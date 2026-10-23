@@ -95,6 +95,7 @@ part of this release. See [Status and limitations](./reference/status-and-limita
 - [Product overview](./product/overview.md)
 - [Analysis workflow](./product/analysis-workflow.md)
 - [Traceability](./product/traceability.md)
+- [Crypto Market Analyst](./product/crypto-market-analyst.md)
 - [Analyst agent](./product/analyst-agent.md)
 - [Architecture](./platform/architecture.md)
 - [Roadmap](../ROADMAP.md)
