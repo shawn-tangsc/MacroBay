@@ -284,11 +284,13 @@ describe('market analysis data-access matrix', () => {
     expect(marketIntelligenceProductManifest.tools.map(tool => tool.id)).toEqual([
       'get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'
     ])
-    expect(marketIntelligenceProductManifest.skills.map(skill => skill.id)).toEqual(['market-analysis-skill-v1'])
+    expect(marketIntelligenceProductManifest.skills.map(skill => skill.id)).toEqual([
+      'market-analysis-skill-v1', 'intelligence-ops-skill-v1'
+    ])
     expect(marketIntelligenceProductManifest.agents).toEqual([expect.objectContaining({
       id: 'crypto-market-analyst',
       toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
-      skillIds: ['market-analysis-skill-v1'],
+      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
       workflowIds: ['market-analysis-auto-run-v1']
     })])
     expect(marketIntelligenceProductManifest.workflows.map(workflow => workflow.id)).toEqual(['market-analysis-auto-run-v1'])

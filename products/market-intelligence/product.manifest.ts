@@ -131,7 +131,7 @@ export const marketIntelligenceProductManifest = {
       description: '基于可追溯市场证据生成条件式分析。',
       seedModule: './agents/agents/cryptoMarketAnalyst',
       seedOnStartup: true,
-      skillIds: ['market-analysis-skill-v1'],
+      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
       toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
       workflowIds: ['market-analysis-auto-run-v1']
     }
