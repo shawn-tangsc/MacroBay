@@ -1,0 +1,10 @@
+{
+  "name": "Fear and Greed Index",
+  "data": [
+    {
+      "value": "22",
+      "value_classification": "Extreme Fear",
+      "timestamp": "1719619200"
+    }
+  ]
+}

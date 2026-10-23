@@ -1,0 +1,87 @@
+{
+  "code": "0",
+  "msg": "",
+  "data": [
+    {
+      "details": [
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 1",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-1",
+          "pTime": "1790758418444",
+          "businessPTime": "1790758418444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 2",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-2",
+          "pTime": "1790758478444",
+          "businessPTime": "1790758478444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 3",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-3",
+          "pTime": "1790758538444",
+          "businessPTime": "1790758538444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 4",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-4",
+          "pTime": "1790758598444",
+          "businessPTime": "1790758598444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 5",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-5",
+          "pTime": "1790758658444",
+          "businessPTime": "1790758658444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 6",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-6",
+          "pTime": "1790758718444",
+          "businessPTime": "1790758718444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 7",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-7",
+          "pTime": "1790758778444",
+          "businessPTime": "1790758778444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 8",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-8",
+          "pTime": "1790758838444",
+          "businessPTime": "1790758838444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 9",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-9",
+          "pTime": "1790758898444",
+          "businessPTime": "1790758898444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 10",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-10",
+          "pTime": "1790758958444",
+          "businessPTime": "1790758958444"
+        },
+        {
+          "annType": "announcements-api",
+          "title": "Synthetic announcements-api notice 11",
+          "url": "https://www.okx.com/help/synthetic-announcements-api-11",
+          "pTime": "1790759018444",
+          "businessPTime": "1790759018444"
+        }
+      ]
+    }
+  ]
+}

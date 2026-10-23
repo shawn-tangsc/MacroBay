@@ -1,0 +1,9 @@
+{
+  "realtime_start": "2026-07-01",
+  "realtime_end": "2026-07-08",
+  "observations": [
+    { "date": "2026-07-03", "value": "4.52" },
+    { "date": "2026-07-02", "value": "4.41" },
+    { "date": "2026-07-01", "value": "4.35" }
+  ]
+}

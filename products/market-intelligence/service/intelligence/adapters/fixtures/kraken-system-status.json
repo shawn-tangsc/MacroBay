@@ -1,0 +1,10 @@
+{
+  "components": [
+    {
+      "id": "comp-spot",
+      "name": "Spot Trading",
+      "status": "degraded_performance",
+      "updated_at": "2026-07-05T10:00:00.000Z"
+    }
+  ]
+}

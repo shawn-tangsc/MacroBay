@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>FRB: Press Release - All Releases</title>
+    <link><![CDATA[https://www.federalreserve.gov/feeds/feeds.htm]]></link>
+    <description><![CDATA[Synthetic FOMC statement feed for tests]]></description>
+    <language>en</language>
+    <item>
+      <title>Federal Reserve issues FOMC statement</title>
+      <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm]]></link>
+      <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260729a.htm]]></guid>
+      <description><![CDATA[Synthetic test item.]]></description>
+      <category>Monetary Policy</category>
+      <pubDate><![CDATA[Wed, 29 Jul 2026 18:00:00 GMT]]></pubDate>
+    </item>
+  </channel>
+</rss>

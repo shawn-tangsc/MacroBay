@@ -1,0 +1,28 @@
+{
+  "code": 200,
+  "msg": "ok",
+  "data": [
+    {
+      "calendarId": "redacted-calendar-id",
+      "calendarName": "redacted-calendar-name",
+      "countryCode": "US",
+      "countryName": "redacted-country-name",
+      "dataEffect": "redacted-effect",
+      "dataEffectCode": "redacted-effect-code",
+      "dataTime": "redacted-period",
+      "estimateValue": "redacted-estimate",
+      "fixPreValue": "redacted-previous",
+      "id": 0,
+      "indicatorsId": "redacted-indicator-id",
+      "locale": "en",
+      "preValue": "redacted-previous",
+      "pubTime": 0,
+      "pubTimestamp": 0,
+      "pubValue": "redacted-actual",
+      "siteCode": "redacted-site-code",
+      "star": 0,
+      "timeUnpublished": 0,
+      "type": 0
+    }
+  ]
+}

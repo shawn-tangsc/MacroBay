@@ -1,0 +1,78 @@
+{
+  "observedAt": "2026-01-01T00:00:00.000Z",
+  "provider": "Binance",
+  "sourceId": "binance-futures-positioning",
+  "capabilityId": "cross-asset-market",
+  "network": "synthetic-test-transport",
+  "metadataPath": "/fapi/v1/exchangeInfo",
+  "historyPath": "/fapi/v1/klines",
+  "streamPath": "/market/stream",
+  "interval": "5m",
+  "publicCredentialRequired": false,
+  "upstreamLimits": {
+    "documentationVerifiedOn": "2026-01-01",
+    "klineMaximumRows": 1500,
+    "klineRequestWeights": [
+      { "minimumLimit": 1, "maximumLimit": 99, "weight": 1 },
+      { "minimumLimit": 100, "maximumLimit": 499, "weight": 2 },
+      { "minimumLimit": 500, "maximumLimit": 1000, "weight": 5 },
+      { "minimumLimit": 1001, "maximumLimit": 1500, "weight": 10 }
+    ],
+    "websocketMaximumStreams": 1024,
+    "websocketIncomingMessagesPerSecond": 10,
+    "websocketLifetimeHours": 24,
+    "scope": "Synthetic test contract. Product uses at most 1000 rows per page, six streams, one connection and 12 governed REST requests per minute."
+  },
+  "assets": [
+    {
+      "asset": "proxy",
+      "symbol": "QQQUSDT",
+      "baseAsset": "QQQ",
+      "contractType": "TRADIFI_PERPETUAL",
+      "tickSize": "0.01000",
+      "priceDecimals": 2,
+      "quoteAsset": "USDT",
+      "marginAsset": "USDT",
+      "status": "TRADING",
+      "state": "admitted",
+      "restBarsObserved": 2,
+      "aggTradeObserved": true,
+      "formingKlineObserved": true,
+      "closedKlineObserved": true
+    },
+    {
+      "asset": "btc",
+      "symbol": "BTCUSDT",
+      "baseAsset": "BTC",
+      "contractType": "PERPETUAL",
+      "tickSize": "0.10",
+      "priceDecimals": 1,
+      "quoteAsset": "USDT",
+      "marginAsset": "USDT",
+      "status": "TRADING",
+      "state": "admitted",
+      "restBarsObserved": 2,
+      "aggTradeObserved": true,
+      "formingKlineObserved": true,
+      "closedKlineObserved": true
+    },
+    {
+      "asset": "eth",
+      "symbol": "ETHUSDT",
+      "baseAsset": "ETH",
+      "contractType": "PERPETUAL",
+      "tickSize": "0.01",
+      "priceDecimals": 2,
+      "quoteAsset": "USDT",
+      "marginAsset": "USDT",
+      "status": "TRADING",
+      "state": "admitted",
+      "restBarsObserved": 2,
+      "aggTradeObserved": true,
+      "formingKlineObserved": true,
+      "closedKlineObserved": true
+    }
+  ],
+  "verifiedDocumentation": [],
+  "scope": "Synthetic test contract. QQQUSDT is a derivatives proxy, not ETF spot or index."
+}

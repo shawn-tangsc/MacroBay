@@ -1,0 +1,4 @@
+# Raw calendar fixtures are byte-exact provenance artifacts. Git must not
+# normalize their line endings, otherwise a fresh clone no longer matches the
+# captured payload bytes/hashes in officialMacroCalendarProvenance.ts.
+products/market-intelligence/service/intelligence/macro-calendar/fixtures/** -text

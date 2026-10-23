@@ -1,0 +1,15 @@
+{
+  "data": [
+    {
+      "record_date": "2026-07-02",
+      "account_type": "Treasury General Account",
+      "close_today_bal": "720000"
+    },
+    {
+      "record_date": "2026-07-01",
+      "account_type": "Treasury General Account",
+      "close_today_bal": "760000"
+    }
+  ],
+  "meta": { "count": 2 }
+}

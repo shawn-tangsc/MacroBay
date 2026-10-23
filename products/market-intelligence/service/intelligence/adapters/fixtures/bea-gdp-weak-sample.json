@@ -1,0 +1,28 @@
+{
+  "BEAAPI": {
+    "Results": {
+      "Data": [
+        {
+          "TableName": "T10101",
+          "LineNumber": "1",
+          "LineDescription": "Gross domestic product",
+          "TimePeriod": "2026Q1",
+          "METRIC_DESC": "Percent change, annual rate",
+          "CL_UNIT": "Percent",
+          "DataValue": "0.8",
+          "NoteRef": ""
+        },
+        {
+          "TableName": "T10101",
+          "LineNumber": "1",
+          "LineDescription": "Gross domestic product",
+          "TimePeriod": "2025Q4",
+          "METRIC_DESC": "Percent change, annual rate",
+          "CL_UNIT": "Percent",
+          "DataValue": "1.6",
+          "NoteRef": ""
+        }
+      ]
+    }
+  }
+}

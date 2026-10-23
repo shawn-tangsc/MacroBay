@@ -1,0 +1,23 @@
+.macro-calendar-settings {
+  --mi-macro-surface: var(--surface);
+  --mi-macro-border: var(--border);
+  --mi-macro-text: var(--text);
+  color: var(--mi-macro-text);
+  padding: var(--spacing-lg, 20px);
+}
+
+.macro-calendar-settings__header p,
+.macro-calendar-settings__card p { color: var(--text-secondary); }
+.macro-calendar-settings__cards { display: grid; gap: var(--spacing-md, 12px); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.macro-calendar-settings__card { background: var(--mi-macro-surface); border: 1px solid var(--mi-macro-border); border-radius: var(--radius-md, 8px); display: grid; gap: var(--spacing-sm, 8px); padding: var(--spacing-md, 12px); }
+.macro-calendar-settings__card > .ant-switch { justify-self: start; }
+.macro-calendar-settings__card dl { display: flex; gap: var(--spacing-lg, 20px); margin: 0; }
+.macro-calendar-settings__card dt { color: var(--text-secondary); font-size: var(--font-size-sm, 12px); }
+.macro-calendar-settings__card dd { margin: 2px 0 0; }
+.macro-calendar-settings__error { color: var(--danger); }
+
+.macro-calendar-settings__market {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}

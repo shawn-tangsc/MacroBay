@@ -1,0 +1,233 @@
+/* 产品布局令牌：右栏宽度与窄屏切换由工作区设计维护。 */
+.mi-analysis-dashboard-layout {
+  --mi-agent-pane-width: 440px;
+  --mi-agent-pane-min-height: 480px;
+  --mi-agent-gap: 12px;
+  --mi-agent-divider: 6px;
+  /* 方向标记语义色：由 analysisConclusionDirectionPolicy 消费，与看板涨跌语言一致。 */
+  --mi-conclusion-positive: #55d69b;
+  --mi-conclusion-negative: #f16d73;
+  --mi-conclusion-caution: #f4ba4b;
+  height: 100%; min-height: 0; min-width: 0;
+  container: mi-analysis-dashboard / inline-size;
+  display: flex; flex-direction: column;
+}
+.mi-analysis-dashboard-layout__panes { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) var(--mi-agent-pane-width); min-height: 0; flex: 1; overflow: hidden; }
+.mi-analysis-dashboard-layout__dashboard { min-width: 0; min-height: 0; overflow: auto; }
+
+/* 最新 AI 结论卡片：主显示区顶部通栏，结论正文完整显示，不做预览截断。 */
+.mi-analysis-conclusion-card { display: grid; gap: 10px; margin: var(--mi-agent-gap); padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border)); border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--surface)); }
+.mi-analysis-conclusion-card > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.mi-analysis-conclusion-card > header > div { display: flex; align-items: center; gap: 8px; }
+.mi-analysis-conclusion-card > header svg { color: var(--accent); }
+.mi-analysis-conclusion-card h2 { margin: 0; color: var(--text-strong); font-size: 12px; letter-spacing: .04em; }
+.mi-analysis-conclusion-card time { color: var(--muted); font-size: 11px; }
+.mi-analysis-conclusion-card em { color: var(--accent); font-size: 11px; font-style: normal; }
+.mi-analysis-conclusion-card__conclusion { margin: 0; color: var(--text-strong); font-size: 13px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.mi-analysis-conclusion-card__hint, .mi-analysis-conclusion-card__state { margin: 0; color: var(--muted); font-size: 10px; }
+
+/* 方向标记：受控词表 + 语义色；无标记的结论保持中性，不做猜测着色。 */
+.mi-analysis-conclusion__direction { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--mi-conclusion-direction) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--mi-conclusion-direction) 14%, transparent); color: var(--mi-conclusion-direction); font-size: 10px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; vertical-align: middle; }
+.mi-analysis-timeline__conclusion[data-direction="bullish"], .mi-analysis-conclusion-card__body[data-direction="bullish"] { border-left-color: var(--mi-conclusion-positive); }
+.mi-analysis-timeline__conclusion[data-direction="bearish"], .mi-analysis-conclusion-card__body[data-direction="bearish"] { border-left-color: var(--mi-conclusion-negative); }
+.mi-analysis-timeline__conclusion[data-direction="range"], .mi-analysis-timeline__conclusion[data-direction="mixed"], .mi-analysis-conclusion-card__body[data-direction="range"], .mi-analysis-conclusion-card__body[data-direction="mixed"] { border-left-color: var(--mi-conclusion-caution); }
+/* 方向标记已用 CSS 变量注入，所以 h3 只在带标记的结论区着色；无标记时保持中性。 */
+/* The direction colour marks the badge and the left stripe only. Painting the whole
+   body in it made a bearish conclusion a wall of red text. */
+.mi-analysis-timeline__conclusion[data-direction]:not([data-direction="none"]) { border-left: 2px solid var(--mi-conclusion-direction); padding-left: 12px; }
+.mi-analysis-timeline__conclusion h3 { color: var(--text-strong); }
+
+/* 节点详情抽屉：非模态，无遮罩，覆盖在主看板之上但不覆盖 Agent 栏。 */
+.mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
+.mi-analysis-dashboard-layout { --mi-drawer-width: 520px; }
+.mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
+.mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 12px; }
+.mi-analysis-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.mi-analysis-drawer__meta time { color: var(--muted); font-size: 10px; }
+.mi-analysis-drawer__meta em { color: var(--accent); font-size: 10px; font-style: normal; }
+.mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 14px; }
+.mi-analysis-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
+@keyframes mi-analysis-drawer-in { from { transform: translateX(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mi-analysis-drawer { animation: none; } }
+.mi-analysis-dashboard-layout__switch { display: none; padding: var(--mi-agent-gap); }
+.mi-analysis-agent-workspace { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.mi-analysis-chat { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* The calendar card takes the conversation's grid row, so it inherits the same sizing. */
+.mi-analysis-agent-workspace__card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.mi-analysis-chat header { display: flex; align-items: center; gap: var(--mi-agent-gap); padding: var(--mi-agent-gap); border-bottom: 1px solid var(--border); }
+.mi-analysis-chat header h2 { font-size: 13px; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-analysis-chat header small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; }
+.mi-analysis-chat__session-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; }
+.mi-analysis-chat__session-actions .ant-btn { color: var(--muted); }
+/* The title bar also owns conversation navigation: new chat, history, and per-row delete. */
+.mi-agent-sessions { display: flex; flex-direction: column; width: 280px; max-height: 320px; overflow: auto; }
+.mi-agent-sessions__heading { padding: 4px 6px 8px; color: var(--muted); font-size: 11px; }
+.mi-agent-sessions__empty { margin: 0; padding: 8px 6px; color: var(--muted); font-size: 12px; }
+.mi-agent-sessions__row { display: flex; align-items: center; gap: 4px; border-radius: 6px; }
+.mi-agent-sessions__row:hover { background: var(--surface-soft); }
+.mi-agent-sessions__select { display: grid; grid-template-columns: minmax(0, 1fr) auto 14px; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 6px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.mi-agent-sessions__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.mi-agent-sessions__time { color: var(--muted); font-size: 10px; }
+.mi-agent-sessions__row.is-current .mi-agent-sessions__name { font-weight: 600; }
+.mi-analysis-chat__binding { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px var(--mi-agent-gap); border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+/* Shown only while the conversation is being created or its selection is unresolved. */
+.mi-analysis-chat__pending { margin: 0; padding: 12px var(--mi-agent-gap); color: var(--muted); font-size: 12px; }
+/* The shared conversation fills the panel; its composer stays on the panel's bottom edge. */
+.mi-analysis-chat > .agent-chat-surface { flex: 1 1 auto; min-height: 0; }
+/* An empty conversation keeps the product's own prompt instead of the agent page's hero. */
+.mi-analysis-chat__empty { flex: 1 1 auto; margin: 0; padding: 16px var(--mi-agent-gap); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.mi-analysis-agent-workspace__divider { background: var(--border); cursor: row-resize; touch-action: none; }
+.mi-analysis-agent-workspace__divider:hover, .mi-analysis-agent-workspace__divider:focus-visible { background: var(--accent); outline: none; }
+.mi-analysis-agent-workspace .mi-analysis-timeline { padding: var(--mi-agent-gap); min-height: 0; overflow: auto; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__header { padding-bottom: 8px; gap: 4px; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__header p { display: none; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__header h1 { font-size: 13px; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__workspace { display: block; min-height: 0; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__list { border-right: 0; padding: 8px 0; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__list > h2 { display: none; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__detail { padding: 8px 0; }
+.mi-analysis-agent-workspace .mi-analysis-timeline__detail-content dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* 低于 1100px 内容宽度时保留一块可读工作面；切换不卸载会话。 */
+@container mi-analysis-dashboard (max-width: 1100px) {
+  .mi-analysis-dashboard-layout__switch { display: block; }
+  .mi-analysis-dashboard-layout__panes { grid-template-columns: minmax(0, 1fr); }
+  .mi-analysis-dashboard-layout[data-compact-view="dashboard"] .mi-analysis-agent-workspace,
+  .mi-analysis-dashboard-layout[data-compact-view="agent"] .mi-analysis-dashboard-layout__dashboard { display: none; }
+  .mi-analysis-agent-workspace { border-left: 0; }
+  /* 窄屏时抽屉一次性铺满主区，避免在窄列里再挤出一层可读性问题。 */
+  .mi-analysis-drawer { width: 100%; box-shadow: none; }
+  .mi-analysis-conclusion-card { margin: 8px; padding: 12px; }
+}
+
+/* Change rows read as a list of named metrics with both values, so a conclusion
+   states what moved without showing the stored machine encoding. */
+.mi-analysis-change__list { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.mi-analysis-change__group { display: grid; gap: 2px; }
+.mi-analysis-change__domain { color: var(--muted-strong); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.mi-analysis-change__group ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.mi-analysis-change__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+.mi-analysis-change__label { color: var(--text-strong); overflow-wrap: anywhere; }
+.mi-analysis-change__value { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mi-analysis-change__value s { color: var(--muted); text-decoration: line-through; opacity: .7; }
+.mi-analysis-change__row[data-change-kind='added'] .mi-analysis-change__value strong { color: var(--mi-conclusion-positive); }
+.mi-analysis-change__row[data-change-kind='removed'] .mi-analysis-change__value strong { color: var(--mi-conclusion-negative); }
+
+/* Conclusion layout: a readable stack of labelled parts instead of one dense block. */
+.mi-analysis-conclusion__head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.mi-analysis-conclusion__head .mi-analysis-timeline__section-label { margin: 0; }
+.mi-analysis-conclusion__body { display: grid; gap: 10px; }
+.mi-analysis-conclusion__text { margin: 0; color: var(--text-strong); font-size: 13px; line-height: 1.75; }
+/* One row per horizon: the operation directions, above the prose they summarise. */
+.mi-analysis-directions { margin: 8px 0 4px; }
+.mi-analysis-directions__title { display: flex; align-items: center; gap: 4px; margin: 0 0 4px; color: var(--muted-strong); font-size: 11px; }
+.mi-analysis-directions ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+/* The rationale is the main content, so it always gets its own full-width line. Keeping it in a
+   1fr column beside the horizon/pill/confidence squeezed it into a one-word-per-line strip. */
+.mi-analysis-directions li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px;
+  padding: 6px 8px; border-left: 2px solid var(--mi-conclusion-direction, var(--border)); border-radius: 4px; background: var(--surface-2, transparent); }
+.mi-analysis-directions__horizon { color: var(--muted-strong); font-size: 11px; white-space: nowrap; }
+/* Inherits the conclusion's direction pill; only the layout bits are local, so one vocabulary
+   keeps one visual language. */
+.mi-analysis-directions__direction { margin-right: 0; }
+.mi-analysis-directions__rationale { order: 1; flex: 1 0 100%; min-width: 0; font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.mi-analysis-directions__confidence { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.mi-analysis-directions li[data-direction='none'] { border-left-color: var(--border); }
+
+.mi-analysis-conclusion__block { display: grid; gap: 3px; padding: 8px 10px; border-radius: 6px; background: color-mix(in srgb, var(--surface-raised, var(--surface)) 70%, transparent); border-left: 2px solid var(--border); }
+.mi-analysis-conclusion__block-title { color: var(--muted-strong); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.mi-analysis-conclusion__block p { margin: 0; color: var(--text); font-size: 12.5px; line-height: 1.7; }
+/* The chain is a sequence, so it gets the accent and the others stay neutral. */
+.mi-analysis-conclusion__block[data-block='causal-chain'] { border-left-color: var(--accent); }
+.mi-analysis-conclusion__block[data-block='causal-chain'] p { color: var(--text-strong); }
+.mi-analysis-conclusion__block[data-block='condition'] { border-left-color: var(--mi-conclusion-caution); }
+.mi-analysis-conclusion__block[data-block='data-gap'] { border-left-color: var(--muted-strong); }
+.mi-analysis-conclusion__block[data-block='data-gap'] p { color: var(--muted); }
+
+/* Change rows read as a three column table: field, previous value, current value. */
+.mi-analysis-change__row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; column-gap: 12px; font-size: 12px; padding: 3px 0; }
+.mi-analysis-change__row + .mi-analysis-change__row { border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
+.mi-analysis-change__value { display: contents; }
+.mi-analysis-change__previous { color: var(--muted); text-decoration: line-through; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mi-analysis-change__current { color: var(--text-strong); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+.mi-analysis-change__row[data-change-kind='added'] .mi-analysis-change__current { color: var(--mi-conclusion-positive); }
+.mi-analysis-change__row[data-change-kind='removed'] .mi-analysis-change__current { color: var(--mi-conclusion-negative); }
+
+/* The direction and the conclusion take the place the generated title used to hold, and they are
+   what the reader scans, so they are the largest text in a row. */
+/* Same pill as the latest-conclusion badge, so a direction reads the same everywhere. */
+.mi-analysis-timeline__direction { display: inline-flex; flex: none; align-items: center; align-self: flex-start; width: fit-content; margin: 0; padding: 1px 8px; border: 1px solid color-mix(in srgb, currentcolor 45%, transparent); border-radius: 999px; background: color-mix(in srgb, currentcolor 14%, transparent); font-size: 10px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; }
+/* The direction tokens are declared on the dashboard layout, and a timeline panel can render outside
+   that subtree, where `var()` then resolves to nothing and the tag loses its colour. The fallbacks
+   keep the tag readable in either scope without declaring the values a second time. */
+.mi-analysis-timeline__direction[data-direction="bullish"] { color: var(--mi-conclusion-positive, #55d69b); }
+.mi-analysis-timeline__direction[data-direction="bearish"] { color: var(--mi-conclusion-negative, #f16d73); }
+.mi-analysis-timeline__direction[data-direction="range"], .mi-analysis-timeline__direction[data-direction="mixed"] { color: var(--mi-conclusion-caution, #f4ba4b); }
+.mi-analysis-timeline__direction[data-direction="undecided"] { color: var(--muted-strong, var(--muted, #8a9992)); }
+/* Mirrors `.mi-analysis-conclusion-card__body`, the layout the reader pointed at: a grid with one
+   column, so the pill takes its own row and the conclusion the next, with the same 6px gap.
+   The base `.mi-analysis-timeline__entry > span { display:flex }` rule outranks the class alone
+   and used to put both on one line, squeezing the conclusion into the space beside the pill. */
+.mi-analysis-timeline__entry > .mi-analysis-timeline__headline {
+  display: grid;
+  align-items: start;
+  justify-content: start;
+  justify-items: start;
+  gap: 6px;
+}
+.mi-analysis-timeline__headline { display: grid; gap: 6px; justify-items: start; margin-top: 4px; }
+.mi-analysis-timeline__conclusion-line { width: 100%; min-width: 0; overflow-wrap: anywhere; color: var(--text, #edf3ef); font-size: 13px; line-height: 1.45; }
+/* The analysis action is disabled for the whole request/run, so its own glyph carries the
+   in-flight state: the reader sees work happening instead of a frozen icon. */
+.mi-analysis-timeline__reanalyse-icon-spin { transform-origin: 50% 50%; animation: mi-analysis-reanalyse-spin 1s linear infinite; }
+@keyframes mi-analysis-reanalyse-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .mi-analysis-timeline__reanalyse-icon-spin { animation: none; }
+}
+
+/* The agent chat is dense: the platform table styling, tightened to the panel's type scale. */
+.mi-analysis-chat .chat-markdown-table table { font-size: 11.5px; }
+.mi-analysis-chat .chat-markdown-table th, .mi-analysis-chat .chat-markdown-table td { padding: 3px 6px; }
+
+/* The capability's mask: the module keeps its content (a reader still sees that history exists) and
+   loses only its interaction, so nothing under here can start a run while the switch is off.
+   The section is a column and the workspace row grows, so the mask is centred in the region the
+   panel was given: with the content's own height it floated at the top of an otherwise empty
+   column. The mask is a sibling of the whole workspace (header included), so switching the
+   capability off covers the title row and its actions too. */
+.mi-analysis-timeline { position: relative; display: flex; flex-direction: column; }
+.mi-analysis-timeline__workspace-wrap { position: relative; display: grid; flex: 1 1 auto; min-height: 0; }
+.mi-analysis-timeline[data-analysis-enabled="false"] .mi-analysis-timeline__workspace {
+  pointer-events: none;
+  user-select: none;
+  opacity: .55;
+}
+.mi-analysis-timeline__mask {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg, #0b0f0d) 62%, transparent);
+  backdrop-filter: blur(2px);
+}
+.mi-analysis-timeline__mask-body { display: grid; justify-items: center; gap: 10px; max-width: 340px; text-align: center; text-wrap: pretty; }
+.mi-analysis-timeline__mask-body p { margin: 0; color: var(--muted-strong, var(--muted, #9aa8a0)); font-size: 12px; line-height: 1.5; }
+.mi-analysis-timeline__mask-body > div { display: flex; gap: 8px; }
+.mi-analysis-timeline__mask-body p[role="alert"] { color: var(--danger, #f16d73); }
+
+.mi-analysis-timeline__settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border, #1e2621); }
+.mi-analysis-timeline__settings-row > div { display: grid; gap: 3px; min-width: 0; }
+.mi-analysis-timeline__settings-row strong { font-size: 12px; font-weight: 600; }
+.mi-analysis-timeline__settings-row small { color: var(--muted, #8a9992); font-size: 11px; }
+.mi-analysis-timeline__settings-error { margin: 10px 0 0; color: var(--danger, #f16d73); font-size: 12px; }
+
+/* Message context cards: the product owns the visual language for its context kinds. */
+.mi-agent-context-card { display: inline-flex; align-items: flex-start; gap: 6px; width: fit-content; max-width: min(100%, 340px); margin: 0 0 7px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--surface) 55%, transparent); }
+.mi-agent-context-card__icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; background: color-mix(in srgb, var(--surface-soft) 80%, transparent); color: var(--muted-strong); flex: 0 0 auto; }
+.mi-agent-context-card__copy { display: flex; flex-direction: column; min-width: 0; gap: 0; line-height: 1.35; }
+.mi-agent-context-card__copy small { color: var(--muted); font-size: 9.5px; }
+.mi-agent-context-card__copy strong { overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 11.5px; font-weight: 600; }
+.mi-agent-context-card__copy span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 10px; }
+.mi-agent-context-card.is-analysis .mi-agent-context-card__icon { color: var(--accent); }

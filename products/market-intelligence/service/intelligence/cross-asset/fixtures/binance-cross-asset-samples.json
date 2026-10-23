@@ -1,0 +1,73 @@
+{
+  "provenance": "Synthetic test bars. No provider response is copied.",
+  "restObservedAt": "2026-01-01T00:00:00.000Z",
+  "restObservedAtPrecision": "millisecond",
+  "rest": {
+    "QQQUSDT": [
+      {
+        "symbol": "QQQUSDT",
+        "barOpenMs": 1700000100000,
+        "barEndMs": 1700000400000,
+        "open": "100.00",
+        "high": "101.00",
+        "low": "99.00",
+        "close": "100.50",
+        "volume": "12.00"
+      },
+      {
+        "symbol": "QQQUSDT",
+        "barOpenMs": 1700000400000,
+        "barEndMs": 1700000700000,
+        "open": "100.50",
+        "high": "101.50",
+        "low": "100.00",
+        "close": "101.00",
+        "volume": "11.00"
+      }
+    ],
+    "BTCUSDT": [
+      {
+        "symbol": "BTCUSDT",
+        "barOpenMs": 1700000100000,
+        "barEndMs": 1700000400000,
+        "open": "68000.00",
+        "high": "68500.00",
+        "low": "67800.00",
+        "close": "68200.00",
+        "volume": "3.20"
+      },
+      {
+        "symbol": "BTCUSDT",
+        "barOpenMs": 1700000400000,
+        "barEndMs": 1700000700000,
+        "open": "68200.00",
+        "high": "68900.00",
+        "low": "68100.00",
+        "close": "68800.00",
+        "volume": "2.90"
+      }
+    ],
+    "ETHUSDT": [
+      {
+        "symbol": "ETHUSDT",
+        "barOpenMs": 1700000100000,
+        "barEndMs": 1700000400000,
+        "open": "3200.00",
+        "high": "3230.00",
+        "low": "3180.00",
+        "close": "3215.00",
+        "volume": "40.00"
+      },
+      {
+        "symbol": "ETHUSDT",
+        "barOpenMs": 1700000400000,
+        "barEndMs": 1700000700000,
+        "open": "3215.00",
+        "high": "3250.00",
+        "low": "3205.00",
+        "close": "3240.00",
+        "volume": "38.00"
+      }
+    ]
+  }
+}

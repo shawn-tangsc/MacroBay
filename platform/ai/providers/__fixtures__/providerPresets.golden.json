@@ -1,0 +1,2566 @@
+[
+  {
+    "id": "silicon",
+    "name": "Silicon",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.siliconflow.cn",
+    "anthropicBaseUrl": "https://api.siliconflow.cn",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://cloud.siliconflow.cn",
+      "apiKey": "https://cloud.siliconflow.cn/i/9GmeSjFn",
+      "docs": "https://docs.siliconflow.cn/",
+      "models": "https://cloud.siliconflow.cn/models"
+    },
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-V3.2",
+        "name": "deepseek-ai/DeepSeek-V3.2",
+        "group": "deepseek-ai",
+        "provider": "silicon",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-R1",
+        "name": "deepseek-ai/DeepSeek-R1",
+        "group": "deepseek-ai",
+        "provider": "silicon",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      },
+      {
+        "id": "Qwen/Qwen3-235B-A22B-Instruct-2507",
+        "name": "Qwen3-235B-A22B-Instruct-2507",
+        "group": "Qwen",
+        "provider": "silicon",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-ai/DeepSeek-V3.2"
+  },
+  {
+    "id": "tokenrhythm",
+    "name": "TokenRhythm",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://tokenrhythm.studio",
+    "anthropicBaseUrl": "https://tokenrhythm.studio",
+    "extraEndpoints": {
+      "responses": "https://tokenrhythm.studio/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://tokenrhythm.studio/account",
+      "apiKey": "https://tokenrhythm.studio/i/rf_tr_C4LK8Z?share_id=ad1db639-8069-4f57-9c08-fa4a114a276d",
+      "docs": "https://tokenrhythm.studio/docs/overview"
+    },
+    "models": []
+  },
+  {
+    "id": "aihubmix",
+    "name": "AiHubMix",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://aihubmix.com",
+    "anthropicBaseUrl": "https://aihubmix.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://aihubmix.com",
+      "apiKey": "https://aihubmix.com/?aff=Rs0c",
+      "docs": "https://doc.aihubmix.com/",
+      "models": "https://aihubmix.com/models"
+    },
+    "models": [
+      {
+        "id": "gpt-5",
+        "name": "gpt-5",
+        "group": "OpenAI",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "gpt-5-mini",
+        "name": "gpt-5-mini",
+        "group": "OpenAI",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "gpt-5-chat-latest",
+        "name": "gpt-5-chat-latest",
+        "group": "OpenAI",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "DeepSeek-V3",
+        "name": "DeepSeek-V3",
+        "group": "DeepSeek",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "DeepSeek-R1",
+        "name": "DeepSeek-R1",
+        "group": "DeepSeek",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      },
+      {
+        "id": "claude-sonnet-4-20250514",
+        "name": "claude-sonnet-4-20250514",
+        "group": "Claude",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "name": "gemini-2.5-pro",
+        "group": "Gemini",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "gemini-2.5-flash",
+        "name": "gemini-2.5-flash",
+        "group": "Gemini",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "qwen3.8-flash",
+        "name": "qwen3.8-flash",
+        "group": "Free",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "qwen3.8-max",
+        "name": "qwen3.8-max",
+        "group": "Free",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "xiaomi-mimo-v2.6-pro-free",
+        "name": "xiaomi-mimo-v2.6-pro-free",
+        "group": "Free",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "xiaomi-mimo-v2.6-flash-free",
+        "name": "xiaomi-mimo-v2.6-flash-free",
+        "group": "Free",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "decision-model-preview",
+        "name": "decision-model-preview",
+        "group": "Free",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "jina-ocr-v1",
+        "name": "jina-ocr-v1",
+        "group": "Free",
+        "provider": "aihubmix",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "vision": true,
+          "ocr": true
+        }
+      }
+    ],
+    "defaultChatModelId": "gpt-5"
+  },
+  {
+    "id": "ocoolai",
+    "name": "ocoolAI",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://one.ocoolai.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://one.ocoolai.com/",
+      "docs": "https://docs.ocoolai.com/",
+      "models": "https://api.ocoolai.com/info/models/"
+    },
+    "models": [
+      {
+        "id": "deepseek-chat",
+        "name": "deepseek-chat",
+        "group": "DeepSeek",
+        "provider": "ocoolai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-reasoner",
+        "name": "deepseek-reasoner",
+        "group": "DeepSeek",
+        "provider": "ocoolai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      },
+      {
+        "id": "gpt-4o",
+        "name": "gpt-4o",
+        "group": "OpenAI",
+        "provider": "ocoolai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "gpt-4o-mini",
+        "name": "gpt-4o-mini",
+        "group": "OpenAI",
+        "provider": "ocoolai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-chat"
+  },
+  {
+    "id": "aionly",
+    "name": "AIOnly",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://llm.aiionly.com",
+    "anthropicBaseUrl": "https://llm.aiionly.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://maas.aiionly.com",
+      "apiKey": "https://maas.aiionly.com/login?inviteCode=8566406797",
+      "docs": "https://maas.aiionly.com/document"
+    },
+    "models": [
+      {
+        "id": "deepseek-v3.2",
+        "name": "DeepSeek V3.2",
+        "group": "DeepSeek",
+        "provider": "aionly",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-r1-0528",
+        "name": "DeepSeek R1 0528",
+        "group": "DeepSeek",
+        "provider": "aionly",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      },
+      {
+        "id": "qwen3-235b-a22b",
+        "name": "Qwen3 235B A22B",
+        "group": "Qwen",
+        "provider": "aionly",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "qwen3-max-vip",
+        "name": "Qwen3 Max VIP",
+        "group": "Qwen",
+        "provider": "aionly",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-v3.2"
+  },
+  {
+    "id": "burncloud",
+    "name": "BurnCloud",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://ai.burncloud.com",
+    "anthropicBaseUrl": "https://ai.burncloud.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://ai.burncloud.com/",
+      "apiKey": "https://ai.burncloud.com/register?aff=Uwn0",
+      "docs": "https://ai.burncloud.com/docs",
+      "models": "https://ai.burncloud.com/pricing"
+    },
+    "models": [
+      {
+        "id": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "group": "Gemini 2.5",
+        "provider": "burncloud",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
+        "group": "Gemini 2.5",
+        "provider": "burncloud",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "deepseek-reasoner",
+        "name": "DeepSeek Reasoner",
+        "group": "deepseek-ai",
+        "provider": "burncloud",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      },
+      {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "group": "deepseek-ai",
+        "provider": "burncloud",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "gemini-2.5-flash"
+  },
+  {
+    "id": "cephalon",
+    "name": "Cephalon",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://cephalon.cloud/user-center/v1"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://cephalon.cloud/user-center/v1/model",
+    "anthropicBaseUrl": "https://cephalon.cloud/user-center/v1",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://cephalon.cloud",
+      "apiKey": "https://cephalon.cloud/share/register-landing?invite_id=s2y8zQ",
+      "docs": "https://cephalon.cloud/apitoken/1864244127731589124",
+      "models": "https://cephalon.cloud/model"
+    },
+    "models": [
+      {
+        "id": "deepseek-chat",
+        "name": "deepseek-chat",
+        "group": "DeepSeek",
+        "provider": "cephalon",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "gpt-4o",
+        "name": "gpt-4o",
+        "group": "OpenAI",
+        "provider": "cephalon",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-chat"
+  },
+  {
+    "id": "lanyun",
+    "name": "LANYUN",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://maas-api.lanyun.net",
+    "anthropicBaseUrl": "https://maas-api.lanyun.net",
+    "extraEndpoints": {
+      "responses": "https://maas-api.lanyun.net/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://console.lanyun.net/",
+      "apiKey": "https://console.lanyun.net/#/register?promoterCode=9847f33a11",
+      "docs": "https://archive.lanyun.net/#/maas/",
+      "models": "https://maas.lanyun.net/#/model/modelSquare"
+    },
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-R1",
+        "name": "deepseek-ai/DeepSeek-R1",
+        "group": "deepseek-ai",
+        "provider": "lanyun",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V3",
+        "name": "deepseek-ai/DeepSeek-V3",
+        "group": "deepseek-ai",
+        "provider": "lanyun",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-ai/DeepSeek-R1"
+  },
+  {
+    "id": "ph8",
+    "name": "PH8",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://ph8.co",
+    "anthropicBaseUrl": "https://ph8.co",
+    "extraEndpoints": {
+      "responses": "https://ph8.co/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://ph8.co",
+      "docs": "https://m1r239or5aw.feishu.cn/wiki/SegzwS4x1i2P4OksFY2cMvujn9f",
+      "models": "https://ph8.co/v1/models"
+    },
+    "models": [
+      {
+        "id": "deepseek-v4.1-flash",
+        "name": "deepseek-v4.1-flash",
+        "group": "DeepSeek",
+        "provider": "ph8",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-r1",
+        "name": "deepseek-r1",
+        "group": "DeepSeek",
+        "provider": "ph8",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-v4.1-flash"
+  },
+  {
+    "id": "sophnet",
+    "name": "SophNet",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://www.sophnet.com/api/open-apis/v1",
+    "anthropicBaseUrl": "https://www.sophnet.com/api/open-apis/v1",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://sophnet.com",
+      "docs": "https://sophnet.com/docs/component/introduce.html",
+      "models": "https://sophnet.com/#/model/list"
+    },
+    "models": []
+  },
+  {
+    "id": "openrouter",
+    "name": "OpenRouter",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://openrouter.ai/api"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://openrouter.ai/api/v1/",
+    "anthropicBaseUrl": "https://openrouter.ai/api",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://openrouter.ai/",
+      "apiKey": "https://openrouter.ai/settings/keys",
+      "docs": "https://openrouter.ai/docs/quick-start",
+      "models": "https://openrouter.ai/models"
+    },
+    "models": [
+      {
+        "id": "google/gemini-2.5-flash-preview",
+        "name": "Google: Gemini 2.5 Flash Preview",
+        "group": "google",
+        "provider": "openrouter",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "qwen/qwen-2.5-7b-instruct:free",
+        "name": "Qwen: Qwen-2.5-7B Instruct",
+        "group": "qwen",
+        "provider": "openrouter",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek/deepseek-chat",
+        "name": "DeepSeek: V3",
+        "group": "deepseek",
+        "provider": "openrouter",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "mistralai/mistral-7b-instruct:free",
+        "name": "Mistral: Mistral 7B Instruct",
+        "group": "mistralai",
+        "provider": "openrouter",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "google/gemini-2.5-flash-preview"
+  },
+  {
+    "id": "poe",
+    "name": "Poe",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.poe.com/v1/",
+    "anthropicBaseUrl": "https://api.poe.com/v1",
+    "extraEndpoints": {
+      "responses": "https://api.poe.com/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://poe.com/",
+      "docs": "https://creator.poe.com/docs/external-applications/openai-compatible-api",
+      "models": "https://poe.com/"
+    },
+    "models": [
+      {
+        "id": "gpt-5-mini",
+        "name": "gpt-5-mini",
+        "group": "OpenAI",
+        "provider": "poe",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "claude-opus-4.8",
+        "name": "claude-opus-4.8",
+        "group": "Anthropic",
+        "provider": "poe",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "gpt-5-mini"
+  },
+  {
+    "id": "zhipu",
+    "name": "ZhiPu",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://open.bigmodel.cn/api/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://open.bigmodel.cn/api/paas/v4/",
+    "anthropicBaseUrl": "https://open.bigmodel.cn/api/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://open.bigmodel.cn/",
+      "apiKey": "https://open.bigmodel.cn/apikey/platform",
+      "docs": "https://docs.bigmodel.cn/",
+      "models": "https://open.bigmodel.cn/modelcenter/square"
+    },
+    "models": [
+      {
+        "id": "glm-5.3",
+        "name": "GLM-5.3",
+        "group": "GLM",
+        "provider": "zhipu",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-5.3-flash",
+        "name": "GLM-5.3 Flash",
+        "group": "GLM",
+        "provider": "zhipu",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "group": "GLM",
+        "provider": "zhipu",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "group": "GLM",
+        "provider": "zhipu",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "glm-5.3"
+  },
+  {
+    "id": "deepseek",
+    "name": "deepseek",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.deepseek.com/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.deepseek.com",
+    "anthropicBaseUrl": "https://api.deepseek.com/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://deepseek.com/",
+      "apiKey": "https://platform.deepseek.com/api_keys",
+      "docs": "https://platform.deepseek.com/api-docs/",
+      "models": "https://platform.deepseek.com/api-docs/"
+    },
+    "models": [
+      {
+        "id": "deepseek-flash",
+        "name": "DeepSeek-V4.1-Flash",
+        "group": "DeepSeek",
+        "provider": "deepseek",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "vision": true,
+          "reasoning": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        }
+      },
+      {
+        "id": "deepseek-v4-flash",
+        "name": "deepseek-v4-flash",
+        "group": "DeepSeek",
+        "provider": "deepseek",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        }
+      },
+      {
+        "id": "deepseek-v4-pro",
+        "name": "deepseek-v4-pro",
+        "group": "DeepSeek",
+        "provider": "deepseek",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        }
+      },
+      {
+        "id": "deepseek-chat",
+        "name": "deepseek-chat",
+        "group": "DeepSeek",
+        "provider": "deepseek",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        }
+      },
+      {
+        "id": "deepseek-reasoner",
+        "name": "deepseek-reasoner",
+        "group": "DeepSeek",
+        "provider": "deepseek",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-flash"
+  },
+  {
+    "id": "ppio",
+    "name": "PPIO",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.ppio.com/openai/",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://ppio.com",
+      "docs": "https://ppio.com/model-api",
+      "models": "https://ppio.com/model-api/product/llm-api"
+    },
+    "models": [
+      {
+        "id": "deepseek/deepseek-v4.1-flash",
+        "name": "DeepSeek V4.1 Flash",
+        "group": "deepseek",
+        "provider": "ppio",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "zai-org/glm-5.3",
+        "name": "GLM-5.3",
+        "group": "zai-org",
+        "provider": "ppio",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek/deepseek-v4.1-flash"
+  },
+  {
+    "id": "dashscope",
+    "name": "Bailian",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://dashscope.aliyuncs.com/apps/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1/",
+    "anthropicBaseUrl": "https://dashscope.aliyuncs.com/apps/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://bailian.console.aliyun.com/",
+      "apiKey": "https://www.aliyun.com/benefit/ai/aistar?clubBiz=subTask..12939034..10274..",
+      "docs": "https://help.aliyun.com/zh/model-studio/getting-started/",
+      "models": "https://bailian.console.aliyun.com/?tab=model#/model-market"
+    },
+    "models": [
+      {
+        "id": "qwen3.5-plus",
+        "name": "Qwen3.5-Plus",
+        "group": "Qwen",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "qwen3.5-flash",
+        "name": "Qwen3.5-Flash",
+        "group": "Qwen",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "qwen3-max",
+        "name": "Qwen3-Max",
+        "group": "Qwen",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "group": "Kimi",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-5",
+        "name": "GLM-5",
+        "group": "GLM",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "MiniMax/MiniMax-M2.5",
+        "name": "MiniMax M2.5",
+        "group": "MiniMax",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-v3.2",
+        "name": "DeepSeek V3.2",
+        "group": "DeepSeek",
+        "provider": "dashscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "qwen3.5-plus"
+  },
+  {
+    "id": "minimax",
+    "name": "MiniMax",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.minimaxi.com/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.minimaxi.com/v1/",
+    "anthropicBaseUrl": "https://api.minimaxi.com/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://platform.minimaxi.com/",
+      "docs": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+      "models": "https://platform.minimaxi.com/document/Models"
+    },
+    "models": [
+      {
+        "id": "MiniMax-M3.1-Flash",
+        "name": "MiniMax-M3.1-Flash",
+        "group": "MiniMax",
+        "provider": "minimax",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "MiniMax-M2.7",
+        "name": "MiniMax-M2.7",
+        "group": "MiniMax",
+        "provider": "minimax",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "group": "MiniMax",
+        "provider": "minimax",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "MiniMax-M3.1-Flash"
+  },
+  {
+    "id": "moonshot",
+    "name": "Moonshot AI",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.moonshot.cn/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.moonshot.cn",
+    "anthropicBaseUrl": "https://api.moonshot.cn/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://www.moonshot.cn/",
+      "apiKey": "https://platform.moonshot.cn/console/api-keys",
+      "docs": "https://platform.moonshot.cn/docs/"
+    },
+    "models": [
+      {
+        "id": "kimi-k3",
+        "name": "kimi-k3",
+        "group": "Kimi",
+        "provider": "moonshot",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "kimi-k2.6",
+        "name": "kimi-k2.6",
+        "group": "Kimi",
+        "provider": "moonshot",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "kimi-k3"
+  },
+  {
+    "id": "qiniu",
+    "name": "Qiniu",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.qnaigc.com",
+    "anthropicBaseUrl": "https://api.qnaigc.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://portal.qiniu.com/",
+      "apiKey": "https://s.qiniu.com/EJraaq",
+      "docs": "https://developer.qiniu.com/aitokenapi",
+      "models": "https://developer.qiniu.com/aitokenapi/12883/model-list"
+    },
+    "models": [
+      {
+        "id": "deepseek-v3",
+        "name": "deepseek-v3",
+        "group": "DeepSeek",
+        "provider": "qiniu",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-r1",
+        "name": "deepseek-r1",
+        "group": "DeepSeek",
+        "provider": "qiniu",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-v3"
+  },
+  {
+    "id": "doubao",
+    "name": "doubao",
+    "protocols": [
+      "openai",
+      "openai-response",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://ark.cn-beijing.volces.com/api/compatible"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/v3/",
+    "anthropicBaseUrl": "https://ark.cn-beijing.volces.com/api/compatible",
+    "extraEndpoints": {
+      "responses": "https://ark.cn-beijing.volces.com/api/v3"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://console.volcengine.com/ark/",
+      "docs": "https://www.volcengine.com/docs/82379/1182403"
+    },
+    "models": [
+      {
+        "id": "doubao-seed-2-1-pro-260915",
+        "name": "Doubao-Seed-2.1-pro",
+        "group": "Doubao-Seed-2.1",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-2-1-lite-260915",
+        "name": "Doubao-Seed-2.1-lite",
+        "group": "Doubao-Seed-2.1",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-2-1-pro-260628",
+        "name": "Doubao-Seed-2.1-pro-0628",
+        "group": "Doubao-Seed-2.1",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-2-1-turbo-260628",
+        "name": "Doubao-Seed-2.1-turbo",
+        "group": "Doubao-Seed-2.1",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-2-0-pro-260215",
+        "name": "Doubao-Seed-2.0-pro",
+        "group": "Doubao-Seed-2.0",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-2-0-lite-260215",
+        "name": "Doubao-Seed-2.0-lite",
+        "group": "Doubao-Seed-2.0",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-2-0-mini-260215",
+        "name": "Doubao-Seed-2.0-mini",
+        "group": "Doubao-Seed-2.0",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "doubao-seed-evolving",
+        "name": "Doubao-Seed-Evolving",
+        "group": "Doubao-Seed",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-v4-pro-260425",
+        "name": "DeepSeek-V4-Pro",
+        "group": "DeepSeek",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-v4-flash-ga-260731",
+        "name": "DeepSeek-V4-Flash",
+        "group": "DeepSeek",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-v4-1-flash-261017",
+        "name": "DeepSeek-V4.1-Flash",
+        "group": "DeepSeek",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-5-2-260617",
+        "name": "GLM-5.2",
+        "group": "GLM",
+        "provider": "doubao",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "doubao-seed-2-1-pro-260915"
+  },
+  {
+    "id": "baichuan",
+    "name": "BAICHUAN AI",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.baichuan-ai.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://www.baichuan-ai.com/",
+      "docs": "https://platform.baichuan-ai.com/docs",
+      "models": "https://platform.baichuan-ai.com/prices"
+    },
+    "models": [
+      {
+        "id": "Baichuan4-Turbo",
+        "name": "Baichuan4-Turbo",
+        "group": "Baichuan",
+        "provider": "baichuan",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "Baichuan4-Air",
+        "name": "Baichuan4-Air",
+        "group": "Baichuan",
+        "provider": "baichuan",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      }
+    ],
+    "defaultChatModelId": "Baichuan4-Turbo"
+  },
+  {
+    "id": "stepfun",
+    "name": "StepFun",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.stepfun.com",
+    "anthropicBaseUrl": "https://api.stepfun.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://platform.stepfun.com/",
+      "docs": "https://platform.stepfun.com/docs/api-reference/chat/chat-completion-create",
+      "models": "https://platform.stepfun.com/docs/guides/models/overview"
+    },
+    "models": [
+      {
+        "id": "step-5-preview",
+        "name": "Step 5 Preview",
+        "group": "Step",
+        "provider": "stepfun",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "step-3.7-flash",
+        "name": "Step 3.7 Flash",
+        "group": "Step",
+        "provider": "stepfun",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      }
+    ],
+    "defaultChatModelId": "step-5-preview"
+  },
+  {
+    "id": "modelscope",
+    "name": "ModelScope",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api-inference.modelscope.cn"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api-inference.modelscope.cn/v1/",
+    "anthropicBaseUrl": "https://api-inference.modelscope.cn",
+    "extraEndpoints": {
+      "responses": "https://api-inference.modelscope.cn/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://modelscope.cn",
+      "docs": "https://modelscope.cn/docs/model-service/API-Inference/intro",
+      "models": "https://modelscope.cn/models"
+    },
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "name": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "group": "deepseek-ai",
+        "provider": "modelscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Pro",
+        "name": "deepseek-ai/DeepSeek-V4-Pro",
+        "group": "deepseek-ai",
+        "provider": "modelscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "Qwen/Qwen3.8-Flash-Next",
+        "name": "Qwen/Qwen3.8-Flash-Next",
+        "group": "Qwen",
+        "provider": "modelscope",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-ai/DeepSeek-V4.1-Flash"
+  },
+  {
+    "id": "longcat",
+    "name": "LongCat",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.longcat.chat/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.longcat.chat/openai",
+    "anthropicBaseUrl": "https://api.longcat.chat/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://longcat.chat",
+      "docs": "https://longcat.chat/docs"
+    },
+    "models": [
+      {
+        "id": "LongCat-2.5-Preview",
+        "name": "LongCat-2.5-Preview",
+        "group": "LongCat",
+        "provider": "longcat",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      },
+      {
+        "id": "LongCat-2.0",
+        "name": "LongCat-2.0",
+        "group": "LongCat",
+        "provider": "longcat",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      }
+    ],
+    "defaultChatModelId": "LongCat-2.5-Preview"
+  },
+  {
+    "id": "mimo",
+    "name": "Xiaomi MiMo",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.xiaomimimo.com/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.xiaomimimo.com",
+    "anthropicBaseUrl": "https://api.xiaomimimo.com/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://platform.xiaomimimo.com",
+      "apiKey": "https://platform.xiaomimimo.com?ref=YVDC37",
+      "docs": "https://mimo.mi.com/docs"
+    },
+    "models": [
+      {
+        "id": "mimo-v2.6-flash",
+        "name": "mimo-v2.6-flash",
+        "group": "MiMo",
+        "provider": "mimo",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "mimo-v2.6-pro",
+        "name": "mimo-v2.6-pro",
+        "group": "MiMo",
+        "provider": "mimo",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "mimo-v2.6-pro-ultraspeed",
+        "name": "mimo-v2.6-pro-ultraspeed",
+        "group": "MiMo",
+        "provider": "mimo",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "mimo-v2.6-flash"
+  },
+  {
+    "id": "zai",
+    "name": "Z.ai",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.z.ai/api/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.z.ai/api/paas/v4/",
+    "anthropicBaseUrl": "https://api.z.ai/api/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://z.ai",
+      "apiKey": "https://z.ai/subscribe?ic=4UPMI1LUMO",
+      "docs": "https://docs.z.ai/",
+      "models": "https://docs.z.ai/models"
+    },
+    "models": [
+      {
+        "id": "glm-4.5",
+        "name": "GLM-4.5",
+        "group": "GLM",
+        "provider": "zai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-4.5-air",
+        "name": "GLM-4.5-Air",
+        "group": "GLM",
+        "provider": "zai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-4.7-flash",
+        "name": "GLM-4.7-Flash (free)",
+        "group": "Free",
+        "provider": "zai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "glm-4.5-flash",
+        "name": "GLM-4.5-Flash (free)",
+        "group": "Free",
+        "provider": "zai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "glm-4.5"
+  },
+  {
+    "id": "minimax-global",
+    "name": "MiniMax Global",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocolOverrides": {
+      "anthropic": "https://api.minimax.io/anthropic"
+    },
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.minimax.io/v1/",
+    "anthropicBaseUrl": "https://api.minimax.io/anthropic",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://platform.minimax.io/",
+      "docs": "https://platform.minimax.io/docs/api-reference/text-openai-api",
+      "models": "https://platform.minimax.io/document/Models"
+    },
+    "models": [
+      {
+        "id": "MiniMax-M3.1-Flash",
+        "name": "MiniMax-M3.1-Flash",
+        "group": "MiniMax",
+        "provider": "minimax-global",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "MiniMax-M2.5",
+        "name": "MiniMax-M2.5",
+        "group": "MiniMax",
+        "provider": "minimax-global",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "MiniMax-M3.1-Flash"
+  },
+  {
+    "id": "anthropic",
+    "name": "Anthropic",
+    "protocols": [
+      "anthropic"
+    ],
+    "protocol": "anthropic",
+    "enabled": false,
+    "baseUrl": "https://api.anthropic.com",
+    "anthropicBaseUrl": "https://api.anthropic.com",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://anthropic.com/",
+      "apiKey": "https://console.anthropic.com/settings/keys",
+      "docs": "https://docs.anthropic.com/en/docs",
+      "models": "https://docs.anthropic.com/en/docs/about-claude/models"
+    },
+    "models": [
+      {
+        "id": "claude-opus-4-7",
+        "name": "Claude Opus 4.7",
+        "group": "Claude 4.7",
+        "provider": "anthropic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        },
+        "chatProtocol": "messages"
+      },
+      {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "group": "Claude 4.6",
+        "provider": "anthropic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        },
+        "chatProtocol": "messages"
+      },
+      {
+        "id": "claude-sonnet-4-6",
+        "name": "Claude Sonnet 4.6",
+        "group": "Claude 4.6",
+        "provider": "anthropic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        },
+        "chatProtocol": "messages"
+      },
+      {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "group": "Claude 4.5",
+        "provider": "anthropic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        },
+        "chatProtocol": "messages"
+      },
+      {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5",
+        "group": "Claude 4.5",
+        "provider": "anthropic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        },
+        "chatProtocol": "messages"
+      },
+      {
+        "id": "claude-opus-4-5",
+        "name": "Claude Opus 4.5",
+        "group": "Claude 4.5",
+        "provider": "anthropic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "agentRuntimes": {
+            "claudeCode": true
+          }
+        },
+        "chatProtocol": "messages"
+      }
+    ],
+    "defaultChatModelId": "claude-opus-4-7"
+  },
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "protocols": [
+      "openai-response",
+      "openai"
+    ],
+    "protocolOverrides": {
+      "openai-response": "https://api.openai.com/v1"
+    },
+    "protocol": "openai-response",
+    "enabled": false,
+    "baseUrl": "https://api.openai.com",
+    "extraEndpoints": {
+      "responses": "https://api.openai.com/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://openai.com/",
+      "apiKey": "https://platform.openai.com/api-keys",
+      "docs": "https://platform.openai.com/docs",
+      "models": "https://platform.openai.com/docs/models"
+    },
+    "models": [
+      {
+        "id": "gpt-5.4",
+        "name": "GPT 5.4",
+        "group": "gpt-5.4",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5.4-pro",
+        "name": "GPT 5.4 Pro",
+        "group": "gpt-5.4",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5.2",
+        "name": "GPT 5.2",
+        "group": "gpt-5.2",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5.2-pro",
+        "name": "GPT 5.2 Pro",
+        "group": "gpt-5.2",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5.1",
+        "name": "GPT 5.1",
+        "group": "gpt-5.1",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5",
+        "name": "GPT 5",
+        "group": "gpt-5",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5-pro",
+        "name": "GPT 5 Pro",
+        "group": "gpt-5",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-5-chat",
+        "name": "GPT 5 Chat",
+        "group": "gpt-5",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        },
+        "chatProtocol": "responses"
+      },
+      {
+        "id": "gpt-image-1",
+        "name": "GPT Image 1",
+        "group": "gpt-image",
+        "provider": "openai",
+        "presetModel": true,
+        "capabilities": {
+          "chat": false,
+          "tools": true,
+          "imageGeneration": true
+        }
+      }
+    ],
+    "defaultChatModelId": "gpt-5.4"
+  },
+  {
+    "id": "gemini",
+    "name": "Gemini",
+    "protocols": [
+      "gemini"
+    ],
+    "protocol": "gemini",
+    "enabled": false,
+    "baseUrl": "https://generativelanguage.googleapis.com",
+    "extraEndpoints": {
+      "gemini": "https://generativelanguage.googleapis.com"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://gemini.google.com/",
+      "apiKey": "https://aistudio.google.com/app/apikey",
+      "docs": "https://ai.google.dev/gemini-api/docs",
+      "models": "https://ai.google.dev/gemini-api/docs/models/gemini"
+    },
+    "models": [
+      {
+        "id": "gemini-3.5-flash",
+        "name": "Gemini 3.5 Flash",
+        "group": "Gemini 3",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        },
+        "chatProtocol": "gemini"
+      },
+      {
+        "id": "gemini-2.5-flash",
+        "name": "Gemini 2.5 Flash",
+        "group": "Gemini 2.5",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        },
+        "chatProtocol": "gemini"
+      },
+      {
+        "id": "gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
+        "group": "Gemini 2.5",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        },
+        "chatProtocol": "gemini"
+      },
+      {
+        "id": "gemini-2.5-flash-image-preview",
+        "name": "Gemini 2.5 Flash Image",
+        "group": "Gemini 2.5",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": false,
+          "imageGeneration": true
+        }
+      },
+      {
+        "id": "gemini-3-pro-image-preview",
+        "name": "Gemini 3 Pro Image Preview",
+        "group": "Gemini 3",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": false,
+          "imageGeneration": true
+        }
+      },
+      {
+        "id": "gemini-3-pro-preview",
+        "name": "Gemini 3 Pro Preview",
+        "group": "Gemini 3",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        },
+        "chatProtocol": "gemini"
+      },
+      {
+        "id": "gemini-3.1-pro-preview",
+        "name": "Gemini 3.1 Pro Preview",
+        "group": "Gemini 3",
+        "provider": "gemini",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        },
+        "chatProtocol": "gemini"
+      }
+    ],
+    "defaultChatModelId": "gemini-3.5-flash"
+  },
+  {
+    "id": "groq",
+    "name": "Groq",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.groq.com/openai",
+    "anthropicBaseUrl": "https://api.groq.com/openai",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://groq.com/",
+      "apiKey": "https://console.groq.com/keys",
+      "docs": "https://console.groq.com/docs/quickstart",
+      "models": "https://console.groq.com/docs/models"
+    },
+    "models": [
+      {
+        "id": "llama3-8b-8192",
+        "name": "LLaMA3 8B",
+        "group": "Llama3",
+        "provider": "groq",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "llama3-70b-8192",
+        "name": "LLaMA3 70B",
+        "group": "Llama3",
+        "provider": "groq",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "mistral-saba-24b",
+        "name": "Mistral Saba 24B",
+        "group": "Mistral",
+        "provider": "groq",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "gemma-9b-it",
+        "name": "Gemma 9B",
+        "group": "Gemma",
+        "provider": "groq",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "llama3-8b-8192"
+  },
+  {
+    "id": "together",
+    "name": "Together",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.together.xyz",
+    "anthropicBaseUrl": "https://api.together.xyz",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://www.together.ai/",
+      "docs": "https://docs.together.ai/docs/introduction",
+      "models": "https://docs.together.ai/docs/serverless-models"
+    },
+    "models": [
+      {
+        "id": "meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo",
+        "name": "Llama-3.2-11B-Vision",
+        "group": "Llama-3.2",
+        "provider": "together",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "vision": true
+        }
+      },
+      {
+        "id": "meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+        "name": "Llama-3.2-90B-Vision",
+        "group": "Llama-3.2",
+        "provider": "together",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "vision": true
+        }
+      },
+      {
+        "id": "google/gemma-2-27b-it",
+        "name": "google/gemma-2-27b-it",
+        "group": "Gemma",
+        "provider": "together",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo"
+  },
+  {
+    "id": "fireworks",
+    "name": "Fireworks",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.fireworks.ai/inference",
+    "anthropicBaseUrl": "https://api.fireworks.ai/inference",
+    "extraEndpoints": {
+      "responses": "https://api.fireworks.ai/inference/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://fireworks.ai/",
+      "docs": "https://docs.fireworks.ai/getting-started/introduction",
+      "models": "https://fireworks.ai/dashboard/models"
+    },
+    "models": [
+      {
+        "id": "accounts/fireworks/models/deepseek-v3p2",
+        "name": "DeepSeek V3.2",
+        "group": "DeepSeek",
+        "provider": "fireworks",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "accounts/fireworks/models/deepseek-v4-pro",
+        "name": "DeepSeek V4 Pro",
+        "group": "DeepSeek",
+        "provider": "fireworks",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "accounts/fireworks/models/deepseek-v3p2"
+  },
+  {
+    "id": "nvidia",
+    "name": "nvidia",
+    "protocols": [
+      "openai",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://integrate.api.nvidia.com",
+    "extraEndpoints": {
+      "responses": "https://integrate.api.nvidia.com/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://build.nvidia.com/explore/discover",
+      "docs": "https://docs.api.nvidia.com/nim/reference/llm-apis",
+      "models": "https://build.nvidia.com/nim"
+    },
+    "models": [
+      {
+        "id": "meta/llama-3.1-405b-instruct",
+        "name": "meta/llama-3.1-405b-instruct",
+        "group": "Llama",
+        "provider": "nvidia",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-ai/deepseek-r1",
+        "name": "deepseek-ai/deepseek-r1",
+        "group": "DeepSeek",
+        "provider": "nvidia",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      }
+    ],
+    "defaultChatModelId": "meta/llama-3.1-405b-instruct"
+  },
+  {
+    "id": "grok",
+    "name": "Grok",
+    "protocols": [
+      "openai",
+      "anthropic",
+      "openai-response"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.x.ai",
+    "anthropicBaseUrl": "https://api.x.ai",
+    "extraEndpoints": {
+      "responses": "https://api.x.ai/v1"
+    },
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://x.ai/",
+      "docs": "https://docs.x.ai/",
+      "models": "https://docs.x.ai/docs/models"
+    },
+    "models": [
+      {
+        "id": "grok-4",
+        "name": "grok-4",
+        "group": "Grok",
+        "provider": "grok",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "grok-3",
+        "name": "grok-3",
+        "group": "Grok",
+        "provider": "grok",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "grok-4"
+  },
+  {
+    "id": "hyperbolic",
+    "name": "Hyperbolic",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.hyperbolic.xyz",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://app.hyperbolic.xyz",
+      "docs": "https://docs.hyperbolic.xyz",
+      "models": "https://app.hyperbolic.xyz/models"
+    },
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-V3",
+        "name": "deepseek-ai/DeepSeek-V3",
+        "group": "DeepSeek",
+        "provider": "hyperbolic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-R1",
+        "name": "deepseek-ai/DeepSeek-R1",
+        "group": "DeepSeek",
+        "provider": "hyperbolic",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true,
+          "reasoning": true
+        }
+      }
+    ],
+    "defaultChatModelId": "deepseek-ai/DeepSeek-V3"
+  },
+  {
+    "id": "mistral",
+    "name": "Mistral",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.mistral.ai",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://mistral.ai",
+      "docs": "https://docs.mistral.ai",
+      "models": "https://docs.mistral.ai/getting-started/models/models_overview"
+    },
+    "models": [
+      {
+        "id": "mistral-large-latest",
+        "name": "mistral-large-latest",
+        "group": "Mistral",
+        "provider": "mistral",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "ministral-8b-latest",
+        "name": "ministral-8b-latest",
+        "group": "Mistral",
+        "provider": "mistral",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true
+        }
+      }
+    ],
+    "defaultChatModelId": "mistral-large-latest"
+  },
+  {
+    "id": "cerebras",
+    "name": "Cerebras AI",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "https://api.cerebras.ai/v1",
+    "anthropicBaseUrl": "https://api.cerebras.ai/v1",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://cerebras.ai",
+      "docs": "https://inference-docs.cerebras.ai/"
+    },
+    "models": [
+      {
+        "id": "llama3.1-8b",
+        "name": "llama3.1-8b",
+        "group": "Llama",
+        "provider": "cerebras",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      },
+      {
+        "id": "qwen-3-235b-a22b",
+        "name": "qwen-3-235b-a22b",
+        "group": "Qwen",
+        "provider": "cerebras",
+        "presetModel": true,
+        "capabilities": {
+          "chat": true,
+          "tools": true
+        }
+      }
+    ],
+    "defaultChatModelId": "llama3.1-8b"
+  },
+  {
+    "id": "ovms",
+    "name": "OpenVINO Model Server",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "http://localhost:8000/v3/",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://www.intel.com/content/www/us/en/developer/tools/openvino-toolkit/overview.html",
+      "docs": "https://docs.openvino.ai/2025/model-server/ovms_what_is_openvino_model_server.html"
+    },
+    "models": []
+  },
+  {
+    "id": "ollama",
+    "name": "Ollama",
+    "protocols": [
+      "ollama",
+      "anthropic"
+    ],
+    "protocol": "ollama",
+    "enabled": false,
+    "baseUrl": "http://localhost:11434",
+    "anthropicBaseUrl": "http://localhost:11434",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://ollama.com/",
+      "docs": "https://github.com/ollama/ollama/tree/main/docs",
+      "models": "https://ollama.com/library"
+    },
+    "models": []
+  },
+  {
+    "id": "lmstudio",
+    "name": "LM Studio",
+    "protocols": [
+      "openai",
+      "anthropic"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "http://localhost:1234",
+    "anthropicBaseUrl": "http://localhost:1234",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://lmstudio.ai/",
+      "docs": "https://lmstudio.ai/docs",
+      "models": "https://lmstudio.ai/models"
+    },
+    "models": []
+  },
+  {
+    "id": "gpustack",
+    "name": "GPUStack",
+    "protocols": [
+      "openai"
+    ],
+    "protocol": "openai",
+    "enabled": false,
+    "baseUrl": "",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://gpustack.ai/",
+      "docs": "https://docs.gpustack.ai/latest/",
+      "models": "https://docs.gpustack.ai/latest/overview/#supported-models"
+    },
+    "models": []
+  },
+  {
+    "id": "new-api",
+    "name": "New API",
+    "protocols": [
+      "new-api",
+      "anthropic"
+    ],
+    "protocol": "new-api",
+    "enabled": false,
+    "baseUrl": "http://localhost:3000",
+    "anthropicBaseUrl": "http://localhost:3000",
+    "apiKey": "",
+    "isSystem": true,
+    "websites": {
+      "official": "https://docs.newapi.pro/",
+      "docs": "https://docs.newapi.pro"
+    },
+    "models": []
+  }
+]

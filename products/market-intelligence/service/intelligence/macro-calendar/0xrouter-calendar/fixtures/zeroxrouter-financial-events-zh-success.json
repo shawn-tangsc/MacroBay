@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "msg": "ok",
+  "data": [
+    {
+      "calendarId": "redacted-calendar-id",
+      "calendarName": "redacted-calendar-name",
+      "countryCode": "US",
+      "countryName": "redacted-country-name",
+      "id": 0,
+      "locale": "zh",
+      "pubTime": 0,
+      "pubTimestamp": 0,
+      "star": 0,
+      "timeUnpublished": 0,
+      "type": 0
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@platform/*": ["platform/*"],
+      "@products/*": ["products/*"],
+      "@renderer/*": ["apps/desktop-shell/src/renderer/src/*"],
+      "antd": ["apps/desktop-shell/node_modules/antd"],
+      "dayjs": ["apps/desktop-shell/node_modules/dayjs"],
+      "lucide-react": ["apps/desktop-shell/node_modules/lucide-react"]
+    },
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "typeRoots": ["./apps/desktop-shell/node_modules/@types", "./node_modules/@types"]
+  },
+  "include": [
+    "apps/desktop-shell/src",
+    "platform/**/*.ts",
+    "products/**/*.{ts,tsx}",
+    "scripts/**/*.mts",
+    "electron.vite.config.ts"
+  ]
+}

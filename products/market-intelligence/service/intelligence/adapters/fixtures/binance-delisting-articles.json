@@ -1,0 +1,22 @@
+{
+  "code": "000000",
+  "message": null,
+  "data": {
+    "catalogs": [
+      {
+        "catalogId": 49,
+        "catalogName": "Delisting",
+        "articles": [
+          {
+            "id": 3001,
+            "code": "delist111222333",
+            "title": "Binance Will Delist Example Token (XYZ)",
+            "type": 1,
+            "releaseDate": 1717603200000
+          }
+        ]
+      }
+    ]
+  },
+  "success": true
+}

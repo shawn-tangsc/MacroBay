@@ -1,0 +1,28 @@
+{
+  "code": 200,
+  "msg": "redacted-success-message",
+  "data": [
+    {
+      "date": 1704931200000,
+      "change": 1200.5,
+      "changeUsd": 4500000,
+      "list": [
+        {
+          "name": "example-btc-fund",
+          "ticker": "BTC-EXAMPLE"
+        }
+      ]
+    },
+    {
+      "date": 1705017600000,
+      "change": 475.75,
+      "changeUsd": 1785000,
+      "list": [
+        {
+          "name": "example-btc-fund",
+          "ticker": "BTC-EXAMPLE"
+        }
+      ]
+    }
+  ]
+}

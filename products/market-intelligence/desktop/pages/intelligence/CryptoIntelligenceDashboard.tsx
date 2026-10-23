@@ -1,0 +1,260 @@
+import { useMemo, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
+
+import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
+import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
+import { FundingRateHistoryPanel } from '../../features/industry/funding-rates/FundingRateHistoryPanel'
+import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
+
+import { type DashboardMacroReleaseDynamicsState } from './dashboardEconomicCalendarModel'
+import { dashboardRealSourcePolicy, FearGreedGaugePresentationPolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
+import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
+import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
+import { FeedStatusStrip } from './DashboardFeedStatusStrip'
+import { useDashboardFeedStatus } from './useDashboardFeedStatus'
+import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
+import { useDashboardFearGreed } from './useDashboardFearGreed'
+import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
+
+import './cryptoDashboard.css'
+import { CrossAssetObservationPanel } from '../../features/industry/cross-asset/CrossAssetObservationPanel'
+import type { CrossAssetEventLine } from '../../features/industry/cross-asset/crossAssetEventLines'
+import { useMacroMarketSnapshot } from '../../features/industry/cross-asset/useMacroMarketSnapshot'
+import { useMacroRatesSnapshot } from '../../features/industry/cross-asset/useMacroRatesSnapshot'
+import type { createCrossAssetObservationClient } from '../../shared/ipc/crossAssetObservationClient'
+import type { DashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedStatusClient'
+import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
+import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
+import type { productText } from '../../shared/i18n/productText'
+import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+
+type CryptoDashboardText = {
+  workspaceLabel: string
+  title: string
+  description: string
+  backToAgents: string
+  configureSources: string
+  crossAsset: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
+  macroReleaseDynamics: {
+    title: string
+    loading: string
+    unavailable: string
+    upcoming: string
+    released: string
+    noUpcoming: string
+    noReleased: string
+    today: string
+    inDays: string
+    inDaysHours: string
+    lessThanOneHour: string
+    prior: string
+    eventCount: string
+    overflowAnnouncement: string
+    calendarAction: string
+    sourceName: string
+    sourceStates: Record<DashboardMacroReleaseDynamicsState['state'], string>
+    manageSettings: string
+  }
+  fearGreed: { title: string; loading: string; empty: string; unavailable: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
+  fundingRate: { title: string; pairTitle: string; loading: string; empty: string; unavailable: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFundingRateHistoryState['state'], string>; manageSettings: string; assets: { btc: string; eth: string }; paymentDirections: Record<'long-pays-short' | 'short-pays-long' | 'neutral', string> }
+  capitalConditions: {
+    title: string; loading: string; empty: string; unavailable: string
+    stablecoinSupply: string; change7d: string; btcEtfLatest: string; ethEtfLatest: string; observedAt: string
+    etfFlow: string; etfUnavailable: string; funds: string; btc: string; eth: string
+    flowDirections: Record<'inflow' | 'outflow' | 'zero', string>; singleDay: string; consecutiveDays: string; valueUnavailable: string
+    refresh: string; refreshFailed: string
+  }
+  positioning: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
+  feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
+  context: { sourceStatus: { title: string } }
+}
+
+const dashboardMacroReleaseTerminalStripPolicy = {
+  layout: 'terminal-strip'
+} as const
+
+type CalendarText = {
+  events: Record<string, string>
+  abbreviations: Record<string, string>
+  moreEvents: string
+}
+
+type Props = { text: CryptoDashboardText; calendarText: CalendarText; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
+
+export function CryptoIntelligenceDashboard({ text, calendarText, client, fearGreedClient, fundingRateClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
+  /**
+   * The calendar's event-title vocabulary, read from the product registry by the page entry and
+   * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
+   * list, one owner.
+   */
+  calendarEventTitles?: Record<string, string>
+  /** The 0xRouter month's events, injected by the page: the chart's lines read both calendars. */
+  readMarketEvents?: (month: string, asOf: string) => Promise<readonly unknown[] | null>
+  /** A chart event line the reader picked: the page opens its detail and records it. */
+  onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void }): React.ReactElement {
+  const calendarState = useDashboardEconomicCalendar({ client, now })
+  const fearGreedState = useDashboardFearGreed({ client: fearGreedClient, now })
+  const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
+  // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
+  // shows the reader the state they are already looking at.
+  const [capitalReloadKey, setCapitalReloadKey] = useState(0)
+  const [capitalRefreshing, setCapitalRefreshing] = useState(false)
+  const [capitalRefreshFailed, setCapitalRefreshFailed] = useState(false)
+  const capitalConditionsState = useCapitalConditions({ client: capitalConditionsClient, now, reloadKey: capitalReloadKey })
+  // One macro read feeds two readers: the 市场状态 table inside the panel and the 来源状态 strip
+  // below, so the strip cannot disagree with the figures it is describing.
+  const macroView = useMacroMarketSnapshot({ client: macroMarketClient })
+  // The two rate rows read FRED's official daily closes through their own door: a daily reading cannot
+  // ride the fifteen-minute macro snapshot without being repainted as if it were intraday.
+  const macroRatesView = useMacroRatesSnapshot({ client: macroRatesClient })
+  // The 来源状态 strip's per-feed lines: the reader's switches and last outcomes, plus the cross-asset
+  // snapshot that says which index leg is answering. Read at its own slow cadence, and read-only.
+  const feedView = useDashboardFeedStatus({ client: dashboardFeedStatusClient, crossAssetClient })
+  // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
+  // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
+  // make it re-query the calendar on every render of this dashboard.
+  const crossAssetText = useMemo(
+    () => ({ ...text.crossAsset, ...(calendarEventTitles ? { eventTitles: calendarEventTitles } : {}) }),
+    [text.crossAsset, calendarEventTitles]
+  )
+  const feedRows = projectDashboardFeedRows({
+    macroClient: Boolean(macroMarketClient), macroState: macroView.state,
+    ...(macroView.snapshot ? { macro: macroView.snapshot } : {}),
+    ...(macroRatesView.snapshot ? { rates: macroRatesView.snapshot } : {}),
+    indexLoading: Boolean(crossAssetClient) && feedView.indexState === 'loading',
+    ...(feedView.index ? { index: feedView.index } : {}),
+    ...(feedView.feed ? { feed: feedView.feed } : {})
+  })
+  const nowMs = now().getTime()
+  const refreshCapitalConditions = async (): Promise<void> => {
+    if (!collectCapitalConditionsSources) return
+    setCapitalRefreshing(true)
+    setCapitalRefreshFailed(false)
+    try {
+      await collectCapitalConditionsSources()
+      // The collection runs as a background job, so this reads whatever the collector was able
+      // to store by now; the panel keeps its refresh control for another attempt.
+      setCapitalReloadKey(key => key + 1)
+    } catch {
+      setCapitalRefreshFailed(true)
+    } finally {
+      setCapitalRefreshing(false)
+    }
+  }
+
+  return (
+    <main className="intelligence-page mi-crypto-dashboard" aria-label={text.title}>
+      <header className="mi-crypto-dashboard__header">
+        <div className="mi-crypto-dashboard__heading">
+          <p className="mi-crypto-dashboard__label">{text.workspaceLabel}</p>
+          <h1>{text.title}</h1>
+          <p>{text.description}</p>
+        </div>
+        <div className="mi-crypto-dashboard__tools">
+          <button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="button">{text.configureSources}</button>
+          <button className="mi-crypto-dashboard__back" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToAgents}</button>
+        </div>
+      </header>
+
+      {/* Named mount point: the analysis workspace portals its latest-conclusion
+          card in here, directly under the macro release strip, so the card reads
+          as part of this dashboard without the dashboard knowing timeline data. */}
+      <div ref={conclusionSlot} data-dashboard-conclusion-slot />
+
+      {crossAssetClient ? <CrossAssetObservationPanel
+        client={crossAssetClient}
+        macroSnapshot={macroView.snapshot}
+        rates={macroRatesView.snapshot}
+        // The panel reads the same calendar this dashboard already reads, rather than reaching for a
+        // second client of its own: one month query per window, one source of truth for the events.
+        calendar={client}
+        readMarketEvents={readMarketEvents}
+        // …and it hands a picked line up rather than opening anything itself: the page owns both the
+        // detail drawer and the recorded selection.
+        onSelectEvent={onSelectChartEvent}
+        text={crossAssetText} /> : null}
+      <div className="mi-crypto-dashboard__capital-positioning-row">
+        <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
+          onRefresh={collectCapitalConditionsSources ? () => void refreshCapitalConditions() : undefined}
+          refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} />
+      </div>
+      <div className="mi-crypto-dashboard__positioning-row">
+        <PositioningPanel fearGreedState={fearGreedState} text={text} />
+        <FundingRateHistoryPanel state={fundingRateState} text={text.fundingRate} />
+      </div>
+
+      <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
+    </main>
+  )
+}
+
+function DynamicsGroup({ label, empty, meta, kind, children }: { label: string; empty: string; meta?: string; kind: 'upcoming' | 'released'; children?: React.ReactNode }): React.ReactElement {
+  return <div className="mi-crypto-dashboard__release-dynamics-group" data-release-dynamics-group={kind}>
+    <strong>{label}</strong><span className="mi-crypto-dashboard__release-dynamics-date">{meta ?? empty}</span>{children}
+  </div>
+}
+
+function DynamicsEventEntry({ calendarText, event, kind, text }: {
+  calendarText: CalendarText
+  event: { labelKey: string; actual?: string; previous?: string }
+  kind: 'upcoming' | 'released'
+  text?: CryptoDashboardText['macroReleaseDynamics']
+}): React.ReactElement {
+  return <span className="mi-crypto-dashboard__release-dynamics-entry" data-release-dynamics-entry={kind}>
+    <i aria-hidden="true" />
+    <span aria-hidden="true" data-release-dynamics-abbreviation>{calendarText.abbreviations[event.labelKey]}</span>
+    <span className="mi-crypto-dashboard__visually-hidden">{calendarText.events[event.labelKey]}</span>
+    {event.actual ? <strong data-release-dynamics-actual>{event.actual}</strong> : null}
+    {event.previous && text ? <small data-release-dynamics-previous>{text.prior} {event.previous}</small> : null}
+  </span>
+}
+
+function DynamicsOverflow({ count, text, visualTemplate }: { count: number; text: CryptoDashboardText['macroReleaseDynamics']; visualTemplate: string }): React.ReactElement | null {
+  if (count < 1) return null
+  return <span className="mi-crypto-dashboard__release-dynamics-overflow" data-release-dynamics-overflow><span aria-hidden="true">{format(visualTemplate, { count })}</span><span className="mi-crypto-dashboard__visually-hidden">{format(text.overflowAnnouncement, { count })}</span></span>
+}
+
+function formatCountdown(countdown: NonNullable<Extract<DashboardMacroReleaseDynamicsState, { state: 'available' }>['upcoming']>['countdown'], text: CryptoDashboardText['macroReleaseDynamics']): string {
+  if (countdown.state === 'less-than-one-hour') return text.lessThanOneHour
+  if (countdown.state === 'today') return text.today
+  if (countdown.state === 'date-only') return format(text.inDays, { days: countdown.days })
+  return format(text.inDaysHours, { days: countdown.days, hours: countdown.hours })
+}
+
+function PositioningPanel({ fearGreedState, text }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText }): React.ReactElement {
+  const formatTime = useShellTimeFormat()
+  return <>
+    <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.positioning.title}</h2>
+      <div className="mi-crypto-dashboard__sentiment-gauge" data-sentiment-gauge>
+      {fearGreedState.state === 'available' ? <>
+        <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<path className="mi-crypto-dashboard__gauge-needle" d={FearGreedGaugePresentationPolicy.trackPath} data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]} style={{ transform: `rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)}deg)` }} /></svg>
+        <strong>{fearGreedState.score}</strong><span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.positioning.gaugeMarkers.fear} · {text.positioning.gaugeMarkers.neutral} · {text.positioning.gaugeMarkers.greed}</p>
+      </> : <span>{text.fearGreed[fearGreedState.state]}</span>}
+      </div>
+    </section>
+  </>
+}
+
+/**
+ * 来源状态. The first three rows describe the panels that own a snapshot of their own; the feeds behind
+ * the 市场状态 / 跨市场 table are printed by `FeedStatusStrip` below them — 异常优先, so a fallback is
+ * stated where the figure it explains is described without making a healthy board cost a line per feed.
+ */
+function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardMacroReleaseDynamicsState; fearGreedState: DashboardFearGreedState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
+  const tags = { synthetic: text.crossAsset.syntheticTag, proxy: text.crossAsset.proxyTag, realIndex: text.crossAsset.indexNames.real }
+  return <section className="mi-crypto-dashboard__source-region"><header><h2>{text.context.sourceStatus.title}</h2></header>{dashboardRealSourcePolicy.map((source) => source.sourceId === 'economic-calendar'
+    ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><button onClick={onOpenCalendar} type="button">{text.macroReleaseDynamics.calendarAction}</button><button onClick={() => onManageSource()} type="button">{text.macroReleaseDynamics.manageSettings}</button></div></div>
+    : source.sourceId === 'fear-greed'
+      ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{text.fearGreed.sourceStates[fearGreedState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.fearGreed.manageSettings}</button></div></div>
+      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fundingRateState.state} key={source.sourceId}><i /><span>{text.fundingRate.sourceName}</span><small>{text.fundingRate.sourceStates[fundingRateState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.fundingRate.manageSettings}</button></div></div>)}
+    <FeedStatusStrip rows={feedRows} text={text.feedStatus} tags={tags} nowMs={nowMs} onManageSource={onManageSource} />
+  </section>
+}
+
+function formatTime(value: string): string {
+  return `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`
+}
+
+function format(template: string, values: Record<string, string | number>): string {
+  return Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), template)
+}

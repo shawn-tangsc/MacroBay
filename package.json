@@ -1,0 +1,67 @@
+{
+  "name": "macrobay",
+  "productName": "MacroBay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first AI desktop workspace for traceable market intelligence.",
+  "license": "MIT",
+  "packageManager": "pnpm@10.20.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "out/main/index.js",
+  "scripts": {
+    "generate:products": "tsx scripts/generate-product-registry.mts",
+    "predev": "pnpm generate:products",
+    "dev": "env -u ELECTRON_RUN_AS_NODE pnpm --filter @macrobay/desktop-shell dev",
+    "prebuild": "pnpm generate:products",
+    "build": "pnpm --filter @macrobay/desktop-shell build",
+    "pretest": "pnpm generate:products",
+    "test": "pnpm --filter @macrobay/desktop-shell test",
+    "pretypecheck": "pnpm generate:products",
+    "lint": "pnpm --filter @macrobay/desktop-shell lint",
+    "docs:check": "node scripts/check-docs.mjs",
+    "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "products/*"
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "electron",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react-swc": "^3.11.0",
+    "electron": "^41.9.2",
+    "electron-vite": "^5.0.0",
+    "happy-dom": "^20.10.6",
+    "lightweight-charts": "^5.0.8",
+    "lucide-react": "^0.525.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tsx": "^4.20.6",
+    "typescript": "~5.8.3",
+    "vite": "^7.3.6",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.205",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^2.2.0",
+    "grammy": "^1.44.0",
+    "node-ical": "0.27.1",
+    "proxy-agent": "^8.0.2",
+    "telegram-markdown-v2": "^0.0.4",
+    "ws": "^8.21.0"
+  }
+}

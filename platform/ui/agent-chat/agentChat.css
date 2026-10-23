@@ -1,0 +1,144 @@
+/*
+ * Canonical agent-conversation presentation.
+ *
+ * The bubble and composer rules below are the design that shipped with the market-intelligence
+ * agent panel; the main agent page reuses the same primitives so a change here lands on both
+ * surfaces. Keep role-identifying colour in the bubble (not in a label) and let the transcript own
+ * the scroll.
+ */
+/*
+ * A hosted conversation: the agent page's own message list and composer, dropped into a panel or
+ * a product column. The host owns the frame, this owns the fill, so the two never disagree about
+ * where the scroll ends and the composer begins.
+ */
+.agent-chat-surface {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.agent-chat-surface > .agent-message-region-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-chat-surface > .agent-message-region-shell > .agent-message-scroll-region {
+  padding: 8px 2px 0;
+}
+
+.agent-chat-surface > .agent-inputbar.agent-chat-composer {
+  flex: 0 0 auto;
+  width: calc(100% - 24px);
+  /* Pinned to the bottom of the host: an empty or short conversation must not leave the composer
+     floating in the middle of the panel. */
+  margin: auto auto 12px;
+}
+
+.agent-chat-surface.is-loading {
+  min-height: 120px;
+}
+
+.agent-chat-transcript {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.agent-chat-transcript__empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+.agent-chat-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: flex-start;
+  width: fit-content;
+  max-width: 84%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.agent-chat-bubble[data-role='user'] {
+  align-self: flex-end;
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.agent-chat-bubble[data-role='assistant'] {
+  align-self: flex-start;
+}
+
+.agent-chat-bubble[data-role='user'] strong {
+  color: var(--accent);
+}
+
+.agent-chat-bubble .chat-markdown {
+  margin-top: 6px;
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+
+.agent-chat-bubble__status {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.agent-chat-composer {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.agent-chat-composer__notices {
+  display: grid;
+  gap: 4px;
+}
+
+.agent-chat-composer__notices > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-chat-composer__notices > p[role='alert'] {
+  color: var(--danger);
+}
+
+.agent-chat-composer__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.agent-chat-composer__actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.agent-chat-composer__actions > button:first-child {
+  margin-right: auto;
+}
+
+
+/* Light theme follows the harness: a cool blue user bubble with dark text, not the accent tint. */
+:root[data-theme='light'] .agent-chat-bubble[data-role='user'] {
+  border-color: color-mix(in srgb, #4d6bfe 22%, #ffffff);
+  background: color-mix(in srgb, #4d6bfe 12%, #ffffff);
+  color: #111827;
+}

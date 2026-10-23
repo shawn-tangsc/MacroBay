@@ -1,0 +1,42 @@
+{
+  "code": "000000",
+  "message": null,
+  "data": {
+    "catalogs": [
+      {
+        "catalogId": 48,
+        "catalogName": "New Cryptocurrency Listing",
+        "articles": [
+          {
+            "id": 1001,
+            "code": "abc123def456",
+            "title": "Binance Will List Example Token (ABC)",
+            "type": 1,
+            "releaseDate": 1717603200000
+          },
+          {
+            "id": 1002,
+            "code": "def789ghi012",
+            "title": "Binance Adds ABC on Cross Margin",
+            "type": 1,
+            "releaseDate": 1717606800000
+          }
+        ]
+      },
+      {
+        "catalogId": 51,
+        "catalogName": "API Updates",
+        "articles": [
+          {
+            "id": 2001,
+            "code": "api111222333",
+            "title": "Binance API Update: New Order Endpoint",
+            "type": 1,
+            "releaseDate": 1717610400000
+          }
+        ]
+      }
+    ]
+  },
+  "success": true
+}

@@ -1,0 +1,1279 @@
+.mi-agent-portal {
+  --mi-page-inline: 32px;
+  --mi-page-block: 32px;
+  --mi-terminal-bg: #080c0d;
+  --mi-terminal-surface: #101717;
+  --mi-terminal-surface-strong: #15201c;
+  --mi-terminal-border: #293735;
+  --mi-terminal-border-strong: #41514c;
+  --mi-terminal-text: #edf3ef;
+  --mi-terminal-muted: #8a9992;
+  --mi-terminal-dim: #63736d;
+  --mi-terminal-lime: #d4ff58;
+  --mi-terminal-lime-line: #87ab30;
+  min-height: 100%;
+  padding: var(--mi-page-block) var(--mi-page-inline);
+  background: radial-gradient(circle at 54% 3%, rgb(97 170 43 / 20%), transparent 32%), var(--mi-terminal-bg);
+  color: var(--mi-terminal-text);
+}
+
+.mi-agent-portal__content {
+  width: 100%;
+}
+
+.mi-agent-portal__label {
+  margin: 0 0 18px;
+  color: var(--mi-terminal-lime);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  line-height: 1;
+}
+
+.mi-agent-portal__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 400px);
+  justify-content: start;
+  gap: 16px;
+}
+
+.mi-analysis-timeline-entry {
+  display: flex;
+  width: 400px;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--mi-terminal-border);
+  border-radius: 10px;
+  background: var(--mi-terminal-surface);
+  color: var(--mi-terminal-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mi-analysis-timeline-entry:hover { border-color: var(--mi-terminal-lime-line); }
+.mi-analysis-timeline-entry > svg { color: var(--mi-terminal-lime); }
+.mi-analysis-timeline-entry span { display: grid; gap: 3px; min-width: 0; }
+.mi-analysis-timeline-entry strong { font-size: 12px; font-weight: 650; }
+.mi-analysis-timeline-entry small { color: var(--mi-terminal-muted); font-size: 10px; }
+
+.mi-analysis-timeline {
+  min-height: 100%;
+  padding: 26px 32px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.mi-analysis-timeline__header,
+.mi-analysis-timeline__header > div,
+.mi-analysis-timeline__header > div:last-child,
+.mi-analysis-timeline__entry > span,
+.mi-analysis-timeline__prediction > div {
+  display: flex;
+  align-items: center;
+}
+
+.mi-analysis-timeline__header { justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.mi-analysis-timeline__header > div:first-child { display: grid; gap: 5px; }
+.mi-analysis-timeline__header p, .mi-analysis-timeline__header h1, .mi-analysis-timeline__detail h2, .mi-analysis-timeline__list h2, .mi-analysis-timeline__detail h3, .mi-analysis-timeline__detail p { margin: 0; }
+.mi-analysis-timeline__header p { color: var(--accent); font: 700 10px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: .12em; }
+.mi-analysis-timeline__header h1 { color: var(--text-strong); font-size: 17px; }
+.mi-analysis-timeline__header > div:last-child { gap: 8px; }
+.mi-analysis-timeline__refresh, .mi-analysis-timeline__back { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+.mi-analysis-timeline__refresh:hover, .mi-analysis-timeline__back:hover { color: var(--accent); }
+.mi-analysis-timeline__workspace { display: grid; grid-template-columns: minmax(280px, 34%) minmax(0, 1fr); min-height: calc(100vh - 154px); border-bottom: 1px solid var(--border); }
+.mi-analysis-timeline__list { min-width: 0; border-right: 1px solid var(--border); padding: 16px 16px 16px 0; }
+.mi-analysis-timeline__detail { min-width: 0; padding: 16px 0 16px 22px; }
+.mi-analysis-timeline__list h2, .mi-analysis-timeline__detail h2 { margin-bottom: 12px; color: var(--text-strong); font-size: 13px; }
+.mi-analysis-timeline__entry { display: grid; width: 100%; gap: 5px; padding: 11px 12px; border: 1px solid transparent; border-bottom-color: var(--border); background: transparent; color: var(--text); cursor: pointer; text-align: left; }
+.mi-analysis-timeline__entry:hover, .mi-analysis-timeline__entry.is-selected { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+/* A failed request is an error, not a status: red against the otherwise muted list, announced to
+   assistive technology, and dismissible so it does not sit on the panel after it was read. */
+.mi-analysis-error { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 5px; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }
+.mi-analysis-error__icon { flex: none; margin-top: 1px; color: var(--danger); }
+.mi-analysis-error__body { display: grid; gap: 3px; min-width: 0; }
+.mi-analysis-error__body strong { color: var(--danger); font-size: 12px; font-weight: 600; line-height: 1.45; }
+.mi-analysis-error__body p { margin: 0; overflow-wrap: anywhere; color: var(--text); font-size: 11px; line-height: 1.45; }
+.mi-analysis-error__meta { color: var(--muted) !important; }
+.mi-analysis-error__dismiss { flex: none; margin-left: auto; color: var(--danger); }
+.mi-analysis-error__dismiss:hover { color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 14%, transparent) !important; }
+/* The end of the list: the sentinel the pull watches, and the same action as a button for a reader
+   who cannot perform a pull. */
+.mi-analysis-timeline__pull { display: flex; justify-content: center; padding: 10px 0 2px; }
+.mi-analysis-timeline__entry > span { justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
+.mi-analysis-timeline__entry em, .mi-analysis-timeline__prediction em { color: var(--accent); font-size: 10px; font-style: normal; }
+.mi-analysis-timeline__entry strong { color: var(--text-strong); font-size: 12px; font-weight: 650; }
+.mi-analysis-timeline__entry small, .mi-analysis-timeline__entry i, .mi-analysis-timeline__prediction p, .mi-analysis-timeline__prediction small, .mi-analysis-timeline__state, .mi-analysis-timeline__agent-note { color: var(--muted); font-size: 11px; font-style: normal; line-height: 1.45; }
+.mi-analysis-timeline__detail-content { display: grid; gap: 16px; }
+.mi-analysis-timeline__detail-content dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 0; background: var(--border); }
+.mi-analysis-timeline__detail-content dl > div { min-width: 0; padding: 10px; background: var(--surface); }
+.mi-analysis-timeline__detail-content dt { color: var(--muted); font-size: 10px; }
+.mi-analysis-timeline__detail-content dd { margin: 5px 0 0; overflow-wrap: anywhere; color: var(--text-strong); font-size: 11px; }
+.mi-analysis-timeline__detail-content section { display: grid; gap: 8px; }
+.mi-analysis-timeline__conclusion { padding: 12px 14px; border-left: 3px solid var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.mi-analysis-timeline__section-label { color: var(--accent) !important; font-size: 10px !important; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.mi-analysis-timeline__detail h3 { color: var(--text-strong); font-size: 13px; font-weight: 650; line-height: 1.5; }
+.mi-analysis-timeline__claims ul { display: grid; gap: 6px; margin: 0; padding-left: 18px; color: var(--text); font-size: 12px; line-height: 1.5; }
+.mi-analysis-timeline__claims li::marker { color: var(--accent); }
+.mi-analysis-timeline__prediction { display: grid; gap: 5px; padding: 10px 12px; border-left: 2px solid var(--accent); background: color-mix(in srgb, var(--surface) 90%, var(--accent)); }
+.mi-analysis-timeline__prediction > div { justify-content: space-between; gap: 12px; }
+.mi-analysis-timeline__prediction strong { color: var(--text-strong); font-size: 12px; }
+.mi-analysis-timeline__caveat, .mi-analysis-timeline__agent-note { padding: 8px 10px; border-left: 2px solid var(--border); background: var(--surface-soft); }
+.mi-analysis-timeline__audit { border-top: 1px solid var(--border); padding-top: 10px; }
+.mi-analysis-timeline__audit summary { color: var(--muted); cursor: pointer; font-size: 11px; }
+.mi-analysis-timeline__audit[open] summary { color: var(--text-strong); margin-bottom: 10px; }
+
+@media (max-width: 760px) {
+  .mi-analysis-timeline { padding: 18px; }
+  .mi-analysis-timeline__workspace { grid-template-columns: 1fr; }
+  .mi-analysis-timeline__list { border-right: 0; border-bottom: 1px solid var(--border); padding-right: 0; }
+  .mi-analysis-timeline__detail { padding-left: 0; }
+  .mi-analysis-timeline__detail-content dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.mi-agent-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(86px, 28%);
+  position: relative;
+  min-width: 0;
+  height: 160px;
+  padding: 15px 0 15px 18px;
+  overflow: hidden;
+  border: 1px solid var(--mi-terminal-border);
+  border-radius: 12px;
+  background: var(--mi-terminal-surface);
+  color: var(--mi-terminal-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.mi-agent-card:first-child {
+  border-color: var(--mi-terminal-lime-line);
+  background: linear-gradient(104deg, #17260f 0%, #101a17 72%);
+}
+
+.mi-agent-card:not(.is-disabled):hover {
+  border-color: var(--mi-terminal-lime);
+  background: var(--mi-terminal-surface-strong);
+}
+
+.mi-agent-card.is-disabled {
+  cursor: not-allowed;
+}
+
+.mi-agent-card__copy {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-width: 0;
+}
+
+.mi-agent-card__status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px;
+  border: 1px solid #756021;
+  color: #f0b642;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.mi-agent-card__status.is-available {
+  border-color: var(--mi-terminal-lime-line);
+  color: var(--mi-terminal-lime);
+}
+
+.mi-agent-card__identity {
+  align-self: end;
+  min-width: 0;
+}
+
+.mi-agent-card__name,
+.mi-agent-card__lens,
+.mi-agent-card__footer {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mi-agent-card__name {
+  color: var(--mi-terminal-text);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.mi-agent-card__lens {
+  margin-top: 5px;
+  color: var(--mi-terminal-muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 9px;
+  white-space: normal;
+  letter-spacing: 0.07em;
+}
+
+.mi-agent-card__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgb(107 127 116 / 32%);
+  color: var(--mi-terminal-muted);
+  font-size: 9px;
+}
+
+.mi-agent-card__footer strong {
+  color: var(--mi-terminal-lime);
+  font-weight: 650;
+}
+
+.mi-agent-card.is-disabled .mi-agent-card__footer strong {
+  color: var(--mi-terminal-dim);
+}
+
+.mi-agent-card__entry,
+.mi-crypto-dashboard__back {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.mi-agent-card__entry {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.mi-agent-card__entry:focus-visible,
+.mi-crypto-dashboard__back:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mi-agent-card__portrait {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-left: 1px solid rgb(120 145 128 / 36%);
+  background: #12201c;
+}
+
+.mi-agent-card__portrait::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgb(14 23 18 / 78%), transparent 55%, rgb(3 10 10 / 20%));
+  content: '';
+}
+
+.mi-agent-card__portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 28%;
+  filter: saturate(0.62) contrast(1.08) brightness(0.72);
+}
+
+.mi-agent-card:first-child .mi-agent-card__portrait img {
+  filter: saturate(0.5) sepia(0.18) hue-rotate(35deg) contrast(1.11) brightness(0.73);
+}
+
+.mi-agent-drawer .ant-drawer-body {
+  container-type: inline-size;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.mi-agent-drawer .settings-workspace.intelligence-sources-workspace.mi-agent-drawer__split {
+  grid-template-columns: minmax(240px, 29%) minmax(0, 1fr);
+}
+
+.mi-agent-drawer__static-value {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
+}
+
+.mi-agent-drawer__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/*
+ * portal 到 body 的两个抽屉（配置看板来源、市场解读 Agent）要从窗口拖拽区里**减掉**。
+ *
+ * 顶栏是拖拽区（`-webkit-app-region: drag`，`--topbar-height: 42px`，见 apps/desktop-shell 的样式）；
+ * antd 的抽屉 portal 到 body、`position: fixed` 铺满全高，于是抽屉自己的标题栏正好落在 0–42px 那条带子里。
+ * Electron 的拖拽区是「拖拽矩形**减去**显式 `no-drag` 的矩形」——没声明就整块算拖拽，点在那里变成拖窗口，
+ * 按钮的 click 根本不会发生：**看得见、点不动**（读者 2026-10-17：「这个配置抽屉左上角的关闭按钮点击
+ * 没有用」）。日历详情是 `getContainer={false}` 的 inline 抽屉，落在日历页自己的定位上下文里，与顶栏无关，
+ * 所以不在这里——给它也加一句只会让下一个人以为"所有抽屉都得写一遍"。
+ *
+ * 回归：`drawerDragRegion.test.tsx` 断言这两条规则存在，且被声明的元素**包含**关闭按钮。
+ */
+.mi-dashboard-source-drawer,
+.mi-agent-drawer {
+  -webkit-app-region: no-drag;
+}
+
+.mi-dashboard-source-drawer .ant-drawer-body {
+  container-type: inline-size;
+  min-height: 0;
+  padding: 0;
+}
+
+.mi-dashboard-source-drawer__layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 31%) minmax(0, 1fr);
+  min-height: 100%;
+}
+
+.mi-dashboard-source-catalog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 84%, var(--bg));
+}
+
+.mi-dashboard-source-catalog__title {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.mi-dashboard-source-catalog__list {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.mi-dashboard-source-catalog__group + .mi-dashboard-source-catalog__group { margin-top: 18px; }
+.mi-dashboard-source-catalog__group > h2 {
+  margin: 0 0 8px;
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.mi-dashboard-source-catalog__item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mi-dashboard-source-catalog__item:hover {
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.mi-dashboard-source-catalog__item.selected {
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.mi-dashboard-source-catalog__avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 780;
+}
+
+/*
+ * A source the reader has switched off: its badge goes quiet in the list, so which sources are actually
+ * collecting is visible before opening one. Colour only — the button still opens and the switch inside
+ * is still the thing that turns it back on — and the state also rides the item's accessible name.
+ */
+.mi-dashboard-source-catalog__item[data-source-enabled='false'] .mi-dashboard-source-catalog__avatar {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  color: var(--muted);
+}
+
+.mi-dashboard-source-catalog__item > span:nth-child(2) { display: grid; gap: 3px; min-width: 0; }
+.mi-dashboard-source-catalog__item strong, .mi-dashboard-source-catalog__item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-dashboard-source-catalog__item strong { color: var(--text-strong); font-size: 14px; font-weight: 650; }
+.mi-dashboard-source-catalog__item small { color: var(--muted); font-size: 11px; }
+.mi-dashboard-source-catalog__navigate { color: var(--muted); }
+.mi-dashboard-source-catalog__item.selected .mi-dashboard-source-catalog__navigate { color: var(--accent); }
+
+.mi-dashboard-source-drawer__detail {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.mi-dashboard-source-drawer__detail > header {
+  display: grid;
+  gap: 4px;
+}
+
+.mi-dashboard-source-drawer__detail h2,
+.mi-dashboard-source-drawer__detail p {
+  margin: 0;
+}
+
+.mi-dashboard-source-drawer__detail p {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mi-dashboard-source-drawer__profile-controls {
+  display: grid;
+  gap: 12px;
+}
+
+.mi-dashboard-source-drawer__profile-controls > label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 12px;
+}
+
+.mi-dashboard-source-drawer__profile-controls .ant-select {
+  min-width: 150px;
+}
+
+.mi-dashboard-source-drawer .macro-calendar-settings {
+  padding: 0;
+}
+
+.mi-dashboard-source-drawer .macro-calendar-settings__cards {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mi-dashboard-source-drawer .macro-calendar-settings__card {
+  background: color-mix(in srgb, var(--surface) 82%, var(--bg));
+}
+
+@container (max-width: 520px) {
+  .mi-dashboard-source-drawer__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mi-dashboard-source-catalog {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mi-dashboard-source-catalog__list { max-height: 240px; }
+}
+
+.mi-crypto-dashboard {
+  --mi-dashboard-page-inline: 32px;
+  --mi-dashboard-page-block: 32px;
+  --mi-dashboard-gap: 16px;
+  --mi-dashboard-compact-gap: 10px;
+  --mi-dashboard-context-width: 260px;
+  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
+  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
+  --mi-dashboard-caution: #e5ae43;
+  min-height: 100%;
+  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
+    var(--bg);
+  color: var(--text);
+}
+
+.mi-crypto-dashboard__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mi-dashboard-gap);
+  margin-bottom: var(--mi-dashboard-gap);
+}
+
+.mi-crypto-dashboard__label {
+  margin: 0 0 6px;
+  color: var(--accent);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.mi-crypto-dashboard h1,
+.mi-crypto-dashboard h2,
+.mi-crypto-dashboard h3,
+.mi-crypto-dashboard p,
+.mi-crypto-dashboard ol,
+.mi-crypto-dashboard dl,
+.mi-crypto-dashboard dd {
+  margin: 0;
+}
+
+.mi-crypto-dashboard h1 {
+  color: var(--text-strong);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.mi-crypto-dashboard h2 {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.mi-crypto-dashboard__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.mi-crypto-dashboard__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mi-dashboard-compact-gap);
+}
+
+.mi-crypto-dashboard__configure {
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--mi-dashboard-line));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  color: var(--text-strong);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.mi-crypto-dashboard__configure:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mi-crypto-dashboard__next-event {
+  display: grid;
+  grid-template-columns: max-content minmax(150px, 1.25fr) repeat(2, minmax(110px, 0.7fr)) max-content minmax(180px, 1fr) max-content;
+  align-items: center;
+  min-width: 0;
+  gap: var(--mi-dashboard-compact-gap);
+  padding: 11px 12px;
+  border-top: 1px solid var(--mi-dashboard-caution);
+  border-bottom: 1px solid var(--mi-dashboard-line);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+}
+
+.mi-crypto-dashboard__next-event span,
+.mi-crypto-dashboard__next-event strong,
+.mi-crypto-dashboard__next-event em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mi-crypto-dashboard__event-kicker,
+.mi-crypto-dashboard__read-label,
+.mi-crypto-dashboard__section > header > span,
+.mi-crypto-dashboard__event-row > div > span,
+.mi-crypto-dashboard__event-detail > span {
+  color: var(--mi-dashboard-muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.mi-crypto-dashboard__next-event strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.mi-crypto-dashboard__next-event > span:not(.mi-crypto-dashboard__event-kicker):not(.mi-crypto-dashboard__week-ahead) {
+  color: var(--mi-dashboard-muted);
+  font-size: 11px;
+}
+
+.mi-crypto-dashboard__next-event em {
+  color: var(--mi-dashboard-caution);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mi-crypto-dashboard__week-ahead {
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.mi-crypto-dashboard__calendar-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mi-crypto-dashboard__calendar-action:focus-visible,
+.mi-crypto-dashboard__event-row summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mi-crypto-dashboard__market-read {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.75fr) repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  margin-top: var(--mi-dashboard-gap);
+  border-top: 1px solid color-mix(in srgb, var(--accent) 48%, var(--mi-dashboard-line));
+  border-bottom: 1px solid var(--mi-dashboard-line);
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+}
+
+.mi-crypto-dashboard__read-label {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  color: var(--accent);
+}
+
+.mi-crypto-dashboard__market-read article {
+  display: grid;
+  min-width: 0;
+  align-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border-left: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__market-read article span,
+.mi-crypto-dashboard__market-read article small {
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.mi-crypto-dashboard__market-read article strong {
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mi-crypto-dashboard__workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(var(--mi-dashboard-context-width), 0.32fr);
+  min-width: 0;
+  gap: calc(var(--mi-dashboard-gap) * 1.5);
+  margin-top: calc(var(--mi-dashboard-gap) * 1.25);
+}
+
+.mi-crypto-dashboard__main {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 20px;
+}
+
+.mi-crypto-dashboard__section {
+  min-width: 0;
+}
+
+.mi-crypto-dashboard__section > header {
+  display: grid;
+  grid-template-columns: 28px max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--mi-dashboard-compact-gap);
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__section > header > span {
+  color: var(--mi-dashboard-caution);
+}
+
+.mi-crypto-dashboard__section > header h2 {
+  font-size: 13px;
+}
+
+.mi-crypto-dashboard__section > header p {
+  color: var(--mi-dashboard-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.mi-crypto-dashboard__checks,
+.mi-crypto-dashboard__event-rows,
+.mi-crypto-dashboard__state-rows {
+  display: grid;
+  min-width: 0;
+}
+
+.mi-crypto-dashboard__checks {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--mi-dashboard-line);
+  border-bottom: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__check {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+  padding: 11px 12px;
+  border-left: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__check:first-child,
+.mi-crypto-dashboard__state:first-child {
+  border-left: 0;
+}
+
+.mi-crypto-dashboard__check > div:first-child,
+.mi-crypto-dashboard__state > div:first-child,
+.mi-crypto-dashboard__liquidation-values {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mi-crypto-dashboard__check > div:first-child {
+  color: var(--accent);
+}
+
+.mi-crypto-dashboard h3 {
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.mi-crypto-dashboard__check > strong {
+  color: var(--text-strong);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mi-crypto-dashboard__check > span,
+.mi-crypto-dashboard__check > p,
+.mi-crypto-dashboard__check > small,
+.mi-crypto-dashboard__state p,
+.mi-crypto-dashboard__state small,
+.mi-crypto-dashboard__event-row small,
+.mi-crypto-dashboard__context p,
+.mi-crypto-dashboard__context li {
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.mi-crypto-dashboard__etf-table {
+  display: grid;
+  gap: 2px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--mi-dashboard-line) 72%, transparent);
+}
+
+.mi-crypto-dashboard__etf-table div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+  color: var(--mi-dashboard-muted);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 9px;
+}
+
+.mi-crypto-dashboard__event-rows,
+.mi-crypto-dashboard__state-rows {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--mi-dashboard-line);
+  border-bottom: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__event-row,
+.mi-crypto-dashboard__state {
+  min-width: 0;
+  padding: 11px 12px;
+  border-left: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__event-row > div,
+.mi-crypto-dashboard__event-row summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mi-dashboard-compact-gap);
+}
+
+.mi-crypto-dashboard__event-row summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.mi-crypto-dashboard__event-row summary::-webkit-details-marker {
+  display: none;
+}
+
+.mi-crypto-dashboard__event-row dl,
+.mi-crypto-dashboard__event-detail dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mi-crypto-dashboard__event-row dt,
+.mi-crypto-dashboard__event-row dd {
+  margin: 0;
+}
+
+.mi-crypto-dashboard__event-row dt {
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+}
+
+.mi-crypto-dashboard__event-row dd {
+  color: var(--text-strong);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.mi-crypto-dashboard__event-row > small {
+  display: block;
+  margin-top: 10px;
+}
+
+.mi-crypto-dashboard__event-detail > span {
+  display: block;
+  margin-top: 10px;
+}
+
+.mi-crypto-dashboard__state > div:first-child {
+  justify-content: space-between;
+}
+
+.mi-crypto-dashboard__state > div:first-child > strong {
+  color: var(--mi-dashboard-caution);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.mi-crypto-dashboard__gauge {
+  position: relative;
+  height: 5px;
+  margin: 12px 0 4px;
+  background: linear-gradient(90deg, var(--danger), var(--mi-dashboard-caution) 48%, var(--accent));
+}
+
+.mi-crypto-dashboard__gauge::before {
+  position: absolute;
+  top: -3px;
+  left: calc(var(--mi-fear-greed-score) * 1%);
+  width: 2px;
+  height: 11px;
+  background: var(--text-strong);
+  content: '';
+}
+
+.mi-crypto-dashboard__gauge span {
+  display: block;
+  padding-top: 10px;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.mi-crypto-dashboard__state p {
+  margin-top: 10px;
+}
+
+.mi-crypto-dashboard__state small {
+  display: block;
+  margin-top: 8px;
+}
+
+.mi-crypto-dashboard__liquidation-values {
+  margin-top: 12px;
+}
+
+.mi-crypto-dashboard__liquidation-values span {
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+}
+
+.mi-crypto-dashboard__context {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  border-top: 2px solid var(--mi-dashboard-caution);
+}
+
+.mi-crypto-dashboard__context-block {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--mi-dashboard-line);
+}
+
+.mi-crypto-dashboard__context-block h2 {
+  margin-bottom: 9px;
+  font-size: 12px;
+}
+
+.mi-crypto-dashboard__context ol {
+  display: grid;
+  gap: 7px;
+  padding-left: 18px;
+}
+
+.mi-crypto-dashboard__caveat {
+  margin-top: 14px;
+  padding-top: 9px;
+  border-top: 1px solid var(--mi-dashboard-line);
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+@container (max-width: 960px) {
+  .mi-agent-drawer .settings-workspace.intelligence-sources-workspace.mi-agent-drawer__split {
+    grid-template-columns: minmax(220px, 32%) minmax(0, 1fr);
+  }
+
+  .mi-agent-drawer .intelligence-setting-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mi-agent-drawer .intelligence-setting-control {
+    justify-content: flex-start;
+  }
+
+  .mi-agent-drawer__static-value {
+    text-align: left;
+  }
+}
+
+@container (max-width: 680px) {
+  .mi-agent-drawer .settings-workspace.intelligence-sources-workspace.mi-agent-drawer__split {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 240px) minmax(0, 1fr);
+  }
+
+  .mi-agent-drawer .intelligence-catalog-pane {
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mi-agent-drawer .intelligence-setting-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .mi-agent-portal {
+    --mi-page-inline: 24px;
+    --mi-page-block: 24px;
+  }
+
+  .mi-crypto-dashboard {
+    --mi-dashboard-page-inline: 24px;
+    --mi-dashboard-page-block: 24px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .mi-agent-portal {
+    --mi-page-inline: 20px;
+    --mi-page-block: 20px;
+  }
+
+  .mi-crypto-dashboard {
+    --mi-dashboard-page-inline: 20px;
+    --mi-dashboard-page-block: 20px;
+  }
+
+  .mi-crypto-dashboard__workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mi-crypto-dashboard__context {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--mi-dashboard-gap);
+    border-top: 0;
+  }
+
+  .mi-crypto-dashboard__context-block {
+    border-top: 1px solid var(--mi-dashboard-line);
+  }
+}
+
+@media (max-width: 439px) {
+  .mi-agent-portal__grid {
+    grid-template-columns: minmax(0, 400px);
+  }
+
+  .mi-crypto-dashboard__header,
+  .mi-crypto-dashboard__next-event,
+  .mi-crypto-dashboard__market-read,
+  .mi-crypto-dashboard__checks,
+  .mi-crypto-dashboard__event-rows,
+  .mi-crypto-dashboard__state-rows,
+  .mi-crypto-dashboard__context,
+  .mi-crypto-dashboard__event-row dl,
+  .mi-crypto-dashboard__event-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mi-crypto-dashboard__header,
+  .mi-crypto-dashboard__next-event {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mi-crypto-dashboard__section > header {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .mi-crypto-dashboard__section > header p {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .mi-crypto-dashboard__market-read article,
+  .mi-crypto-dashboard__check,
+  .mi-crypto-dashboard__event-row,
+  .mi-crypto-dashboard__state {
+    border-top: 1px solid var(--mi-dashboard-line);
+    border-left: 0;
+  }
+
+  .mi-crypto-dashboard__market-read article:first-of-type,
+  .mi-crypto-dashboard__check:first-child,
+  .mi-crypto-dashboard__state:first-child {
+    border-top: 0;
+  }
+
+  .mi-crypto-dashboard__context {
+    border-top: 2px solid var(--mi-dashboard-caution);
+  }
+
+  .mi-agent-card__footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/*
+ * Light theme: the agent portal follows the same platform tokens as the rest of the app.
+ * `.mi-agent-portal` above keeps the terminal values as the dark default; this block only
+ * remaps them for light. Lime `--accent` is unreadable as text on white, so the accent used
+ * for labels, links and the emphasised card edge is mixed toward `--text-strong`.
+ */
+:root[data-theme='light'] .mi-agent-portal {
+  --mi-terminal-bg: var(--bg);
+  --mi-terminal-surface: var(--surface);
+  --mi-terminal-surface-strong: var(--surface-strong);
+  --mi-terminal-border: var(--border);
+  --mi-terminal-border-strong: var(--border-strong);
+  --mi-terminal-text: var(--text);
+  --mi-terminal-muted: color-mix(in srgb, var(--muted) 74%, var(--text-strong));
+  --mi-terminal-dim: var(--muted);
+  --mi-terminal-lime: color-mix(in srgb, var(--accent) 30%, var(--text-strong));
+  --mi-terminal-lime-line: color-mix(in srgb, var(--accent) 52%, var(--text-strong));
+  background:
+    radial-gradient(circle at 54% 3%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 34%),
+    var(--bg);
+  color: var(--text);
+}
+
+/* The first card's own dark gradient and the hard-coded placeholder/overlay treatment. */
+:root[data-theme='light'] .mi-agent-card:first-child {
+  border-color: var(--mi-terminal-lime-line);
+  background: linear-gradient(104deg, color-mix(in srgb, var(--accent) 15%, var(--surface)) 0%, var(--surface) 72%);
+}
+
+/* The first card keeps hover feedback: its light gradient must not pin the card on hover. */
+:root[data-theme='light'] .mi-agent-card:first-child:not(.is-disabled):hover {
+  border-color: var(--mi-terminal-lime);
+  background: var(--mi-terminal-surface-strong);
+}
+
+:root[data-theme='light'] .mi-agent-card__status {
+  border-color: color-mix(in srgb, var(--warning, #c48a2a) 45%, var(--border));
+  color: color-mix(in srgb, var(--warning, #c48a2a) 82%, var(--text-strong));
+}
+
+:root[data-theme='light'] .mi-agent-card__footer {
+  border-top-color: var(--border);
+}
+
+:root[data-theme='light'] .mi-agent-card__portrait {
+  border-left-color: var(--border);
+  background: var(--surface-soft);
+}
+
+:root[data-theme='light'] .mi-agent-card__portrait::after {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface) 66%, transparent), transparent 58%, color-mix(in srgb, var(--bg) 10%, transparent));
+}
+
+:root[data-theme='light'] .mi-agent-card__portrait img {
+  filter: saturate(0.92) contrast(1.02) brightness(1.02);
+}
+
+:root[data-theme='light'] .mi-agent-card:first-child .mi-agent-card__portrait img {
+  filter: saturate(0.88) sepia(0.06) hue-rotate(28deg) contrast(1.03) brightness(1.02);
+}
+
+/* The agent control floats above the workspace: fixed to the window, never part of a column,
+   draggable, so it can be moved clear of a chart. */
+/* One rule for this control. Three copies used to stack here — a stale muted 44px block from the
+   first version overrode the highlighted 56px one, and a later 48px override won the size — so the
+   button rendered small, grey and easy to lose against the workspace. The highlighted treatment is
+   now the default, not a hover state, and the box is the size the drag clamp assumes. */
+.mi-agent-floating__button {
+  position: fixed;
+  /* Above the content and above antd's drawers (1000), or the workspace text buries it; below
+     antd's modal layer so a real dialog still owns the top. */
+  z-index: var(--mi-agent-floating-z);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--surface) 70%, transparent), 0 10px 24px rgb(0 0 0 / 55%);
+  cursor: grab;
+  touch-action: none;
+}
+.mi-agent-floating__button:hover { background: color-mix(in srgb, var(--accent) 82%, var(--surface)); }
+.mi-agent-floating__button:active { cursor: grabbing; }
+.mi-agent-floating__button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-agent-floating {
+  position: fixed;
+  /* The portal declares --mi-terminal-*; this panel lives in the dashboard subtree, where a
+     failed var() resolves to transparent — so it uses the shell theme tokens instead. */
+  z-index: var(--mi-agent-floating-z);
+  display: flex;
+  flex-direction: column;
+  /* Roomier than the original 460x620 and smaller than the 900x1200 that then felt oversized,
+     always bounded by the window. */
+  width: min(760px, 74vw);
+  height: min(900px, 78vh);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 35%);
+}
+.mi-agent-floating > header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.mi-agent-floating > header h2 { margin: 0; font-size: 13px; }
+.mi-agent-floating__clear, .mi-agent-floating__close { border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.mi-agent-floating__clear { margin-left: auto; margin-right: 6px; padding: 2px 10px; }
+.mi-agent-floating__close { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
+.mi-agent-floating__clear:hover, .mi-agent-floating__close:hover { border-color: var(--accent); color: var(--accent); }
+/* The chat owns the scrolling so its composer can stay pinned to the bottom of the panel, the
+   way a conversation box behaves; the panel body itself never scrolls. */
+.mi-agent-floating__body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.mi-agent-floating__body > .mi-analysis-chat { flex: 1; min-height: 0; }
+
+/* The agent control floats above the workspace: fixed to the window, never part of a column,
+   draggable, so it can be moved clear of a chart. */
+
+:root {
+  /* The floating agent control must outrank page content and antd drawers, which sit at 1000. */
+  --mi-agent-floating-z: 1100;
+  /* The three calendar kinds, told apart by colour. Declared once, because the chip rules are
+     not inside the portal scope that owns the --mi-terminal-* palette. */
+  --mi-calendar-kind-indicator: #7fd1a6;
+  --mi-calendar-kind-financial: #6ea8fe;
+  --mi-calendar-kind-central-bank: #e0b357;
+}
+
+/* The right column's calendar card: a compact watch list, not a bulleted list. */
+.mi-calendar-card { display: flex; flex-direction: column; min-height: 0; overflow: auto; background: var(--surface); }
+.mi-calendar-card > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.mi-calendar-card > header h2 { margin: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+.mi-calendar-card__open { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.mi-calendar-card__open:hover { border-color: var(--border); color: var(--text); }
+.mi-calendar-card__open:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mi-calendar-card__section { margin: 10px 10px 4px; font-size: 10px; font-weight: 600; letter-spacing: .08em; color: var(--muted); }
+.mi-calendar-card__list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 6px 6px; list-style: none; }
+.mi-calendar-card__row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: start; gap: 10px; width: 100%; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; text-align: left; cursor: pointer; }
+.mi-calendar-card__row[data-selected='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.mi-calendar-card__row[role='button'] { cursor: pointer; }
+.mi-calendar-card__row:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.mi-calendar-card__row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Left: when. Right: the event over its numbers, so a long name never squeezes the values out. */
+.mi-calendar-card__row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mi-calendar-card__row-country { margin-right: 4px; color: var(--muted-strong); font-size: 10px; font-style: normal; }
+.mi-calendar-card__row-title { overflow-wrap: anywhere; }
+.mi-calendar-card__row-kind { margin-right: 6px; padding: 0 4px; border: 1px solid currentcolor; border-radius: 3px; font-size: 9px; font-style: normal; line-height: 14px; white-space: nowrap; }
+.mi-calendar-card__row-kind[data-kind='economic-indicator'] { color: var(--mi-calendar-kind-indicator); }
+.mi-calendar-card__row-kind[data-kind='financial-event'] { color: var(--mi-calendar-kind-financial); }
+.mi-calendar-card__row-kind[data-kind='central-bank-activity'] { color: var(--mi-calendar-kind-central-bank); }
+.mi-calendar-card__row-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.mi-calendar-card__row time { padding-top: 1px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-calendar-card__row-tools { display: flex; align-items: center; gap: 6px; }
+.mi-calendar-card__copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }
+.mi-calendar-card__row:hover .mi-calendar-card__copy, .mi-calendar-card__copy:focus-visible { opacity: 1; }
+.mi-calendar-card__copy:hover { border-color: var(--accent); color: var(--accent); }
+/* Same quiet-until-hover treatment as the copy control it sits beside. */
+.mi-calendar-card__open-event { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }
+.mi-calendar-card__row:hover .mi-calendar-card__open-event, .mi-calendar-card__open-event:focus-visible { opacity: 1; }
+.mi-calendar-card__open-event:hover { border-color: var(--accent); color: var(--accent); }
+.mi-calendar-card__importance { margin-top: 6px; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
+.mi-calendar-card__importance[data-importance='high'] { background: var(--accent); }
+.mi-calendar-card__state { display: flex; align-items: center; gap: 6px; margin: 12px 10px; color: var(--muted); font-size: 11px; }
+
+/* 计划时刻已过、值还没到的那一行：写在这一行上（行里已经写着事件名），淡色小字，不抢读数的位置。 */
+.mi-calendar-card__row-waiting { display: block; margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+
+/* 「±30 分」反应（原型 ④）：标注窗口，三条线各自一格 —— 数字用等宽数字，好和上面的值对齐着读。 */
+.mi-calendar-card__row-reaction { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 2px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.mi-calendar-card__row-reaction em { margin-right: 2px; color: var(--muted-strong); font-style: normal; }
+.mi-calendar-card__row-reaction span { white-space: nowrap; }

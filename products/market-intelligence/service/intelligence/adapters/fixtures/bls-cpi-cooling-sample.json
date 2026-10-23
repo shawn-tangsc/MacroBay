@@ -1,0 +1,15 @@
+{
+  "Results": {
+    "series": [
+      {
+        "seriesID": "CUSR0000SA0",
+        "data": [
+          { "year": "2026", "period": "M06", "periodName": "June", "value": "308.400" },
+          { "year": "2025", "period": "M06", "periodName": "June", "value": "300.000" },
+          { "year": "2026", "period": "M05", "periodName": "May", "value": "309.300" },
+          { "year": "2025", "period": "M05", "periodName": "May", "value": "300.000" }
+        ]
+      }
+    ]
+  }
+}

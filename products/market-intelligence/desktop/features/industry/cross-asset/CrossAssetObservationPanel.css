@@ -1,0 +1,204 @@
+.mi-cross-asset {
+  /* CrossAssetLayoutPolicy: 123/126; product-owned, protected by panel layout regression.
+     The status block now carries six columns (name, level, four windows), so the left column is
+     380px/320px instead of 330px/270px. That costs the middle chart column 50px at the wide
+     breakpoint (about 1220px left on a 1600px panel) and 50px at the medium one; the plot stays
+     comfortably wider than the 1000-unit viewBox it stretches over in both. */
+  --mi-cross-asset-quote-wide: 380px;
+  --mi-cross-asset-quote-medium: 320px;
+  --mi-cross-asset-gap: 16px;
+  --mi-cross-asset-gap-small: 8px;
+  --mi-cross-asset-gap-large: 24px;
+  /* 画布高度按「与左右两栏内容块等高」定标（约 250px 一栏）：
+     图例 20 + 图表 100 + 刻度 30 + 内边距 → 中央栏约 260px。 */
+  --mi-cross-asset-chart-height: 100px;
+  --mi-cross-asset-chart-height-wide: 116px;
+  /* 空状态与图表共用同一高度，避免加载完成后整块跳动。 */
+  --mi-cross-asset-chart-empty-height: var(--mi-cross-asset-chart-height);
+  --mi-cross-asset-axis-width: 62px;
+  --mi-cross-asset-tooltip-width: 210px;
+  --mi-cross-asset-tooltip-inset: 8px;
+  --mi-cross-asset-text: var(--text);
+  --mi-cross-asset-surface: var(--surface);
+  --mi-cross-asset-muted: var(--muted);
+  --mi-cross-asset-line: var(--border);
+  /* 这张图的五条线：颜色住在调色板里（`cryptoDashboard.css` 的 `--mi-dashboard-chart-*`，那一份是
+     唯一 owner），这个面板只**命名**它们。五条线必须两两分得清——读者 2026-10-16 指出 BTC 与黄金撞色，
+     现在黄金是淡金、BTC 是饱和的琥珀，按明度分开；`crossAssetChartPalette.test.ts` 守住这条。 */
+  --mi-cross-asset-index: var(--mi-dashboard-chart-qqq);
+  --mi-cross-asset-btc: var(--mi-dashboard-chart-btc);
+  --mi-cross-asset-eth: var(--mi-dashboard-chart-eth);
+  --mi-cross-asset-dxy: var(--mi-dashboard-chart-dxy);
+  --mi-cross-asset-gold: var(--mi-dashboard-chart-gold);
+  /* 判读句里剧本名的强调色：原型（读者 2026-10-15 选定 B1）用的就是面板的强调色，所以这里只
+     命名它，不另造一个颜色。 */
+  --mi-cross-asset-accent: var(--mi-dashboard-lime);
+  container-name: mi-cross-asset;
+  container-type: inline-size;
+  margin-block: var(--mi-cross-asset-gap);
+  border-block: 1px solid var(--mi-cross-asset-line);
+  padding-block: 14px;
+  color: var(--mi-cross-asset-text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+}
+.mi-cross-asset h2, .mi-cross-asset h3, .mi-cross-asset p { margin: 0; }
+.mi-cross-asset h2 { font-size: 14px; }
+.mi-cross-asset h3 { font-size: 12px; font-weight: 600; }
+.mi-cross-asset small { color: var(--mi-cross-asset-muted); font-size: 11px; }
+.mi-cross-asset__chart-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
+.mi-cross-asset [data-cross-asset-region="chart"] { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.mi-cross-asset__chart { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.mi-cross-asset__chart-actions, .mi-cross-asset__quote-heading, .mi-cross-asset__status { display: flex; align-items: center; gap: var(--mi-cross-asset-gap-small); flex-wrap: wrap; }
+.mi-cross-asset__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-cross-asset-gap); }
+.mi-cross-asset__body > * { min-width: 0; box-sizing: border-box; }
+.mi-cross-asset__quote > strong { display: inline-block; font-size: 24px; margin: 10px 6px 2px 0; }
+.mi-cross-asset__quote p { margin-bottom: 12px; }
+.mi-cross-asset [data-direction="1"] { color: var(--mi-dashboard-positive); }
+.mi-cross-asset [data-direction="-1"] { color: var(--mi-dashboard-negative); }
+/* `.mi-cross-asset__observations` rules were removed with the aside itself; the correlations and
+   relative returns still live in the snapshot, only their rendering is temporarily withdrawn. */
+.mi-cross-asset__empty { display: grid; align-content: center; min-height: var(--mi-cross-asset-chart-empty-height); color: var(--mi-cross-asset-muted); }
+.mi-cross-asset__legend { display: flex; gap: 12px; margin-block: 10px; }
+.mi-cross-asset__legend button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--mi-cross-asset-text); cursor: pointer; font: inherit; padding: 0; }
+.mi-cross-asset__legend button[aria-pressed="false"] { opacity: .4; }
+.mi-cross-asset [data-asset="index"], .mi-cross-asset [data-asset-line="index"], .mi-cross-asset [data-forming-line="index"] { --asset-color: var(--mi-cross-asset-index); }
+.mi-cross-asset [data-asset="btc"], .mi-cross-asset [data-asset-line="btc"], .mi-cross-asset [data-forming-line="btc"] { --asset-color: var(--mi-cross-asset-btc); }
+.mi-cross-asset [data-asset="eth"], .mi-cross-asset [data-asset-line="eth"], .mi-cross-asset [data-forming-line="eth"] { --asset-color: var(--mi-cross-asset-eth); }
+.mi-cross-asset [data-asset="dxy"], .mi-cross-asset [data-asset-line="dxy"], .mi-cross-asset [data-forming-line="dxy"] { --asset-color: var(--mi-cross-asset-dxy); }
+.mi-cross-asset [data-asset="gold"], .mi-cross-asset [data-asset-line="gold"], .mi-cross-asset [data-forming-line="gold"] { --asset-color: var(--mi-cross-asset-gold); }
+.mi-cross-asset__legend i, .mi-cross-asset__tooltip i { display: inline-block; width: 16px; border-top: 2px solid var(--asset-color); }
+.mi-cross-asset__legend i { border-top-style: solid; }
+/*
+ * The chart fills the column the table beside it sets the height of.
+ *
+ * Two blocks side by side that end on the same line: the reader compares a curve with the row next to
+ * it, and a chart that stopped a third of the way down left the comparison to the eye alone. The column
+ * stretches to the grid row (the table's height), the chart takes what is left after its own toolbar and
+ * legend, and the plot fills the frame — its `preserveAspectRatio="none"` svg stretches with it.
+ */
+.mi-cross-asset__chart-frame { display: grid; grid-template-columns: var(--mi-cross-asset-axis-width) minmax(0, 1fr); gap: var(--mi-cross-asset-gap-small); padding-block: 6px; flex: 1; min-height: var(--mi-cross-asset-chart-height); }
+.mi-cross-asset__plot { position: relative; height: 100%; min-width: 0; }
+.mi-cross-asset__plot svg { width: 100%; height: 100%; overflow: visible; }
+.mi-cross-asset__plot path { fill: none; stroke: var(--asset-color); stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.mi-cross-asset__plot [data-forming-line] circle { fill: var(--asset-color); stroke: var(--mi-cross-asset-surface); stroke-width: 1; vector-effect: non-scaling-stroke; }
+/*
+ * A calendar event on the plot: a hairline the reader can hover and focus.
+ *
+ * Solid once something in its minute was published, dashed while it is all still ahead — the whole point
+ * is telling "that dip was the print" from "the print is in two hours". The clickable box is wider than
+ * the line so it can be hit and focused; the label appears on hover/focus only, because twenty-four
+ * permanent labels would be a wall of text over the curves.
+ */
+.mi-cross-asset__event-line { position: absolute; top: 0; bottom: 0; width: 12px; margin-left: -6px; border: 0; padding: 0; background: none; cursor: pointer; }
+.mi-cross-asset__event-line > i { position: absolute; top: 0; bottom: 0; left: 6px; border-left: 1px dashed color-mix(in srgb, var(--mi-cross-asset-muted) 70%, transparent); }
+.mi-cross-asset__event-line[data-published="true"] > i { border-left-style: solid; border-left-color: color-mix(in srgb, var(--mi-cross-asset-text) 55%, transparent); }
+.mi-cross-asset__event-line:focus-visible > i, .mi-cross-asset__event-line:hover > i { border-left-color: var(--mi-cross-asset-text); }
+.mi-cross-asset__event-line-label { display: none; position: absolute; top: 4px; left: 8px; white-space: nowrap; padding: 2px 6px; border: 1px solid var(--mi-cross-asset-line); background: var(--mi-cross-asset-surface); color: var(--mi-cross-asset-text); font-size: 11px; }
+.mi-cross-asset__event-line:hover .mi-cross-asset__event-line-label, .mi-cross-asset__event-line:focus-visible .mi-cross-asset__event-line-label { display: block; }
+.mi-cross-asset__event-line-note { margin: 2px 0 0; color: var(--mi-cross-asset-muted); font-size: 11px; }
+.mi-cross-asset__zero { stroke: var(--mi-cross-asset-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.mi-cross-asset__y-axis { position: relative; color: var(--mi-cross-asset-muted); font-size: 10px; }
+.mi-cross-asset__y-axis span { position: absolute; right: 0; transform: translateY(-50%); }
+.mi-cross-asset__ticks { position: relative; min-height: 3em; margin-left: calc(var(--mi-cross-asset-axis-width) + var(--mi-cross-asset-gap-small)); color: var(--mi-cross-asset-muted); font-size: 10px; }
+.mi-cross-asset__ticks time { position: absolute; box-sizing: border-box; width: calc(100% / var(--mi-cross-asset-tick-count)); overflow-wrap: anywhere; }
+.mi-cross-asset__crosshair { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--mi-cross-asset-muted); pointer-events: none; }
+.mi-cross-asset__tooltip { position: absolute; box-sizing: border-box; width: var(--mi-cross-asset-tooltip-width); max-width: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset)); max-height: calc(100% - var(--mi-cross-asset-tooltip-inset) - var(--mi-cross-asset-tooltip-inset)); overflow: auto; padding: 9px; border: 1px solid var(--mi-cross-asset-line); background: var(--mi-cross-asset-surface); z-index: 2; font-size: 11px; pointer-events: none; }
+.mi-cross-asset__tooltip time { display: block; margin-bottom: 6px; overflow-wrap: anywhere; }
+.mi-cross-asset__tooltip span { display: flex; align-items: center; gap: 6px; padding-block: 3px; }
+.mi-cross-asset__tooltip b { margin-left: auto; }
+/* CrossAssetLayoutPolicy thresholds from 123; custom properties cannot be used in container conditions. */
+@container mi-cross-asset (min-width: 800px) {
+  .mi-cross-asset__body { grid-template-columns: var(--mi-cross-asset-quote-medium) minmax(0, 1fr); }
+  /* Taller by default here, but the height is the row's: this is a floor, not a ceiling. */
+  .mi-cross-asset__chart-frame { min-height: var(--mi-cross-asset-chart-height-wide); }
+}
+@container mi-cross-asset (min-width: 1200px) {
+  /* Two columns: the 跨市场观察 aside is temporarily unrendered, so there is no third track. */
+  .mi-cross-asset__body { grid-template-columns: minmax(0, var(--mi-cross-asset-quote-wide)) minmax(0, 1fr); }
+  .mi-cross-asset__quote { border-right: 1px solid var(--mi-cross-asset-line); padding-right: var(--mi-cross-asset-gap); }
+}
+
+/* 市场状态: one row per input the reading depends on. The class name is deliberately NOT
+   `mi-cross-asset__status`: that name already exists on the quote-status line above and sets
+   `display: flex`, which turned this table into a flex container — the header and body then sized
+   as two anonymous tables and no longer shared column widths, so the figures sat away from their
+   headings no matter how often the window was reloaded. The layout is `fixed` with an explicit
+   asset column because the rows must line up with their header: letting content size the columns
+   made the hint under each name set the width, so the four numeric columns drifted out from under
+   their own headings. Numbers never wrap; the name and its hint may. */
+.mi-cross-asset__status-table { table-layout: fixed; width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+/* Six columns since the ladder became 15m/1h/4h/24h. Every share is explicit: with equal remaining
+   width the four windows came out around 42px and the two-decimal percentages ran together into
+   what read as one long number (`+0.09%0.06%0.27%0.43%`), so the name and the level give the four
+   windows roughly 13.5% each — about 51px at the 380px status column, 43px at the medium 320px —
+   and a hairline divides them. */
+.mi-cross-asset__status-table .mi-cross-asset__status-col { width: 30%; }
+.mi-cross-asset__status-table .mi-cross-asset__status-col-latest { width: 16%; }
+.mi-cross-asset__status-table .mi-cross-asset__status-col-window { width: 13.5%; }
+.mi-cross-asset__status-table th, .mi-cross-asset__status-table td { padding: 3px 2px; }
+.mi-cross-asset__status-table thead th { color: var(--muted); font-size: 10px; font-weight: 500; text-align: right; border-bottom: 1px solid var(--mi-cross-asset-line); }
+.mi-cross-asset__status-table thead th:first-child { text-align: left; }
+.mi-cross-asset__status-table tbody th { text-align: left; font-weight: 600; font-size: 12px; white-space: normal; overflow-wrap: anywhere; }
+.mi-cross-asset__status-table tbody th span, .mi-cross-asset__status-table tbody th small { display: block; }
+.mi-cross-asset__status-table tbody th small { color: var(--muted); font-size: 9.5px; font-weight: 400; }
+.mi-cross-asset__status-table tbody td { text-align: right; white-space: nowrap; font-size: 9.5px; }
+/* One hairline between numeric columns, header included: four windows of signed percentages need a
+   visible gutter before the eye can tell where one figure ends and the next begins. */
+.mi-cross-asset__status-table thead th + th, .mi-cross-asset__status-table tbody td + td { border-left: 1px solid color-mix(in srgb, var(--mi-cross-asset-line) 45%, transparent); }
+.mi-cross-asset__status-table tbody tr + tr th, .mi-cross-asset__status-table tbody tr + tr td { border-top: 1px solid color-mix(in srgb, var(--mi-cross-asset-line) 55%, transparent); }
+.mi-cross-asset__status-table td[data-direction='1'] { color: var(--mi-dashboard-positive); }
+.mi-cross-asset__status-table td[data-direction='-1'] { color: var(--mi-dashboard-negative); }
+/* An unanswerable window is a dash, not a zero: the full 无数据 wording stays on the cell title and
+   the dash keeps the column narrow enough that the neighbouring figures stay legible. */
+.mi-cross-asset__status-table td[data-unavailable='true'] { color: var(--muted); }
+/* The synthetic label is part of the row name, not a figure: it sits inline after the label so a
+   computed dollar level can never be read as the licensed index. */
+.mi-cross-asset__status-table tbody th .mi-cross-asset__synthetic { display: inline-block; margin-left: 4px; padding: 0 4px; border: 1px solid var(--mi-cross-asset-line); border-radius: 3px; color: var(--muted); font-size: 9px; font-style: normal; font-weight: 500; vertical-align: 1px; }
+/* The live badge answers one question the figure cannot: is 最新 a stream tick or a closed bar? It
+   sits with the row name, beside the synthetic tag and matching its box, so it reads as a label on
+   the asset rather than a qualifier on the number. Only tokens, no literal colour, and the state is
+   carried by `data-live-state` rather than by the wording alone. */
+.mi-cross-asset__status-table tbody th .mi-cross-asset__live { display: inline-block; margin-left: 3px; padding: 0 3px; border: 1px solid var(--mi-cross-asset-line); border-radius: 3px; color: var(--muted); font-size: 8.5px; font-style: normal; font-weight: 500; vertical-align: 1px; white-space: nowrap; }
+.mi-cross-asset__status-table tbody th .mi-cross-asset__live[data-live-state='live'] { color: var(--mi-dashboard-positive); border-color: var(--mi-dashboard-positive); }
+/* Section label and divider: the daily block states its own frequency rather than inheriting the
+   window headings above it. */
+.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section th { text-align: left; font-weight: 500; color: var(--muted); font-size: 9.5px; padding-top: 6px; border-top: 1px solid var(--mi-cross-asset-line); }
+/* The block's rhythm rides on the same line as its heading: smaller and quieter than the heading,
+   so it explains the block without competing with the figures under it. */
+.mi-cross-asset__status-table tbody[data-status-section='daily'] .mi-cross-asset__section small { margin-left: 6px; color: var(--mi-cross-asset-muted); font-size: 9px; }
+
+/* The daily cell carries two different statements: the move over the day, and the context that makes it
+   readable (term spread, inflation expectation). Run together on one line they read as a single
+   sentence; stacked, the change is the answer and the context is beneath it. */
+.mi-cross-asset__status-table tbody td.mi-cross-asset__daily { white-space: normal; }
+.mi-cross-asset__status-table tbody td.mi-cross-asset__daily > strong { display: block; white-space: nowrap; }
+.mi-cross-asset__status-table tbody td.mi-cross-asset__daily small { display: block; margin-top: 1px; opacity: .8; }
+
+.mi-cross-asset__not-connected { text-align: left !important; white-space: normal !important; color: var(--muted); }
+.mi-cross-asset__not-connected span { font-size: 12px; }
+.mi-cross-asset__not-connected small { display: block; font-size: 9.5px; opacity: .75; }
+/* The rate rows answer with one merged daily cell instead of four intraday windows. It carries no new
+   look — the same type scale, the same `data-direction` colouring the window cells use — it only lets
+   the optional 期限利差/通胀预期 line break beneath the figure it belongs to instead of running on. */
+.mi-cross-asset__status-table td.mi-cross-asset__daily { white-space: normal; }
+.mi-cross-asset__daily small { display: block; color: var(--muted); font-size: 9px; font-weight: 400; }
+
+/* The reading line (design 142 §6, the reader's choice B1): one footnote spanning the panel under the
+   chart, not a card. A single rule above it and 6px of padding keep it reading as an annotation of the
+   chart rather than as a block competing with the analysis beside the panel. Below a 1200px container it
+   wraps to two lines on its own; the figure keeps its width either way. */
+.mi-cross-asset__reading {
+  grid-column: 1 / -1; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--mi-cross-asset-line);
+}
+/* 顺序就是 DOM 顺序（标签 → 判读 → 替身说明 → 不像 → 旁证 → ρ）：不写 order 覆盖，就不会出现
+   "看起来的顺序"与"读屏/测试看到的顺序"不一致——评审正是从这处发现替身说明被画到了判读前面。 */
+.mi-cross-asset__reading h3 { color: var(--mi-cross-asset-muted); font-size: 11px; font-weight: 500; }
+.mi-cross-asset__reading-verdict { margin: 0; font-size: 12.5px; }
+.mi-cross-asset__reading-verdict b { font-weight: 600; color: var(--mi-cross-asset-accent); }
+.mi-cross-asset__reading-refuted { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; padding: 0; list-style: none; color: var(--mi-cross-asset-muted); }
+.mi-cross-asset__reading-relative { margin: 0; color: var(--mi-cross-asset-muted); font-size: 11px; }
+/* The correlation closes the line at the right edge: it is the backing, not part of the verdict. */
+.mi-cross-asset__reading-correlation { margin-left: auto; }

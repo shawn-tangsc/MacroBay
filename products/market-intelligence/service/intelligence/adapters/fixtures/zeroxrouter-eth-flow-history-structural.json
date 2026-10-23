@@ -1,0 +1,30 @@
+{
+  "code": 200,
+  "msg": "redacted-success-message",
+  "data": [
+    {
+      "date": 1721692800000,
+      "change": 860.25,
+      "changeUsd": 1450000,
+      "updateTime": 1721692800001,
+      "list": [
+        {
+          "name": "example-eth-fund",
+          "ticker": "ETH-EXAMPLE"
+        }
+      ]
+    },
+    {
+      "date": 1721779200000,
+      "change": -920.75,
+      "changeUsd": -1575000,
+      "updateTime": 1721779200001,
+      "list": [
+        {
+          "name": "example-eth-fund",
+          "ticker": "ETH-EXAMPLE"
+        }
+      ]
+    }
+  ]
+}

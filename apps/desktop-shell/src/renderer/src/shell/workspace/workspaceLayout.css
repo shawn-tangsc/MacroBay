@@ -1,0 +1,738 @@
+/*
+ * Owner: apps/desktop-shell renderer / workspace 页面级布局。
+ * 权威：P1-03 纠偏裁决 §1、§2、§11。
+ *
+ * 网格轨道（grid-template-columns/rows/areas）由 WorkspacePanelHost 内联下发，
+ * 因为它们是数据驱动的（page/embedded/right/bottom 同时存在）。
+ * 所有尺寸数值只有一个来源：宿主下发的自定义属性
+ *   --workspace-title-height / --workspace-splitter-size / --workspace-splitter-hit-size
+ * 它们来自 workspacePresentation.ts 的 WorkspaceUiPolicy，本文件不得复制字面量。
+ *
+ * 分隔条命中区是帧网格内的真实轨道（grid-area: splitter），不再使用
+ * overflow:hidden + 负偏移，因此不会被裁切。
+ */
+
+.workspace-panel-host {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.workspace-page {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-page[hidden] {
+  display: none;
+}
+
+.workspace-panel-frame {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--workspace-title-height) auto minmax(0, 1fr);
+  grid-template-areas: 'toolbar' 'tabs' 'body';
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* 非活动 Tab 与窄屏临时收起：隐藏但保持内容挂载。 */
+.workspace-panel-frame[hidden] {
+  display: none;
+}
+
+.workspace-panel-frame[data-splitter='true'][data-region='right'] {
+  grid-template-columns: var(--workspace-splitter-hit-size) minmax(0, 1fr);
+  grid-template-rows: var(--workspace-title-height) auto minmax(0, 1fr);
+  grid-template-areas: 'splitter toolbar' 'splitter tabs' 'splitter body';
+}
+
+.workspace-panel-frame[data-splitter='true'][data-region='bottom'] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--workspace-splitter-hit-size) var(--workspace-title-height) auto minmax(0, 1fr);
+  grid-template-areas: 'splitter' 'toolbar' 'tabs' 'body';
+}
+
+.workspace-panel-toolbar {
+  display: flex;
+  grid-area: toolbar;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-strong);
+}
+
+.workspace-panel-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-panel-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.workspace-panel-actions .ant-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+.workspace-panel-tabs {
+  min-width: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-panel-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+/* 命中区即轨道本身，永远位于帧的内容盒内。 */
+.workspace-panel-splitter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border);
+  outline: none;
+}
+
+.workspace-panel-splitter::after {
+  content: '';
+  display: block;
+  background: var(--muted);
+}
+
+.workspace-panel-splitter[data-splitter-region='right'] {
+  cursor: col-resize;
+}
+
+.workspace-panel-splitter[data-splitter-region='right']::after {
+  width: var(--workspace-splitter-size);
+  height: 100%;
+}
+
+.workspace-panel-splitter[data-splitter-region='bottom'] {
+  cursor: row-resize;
+}
+
+.workspace-panel-splitter[data-splitter-region='bottom']::after {
+  width: 100%;
+  height: var(--workspace-splitter-size);
+}
+
+.workspace-panel-splitter:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.workspace-panel-frame[data-presentation='overlay'] {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 35%, transparent);
+}
+
+.workspace-panel-entries {
+  display: flex;
+  z-index: 3;
+  flex-wrap: wrap;
+  align-self: start;
+  justify-self: end;
+  gap: 4px;
+  max-width: 100%;
+  padding: 6px;
+}
+
+.workspace-panel-entry {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  color: var(--text-strong);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workspace-panel-entry:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+  outline: none;
+}
+
+.workspace-panel-notice {
+  z-index: 4;
+  align-self: end;
+  justify-self: stretch;
+  margin: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.workspace-inspector-panel {
+  display: grid;
+  gap: 12px;
+  max-width: 360px;
+}
+
+.workspace-inspector-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted-strong);
+  font-size: 11px;
+}
+
+/*
+ * P1-06h（N2）：独立面板窗的**准备期壳**与 **error-shell**。
+ * 此前这两个壳只有类名、没有任何规则，真机上是未样式化的裸 DOM。
+ * 主题切换只由 root 的 `data-theme` 属性 + 下面的 token 完成（见 styles.css 的 :root[data-theme]），
+ * 本文件不得再定义第二套调色板：颜色/背景/边框一律取主题变量，绝不写死色值。
+ */
+.workspace-window-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 24px;
+  border-top: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+}
+
+.workspace-window-shell h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.workspace-window-shell p {
+  max-width: 420px;
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.workspace-window-shell .workspace-window-shell-hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-window-error {
+  border-top-color: var(--danger);
+}
+
+.workspace-window-preparing {
+  border-top-color: var(--accent);
+}
+
+:root[data-theme='light'] .workspace-window-shell {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] .workspace-window-shell {
+  color-scheme: dark;
+}
+
+/*
+ * P2-02：顶部 Tab Strip、页面宿主与草稿保护。
+ * 与 Phase 1 同一姿态：只用主题变量（`--surface/--border/--text/--accent/...`），
+ * 不引入第二套调色板，也不写死 app 级颜色；布局密集、工具化，不做 hero。
+ */
+.workspace-tab-strip {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.workspace-tab-strip-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 72%, var(--bg));
+}
+
+.workspace-tablist {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.workspace-tab-item {
+  display: inline-flex;
+  align-items: center;
+  max-width: 220px;
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
+}
+
+.workspace-tab-item[data-active='true'] {
+  border-color: var(--border);
+  border-bottom-color: transparent;
+  background: var(--surface);
+}
+
+.workspace-tab {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.workspace-tab span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab[aria-selected='true'] {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.workspace-tab:focus-visible,
+.workspace-tab-close:focus-visible,
+.workspace-tab-menu-trigger:focus-visible,
+.workspace-tab-menu-item:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent);
+  outline: none;
+}
+
+.workspace-tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.workspace-tab-close:hover {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+
+.workspace-tab-strip-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.workspace-tab-menu-root {
+  position: relative;
+}
+
+.workspace-tab-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.workspace-tab-menu-trigger:hover {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.workspace-tab-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 200px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 45%, transparent);
+}
+
+/*
+ * P2-15：Tab 右键 / Shift+F10 的上下文菜单。触发器是 Tab 元素本身（不在菜单组件内），因此
+ *  1) 用 `position:fixed` 贴在指针/几何锚点上（内联 left/top）：既不被 `.workspace-tablist` 的
+ *     `overflow-x:auto` 裁剪，也不参与 `.workspace-tab-strip-bar` 的 flex 布局（零布局影响）；
+ *  2) 覆盖 `top/right`，避免同时命中内联 left/top 与默认 `top:calc(100%+4px); right:0`。
+ */
+.workspace-tab-menu-floating {
+  position: fixed;
+  top: auto;
+  right: auto;
+}
+
+.workspace-tab-menu-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace-tab-menu-item:hover:not(:disabled) {
+  background: var(--surface-soft);
+}
+
+.workspace-tab-menu-item:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.workspace-tab-notice {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-strong);
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.workspace-page-host {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * P2-14：独立**页面窗**的根面（`WorkspaceWindowRoot` 的 `status:'page'` 分支）。
+ *
+ * 缺陷（生产真机）：页面窗根此前**只有** `.workspace-window-shell`（准备期/错误壳的壳类），它是
+ * `display:flex; align-items:center; justify-content:center; padding:24px; text-align:center`，
+ * 于是 `.workspace-page-host` 作为**居中 flex 项**退化成内容尺寸：它自己没有 `height:100%`，
+ * 其子 `.workspace-page-host-panel { height:100% }` 对 `auto` 高度解析成 `auto`，`.workspace-page-body`
+ * 随之退化 —— 产品页根拿不到窗口高度，正文缩成一块并居中（真机观感：正文只占左上角一小块 / 约 600px 宽居中）。
+ *
+ * 约束链（缺一不可）：
+ *   #root(100%) → .workspace-window-page(100%, grid minmax(0,1fr) 行) → .workspace-page-host(100%, min 0)
+ *   → .workspace-page-host-panel(100%, overflow:auto，P2-05) → .workspace-page-body(100%, overflow:auto，P2-05)
+ *   → 页面根
+ * 这里逐条**覆盖**居中壳的语义（display/align-items/justify-content/padding/border-top/text-align），
+ * 不引入第二套调色板，也不改动准备期/错误壳自身的样式（它们仍由 `.workspace-window-shell` 定义）。
+ */
+.workspace-window-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  /* PLAT-39 ①：自绘顶栏占一行（与主窗 `.topbar` 同高，数值来自 `--topbar-height`）；
+     正文行仍是 `minmax(0,1fr)` ⇒ **内容区 = 窗高 − 顶栏高**（P2-14 判据同步为扣除顶栏后的区域）。 */
+  grid-template-rows: var(--topbar-height) minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+  justify-content: stretch;
+  /* P2-15：回停靠悬浮控件的定位上下文（绝对定位的子节点因此绝不吃掉正文高度） */
+  position: relative;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-top: 0;
+  text-align: start;
+}
+
+/*
+ * P2-15：页面窗右上角的「回停靠」悬浮控件。`position:absolute` 由组件内联声明（不依赖样式表已加载，
+ * 也保证「不占布局高度」这条 P2-14 判据不会被级联顺序破坏）；这里只管观感，且只用主题变量。
+ */
+.workspace-page-redock-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--surface-strong) 82%, transparent);
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.workspace-page-redock-button:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.workspace-page-redock-button:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: 1px;
+}
+
+.workspace-page-redock-notice {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  color: var(--muted-strong);
+  font-size: 11px;
+}
+
+.workspace-window-page > .workspace-page-host {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.workspace-page-host-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+/*
+ * P2-05：页面内容包裹层**必须**显式参与纵向约束链。
+ *
+ * 缺陷（生产实测）：本层由 `workspacePageContentProvider.render()` 渲染（P2-03），此前**没有任何 CSS 规则**，
+ * 因而是 `display: block; height: auto`。它夹在「确定高度的面板」与
+ * `.settings-contribution-host { height: 100% }` 之间，把百分比高度链断掉：
+ * 产品页根（`.market-page { height: 100% }`、`.mi-agent-portal { min-height: 100% }`）拿不到内容区高度，
+ * 退化为 `auto`/内容高度 ⇒ 「六图」页面长到 ~2100px（每图 min-height 620px），底部两行被窗口下沿裁掉，
+ * 而 `.app-shell { height:100%; overflow:hidden }` 又让 `documentElement.scrollHeight === clientHeight`
+ * 恒成立，因此任何「文档不溢出」的断言都抓不到它。
+ *
+ * 约束链（缺一不可）：
+ *   .page-body(grid, minmax(0,1fr) 行) → .workspace-tab-strip(100%, auto + minmax(0,1fr))
+ *   → .workspace-page-host(min-height:0) → .workspace-page-host-panel(100%, overflow:auto)
+ *   → .workspace-page-body(100%, min-height:0, overflow:auto) → 页面根
+ *
+ * 这里用 `overflow: auto` 而不是 `hidden`：内容仍可能高于内容区（产品自己的 min-height），
+ * 有界层必须是**可达**的滚动容器，绝不用隐藏溢出掩盖不可达内容。
+ */
+.workspace-page-body {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.workspace-page-host-panel[hidden] {
+  display: none;
+}
+
+.workspace-page-placeholder {
+  margin: 0;
+  padding: 12px;
+  color: var(--muted-strong);
+  font-size: 12px;
+}
+
+.workspace-page-host-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted-strong);
+  text-align: center;
+}
+
+.workspace-page-host-empty h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-page-host-empty p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.workspace-draft-gate-backdrop {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+
+.workspace-draft-gate {
+  display: grid;
+  gap: 8px;
+  width: min(420px, calc(100% - 32px));
+  padding: 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--bg) 50%, transparent);
+}
+
+.workspace-draft-gate h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.workspace-draft-gate p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.workspace-draft-gate .workspace-draft-gate-hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-draft-gate-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.workspace-draft-gate[data-draft-gate='sensitive-draft'] {
+  border-top: 2px solid var(--danger);
+}
+
+
+/*
+ * PLAT-39 ①：分离窗（页窗与面板窗）的**自绘顶栏**。
+ *
+ * 与主窗 `.topbar` 同款同高（`--topbar-height`）、同 token（`--surface/--bg/--border/--muted-strong`）、
+ * 左侧为 macOS 红绿灯让位（`--traffic-light-width`，`hiddenInset` 下红绿灯内嵌在内容之上）。
+ * 顶栏是**拖拽区**（`-webkit-app-region: drag`），其中的按钮一律 `no-drag`。
+ * 面板窗复用同一份 class ⇒ 两窗顶栏逐字一致（不在面板窗里复制第二套样式）。
+ */
+.workspace-window-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px 0 var(--traffic-light-width);
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 72%, var(--bg));
+  color: var(--muted-strong);
+  font-size: 12px;
+  -webkit-app-region: drag;
+}
+
+.workspace-window-topbar-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--muted);
+}
+
+.workspace-window-topbar-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-window-topbar-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+/* 顶栏里的回停靠入口：仍是既有 `PageWindowRedockControl`（内联绝对定位不变，P2-15 判据逐字保留），
+   这里只把它钉在顶栏右侧并把整块设为 no-drag（否则拖拽区吞掉点击）。 */
+.workspace-window-topbar .workspace-page-redock-button,
+.workspace-window-topbar .workspace-page-redock-notice {
+  -webkit-app-region: no-drag;
+}
+
+/*
+ * PLAT-37：分离**面板窗**根（`.workspace-panel-window`）。
+ *
+ * 缺陷（PLAT-32R 真机证据）：面板窗的 `.workspace-panel-surface` 高度 = **内容高度**（约 34px），
+ * `surfaceFillsWindow:false` —— 与页窗 P2-14 同族的「正文没吃满窗口」。
+ * 根因只有一条：本规则此前**只**声明了 `grid-template-rows`，容器自己是 `height:auto`（内容尺寸），
+ * 于是 `minmax(0, 1fr)` 的 1fr 行在 auto 高度的 grid 里退化成**内容高度**。
+ *
+ * 约束链（与页窗 `.workspace-window-page` 逐字同构，缺一不可）：
+ *   #root(100%) → .workspace-panel-window(100%, grid: 顶栏 + minmax(0,1fr))
+ *   → .workspace-panel-surface(100%, min 0, overflow:auto)
+ * ⇒ 内容区 = **窗高 − 顶栏高**（顶栏高走命名策略 `--topbar-height`，不写匿名 42）。
+ * 颜色仍只用主题变量（不引入第二套调色板）；padding/上边框保持 0（PLAT-08 判据不放宽）。
+ */
+.workspace-panel-window {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--topbar-height) minmax(0, 1fr);
+  gap: 0;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  border-top: 0;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* PLAT-37：正文面自己声明高度链（不依赖父级 grid 的默认拉伸），并保留有界滚动。 */
+.workspace-panel-window > .workspace-panel-surface {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+}

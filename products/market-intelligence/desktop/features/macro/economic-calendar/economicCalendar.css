@@ -1,0 +1,300 @@
+/*
+ * The calendar's tokens belong to its detail surface too, not only to the page.
+ *
+ * The same drawer is opened from the market dashboard, where no `.mi-economic-calendar` ancestor
+ * exists. An undefined `var()` is invalid at computed-value time — the declaration does not fall back
+ * to another rule, it unset the property — so there the body lost its padding (0 instead of 20px) and
+ * the inspector's labels lost their muted colour, quietly, without anything failing. The drawer class
+ * carries the tokens with it so one detail surface looks the same wherever it is opened.
+ */
+.mi-economic-calendar,
+.mi-calendar-drawer {
+  /* EconomicCalendarMonthLayoutPolicy — design 122 §2.1. */
+  --mi-calendar-day-height: 200px;
+  --mi-calendar-row-height: 22px;
+  --mi-calendar-title-size: 12px;
+  --mi-calendar-time-size: 11px;
+  --mi-calendar-time-width: 40px;
+  --mi-calendar-date-size: 13px;
+  --mi-calendar-day-padding: 8px;
+  --mi-calendar-group-gap: 8px;
+  --mi-calendar-group-title-gap: 4px;
+  --mi-calendar-status-received: #6ddc96;
+  --mi-calendar-status-upcoming: #7cb9ff;
+  --mi-calendar-status-awaiting: #ffbd69;
+  --mi-calendar-status-pending: #a4adbb;
+  --mi-calendar-status-cancelled: #ff8d96;
+  /* A refused write is neither a missing release nor a cancelled one; it needs its own token. */
+  --mi-calendar-status-limited: #c4a2ff;
+  --mi-market-status-gap: 12px;
+  --mi-market-detail-max-height: 75vh;
+  --mi-market-detail-inset: 20px;
+  --mi-market-detail-layer: 20;
+  --mi-economic-page-inline: 20px;
+  --mi-economic-page-block: 12px;
+  --mi-economic-gap: 22px;
+  --mi-economic-inspector-width: 320px;
+  --mi-economic-radius: 11px;
+  --mi-economic-line: var(--border);
+  --mi-economic-surface: var(--surface);
+  --mi-economic-surface-strong: var(--surface-strong);
+  --mi-economic-muted: var(--muted);
+  --mi-economic-text: var(--text);
+  --mi-economic-strong: var(--text-strong);
+  --mi-economic-lime: var(--accent);
+  --mi-economic-amber: color-mix(in srgb, var(--danger) 58%, var(--accent));
+  --mi-economic-dialog-width: min(520px, calc(100vw - 32px));
+  --mi-economic-dialog-list-height: min(360px, 50vh);
+  --mi-economic-month-picker-width: 112px;
+}
+.mi-economic-calendar {
+  height: 100%;
+  /* The event detail's drawer is inline (`getContainer={false}`), which antd makes `position:
+     absolute` — so where it lands is decided by the nearest positioned ancestor. With none in this
+     chain it resolved against the initial containing block and slid over the app's icon rail and tab
+     strip, while the same drawer opened from the market dashboard stops at the content area's edge.
+     The page's own box is that anchor: one drawer, one place, whichever surface opened it. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
+  padding: var(--mi-economic-page-block) var(--mi-economic-page-inline);
+  background: var(--bg);
+  color: var(--mi-economic-text);
+}
+
+:root[data-theme='light'] .mi-economic-calendar {
+  --mi-calendar-status-received: #16713b;
+  --mi-calendar-status-upcoming: #1c5fa8;
+  --mi-calendar-status-awaiting: #935000;
+  --mi-calendar-status-pending: #555f6d;
+  --mi-calendar-status-cancelled: #b52b39;
+  --mi-calendar-status-limited: #6d3fa8;
+}
+.mi-calendar-status-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; margin-bottom: 8px; }
+/* The source-status line, on the page's strip and inside a market detail alike. */
+.mi-calendar-detail-status { font-size: 11px; color: var(--mi-economic-muted); margin-bottom: 8px; }
+[data-event-status='data-received'] { --mi-calendar-event-status-color: var(--mi-calendar-status-received); }
+[data-event-status='upcoming'] { --mi-calendar-event-status-color: var(--mi-calendar-status-upcoming); }
+[data-event-status='awaiting-data'] { --mi-calendar-event-status-color: var(--mi-calendar-status-awaiting); }
+[data-event-status='time-pending'], [data-event-status='elapsed-unconfirmed'] { --mi-calendar-event-status-color: var(--mi-calendar-status-pending); }
+[data-event-status='cancelled'] { --mi-calendar-event-status-color: var(--mi-calendar-status-cancelled); }
+[data-event-status='storage-limited'] { --mi-calendar-event-status-color: var(--mi-calendar-status-limited); }
+.mi-calendar-status-legend [data-event-status] { color: var(--mi-calendar-event-status-color); }
+
+.mi-economic-calendar *, .mi-economic-calendar *::before, .mi-economic-calendar *::after { box-sizing: border-box; }
+.mi-market-calendar__status { display: flex; flex-wrap: wrap; gap: var(--mi-market-status-gap); margin-bottom: var(--mi-market-status-gap); color: var(--mi-economic-muted); font-size: 11px; }
+.mi-market-calendar__inspector h2 { overflow-wrap: anywhere; }
+.mi-market-calendar__inspector strong { overflow-wrap: anywhere; min-width: 0; }
+.mi-economic-calendar h1, .mi-economic-calendar h2, .mi-economic-calendar p, .mi-economic-calendar dl, .mi-economic-calendar dd,
+.mi-calendar-drawer h1, .mi-calendar-drawer h2, .mi-calendar-drawer p, .mi-calendar-drawer dl, .mi-calendar-drawer dd { margin: 0; }
+.mi-economic-calendar__header, .mi-economic-calendar__heading, .mi-economic-calendar__tools, .mi-economic-calendar__workspace, .mi-economic-calendar__month, .mi-economic-calendar__inspector { min-width: 0; }
+.mi-economic-calendar__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--mi-market-status-gap); margin-bottom: var(--mi-market-status-gap); }
+.mi-economic-calendar h1, .mi-calendar-drawer h1 { font-size: var(--mi-calendar-date-size); font-weight: 650; line-height: 1.2; }
+.mi-economic-calendar__import.ant-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; margin-top: 12px; border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; }
+.mi-economic-calendar__import.ant-btn:hover { border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 17%, var(--mi-economic-surface)); color: var(--mi-economic-text); }
+.mi-economic-calendar__tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.mi-economic-calendar__tools > span,
+.mi-economic-calendar__tools > button,
+.mi-economic-calendar__tools > .ant-btn,
+.mi-economic-calendar__tools > .ant-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--mi-economic-line);
+  border-radius: 8px;
+  background: var(--mi-economic-surface);
+  color: var(--mi-economic-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+.mi-economic-calendar__tools > span { color: var(--mi-economic-muted); }
+.mi-economic-calendar__tools > button { cursor: pointer; }
+.mi-economic-calendar__tools > .ant-btn:hover,
+.mi-economic-calendar__tools > button:hover {
+  border-color: var(--mi-economic-lime);
+  color: var(--mi-economic-text);
+}
+.mi-economic-calendar__tools > .ant-btn > span { display: inline-flex; align-items: center; gap: 6px; }
+.mi-economic-calendar__tools > .ant-picker { padding: 0 8px; }
+.mi-economic-calendar__tools .ant-picker-input > input { height: 30px; font-size: 12px; }
+.mi-economic-calendar__month-picker.ant-picker { width: var(--mi-economic-month-picker-width); }
+.mi-economic-calendar__tools > button:focus-visible, .mi-economic-calendar__event:focus-visible, .mi-economic-calendar__more-button:focus-visible, .mi-day-events-dialog__event:focus-visible { outline: 2px solid var(--mi-economic-lime); outline-offset: 2px; }
+.mi-economic-calendar__workspace { display: grid; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) var(--mi-economic-inspector-width); gap: var(--mi-economic-gap); }
+.mi-calendar-month-scroll { min-width: 0; min-height: 0; overflow-y: auto; }
+/* The right column stands on its own: the detail opens as a drawer over the board instead of
+   replacing it, so this surface is never swapped out from under the reader. */
+.mi-calendar-day-list, .mi-calendar-detail-container { min-width: 0; min-height: 0; overflow-y: auto; overflow-wrap: anywhere; }
+.mi-calendar-day-list { display: grid; align-content: start; gap: var(--mi-calendar-group-gap); padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
+.mi-calendar-day-list [data-calendar-group], .mi-calendar-detail-container [data-calendar-group] { border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-calendar-group-gap); margin-top: var(--mi-calendar-group-gap); }
+.mi-calendar-day-list [data-calendar-group] > h3, .mi-calendar-detail-container [data-calendar-group] > h3 { color: var(--mi-economic-muted); font-size: var(--mi-calendar-title-size); margin: 0 0 var(--mi-calendar-group-title-gap); }
+.mi-calendar-day-list [data-day-summary], .mi-calendar-detail-container [data-day-summary] { color: var(--mi-economic-muted); font-size: var(--mi-calendar-time-size); }
+.mi-calendar-drawer .ant-drawer-body { padding: var(--mi-economic-page-inline); }
+/*
+ * The detail is a **floating** panel, not a wall on the window edge: 12px off every side of the
+ * content area, rounded, so it reads as a card lying over the board it came from. The reader asked
+ * for it after seeing the drawer glued to the icon rail and the tab strip.
+ *
+ * antd positions a left drawer's content wrapper itself (`.ant-drawer-left > .ant-drawer-content-wrapper
+ * { top: 0; bottom: 0; left: 0 }`), and its styles are injected at runtime — a plain two-class
+ * selector would tie on specificity and lose on source order. The placement class is therefore part
+ * of the selector, which wins outright. The tokens live on the drawer class because the same drawer
+ * is opened from the calendar page and from the market dashboard, and only one of those has the
+ * calendar's own custom properties in scope.
+ */
+.mi-calendar-drawer { --mi-calendar-drawer-inset: 12px; --mi-calendar-drawer-radius: 11px; }
+.mi-calendar-drawer.ant-drawer-left > .ant-drawer-content-wrapper {
+  top: var(--mi-calendar-drawer-inset);
+  bottom: var(--mi-calendar-drawer-inset);
+  left: var(--mi-calendar-drawer-inset);
+  max-width: calc(100% - 2 * var(--mi-calendar-drawer-inset));
+}
+.mi-calendar-drawer .ant-drawer-content { border-radius: var(--mi-calendar-drawer-radius); overflow: hidden; }
+/* The current day is a fixed square badge while its number is one line of the cell's type, so the
+   number is centered in that square on both axes; left to itself the line box sits at the top. */
+.mi-economic-calendar__date[aria-current='date'] { display: grid; place-items: center; justify-self: start; width: var(--mi-calendar-row-height); height: var(--mi-calendar-row-height); border-radius: 50%; background: var(--mi-economic-lime); color: var(--mi-economic-surface); }
+.mi-economic-calendar__month { overflow: hidden; border: 1px solid var(--mi-economic-line); border-radius: var(--mi-economic-radius); background: var(--mi-economic-surface); }
+.mi-economic-calendar__weekdays, .mi-economic-calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.mi-economic-calendar__weekdays { border-bottom: 1px solid var(--mi-economic-line); background: var(--mi-economic-surface-strong); }
+.mi-economic-calendar__weekdays span { padding: 10px; color: var(--mi-economic-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .08em; text-align: right; }
+.mi-economic-calendar__day { display: grid; align-content: start; height: var(--mi-calendar-day-height); min-width: 0; padding: var(--mi-calendar-day-padding); border-right: 1px solid var(--mi-economic-line); border-bottom: 1px solid var(--mi-economic-line); background: var(--mi-economic-surface); }
+.mi-economic-calendar__day:nth-child(7n) { border-right: 0; }
+.mi-economic-calendar__day[data-month='outside'] { background: color-mix(in srgb, var(--bg) 86%, var(--mi-economic-surface)); }
+.mi-economic-calendar__day[data-month='outside'] .mi-economic-calendar__date { color: color-mix(in srgb, var(--mi-economic-muted) 48%, transparent); }
+.mi-economic-calendar__date { color: var(--mi-economic-muted); height: var(--mi-calendar-row-height); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-date-size); text-align: left; }
+.mi-economic-calendar__events { display: grid; align-content: start; min-width: 0; }
+.mi-economic-calendar__event { display: grid; grid-template-columns: var(--mi-calendar-time-width) minmax(0, 1fr); align-items: center; height: var(--mi-calendar-row-height); min-width: 0; width: 100%; border: 0; border-radius: 0; background: transparent; color: var(--mi-economic-text); cursor: pointer; font: inherit; padding: 0; text-align: left; }
+.mi-economic-calendar__event-title { color: var(--mi-calendar-event-status-color); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--mi-calendar-title-size); }
+.mi-economic-calendar__event[data-event-status='cancelled'] .mi-economic-calendar__event-title { text-decoration: line-through; }
+.mi-economic-calendar__event[data-importance='high'] .mi-economic-calendar__event-title { font-weight: 600; }
+/* A high-importance row leads its name with a dot, in the month cell and in the day list alike. The
+   title's colour already answers "what is this value doing", so importance gets a mark of its own
+   rather than borrowing the status palette; the dot is empty and the accessible name says the word. */
+.mi-economic-calendar__event-marker { display: inline-block; width: 5px; height: 5px; margin-right: 5px; border-radius: 50%; vertical-align: middle; background: var(--mi-economic-lime); }
+/* The kind is a glyph rather than a word: the cell has no room for 经济指标/央行活动/财经事件, and it
+   leads the title run so the glyphs line up down a column that mixes kinds. */
+.mi-economic-calendar__event-kind { display: inline-flex; align-items: center; margin-right: 4px; color: var(--mi-economic-muted); vertical-align: -1.5px; }
+/* The provider's country rides inside the title, never as a third grid child: the row is
+   `time | minmax(0, 1fr)`, and a box of its own collapsed the title to an ellipsis in the month
+   cell. Inline, the ellipsis applies to "country + name" as one string. */
+.mi-economic-calendar__event-country { color: var(--mi-economic-muted); font-size: calc(var(--mi-calendar-title-size) - 1px); font-weight: 400; }
+.mi-economic-calendar__event-country::after { content: ' '; }
+.mi-economic-calendar__event:hover, .mi-economic-calendar__event[aria-pressed='true'] { border-color: var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 10%, var(--mi-economic-surface)); }
+.mi-economic-calendar__event-time { min-width: 0; overflow: hidden; color: var(--mi-economic-muted); font-variant-numeric: tabular-nums; font-size: var(--mi-calendar-time-size); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.mi-economic-calendar__source-tag.ant-tag { margin-inline-end: 0; border-color: var(--mi-economic-line); background: color-mix(in srgb, var(--mi-economic-lime) 8%, var(--mi-economic-surface)); color: var(--mi-economic-muted); font-size: 9px; line-height: 16px; }
+.mi-economic-calendar__more { color: var(--mi-economic-muted); font-size: 10px; padding-left: 2px; }
+.mi-economic-calendar__empty-state { display: flex; align-items: center; justify-content: space-between; gap: var(--mi-economic-gap); padding: 14px; border-top: 1px solid var(--mi-economic-line); background: var(--mi-economic-surface-strong); }
+.mi-economic-calendar__empty-state-title { color: var(--mi-economic-text); font-size: 12px; font-weight: 650; }
+.mi-economic-calendar__empty-state-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mi-economic-calendar__more-button { height: var(--mi-calendar-row-height); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: fit-content; border: 0; background: transparent; cursor: pointer; font-size: var(--mi-calendar-time-size); text-align: left; }
+.mi-economic-calendar__more-button:hover { color: var(--mi-economic-text); text-decoration: underline; }
+.mi-economic-calendar__inspector { display: grid; align-content: start; gap: 15px; padding-left: var(--mi-economic-gap); border-left: 1px solid var(--mi-economic-line); }
+.mi-economic-calendar h2, .mi-calendar-drawer h2 { font-size: 20px; font-weight: 650; line-height: 1.3; }
+.mi-economic-calendar__surprise { width: fit-content; border: 1px solid var(--mi-economic-line); border-radius: 999px; color: var(--mi-economic-muted); font-size: 11px; padding: 5px 9px; }
+.mi-economic-calendar__surprise[data-surprise='above-consensus'] { border-color: var(--mi-economic-amber); color: var(--mi-economic-amber); }
+.mi-economic-calendar__surprise[data-surprise='below-consensus'], .mi-economic-calendar__surprise[data-surprise='in-line'] { border-color: var(--mi-economic-lime); color: var(--mi-economic-lime); }
+.mi-economic-calendar__metadata, .mi-economic-calendar__provenance { display: grid; gap: 8px; }
+.mi-economic-calendar__metadata div, .mi-economic-calendar__provenance div { display: grid; grid-template-columns: minmax(92px, .9fr) minmax(0, 1fr); gap: 10px; }
+.mi-economic-calendar dt, .mi-calendar-drawer dt { color: var(--mi-economic-muted); font-size: 11px; }
+.mi-economic-calendar dd, .mi-calendar-drawer dd { color: var(--mi-economic-text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.mi-economic-calendar__values { display: grid; border-top: 1px solid var(--mi-economic-line); border-bottom: 1px solid var(--mi-economic-line); }
+.mi-economic-calendar__values div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--mi-economic-line); }
+.mi-economic-calendar__values div:last-child { border-bottom: 0; }
+.mi-economic-calendar__values span { color: var(--mi-economic-muted); font-size: 11px; }
+.mi-economic-calendar__values strong { color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; text-align: right; }
+.mi-economic-calendar__comparison-rule { padding-left: 12px; border-left: 3px solid var(--mi-economic-lime); color: var(--mi-economic-muted); font-size: 11px; line-height: 1.55; }
+.mi-economic-calendar__provenance { border-top: 1px solid var(--mi-economic-line); padding-top: 12px; }
+.mi-bls-ics-dialog .ant-modal-content { background: var(--mi-economic-surface); color: var(--mi-economic-text); }
+.mi-bls-ics-dialog .ant-modal-header { background: transparent; border-bottom-color: var(--mi-economic-line); }
+.mi-bls-ics-dialog .ant-modal-title, .mi-bls-ics-dialog .ant-modal-close { color: var(--mi-economic-text); }
+.mi-bls-ics-dialog.ant-modal { max-width: var(--mi-economic-dialog-width); }
+.mi-bls-ics-dialog__content { display: grid; gap: 14px; }
+.mi-bls-ics-dialog__filename { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--mi-economic-line); border-radius: 8px; background: var(--mi-economic-surface-strong); }
+.mi-bls-ics-dialog__filename span, .mi-bls-ics-dialog__counts dt { color: var(--mi-economic-muted); font-size: 11px; }
+.mi-bls-ics-dialog__filename strong { overflow: hidden; color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.mi-bls-ics-dialog__counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; border: 1px solid var(--mi-economic-line); border-radius: 8px; overflow: hidden; background: var(--mi-economic-line); }
+.mi-bls-ics-dialog__counts div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 10px; background: var(--mi-economic-surface); }
+.mi-bls-ics-dialog__counts dd { margin: 0; color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.mi-bls-ics-dialog__status { padding: 9px 11px; border-left: 3px solid var(--mi-economic-lime); background: color-mix(in srgb, var(--mi-economic-lime) 8%, var(--mi-economic-surface)); color: var(--mi-economic-text); font-size: 12px; line-height: 1.5; }
+.mi-bls-ics-dialog__status[data-state='failed'] { border-left-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--mi-economic-surface)); }
+.mi-bls-ics-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 1279px) { .mi-economic-calendar { --mi-economic-page-inline: 24px; } }
+/* The drawer carries the detail on every width now, so its own gutter is the drawer's, not the
+   column's: the inspector keeps the type and drops the rule that separated it from the month. */
+.mi-calendar-detail-container .mi-economic-calendar__inspector { grid-template-columns: minmax(0, 1fr); padding: 0; border: 0; }
+@media (max-width: 1023px) { .mi-economic-calendar__workspace { grid-template-columns: minmax(0, 1fr); } .mi-calendar-day-list { padding-left: 0; border-left: 0; border-top: 1px solid var(--mi-economic-line); padding-top: var(--mi-economic-gap); } }
+@media (max-width: 620px) { .mi-economic-calendar__header, .mi-economic-calendar__empty-state { display: grid; } .mi-economic-calendar__tools { justify-content: flex-start; } .mi-bls-ics-dialog__counts { grid-template-columns: minmax(0, 1fr); } }
+
+/* The release time reads as the row's value, not as a control: same type as its neighbours, with a
+   quiet affordance that only appears for a row that may still be changed. A released row keeps the
+   identical type with no affordance at all, because its time is history rather than a setting. */
+.mi-economic-calendar__release-time { display: grid; grid-template-columns: minmax(92px, .9fr) minmax(0, 1fr); gap: 10px; }
+.mi-economic-calendar__release-time dt { color: var(--mi-economic-muted); font-size: 11px; }
+.mi-economic-calendar__release-time dd { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; color: var(--mi-economic-text); font-size: 12px; line-height: 1.45; }
+.mi-economic-calendar__release-time-value {
+  padding: 1px 6px; margin: -1px -6px; border: 1px dashed transparent; border-radius: 4px;
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.mi-economic-calendar__release-time-value:hover { border-color: var(--mi-economic-line); background: color-mix(in srgb, var(--mi-economic-text) 6%, transparent); }
+.mi-economic-calendar__release-time-value:focus-visible { outline: 2px solid var(--mi-economic-lime); outline-offset: 1px; }
+.mi-economic-calendar__release-time-value[data-release-time-fixed] { padding: 0; margin: 0; border-color: transparent; cursor: default; }
+.mi-economic-calendar__release-time-value[data-release-time-fixed]:hover { border-color: transparent; background: none; }
+.mi-economic-calendar__release-time-picker { width: 100%; max-width: 240px; }
+.mi-economic-calendar__release-time-actions { display: inline-flex; align-items: center; gap: 8px; }
+
+.mi-calendar-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.mi-calendar-panel__provider {
+  display: grid;
+  gap: 2px;
+}
+
+.mi-calendar-panel__provider h3 {
+  margin: 0;
+  padding: 4px 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mi-calendar-panel__source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+}
+
+.mi-calendar-panel__source:last-child {
+  border-bottom: 0;
+}
+
+.mi-calendar-panel__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mi-calendar-panel__copy strong {
+  font-size: 13px;
+}
+
+.mi-calendar-panel__copy small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}

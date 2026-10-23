@@ -1,0 +1,167 @@
+{
+  "schemaVersion": "0xrouter-calendar-fixture-manifest-v1",
+  "providerId": "0xrouter",
+  "evidenceAdmission": "controlled-main-process-archive",
+  "descriptors": [
+    {
+      "descriptorId": "macro-calendar-0xrouter-economic-data",
+      "endpointPath": "/cexdata/calendar/economic-data",
+      "observedEnvelopeFields": {
+        "code": "number",
+        "msg": "string",
+        "data": "array"
+      },
+      "observedDataFieldTypes": {
+        "calendarId": "string",
+        "calendarName": "string",
+        "countryCode": "string",
+        "countryName": "string",
+        "dataEffect": "string",
+        "dataEffectCode": "string",
+        "dataTime": "string",
+        "estimateValue": "string",
+        "fixPreValue": "string",
+        "id": "number",
+        "indicatorsId": "string",
+        "locale": "string",
+        "preValue": "string",
+        "pubTime": "number",
+        "pubTimestamp": "number",
+        "pubValue": "string",
+        "siteCode": "string",
+        "star": "number",
+        "timeUnpublished": "number",
+        "type": "number"
+      },
+      "localeEvidence": {
+        "zh": {
+          "locale": "zh",
+          "origin": "captured-controlled-archive",
+          "acceptedBytes": 201079,
+          "evidenceHash": "742add25504f32fb8d74422887bae58f5e3642026f8ff1169787ab850b304edd"
+        },
+        "en": {
+          "locale": "en",
+          "origin": "captured-controlled-archive",
+          "acceptedBytes": 201103,
+          "evidenceHash": "3beddda317cf2a5aae0e736f2b086d0d9fc2d4c0693662a51353e71a7e9dfaaa"
+        }
+      },
+      "localeMerge": {
+        "state": "disabled",
+        "officialLinkConsensus": "disabled",
+        "reason": "calendarId overlap without stable cross-locale id evidence"
+      }
+    },
+    {
+      "descriptorId": "macro-calendar-0xrouter-financial-events",
+      "endpointPath": "/cexdata/calendar/financial-events",
+      "observedEnvelopeFields": {
+        "code": "number",
+        "msg": "string",
+        "data": "array"
+      },
+      "observedDataFieldTypes": {
+        "calendarId": "string",
+        "calendarName": "string",
+        "countryCode": "string",
+        "countryName": "string",
+        "id": "number",
+        "locale": "string",
+        "pubTime": "number",
+        "pubTimestamp": "number",
+        "star": "number",
+        "timeUnpublished": "number",
+        "type": "number"
+      },
+      "localeEvidence": {
+        "zh": {
+          "locale": "zh",
+          "origin": "captured-controlled-archive",
+          "acceptedBytes": 4529,
+          "evidenceHash": "315493b91f48157920dd1ef7f8fbc5894ed7f4be58629efaa0415d4277028d95"
+        },
+        "en": {
+          "locale": "en",
+          "origin": "captured-controlled-archive",
+          "acceptedBytes": 38,
+          "evidenceHash": "d7e8acd9fcd3ffbc895372f510a4fa546e71d1bd066f047fc53b7471016badbb",
+          "result": "success-empty"
+        }
+      },
+      "localeMerge": {
+        "state": "disabled",
+        "officialLinkConsensus": "disabled",
+        "reason": "english success-empty has no cross-locale identity evidence"
+      }
+    },
+    {
+      "descriptorId": "macro-calendar-0xrouter-central-bank-activities",
+      "endpointPath": "/cexdata/calendar/central-bank-activities",
+      "observedEnvelopeFields": {
+        "code": "number",
+        "msg": "string",
+        "data": "array"
+      },
+      "observedDataFieldTypes": {
+        "calendarId": "string",
+        "calendarName": "string",
+        "countryCode": "string",
+        "countryName": "string",
+        "id": "number",
+        "locale": "string",
+        "pubTime": "number",
+        "pubTimestamp": "number",
+        "star": "number",
+        "timeUnpublished": "number",
+        "type": "number"
+      },
+      "localeEvidence": {
+        "zh": {
+          "locale": "zh",
+          "origin": "captured-controlled-archive",
+          "acceptedBytes": 8272,
+          "evidenceHash": "b978dafa5f264fefa38af50705b7fc693d1428c6b44a39ccd46a8a80700d58b8"
+        },
+        "en": {
+          "locale": "en",
+          "origin": "captured-controlled-archive",
+          "acceptedBytes": 38,
+          "evidenceHash": "d7e8acd9fcd3ffbc895372f510a4fa546e71d1bd066f047fc53b7471016badbb",
+          "result": "success-empty"
+        }
+      },
+      "localeMerge": {
+        "state": "disabled",
+        "officialLinkConsensus": "disabled",
+        "reason": "english success-empty has no cross-locale identity evidence"
+      }
+    }
+  ],
+  "fixtureCases": [
+    { "fixtureFile": "zeroxrouter-economic-data-zh-success.json", "origin": "captured-controlled-archive" },
+    { "fixtureFile": "zeroxrouter-economic-data-en-success.json", "origin": "captured-controlled-archive" },
+    { "fixtureFile": "zeroxrouter-economic-data-zh-2026-10-success.json", "origin": "captured-controlled-archive",
+      "evidenceHash": "a87a333c1f24068eee3abf655799990001dfabb8c0a81251eeb6a538e9f89846",
+      "capturedAt": "2026-10-14T15:33:33.917Z",
+      "note": "Real September US CPI release the 256 MiB shared-calendar ceiling refused to store; see marketCalendarSharedCapacityAdmission.test.ts." },
+    { "fixtureFile": "zeroxrouter-economic-data-empty.json", "origin": "derived-contract-case" },
+    { "fixtureFile": "zeroxrouter-financial-events-zh-success.json", "origin": "captured-controlled-archive" },
+    { "fixtureFile": "zeroxrouter-financial-events-en-success.json", "origin": "captured-controlled-archive", "result": "success-empty" },
+    { "fixtureFile": "zeroxrouter-central-bank-activities-zh-success.json", "origin": "captured-controlled-archive" },
+    { "fixtureFile": "zeroxrouter-central-bank-activities-en-success.json", "origin": "captured-controlled-archive", "result": "success-empty" },
+    { "fixtureFile": "zeroxrouter-error-envelope.json", "origin": "derived-contract-case" },
+    { "fixtureFile": "zeroxrouter-missing-fields.json", "origin": "derived-contract-case" }
+  ],
+  "candidateMappings": [
+    { "candidateId": "us-cpi-yoy", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-core-cpi-yoy", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-nonfarm-payrolls", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-unemployment-rate", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-average-hourly-earnings-mom", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-pce-yoy", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-core-pce-yoy", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-real-gdp-qoq-annualized", "status": "planned", "admissionEvidence": "insufficient" },
+    { "candidateId": "us-fomc-target-rate-decision", "status": "planned", "admissionEvidence": "insufficient" }
+  ]
+}

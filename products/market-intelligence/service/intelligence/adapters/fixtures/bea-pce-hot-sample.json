@@ -1,0 +1,28 @@
+{
+  "BEAAPI": {
+    "Results": {
+      "Data": [
+        {
+          "TableName": "T20304",
+          "LineNumber": "1",
+          "LineDescription": "Personal consumption expenditures",
+          "TimePeriod": "2026M05",
+          "METRIC_DESC": "Percent change from year ago",
+          "CL_UNIT": "Percent",
+          "DataValue": "3.6",
+          "NoteRef": ""
+        },
+        {
+          "TableName": "T20304",
+          "LineNumber": "1",
+          "LineDescription": "Personal consumption expenditures",
+          "TimePeriod": "2026M04",
+          "METRIC_DESC": "Percent change from year ago",
+          "CL_UNIT": "Percent",
+          "DataValue": "3.1",
+          "NoteRef": ""
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "@macrobay/desktop-shell",
+  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "main": "../../out/main/index.js",
+  "scripts": {
+    "dev": "cd ../.. && env -u ELECTRON_RUN_AS_NODE electron-vite dev --config electron.vite.config.ts",
+    "start": "cd ../.. && env -u ELECTRON_RUN_AS_NODE electron-vite preview --config electron.vite.config.ts",
+    "build": "cd ../.. && electron-vite build --config electron.vite.config.ts",
+    "typecheck": "tsc --noEmit -p ../../tsconfig.json",
+    "lint": "tsc --noEmit -p ../../tsconfig.json",
+    "test": "cd ../.. && pnpm exec vitest run"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "antd": "^5.27.0",
+    "dayjs": "^1.11.21",
+    "lightweight-charts": "^5.0.8",
+    "lucide-react": "^0.525.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.4",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^3.9.0",
+    "electron": "^41.2.1",
+    "electron-vite": "^5.0.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.3.0"
+  }
+}
