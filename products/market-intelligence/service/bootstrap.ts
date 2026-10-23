@@ -43,6 +43,7 @@ import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calenda
 import { createMacroCalendarProviderSettingsService } from './intelligence/macro-calendar/macroCalendarProviderSettingsService'
 import { createUnifiedMacroCalendarProfileStore } from './intelligence/macro-calendar/macroCalendarUnifiedProfileStore'
 import { registerMacroEconomicCalendarIpc } from './intelligence/macro-calendar/ipc/registerMacroEconomicCalendarIpc'
+import { createMacroCalendarWriteActions } from './intelligence/macro-calendar/macroCalendarWriteActions'
 import { registerMacroMarketIpc, registerDashboardFeedStatusIpc } from './intelligence/macro-market/ipc/registerMacroMarketIpc'
 import { createMacroMarketSnapshotQuery } from './intelligence/macro-market/macroMarketSnapshotQuery'
 import { registerMacroRatesIpc } from './intelligence/macro-rates/ipc/registerMacroRatesIpc'
@@ -442,38 +443,62 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // Start only now that the socket constructor is bound: a first reconcile before this would fail
   // once and then sit in backoff for a whole profile-check interval.
   void intelligenceModule.macroMarketLive.reconcile().catch(() => undefined)
-  // The agent write surface reaches these two runtimes only through the facades below. They call the
-  // same objects the IPC registrations above call, so a tool cannot drift from the panel it mirrors:
-  // the release-time cache apply, the provider settings service, and the cross-asset lease runtime
-  // stay the single implementations.
+  // The agent write surface reaches these two runtimes only through the facades below. The calendar
+  // writes are the same functions `registerMacroEconomicCalendarIpc` calls (one factory, one result
+  // boundary), and the three reads are what the audit records before/after and what the calendar
+  // revision hashes. The cross-asset lease runtime stays the single implementation too.
+  const macroCalendarWriteActions = createMacroCalendarWriteActions({
+    manualBlsIcs: macroCalendarBackend.manualBlsIcs,
+    providerSettings: macroCalendarProviderSettings,
+    connection: {
+      testProviderConnection: macroCalendarBackend.testProviderConnection,
+      releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
+      releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
+    },
+    blsEmploymentRefresh: blsEmploymentMvpRefresh,
+    blsEmploymentSchedule: blsScheduleAndLatestValues,
+    fedFomcRefresh: macroCalendarBackend.fedFomcRefresh
+  })
   const macroCalendarOps: MacroCalendarOps = {
-    saveProviderProfile: (input) => macroCalendarProviderSettings.saveProfile(input),
-    runProviderNow: (providerId) => macroCalendarProviderSettings.runProviderNow(providerId),
-    testProviderConnection: (providerId) => macroCalendarBackend.testProviderConnection(providerId),
-    setReleaseTime: async (input) => {
-      const saved = await macroCalendarBackend.releaseTimeOverrideStore.set({
-        ...input,
-        updatedAt: new Date().toISOString()
-      })
-      if (!saved) return { state: 'rejected' }
-      // The synchronous calendar view reads the cache, not the store; an edit that skipped
-      // `apply` would be durable and invisible until the next process start.
-      macroCalendarBackend.releaseTimeOverrides.apply(saved)
-      return { state: 'saved', scheduledAt: saved.scheduledAt, scheduledDate: saved.scheduledDate }
+    saveProviderProfile: (input) => macroCalendarWriteActions.saveProviderProfile(input),
+    runProviderNow: (providerId) => macroCalendarWriteActions.runProviderNow({ providerId }),
+    testProviderConnection: (providerId) =>
+      macroCalendarWriteActions.testProviderConnection({ providerId }),
+    setReleaseTime: (input) => macroCalendarWriteActions.setReleaseTime(input),
+    clearReleaseTime: (eventKey) => macroCalendarWriteActions.clearReleaseTime({ eventKey }),
+    refreshBlsEmployment: (input) => macroCalendarWriteActions.refreshBlsEmployment(input),
+    refreshFedFomc: (input) => macroCalendarWriteActions.refreshFedFomc(input),
+    syncBlsSchedule: (input) => macroCalendarWriteActions.syncBlsSchedule(input),
+    previewManualIcs: (input) => macroCalendarWriteActions.previewManualIcs(input),
+    importManualIcs: (input) => macroCalendarWriteActions.importManualIcs(input),
+    readConfiguration: async () => {
+      const [profiles, overrides] = await Promise.all([
+        calendarProfiles.list(),
+        macroCalendarBackend.releaseTimeOverrideStore.list()
+      ])
+      return {
+        providers: Object.fromEntries(
+          profiles.map((profile) => [profile.providerId, profile.enabled === true])
+        ),
+        releaseTimes: Object.fromEntries(
+          overrides.map((override) => [
+            override.eventKey,
+            { scheduledAt: override.scheduledAt, scheduledDate: override.scheduledDate }
+          ])
+        )
+      }
     },
-    clearReleaseTime: async (eventKey) => {
-      const cleared = await macroCalendarBackend.releaseTimeOverrideStore.clear(eventKey)
-      if (cleared) macroCalendarBackend.releaseTimeOverrides.remove(eventKey)
-      return { state: 'cleared' }
+    readProviderState: async (providerId) => {
+      const profiles = await calendarProfiles.list()
+      const profile = profiles.find((candidate) => candidate.providerId === providerId)
+      return profile ? profile.enabled === true : null
     },
-    refreshBlsEmployment: (input) => blsEmploymentMvpRefresh.refresh(input),
-    refreshFedFomc: async (input) =>
-      macroCalendarBackend.fedFomcRefresh
-        ? macroCalendarBackend.fedFomcRefresh.refresh(input)
-        : { state: 'unavailable' as const },
-    syncBlsSchedule: (input) => blsScheduleAndLatestValues.sync(input),
-    previewManualIcs: async (input) => macroCalendarBackend.manualBlsIcs.preview(input),
-    importManualIcs: async (input) => macroCalendarBackend.manualBlsIcs.import(input)
+    readReleaseTime: async (eventKey) => {
+      const override = await macroCalendarBackend.releaseTimeOverrideStore.get(eventKey)
+      return override
+        ? { scheduledAt: override.scheduledAt, scheduledDate: override.scheduledDate }
+        : null
+    }
   }
   const crossAssetOps: CrossAssetOps = {
     acquire: async () => (crossAssetRuntime ? crossAssetRuntime.acquire() : { state: 'unavailable' as const }),
@@ -482,7 +507,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     refresh: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.refresh(leaseId) : { state: 'unavailable' as const }),
     testInterface: async () => (crossAssetRuntime ? crossAssetRuntime.testInterface() : { state: 'unavailable' as const }),
     cancelInterfaceTest: async () =>
-      crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const })
+      crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const }),
+    readConfiguration: () => crossAssetConfiguration.read()
   }
   registerIntelligenceAgentToolHandlers(deps.registerProductAgentToolHandler, {
     jobRuntime: deps.jobRuntime,

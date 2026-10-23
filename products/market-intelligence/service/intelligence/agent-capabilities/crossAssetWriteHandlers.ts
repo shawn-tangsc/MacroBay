@@ -2,7 +2,7 @@ import { ProductToolGuardError, type ToolCallContext } from './capabilityTypes'
 import type { CrossAssetOps } from './operationFacades'
 import type { WriteHandlerDeps } from './writeAudit'
 import { runAuditedWrite } from './writeAudit'
-import { readRevisionSnapshot } from './writeState'
+import { readCrossAssetSnapshot } from './writeState'
 
 const CROSS_ASSET_CAPABILITY = { id: 'configure_cross_asset_interface', domain: 'cross-asset' } as const
 
@@ -27,7 +27,7 @@ export async function handleConfigureCrossAssetInterface(
     capability: CROSS_ASSET_CAPABILITY,
     action: value.action,
     ...(typeof leaseId === 'string' && leaseId.length > 0 ? { target: leaseId } : {}),
-    read: () => readRevisionSnapshot(deps),
+    read: () => readCrossAssetSnapshot(deps),
     execute: async () => ({ ...(await executeCrossAssetAction(deps.crossAssetOps, value)) })
   })
 }

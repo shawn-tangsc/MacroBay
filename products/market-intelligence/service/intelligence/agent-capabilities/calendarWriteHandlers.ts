@@ -1,9 +1,13 @@
 import type { MacroCalendarSettingsProviderId } from '../../../contracts/macro/economicCalendarQueryContracts'
 import { ProductToolGuardError, type ToolCallContext } from './capabilityTypes'
 import type { MacroCalendarOps } from './operationFacades'
-import type { WriteHandlerDeps } from './writeAudit'
+import type { WriteHandlerDeps, WriteSnapshot } from './writeAudit'
 import { runAuditedWrite } from './writeAudit'
-import { readRevisionSnapshot } from './writeState'
+import {
+  readCalendarProviderSnapshot,
+  readCalendarReleaseTimeSnapshot,
+  readCalendarRevisionSnapshot
+} from './writeState'
 
 const CALENDAR_CAPABILITY = { id: 'operate_macro_calendar', domain: 'calendar' } as const
 
@@ -32,6 +36,17 @@ type CalendarInput = {
   truncated?: boolean
 }
 
+/** The counts an import returns; they are the audit's after-state for that action. */
+const IMPORT_COUNT_FIELDS = [
+  'totalEvents',
+  'supportedReleaseGroups',
+  'generatedEvents',
+  'unsupportedEvents',
+  'insertedCount',
+  'rescheduledCount',
+  'unchangedCount'
+] as const
+
 export async function handleOperateMacroCalendar(
   input: unknown,
   deps: WriteHandlerDeps,
@@ -41,6 +56,9 @@ export async function handleOperateMacroCalendar(
   const ops = deps.macroCalendarOps
   const action = value.action
   const target = targetOf(value)
+  // Set by `execute` and read by the post-state read: the import result only exists after
+  // the import ran, and the audit's after-state must carry its counts.
+  let imported: Record<string, unknown> | null = null
 
   return runAuditedWrite({
     deps,
@@ -49,9 +67,47 @@ export async function handleOperateMacroCalendar(
     action,
     ...(target ? { target } : {}),
     ...(value.providerId ? { sourceId: value.providerId } : {}),
-    read: () => readRevisionSnapshot(deps),
-    execute: () => executeCalendarAction(ops, value)
+    read: () => readCalendarActionSnapshot(deps, value, imported),
+    execute: async () => {
+      const result = await executeCalendarAction(ops, value)
+      if (value.action === 'import-manual-ics') imported = importSnapshot(result)
+      return result
+    }
   })
+}
+
+function readCalendarActionSnapshot(
+  deps: WriteHandlerDeps,
+  value: CalendarInput,
+  imported: Record<string, unknown> | null
+): Promise<WriteSnapshot> {
+  switch (value.action) {
+    case 'save-provider-profile':
+      return readCalendarProviderSnapshot(deps, requireProviderId(value.providerId))
+    case 'set-release-time':
+    case 'clear-release-time':
+      return readCalendarReleaseTimeSnapshot(deps, requireString(value.eventKey, 'eventKey'))
+    case 'import-manual-ics':
+      return readCalendarImportSnapshot(deps, imported)
+    default:
+      return readCalendarRevisionSnapshot(deps)
+  }
+}
+
+async function readCalendarImportSnapshot(
+  deps: WriteHandlerDeps,
+  imported: Record<string, unknown> | null
+): Promise<WriteSnapshot> {
+  const snapshot = await readCalendarRevisionSnapshot(deps)
+  return { revision: snapshot.revision, value: { import: imported } }
+}
+
+function importSnapshot(result: Record<string, unknown>): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = { state: result.state }
+  for (const field of IMPORT_COUNT_FIELDS) {
+    if (typeof result[field] === 'number') snapshot[field] = result[field]
+  }
+  return snapshot
 }
 
 async function executeCalendarAction(

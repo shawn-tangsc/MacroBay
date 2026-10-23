@@ -253,16 +253,19 @@ export const configureCrossAssetInterfaceOutputSchema = crossAssetOutputSchema
  */
 export const intelligenceWriteActionRules: Readonly<Record<string, CapabilityActionRules>> = {
   configure_intelligence_source: {
-    'save-profile': [
-      'sourceId',
-      'collectionPreset',
-      'includeInSentiment',
-      'scopePolicy',
-      'rawArchiveEnabled',
-      'retentionMode',
-      'autoReplayAfterParserUpgrade',
-      'monitoredSymbols'
-    ],
+    'save-profile': {
+      fields: [
+        'sourceId',
+        'collectionPreset',
+        'includeInSentiment',
+        'scopePolicy',
+        'rawArchiveEnabled',
+        'retentionMode',
+        'autoReplayAfterParserUpgrade',
+        'monitoredSymbols'
+      ],
+      required: ['sourceId']
+    },
     'set-enabled': { fields: ['sourceId', 'enabled'], required: ['sourceId', 'enabled'] },
     'save-focus-markets': { fields: ['enabledFocusMarkets'], required: ['enabledFocusMarkets'] }
   },
@@ -293,15 +296,26 @@ export const intelligenceWriteActionRules: Readonly<Record<string, CapabilityAct
     'import-manual-ics': { fields: ['body', 'truncated'], required: ['body'] }
   },
   configure_translation: {
-    'save-settings': [
-      'autoTranslateEnabled',
-      'targetLocale',
-      'providerId',
-      'modelId',
-      'translateTitle',
-      'translateSummary',
-      'translateEvidenceExcerpt'
-    ],
+    'save-settings': {
+      fields: [
+        'autoTranslateEnabled',
+        'targetLocale',
+        'providerId',
+        'modelId',
+        'translateTitle',
+        'translateSummary',
+        'translateEvidenceExcerpt'
+      ],
+      anyOfRequired: [
+        'autoTranslateEnabled',
+        'targetLocale',
+        'providerId',
+        'modelId',
+        'translateTitle',
+        'translateSummary',
+        'translateEvidenceExcerpt'
+      ]
+    },
     'queue-missing': ['itemIds', 'clusterIds', 'filters', 'targetLocale'],
     'retry-failed': ['itemIds', 'clusterIds', 'filters', 'targetLocale']
   },

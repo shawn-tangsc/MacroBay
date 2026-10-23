@@ -49,6 +49,12 @@ const fixture = vi.hoisted(() => ({
     previewManualIcs: [] as unknown[],
     importManualIcs: [] as unknown[]
   },
+  calendarState: {
+    providers: {} as Record<string, boolean>,
+    releaseTimes: {} as Record<string, { scheduledAt: string; scheduledDate: string }>,
+    failReadAfterExecute: false
+  },
+  crossAssetConfiguration: { state: 'configured' as const, enabled: true },
   crossAsset: {
     acquire: [] as unknown[],
     renew: [] as unknown[],
@@ -122,6 +128,8 @@ let context: {
 function resetFixtures(): void {
   for (const calls of Object.values(fixture.calendar)) calls.length = 0
   for (const calls of Object.values(fixture.crossAsset)) calls.length = 0
+  fixture.calendarState = { providers: {}, releaseTimes: {}, failReadAfterExecute: false }
+  fixture.crossAssetConfiguration = { state: 'configured', enabled: true }
   fixture.saveSettingsCalls.length = 0
   fixture.queueMissingCalls.length = 0
   fixture.retryFailedCalls.length = 0
@@ -163,9 +171,10 @@ afterEach(() => {
 })
 
 const macroCalendarOps = {
-  saveProviderProfile: async (input: unknown) => {
+  saveProviderProfile: async (input: { providerId: string; enabled: boolean }) => {
     fixture.calendar.saveProviderProfile.push(input)
-    return { state: 'saved', provider: { providerId: 'macro-calendar-fed', enabled: true, scheduleHealth: 'healthy', consecutiveFailures: 0 } }
+    fixture.calendarState.providers[input.providerId] = input.enabled
+    return { state: 'saved', provider: { providerId: input.providerId, enabled: input.enabled, scheduleHealth: 'healthy', consecutiveFailures: 0 } }
   },
   runProviderNow: async (providerId: unknown) => {
     fixture.calendar.runProviderNow.push(providerId)
@@ -175,12 +184,17 @@ const macroCalendarOps = {
     fixture.calendar.testProviderConnection.push(providerId)
     return { state: 'succeeded' }
   },
-  setReleaseTime: async (input: unknown) => {
+  setReleaseTime: async (input: { eventKey: string; scheduledAt: string; scheduledDate: string }) => {
     fixture.calendar.setReleaseTime.push(input)
-    return { state: 'saved', scheduledAt: '2026-09-10T12:30:00.000Z', scheduledDate: '2026-09-10' }
+    fixture.calendarState.releaseTimes[input.eventKey] = {
+      scheduledAt: input.scheduledAt,
+      scheduledDate: input.scheduledDate
+    }
+    return { state: 'saved', scheduledAt: input.scheduledAt, scheduledDate: input.scheduledDate }
   },
   clearReleaseTime: async (eventKey: string) => {
     fixture.calendar.clearReleaseTime.push(eventKey)
+    delete fixture.calendarState.releaseTimes[eventKey]
     return { state: 'cleared' }
   },
   refreshBlsEmployment: async (input: unknown) => {
@@ -220,7 +234,24 @@ const macroCalendarOps = {
       rescheduledCount: 0,
       unchangedCount: 0
     }
-  }
+  },
+  readConfiguration: async () => {
+    if (fixture.calendarState.failReadAfterExecute) {
+      fixture.calendarState.failReadAfterExecute = false
+      throw new Error('post-state read failed')
+    }
+    return {
+      providers: { ...fixture.calendarState.providers },
+      releaseTimes: Object.fromEntries(
+        Object.entries(fixture.calendarState.releaseTimes).map(([eventKey, value]) => [eventKey, { ...value }])
+      )
+    }
+  },
+  readProviderState: async (providerId: string) =>
+    Object.hasOwn(fixture.calendarState.providers, providerId)
+      ? fixture.calendarState.providers[providerId] === true
+      : null,
+  readReleaseTime: async (eventKey: string) => fixture.calendarState.releaseTimes[eventKey] ?? null
 }
 
 const crossAssetOps = {
@@ -247,7 +278,8 @@ const crossAssetOps = {
   cancelInterfaceTest: async () => {
     fixture.crossAsset.cancelInterfaceTest.push({})
     return { state: 'cancelled' }
-  }
+  },
+  readConfiguration: async () => ({ ...fixture.crossAssetConfiguration })
 }
 
 function registrations(): Map<string, ProductAgentToolHandlerRegistration> {
@@ -266,28 +298,39 @@ function handler(id: string) {
 }
 
 describe('macro calendar write handlers', () => {
-  it('saves provider settings through the provider settings service', async () => {
+  it('records the enabled flag transition for a provider profile change', async () => {
+    fixture.calendarState.providers['macro-calendar-fed'] = false
+
     const result = (await handler('operate-macro-calendar')(
       { action: 'save-provider-profile', providerId: 'macro-calendar-fed', enabled: true },
       context
-    )) as { state: string; revisionBefore: string; revisionAfter: string }
+    )) as {
+      state: string
+      revisionBefore: string
+      revisionAfter: string
+      changed: Record<string, { before: unknown; after: unknown }>
+    }
 
     expect(fixture.calendar.saveProviderProfile).toEqual([
       { providerId: 'macro-calendar-fed', enabled: true }
     ])
     expect(result.state).toBe('saved')
-    expect(result.revisionBefore).toBe(result.revisionAfter)
+    expect(result.changed).toEqual({ enabled: { before: false, after: true } })
+    expect(result.revisionBefore).not.toBe(result.revisionAfter)
     const rows = changeLog!.listRecent({})
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
       domain: 'calendar',
       action: 'save-provider-profile',
-      sourceId: 'macro-calendar-fed'
+      sourceId: 'macro-calendar-fed',
+      before: { enabled: false },
+      after: { enabled: true }
     })
+    expect(rows[0]!.changeSummary).toContain('enabled false -> true')
   })
 
-  it('sets and clears a release time override with the exact payload', async () => {
-    await handler('operate-macro-calendar')(
+  it('records release time before and after for set and clear', async () => {
+    const setResult = (await handler('operate-macro-calendar')(
       {
         action: 'set-release-time',
         eventKey: 'US.CPI.RELEASE.2026-M09',
@@ -295,11 +338,11 @@ describe('macro calendar write handlers', () => {
         scheduledDate: '2026-09-10'
       },
       context
-    )
-    await handler('operate-macro-calendar')(
-      { action: 'clear-release-time', eventKey: 'US.CPI.RELEASE.2026-M09' },
-      context
-    )
+    )) as {
+      revisionBefore: string
+      revisionAfter: string
+      changed: Record<string, { before: unknown; after: unknown }>
+    }
 
     expect(fixture.calendar.setReleaseTime).toEqual([
       {
@@ -308,14 +351,97 @@ describe('macro calendar write handlers', () => {
         scheduledDate: '2026-09-10'
       }
     ])
+    expect(setResult.changed).toEqual({
+      releaseTime: { before: null, after: '2026-09-10T12:30:00.000Z' },
+      releaseDate: { before: null, after: '2026-09-10' }
+    })
+    expect(setResult.revisionBefore).not.toBe(setResult.revisionAfter)
+
+    const setRow = changeLog!.listRecent({})[0]!
+    expect(setRow.changeSummary).toContain('releaseTime null -> 2026-09-10T12:30:00.000Z')
+    expect(setRow.before).toEqual({ releaseTime: null, releaseDate: null })
+    expect(setRow.after).toEqual({
+      releaseTime: '2026-09-10T12:30:00.000Z',
+      releaseDate: '2026-09-10'
+    })
+
+    const clearResult = (await handler('operate-macro-calendar')(
+      { action: 'clear-release-time', eventKey: 'US.CPI.RELEASE.2026-M09' },
+      context
+    )) as { revisionBefore: string; revisionAfter: string; changed: Record<string, unknown> }
+
     expect(fixture.calendar.clearReleaseTime).toEqual(['US.CPI.RELEASE.2026-M09'])
+    expect(clearResult.changed).toEqual({
+      releaseTime: { before: '2026-09-10T12:30:00.000Z', after: null },
+      releaseDate: { before: '2026-09-10', after: null }
+    })
+    expect(clearResult.revisionAfter).toBe(setResult.revisionBefore)
+  })
+
+  it('records the manual ICS import counts instead of an empty diff', async () => {
+    const result = (await handler('operate-macro-calendar')(
+      { action: 'import-manual-ics', body: 'BEGIN:VCALENDAR', truncated: true },
+      context
+    )) as { revisionBefore: string; revisionAfter: string; changed: Record<string, { before: unknown; after: unknown }> }
+
+    expect(result.changed).toEqual({
+      import: {
+        before: null,
+        after: {
+          state: 'imported',
+          totalEvents: 1,
+          supportedReleaseGroups: 1,
+          generatedEvents: 1,
+          unsupportedEvents: 0,
+          insertedCount: 1,
+          rescheduledCount: 0,
+          unchangedCount: 0
+        }
+      }
+    })
+    const rows = changeLog!.listRecent({})
+    expect(rows[0]!.before).toEqual({ import: null })
+    expect(rows[0]!.after).toMatchObject({ import: { state: 'imported', insertedCount: 1 } })
+    expect(rows[0]!.changeSummary).not.toContain('no configuration change')
+  })
+
+  it('keeps the successful business result and audits a failed post-state read', async () => {
+    fixture.calendarState.providers['macro-calendar-fed'] = false
+    const saveProviderProfile = macroCalendarOps.saveProviderProfile
+    macroCalendarOps.saveProviderProfile = async (input) => {
+      const saved = await saveProviderProfile(input)
+      fixture.calendarState.failReadAfterExecute = true
+      return saved
+    }
+
+    const result = (await handler('operate-macro-calendar')(
+      { action: 'save-provider-profile', providerId: 'macro-calendar-fed', enabled: true },
+      context
+    )) as {
+      state: string
+      auditFailed?: boolean
+      changed: Record<string, unknown>
+      revisionBefore: string
+      revisionAfter: string
+    }
+
+    expect(result.state).toBe('saved')
+    expect(result.auditFailed).toBe(true)
+    expect(result.changed).toEqual({})
+    expect(result.revisionAfter).toBe(result.revisionBefore)
+    expect(fixture.calendar.saveProviderProfile).toHaveLength(1)
+
+    const rows = changeLog!.listRecent({})
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.after).toBeNull()
+    expect(rows[0]!.changeSummary).toContain('post-state could not be read')
   })
 
   it('runs a provider and tests its connection without configuration change', async () => {
-    await handler('operate-macro-calendar')(
+    const run = (await handler('operate-macro-calendar')(
       { action: 'run-provider-now', providerId: 'macro-calendar-fed' },
       context
-    )
+    )) as { revisionBefore: string; revisionAfter: string }
     await handler('operate-macro-calendar')(
       { action: 'test-provider-connection', providerId: 'macro-calendar-fed' },
       context
@@ -323,6 +449,7 @@ describe('macro calendar write handlers', () => {
 
     expect(fixture.calendar.runProviderNow).toEqual(['macro-calendar-fed'])
     expect(fixture.calendar.testProviderConnection).toEqual(['macro-calendar-fed'])
+    expect(run.revisionBefore).toBe(run.revisionAfter)
     const rows = changeLog!.listRecent({})
     expect(rows).toHaveLength(2)
     expect(rows[0]!.changeSummary).toContain('no configuration change')
@@ -399,8 +526,8 @@ describe('macro calendar write handlers', () => {
 })
 
 describe('translation write handlers', () => {
-  it('saves only the settings the caller supplied', async () => {
-    await handler('configure-translation')(
+  it('saves only the settings the caller supplied and moves the translation revision', async () => {
+    const result = (await handler('configure-translation')(
       {
         action: 'save-settings',
         autoTranslateEnabled: true,
@@ -408,11 +535,12 @@ describe('translation write handlers', () => {
         translateTitle: true
       },
       context
-    )
+    )) as { revisionBefore: string; revisionAfter: string }
 
     expect(fixture.saveSettingsCalls).toEqual([
       { autoTranslateEnabled: true, targetLocale: 'zh-CN', translateTitle: true }
     ])
+    expect(result.revisionBefore).not.toBe(result.revisionAfter)
     const rows = changeLog!.listRecent({})
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ domain: 'translation', action: 'save-settings' })
@@ -420,8 +548,8 @@ describe('translation write handlers', () => {
     expect(rows[0]!.after).toMatchObject({ autoTranslateEnabled: true })
   })
 
-  it('queues missing items with the manual-selection reason', async () => {
-    await handler('configure-translation')(
+  it('queues missing items with the manual-selection reason without moving the translation revision', async () => {
+    const result = (await handler('configure-translation')(
       {
         action: 'queue-missing',
         itemIds: ['item-1'],
@@ -430,7 +558,7 @@ describe('translation write handlers', () => {
         targetLocale: 'en-US'
       },
       context
-    )
+    )) as { revisionBefore: string; revisionAfter: string }
 
     expect(fixture.queueMissingCalls).toEqual([
       {
@@ -441,6 +569,8 @@ describe('translation write handlers', () => {
         reason: 'manual-selection'
       }
     ])
+    expect(result.revisionBefore).toBe(result.revisionAfter)
+    expect(changeLog!.listRecent({})[0]!.changeSummary).toContain('no configuration change')
   })
 
   it('retries failed items without overriding the service-owned reason', async () => {
@@ -477,5 +607,21 @@ describe('cross-asset interface write handlers', () => {
 
     expect(result).toMatchObject({ state: 'active', leaseId: 'lease-1', changed: {} })
     expect(result.revisionBefore).toBe(result.revisionAfter)
+  })
+
+  it('uses the cross-asset interface revision rather than the source configuration revision', async () => {
+    const first = (await handler('configure-cross-asset-interface')(
+      { action: 'acquire' },
+      context
+    )) as { revisionBefore: string }
+
+    fixture.crossAssetConfiguration = { state: 'configured', enabled: false }
+
+    const second = (await handler('configure-cross-asset-interface')(
+      { action: 'acquire' },
+      context
+    )) as { revisionBefore: string }
+
+    expect(second.revisionBefore).not.toBe(first.revisionBefore)
   })
 })

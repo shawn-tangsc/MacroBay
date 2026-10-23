@@ -1,6 +1,12 @@
 import { getIntelligenceModule } from '../intelligenceModule'
+import type { MacroCalendarSettingsProviderId } from '../../../contracts/macro/economicCalendarQueryContracts'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
-import { computeConfigurationRevision } from './configurationRevision'
+import {
+  computeCalendarRevision,
+  computeConfigurationRevision,
+  computeCrossAssetRevision,
+  computeTranslationRevision
+} from './configurationRevision'
 import type { WriteHandlerDeps, WriteSnapshot } from './writeAudit'
 
 export type SourceConfigurationState = {
@@ -9,7 +15,13 @@ export type SourceConfigurationState = {
   focusMarkets: readonly string[]
 }
 
-/** One read of the two things the configuration revision is computed from. */
+export type CalendarConfigurationState = {
+  revision: string
+  providers: Readonly<Record<string, boolean>>
+  releaseTimes: Readonly<Record<string, Readonly<{ scheduledAt: string; scheduledDate: string }>>>
+}
+
+/** One read of the two things the source configuration revision is computed from. */
 export async function readSourceConfiguration(
   deps: WriteHandlerDeps
 ): Promise<SourceConfigurationState> {
@@ -73,12 +85,56 @@ export async function readRevisionSnapshot(deps: WriteHandlerDeps): Promise<Writ
   return { revision: state.revision, value: {} }
 }
 
-/** Translation settings as the agent may see them; no provider secret lives here. */
-export async function readTranslationSnapshot(deps: WriteHandlerDeps): Promise<WriteSnapshot> {
-  const state = await readSourceConfiguration(deps)
-  const settings = await getIntelligenceModule(deps.jobRuntime).translationService.getSettings()
+/** One read of the provider enable map and every release time the calendar owns. */
+export async function readCalendarConfiguration(
+  deps: WriteHandlerDeps
+): Promise<CalendarConfigurationState> {
+  const configuration = await deps.macroCalendarOps.readConfiguration()
+  return {
+    revision: computeCalendarRevision(configuration),
+    providers: configuration.providers,
+    releaseTimes: configuration.releaseTimes
+  }
+}
+
+export async function readCalendarProviderSnapshot(
+  deps: WriteHandlerDeps,
+  providerId: MacroCalendarSettingsProviderId
+): Promise<WriteSnapshot> {
+  const [state, enabled] = await Promise.all([
+    readCalendarConfiguration(deps),
+    deps.macroCalendarOps.readProviderState(providerId)
+  ])
+  return { revision: state.revision, value: { enabled } }
+}
+
+export async function readCalendarReleaseTimeSnapshot(
+  deps: WriteHandlerDeps,
+  eventKey: string
+): Promise<WriteSnapshot> {
+  const [state, releaseTime] = await Promise.all([
+    readCalendarConfiguration(deps),
+    deps.macroCalendarOps.readReleaseTime(eventKey)
+  ])
   return {
     revision: state.revision,
+    value: {
+      releaseTime: releaseTime?.scheduledAt ?? null,
+      releaseDate: releaseTime?.scheduledDate ?? null
+    }
+  }
+}
+
+export async function readCalendarRevisionSnapshot(deps: WriteHandlerDeps): Promise<WriteSnapshot> {
+  const state = await readCalendarConfiguration(deps)
+  return { revision: state.revision, value: {} }
+}
+
+/** Translation settings as the agent may see them; no provider secret lives here. */
+export async function readTranslationSnapshot(deps: WriteHandlerDeps): Promise<WriteSnapshot> {
+  const settings = await getIntelligenceModule(deps.jobRuntime).translationService.getSettings()
+  return {
+    revision: computeTranslationRevision(settings),
     value: {
       autoTranslateEnabled: settings.autoTranslateEnabled === true,
       targetLocale: settings.targetLocale,
@@ -89,4 +145,10 @@ export async function readTranslationSnapshot(deps: WriteHandlerDeps): Promise<W
       translateEvidenceExcerpt: settings.translateEvidenceExcerpt === true
     }
   }
+}
+
+/** The cross-asset interface is its own configuration domain; leases are operations. */
+export async function readCrossAssetSnapshot(deps: WriteHandlerDeps): Promise<WriteSnapshot> {
+  const configuration = await deps.crossAssetOps.readConfiguration()
+  return { revision: computeCrossAssetRevision(configuration), value: {} }
 }

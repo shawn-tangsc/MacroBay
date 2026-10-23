@@ -194,6 +194,23 @@ describe('validateCapabilityInput with action rules', () => {
       validateCapabilityInput({ action: 'set-enabled', sourceId: 'source-a', enabled: true }, writeSchema, rules)
     ).toEqual({ ok: true })
   })
+
+  it('rejects an empty patch when the action rule requires at least one field', () => {
+    const rules = {
+      'save-settings': {
+        fields: ['sourceId', 'enabled', 'focusMarkets'],
+        anyOfRequired: ['sourceId', 'enabled', 'focusMarkets']
+      }
+    } as const
+
+    expect(validateCapabilityInput({ action: 'save-settings' }, writeSchema, rules)).toMatchObject({
+      ok: false,
+      code: 'invalid-action-fields'
+    })
+    expect(
+      validateCapabilityInput({ action: 'save-settings', enabled: true }, writeSchema, rules)
+    ).toEqual({ ok: true })
+  })
 })
 
 describe('validateCapabilityInput recursively', () => {

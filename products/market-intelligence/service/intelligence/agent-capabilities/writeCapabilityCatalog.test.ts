@@ -95,6 +95,52 @@ describe('write capability catalog', () => {
     ).toMatchObject({ ok: false, code: 'unexpected-property' })
   })
 
+  it('requires sourceId on save-profile instead of letting the handler discover it', () => {
+    expect(
+      validate('configure_intelligence_source', {
+        action: 'save-profile',
+        collectionPreset: 'frequent'
+      })
+    ).toMatchObject({ ok: false, code: 'missing-property' })
+  })
+
+  it('requires at least one settings field on save-settings so an empty patch never reaches the handler', () => {
+    expect(validate('configure_translation', { action: 'save-settings' })).toMatchObject({
+      ok: false,
+      code: 'invalid-action-fields'
+    })
+
+    expect(
+      validate('configure_translation', { action: 'save-settings', targetLocale: 'zh-CN' })
+    ).toEqual({ ok: true })
+  })
+
+  it('declares every identifier an action handler needs as required', () => {
+    const identifierActions: ReadonlyArray<readonly [string, string, string]> = [
+      ['configure_intelligence_source', 'save-profile', 'sourceId'],
+      ['configure_intelligence_source', 'set-enabled', 'sourceId'],
+      ['operate_intelligence_source', 'run-now', 'sourceId'],
+      ['operate_intelligence_source', 'test-connection', 'sourceId'],
+      ['operate_intelligence_source', 'retry-assessment', 'itemId'],
+      ['operate_macro_calendar', 'save-provider-profile', 'providerId'],
+      ['operate_macro_calendar', 'run-provider-now', 'providerId'],
+      ['operate_macro_calendar', 'test-provider-connection', 'providerId'],
+      ['operate_macro_calendar', 'set-release-time', 'eventKey'],
+      ['operate_macro_calendar', 'clear-release-time', 'eventKey'],
+      ['operate_macro_calendar', 'refresh-bls-employment', 'eventKey'],
+      ['operate_macro_calendar', 'refresh-fed-fomc', 'eventKey'],
+      ['configure_cross_asset_interface', 'renew', 'leaseId'],
+      ['configure_cross_asset_interface', 'release', 'leaseId'],
+      ['configure_cross_asset_interface', 'refresh', 'leaseId']
+    ]
+
+    for (const [capabilityId, action, identifier] of identifierActions) {
+      const rule = intelligenceWriteActionRules[capabilityId]?.[action]
+      const required = rule && !Array.isArray(rule) ? (rule.required ?? []) : []
+      expect(required, `${capabilityId}.${action} must require ${identifier}`).toContain(identifier)
+    }
+  })
+
   it('accepts a profile patch made only of the declared per-source settings', () => {
     expect(
       validate('configure_intelligence_source', {
