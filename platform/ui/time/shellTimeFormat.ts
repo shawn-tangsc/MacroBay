@@ -62,16 +62,26 @@ export function formatShellInstant(
   const value = (type: Intl.DateTimeFormatPartTypes): string => parts.find(part => part.type === type)?.value ?? ''
   const date = `${value('year')}-${value('month')}-${value('day')}`
   const time = [value('hour'), value('minute'), ...(precision === 'second' ? [value('second')] : [])].join(shellTimeFormatPolicy.timeSeparator)
-  const zone = value('timeZoneName')
+  const zone = normalizeTimeZoneName(value('timeZoneName'))
   return [date, time, zone].filter(Boolean).join(shellTimeFormatPolicy.dateTimeSeparator)
 }
 
 /** 时区在界面上的短名称（`GMT+8` / `UTC`），用于设置项与时间标签。 */
 export function formatShellTimeZoneLabel(timeZone: string, locale = 'zh-CN', at: Date = new Date()): string {
   try {
-    return new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: 'shortOffset' })
-      .formatToParts(at).find(part => part.type === 'timeZoneName')?.value ?? timeZone
+    const label = new Intl.DateTimeFormat(locale, { timeZone, timeZoneName: 'shortOffset' })
+      .formatToParts(at).find(part => part.type === 'timeZoneName')?.value
+    return label ? normalizeTimeZoneName(label) : timeZone
   } catch {
     return timeZone
   }
+}
+
+/**
+ * `shortOffset` names zero offset differently across ICU builds (`GMT`, `GMT+0`, `GMT+00:00`).
+ * Keep one public spelling so the same instant is not labelled twice.
+ */
+function normalizeTimeZoneName(value: string): string {
+  if (value === 'UTC' || /^GMT[+-]0(?::00)?$/.test(value)) return 'GMT'
+  return value
 }
