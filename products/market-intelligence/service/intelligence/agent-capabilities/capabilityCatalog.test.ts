@@ -31,6 +31,57 @@ describe('intelligence agent capability catalog', () => {
     }
   })
 
+  it('restores the original 10 s timeout for the four query adapters', () => {
+    const timeoutFor = (id: string) =>
+      intelligenceAgentCapabilities.find((capability) => capability.id === id)?.timeoutMs
+
+    for (const id of [
+      'query_sentiment_snapshot',
+      'query_sentiment_series',
+      'query_related_events',
+      'query_impact_timeline'
+    ]) {
+      expect(timeoutFor(id), id).toBe(10_000)
+    }
+  })
+
+  it('declares a strict source-detail output schema with the health and runtime projections', () => {
+    const capability = intelligenceAgentCapabilities.find((entry) => entry.id === 'get_source_detail')
+    const schema = capability?.outputSchema as {
+      additionalProperties?: boolean
+      properties: {
+        source: {
+          additionalProperties?: boolean
+          properties: Record<string, { additionalProperties?: boolean; properties?: Record<string, unknown> }>
+        }
+      }
+    }
+
+    expect(schema).toMatchObject({ type: 'object', additionalProperties: false })
+    expect(schema.properties.source).toMatchObject({ additionalProperties: false })
+    expect(schema.properties.source.properties.health).toMatchObject({
+      type: 'object',
+      additionalProperties: false
+    })
+    expect(Object.keys(schema.properties.source.properties.health.properties ?? {}).sort()).toEqual([
+      'collectionGap',
+      'connectivityStatus',
+      'consecutiveFailures',
+      'lastFailureAt',
+      'lastSuccessAt',
+      'runtimeStatus'
+    ])
+    expect(schema.properties.source.properties.runtime).toMatchObject({
+      type: 'object',
+      additionalProperties: false
+    })
+    expect(Object.keys(schema.properties.source.properties.runtime.properties ?? {}).sort()).toEqual([
+      'desiredState',
+      'pollingIntervalSec',
+      'schedule'
+    ])
+  })
+
   it('exposes every capability through the derived manifest', () => {
     const manifestTools = marketIntelligenceProductManifest.productAgentTools ?? []
     expect(manifestTools).toHaveLength(intelligenceAgentCapabilities.length)

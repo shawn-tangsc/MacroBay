@@ -1,8 +1,14 @@
 import { agentRegistry, getSource } from '../application/providerRegistry'
 import type {
+  IntelligenceDesiredRuntimeState,
+  IntelligenceSourceConfig,
   IntelligenceSourceDefinition,
   IntelligenceSourceProfile
 } from '../schema/intelligenceSource'
+import type {
+  SafeIntelligenceSourceHealthView,
+  SafeSourceScheduleRule
+} from '../schema/intelligenceSourcesContracts'
 import type { IntelligenceTimelineRow } from '../application/intelligenceWorkspaceQueries'
 
 export type SourceDomain = 'dashboard' | 'calendar'
@@ -33,18 +39,58 @@ export type ProjectedSourceSummary = {
   credentialStatus: ProjectedCredentialStatus
 }
 
+/** Only the health fields the agent may reason about; run internals stay out. */
+export type ProjectedSourceHealth = {
+  runtimeStatus: SafeIntelligenceSourceHealthView['runtimeStatus']
+  connectivityStatus: SafeIntelligenceSourceHealthView['connectivityStatus']
+  lastSuccessAt?: string
+  lastFailureAt?: string
+  consecutiveFailures: number
+  collectionGap?: boolean
+}
+
+export type ProjectedSourceSchedule =
+  | Readonly<{ mode: 'manual' }>
+  | Readonly<{ mode: 'interval'; intervalSeconds: number }>
+
+/** Runtime settings that explain when the source runs, without adapter internals. */
+export type ProjectedSourceRuntime = {
+  desiredState: IntelligenceDesiredRuntimeState
+  pollingIntervalSec?: number
+  schedule: ProjectedSourceSchedule
+}
+
 export type ProjectedSourceDetail = ProjectedSourceSummary & {
   definition: {
     description: string
     authMode: IntelligenceSourceDefinition['authMode']
     requiredFields: string[]
   }
+  health: ProjectedSourceHealth
+  runtime: ProjectedSourceRuntime
 }
 
 type SourceDefinitionProjection = Pick<
   IntelligenceSourceDefinition,
   'displayName' | 'sourceGroup' | 'category' | 'visibility' | 'authMode' | 'sourceSpecificFields' | 'readinessNote'
 >
+
+export type SourceDetailProjectionInput = {
+  definition: SourceDefinitionProjection & {
+    displayName: string
+    sourceGroup: string
+    category: string
+    visibility: string
+    authMode: IntelligenceSourceDefinition['authMode']
+    sourceSpecificFields: string[]
+    readinessNote?: string
+  }
+  profile: IntelligenceSourceProfile
+  health: ProjectedSourceHealth
+  runtimeConfig: Pick<IntelligenceSourceConfig, 'desiredRuntimeState' | 'pollingIntervalSec'>
+  scheduleRule?: SafeSourceScheduleRule
+  credentialStatus?: Readonly<{ hasCredential: boolean; lastValidatedAt?: string }>
+}
 
 /**
  * The panel a source belongs to, not the product-level domain: the settings page groups sources by
@@ -113,19 +159,7 @@ export function projectSourceSummary(input: {
 }
 
 /** `getDetail` returns the full profile; the agent only ever receives this projection. */
-export function projectSourceDetail(detail: {
-  definition: SourceDefinitionProjection & {
-    displayName: string
-    sourceGroup: string
-    category: string
-    visibility: string
-    authMode: IntelligenceSourceDefinition['authMode']
-    sourceSpecificFields: string[]
-    readinessNote?: string
-  }
-  profile: IntelligenceSourceProfile
-  credentialStatus?: Readonly<{ hasCredential: boolean; lastValidatedAt?: string }>
-}): ProjectedSourceDetail {
+export function projectSourceDetail(detail: SourceDetailProjectionInput): ProjectedSourceDetail {
   const summary = projectSourceSummary({
     profile: detail.profile,
     definition: detail.definition,
@@ -137,8 +171,50 @@ export function projectSourceDetail(detail: {
       description: detail.definition.readinessNote ?? detail.definition.displayName,
       authMode: detail.definition.authMode,
       requiredFields: [...detail.definition.sourceSpecificFields]
-    }
+    },
+    health: projectSourceHealth(detail.health),
+    runtime: projectSourceRuntime(detail)
   }
+}
+
+/** Keeps the six agent-safe health fields; worker and run internals are dropped. */
+function projectSourceHealth(health: ProjectedSourceHealth): ProjectedSourceHealth {
+  return {
+    runtimeStatus: health.runtimeStatus,
+    connectivityStatus: health.connectivityStatus,
+    ...(typeof health.lastSuccessAt === 'string' ? { lastSuccessAt: health.lastSuccessAt } : {}),
+    ...(typeof health.lastFailureAt === 'string' ? { lastFailureAt: health.lastFailureAt } : {}),
+    consecutiveFailures: health.consecutiveFailures,
+    ...(typeof health.collectionGap === 'boolean' ? { collectionGap: health.collectionGap } : {})
+  }
+}
+
+function projectSourceRuntime(input: {
+  runtimeConfig: Pick<IntelligenceSourceConfig, 'desiredRuntimeState' | 'pollingIntervalSec'>
+  scheduleRule?: SafeSourceScheduleRule
+}): ProjectedSourceRuntime {
+  return {
+    desiredState: input.runtimeConfig.desiredRuntimeState,
+    ...(typeof input.runtimeConfig.pollingIntervalSec === 'number'
+      ? { pollingIntervalSec: input.runtimeConfig.pollingIntervalSec }
+      : {}),
+    schedule: resolveSchedule(input)
+  }
+}
+
+function resolveSchedule(input: {
+  runtimeConfig: Pick<IntelligenceSourceConfig, 'pollingIntervalSec'>
+  scheduleRule?: SafeSourceScheduleRule
+}): ProjectedSourceSchedule {
+  if (input.scheduleRule?.mode === 'manual') return { mode: 'manual' }
+  const intervalSeconds =
+    input.scheduleRule?.mode === 'interval'
+      ? input.scheduleRule.intervalSeconds
+      : input.runtimeConfig.pollingIntervalSec
+  if (typeof intervalSeconds !== 'number' || !Number.isInteger(intervalSeconds) || intervalSeconds <= 0) {
+    return { mode: 'manual' }
+  }
+  return { mode: 'interval', intervalSeconds }
 }
 
 /**

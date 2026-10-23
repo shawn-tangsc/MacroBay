@@ -123,7 +123,14 @@ export async function handleGetSourceDetail(
   const detail = await sourcesService.getDetail(sourceId)
   return {
     state: 'available',
-    source: projectSourceDetail(detail),
+    source: projectSourceDetail({
+      definition: detail.definition,
+      profile: detail.profile,
+      health: detail.health,
+      runtimeConfig: detail.runtimeConfig,
+      ...(detail.scheduleRule ? { scheduleRule: detail.scheduleRule } : {}),
+      ...(detail.credentialStatus ? { credentialStatus: detail.credentialStatus } : {})
+    }),
     caveats: []
   }
 }

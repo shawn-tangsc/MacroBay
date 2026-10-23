@@ -105,7 +105,7 @@ export const intelligenceAgentCapabilities = [
     inputSchema: marketIntelligenceTimeBoundInputSchema,
     outputSchema: marketIntelligenceQueryOutputSchema,
     handlerId: 'market-intelligence.query-sentiment-snapshot',
-    timeoutMs: 5_000,
+    timeoutMs: 10_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {
@@ -118,7 +118,7 @@ export const intelligenceAgentCapabilities = [
     inputSchema: marketIntelligenceTimeBoundInputSchema,
     outputSchema: marketIntelligenceQueryOutputSchema,
     handlerId: 'market-intelligence.query-sentiment-series',
-    timeoutMs: 5_000,
+    timeoutMs: 10_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {
@@ -131,7 +131,7 @@ export const intelligenceAgentCapabilities = [
     inputSchema: marketIntelligenceTimeBoundInputSchema,
     outputSchema: marketIntelligenceQueryOutputSchema,
     handlerId: 'market-intelligence.query-related-events',
-    timeoutMs: 5_000,
+    timeoutMs: 10_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {
@@ -144,7 +144,7 @@ export const intelligenceAgentCapabilities = [
     inputSchema: marketIntelligenceTimeBoundInputSchema,
     outputSchema: marketIntelligenceQueryOutputSchema,
     handlerId: 'market-intelligence.query-impact-timeline',
-    timeoutMs: 5_000,
+    timeoutMs: 10_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {

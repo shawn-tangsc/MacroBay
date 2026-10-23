@@ -94,7 +94,7 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.retryItemAssessment': excluded('destructive'),
 
   'intelligenceSources.getFocusSettings': exposed('list_intelligence_sources'),
-  'intelligenceSources.getHealth': exposed('get_source_health'),
+  'intelligenceSources.getHealth': exposed('get_source_detail'),
   'intelligenceSources.getPageState': excluded('internal-view'),
   'intelligenceSources.revealCredential': excluded('returns-plaintext-credential'),
   'intelligenceSources.setCalendarEnabled': excluded('destructive'),

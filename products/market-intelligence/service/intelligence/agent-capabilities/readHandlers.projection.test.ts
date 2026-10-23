@@ -41,6 +41,27 @@ const fixtures = vi.hoisted(() => {
       getDetail: async (sourceId: string) => ({
         definition,
         profile: { ...profile, sourceId },
+        runtimeConfig: {
+          desiredRuntimeState: 'polling',
+          pollingIntervalSec: 600
+        },
+        scheduleRule: {
+          mode: 'interval',
+          intervalSeconds: 600,
+          anchor: 'last-complete',
+          initialRunOnEnable: true
+        },
+        health: {
+          sourceId,
+          runtimeStatus: 'healthy',
+          connectivityStatus: 'connected',
+          workerStatus: 'live',
+          lastSuccessAt: '2026-10-02T00:00:00.000Z',
+          consecutiveFailures: 0,
+          lastRunSummary: 'internal run summary',
+          checkpointPreview: 'internal checkpoint',
+          collectionGap: false
+        },
         credentialStatus: {
           hasCredential: true,
           maskedPreview: 'sk-masked-preview',
@@ -101,11 +122,15 @@ describe('source-capability handlers', () => {
     expect(serialized).not.toContain('placeholder-value')
   })
 
-  it('projects source detail and keeps the health/credential boolean', async () => {
+  it('projects source detail with health and runtime and keeps credentials out', async () => {
     const handler = registrations().get('market-intelligence.get-source-detail')
     const result = (await handler!.handle({ sourceId: 'fred-rates-liquidity' }, context)) as {
       state: string
-      source: { credentialStatus: { hasCredential: boolean; lastValidatedAt?: string } }
+      source: {
+        credentialStatus: { hasCredential: boolean; lastValidatedAt?: string }
+        health: Record<string, unknown>
+        runtime: Record<string, unknown>
+      }
     }
     const serialized = JSON.stringify(result)
 
@@ -114,10 +139,37 @@ describe('source-capability handlers', () => {
       hasCredential: true,
       lastValidatedAt: '2026-10-02T00:00:00.000Z'
     })
+    expect(result.source.health).toEqual({
+      runtimeStatus: 'healthy',
+      connectivityStatus: 'connected',
+      lastSuccessAt: '2026-10-02T00:00:00.000Z',
+      consecutiveFailures: 0,
+      collectionGap: false
+    })
+    expect(Object.keys(result.source.health).sort()).toEqual([
+      'collectionGap',
+      'connectivityStatus',
+      'consecutiveFailures',
+      'lastSuccessAt',
+      'runtimeStatus'
+    ])
+    expect(result.source.runtime).toEqual({
+      desiredState: 'polling',
+      pollingIntervalSec: 600,
+      schedule: { mode: 'interval', intervalSeconds: 600 }
+    })
+    expect(Object.keys(result.source.runtime).sort()).toEqual([
+      'desiredState',
+      'pollingIntervalSec',
+      'schedule'
+    ])
     expect(serialized).not.toContain('credentialRef')
     expect(serialized).not.toContain('sourceSpecificConfigJson')
     expect(serialized).not.toContain('maskedPreview')
+    expect(serialized).not.toContain('profileId')
     expect(serialized).not.toContain('placeholder-value')
+    expect(serialized).not.toContain('workerStatus')
+    expect(serialized).not.toContain('lastRunSummary')
   })
 
   it('answers an unknown source id with unavailable instead of throwing', async () => {

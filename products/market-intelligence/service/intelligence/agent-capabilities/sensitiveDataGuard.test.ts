@@ -135,11 +135,45 @@ describe('guardProductToolOutput', () => {
     ['a Map', { sample: new Map([['a', 1]]) }],
     ['a Set', { sample: new Set(['a']) }],
     ['a function', { sample: () => 1 }],
-    ['a symbol', { sample: Symbol('value') }],
-    ['undefined', { sample: undefined }],
-    ['a non-finite number', { sample: Number.POSITIVE_INFINITY }]
+    ['a symbol', { sample: Symbol('value') }]
   ])('throws invalid-output for %s', (_label, value) => {
     expect(() => guardProductToolOutput(value)).toThrowError(expect.objectContaining({ code: 'invalid-output' }))
+  })
+
+  it('drops own object properties whose value is undefined instead of failing', () => {
+    expect(
+      guardProductToolOutput({
+        sourceId: 'source-a',
+        from: undefined,
+        nested: { to: '2026-07-08T10:00:00.000Z', lookbackWindowMs: undefined }
+      })
+    ).toEqual({
+      sourceId: 'source-a',
+      nested: { to: '2026-07-08T10:00:00.000Z' }
+    })
+  })
+
+  it('converts undefined array items to null instead of failing', () => {
+    expect(guardProductToolOutput({ values: [undefined, 'BTCUSDT', null] })).toEqual({
+      values: [null, 'BTCUSDT', null]
+    })
+  })
+
+  it('converts non-finite numbers to null instead of failing', () => {
+    expect(
+      guardProductToolOutput({
+        values: [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY],
+        finite: 0
+      })
+    ).toEqual({ values: [null, null, null], finite: 0 })
+  })
+
+  it('drops undefined nested in arrays of objects', () => {
+    expect(
+      guardProductToolOutput({
+        rows: [{ sourceId: 'source-a', latestSuccessAt: undefined, latestFailureAt: undefined }]
+      })
+    ).toEqual({ rows: [{ sourceId: 'source-a' }] })
   })
 
   it('drops symbol keys', () => {

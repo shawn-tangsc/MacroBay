@@ -96,6 +96,54 @@ export const listSourcesOutputSchema = {
   }
 } as const
 
+const sourceHealthSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['runtimeStatus', 'connectivityStatus', 'consecutiveFailures'],
+  properties: {
+    runtimeStatus: { type: 'string', enum: ['healthy', 'degraded', 'failed', 'paused'] },
+    connectivityStatus: {
+      type: 'string',
+      enum: ['unverified', 'connected', 'degraded', 'failed', 'paused']
+    },
+    lastSuccessAt: { type: 'string', format: 'date-time' },
+    lastFailureAt: { type: 'string', format: 'date-time' },
+    consecutiveFailures: { type: 'integer', minimum: 0 },
+    collectionGap: { type: 'boolean' }
+  }
+} as const
+
+const sourceScheduleSchema = {
+  oneOf: [
+    {
+      type: 'object',
+      additionalProperties: false,
+      required: ['mode'],
+      properties: { mode: { type: 'string', enum: ['manual'] } }
+    },
+    {
+      type: 'object',
+      additionalProperties: false,
+      required: ['mode', 'intervalSeconds'],
+      properties: {
+        mode: { type: 'string', enum: ['interval'] },
+        intervalSeconds: { type: 'integer', minimum: 1 }
+      }
+    }
+  ]
+} as const
+
+const sourceRuntimeSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['desiredState', 'schedule'],
+  properties: {
+    desiredState: { type: 'string', enum: ['polling', 'live', 'paused'] },
+    pollingIntervalSec: { type: 'integer', minimum: 1 },
+    schedule: sourceScheduleSchema
+  }
+} as const
+
 export const sourceDetailInputSchema = {
   type: 'object',
   required: ['sourceId'],
@@ -106,21 +154,26 @@ export const sourceDetailInputSchema = {
 export const sourceDetailOutputSchema = {
   type: 'object',
   required: ['state', 'caveats'],
+  additionalProperties: false,
   properties: {
     state: stateSchema,
     source: {
       type: 'object',
+      additionalProperties: false,
       properties: {
         ...sourceSummaryProperties,
         definition: {
           type: 'object',
+          additionalProperties: false,
           required: ['description', 'authMode', 'requiredFields'],
           properties: {
             description: { type: 'string' },
             authMode: { type: 'string', enum: ['none', 'api-key', 'optional-api-key'] },
             requiredFields: { type: 'array', items: { type: 'string' } }
           }
-        }
+        },
+        health: sourceHealthSchema,
+        runtime: sourceRuntimeSchema
       }
     },
     caveats: caveatsSchema

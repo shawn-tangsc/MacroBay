@@ -50,6 +50,7 @@ describe('intelligence capability coverage', () => {
     expect(exposedCapability('intelligence.macro.economicCalendar.queryMonth')).toBe('query_macro_calendar')
     expect(exposedCapability('intelligence.crossAsset.query')).toBe('get_cross_asset_snapshot')
     expect(exposedCapability('intelligenceSources.listProfiles')).toBe('list_intelligence_sources')
+    expect(exposedCapability('intelligenceSources.getHealth')).toBe('get_source_detail')
     expect(exposedCapability('intelligenceTranslation.getStatus')).toBe('get_translation_status')
     expect(decisionFor('intelligenceSources.revealCredential')).toEqual({
       state: 'excluded',
