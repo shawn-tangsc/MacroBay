@@ -29,7 +29,7 @@ import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registe
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
-import { registerIntelligenceProductTools } from './intelligence/product-tools/registerIntelligenceProductTools'
+import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
@@ -438,5 +438,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // Start only now that the socket constructor is bound: a first reconcile before this would fail
   // once and then sit in backoff for a whole profile-check interval.
   void intelligenceModule.macroMarketLive.reconcile().catch(() => undefined)
-  registerIntelligenceProductTools(deps.registerProductAgentToolHandler, deps.jobRuntime)
+  registerIntelligenceAgentToolHandlers(deps.registerProductAgentToolHandler, {
+    jobRuntime: deps.jobRuntime,
+    getAppLanguage: deps.getAppLanguage
+  })
 }

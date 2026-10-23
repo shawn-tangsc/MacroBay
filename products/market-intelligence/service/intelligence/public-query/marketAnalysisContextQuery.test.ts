@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { JobRuntime } from '@platform/jobs'
 
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
+import { intelligenceAgentCapabilities } from '../agent-capabilities/capabilityCatalog'
 import {
   MARKET_ANALYSIS_CONTEXT_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
@@ -23,7 +24,7 @@ import {
   resolveMacroActual,
   type MarketAnalysisDomainObservation
 } from './marketAnalysisContextQuery'
-import { registerIntelligenceProductTools } from '../product-tools/registerIntelligenceProductTools'
+import { registerIntelligenceAgentToolHandlers } from '../agent-capabilities/handlerRegistry'
 import {
   marketCalendarPublicPolicy,
   type MarketCalendarEvent,
@@ -268,22 +269,28 @@ describe('market analysis data-access matrix', () => {
     expect(capital.autoTriggerAllowed).toBe(false)
   })
 
-  it('matches the nine manifest tools with the nine registered handler identities', () => {
+  it('derives the manifest tools from the capability catalog and registers a handler for each', () => {
     const manifestToolNames = marketIntelligenceProductManifest.productAgentTools.map(tool => tool.toolName)
     const handlerIds: string[] = []
-    registerIntelligenceProductTools((registration) => handlerIds.push(registration.handlerId), {} as JobRuntime)
+    registerIntelligenceAgentToolHandlers((registration) => handlerIds.push(registration.handlerId), { jobRuntime: {} as JobRuntime })
 
+    expect(manifestToolNames).toEqual(intelligenceAgentCapabilities.map(capability => capability.id))
     expect(manifestToolNames).toContain('get_market_analysis_context')
-    expect(manifestToolNames).toEqual(expect.arrayContaining(['get_macro_market_snapshot', 'get_macro_rates_snapshot']))
+    expect(manifestToolNames).toEqual(expect.arrayContaining(['get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure']))
     expect(marketIntelligenceProductManifest.tools.map(tool => tool.id)).toEqual([
       'get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'
     ])
     expect(marketIntelligenceProductManifest.skills.map(skill => skill.id)).toEqual(['market-analysis-skill-v1'])
-    expect(marketIntelligenceProductManifest.agents).toEqual([expect.objectContaining({ id: 'crypto-market-analyst', toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot'], skillIds: ['market-analysis-skill-v1'], workflowIds: ['market-analysis-auto-run-v1'] })])
+    expect(marketIntelligenceProductManifest.agents).toEqual([expect.objectContaining({
+      id: 'crypto-market-analyst',
+      toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
+      skillIds: ['market-analysis-skill-v1'],
+      workflowIds: ['market-analysis-auto-run-v1']
+    })])
     expect(marketIntelligenceProductManifest.workflows.map(workflow => workflow.id)).toEqual(['market-analysis-auto-run-v1'])
     expect(compareMarketAnalysisAgentToolRegistration(manifestToolNames, handlerIds)).toEqual({
-      // 数字来源与算式那条（设计 144）把注册的工具数从九条带到十条；两边必须一起动，否则这条守卫就红。
-      registeredToolCount: 10, mismatchCount: 0
+      registeredToolCount: intelligenceAgentCapabilities.length,
+      mismatchCount: 0
     })
   })
 
