@@ -98,6 +98,7 @@ part of this release. See [Status and limitations](./reference/status-and-limita
 - [Analyst agent](./product/analyst-agent.md)
 - [Architecture](./platform/architecture.md)
 - [Roadmap](../ROADMAP.md)
+- [Git workflow](./development/git-workflow.md)
 
 ## License
 

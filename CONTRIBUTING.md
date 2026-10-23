@@ -18,6 +18,7 @@ Read the [public documentation](./docs/README.md) first. The most useful pages f
 
 - [Development setup](./docs/development/setup.md)
 - [Testing](./docs/development/testing.md)
+- [Git workflow](./docs/development/git-workflow.md)
 - [Architecture](./docs/platform/architecture.md)
 - [Platform and products](./docs/platform/platform-and-products.md)
 
@@ -31,11 +32,22 @@ Read the [public documentation](./docs/README.md) first. The most useful pages f
 
 ## Making a change
 
+All changes go through a short-lived branch and a pull request; do not push directly to `main`.
+
+```bash
+git switch main
+git pull --ff-only
+git switch -c feat/short-description
+```
+
 1. Keep one semantic change per pull request.
 2. Add or update tests for behavior changes.
 3. Run the verification commands before opening the PR.
 4. Update the public documentation when a user-facing behavior changes.
 5. Do not add captured market data, provider responses, or credentials to the repository.
+
+Use **Squash and merge**, delete the branch after merge, and follow the
+[Git workflow](./docs/development/git-workflow.md) for branch names, tags, and releases.
 
 ## Verification
 
@@ -58,7 +70,7 @@ pnpm docs:check
 
 ## Pull requests
 
-A good PR description includes:
+Use the repository PR template. It asks for:
 
 - what changed and why;
 - the user-visible effect;

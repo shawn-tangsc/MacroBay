@@ -88,6 +88,7 @@ MIT 许可证只覆盖代码，不覆盖行情数据或供应商内容。MacroBa
 - [分析智能体](./product/analyst-agent.zh-CN.md)
 - [架构](./platform/architecture.zh-CN.md)
 - [路线图](../ROADMAP.zh-CN.md)
+- [Git 工作流](./development/git-workflow.zh-CN.md)
 
 ## 许可证
 
