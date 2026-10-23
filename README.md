@@ -15,6 +15,7 @@
   <img alt="TypeScript 5.8" src="https://img.shields.io/badge/TypeScript-5.8-3178C6?style=flat-square&logo=typescript&logoColor=white">
   <img alt="pnpm 10" src="https://img.shields.io/badge/pnpm-10-F69220?style=flat-square&logo=pnpm&logoColor=white">
   <a href="./docs/reference/status-and-limitations.md"><img alt="Status: alpha" src="https://img.shields.io/badge/status-alpha-d97706?style=flat-square"></a>
+  <a href="https://github.com/shawn-tangsc/MacroBay/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/shawn-tangsc/MacroBay/actions/workflows/ci.yml/badge.svg?branch=main"></a>
 </p>
 
 <p align="center">
