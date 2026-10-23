@@ -24,14 +24,15 @@ export type IntelligenceAgentCapability = {
   maxOutputBytes: number
 }
 
-declare const guardedHandlerBrand: unique symbol
+const GUARDED: unique symbol = Symbol('mi.guarded')
 
 /**
- * Only `wrapProductToolHandler` can produce this shape; the brand is not
- * exported as a value so callers cannot bypass the guards.
+ * Only `createGuardedHandler` can produce this shape. The symbol stays module
+ * private, so a hand-built object that happens to have the same fields fails
+ * `isGuardedHandlerValue`.
  */
 export type GuardedHandler = {
-  readonly [guardedHandlerBrand]: true
+  readonly [GUARDED]: true
   readonly capabilityId: string
   handle(input: unknown, context: ToolCallContext): Promise<unknown>
 }
@@ -51,6 +52,7 @@ export type ProductToolGuardCode =
   | 'invalid-action-fields'
   | 'sensitive-output-blocked'
   | 'output-too-deep'
+  | 'invalid-output'
   | 'approval-denied'
   | 'tool-disabled'
   | 'timeout'
@@ -65,4 +67,37 @@ export class ProductToolGuardError extends Error {
     this.name = 'ProductToolGuardError'
     this.code = code
   }
+}
+
+/**
+ * The only constructor of a `GuardedHandler`. The marker is a non-enumerable
+ * symbol property, so spreading a guarded handler does not carry the brand.
+ */
+export function createGuardedHandler(handler: {
+  readonly capabilityId: string
+  handle(input: unknown, context: ToolCallContext): Promise<unknown>
+}): GuardedHandler {
+  const guarded = {
+    capabilityId: handler.capabilityId,
+    handle: handler.handle
+  }
+  Object.defineProperty(guarded, GUARDED, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false
+  })
+  return guarded as unknown as GuardedHandler
+}
+
+export function isGuardedHandlerValue(value: unknown): value is GuardedHandler {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Record<PropertyKey, unknown>
+  if (!Object.prototype.hasOwnProperty.call(candidate, GUARDED)) return false
+  if (candidate[GUARDED] !== true) return false
+  return (
+    typeof candidate.capabilityId === 'string' &&
+    candidate.capabilityId.length > 0 &&
+    typeof candidate.handle === 'function'
+  )
 }

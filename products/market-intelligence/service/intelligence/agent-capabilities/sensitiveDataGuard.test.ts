@@ -32,9 +32,15 @@ describe('guardProductToolOutput', () => {
     }
   )
 
-  it('allows a bare credential key because credentialStatus is a legitimate field', () => {
-    const value = { credential: { hasCredential: true }, credentialStatus: { hasCredential: false } }
-    expect(guardProductToolOutput(value)).toEqual(value)
+  it('blocks a bare credential key', () => {
+    expect(() => guardProductToolOutput({ credential: { hasCredential: true } })).toThrowError(
+      expect.objectContaining({ code: 'sensitive-output-blocked' })
+    )
+  })
+
+  it('allows credentialStatus because only exact credential names are blocked', () => {
+    const value = { credentialStatus: { hasCredential: true, maskedPreview: '****' } }
+    expect(guardProductToolOutput(value)).toEqual({ credentialStatus: { hasCredential: true } })
   })
 
   it('strips projection-only keys instead of failing', () => {
@@ -93,6 +99,53 @@ describe('guardProductToolOutput', () => {
     expect(guardProductToolOutput({ note: 'https://example.test/x?token=abcdef&limit=2' })).toEqual({
       note: 'https://example.test/x?token=<redacted>&limit=2'
     })
+  })
+
+  it('redacts sig and secret URL parameters', () => {
+    expect(
+      guardProductToolOutput({ note: 'https://example.test/x?sig=abcdef&secret=s3cr3t&limit=2' })
+    ).toEqual({ note: 'https://example.test/x?sig=<redacted>&secret=<redacted>&limit=2' })
+    expect(guardProductToolOutput({ note: 'https://example.test/x?signature=abcdef' })).toEqual({
+      note: 'https://example.test/x?signature=<redacted>'
+    })
+  })
+
+  it('converts Date values to ISO strings', () => {
+    expect(guardProductToolOutput({ createdAt: new Date('2026-01-02T03:04:05.000Z') })).toEqual({
+      createdAt: '2026-01-02T03:04:05.000Z'
+    })
+  })
+
+  it('throws output-too-deep for a cyclic structure', () => {
+    const cyclic: Record<string, unknown> = { sourceId: 'source-a' }
+    cyclic.self = cyclic
+    expect(() => guardProductToolOutput(cyclic)).toThrowError(expect.objectContaining({ code: 'output-too-deep' }))
+  })
+
+  it('accepts shared references that are not cycles', () => {
+    const shared = { symbol: 'BTCUSDT' }
+    expect(guardProductToolOutput({ left: shared, right: shared })).toEqual({
+      left: { symbol: 'BTCUSDT' },
+      right: { symbol: 'BTCUSDT' }
+    })
+  })
+
+  it.each([
+    ['a class instance', { sample: new (class Sample { value = 1 })() }],
+    ['a Map', { sample: new Map([['a', 1]]) }],
+    ['a Set', { sample: new Set(['a']) }],
+    ['a function', { sample: () => 1 }],
+    ['a symbol', { sample: Symbol('value') }],
+    ['undefined', { sample: undefined }],
+    ['a non-finite number', { sample: Number.POSITIVE_INFINITY }]
+  ])('throws invalid-output for %s', (_label, value) => {
+    expect(() => guardProductToolOutput(value)).toThrowError(expect.objectContaining({ code: 'invalid-output' }))
+  })
+
+  it('drops symbol keys', () => {
+    const symbolKey = Symbol('hidden')
+    const value = { sourceId: 'source-a', [symbolKey]: 'sk-abcdefgh1234' }
+    expect(guardProductToolOutput(value)).toEqual({ sourceId: 'source-a' })
   })
 
   it('composes sanitizeSafeView and converts its rejection into a guard error', () => {

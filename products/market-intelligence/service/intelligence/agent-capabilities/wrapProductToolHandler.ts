@@ -1,22 +1,31 @@
 import type { GuardedHandler, IntelligenceAgentCapability, ToolCallContext } from './capabilityTypes'
-import { ProductToolGuardError } from './capabilityTypes'
+import { createGuardedHandler, isGuardedHandlerValue, ProductToolGuardError } from './capabilityTypes'
 import { guardProductToolOutput } from './sensitiveDataGuard'
+import type { CapabilityActionRules } from './strictInputGuard'
 import { validateCapabilityInput } from './strictInputGuard'
 
 export type WrapProductToolHandlerOptions = {
   capability: Pick<IntelligenceAgentCapability, 'id' | 'inputSchema'>
   handle: (input: unknown, context: ToolCallContext) => Promise<unknown>
+  /** Action-scoped field allow-lists, forwarded to the input validator. */
+  actionRules?: CapabilityActionRules
 }
 
 /**
- * The only constructor of `GuardedHandler`. Input guard -> handler -> output guard.
- * Handler failures become fixed-text errors so provider messages cannot leak values.
+ * Input guard -> handler -> output guard. `createGuardedHandler` is the only
+ * way to obtain the runtime brand, so a hand-built look-alike cannot pass
+ * `isGuardedHandler`. Handler failures become fixed-text errors so provider
+ * messages cannot leak values.
  */
-export function wrapProductToolHandler({ capability, handle }: WrapProductToolHandlerOptions): GuardedHandler {
-  return {
+export function wrapProductToolHandler({
+  capability,
+  handle,
+  actionRules
+}: WrapProductToolHandlerOptions): GuardedHandler {
+  return createGuardedHandler({
     capabilityId: capability.id,
     handle: async (input, context) => {
-      const validation = validateCapabilityInput(input, capability.inputSchema)
+      const validation = validateCapabilityInput(input, capability.inputSchema, actionRules)
       if (!validation.ok) throw new ProductToolGuardError(validation.code, validation.message)
 
       let output: unknown
@@ -29,15 +38,10 @@ export function wrapProductToolHandler({ capability, handle }: WrapProductToolHa
 
       return guardProductToolOutput(output)
     }
-  } as GuardedHandler
+  })
 }
 
+/** Retained public predicate; delegates to the brand owned by `capabilityTypes`. */
 export function isGuardedHandler(value: unknown): value is GuardedHandler {
-  if (!value || typeof value !== 'object') return false
-  const candidate = value as { capabilityId?: unknown; handle?: unknown }
-  return (
-    typeof candidate.capabilityId === 'string' &&
-    candidate.capabilityId.length > 0 &&
-    typeof candidate.handle === 'function'
-  )
+  return isGuardedHandlerValue(value)
 }

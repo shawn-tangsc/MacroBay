@@ -181,3 +181,116 @@ describe('validateCapabilityInput with action rules', () => {
     ).toMatchObject({ ok: false, code: 'invalid-action-fields' })
   })
 })
+
+describe('validateCapabilityInput recursively', () => {
+  const nestedSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      asOf: { type: 'string' },
+      window: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          from: { type: 'string' },
+          to: { type: 'string' }
+        },
+        required: ['from']
+      },
+      rows: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            symbol: { type: 'string' },
+            limit: { type: 'integer', minimum: 1, maximum: 5 }
+          },
+          required: ['symbol']
+        }
+      }
+    },
+    required: ['asOf']
+  }
+
+  it('accepts a nested value that matches every level', () => {
+    expect(
+      validateCapabilityInput(
+        { asOf: 'x', window: { from: 'a', to: 'b' }, rows: [{ symbol: 'BTCUSDT', limit: 5 }] },
+        nestedSchema
+      )
+    ).toEqual({ ok: true })
+  })
+
+  it('rejects an undeclared key in a nested object', () => {
+    expect(
+      validateCapabilityInput({ asOf: 'x', window: { from: 'a', surprise: true } }, nestedSchema)
+    ).toMatchObject({ ok: false, code: 'unexpected-property' })
+  })
+
+  it('rejects a missing required key in a nested object', () => {
+    expect(validateCapabilityInput({ asOf: 'x', window: { to: 'b' } }, nestedSchema)).toMatchObject({
+      ok: false,
+      code: 'missing-property'
+    })
+  })
+
+  it('rejects an undeclared key inside an array item', () => {
+    expect(
+      validateCapabilityInput({ asOf: 'x', rows: [{ symbol: 'BTCUSDT', surprise: true }] }, nestedSchema)
+    ).toMatchObject({ ok: false, code: 'unexpected-property' })
+  })
+
+  it('rejects an invalid array item against items', () => {
+    expect(validateCapabilityInput({ asOf: 'x', rows: [{ symbol: 'BTCUSDT', limit: 9 }] }, nestedSchema)).toMatchObject(
+      { ok: false, code: 'out-of-range' }
+    )
+    expect(validateCapabilityInput({ asOf: 'x', rows: [{ limit: 1 }] }, nestedSchema)).toMatchObject({
+      ok: false,
+      code: 'missing-property'
+    })
+  })
+
+  it('rejects a nested forbidden object key', () => {
+    const value = JSON.parse('{"asOf":"x","window":{"from":"a","__proto__":{"polluted":true}}}')
+    expect(validateCapabilityInput(value, nestedSchema)).toMatchObject({ ok: false, code: 'invalid-input' })
+  })
+})
+
+describe('validateCapabilityInput credential names', () => {
+  const credentialSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      asOf: { type: 'string' },
+      apiKey: { type: 'string' },
+      headers: { type: 'object' }
+    },
+    required: ['asOf']
+  }
+
+  it.each(['apiKey', 'headers'])('rejects the declared credential key %s', (key) => {
+    expect(validateCapabilityInput({ asOf: 'x', [key]: 'value' }, credentialSchema)).toMatchObject({
+      ok: false,
+      code: 'sensitive-input-rejected'
+    })
+  })
+
+  it('rejects a nested credential key even without a matching schema property', () => {
+    expect(
+      validateCapabilityInput({ asOf: 'x', nested: { password: 'value' } }, {
+        type: 'object',
+        properties: { asOf: { type: 'string' }, nested: { type: 'object' } }
+      })
+    ).toMatchObject({ ok: false, code: 'sensitive-input-rejected' })
+  })
+
+  it('rejects sig and secret URL parameters anywhere', () => {
+    expect(
+      validateCapabilityInput({ asOf: 'x', note: 'https://example.test/data?sig=abcdefgh' }, schema)
+    ).toMatchObject({ ok: false, code: 'sensitive-input-rejected' })
+    expect(
+      validateCapabilityInput({ asOf: 'x', note: 'https://example.test/data?secret=abcdefgh' }, schema)
+    ).toMatchObject({ ok: false, code: 'sensitive-input-rejected' })
+  })
+})

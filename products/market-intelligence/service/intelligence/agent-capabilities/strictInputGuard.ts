@@ -1,17 +1,9 @@
-export type InputGuardCode =
-  | 'invalid-input'
-  | 'unexpected-property'
-  | 'missing-property'
-  | 'type-mismatch'
-  | 'invalid-enum'
-  | 'out-of-range'
-  | 'string-too-long'
-  | 'sensitive-input-rejected'
-  | 'invalid-action-fields'
+import type { ProductToolGuardCode } from './capabilityTypes'
+import { containsCredentialValue, isCredentialKeyName } from './sensitivePatterns'
 
 export type CapabilityInputValidation =
   | { readonly ok: true }
-  | { readonly ok: false; readonly code: InputGuardCode; readonly message: string }
+  | { readonly ok: false; readonly code: ProductToolGuardCode; readonly message: string }
 
 /** action value -> field names the action accepts besides `action` itself. */
 export type CapabilityActionRules = Readonly<Record<string, readonly string[]>>
@@ -19,15 +11,14 @@ export type CapabilityActionRules = Readonly<Record<string, readonly string[]>>
 type Failure = Extract<CapabilityInputValidation, { ok: false }>
 
 const DEFAULT_MAX_STRING_LENGTH = 4096
+const MAX_INPUT_DEPTH = 32
 const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 
-const CREDENTIAL_PATTERNS: readonly RegExp[] = [
-  /\bBearer\s+\S{8,}/,
-  /\bBasic\s+\S{8,}/,
-  /\bsk-[A-Za-z0-9]{8,}/,
-  /[?#&](api[_-]?key|token|access_token|secret|signature)=/i
-]
-
+/**
+ * Validates the whole input tree against the schema. Symbol keys are ignored;
+ * own string keys are checked at every level for forbidden names, credential
+ * names and credential-shaped values.
+ */
 export function validateCapabilityInput(
   value: unknown,
   schema: Record<string, unknown>,
@@ -35,15 +26,44 @@ export function validateCapabilityInput(
 ): CapabilityInputValidation {
   if (!isPlainObject(value)) return fail('invalid-input', 'Input must be a plain object.')
 
-  const keys = Object.getOwnPropertyNames(value)
-  if (keys.some((key) => FORBIDDEN_KEYS.has(key))) {
-    return fail('invalid-input', 'Input contains a forbidden object key.')
+  const sensitive = scanForSensitiveContent(value, new WeakSet())
+  if (sensitive) return sensitive
+
+  const structureFailure = validateObject(value, schema, 0)
+  if (structureFailure) return structureFailure
+
+  if (actionRules) {
+    const action = value.action
+    const ruleFields =
+      typeof action === 'string' && Object.prototype.hasOwnProperty.call(actionRules, action)
+        ? actionRules[action]
+        : undefined
+    if (!ruleFields) return fail('invalid-action-fields', 'Unsupported action or action fields.')
+    const allowed = new Set(['action', ...ruleFields])
+    for (const key of Object.getOwnPropertyNames(value)) {
+      if (!allowed.has(key)) return fail('invalid-action-fields', `Action does not accept parameter: ${key}.`)
+    }
   }
 
+  return { ok: true }
+}
+
+function validateObject(
+  value: Record<string, unknown>,
+  schema: Record<string, unknown>,
+  depth: number
+): Failure | undefined {
+  if (depth > MAX_INPUT_DEPTH) return fail('invalid-input', 'Input is nested too deeply.')
+
   const properties = asRecord(schema.properties) ?? {}
-  const declared = new Set(Object.keys(properties))
-  for (const key of keys) {
-    if (!declared.has(key)) return fail('unexpected-property', `Unsupported parameter: ${key}.`)
+  const keys = Object.getOwnPropertyNames(value)
+
+  if (schema.additionalProperties === false) {
+    for (const key of keys) {
+      if (!Object.prototype.hasOwnProperty.call(properties, key)) {
+        return fail('unexpected-property', `Unsupported parameter: ${key}.`)
+      }
+    }
   }
 
   const required = Array.isArray(schema.required) ? schema.required : []
@@ -57,29 +77,21 @@ export function validateCapabilityInput(
   for (const key of keys) {
     const propertySchema = asRecord(properties[key])
     if (!propertySchema) continue
-    const failure = validateProperty(value[key], propertySchema, key)
+    const failure = validateValue(value[key], propertySchema, key, depth + 1)
     if (failure) return failure
   }
 
-  const sensitive = scanForCredentials(value, new WeakSet())
-  if (sensitive) return sensitive
-
-  if (actionRules) {
-    const action = value.action
-    const allowed =
-      typeof action === 'string' && Object.prototype.hasOwnProperty.call(actionRules, action)
-        ? new Set(['action', ...actionRules[action]])
-        : undefined
-    if (!allowed) return fail('invalid-action-fields', 'Unsupported action or action fields.')
-    for (const key of keys) {
-      if (!allowed.has(key)) return fail('invalid-action-fields', `Action does not accept parameter: ${key}.`)
-    }
-  }
-
-  return { ok: true }
+  return undefined
 }
 
-function validateProperty(value: unknown, schema: Record<string, unknown>, name: string): Failure | undefined {
+function validateValue(
+  value: unknown,
+  schema: Record<string, unknown>,
+  name: string,
+  depth: number
+): Failure | undefined {
+  if (depth > MAX_INPUT_DEPTH) return fail('invalid-input', 'Input is nested too deeply.')
+
   const expectedType = schema.type
   if (typeof expectedType === 'string' && !matchesType(value, expectedType)) {
     return fail('type-mismatch', `Parameter ${name} must be of type ${expectedType}.`)
@@ -108,6 +120,18 @@ function validateProperty(value: unknown, schema: Record<string, unknown>, name:
     if (value.length > limit) return fail('string-too-long', `Parameter ${name} exceeds ${limit} characters.`)
   }
 
+  if (Array.isArray(value)) {
+    const items = asRecord(schema.items)
+    if (!items) return undefined
+    for (let index = 0; index < value.length; index += 1) {
+      const failure = validateValue(value[index], items, `${name}[${index}]`, depth + 1)
+      if (failure) return failure
+    }
+    return undefined
+  }
+
+  if (isPlainObject(value)) return validateObject(value, schema, depth)
+
   return undefined
 }
 
@@ -130,16 +154,18 @@ function matchesType(value: unknown, expectedType: string): boolean {
   }
 }
 
-function scanForCredentials(value: unknown, seen: WeakSet<object>): Failure | undefined {
+function scanForSensitiveContent(value: unknown, seen: WeakSet<object>): Failure | undefined {
   if (typeof value === 'string') {
-    return CREDENTIAL_PATTERNS.some((pattern) => pattern.test(value))
+    return containsCredentialValue(value)
       ? fail('sensitive-input-rejected', 'Request contains credential-like content.')
       : undefined
   }
 
   if (Array.isArray(value)) {
+    if (seen.has(value)) return undefined
+    seen.add(value)
     for (const item of value) {
-      const failure = scanForCredentials(item, seen)
+      const failure = scanForSensitiveContent(item, seen)
       if (failure) return failure
     }
     return undefined
@@ -148,8 +174,12 @@ function scanForCredentials(value: unknown, seen: WeakSet<object>): Failure | un
   if (isPlainObject(value)) {
     if (seen.has(value)) return undefined
     seen.add(value)
-    for (const child of Object.values(value)) {
-      const failure = scanForCredentials(child, seen)
+    for (const key of Object.getOwnPropertyNames(value)) {
+      if (FORBIDDEN_KEYS.has(key)) return fail('invalid-input', 'Input contains a forbidden object key.')
+      if (isCredentialKeyName(key)) {
+        return fail('sensitive-input-rejected', `Parameter ${key} is not an accepted input field.`)
+      }
+      const failure = scanForSensitiveContent(value[key], seen)
       if (failure) return failure
     }
   }
@@ -167,6 +197,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return isPlainObject(value) ? value : undefined
 }
 
-function fail(code: InputGuardCode, message: string): Failure {
+function fail(code: ProductToolGuardCode, message: string): Failure {
   return { ok: false, code, message }
 }

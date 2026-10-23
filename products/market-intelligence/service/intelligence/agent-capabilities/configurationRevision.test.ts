@@ -28,6 +28,13 @@ describe('computeConfigurationRevision', () => {
     expect(revision).toMatch(/^[0-9a-f]{12}$/)
   })
 
+  it('pins the exact revision for a fixed configuration', () => {
+    // Pinned so a change to the field order or the row/digest delimiters fails here.
+    expect(computeConfigurationRevision({ profiles: [profile()], focusMarkets: ['CN', 'US'] })).toBe(
+      'e901674e28e7'
+    )
+  })
+
   it('is stable when neither profiles nor focus markets change', () => {
     const first = computeConfigurationRevision({ profiles: [profile()], focusMarkets })
     const second = computeConfigurationRevision({ profiles: [profile()], focusMarkets: ['CN', 'US'] })

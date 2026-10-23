@@ -131,3 +131,69 @@ describe('isGuardedHandler', () => {
     }
   )
 })
+
+describe('isGuardedHandler forgery', () => {
+  it('rejects a hand-built handler with the same public fields', () => {
+    const forged = { capabilityId: capability.id, handle: async () => ({ ok: true }) }
+    expect(isGuardedHandler(forged)).toBe(false)
+  })
+
+  it('rejects a spread copy of a real guarded handler', () => {
+    const handler = wrapProductToolHandler({ capability, handle: async () => ({ ok: true }) })
+    expect(isGuardedHandler({ ...handler })).toBe(false)
+  })
+
+  it('accepts only a handler produced by the wrapper', () => {
+    const handler = wrapProductToolHandler({ capability, handle: async () => ({ ok: true }) })
+    expect(isGuardedHandler(handler)).toBe(true)
+  })
+})
+
+describe('wrapProductToolHandler with action rules', () => {
+  const writeCapability: IntelligenceAgentCapability = {
+    id: 'set_test_source_enabled',
+    domain: 'source-config',
+    kind: 'write',
+    title: { 'zh-CN': '设置测试来源', 'en-US': 'Set test source state' },
+    description: 'Toggles a test source.',
+    inputSchema: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        action: { type: 'string' },
+        sourceId: { type: 'string' },
+        enabled: { type: 'boolean' },
+        focusMarkets: { type: 'array', items: { type: 'string' } }
+      },
+      required: ['action']
+    },
+    outputSchema: { type: 'object' },
+    handlerId: 'market-intelligence.set-test-source-enabled',
+    timeoutMs: 5000,
+    maxOutputBytes: 65536
+  }
+
+  const actionRules = {
+    'set-enabled': ['sourceId', 'enabled'],
+    'save-focus-markets': ['focusMarkets']
+  } as const
+
+  it('rejects a field outside [action, ...allowed] through the wrapper', async () => {
+    const handle = vi.fn(async () => ({ ok: true }))
+    const handler = wrapProductToolHandler({ capability: writeCapability, handle, actionRules })
+
+    await expect(
+      handler.handle({ action: 'set-enabled', focusMarkets: ['CN'] }, context)
+    ).rejects.toMatchObject({ code: 'invalid-action-fields' })
+    expect(handle).not.toHaveBeenCalled()
+  })
+
+  it('accepts the fields declared for the action', async () => {
+    const handle = vi.fn(async () => ({ ok: true }))
+    const handler = wrapProductToolHandler({ capability: writeCapability, handle, actionRules })
+
+    await expect(
+      handler.handle({ action: 'set-enabled', sourceId: 'source-a', enabled: true }, context)
+    ).resolves.toEqual({ ok: true })
+  })
+})
