@@ -12,16 +12,17 @@
   "main": "out/main/index.js",
   "scripts": {
     "generate:products": "tsx scripts/generate-product-registry.mts",
-    "predev": "pnpm generate:products",
+    "predev": "pnpm generate:products && pnpm generate:agent-capabilities",
     "dev": "env -u ELECTRON_RUN_AS_NODE pnpm --filter @macrobay/desktop-shell dev",
-    "prebuild": "pnpm generate:products",
+    "prebuild": "pnpm generate:products && pnpm generate:agent-capabilities",
     "build": "pnpm --filter @macrobay/desktop-shell build",
-    "pretest": "pnpm generate:products",
+    "pretest": "pnpm generate:products && pnpm generate:agent-capabilities",
     "test": "pnpm --filter @macrobay/desktop-shell test",
-    "pretypecheck": "pnpm generate:products",
+    "pretypecheck": "pnpm generate:products && pnpm generate:agent-capabilities",
     "lint": "pnpm --filter @macrobay/desktop-shell lint",
     "docs:check": "node scripts/check-docs.mjs",
-    "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck"
+    "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
+    "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts"
   },
   "workspaces": [
     "apps/*",
