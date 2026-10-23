@@ -80,7 +80,10 @@ export function createCryptoMarketAnalystAgentSeed(
     sessions: [],
     messagesBySessionId: {},
     workspaces: [],
-    agentSkills: [{ agentId: AGENT_ID, skillId: 'market-analysis-skill-v1', isEnabled: true }],
+    agentSkills: [
+      { agentId: AGENT_ID, skillId: 'market-analysis-skill-v1', isEnabled: true },
+      { agentId: AGENT_ID, skillId: 'intelligence-ops-skill-v1', isEnabled: true }
+    ],
     agentProductToolPackages: [
       {
         agentId: AGENT_ID,

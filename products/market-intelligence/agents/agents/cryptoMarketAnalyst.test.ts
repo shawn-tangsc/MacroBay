@@ -16,7 +16,10 @@ describe('crypto market analyst product seed', () => {
     })
     expect(seed.sessions).toEqual([])
     expect(seed.messagesBySessionId).toEqual({})
-    expect(seed.agentSkills).toEqual([{ agentId: 'crypto-market-analyst', skillId: 'market-analysis-skill-v1', isEnabled: true }])
+    expect(seed.agentSkills).toEqual([
+      { agentId: 'crypto-market-analyst', skillId: 'market-analysis-skill-v1', isEnabled: true },
+      { agentId: 'crypto-market-analyst', skillId: 'intelligence-ops-skill-v1', isEnabled: true }
+    ])
   })
 
   it('seeds the default read-only product tool package binding', () => {
