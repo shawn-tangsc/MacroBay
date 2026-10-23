@@ -98,7 +98,7 @@ function registrations(): Map<string, ProductAgentToolHandlerRegistration> {
   const collected = new Map<string, ProductAgentToolHandlerRegistration>()
   registerIntelligenceAgentToolHandlers(
     (registration) => collected.set(registration.handlerId, registration),
-    { jobRuntime, getAppLanguage: async () => 'zh-CN' }
+    { jobRuntime, getAppLanguage: async () => 'zh-CN', macroCalendarOps: {} as never, crossAssetOps: {} as never }
   )
   return collected
 }

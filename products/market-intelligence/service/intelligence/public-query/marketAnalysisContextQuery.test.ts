@@ -272,7 +272,11 @@ describe('market analysis data-access matrix', () => {
   it('derives the manifest tools from the capability catalog and registers a handler for each', () => {
     const manifestToolNames = marketIntelligenceProductManifest.productAgentTools.map(tool => tool.toolName)
     const handlerIds: string[] = []
-    registerIntelligenceAgentToolHandlers((registration) => handlerIds.push(registration.handlerId), { jobRuntime: {} as JobRuntime })
+    registerIntelligenceAgentToolHandlers((registration) => handlerIds.push(registration.handlerId), {
+      jobRuntime: {} as JobRuntime,
+      macroCalendarOps: {} as never,
+      crossAssetOps: {} as never
+    })
 
     expect(manifestToolNames).toEqual(intelligenceAgentCapabilities.map(capability => capability.id))
     expect(manifestToolNames).toContain('get_market_analysis_context')

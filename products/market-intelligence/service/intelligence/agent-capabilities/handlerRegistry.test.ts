@@ -5,9 +5,10 @@ import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-pla
 
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import { ProductToolGuardError, type ToolCallContext } from './capabilityTypes'
-import { registerIntelligenceAgentToolHandlers } from './handlerRegistry'
+import { assertCapabilityRegistration, registerIntelligenceAgentToolHandlers } from './handlerRegistry'
 
 const jobRuntime = {} as JobRuntime
+const operationFacades = { macroCalendarOps: {} as never, crossAssetOps: {} as never }
 
 const context = {
   toolCallId: 'tool-call-1',
@@ -24,7 +25,7 @@ function registerAll(getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>) {
   const registrations = new Map<string, ProductAgentToolHandlerRegistration>()
   registerIntelligenceAgentToolHandlers(
     (registration) => registrations.set(registration.handlerId, registration),
-    { jobRuntime, ...(getAppLanguage ? { getAppLanguage } : {}) }
+    { jobRuntime, ...operationFacades, ...(getAppLanguage ? { getAppLanguage } : {}) }
   )
   return registrations
 }
@@ -71,7 +72,8 @@ describe('intelligence agent handler registry', () => {
     expect(result.domains[0].capabilities.map((capability) => capability.id)).toEqual([
       'get_operations_health',
       'get_dashboard_feed_status',
-      'describe_intelligence_capabilities'
+      'describe_intelligence_capabilities',
+      'operate_intelligence_source'
     ])
     expect(result.domains[0].capabilities[0].title).toBe('Operations health')
     expect(result.domains[0].capabilities[0].requiredFields).toEqual([])
@@ -84,5 +86,11 @@ describe('intelligence agent handler registry', () => {
     const error = await discovery!.handle({ domain: 'nope' }, context).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(ProductToolGuardError)
     expect((error as ProductToolGuardError).code).toBe('invalid-enum')
+  })
+
+  it('refuses a capability that does not declare a handlerId', () => {
+    expect(() => assertCapabilityRegistration({ id: 'unbound', handlerId: '' })).toThrow(
+      /no handlerId/
+    )
   })
 })

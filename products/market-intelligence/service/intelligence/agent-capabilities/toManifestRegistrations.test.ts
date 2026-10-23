@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProductAgentToolRegistration } from '@platform/product-manifest'
-
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import { toManifestRegistrations } from './toManifestRegistrations'
 
@@ -20,11 +18,14 @@ describe('catalog → manifest derivation', () => {
     expect(registrations.every((entry) => entry.schemaVersion === 1)).toBe(true)
   })
 
-  it('makes every slice capability read-only and prompt-free', () => {
-    for (const registration of registrations) {
-      expect(registration.readOnly).toBe(true)
-      expect(registration.requiresApproval).toBe('never')
+  it('marks writes as approval-gated and keeps read, discovery, and handoff prompt-free', () => {
+    for (const [index, capability] of intelligenceAgentCapabilities.entries()) {
+      const write = capability.kind === 'write'
+      expect(registrations[index].readOnly, capability.id).toBe(!write)
+      expect(registrations[index].requiresApproval, capability.id).toBe(write ? 'always' : 'never')
+      expect(registrations[index].timeoutMs, capability.id).toBe(capability.timeoutMs)
     }
+    expect(registrations.filter((registration) => registration.readOnly === false)).toHaveLength(5)
   })
 
   it('passes timeout, output cap, and schemas through unchanged', () => {
@@ -45,13 +46,18 @@ describe('catalog → manifest derivation', () => {
     }
   })
 
-  it('maps write capabilities to an approval-gated mutation (contract guard for later slices)', () => {
-    const writeRegistration: ProductAgentToolRegistration = {
-      ...registrations[0],
-      readOnly: false,
-      requiresApproval: 'always'
+  it('keeps every declared write tool out of the automatic execution path', () => {
+    const writes = registrations.filter((registration) => !registration.readOnly)
+    expect(writes.map((registration) => registration.toolName)).toEqual([
+      'configure_intelligence_source',
+      'operate_intelligence_source',
+      'operate_macro_calendar',
+      'configure_translation',
+      'configure_cross_asset_interface'
+    ])
+    for (const write of writes) {
+      expect(write.requiresApproval).toBe('always')
+      expect(write.timeoutMs).toBeGreaterThanOrEqual(10_000)
     }
-    expect(writeRegistration.readOnly).toBe(false)
-    expect(writeRegistration.requiresApproval).toBe('always')
   })
 })

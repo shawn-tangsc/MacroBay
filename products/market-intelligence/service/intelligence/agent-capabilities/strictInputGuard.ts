@@ -5,8 +5,13 @@ export type CapabilityInputValidation =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: ProductToolGuardCode; readonly message: string }
 
-/** action value -> field names the action accepts besides `action` itself. */
-export type CapabilityActionRules = Readonly<Record<string, readonly string[]>>
+/** A per-action allow-list, optionally naming the fields that action cannot omit. */
+export type CapabilityActionRule =
+  | readonly string[]
+  | Readonly<{ fields: readonly string[]; required?: readonly string[] }>
+
+/** action value -> the fields that action accepts besides `action` itself. */
+export type CapabilityActionRules = Readonly<Record<string, CapabilityActionRule>>
 
 type Failure = Extract<CapabilityInputValidation, { ok: false }>
 
@@ -34,18 +39,33 @@ export function validateCapabilityInput(
 
   if (actionRules) {
     const action = value.action
-    const ruleFields =
+    const rule =
       typeof action === 'string' && Object.prototype.hasOwnProperty.call(actionRules, action)
         ? actionRules[action]
         : undefined
-    if (!ruleFields) return fail('invalid-action-fields', 'Unsupported action or action fields.')
-    const allowed = new Set(['action', ...ruleFields])
+    if (!rule) return fail('invalid-action-fields', 'Unsupported action or action fields.')
+    const { fields, required } = normalizeActionRule(rule)
+    const allowed = new Set(['action', ...fields])
     for (const key of Object.getOwnPropertyNames(value)) {
       if (!allowed.has(key)) return fail('invalid-action-fields', `Action does not accept parameter: ${key}.`)
+    }
+    for (const name of required) {
+      if (!Object.prototype.hasOwnProperty.call(value, name)) {
+        return fail('missing-property', `Missing required parameter: ${name}.`)
+      }
     }
   }
 
   return { ok: true }
+}
+
+function normalizeActionRule(rule: CapabilityActionRule): {
+  fields: readonly string[]
+  required: readonly string[]
+} {
+  if (Array.isArray(rule)) return { fields: rule, required: [] }
+  const record = rule as Readonly<{ fields: readonly string[]; required?: readonly string[] }>
+  return { fields: record.fields, required: record.required ?? [] }
 }
 
 function validateObject(

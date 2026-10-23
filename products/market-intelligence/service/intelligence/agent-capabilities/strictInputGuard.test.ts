@@ -180,6 +180,20 @@ describe('validateCapabilityInput with action rules', () => {
       validateCapabilityInput({ action: 'set-enabled', focusMarkets: ['CN'] }, writeSchema, actionRules)
     ).toMatchObject({ ok: false, code: 'invalid-action-fields' })
   })
+
+  it('enforces per-action required fields when a rule declares them', () => {
+    const rules = {
+      'set-enabled': { fields: ['sourceId', 'enabled'], required: ['sourceId', 'enabled'] }
+    } as const
+
+    expect(validateCapabilityInput({ action: 'set-enabled' }, writeSchema, rules)).toMatchObject({
+      ok: false,
+      code: 'missing-property'
+    })
+    expect(
+      validateCapabilityInput({ action: 'set-enabled', sourceId: 'source-a', enabled: true }, writeSchema, rules)
+    ).toEqual({ ok: true })
+  })
 })
 
 describe('validateCapabilityInput recursively', () => {

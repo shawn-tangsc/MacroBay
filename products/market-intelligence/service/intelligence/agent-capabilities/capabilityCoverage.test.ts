@@ -56,6 +56,63 @@ describe('intelligence capability coverage', () => {
       state: 'excluded',
       reason: 'returns-plaintext-credential'
     })
-    expect(decisionFor('intelligenceSources.saveProfile')).toEqual({ state: 'excluded', reason: 'destructive' })
+    expect(decisionFor('intelligenceSources.replayWindow')).toEqual({
+      state: 'excluded',
+      reason: 'destructive'
+    })
+    expect(decisionFor('intelligence.ingestEvent')).toEqual({ state: 'excluded', reason: 'destructive' })
+  })
+
+  it('maps the write routes the write slice exposes to their capability', () => {
+    const exposedCapability = (method: string): CapabilityId | undefined => {
+      const decision = intelligenceCapabilityCoverage[method]
+      return decision?.state === 'exposed' ? decision.capabilityId : undefined
+    }
+
+    for (const method of [
+      'intelligenceSources.saveProfile',
+      'intelligenceSources.setEnabled',
+      'intelligenceSources.saveFocusSettings'
+    ]) {
+      expect(exposedCapability(method), method).toBe('configure_intelligence_source')
+    }
+    for (const method of [
+      'intelligenceSources.runNow',
+      'intelligenceSources.testConnection',
+      'intelligence.retryItemAssessment'
+    ]) {
+      expect(exposedCapability(method), method).toBe('operate_intelligence_source')
+    }
+    for (const method of [
+      'intelligence.macro.economicCalendar.saveProviderProfile',
+      'intelligence.macro.economicCalendar.runProviderNow',
+      'intelligence.macro.economicCalendar.testProviderConnection',
+      'intelligence.macro.economicCalendar.setReleaseTime',
+      'intelligence.macro.economicCalendar.clearReleaseTime',
+      'intelligence.macro.economicCalendar.refreshBlsEmploymentRelease',
+      'intelligence.macro.economicCalendar.refreshFedFomcDecision',
+      'intelligence.macro.economicCalendar.syncBlsEmploymentSchedule',
+      'intelligence.macro.economicCalendar.previewManualBlsIcs',
+      'intelligence.macro.economicCalendar.importManualBlsIcs'
+    ]) {
+      expect(exposedCapability(method), method).toBe('operate_macro_calendar')
+    }
+    for (const method of [
+      'intelligenceTranslation.saveSettings',
+      'intelligenceTranslation.queueMissing',
+      'intelligenceTranslation.retryFailed'
+    ]) {
+      expect(exposedCapability(method), method).toBe('configure_translation')
+    }
+    for (const method of [
+      'intelligence.crossAsset.acquire',
+      'intelligence.crossAsset.renew',
+      'intelligence.crossAsset.release',
+      'intelligence.crossAsset.refresh',
+      'intelligence.crossAsset.testInterface',
+      'intelligence.crossAsset.cancelInterfaceTest'
+    ]) {
+      expect(exposedCapability(method), method).toBe('configure_cross_asset_interface')
+    }
   })
 })

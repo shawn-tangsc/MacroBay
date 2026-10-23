@@ -4,11 +4,13 @@ import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 
 describe('intelligence agent capability catalog', () => {
-  it('declares the 19 read/discovery capabilities from the design', () => {
-    expect(intelligenceAgentCapabilities).toHaveLength(19)
-    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.id)).size).toBe(19)
-    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.handlerId)).size).toBe(19)
+  it('declares the full read, write, discovery, and handoff surface', () => {
+    expect(intelligenceAgentCapabilities).toHaveLength(25)
+    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.id)).size).toBe(25)
+    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.handlerId)).size).toBe(25)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(18)
+    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'write')).toHaveLength(5)
+    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'handoff')).toHaveLength(1)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'discovery')).toHaveLength(1)
   })
 
@@ -22,10 +24,15 @@ describe('intelligence agent capability catalog', () => {
     }
   })
 
-  it('keeps read timeouts within the 5–10 s budget and output caps at 64 KiB except the analysis context', () => {
+  it('keeps read timeouts within 5–10 s, write timeouts within 10–15 s, and output caps at 64 KiB', () => {
     for (const capability of intelligenceAgentCapabilities) {
-      expect(capability.timeoutMs).toBeGreaterThanOrEqual(5_000)
-      expect(capability.timeoutMs).toBeLessThanOrEqual(10_000)
+      if (capability.kind === 'write') {
+        expect(capability.timeoutMs).toBeGreaterThanOrEqual(10_000)
+        expect(capability.timeoutMs).toBeLessThanOrEqual(15_000)
+      } else {
+        expect(capability.timeoutMs).toBeGreaterThanOrEqual(5_000)
+        expect(capability.timeoutMs).toBeLessThanOrEqual(10_000)
+      }
       const expectedBytes = capability.id === 'get_market_analysis_context' ? 256 * 1024 : 64 * 1024
       expect(capability.maxOutputBytes).toBe(expectedBytes)
     }
