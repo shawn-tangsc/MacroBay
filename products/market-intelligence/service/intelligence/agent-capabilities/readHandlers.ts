@@ -71,7 +71,7 @@ export async function handleGetOperationsHealth(
       ...(lastJobAt ? { lastJobAt } : {}),
       stuck: failedSource || stuckRun
     },
-    caveats: ['per-source-detail-use-get-source-health']
+    caveats: ['per-source-detail-use-get-source-detail']
   }
 }
 
