@@ -14,7 +14,6 @@ export type AgentProductToolPackageBinding = {
 export type ProductAgentToolPackageStatus =
   | 'available'
   | 'missing-handler'
-  | 'invalid-registration'
   | 'not-installed'
 
 export type ProductAgentToolDescriptor = {
@@ -23,7 +22,7 @@ export type ProductAgentToolDescriptor = {
   handlerId: string
   description: string
   schemaVersion: number
-  readOnly: true
+  readOnly: boolean
   requiresTemporalBoundary: boolean
   timeoutMs?: number
   maxOutputBytes?: number

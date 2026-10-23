@@ -18,6 +18,7 @@ export class ProductAgentToolRegistry {
     if (this.metadataByKey.has(key)) {
       throw new Error(`Product tool "${registration.toolName}" is already registered for "${registration.productId}".`)
     }
+    assertMutatingToolPolicy(registration)
     this.metadataByKey.set(key, { ...registration })
   }
 
@@ -91,9 +92,6 @@ function buildPackageDescriptor(
   } else if (tools.some((tool) => !tool.hasHandler)) {
     status = 'missing-handler'
     diagnostics.push('One or more declared product tools are missing handler registrations.')
-  } else if (tools.some((tool) => !tool.readOnly)) {
-    status = 'invalid-registration'
-    diagnostics.push('V1 only supports read-only product agent tools.')
   }
 
   return {
@@ -120,6 +118,22 @@ function toDescriptor(
     maxOutputBytes: registration.maxOutputBytes,
     requiresApproval: registration.requiresApproval,
     hasHandler
+  }
+}
+
+/**
+ * A mutating tool may never pre-authorize itself, and it must be able to time out: a write that can
+ * hang has no safe default. Both rules are generic platform policy, not product-specific.
+ */
+function assertMutatingToolPolicy(registration: ProductAgentToolRegistration): void {
+  if (registration.readOnly) return
+  if (registration.requiresApproval === 'never') {
+    throw new Error(
+      `Mutating product tool "${registration.toolName}" must not declare requiresApproval "never".`
+    )
+  }
+  if (registration.timeoutMs === undefined) {
+    throw new Error(`Mutating product tool "${registration.toolName}" must declare timeoutMs.`)
   }
 }
 

@@ -93,7 +93,8 @@ export type ProductAgentToolRegistration = {
   outputSchema: Record<string, unknown>
   schemaVersion: number
   description: string
-  readOnly: true
+  /** Read-only tools may run without a prompt under `allow-read-only`; mutating tools always ask. */
+  readOnly: boolean
   requiresTemporalBoundary: boolean
   timeoutMs?: number
   maxOutputBytes?: number

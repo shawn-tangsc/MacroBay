@@ -367,7 +367,7 @@ function toRuntimeTool(
     toolName: string
     description: string
     schemaVersion: number
-    readOnly: true
+    readOnly: boolean
     requiresTemporalBoundary: boolean
     requiresApproval: ProductAgentToolApprovalMode
   }
