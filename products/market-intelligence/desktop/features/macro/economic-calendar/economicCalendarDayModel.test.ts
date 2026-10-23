@@ -13,7 +13,19 @@ const typedMarket = (id: number, eventType: MarketCalendarEvent['eventType'], im
 }) as MarketCalendarEvent
 async function model() {
   expect(existsSync(new URL('./economicCalendarDayModel.ts', import.meta.url))).toBe(true)
-  return import('./economicCalendarDayModel')
+  const actual = await import('./economicCalendarDayModel')
+  // These cases assert Beijing display times; pin the zone instead of inheriting the CI host.
+  return {
+    ...actual,
+    unifiedCalendarDay: (
+      date: Parameters<typeof actual.unifiedCalendarDay>[0],
+      official: Parameters<typeof actual.unifiedCalendarDay>[1],
+      market: Parameters<typeof actual.unifiedCalendarDay>[2],
+      coverage: Parameters<typeof actual.unifiedCalendarDay>[3],
+      timeZone = 'Asia/Shanghai',
+      linked?: Parameters<typeof actual.unifiedCalendarDay>[5]
+    ) => actual.unifiedCalendarDay(date, official, market, coverage, timeZone, linked)
+  }
 }
 it('shares six visible positions and one remaining count across official and market observations', async () => {
   const { unifiedCalendarDay } = await model()
