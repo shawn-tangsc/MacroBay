@@ -28,7 +28,7 @@ import {
   ChannelDeliveryRepository,
   ChannelDeliveryService,
   ChannelAdapterAcceptanceRegistry,
-  ChannelAdapterEvidenceRepository,
+  ChannelAcceptanceService,
   ChannelManagementRepository,
   ChannelManagementService,
   ChannelSecureHandoff,
@@ -375,8 +375,8 @@ const channelInboundRepository = new ChannelInboundRepository(agentDatabase)
 const channelDeliveryRepository = new ChannelDeliveryRepository(agentDatabase)
 const channelManagementRepository = new ChannelManagementRepository(agentDatabase)
 const channelAdapterRegistry = new ChannelAdapterAcceptanceRegistry()
-const channelAdapterEvidenceRepository = new ChannelAdapterEvidenceRepository(agentDatabase)
-channelAdapterEvidenceRepository.load(channelAdapterRegistry)
+const channelAcceptance = new ChannelAcceptanceService(agentDatabase)
+channelAcceptance.load(channelAdapterRegistry)
 const telegramOffsetRepository = new TelegramOffsetRepository(agentDatabase)
 const slackRuntimeRepository = new SlackRuntimeRepository(agentDatabase)
 const larkRuntimeRepository = new LarkRuntimeRepository(agentDatabase)
@@ -394,6 +394,7 @@ const channelManagementService = new ChannelManagementService({
   vault: channelCredentialVault,
   cipher: channelCredentialVault.payloadCipher,
   registry: channelAdapterRegistry,
+  acceptance: channelAcceptance,
   handoff: new ChannelSecureHandoff()
 })
 const channelCredentialMigrationReconciler = new ChannelCredentialMigrationReconciler({

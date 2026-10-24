@@ -11,6 +11,7 @@ import {
 } from './ChannelManagementContracts'
 import { ChannelManagementCredentialService } from './ChannelManagementCredentialService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
+import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 
 type ManagementDependencies = {
@@ -18,6 +19,7 @@ type ManagementDependencies = {
   vault: ChannelCredentialVault
   cipher: ChannelPayloadCipher
   registry: ChannelAdapterAcceptanceRegistry
+  acceptance?: { isSupported: (adapterType: AgentChannelType) => boolean }
   handoff: ChannelSecureHandoff
   runtime?: {
     start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean>
@@ -147,7 +149,7 @@ export class ChannelManagementService {
     const id = this.requireMutableChannel(input.id)
     const channel = this.deps.repository.query.get(id)
     if (!channel) return { ok: false, code: 'channel-not-found' }
-    if (!this.deps.registry.canEnable(channel.type)) return this.enableRejected(id, input.actorId, channel)
+    if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
     const owner = this.deps.repository.beginLifecycleOwner(id, 'enable', randomUUID(), this.now())
     if (owner) return this.enableRuntime(id, input.actorId, channel, owner)
     // A running Channel keeps its existing runtime owner; repeated enable is intentionally idempotent.
@@ -159,7 +161,7 @@ export class ChannelManagementService {
     const id = this.requireMutableChannel(input.id)
     const channel = this.deps.repository.query.get(id)
     if (!channel) return { ok: false, code: 'channel-not-found' }
-    if (!this.deps.registry.canEnable(channel.type)) return this.enableRejected(id, input.actorId, channel)
+    if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
     const owner = this.deps.repository.beginLifecycleOwner(id, 'restart', randomUUID(), this.now())
     if (owner) this.deps.runtime?.stop(id)
     return owner ? this.startRestart(id, input.actorId, channel, owner) : this.enableRejected(id, input.actorId, channel, 'adapter-runtime-start-failed')
@@ -401,6 +403,10 @@ export class ChannelManagementService {
       const safe = await this.deps.vault.inspectSafe?.(metadata.ref)
       return safe?.revision === metadata.revision ? null : 'channel-credential-unavailable'
     } catch { return 'channel-credential-unavailable' }
+  }
+
+  private canEnableAdapter(adapterType: AgentChannelType): boolean {
+    return this.deps.acceptance?.isSupported(adapterType) ?? this.deps.registry.canEnable(adapterType)
   }
 
   private enableRejected(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, code: ChannelManagementResult['code'] = 'adapter-not-supported'): ChannelManagementResult {

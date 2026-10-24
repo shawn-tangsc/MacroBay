@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url'
 
 import { createAgentPlatformDatabase } from '../platform/ai/agent-platform/db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../platform/ai/agent-platform/schemas/channelSchemas'
-import { ChannelAdapterEvidenceRepository } from '../platform/ai/agent-platform/channels/ChannelAdapterEvidenceRepository'
+import { ChannelAcceptanceService } from '../platform/ai/agent-platform/channels/ChannelAcceptanceService'
 import { channelAdapterKeys, type ChannelAdapterKey } from '../platform/ai/agent-platform/channels/ChannelManagementPredicates'
 import type { ChannelAdapterAcceptanceEntry } from '../platform/ai/agent-platform/channels/channelContracts'
 
@@ -127,18 +127,15 @@ export function evidenceFileToEntry(value: unknown): ChannelAdapterAcceptanceEnt
 export function runChannelAcceptanceCli(args: ChannelAcceptanceCliArgs): string {
   const database = createAgentPlatformDatabase(args.dbPath)
   try {
-    const repository = new ChannelAdapterEvidenceRepository(database)
+    const acceptance = new ChannelAcceptanceService(database)
     if (args.mode === 'status') {
-      const stored = database.connection.prepare(
-        'select adapter_key,status,adapter_version,evidence_recorded_at,updated_at from channel_adapter_support order by adapter_key'
-      ).all() as Array<{ adapter_key: string }>
-      const byKey = new Map(stored.map((row) => [row.adapter_key, row]))
+      const byKey = new Map(acceptance.listSupport().map((row) => [row.adapterKey, row]))
       const support = channelAdapterKeys.map((adapterKey) => byKey.get(adapterKey) ?? {
-        adapter_key: adapterKey,
+        adapterKey,
         status: 'blocked',
-        adapter_version: '',
-        evidence_recorded_at: null,
-        updated_at: null
+        adapterVersion: '',
+        evidenceRecordedAt: null,
+        updatedAt: null
       })
       const current = database.connection.prepare(
         'select adapter_type,adapter_version,updated_at from channel_adapter_acceptance_current order by adapter_type'
@@ -149,14 +146,14 @@ export function runChannelAcceptanceCli(args: ChannelAcceptanceCliArgs): string 
     if (args.mode === 'revoke') {
       if (!args.adapterKey) throw new Error('--revoke requires an adapter key')
       const adapterType = (args.adapterKey === 'lark' ? 'feishu' : args.adapterKey) as AgentChannelType
-      repository.revokeCurrent(adapterType)
+      acceptance.revokeCurrent(adapterType)
       return JSON.stringify({ ok: true, action: 'revoke', adapterKey: args.adapterKey, actor: args.actor })
     }
 
     if (!args.recordPath) throw new Error('--record requires a file path')
     const evidence = JSON.parse(readFileSync(args.recordPath, 'utf8')) as EvidenceFile
     const entry = evidenceFileToEntry(evidence)
-    repository.recordSuccessfulSmoke({ entry, actor: args.actor, realSmokeAt: evidence.realSmokeAt })
+    acceptance.recordSuccessfulSmoke({ entry, actor: args.actor, realSmokeAt: evidence.realSmokeAt })
     return JSON.stringify({ ok: true, action: 'record', adapterKey: args.adapterKey ?? evidence.adapterKey, actor: args.actor })
   } finally {
     database.connection.close()
