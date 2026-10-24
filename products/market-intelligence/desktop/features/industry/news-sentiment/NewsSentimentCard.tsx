@@ -21,6 +21,9 @@ export function NewsSentimentCard(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
+  onEnableSources?: () => void
+  enablingSources?: boolean
+  enableSourcesFailed?: boolean
 }): React.ReactElement {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
@@ -63,6 +66,12 @@ export function NewsSentimentCard(props: {
       ) : !summary ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
           <p>{text.empty}</p>
+          {props.onEnableSources ? (
+            <button disabled={props.enablingSources} onClick={props.onEnableSources} type="button">
+              {props.enablingSources ? text.enablingSources : text.enableSources}
+            </button>
+          ) : null}
+          {props.enableSourcesFailed ? <p role="alert">{text.enableSourcesFailed}</p> : null}
           <button onClick={props.onOpenAll} type="button">{text.openAll}</button>
         </div>
       ) : (

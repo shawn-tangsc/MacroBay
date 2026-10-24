@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { newsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
+import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { NewsSentimentDrawer } from './NewsSentimentDrawer'
@@ -24,7 +25,25 @@ export function NewsSentimentFeature(props: {
   const state = useNewsSentiment({ client, now })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
+  const [enabling, setEnabling] = useState(false)
+  const [enableFailed, setEnableFailed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const enableSources = useCallback(async () => {
+    setEnabling(true)
+    setEnableFailed(false)
+    try {
+      for (const sourceId of ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements']) {
+        await intelligenceSourcesClient.setEnabled(sourceId, true)
+        await intelligenceSourcesClient.runNow(sourceId)
+      }
+      state.refresh()
+    } catch {
+      setEnableFailed(true)
+    } finally {
+      setEnabling(false)
+    }
+  }, [state])
 
   return (
     <>
@@ -35,6 +54,9 @@ export function NewsSentimentFeature(props: {
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
         onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true) }}
+        onEnableSources={() => void enableSources()}
+        enablingSources={enabling}
+        enableSourcesFailed={enableFailed}
         onWindowChange={state.setWindow}
         text={props.text}
         view={state.view}
