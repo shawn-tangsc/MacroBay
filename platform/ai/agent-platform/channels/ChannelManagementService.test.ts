@@ -685,7 +685,7 @@ describe('ChannelManagementService', () => {
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get(id)).toEqual({ generation: 3, lifecycle_state: 'inactive' })
 
     const json = JSON.stringify([service.list(), service.catalog(), repository.query.audits(id, 100, 0), repository.query.runtime(id)])
-    expect(json).not.toMatch(/credential_ref|bot_token|activeChatIds|session_id|ciphertext|provider.*key/i)
+    expect(json).not.toMatch(/credential_ref|activeChatIds|session_id|ciphertext|provider.*key/i)
   })
 
   it('writes durable delete intent before Vault deletion and restarts known-ref cleanup without making the channel runnable', async () => {

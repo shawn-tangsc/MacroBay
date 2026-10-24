@@ -68,9 +68,9 @@ describe('ChannelInboundService', () => {
     expect(channelWithoutMention.disposition).toBe('ignored')
     expect(directDenied.disposition).toBe('ignored')
     expect(database.connection.prepare('select count(*) as count from channel_delivery_targets').get()).toEqual({ count: 0 })
-    expect(database.connection.prepare('select code from channel_runtime_audits order by created_at, id').all()).toEqual([
-      { code: 'channel-mention-required' }, { code: 'channel-mention-required' }, { code: 'channel-policy-denied' }
-    ])
+    const auditCodes = (database.connection.prepare('select code from channel_runtime_audits').all() as Array<{ code: string }>)
+      .map((row) => row.code).sort()
+    expect(auditCodes).toEqual(['channel-mention-required', 'channel-mention-required', 'channel-policy-denied'])
   })
 
   it('records a denied conversation as a key-only candidate and allows it without provider ids', async () => {

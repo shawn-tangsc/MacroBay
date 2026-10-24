@@ -157,6 +157,7 @@ export class ChannelManagementService {
     const channel = this.deps.repository.query.get(id)
     if (!channel) return { ok: false, code: 'channel-not-found' }
     if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
+    if (!this.deps.repository.credentialMetadata(id)) return this.enableRejected(id, input.actorId, channel, 'channel-credential-missing')
     const owner = this.deps.repository.beginLifecycleOwner(id, 'enable', randomUUID(), this.now())
     if (owner) return this.enableRuntime(id, input.actorId, channel, owner)
     // A running Channel keeps its existing runtime owner; repeated enable is intentionally idempotent.

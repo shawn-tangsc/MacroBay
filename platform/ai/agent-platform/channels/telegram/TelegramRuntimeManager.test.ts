@@ -58,7 +58,7 @@ describe('TelegramRuntimeManager', () => {
 function createManager(database: ReturnType<typeof createAgentPlatformDatabase>, token: () => Promise<string | null>, fetch: typeof globalThis.fetch = vi.fn() as never): TelegramRuntimeManager {
   return new TelegramRuntimeManager({
     inbound: new ChannelInboundRepository(database), inboundService: {} as never, offsets: new TelegramOffsetRepository(database),
-    vault: { get: async () => token() } as never, getPlatformFetch: () => fetch,
+    vault: { get: async () => ({ bot_token: await token() }) } as never, getPlatformFetch: () => fetch,
     delivery: new TelegramDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }),
     ownsLifecycleOwner: (_channelId, token, generation) => token === 'owner-a' && generation === 1
   })

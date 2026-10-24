@@ -95,6 +95,7 @@ describe('ChannelInboundExecutionCoordinator', () => {
       runtime: runtime as never, setInterval: (callback) => { tick = callback; return 1 as never }, clearInterval: () => {}
     })
     const pending = coordinator.execute(claim)
+    await vi.waitFor(() => expect(resolveRuntime).toBeTypeOf('function'))
     tick?.()
     resolveRuntime?.({ assistantMessage: { data: { parts: [{ type: 'text', text: 'final' }] } } })
     await expect(pending).resolves.toBe('deferred')
@@ -117,6 +118,7 @@ describe('ChannelInboundExecutionCoordinator', () => {
       setInterval: (callback) => { tick = callback; return 1 as never }, clearInterval: () => {}
     })
     const pending = coordinator.execute(claim)
+    await vi.waitFor(() => expect(resolveRuntime).toBeTypeOf('function'))
     tick?.()
     resolveRuntime?.({ assistantMessage: { data: { parts: [{ type: 'text', text: 'final' }] } } })
     await expect(pending).resolves.toBe('deferred')
@@ -140,6 +142,7 @@ describe('ChannelInboundExecutionCoordinator', () => {
       setInterval: (callback) => { tick = callback; return 1 as never }, clearInterval: () => {}
     })
     const pending = coordinator.execute(claim)
+    await vi.waitFor(() => expect(resolveRuntime).toBeTypeOf('function'))
     tick?.()
     resolveRuntime?.({ assistantMessage: { data: { parts: [{ type: 'text', text: 'final' }] } } })
     await expect(pending).resolves.toBe('completed')
