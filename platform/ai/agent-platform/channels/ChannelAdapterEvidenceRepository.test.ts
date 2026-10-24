@@ -21,6 +21,45 @@ describe('ChannelAdapterEvidenceRepository', () => {
     expect(JSON.stringify(database.connection.prepare('select evidence_json from channel_adapter_acceptance_evidence_versions').get())).not.toMatch(/bot[_-]?token|api[_-]?key|"(token|secret|credential|providerPayload)"\s*:/i)
   })
 
+  it('projects runtime support only from current, unrevoked evidence', () => {
+    const database = createAgentPlatformDatabase(':memory:')
+    const evidence = new ChannelAdapterEvidenceRepository(database)
+    evidence.load(new ChannelAdapterAcceptanceRegistry())
+    const blocked = database.connection.prepare(
+      'select adapter_key, status from channel_adapter_support order by adapter_key'
+    ).all() as Array<{ adapter_key: string; status: string }>
+    expect(blocked).toHaveLength(6)
+    expect(blocked.every((row) => row.status === 'blocked')).toBe(true)
+    expect(evidence.isSupported('telegram')).toBe(false)
+
+    evidence.recordSuccessfulSmoke({ entry: supported(), actor: 'smoke', realSmokeAt: '2026-07-19T00:00:00.000Z' })
+    expect(database.connection.prepare(
+      "select status, adapter_version from channel_adapter_support where adapter_key='telegram'"
+    ).get()).toEqual({ status: 'supported', adapter_version: 'release-a' })
+    expect(evidence.isSupported('telegram')).toBe(true)
+
+    evidence.revokeCurrent('telegram')
+    expect(evidence.isSupported('telegram')).toBe(false)
+    expect(database.connection.prepare(
+      "select status from channel_adapter_support where adapter_key='telegram'"
+    ).get()).toEqual({ status: 'blocked' })
+  })
+
+  it('maps the Lark carrier to the lark adapter key when recording support', () => {
+    const database = createAgentPlatformDatabase(':memory:')
+    const evidence = new ChannelAdapterEvidenceRepository(database)
+    evidence.load(new ChannelAdapterAcceptanceRegistry())
+    evidence.recordSuccessfulSmoke({
+      entry: { ...supported(), adapterType: 'feishu' },
+      actor: 'smoke',
+      realSmokeAt: '2026-07-19T00:00:00.000Z'
+    })
+    expect(database.connection.prepare(
+      "select status from channel_adapter_support where adapter_key='lark'"
+    ).get()).toEqual({ status: 'supported' })
+    expect(evidence.isSupported('feishu')).toBe(true)
+  })
+
   it('loads only the current version and never lets superseded evidence re-enable an adapter', () => {
     const database = createAgentPlatformDatabase(':memory:')
     const evidence = new ChannelAdapterEvidenceRepository(database)

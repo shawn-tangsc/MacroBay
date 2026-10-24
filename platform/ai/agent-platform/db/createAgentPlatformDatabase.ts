@@ -972,6 +972,21 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_channel_wechat_runtime_audits_channel_created
         on channel_wechat_runtime_audits(channel_id, created_at desc, id asc);
     `
+  },
+  {
+    // One row per adapter key. Every runtime query joins this projection instead of naming an adapter.
+    id: '0027_channel_adapter_support',
+    up: `
+      create table channel_adapter_support (
+        adapter_key text primary key
+          check (adapter_key in ('telegram','slack','lark','qq','discord','wechat')),
+        status text not null
+          check (status in ('supported','blocked')),
+        adapter_version text not null,
+        evidence_recorded_at text,
+        updated_at text not null
+      );
+    `
   }
 ]
 

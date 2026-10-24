@@ -21,6 +21,7 @@
     "pretypecheck": "pnpm generate:products && pnpm generate:agent-capabilities",
     "lint": "pnpm --filter @macrobay/desktop-shell lint",
     "docs:check": "node scripts/check-docs.mjs",
+    "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
     "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts"
   },
