@@ -987,6 +987,40 @@ const migrations: AgentPlatformMigration[] = [
         updated_at text not null
       );
     `
+  },
+  {
+    // A deleted Agent session must not leave a channel bound to a missing session.
+    id: '0028_channel_conversation_session_integrity',
+    up: `
+      create table channel_conversations_v2 (
+        id text primary key,
+        channel_id text not null,
+        conversation_key_ciphertext blob not null,
+        conversation_key_ref text not null,
+        conversation_key_revision integer not null,
+        conversation_key_hash text not null,
+        conversation_kind text not null,
+        agent_session_id text,
+        created_at text not null,
+        updated_at text not null,
+        unique(channel_id, conversation_key_hash),
+        unique(agent_session_id)
+      );
+
+      insert into channel_conversations_v2 (
+        id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+        conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
+      ) select
+        id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+        conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
+      from channel_conversations;
+
+      drop table channel_conversations;
+      alter table channel_conversations_v2 rename to channel_conversations;
+
+      create index idx_channel_conversations_channel_updated
+        on channel_conversations(channel_id, updated_at desc, id asc);
+    `
   }
 ]
 

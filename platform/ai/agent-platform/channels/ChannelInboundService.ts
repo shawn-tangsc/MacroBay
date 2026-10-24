@@ -80,6 +80,17 @@ export class ChannelInboundService {
             providerConversationKey: request.providerConversationKey
           })
         }
+        if (!decision && !isNewCommand && conversation && !conversation.record.sessionId) {
+          conversation = {
+            record: await this.ensureConversationSession({
+              channelId: request.channelId,
+              generation: request.generation,
+              keyHash: conversationHash,
+              agentId
+            }),
+            created: conversation.created
+          }
+        }
         const result = this.deps.repository.handleClaim({
           channelId: request.channelId,
           generation: request.generation,
@@ -200,9 +211,44 @@ export class ChannelInboundService {
     return this.deps.contentGuard?.(request) ?? null
   }
 
+  private async ensureConversationSession(input: {
+    channelId: string
+    generation: number
+    keyHash: string
+    agentId: string
+  }): Promise<ChannelConversationRecord> {
+    const operationId = this.deps.repository.reserveConversationOperation(
+      input.channelId, input.keyHash, input.generation, input.agentId, this.now()
+    )
+    if (!operationId) throw new Error('Channel conversation operation is already active.')
+    let sessionId: string | null = null
+    let bound = false
+    try {
+      sessionId = await this.deps.sessions.createForConversation({ channelId: input.channelId, agentId: input.agentId })
+      if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
+        input.channelId, input.keyHash, sessionId, input.generation, input.agentId, this.now()
+      )) {
+        throw new Error('Channel conversation session rebind failed.')
+      }
+      bound = true
+      const record = this.deps.repository.getConversation(input.channelId, input.keyHash)
+      if (!record) throw new Error('Channel conversation disappeared during session rebind.')
+      return record
+    } finally {
+      if (sessionId && !bound) await this.deps.sessions.discardUnbound(sessionId)
+      this.deps.repository.releaseConversationOperation(input.channelId, input.keyHash, operationId)
+    }
+  }
+
   private async resolveConversation(request: ChannelInboundRequest, agentId: string, hash: string, encrypted: { ciphertext: Uint8Array; keyRef: string; keyRevision: number }): Promise<{ record: ChannelConversationRecord; created: boolean }> {
     const existing = this.deps.repository.getConversation(request.channelId, hash)
-    if (existing) return { record: existing, created: false }
+    if (existing) {
+      if (existing.sessionId && this.deps.sessions.exists) {
+        const alive = await this.deps.sessions.exists(existing.sessionId)
+        if (!alive) return { record: { ...existing, sessionId: null }, created: false }
+      }
+      return { record: existing, created: false }
+    }
     const resolutionKey = `${request.channelId}:${hash}`
     const inFlight = this.conversationResolutions.get(resolutionKey)
     if (inFlight) return inFlight
@@ -252,8 +298,10 @@ export class ChannelInboundService {
     conversation: { record: ChannelConversationRecord; created: boolean } | null
   ): Promise<void> {
     if (!conversation?.created) return
-    if (this.deps.repository.deleteUnboundConversation(channelId, keyHash, conversation.record.sessionId)) {
-      await this.deps.sessions.discardUnbound(conversation.record.sessionId)
+    const sessionId = conversation.record.sessionId
+    if (!sessionId) return
+    if (this.deps.repository.deleteUnboundConversation(channelId, keyHash, sessionId)) {
+      await this.deps.sessions.discardUnbound(sessionId)
     }
   }
 

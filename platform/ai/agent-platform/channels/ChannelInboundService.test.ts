@@ -40,6 +40,21 @@ describe('ChannelInboundService', () => {
     expect(cipher.encrypt).toHaveBeenCalled()
   })
 
+  it('rebinds a conversation to a fresh session after its agent session is deleted', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    expect((await receive(service, 'channel-a', {})).disposition).toBe('acknowledged')
+    const first = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    expect(first.agent_session_id).toBeTruthy()
+
+    database.connection.prepare('update channel_conversations set agent_session_id = null').run()
+    expect((await receive(service, 'channel-a', { providerEventKey: 'event-after-session-delete' })).disposition).toBe('acknowledged')
+
+    const rebound = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    expect(rebound.agent_session_id).toBeTruthy()
+    expect(rebound.agent_session_id).not.toBe(first.agent_session_id)
+  })
+
   it('requires explicit allow policy and structured mention for groups and channels, without turning discovery into targets', async () => {
     const { service, database, repository } = createHarness()
     await allow(service, 'channel-a', 'user-a', 'group')

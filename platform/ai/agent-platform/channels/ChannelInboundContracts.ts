@@ -62,6 +62,8 @@ export type ChannelDispatchFinalStatus = 'completed' | 'failed'
 export type ChannelSessionFactory = {
   createForConversation: (input: { channelId: string; agentId: string }) => Promise<string>
   discardUnbound: (sessionId: string) => Promise<void>
+  /** Optional existence probe; when provided, a deleted session is treated as unbound. */
+  exists?: (sessionId: string) => Promise<boolean>
 }
 
 export type ChannelContentGuard = (facts: ChannelInboundFacts) => 'channel-content-rejected' | null

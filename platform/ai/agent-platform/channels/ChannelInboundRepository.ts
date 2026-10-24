@@ -23,7 +23,7 @@ export type ChannelConversationRecord = {
   keyRevision: number
   keyHash: string
   kind: ChannelConversationKind
-  sessionId: string
+  sessionId: string | null
 }
 
 export type ChannelWorkItemRecord = {
@@ -116,7 +116,8 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.conversation_id = ? and w.dispatch_id = ?
          and w.status = 'dispatching' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
-         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1`
+         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+         and v.agent_session_id is not null`
     ).get(
       input.claim.workItemId, input.claim.receiptId, input.claim.channelId, input.conversationId, input.claim.dispatchId,
       input.claim.leaseToken, input.claim.leaseExpiresAt, (input.now ?? new Date()).toISOString(), input.claim.generation
@@ -723,7 +724,7 @@ export class ChannelInboundRepository {
 
 type ConversationRow = {
   id: string; channel_id: string; conversation_key_ciphertext: Uint8Array; conversation_key_ref: string
-  conversation_key_revision: number; conversation_key_hash: string; conversation_kind: ChannelConversationKind; agent_session_id: string
+  conversation_key_revision: number; conversation_key_hash: string; conversation_kind: ChannelConversationKind; agent_session_id: string | null
 }
 type WorkRow = {
   id: string; receipt_id: string; channel_id: string; conversation_id: string; dispatch_id: string; payload_ciphertext: Uint8Array

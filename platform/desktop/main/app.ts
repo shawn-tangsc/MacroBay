@@ -690,7 +690,8 @@ channelInboundService = new ChannelInboundService({
       name: 'Channel conversation',
       workspace: { type: 'system' }
     })).id,
-    discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) }
+    discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
+    exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
   },
   onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
 })
