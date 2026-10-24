@@ -24,7 +24,6 @@ import {
   ChannelInboundRepository,
   ChannelInboundService,
   ChannelDeliveryMaintenance,
-  ChannelCredentialMigrationReconciler,
   ChannelDeliveryRepository,
   ChannelDeliveryService,
   ChannelAdapterAcceptanceRegistry,
@@ -393,12 +392,6 @@ const channelManagementService = new ChannelManagementService({
   acceptance: channelAcceptance,
   handoff: new ChannelSecureHandoff()
 })
-const channelCredentialMigrationReconciler = new ChannelCredentialMigrationReconciler({
-  database: agentDatabase,
-  vault: channelCredentialVault,
-  readLegacyState: () => legacyAgentStorage.read(),
-  writeLegacyState: (state) => legacyAgentStorage.write(state as AgentStoreState)
-})
 const agentStore = createAgentSqliteStoreWithOptions(
   agentDatabase,
   taskAutomationSmokeProfile.enabled
@@ -408,8 +401,7 @@ const agentStore = createAgentSqliteStoreWithOptions(
       ? createWorkspaceTestFixtureAgentSeed('2026-10-06T00:00:00.000Z')
       : createDefaultAgentPersistentState(),
   {
-    legacyStateLoader: () => legacyAgentStorage.read(),
-    channelMigrationReconciler: channelCredentialMigrationReconciler
+    legacyStateLoader: () => legacyAgentStorage.read()
   }
 )
 const agentServices = createAgentPlatformServices(agentStore, {

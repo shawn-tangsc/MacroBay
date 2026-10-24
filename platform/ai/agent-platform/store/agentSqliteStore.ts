@@ -7,7 +7,6 @@ import type { InstalledSkill } from '../schemas/skillSchemas'
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '../schemas/taskSchemas'
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { createAgentPlatformRepositories } from '../repositories/createAgentPlatformRepositories'
-import type { ChannelCredentialMigrationReconciler } from '../channels/ChannelCredentialMigrationReconciler'
 import type { TaskMutationAuditEntity } from '../runtime/tasks/taskAutomationContracts'
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
 import type {
@@ -40,7 +39,6 @@ export function createAgentSqliteStoreWithOptions(
   options: {
     legacyStateLoader?: () => Promise<unknown>
     legacyStateArchiver?: (state: AgentStoreState) => Promise<void> | void
-    channelMigrationReconciler?: Pick<ChannelCredentialMigrationReconciler, 'reconcile' | 'completeFallbackHydration'>
   } = {}
 ): AgentPersistentStore {
   const repositories = createAgentPlatformRepositories(database)
@@ -54,7 +52,6 @@ export function createAgentSqliteStoreWithOptions(
     if (state) return state
 
     const hadPersistedState = hasPersistedStorage(database) && !hasPendingChannelFallbackScrub(database)
-    await options.channelMigrationReconciler?.reconcile()
     migrateLegacyTaskChannelState(database, repositories)
     const persisted = readPersistedState(repositories)
     if ((hasAnyPersistedData(persisted) || hadPersistedState) && !hasPendingChannelFallbackScrub(database)) {
@@ -67,7 +64,7 @@ export function createAgentSqliteStoreWithOptions(
       : createDefaultAgentPersistentState()
     // The reconciler has already persisted or quarantined the legacy Channel records.
     // Never let a stale fallback object repopulate Channel state after that boundary.
-    const legacy = options.channelMigrationReconciler ? { ...loadedLegacy, channels: [] } : loadedLegacy
+    const legacy = { ...loadedLegacy, channels: [] }
     const hydrated = mergeAgentStoreSeeds(legacy, safeSeed)
     const hasLegacyData = hasAnyPersistedData(legacy)
     if (hasAnyPersistedData(hydrated)) {
@@ -79,7 +76,6 @@ export function createAgentSqliteStoreWithOptions(
         await archiveLegacyState(options.legacyStateArchiver, legacy)
       }
     }
-    options.channelMigrationReconciler?.completeFallbackHydration()
     state = hydrated
     return state
   }

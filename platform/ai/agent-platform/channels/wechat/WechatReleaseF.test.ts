@@ -7,7 +7,6 @@ import { ChannelDeliveryTransportRouter } from '../ChannelDeliveryTransportRoute
 import { ChannelManagementRepository } from '../ChannelManagementRepository'
 import { ChannelManagementService } from '../ChannelManagementService'
 import { ChannelSecureHandoff } from '../ChannelSecureHandoff'
-import { parseLegacyChannelCredentialMigrationSource } from '../channelCredentialMigrationContracts'
 import { decodeWechatConversation, encodeWechatConversation, splitWechatText } from './WechatContracts'
 import { WechatDeliveryTransport } from './WechatDeliveryTransport'
 import { seedChannelAdapterSupport } from '../channelTestSupport'
@@ -23,8 +22,6 @@ describe('WeChat Release F safety foundation', () => {
     expect(service.requestEnable({ id: created.channel!.id, actorId: 'user-a' })).toMatchObject({ ok: false, code: 'adapter-not-supported' })
     await expect(service.beginCredential({ id: created.channel!.id, senderId: 1 })).rejects.toThrow('channel-input-invalid')
     expect(database.connection.prepare('select public_config_json,credential_ref,requested_enabled from agent_channels where id=?').get(created.channel!.id)).toEqual({ public_config_json: '{}', credential_ref: null, requested_enabled: 0 })
-    expect(parseLegacyChannelCredentialMigrationSource({ type: 'wechat', config: { token_path: '/private/never-read.json' } })).toMatchObject({ kind: 'requires-reenrollment' })
-    expect(() => parseLegacyChannelCredentialMigrationSource({ type: 'wechat', config: { token_path: '/private/x', context_token: 'forbidden' } })).toThrow()
   })
 
   it('rejects generic credential and policy handoffs before any Vault, cipher, owner, or state mutation', async () => {
