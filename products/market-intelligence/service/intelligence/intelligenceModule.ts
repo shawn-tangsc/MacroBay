@@ -55,6 +55,7 @@ import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSenti
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
+import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
@@ -541,8 +542,17 @@ export function getIntelligenceModule(
       requestGovernanceQueue,
       ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
     })
-    void intelligenceRawRecordStartupRecoveryPolicy
-      .completeBeforeSourceRuntime(jobRuntime)
+    // These four need no credential and feed the dashboard's sentiment card; a fresh install should
+    // not require toggling them on before the feature can do anything. An existing profile wins.
+    const ensureDefaultNewsSources = (async () => {
+      for (const sourceId of NEWS_SENTIMENT_SOURCE_IDS) {
+        if ((await profileStore.getProfile(sourceId)) === undefined) {
+          await profileStore.saveProfile({ sourceId, enabled: true })
+        }
+      }
+    })().catch(() => undefined)
+    void ensureDefaultNewsSources
+      .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
     void (async () => {
