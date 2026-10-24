@@ -1,11 +1,7 @@
-import { Button, Modal, Switch } from 'antd'
+import { Button } from 'antd'
 import { ArrowLeft, RefreshCw, Settings2 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { parseConfiguredModelRef, type ConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
+import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
-import { platformText } from '@renderer/i18n/platformText'
-import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
-import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
 import { toReadableConclusionText } from '../../../contracts/marketAnalysisReadableText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -17,9 +13,8 @@ import { oneOffTriggerReasons } from './analysisTriggerStatusPresentation'
 import type { AnalysisTimelineText, UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisSettings, type MarketAnalysisSettingsRefusal } from './useMarketAnalysisSettings'
 import { AnalysisRequestErrorBanner, useDismissibleError } from './AnalysisRequestErrorBanner'
+import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
 
-/** The analysis is a text task, so the picker offers exactly the chat-capable models. */
-const ANALYSIS_MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
 
 export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   /** The calm status shown when a refresh had nothing to do because an analysis already exists. */
@@ -105,39 +100,11 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
   const analysisEnabled = settingsState.settings?.enabled
   const masked = analysisEnabled === false
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [draft, setDraft] = useState<{ enabled: boolean; providerId: string; modelId: string } | null>(null)
-  const modelCandidates = useMemo<ModelPickerCandidate[]>(
-    () => settingsState.providers.flatMap(provider => provider.models.map(model => ({ providerId: provider.id, model }))),
-    [settingsState.providers]
-  )
-  // A stored model that is the platform's default is shown as "following the default", not as a
-  // name the reader typed: the picker's empty state is exactly that, and it keeps the label stable
-  // when the stored snapshot happens to be the default.
-  const followsDefault = Boolean(settingsState.defaultModel &&
-    draft?.providerId === settingsState.defaultModel.providerId && draft?.modelId === settingsState.defaultModel.modelId)
-  const pickerValue = draft?.providerId && draft.modelId && !followsDefault ? `${draft.providerId}:${draft.modelId}` : null
-  const followLabel = settingsState.defaultModel
-    ? `${text.followsDefaultPrefix}${settingsState.defaultModel.providerName} / ${settingsState.defaultModel.modelName}`
-    : text.modelFollowDefault
   const refusalText = (refusal: MarketAnalysisSettingsRefusal | undefined): string | undefined =>
     refusal === 'model-unconfigured' ? text.refusalModelUnconfigured
       : refusal === 'model-unavailable' ? text.refusalModelUnavailable
         : refusal === 'failed' ? text.refusalFailed
           : undefined
-  // The dialog always opens on the *stored* state, whichever button opened it: a switch that reads
-  // "on" before the reader has saved anything claims a change that has not happened.
-  const openSettings = (): void => {
-    setDraft({
-      enabled: settingsState.settings?.enabled ?? false,
-      providerId: settingsState.settings?.providerId ?? '',
-      modelId: settingsState.settings?.modelId ?? ''
-    })
-    setSettingsOpen(true)
-  }
-  const submitSettings = async (): Promise<void> => {
-    if (!draft) return
-    if (await settingsState.save(draft)) setSettingsOpen(false)
-  }
   // Eight nodes at a time, and reaching the end of what is shown is what brings the next eight in —
   // instantly while the workspace still holds read nodes, and by reading on once it does not.
   const [pages, setPages] = useState(1)
@@ -169,7 +136,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
       <header className="mi-analysis-timeline__header" aria-hidden={masked || undefined}>
         <div><p>{text.workspaceLabel}</p><h1>{text.title}</h1></div>
         <div>
-          <Button className="mi-analysis-timeline__settings" onClick={() => openSettings()} icon={<Settings2 aria-hidden="true" size={14} />}>{text.settings}</Button>
+          <Button className="mi-analysis-timeline__settings" onClick={() => setSettingsOpen(true)} icon={<Settings2 aria-hidden="true" size={14} />}>{text.settings}</Button>
           {onBack ? <Button className="mi-analysis-timeline__back" onClick={onBack} icon={<ArrowLeft aria-hidden="true" size={15} />}>{text.back}</Button> : null}
           {/* The one analysis action sits at the far right, where a separate refresh button used to
               be: the list refreshes itself (live poll, focus), so a second control that only re-read
@@ -252,54 +219,16 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
         <div className="mi-analysis-timeline__mask-body">
           <p>{text.analysisOffHint}</p>
           <div>
-            <Button type="primary" onClick={() => openSettings()}>{text.enableAnalysis}</Button>
+            <Button type="primary" onClick={() => setSettingsOpen(true)}>{text.enableAnalysis}</Button>
           </div>
           {refusalText(settingsState.refusal) ? <p role="alert">{refusalText(settingsState.refusal)}</p> : null}
         </div>
       </div> : null}
-      {settingsOpen ? <Modal
-        className="mi-analysis-timeline__settings-dialog"
-        open
-        title={text.settingsTitle}
-        onCancel={() => setSettingsOpen(false)}
-        footer={[
-          <Button key="cancel" onClick={() => setSettingsOpen(false)}>{text.cancel}</Button>,
-          <Button key="save" type="primary" loading={settingsState.saving} onClick={() => void submitSettings()}>{settingsState.saving ? text.saving : text.save}</Button>
-        ]}
-      >
-        <div className="mi-analysis-timeline__settings-row">
-          <div>
-            <strong>{text.analysisEnabled}</strong>
-            <small>{text.analysisEnabledHint}</small>
-          </div>
-          <Switch
-            checked={draft?.enabled ?? false}
-            onChange={enabled => setDraft(current => current ? { ...current, enabled } : { enabled, providerId: '', modelId: '' })}
-          />
-        </div>
-        <div className="mi-analysis-timeline__settings-row">
-          <div>
-            <strong>{text.analysisModel}</strong>
-          </div>
-          <ModelPicker
-            pickerId="market-analysis"
-            value={pickerValue}
-            onChange={(value: string | null) => {
-              const ref: ConfiguredModelRef | null = parseConfiguredModelRef(value)
-              setDraft(current => current ? { ...current, providerId: ref?.providerId ?? '', modelId: ref?.modelId ?? '' } : current)
-            }}
-            models={modelCandidates}
-            providers={settingsState.providers}
-            labels={platformText[language].models}
-            constraints={ANALYSIS_MODEL_CONSTRAINTS}
-            placeholder={followLabel}
-            allowClear
-            onClear={() => setDraft(current => current ? { ...current, providerId: '', modelId: '' } : current)}
-            placement="bottomRight"
-          />
-        </div>
-        {refusalText(settingsState.refusal) ? <p role="alert" className="mi-analysis-timeline__settings-error">{refusalText(settingsState.refusal)}</p> : null}
-      </Modal> : null}
+      <MarketAnalysisSettingsDialog
+        onClose={() => setSettingsOpen(false)}
+        open={settingsOpen}
+        text={text}
+      />
     </section>
   )
 }

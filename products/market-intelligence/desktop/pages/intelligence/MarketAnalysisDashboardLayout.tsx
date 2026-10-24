@@ -10,6 +10,7 @@ import { MarketCalendarCard } from './MarketCalendarCard'
 import { useCalendarCardData, type CalendarCardReactionReader } from './useCalendarCardData'
 import { AnalysisDetailDrawer } from './AnalysisDetailDrawer'
 import { AnalysisTimelineDrawer } from './AnalysisTimelineDrawer'
+import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
 import { LatestAnalysisConclusionCard } from './LatestAnalysisConclusionCard'
 import type { AnalysisSelectionState } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
@@ -83,6 +84,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   const [selectionState, setSelectionState] = useState<AnalysisSelectionState>('none')
   const [openEntryId, setOpenEntryId] = useState<string>()
   const [timelineOpen, setTimelineOpen] = useState(false)
+  const [analysisSettingsOpen, setAnalysisSettingsOpen] = useState(false)
   const [conclusionHost, setConclusionHost] = useState<HTMLDivElement | null>(null)
   // Frozen at mount: a new instant per render would re-query the calendar on every render.
   // One selection at a time, shared by the timeline entries and the calendar card, so the floating
@@ -145,6 +147,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
           onOpenTimeline={() => setTimelineOpen(true)}
+          onOpenAnalysisSettings={() => setAnalysisSettingsOpen(true)}
           openTimelineLabel={text.analysisDrawer.open}
           enableAnalysisLabel={text.analysisTimeline.enableAnalysis}
           analysisOffHint={text.analysisTimeline.analysisOffHint}
@@ -159,6 +162,11 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})
         })}
+        <MarketAnalysisSettingsDialog
+          onClose={() => setAnalysisSettingsOpen(false)}
+          open={analysisSettingsOpen}
+          text={text.analysisTimeline}
+        />
         <AnalysisTimelineDrawer
           onClose={() => setTimelineOpen(false)}
           onOpenChange={setOpenEntry}

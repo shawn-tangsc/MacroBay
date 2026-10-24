@@ -231,3 +231,12 @@
 .mi-agent-context-card__copy strong { overflow: hidden; text-overflow: ellipsis; color: var(--text); font-size: 11.5px; font-weight: 600; }
 .mi-agent-context-card__copy span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 10px; }
 .mi-agent-context-card.is-analysis .mi-agent-context-card__icon { color: var(--accent); }
+
+/* Off state: the one action is centred, because the card has no other content to align to. */
+.mi-analysis-conclusion-card__state--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}

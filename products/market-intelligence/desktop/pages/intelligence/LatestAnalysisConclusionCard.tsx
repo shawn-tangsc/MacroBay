@@ -32,12 +32,13 @@ export function selectLatestPublishedEntry(entries: readonly MarketAnalysisTimel
  * analysis so the current judgement is the first thing on screen; selecting an
  * older node opens the detail drawer instead of replacing this card.
  */
-export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, onOpenDetail, onOpenTimeline, openTimelineLabel, enableAnalysisLabel, analysisOffHint }: Readonly<{
+export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, onOpenDetail, onOpenTimeline, onOpenAnalysisSettings, openTimelineLabel, enableAnalysisLabel, analysisOffHint }: Readonly<{
   text: Pick<AnalysisDetailText, 'status' | 'conclusion' | 'conclusionDirection' | 'directions' | 'readableLocale'>
   workspaceText: LatestConclusionText
   timeline: UseMarketAnalysisTimelineResult
   onOpenDetail: (entry: MarketAnalysisTimelineEntry) => void
   onOpenTimeline?: () => void
+  onOpenAnalysisSettings?: () => void
   openTimelineLabel?: string
   enableAnalysisLabel?: string
   analysisOffHint?: string
@@ -70,9 +71,9 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
       <header>
         <div><Sparkles size={15} aria-hidden="true" /><h2>{workspaceText.latestConclusion}</h2></div>
       </header>
-      <div className="mi-analysis-conclusion-card__state">
+      <div className="mi-analysis-conclusion-card__state mi-analysis-conclusion-card__state--center">
         <p>{analysisOffHint}</p>
-        {onOpenTimeline ? <Button size="small" type="primary" onClick={onOpenTimeline}>{enableAnalysisLabel}</Button> : null}
+        <Button size="small" type="primary" onClick={onOpenAnalysisSettings ?? onOpenTimeline}>{enableAnalysisLabel}</Button>
       </div>
     </section>
   }
