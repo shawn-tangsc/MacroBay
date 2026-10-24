@@ -152,6 +152,7 @@ describe('ChannelManagementService', () => {
     expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
     database.connection.prepare("update agent_channels set credential_ref='channel-migration:channel-pending-restart:ref',credential_revision=1,credential_health='configured',migration_state='runtime-ready',requested_enabled=1 where id=?").run(id)
     database.connection.prepare("insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,1,'active','2026-07-19')").run(id)
+    database.connection.prepare("insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values(?, 'owner-a', 'enable', 1, '2026-07-19', '2026-07-19')").run(id)
     let resolveInspect!: (value: ChannelCredentialSafeView | null) => void
     vault.inspectSafe = async () => new Promise<ChannelCredentialSafeView | null>((resolve) => { resolveInspect = resolve })
     const start = vi.fn(async () => true)
