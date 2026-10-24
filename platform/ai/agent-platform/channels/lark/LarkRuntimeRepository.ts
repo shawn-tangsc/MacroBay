@@ -16,7 +16,7 @@ export class LarkRuntimeRepository {
       const current = this.database.connection.prepare(
         `select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
-           and c.migration_state='runtime-ready' and c.requested_enabled=1`
+           and c.lifecycle_state='enabled' and c.requested_enabled=1`
       ).get(channelId, generation)
       if (!current) return false
       return this.database.connection.prepare(
@@ -31,7 +31,7 @@ export class LarkRuntimeRepository {
       `insert into channel_lark_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
        where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
-           and c.migration_state='runtime-ready' and c.requested_enabled=1)`
+           and c.lifecycle_state='enabled' and c.requested_enabled=1)`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
   }
 

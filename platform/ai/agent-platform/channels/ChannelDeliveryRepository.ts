@@ -188,7 +188,7 @@ export class ChannelDeliveryRepository {
        and exists (select 1 from channel_conversations v join agent_channels c on c.id = v.channel_id
          join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active' join agent_entities a on a.id = c.agent_id
          where v.id = d.conversation_id and v.channel_id = d.channel_id and c.agent_id = d.agent_id
-           and ${SUPPORTED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+           and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            and (d.source_type = 'inbound-reply' or exists (select 1 from channel_delivery_targets t where t.channel_id = v.channel_id and t.conversation_id = v.id and t.enabled = 1))
            and (? is null or exists (select 1 from channel_inbound_work_items w join channel_receipts r on r.id = w.receipt_id
              where w.id = ? and w.receipt_id = ? and w.channel_id = v.channel_id and w.conversation_id = v.id and w.dispatch_id = ?
@@ -223,7 +223,7 @@ export class ChannelDeliveryRepository {
        join agent_channels c on c.id = t.channel_id join agent_entities a on a.id = c.agent_id
        join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active'
        where t.channel_id = ? and t.enabled = 1 and c.agent_id = ? and ${SUPPORTED_CHANNEL_C_SQL}
-         and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+         and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
        order by t.updated_at asc, t.id asc`
     ).all(channelId, agentId) as Array<{ conversation_id: string }>
     return rows.map((row) => ({ conversationId: row.conversation_id }))
@@ -290,7 +290,7 @@ export class ChannelDeliveryRepository {
        join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active'
        join agent_entities a on a.id = c.agent_id
        where v.id = ? and v.channel_id = ? and c.agent_id = ? and ${SUPPORTED_CHANNEL_C_SQL}
-         and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+         and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and (? = 0 or exists (select 1 from channel_delivery_targets t where t.channel_id = v.channel_id and t.conversation_id = v.id and t.enabled = 1))
          and (? is null or exists (select 1 from channel_inbound_work_items w join channel_receipts r on r.id = w.receipt_id
            where w.id = ? and w.receipt_id = ? and w.channel_id = v.channel_id and w.conversation_id = v.id and w.dispatch_id = ?
