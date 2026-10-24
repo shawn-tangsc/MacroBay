@@ -446,6 +446,7 @@ export class ChannelCredentialMigrationReconciler {
            updated_at = ? where id = ?`
       ).run(errorCode, legacySessionState, this.now(), row.id)
     })
+    this.assertScrubbedOrThrow(row.id)
   }
 
   private async quarantineForReenrollment(
