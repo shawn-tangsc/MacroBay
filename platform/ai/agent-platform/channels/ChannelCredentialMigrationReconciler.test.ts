@@ -344,7 +344,8 @@ describe('ChannelCredentialMigrationReconciler', () => {
 
     const retryVault = createVaultFake()
     await new ChannelCredentialMigrationReconciler({ database, vault: retryVault, now: () => now }).reconcile()
-    expect(database.connection.prepare("select state from channel_credential_migrations where id = 'journal-1'").get()).toEqual({ state: 'cleanup-completed' })
+    // Cleanup completes the provider journal once the unreferenced Vault entry is gone.
+    expect(database.connection.prepare("select state from channel_credential_migrations where id = 'journal-1'").get()).toEqual({ state: 'completed' })
   })
 
   it('records and retries archive cleanup after a reenrollment metadata transaction failure', async () => {
