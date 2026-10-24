@@ -16,7 +16,7 @@ export function AnalysisTimelineDrawer(props: {
   onClose: () => void
 }): React.ReactElement {
   return (
-    <Drawer destroyOnHidden onClose={props.onClose} open={props.open} title={props.title} width={640}>
+    <Drawer destroyOnHidden onClose={props.onClose} open={props.open} rootClassName="mi-analysis-timeline-drawer" title={props.title} width={640}>
       <TimelinePanel
         onOpenChange={props.onOpenChange}
         openEntry={props.openEntry}

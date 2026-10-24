@@ -240,3 +240,22 @@
   gap: 10px;
   text-align: center;
 }
+
+/* The timeline drawer only carries the list; the node detail stays in the analysis detail drawer.
+   Without this, the timeline's two-column page grid reserves an empty right half. */
+.mi-analysis-timeline-drawer .mi-analysis-timeline,
+.mi-analysis-timeline-drawer .mi-analysis-timeline__workspace-wrap,
+.mi-analysis-timeline-drawer .mi-analysis-timeline__workspace {
+  min-height: 0;
+}
+.mi-analysis-timeline-drawer .mi-analysis-timeline__workspace {
+  display: block;
+  border-bottom: 0;
+}
+.mi-analysis-timeline-drawer .mi-analysis-timeline__list {
+  border-right: 0;
+  padding: 8px 0 0;
+}
+.mi-analysis-timeline-drawer .ant-drawer-body {
+  padding-top: 8px;
+}
