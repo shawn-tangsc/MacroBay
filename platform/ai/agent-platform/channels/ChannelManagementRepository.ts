@@ -846,6 +846,34 @@ export class ChannelManagementRepository {
     })
   }
 
+  /** Quit preserves user intent: fence generations and owners, but leave requested_enabled/state. */
+  fenceAllForQuit(now: string): string[] {
+    return this.database.transact(() => {
+      const isolated = this.fenceIsolatedFeishuRuntimes(now)
+      const isolatedWechat = this.fenceIsolatedWechatRuntimes(now)
+      const blockedAdapters = this.fenceBlockedAdapterRuntimes(now)
+      const ids = this.database.connection.prepare(
+        `select distinct c.id from agent_channels c left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
+         where ${MANAGED_CHANNEL_C_SQL} and (o.channel_id is not null or (c.migration_state = 'runtime-ready' and c.requested_enabled = 1))`
+      ).all().map((row) => (row as { id: string }).id)
+      for (const id of ids) {
+        this.invalidateLifecycleOwner(id)
+        this.fence(id, now)
+      }
+      return [...new Set([...isolated, ...isolatedWechat, ...blockedAdapters, ...ids])]
+    })
+  }
+
+  /** Channels whose user intent survived a graceful quit but whose generation is no longer active. */
+  resumableChannelIds(): string[] {
+    return (this.database.connection.prepare(
+      `select c.id from agent_channels c
+       left join channel_runtime_generations g on g.channel_id = c.id
+       where ${MANAGED_CHANNEL_C_SQL} and c.requested_enabled = 1 and c.migration_state = 'runtime-ready'
+         and (g.lifecycle_state is null or g.lifecycle_state <> 'active')`
+    ).all() as Array<{ id: string }>).map((row) => row.id)
+  }
+
   activeRuntimeOwners(now: string): Array<{ channelId: string; generation: number; token: string }> {
     return this.database.transact(() => {
       this.fenceIsolatedFeishuRuntimes(now)

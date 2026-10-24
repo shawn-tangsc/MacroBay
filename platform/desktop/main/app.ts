@@ -627,7 +627,7 @@ async function disposePlatformRuntimes(): Promise<void> {
   await qqRuntimeManager.dispose()
   await discordRuntimeManager.dispose()
   await wechatRuntimeManager.dispose()
-  channelManagementRepository.stopAllRuntimeAndFence(new Date().toISOString())
+  channelManagementRepository.fenceAllForQuit(new Date().toISOString())
   agentTaskSchedulerRuntimeService.stop()
   jobRuntimeForDisposal?.stopAll()
   await productServiceDisposerRegistry.disposeAll()
@@ -2529,6 +2529,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       else telegramOffsetRepository.auditBootstrapFenced(channelId, 'telegram-runtime-start-failed')
     }
   }
+  await channelManagementService.resumeRequested()
   taskAutomationMaintenance.recoverAfterRestart()
   disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
   disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)

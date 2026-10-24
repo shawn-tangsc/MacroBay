@@ -316,6 +316,14 @@ export class ChannelManagementService {
     })
   }
 
+  /** Restarts channels whose intent survived a graceful quit; unsupported/broken rows are disabled. */
+  async resumeRequested(): Promise<void> {
+    for (const id of this.deps.repository.resumableChannelIds()) {
+      const result = await this.restart({ id, actorId: 'channel-startup' })
+      if (!result.ok) this.disable({ id, actorId: 'channel-startup' })
+    }
+  }
+
   async recover(): Promise<void> {
     await this.credentials.recover()
     for (const credential of this.deps.repository.managedCredentialRows()) {
