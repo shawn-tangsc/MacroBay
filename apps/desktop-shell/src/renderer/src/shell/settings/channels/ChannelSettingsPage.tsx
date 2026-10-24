@@ -38,6 +38,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [policies, setPolicies] = useState<Policy[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [candidates, setCandidates] = useState<Candidate[]>([])
+  const [candidateTargets, setCandidateTargets] = useState<Record<string, boolean>>({})
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
@@ -222,9 +223,19 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               {candidates.length === 0 ? <p>{labels.channelCandidatesEmpty}</p> : candidates.map((candidate) => (
                 <div key={candidate.id} className="channel-target-row">
                   <span>{candidate.displayLabel ?? labels.channelCandidateUnknown} · {labels.channelConversationKind[candidate.kind]}</span>
+                  <Switch
+                    aria-label={labels.channelCandidateAlsoTarget}
+                    checked={candidateTargets[candidate.id] ?? true}
+                    onChange={(checked) => setCandidateTargets((previous) => ({ ...previous, [candidate.id]: checked }))}
+                  />
+                  <small>{labels.channelCandidateAlsoTarget}</small>
                   <Button
                     size="small"
-                    onClick={() => void window.platform.channels.allowCandidate({ channelId: current.id, candidateId: candidate.id, enableTarget: true }).then(() => reloadDetails(current.id))}
+                    onClick={() => void window.platform.channels.allowCandidate({
+                      channelId: current.id,
+                      candidateId: candidate.id,
+                      enableTarget: candidateTargets[candidate.id] ?? true
+                    }).then(() => reloadDetails(current.id))}
                   >
                     {labels.channelCandidateAllow}
                   </Button>
