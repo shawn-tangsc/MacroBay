@@ -639,10 +639,14 @@ describe('ChannelManagementService', () => {
     expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
     const service = new ChannelManagementService({ repository, vault, cipher, registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]), handoff: new ChannelSecureHandoff() })
     const credential = await credentialHandoff(service, id, 'token-a')
+    vault.prepareMigration = async (input: { channelId: string }) => ({
+      credentialRef: `channel-migration:${input.channelId}:fingerprint`, sourceFingerprint: 'fingerprint',
+      fingerprintKeyId: 'key', migrationPermit: 'permit'
+    })
     let releasePut!: () => void
     vault.putReserved = async () => {
       await new Promise<void>((resolve) => { releasePut = resolve })
-      return { credentialRef: 'reserved-ref', revision: 1, maskedFields: {} }
+      return { credentialRef: `channel-migration:${id}:fingerprint`, revision: 1, maskedFields: {} }
     }
     const provision = service.provision({ id, actorId: 'user-a', senderId: 7, handoff: credential })
     await vi.waitFor(() => expect(releasePut).toBeTypeOf('function'))
@@ -653,7 +657,7 @@ describe('ChannelManagementService', () => {
     await expect(deletion).resolves.toMatchObject({ ok: false, code: 'channel-delete-pending' })
     expect(database.connection.prepare('select migration_state from agent_channels where id=?').get(id)).toEqual({ migration_state: 'deleting' })
     expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state in ('revoked-cleanup','revoked-inflight','external-inflight')").get(id)).toEqual({ count: 1 })
-    expect(database.connection.prepare("select credential_cleanup_refs_json from channel_management_operations where channel_id=? and purpose='delete'").get(id)).toMatchObject({ credential_cleanup_refs_json: expect.stringContaining('reserved-ref') })
+    expect(database.connection.prepare("select credential_cleanup_refs_json from channel_management_operations where channel_id=? and purpose='delete'").get(id)).toMatchObject({ credential_cleanup_refs_json: expect.stringContaining(`channel-migration:${id}:fingerprint`) })
     vault.failReservedDelete = false
     await service.recover()
     expect(database.connection.prepare('select 1 from agent_channels where id=?').get(id)).toBeUndefined()
@@ -847,7 +851,7 @@ describe('ChannelManagementService', () => {
     const handoff = await credentialHandoff(service, id, 'token-a')
 
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'reserved' })
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'external-inflight' })
     await service.recover()
     expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
     vault.failPutReserved = false
@@ -885,7 +889,7 @@ describe('ChannelManagementService', () => {
     const id = repository.query.list()[0]?.id ?? ''
     const created = id || 'channel-final-cas'
     if (!id) expect(repository.create({ id: created, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
-    database.connection.prepare(`insert into channel_conversations(id,channel_id,conversation_key_ciphertext,conversation_key_ref,conversation_key_revision,conversation_key_hash,conversation_kind,agent_session_id,created_at,updated_at) values('final-cas-conversation',?,x'01','payload-ref',1,'opaque-hash','direct','session-final-cas','2026-07-19','2026-07-19')`).run(created)
+    database.connection.prepare(`insert into channel_conversations(id,channel_id,conversation_key_ciphertext,conversation_key_ref,conversation_key_revision,conversation_key_hash,conversation_kind,agent_session_id,created_at,updated_at) values('final-cas-conversation',?,x'01','channel-payload-key:${created}:123e4567-e89b-12d3-a456-426614174000',1,'opaque-hash','direct','session-final-cas','2026-07-19','2026-07-19')`).run(created)
 
     expect(repository.beginDelete(created, 'delete-final-cas', '2026-07-19')).not.toBeNull()
     expect(repository.reserveOperation({ id: 'late-provision', channelId: created, purpose: 'provision', ref: 'late-ref', now: '2026-07-19' })).toBe(false)
@@ -918,9 +922,9 @@ describe('ChannelManagementService', () => {
   })
 
   it.each([
-    ["update channel_credential_migrations set credential_ref = 'channel-migration:other-channel:provider-fingerprint' where channel_id = ? and purpose = 'provider-credential'", 'other-channel Stage 1 provider ref'],
-    ["update agent_channels set credential_ref = 'channel-migration:other-channel:metadata-ref', credential_revision = 1, migration_state = 'configuration-ready' where id = ?", 'other-channel metadata ref']
-  ])('does not fence, clear data, or delete another Channel credential for %s', async (sql, _reason) => {
+    ["update channel_credential_migrations set credential_ref = 'channel-migration:other-channel:provider-fingerprint' where channel_id = ? and purpose = 'provider-credential'", 'other-channel Stage 1 provider ref', 'credential-missing'],
+    ["update agent_channels set credential_ref = 'channel-migration:other-channel:metadata-ref', credential_revision = 1, migration_state = 'configuration-ready' where id = ?", 'other-channel metadata ref', 'configuration-ready']
+  ])('does not fence, clear data, or delete another Channel credential for %s', async (sql, _reason, expectedState) => {
     const { service, database, vault } = harness()
     const id = service.create({ name: 'Telegram', agentId: 'agent-a', actorId: 'user-a' }).channel!.id
     seedC03Rows(database, id)
@@ -928,7 +932,7 @@ describe('ChannelManagementService', () => {
     database.connection.prepare(sql).run(id)
 
     await expect(service.delete({ id, actorId: 'user-a' })).rejects.toThrow('channel-delete-known-ref-invalid')
-    expect(database.connection.prepare('select migration_state from agent_channels where id=?').get(id)).toEqual({ migration_state: 'credential-missing' })
+    expect(database.connection.prepare('select migration_state from agent_channels where id=?').get(id)).toEqual({ migration_state: expectedState })
     expect(database.connection.prepare('select count(*) as count from channel_inbound_work_items where channel_id=?').get(id)).toEqual({ count: 1 })
     expect(database.connection.prepare('select count(*) as count from channel_credential_migrations where channel_id=?').get(id)).toEqual({ count: 2 })
     expect(vault.deleted).toEqual([])
@@ -952,7 +956,7 @@ describe('ChannelManagementService', () => {
 
     await expect(service.delete({ id, actorId: 'user-a' })).rejects.toThrow('channel-delete-known-ref-invalid')
     expect(database.connection.prepare('select migration_state from agent_channels where id=?').get(id)).toEqual({ migration_state: 'credential-missing' })
-    expect(database.connection.prepare('select 1 from channel_runtime_generations where channel_id=?').get(id)).toBeUndefined()
+    expect(database.connection.prepare('select 1 from channel_runtime_generations where channel_id=?').get(id)).toEqual({ '1': 1 })
     expect(database.connection.prepare('select count(*) as count from channel_inbound_work_items where channel_id=?').get(id)).toEqual({ count: 1 })
     expect(database.connection.prepare('select count(*) as count from channel_credential_migrations where channel_id=?').get(id)).toEqual({ count: 2 })
     expect(database.connection.prepare("select state from channel_management_operations where id='pending-operation'").get()).toEqual({ state: 'reserved' })
@@ -970,7 +974,7 @@ describe('ChannelManagementService', () => {
     await expect(service.delete({ id, actorId: 'user-a' })).rejects.toThrow('channel-delete-known-ref-invalid')
     expect(database.connection.prepare('select migration_state from agent_channels where id=?').get(id)).toEqual({ migration_state: 'credential-missing' })
     expect(database.connection.prepare('select count(*) as count from channel_inbound_work_items where channel_id=?').get(id)).toEqual({ count: 1 })
-    expect(database.connection.prepare('select 1 from channel_runtime_generations where channel_id=?').get(id)).toBeUndefined()
+    expect(database.connection.prepare('select 1 from channel_runtime_generations where channel_id=?').get(id)).toEqual({ '1': 1 })
     expect(cipher.destroyed).toEqual([])
     expect(vault.deleted).toEqual([])
     expect(vault.deletedArchives).toEqual([])
