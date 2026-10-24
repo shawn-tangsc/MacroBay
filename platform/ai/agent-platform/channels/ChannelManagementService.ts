@@ -13,6 +13,8 @@ import { ChannelManagementCredentialService } from './ChannelManagementCredentia
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
+import { channelAdapterDescriptor } from './channelAdapterDescriptors'
+import { channelAdapterKeyForType } from './ChannelManagementPredicates'
 
 type ManagementDependencies = {
   repository: ChannelManagementRepository
@@ -49,11 +51,16 @@ export class ChannelManagementService {
   }
 
   catalog(): ChannelManagementCatalogEntry[] {
-    return this.deps.registry.list().map((entry) => ({
-      type: entry.adapterType,
-      status: entry.status === 'supported' ? 'supported' : entry.status === 'planned' ? 'planned' : 'blocked',
-      reason: entry.status === 'supported' ? 'evidence-complete' : entry.status === 'planned' ? 'release-a-pending' : 'adapter-blocked'
-    }))
+    return this.deps.registry.list().map((entry) => {
+      const descriptor = channelAdapterDescriptor(channelAdapterKeyForType(entry.adapterType))
+      return {
+        type: entry.adapterType,
+        status: entry.status === 'supported' ? 'supported' : entry.status === 'planned' ? 'planned' : 'blocked',
+        reason: entry.status === 'supported' ? 'evidence-complete' : entry.status === 'planned' ? 'release-a-pending' : 'adapter-blocked',
+        implemented: descriptor.implemented,
+        credentialFields: descriptor.credentialFields
+      }
+    })
   }
 
   list() {

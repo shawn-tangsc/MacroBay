@@ -17,7 +17,7 @@ type Channel = {
 type Conversation = { id: string; kind: string; targetEnabled: boolean }
 type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 type Agent = { id: string; name: string }
-type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string }
+type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
 
 export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' }): React.ReactElement {
   const labels = platformText[language].settings
@@ -37,7 +37,9 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [conversations, setConversations] = useState<Conversation[]>([])
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
+  const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
   const currentSupported = current ? catalog.some((entry) => entry.type === current.type && entry.status === 'supported') : false
+  const currentImplemented = currentCatalog?.implemented === true
 
   const reload = async (): Promise<void> => {
     const [nextCatalog, nextChannels, agentState] = await Promise.all([
@@ -85,7 +87,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }
 
   const saveCredential = async (): Promise<void> => {
-    if (!current || !credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)) return
+    if (!current || !currentImplemented || !credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)) return
     try {
       const begin = await window.platform.channels.beginCredential({ id: current.id })
       const handoff = await encryptChannelHandoff(begin as Parameters<typeof encryptChannelHandoff>[0], current.id, 'credential',
@@ -193,14 +195,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               onChange={setEditAgentId}
             />
             <Button disabled={!editName.trim() || !editAgentId} onClick={() => void update()}>{labels.channelUpdate}</Button>
-            {current.type === 'wechat' ? <p>{labels.channelWechatEnrollment}</p> : <Input.Password
-              aria-label={current.type === 'feishu' ? labels.channelLarkAppId : current.type === 'qq' ? labels.channelQqAppId : current.type === 'discord' ? labels.channelDiscordBotToken : labels.channelCredential}
-              value={credentialDraft}
-              onChange={(event) => setCredentialDraft(event.target.value)}
-              autoComplete="off"
-            />}
-            {current.type === 'slack' || current.type === 'feishu' || current.type === 'qq' ? <Input.Password aria-label={current.type === 'feishu' ? labels.channelLarkAppSecret : current.type === 'qq' ? labels.channelQqClientSecret : labels.channelAppCredential} value={appCredentialDraft} onChange={(event) => setAppCredentialDraft(event.target.value)} autoComplete="off" /> : null}
-            {current.type !== 'wechat' ? <Button disabled={!credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)} onClick={() => void saveCredential()}>{labels.channelSaveCredential}</Button> : null}
+            {current.type === 'wechat' ? <p>{labels.channelWechatEnrollment}</p> : !currentImplemented ? <p>{labels.channelAdapterUnavailable}</p> : <>
+              <Input.Password
+                aria-label={current.type === 'feishu' ? labels.channelLarkAppId : current.type === 'qq' ? labels.channelQqAppId : current.type === 'discord' ? labels.channelDiscordBotToken : labels.channelCredential}
+                value={credentialDraft}
+                onChange={(event) => setCredentialDraft(event.target.value)}
+                autoComplete="off"
+              />
+              {current.type === 'slack' || current.type === 'feishu' || current.type === 'qq' ? <Input.Password aria-label={current.type === 'feishu' ? labels.channelLarkAppSecret : current.type === 'qq' ? labels.channelQqClientSecret : labels.channelAppCredential} value={appCredentialDraft} onChange={(event) => setAppCredentialDraft(event.target.value)} autoComplete="off" /> : null}
+              <Button disabled={!credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)} onClick={() => void saveCredential()}>{labels.channelSaveCredential}</Button>
+            </>}
             <p>{labels.channelState[current.state]}</p>
             {current.type !== 'wechat' ? <section>
               <strong>{labels.channelPolicy}</strong>
