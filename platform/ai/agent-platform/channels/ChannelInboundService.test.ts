@@ -75,12 +75,12 @@ describe('ChannelInboundService', () => {
 
   it('records a denied conversation as a key-only candidate and allows it without provider ids', async () => {
     const { service, database } = createHarness()
-    const denied = await receive(service, 'channel-a', { providerUserKey: 'user-x', providerConversationKey: 'conversation-x' })
+    const denied = await receive(service, 'channel-a', { providerUserKey: 'user-x', providerUserLabel: 'Alice', providerConversationKey: 'conversation-x' })
     expect(denied.disposition).toBe('ignored')
 
     const candidates = service.listCandidates('channel-a')
     expect(candidates).toHaveLength(1)
-    expect(candidates[0]).toMatchObject({ kind: 'direct', hitCount: 1, status: 'pending' })
+    expect(candidates[0]).toMatchObject({ kind: 'direct', hitCount: 1, status: 'pending', displayLabel: 'Alice' })
     expect(JSON.stringify(database.connection.prepare('select * from channel_inbound_candidates').all())).not.toContain('conversation-x')
 
     const conversationId = service.allowCandidate({

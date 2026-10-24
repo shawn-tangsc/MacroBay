@@ -86,6 +86,7 @@ export class TelegramPollingHost {
         providerMessageKey: fact.messageKey,
         providerConversationKey: fact.conversationKey,
         providerUserKey: fact.userKey,
+        ...(fact.userLabel ? { providerUserLabel: fact.userLabel } : {}),
         conversationKind: fact.conversationKind,
         mentionedBot: fact.mentionedBot,
         ...(fact.text === undefined ? {} : { text: fact.text }),

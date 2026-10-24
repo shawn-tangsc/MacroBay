@@ -14,6 +14,24 @@ describe('ChannelInboundExecutionCoordinator', () => {
     expect(runtime.sendMessage).not.toHaveBeenCalled()
   })
 
+  it('sends a localized failure notice when the Agent rejects', async () => {
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new TextEncoder().encode('{"text":"hello"}'), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value)
+    }
+    const delivery = { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never, delivery: delivery as never,
+      cipher: { decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext } as never,
+      runtime: { sendMessage: vi.fn(async () => { throw new Error('provider down') }) } as never,
+      failureText: () => '处理失败，请稍后重试。'
+    })
+    await expect(coordinator.execute(claim)).resolves.toBe('failed')
+    expect(delivery.deliverStreamFinal).toHaveBeenCalledWith(expect.objectContaining({ text: '处理失败，请稍后重试。' }), ['处理失败，请稍后重试。'])
+  })
+
   it('marks a recovered started run interrupted instead of calling the Agent twice', async () => {
     const runtime = { sendMessage: vi.fn() }
     const runs = { get: vi.fn(() => ({ status: 'started' as const })), fail: vi.fn() }

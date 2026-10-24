@@ -79,6 +79,7 @@ export class ChannelInboundService {
             conversationKeyRef: encryptedConversation.keyRef,
             conversationKeyRevision: encryptedConversation.keyRevision,
             conversationKeyHash: conversationHash,
+            ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
             now
           })
         } catch { /* Discovery is best-effort; the denied message must still be acknowledged. */ }

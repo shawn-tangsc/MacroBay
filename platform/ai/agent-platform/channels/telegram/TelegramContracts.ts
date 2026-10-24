@@ -19,7 +19,7 @@ export type TelegramUpdate = {
 export type TelegramMessage = {
   message_id: number
   chat: { id: number | string; type: 'private' | 'group' | 'supergroup' | 'channel' }
-  from?: { id: number | string }
+  from?: { id: number | string; first_name?: string; username?: string }
   text?: string
   caption?: string
   entities?: Array<{ type: string; offset: number; length: number }>
@@ -33,6 +33,7 @@ export type TelegramNormalizedUpdate = {
   messageKey: string
   conversationKey: string
   userKey: string
+  userLabel?: string
   conversationKind: 'direct' | 'group' | 'channel'
   mentionedBot: boolean
   text?: string

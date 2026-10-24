@@ -19,6 +19,7 @@ export type ChannelInboundFacts = {
   providerMessageKey?: string
   providerConversationKey: string
   providerUserKey: string
+  providerUserLabel?: string
   conversationKind: ChannelConversationKind
   mentionedBot: boolean
   text?: string
@@ -126,6 +127,7 @@ export function assertChannelInboundFacts(facts: ChannelInboundFacts): void {
     !['direct', 'group', 'channel'].includes(facts.conversationKind) ||
     typeof facts.mentionedBot !== 'boolean' ||
     (facts.text !== undefined && typeof facts.text !== 'string') ||
+    (facts.providerUserLabel !== undefined && (typeof facts.providerUserLabel !== 'string' || facts.providerUserLabel.length > 128)) ||
     hasInvalidAttachment
   ) {
     throw new Error('Channel inbound facts are invalid.')

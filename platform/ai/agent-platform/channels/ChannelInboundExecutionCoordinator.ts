@@ -17,6 +17,7 @@ export class ChannelInboundExecutionCoordinator {
     cipher: ChannelPayloadCipher
     runtime: { sendMessage: (request: { agentId: string; sessionId: string; text: string; runId: string }) => Promise<AgentChatRuntimeResult> }
     runs?: ChannelDispatchRunRepository
+    failureText?: (kind: 'run-failed' | 'run-interrupted') => string | Promise<string>
     now?: () => Date
     leaseMs?: number
     setInterval?: (callback: () => void, intervalMs: number) => Timer
@@ -44,6 +45,7 @@ export class ChannelInboundExecutionCoordinator {
       const existing = this.deps.runs?.get(owner.dispatchId) ?? null
       if (existing?.status === 'started') {
         this.deps.runs?.fail(owner.dispatchId, 'interrupted', this.now())
+        await this.deliverFailure(owner, admitted.conversationId, binding.agentId, 'run-interrupted')
         return this.finalize(owner, 'failed')
       }
       if (existing?.status === 'completed') {
@@ -83,7 +85,11 @@ export class ChannelInboundExecutionCoordinator {
       if (renewalFailed || status === 'unknown-after-send') return 'deferred'
       return this.finalize(owner, status === 'delivered' ? 'completed' : 'failed')
     } catch {
-      if (!renewalFailed) this.deps.runs?.fail(owner.dispatchId, 'failed', this.now())
+      if (!renewalFailed) {
+        this.deps.runs?.fail(owner.dispatchId, 'failed', this.now())
+        const binding = this.deps.inbound.getConversationBinding({ claim: owner, conversationId: admitted.conversationId, now: this.now() })
+        if (binding) await this.deliverFailure(owner, admitted.conversationId, binding.agentId, 'run-failed')
+      }
       return renewalFailed ? 'deferred' : this.finalize(owner, 'failed')
     } finally {
       this.stopHeartbeat(heartbeat)
@@ -108,6 +114,23 @@ export class ChannelInboundExecutionCoordinator {
     const parsed = JSON.parse(new TextDecoder().decode(plaintext)) as ChannelInboundPayload
     if (!parsed || typeof parsed !== 'object' || (parsed.text !== null && typeof parsed.text !== 'string')) throw new Error('Channel inbound payload is invalid.')
     return parsed
+  }
+
+  private async deliverFailure(
+    claim: ChannelExecutionClaim,
+    conversationId: string,
+    agentId: string,
+    kind: 'run-failed' | 'run-interrupted'
+  ): Promise<void> {
+    if (!this.deps.failureText) return
+    try {
+      const text = await this.deps.failureText(kind)
+      if (!text.trim()) return
+      await this.deps.delivery.deliverStreamFinal({
+        channelId: claim.channelId, agentId, conversationId, source: 'inbound-reply',
+        sourceId: claim.dispatchId, executionClaim: claim, text
+      }, [text])
+    } catch { /* Best-effort user notice; the failed run is still finalized. */ }
   }
 
   private async deliverStoredResult(claim: ChannelExecutionClaim, conversationId: string, agentId: string): Promise<'completed' | 'failed' | 'deferred'> {

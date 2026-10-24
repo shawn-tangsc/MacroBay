@@ -17,11 +17,13 @@ export function normalizeTelegramUpdate(update: TelegramUpdate, botUsername?: st
     photo ? stableTelegramAttachment({ kind: 'image', fileId: photo.file_id, mimeType: photo.mime_type, size: photo.file_size }) : null,
     message.document ? stableTelegramAttachment({ kind: 'file', fileId: message.document.file_id, name: message.document.file_name, mimeType: message.document.mime_type, size: message.document.file_size }) : null
   ].filter((attachment): attachment is NonNullable<typeof attachment> => Boolean(attachment))
+  const userLabel = (message.from?.first_name ?? message.from?.username ?? '').trim().slice(0, 128)
   return {
     eventKey: `telegram:update:${update.update_id}`,
     messageKey: `telegram:message:${message.message_id}`,
     conversationKey: `telegram:chat:${message.chat.id}`,
     userKey: `telegram:user:${message.from?.id ?? message.chat.id}`,
+    ...(userLabel ? { userLabel } : {}),
     conversationKind,
     mentionedBot,
     ...(text ? { text } : {}),

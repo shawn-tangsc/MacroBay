@@ -677,7 +677,16 @@ const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinato
   delivery: channelDeliveryService,
   cipher: channelCredentialVault.payloadCipher,
   runtime: agentRuntimeService,
-  runs: channelDispatchRuns
+  runs: channelDispatchRuns,
+  failureText: async (kind) => {
+    const language = (await settingsStore.get()).language
+    if (language === 'zh-CN') {
+      return kind === 'run-interrupted' ? '上一条消息处理被中断，请重新发送。' : '处理失败，请稍后重试。'
+    }
+    return kind === 'run-interrupted'
+      ? 'The previous request was interrupted. Please send it again.'
+      : 'The request failed. Please try again later.'
+  }
 })
 const channelInboundExecutionRunner = new ChannelInboundExecutionRunner({
   inbound: channelInboundRepository,
