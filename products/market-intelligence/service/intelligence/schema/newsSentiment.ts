@@ -79,6 +79,12 @@ export type NewsSentimentModelResolution = {
   modelId?: string
 }
 
+export type NewsSentimentSettingsView = {
+  settings: NewsSentimentSettings
+  resolution: NewsSentimentModelResolution
+  defaultFastModel?: { providerId: string; modelId: string; name: string }
+}
+
 export type NewsSentimentJudgment = {
   polarity: NewsPolarity
   strength: number

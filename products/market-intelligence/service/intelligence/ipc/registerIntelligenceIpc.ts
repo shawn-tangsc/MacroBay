@@ -15,6 +15,7 @@ import type {
   IntelligenceWorkspaceFilters,
   IntelligenceWorkspaceView
 } from '../application/intelligenceWorkspaceQueries'
+import type { NewsSentimentQuery } from '../schema/newsSentiment'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -75,6 +76,30 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
 
   register(PRODUCT_ID, 'intelligence.getSentimentAggregates', async (payload) => {
     return getIntelligenceService(jobRuntime).getSentimentAggregates((payload ?? {}) as IntelligenceWorkspaceFilters)
+  })
+
+  register(PRODUCT_ID, 'intelligence.getNewsSentiment', async (payload) => {
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.query) throw new Error('News sentiment is unavailable.')
+    return module.newsSentiment.query.query((payload ?? {}) as NewsSentimentQuery)
+  })
+
+  register(PRODUCT_ID, 'intelligence.getNewsSentimentItem', async (payload) => {
+    const input = (payload ?? {}) as { itemId?: string; asOf?: string }
+    if (!input.itemId?.trim() || !input.asOf?.trim()) throw new Error('itemId and asOf are required.')
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.query) throw new Error('News sentiment is unavailable.')
+    return module.newsSentiment.query.getItem({ itemId: input.itemId, asOf: input.asOf })
+  })
+
+  register(PRODUCT_ID, 'intelligence.getNewsSentimentSettings', async () =>
+    getIntelligenceModule(jobRuntime).newsSentiment.settings.get()
+  )
+
+  register(PRODUCT_ID, 'intelligence.saveNewsSentimentSettings', async (payload) => {
+    const patch = (payload ?? {}) as Record<string, unknown>
+    if (typeof patch !== 'object' || Array.isArray(patch)) throw new Error('A settings patch is required.')
+    return getIntelligenceModule(jobRuntime).newsSentiment.settings.save(patch as never)
   })
 
   register(PRODUCT_ID, 'intelligence.getDetail', async (payload) => {

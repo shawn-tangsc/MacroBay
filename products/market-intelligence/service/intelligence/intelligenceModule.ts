@@ -53,6 +53,9 @@ import {
 import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
+import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
+import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
+import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
 import {
@@ -67,6 +70,7 @@ import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { statSync } from 'node:fs'
 import { getPlatformFetch } from '@platform/network/platformFetch'
+import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createMacroCalendarEvidenceStore } from './macro-calendar/macroCalendarEvidenceStore'
 import { createCapitalConditionsHttpClient, type CapitalConditionsPlatformFetch } from './capital-conditions/capitalConditionsHttpClient'
@@ -165,6 +169,11 @@ type IntelligenceModule = {
     settingsStore: ReturnType<typeof createNewsSentimentSettingsStore>
     enrichment?: ReturnType<typeof createNewsSentimentEnrichmentService>
     scoring?: ReturnType<typeof createNewsSentimentScoringService>
+    query?: ReturnType<typeof createNewsSentimentQuery>
+    settings: {
+      get: () => Promise<NewsSentimentSettingsView>
+      save: (patch: Partial<NewsSentimentSettings>) => Promise<NewsSentimentSettingsView>
+    }
   }
   workerRuntime: ManagedWorkerRuntime
   replayService: ReturnType<typeof createIntelligenceReplayService>
@@ -422,6 +431,47 @@ export function getIntelligenceModule(
           now: () => new Date().toISOString()
         })
       : undefined
+    const newsSentimentQuery = newsSentimentStore
+      ? createNewsSentimentQuery({
+          store: newsSentimentStore,
+          pipeline,
+          translation: translationService,
+          now: () => new Date().toISOString()
+        })
+      : undefined
+    const readNewsSentimentSettings = async (): Promise<NewsSentimentSettingsView> => {
+      const settings = await newsSentimentSettingsStore.getSettings()
+      const [providerState, modelDefaults] = await Promise.all([
+        hooks?.getProviderState?.().catch(() => undefined) ?? Promise.resolve(undefined),
+        hooks?.getModelDefaults?.().catch(() => undefined) ?? Promise.resolve(undefined)
+      ])
+      const resolution = resolveNewsSentimentModel({
+        settings,
+        modelDefaults: modelDefaults ?? null,
+        providers: providerState?.providers ?? []
+      })
+      const fastResolution = modelDefaults?.fastModelId
+        ? resolveConfiguredModel({
+            value: modelDefaults.fastModelId,
+            providers: providerState?.providers ?? [],
+            isModelAcceptable: (_provider, model) => model.capabilities.chat === true
+          })
+        : undefined
+      return {
+        settings,
+        resolution,
+        ...(fastResolution?.ok
+          ? { defaultFastModel: { providerId: fastResolution.ref.providerId, modelId: fastResolution.ref.modelId, name: `${fastResolution.providerName} · ${fastResolution.modelName}` } }
+          : {})
+      }
+    }
+    const newsSentimentSettings = {
+      get: readNewsSentimentSettings,
+      save: async (patch: Partial<NewsSentimentSettings>) => {
+        await newsSentimentSettingsStore.save(patch)
+        return readNewsSentimentSettings()
+      }
+    }
     const archiveService = createIntelligenceArchiveService({
       rawRecordStore,
       archiveBaseDir: join(dataDir, 'intelligence-archive'),
@@ -513,7 +563,9 @@ export function getIntelligenceModule(
         settingsStore: newsSentimentSettingsStore,
         ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
         ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
-        ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {})
+        ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {}),
+        ...(newsSentimentQuery ? { query: newsSentimentQuery } : {}),
+        settings: newsSentimentSettings
       },
       sourcesService,
       publicQueryService,
