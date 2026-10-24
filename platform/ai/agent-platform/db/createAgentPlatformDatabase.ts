@@ -1155,6 +1155,104 @@ const migrations: AgentPlatformMigration[] = [
 
       delete from agent_channels where id in (select id from channel_legacy_channels);
     `
+  },
+  {
+    // Transitional canonical table: old table stays the write source, triggers mirror into this one.
+    id: '0034_channel_canonical_shadow',
+    up: `
+      create table agent_channels_next (
+        id text primary key,
+        adapter_key text not null,
+        name text not null,
+        agent_id text,
+        public_config_json text not null default '{}',
+        credential_ref text,
+        credential_revision integer,
+        credential_health text not null default 'missing',
+        requested_enabled integer not null default 0,
+        lifecycle_state text not null default 'credential-missing',
+        mutation_epoch integer not null default 0,
+        migration_error_code text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      insert into agent_channels_next (
+        id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+        credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code, created_at, updated_at
+      ) select
+        id, case when adapter_key = 'lark' then 'lark' else adapter_key end,
+        name, agent_id, coalesce(public_config_json, '{}'), credential_ref, credential_revision,
+        credential_health, requested_enabled,
+        case lifecycle_state
+          when 'runtime-ready' then 'enabled'
+          when 'configuration-ready' then 'ready'
+          when 'deleting' then 'deleting'
+          when 'credential-missing' then 'credential-missing'
+          else 'disabled'
+        end,
+        mutation_epoch, migration_error_code, created_at, updated_at
+      from agent_channels;
+
+      create trigger agent_channels_next_insert after insert on agent_channels begin
+        insert into agent_channels_next (
+          id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code, created_at, updated_at
+        ) values (
+          new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+          coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+          new.credential_health, new.requested_enabled,
+          case new.migration_state
+            when 'runtime-ready' then 'enabled'
+            when 'configuration-ready' then 'ready'
+            when 'deleting' then 'deleting'
+            when 'credential-missing' then 'credential-missing'
+            else 'disabled'
+          end,
+          new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+        ) on conflict(id) do update set
+          adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+          public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+          credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+          requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+          mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+          created_at = excluded.created_at, updated_at = excluded.updated_at;
+      end;
+
+      create trigger agent_channels_next_update after update on agent_channels begin
+        insert into agent_channels_next (
+          id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code, created_at, updated_at
+        ) values (
+          new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+          coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+          new.credential_health, new.requested_enabled,
+          case new.migration_state
+            when 'runtime-ready' then 'enabled'
+            when 'configuration-ready' then 'ready'
+            when 'deleting' then 'deleting'
+            when 'credential-missing' then 'credential-missing'
+            else 'disabled'
+          end,
+          new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+        ) on conflict(id) do update set
+          adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+          public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+          credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+          requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+          mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+          created_at = excluded.created_at, updated_at = excluded.updated_at;
+      end;
+
+      create trigger agent_channels_next_delete after delete on agent_channels begin
+        delete from agent_channels_next where id = old.id;
+      end;
+
+      create index idx_agent_channels_next_agent_updated
+        on agent_channels_next(agent_id, updated_at desc, id asc);
+      create index idx_agent_channels_next_lifecycle
+        on agent_channels_next(lifecycle_state, updated_at asc, id asc);
+    `
   }
 ]
 
