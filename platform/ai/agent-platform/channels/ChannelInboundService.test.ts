@@ -73,6 +73,29 @@ describe('ChannelInboundService', () => {
     ])
   })
 
+  it('records a denied conversation as a key-only candidate and allows it without provider ids', async () => {
+    const { service, database } = createHarness()
+    const denied = await receive(service, 'channel-a', { providerUserKey: 'user-x', providerConversationKey: 'conversation-x' })
+    expect(denied.disposition).toBe('ignored')
+
+    const candidates = service.listCandidates('channel-a')
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).toMatchObject({ kind: 'direct', hitCount: 1, status: 'pending' })
+    expect(JSON.stringify(database.connection.prepare('select * from channel_inbound_candidates').all())).not.toContain('conversation-x')
+
+    const conversationId = service.allowCandidate({
+      channelId: 'channel-a', candidateId: candidates[0].id, enableTarget: true
+    })
+    expect(conversationId).toBeTruthy()
+    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 1 })
+    expect(database.connection.prepare('select count(*) as count from channel_delivery_targets where enabled=1').get()).toEqual({ count: 1 })
+
+    const accepted = await receive(service, 'channel-a', {
+      providerEventKey: 'event-after-allow', providerUserKey: 'user-x', providerConversationKey: 'conversation-x'
+    })
+    expect(accepted.disposition).toBe('acknowledged')
+  })
+
   it('claims concurrent duplicates once, acknowledges both, and never creates a second dispatch', async () => {
     const { service, database, repository } = createHarness()
     await allow(service, 'channel-a', 'user-a')

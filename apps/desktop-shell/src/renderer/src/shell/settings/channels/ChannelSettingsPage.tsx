@@ -15,6 +15,7 @@ type Channel = {
 }
 
 type Conversation = { id: string; kind: string; targetEnabled: boolean }
+type Candidate = { id: string; kind: 'direct' | 'group' | 'channel'; displayLabel: string | null; firstSeenAt: string; lastSeenAt: string; hitCount: number; status: 'pending' | 'allowed' | 'ignored' }
 type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 type Agent = { id: string; name: string }
 type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
@@ -35,6 +36,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [policyDraft, setPolicyDraft] = useState('')
   const [policies, setPolicies] = useState<Policy[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
+  const [candidates, setCandidates] = useState<Candidate[]>([])
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
   const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
@@ -54,12 +56,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }
 
   const reloadDetails = async (channelId: string): Promise<void> => {
-    const [nextPolicies, nextConversations] = await Promise.all([
+    const [nextPolicies, nextConversations, nextCandidates] = await Promise.all([
       window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
-      window.platform.channels.listConversations({ id: channelId, limit: 100 })
+      window.platform.channels.listConversations({ id: channelId, limit: 100 }),
+      window.platform.channels.listCandidates({ id: channelId, limit: 100 })
     ])
     setPolicies(nextPolicies as Policy[])
     setConversations(nextConversations as Conversation[])
+    setCandidates(nextCandidates as Candidate[])
   }
 
   useEffect(() => {
@@ -71,6 +75,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
     else {
       setPolicies([])
       setConversations([])
+      setCandidates([])
     }
   }, [current?.id])
 
@@ -206,6 +211,26 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <Button disabled={!credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)} onClick={() => void saveCredential()}>{labels.channelSaveCredential}</Button>
             </>}
             <p>{labels.channelState[current.state]}</p>
+            <section>
+              <strong>{labels.channelCandidates}</strong>
+              {candidates.length === 0 ? <p>{labels.channelCandidatesEmpty}</p> : candidates.map((candidate) => (
+                <div key={candidate.id} className="channel-target-row">
+                  <span>{candidate.displayLabel ?? labels.channelCandidateUnknown} · {labels.channelConversationKind[candidate.kind]}</span>
+                  <Button
+                    size="small"
+                    onClick={() => void window.platform.channels.allowCandidate({ channelId: current.id, candidateId: candidate.id, enableTarget: true }).then(() => reloadDetails(current.id))}
+                  >
+                    {labels.channelCandidateAllow}
+                  </Button>
+                  <Button
+                    size="small"
+                    onClick={() => void window.platform.channels.ignoreCandidate({ channelId: current.id, candidateId: candidate.id }).then(() => reloadDetails(current.id))}
+                  >
+                    {labels.channelCandidateIgnore}
+                  </Button>
+                </div>
+              ))}
+            </section>
             {current.type !== 'wechat' ? <section>
               <strong>{labels.channelPolicy}</strong>
               <Input

@@ -92,7 +92,10 @@ const api = {
     listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input),
     deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input),
-    setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input)
+    setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
+    listCandidates: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input),
+    allowCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),
+    ignoreCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsIgnoreCandidate, input)
   },
   modelProviders: {
     list: () => ipcRenderer.invoke(IpcChannels.modelProvidersList),

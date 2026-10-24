@@ -54,9 +54,10 @@ export class ChannelInboundService {
         this.enqueueInitialClaim(this.deps.repository.findInitialClaim(request.channelId, eventHash, this.now()))
         return { disposition: 'duplicate' }
       }
-      const [event, encryptedConversation, payload] = await Promise.all([
+      const [event, encryptedConversation, encryptedUser, payload] = await Promise.all([
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerEventKey)),
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerConversationKey)),
+        this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerUserKey)),
         this.deps.encryption.cipher.encrypt(request.channelId, encodeChannelInboundPayload(request))
       ])
       const [conversationHash, userHash] = await Promise.all([
@@ -65,6 +66,23 @@ export class ChannelInboundService {
       ])
       const now = this.now()
       const decision = this.policyDecision(request, userHash, conversationHash)
+      if (decision === 'channel-policy-denied') {
+        try {
+          this.deps.repository.upsertCandidate({
+            channelId: request.channelId,
+            kind: request.conversationKind,
+            userKeyCiphertext: encryptedUser.ciphertext,
+            userKeyRef: encryptedUser.keyRef,
+            userKeyRevision: encryptedUser.keyRevision,
+            userKeyHash: userHash,
+            conversationKeyCiphertext: encryptedConversation.ciphertext,
+            conversationKeyRef: encryptedConversation.keyRef,
+            conversationKeyRevision: encryptedConversation.keyRevision,
+            conversationKeyHash: conversationHash,
+            now
+          })
+        } catch { /* Discovery is best-effort; the denied message must still be acknowledged. */ }
+      }
       const isNewCommand = request.text?.trim() === '/new'
       const admissionId = decision ? null : this.deps.repository.reserveAdmission(request.channelId, request.generation, now)
       if (!decision && !admissionId) return retry()
@@ -199,6 +217,19 @@ export class ChannelInboundService {
       }
       this.deps.repository.releaseConversationOperation(input.channelId, keyHash, operationId)
     }
+  }
+
+  listCandidates(channelId: string, limit = 100) {
+    return this.deps.repository.listCandidates(channelId, limit)
+  }
+
+  allowCandidate(input: { channelId: string; candidateId: string; enableTarget: boolean }): string | null {
+    if (!this.deps.repository.managedChannelExists(input.channelId)) return null
+    return this.deps.repository.allowCandidate(input)
+  }
+
+  ignoreCandidate(channelId: string, candidateId: string): boolean {
+    return this.deps.repository.ignoreCandidate(channelId, candidateId)
   }
 
   setDeliveryTarget(input: { channelId: string; conversationId: string; enabled: boolean }): boolean {

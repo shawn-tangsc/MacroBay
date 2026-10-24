@@ -1498,6 +1498,23 @@ function registerIpcHandlers(
     })
   })
 
+  ipcMain.handle(IpcChannels.channelsListCandidates, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelInboundService.listCandidates(String(value.id), typeof value.limit === 'number' ? value.limit : 100)
+  })
+  ipcMain.handle(IpcChannels.channelsAllowCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelInboundService.allowCandidate({
+      channelId: String(value.channelId ?? value.id),
+      candidateId: String(value.candidateId),
+      enableTarget: assertBoolean(value.enableTarget)
+    })
+  })
+  ipcMain.handle(IpcChannels.channelsIgnoreCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelInboundService.ignoreCandidate(String(value.channelId ?? value.id), String(value.candidateId))
+  })
+
   ipcMain.handle(IpcChannels.modelProvidersList, () => providerStore.list())
   ipcMain.handle(IpcChannels.modelProvidersUpsert, async (_event: IpcMainInvokeEvent, provider: ModelProviderInput) => {
     const result = await providerStore.upsert(provider)

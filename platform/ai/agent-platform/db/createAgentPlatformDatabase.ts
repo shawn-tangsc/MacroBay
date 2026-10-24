@@ -1053,6 +1053,33 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_channel_dispatch_results_status
         on channel_dispatch_results(status, updated_at asc, dispatch_id asc);
     `
+  },
+  {
+    // Unknown inbound conversations are recorded as key-only candidates; message bodies never land here.
+    id: '0029_channel_inbound_candidates',
+    up: `
+      create table channel_inbound_candidates (
+        id text primary key,
+        channel_id text not null,
+        conversation_kind text not null check (conversation_kind in ('direct','group','channel')),
+        user_key_ciphertext blob not null,
+        user_key_ref text not null,
+        user_key_revision integer not null,
+        user_key_hash text not null,
+        conversation_key_ciphertext blob not null,
+        conversation_key_ref text not null,
+        conversation_key_revision integer not null,
+        conversation_key_hash text not null,
+        display_label text,
+        first_seen_at text not null,
+        last_seen_at text not null,
+        hit_count integer not null default 1,
+        status text not null default 'pending' check (status in ('pending','allowed','ignored')),
+        unique(channel_id, conversation_kind, user_key_hash, conversation_key_hash)
+      );
+      create index idx_channel_inbound_candidates_pending
+        on channel_inbound_candidates(channel_id, status, last_seen_at desc, id asc);
+    `
   }
 ]
 

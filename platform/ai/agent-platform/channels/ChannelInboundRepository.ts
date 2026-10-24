@@ -26,6 +26,35 @@ export type ChannelConversationRecord = {
   sessionId: string | null
 }
 
+export type ChannelCandidateRecord = {
+  id: string
+  channelId: string
+  kind: ChannelConversationKind
+  userKeyCiphertext: Uint8Array
+  userKeyRef: string
+  userKeyRevision: number
+  userKeyHash: string
+  conversationKeyCiphertext: Uint8Array
+  conversationKeyRef: string
+  conversationKeyRevision: number
+  conversationKeyHash: string
+  displayLabel: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  hitCount: number
+  status: 'pending' | 'allowed' | 'ignored'
+}
+
+export type ChannelCandidateSafeView = {
+  id: string
+  kind: ChannelConversationKind
+  displayLabel: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  hitCount: number
+  status: 'pending' | 'allowed' | 'ignored'
+}
+
 export type ChannelWorkItemRecord = {
   id: string
   receiptId: string
@@ -298,6 +327,136 @@ export class ChannelInboundRepository {
        on conflict(channel_id, conversation_id) do update set enabled = excluded.enabled, updated_at = excluded.updated_at`
     ).run(randomUUID(), channelId, conversationId, enabled ? 1 : 0, now.toISOString(), now.toISOString())
     return true
+  }
+
+  managedChannelExists(channelId: string): boolean {
+    return Boolean(this.database.connection.prepare(
+      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
+    ).get(channelId))
+  }
+
+  upsertCandidate(input: {
+    channelId: string
+    kind: ChannelConversationKind
+    userKeyCiphertext: Uint8Array
+    userKeyRef: string
+    userKeyRevision: number
+    userKeyHash: string
+    conversationKeyCiphertext: Uint8Array
+    conversationKeyRef: string
+    conversationKeyRevision: number
+    conversationKeyHash: string
+    displayLabel?: string
+    now?: Date
+  }): void {
+    const now = (input.now ?? new Date()).toISOString()
+    this.database.connection.prepare(
+      `insert into channel_inbound_candidates (
+         id, channel_id, conversation_kind, user_key_ciphertext, user_key_ref, user_key_revision, user_key_hash,
+         conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash,
+         display_label, first_seen_at, last_seen_at, hit_count, status
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending')
+       on conflict(channel_id, conversation_kind, user_key_hash, conversation_key_hash) do update set
+         last_seen_at = excluded.last_seen_at,
+         hit_count = channel_inbound_candidates.hit_count + 1,
+         display_label = coalesce(excluded.display_label, channel_inbound_candidates.display_label)`
+    ).run(
+      randomUUID(), input.channelId, input.kind, input.userKeyCiphertext, input.userKeyRef, input.userKeyRevision,
+      input.userKeyHash, input.conversationKeyCiphertext, input.conversationKeyRef, input.conversationKeyRevision,
+      input.conversationKeyHash, input.displayLabel ?? null, now, now
+    )
+  }
+
+  listCandidates(channelId: string, limit = 100): ChannelCandidateSafeView[] {
+    const rows = this.database.connection.prepare(
+      `select id, conversation_kind, display_label, first_seen_at, last_seen_at, hit_count, status
+       from channel_inbound_candidates
+       where channel_id = ? and status = 'pending'
+       order by last_seen_at desc, id asc limit ?`
+    ).all(channelId, Math.max(1, Math.min(limit, 200))) as Array<{
+      id: string; conversation_kind: ChannelConversationKind; display_label: string | null
+      first_seen_at: string; last_seen_at: string; hit_count: number
+      status: 'pending' | 'allowed' | 'ignored'
+    }>
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.conversation_kind,
+      displayLabel: row.display_label,
+      firstSeenAt: row.first_seen_at,
+      lastSeenAt: row.last_seen_at,
+      hitCount: row.hit_count,
+      status: row.status
+    }))
+  }
+
+  getCandidate(channelId: string, candidateId: string): ChannelCandidateRecord | null {
+    const row = this.database.connection.prepare(
+      `select * from channel_inbound_candidates where channel_id = ? and id = ?`
+    ).get(channelId, candidateId) as Record<string, unknown> | undefined
+    return row ? {
+      id: row.id as string,
+      channelId: row.channel_id as string,
+      kind: row.conversation_kind as ChannelConversationKind,
+      userKeyCiphertext: row.user_key_ciphertext as Uint8Array,
+      userKeyRef: row.user_key_ref as string,
+      userKeyRevision: row.user_key_revision as number,
+      userKeyHash: row.user_key_hash as string,
+      conversationKeyCiphertext: row.conversation_key_ciphertext as Uint8Array,
+      conversationKeyRef: row.conversation_key_ref as string,
+      conversationKeyRevision: row.conversation_key_revision as number,
+      conversationKeyHash: row.conversation_key_hash as string,
+      displayLabel: (row.display_label as string | null) ?? null,
+      firstSeenAt: row.first_seen_at as string,
+      lastSeenAt: row.last_seen_at as string,
+      hitCount: row.hit_count as number,
+      status: row.status as 'pending' | 'allowed' | 'ignored'
+    } : null
+  }
+
+  /** Allows a candidate without ever decrypting its provider keys. */
+  allowCandidate(input: {
+    channelId: string
+    candidateId: string
+    enableTarget: boolean
+    now?: Date
+  }): string | null {
+    const now = input.now ?? new Date()
+    if (!this.managedChannelExists(input.channelId)) return null
+    return this.database.transact(() => {
+      const candidate = this.getCandidate(input.channelId, input.candidateId)
+      if (!candidate || candidate.status !== 'pending') return null
+      this.database.connection.prepare(
+        `insert or ignore into channel_allow_policies (
+           id, channel_id, subject_type, subject_key_ciphertext, subject_key_ref, subject_key_revision,
+           subject_key_hash, conversation_kind, created_at
+         ) values (?, ?, 'user', ?, ?, ?, ?, ?, ?)`
+      ).run(randomUUID(), input.channelId, candidate.userKeyCiphertext, candidate.userKeyRef, candidate.userKeyRevision, candidate.userKeyHash, candidate.kind, now.toISOString())
+
+      let conversationId = this.database.connection.prepare(
+        'select id from channel_conversations where channel_id = ? and conversation_key_hash = ?'
+      ).get(input.channelId, candidate.conversationKeyHash) as { id: string } | undefined
+      if (!conversationId) {
+        const id = randomUUID()
+        this.database.connection.prepare(
+          `insert into channel_conversations (
+             id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+             conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
+           ) values (?, ?, ?, ?, ?, ?, ?, null, ?, ?)`
+        ).run(id, input.channelId, candidate.conversationKeyCiphertext, candidate.conversationKeyRef, candidate.conversationKeyRevision, candidate.conversationKeyHash, candidate.kind, now.toISOString(), now.toISOString())
+        conversationId = { id }
+      }
+      this.setDeliveryTarget(input.channelId, conversationId.id, input.enableTarget, now)
+      this.database.connection.prepare(
+        "update channel_inbound_candidates set status = 'allowed', last_seen_at = ? where channel_id = ? and id = ?"
+      ).run(now.toISOString(), input.channelId, input.candidateId)
+      return conversationId.id
+    })
+  }
+
+  ignoreCandidate(channelId: string, candidateId: string, now = new Date()): boolean {
+    return this.database.connection.prepare(
+      "update channel_inbound_candidates set status = 'ignored', last_seen_at = ? where channel_id = ? and id = ? and status = 'pending'"
+    ).run(now.toISOString(), channelId, candidateId).changes === 1
   }
 
   allow(channelId: string, input: {
