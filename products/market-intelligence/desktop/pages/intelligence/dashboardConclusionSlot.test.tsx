@@ -97,6 +97,12 @@ describe('dashboard conclusion slot', () => {
     await act(async () => { timelineButton?.click() })
     await act(async () => {})
     expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBeGreaterThan(0)
+
+    const close = document.querySelector<HTMLButtonElement>('.mi-analysis-timeline-drawer__head button')
+    expect(close).not.toBeNull()
+    await act(async () => { close?.click() })
+    await act(async () => {})
+    expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBe(0)
   })
 
   it('shows the verdict and the operation directions on the card, and nothing the reader kept for the drawer', async () => {

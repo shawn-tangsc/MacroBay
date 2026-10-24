@@ -182,7 +182,7 @@ export const productText = {
               failed: '保存失败'
             }
           },
-          analysisDrawer: { title: '分析时间轴', open: '分析时间轴' },
+          analysisDrawer: { title: '分析时间轴', open: '分析时间轴', close: '关闭' },
           dashboard: {
             workspaceLabel: '— CRYPTO INTELLIGENCE',
             title: '数字货币市场检查表',
@@ -1462,7 +1462,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               failed: 'Could not save'
             }
           },
-          analysisDrawer: { title: 'Analysis timeline', open: 'Analysis timeline' },
+          analysisDrawer: { title: 'Analysis timeline', open: 'Analysis timeline', close: 'Close' },
           dashboard: {
             workspaceLabel: '— CRYPTO INTELLIGENCE',
             title: 'Crypto market checklist',
