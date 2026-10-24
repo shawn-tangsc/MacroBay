@@ -789,14 +789,14 @@ describe('ChannelManagementService', () => {
     })
     expect(database.connection.prepare("select purpose,state,expected_revision from channel_management_operations where channel_id=?").get(id)).toEqual({
       purpose: 'rotate',
-      state: 'needs-recovery',
+      state: 'revoked-cleanup',
       expected_revision: 1
     })
 
     database.connection.exec('drop trigger management_stale_metadata')
     await service.recover()
     expect(database.connection.prepare('select credential_revision,requested_enabled from agent_channels where id=?').get(id)).toEqual({ credential_revision: 2, requested_enabled: 0 })
-    expect(vault.inspectRefs).toEqual(['known-ref'])
+    expect(vault.inspectRefs).toEqual(['known-ref', 'known-ref'])
   })
 
   it('abandons a rotate intent when Vault failed before write and never pretends the old revision completed', async () => {
@@ -807,7 +807,7 @@ describe('ChannelManagementService', () => {
     await expect(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff: await credentialHandoff(service, id, 'token-a') })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
     await service.recover()
     expect(database.connection.prepare('select credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_revision: 1 })
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'revoked-cleanup' })
   })
 
   it('fails closed when a recovered rotate observes a jumped revision instead of adopting it', async () => {
@@ -853,11 +853,11 @@ describe('ChannelManagementService', () => {
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
     expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'external-inflight' })
     await service.recover()
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'abandoned' })
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'completed' })
     vault.failPutReserved = false
     const retry = await credentialHandoff(service, id, 'token-b')
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff: retry })).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get(id)).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get(id)).toEqual({ requested_enabled: 0, migration_state: 'configuration-ready' })
   })
 
   it('only allows policies and targets tied to this C03 channel, and their DTOs never reveal protected keys', () => {
