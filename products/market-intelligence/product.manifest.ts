@@ -155,6 +155,8 @@ export const marketIntelligenceProductManifest = {
     { id: 'market-intelligence.refreshSentimentAggregates' },
     { id: 'market-intelligence.reevaluateClusters' },
     { id: 'market-intelligence.reevaluateSentimentScopes' },
+    { id: 'market-intelligence.enrichNewsDocuments' },
+    { id: 'market-intelligence.scoreNewsSentiment' },
     { id: 'market-intelligence.archiveCompaction' },
     { id: 'market-intelligence.parquetExport' },
     { id: 'market-intelligence.purge' },

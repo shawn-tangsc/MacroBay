@@ -47,6 +47,15 @@ import {
   createIntelligenceTranslationJsonStorage
 } from './store/intelligenceTranslationStorage'
 import {
+  createNewsSentimentSettingsJsonStorage,
+  createNewsSentimentSettingsStore
+} from './news-sentiment/newsSentimentSettingsStore'
+import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './news-sentiment/newsSentimentStore'
+import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
+import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
+import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
+import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
+import {
   createRawRecordJsonStorage,
   readRawRecordSnapshotSync
 } from './store/rawRecordStorage'
@@ -151,6 +160,12 @@ type IntelligenceModule = {
   pipeline: ReturnType<typeof createIntelligencePipeline>
   sourcesService: ReturnType<typeof createIntelligenceSourcesService>
   translationService: ReturnType<typeof createIntelligenceTranslationService>
+  newsSentiment: {
+    store?: ReturnType<typeof createNewsSentimentSqliteStore>
+    settingsStore: ReturnType<typeof createNewsSentimentSettingsStore>
+    enrichment?: ReturnType<typeof createNewsSentimentEnrichmentService>
+    scoring?: ReturnType<typeof createNewsSentimentScoringService>
+  }
   workerRuntime: ManagedWorkerRuntime
   replayService: ReturnType<typeof createIntelligenceReplayService>
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
@@ -367,6 +382,46 @@ export function getIntelligenceModule(
       getProviderState: hooks?.getProviderState,
       getModelDefaults: hooks?.getModelDefaults
     })
+    const newsSentimentSettingsStore = createNewsSentimentSettingsStore(
+      createNewsSentimentSettingsJsonStorage(join(dataDir, 'intelligence-news-sentiment-settings.json'))
+    )
+    let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
+    try {
+      newsSentimentStore = createNewsSentimentSqliteStore(join(dataDir, newsSentimentStoragePolicy.fileName))
+    } catch {
+      // A broken database must not take the rest of the product down; news sentiment stays unavailable.
+      newsSentimentStore = undefined
+    }
+    const newsSentimentEnrichment = newsSentimentStore
+      ? createNewsSentimentEnrichmentService({
+          pipeline,
+          store: newsSentimentStore,
+          fetchArticle: async (url) => {
+            const response = await intelligenceHttpRequest(
+              {
+                url,
+                method: 'GET',
+                headers: { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT },
+                timeoutMs: 15_000
+              },
+              { retryPolicy: { maxAttempts: 1 } }
+            )
+            return { status: response.status, bodyText: response.bodyText }
+          },
+          now: () => new Date().toISOString()
+        })
+      : undefined
+    const newsSentimentScoring = newsSentimentStore
+      ? createNewsSentimentScoringService({
+          pipeline,
+          store: newsSentimentStore,
+          settingsStore: newsSentimentSettingsStore,
+          ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
+          ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
+          invoke: structuredModelInvocation.invoke,
+          now: () => new Date().toISOString()
+        })
+      : undefined
     const archiveService = createIntelligenceArchiveService({
       rawRecordStore,
       archiveBaseDir: join(dataDir, 'intelligence-archive'),
@@ -390,7 +445,18 @@ export function getIntelligenceModule(
       }
     })
 
-    registerIntelligenceJobs(jobRuntime, { pipeline, archiveService, replayService, translationService, capitalConditions, etfFlowHistory: etfCurrentStateRefresh, fundingRateHistory: fundingRateHistoryRefresh })
+    registerIntelligenceJobs(jobRuntime, {
+      pipeline,
+      archiveService,
+      replayService,
+      translationService,
+      capitalConditions,
+      etfFlowHistory: etfCurrentStateRefresh,
+      fundingRateHistory: fundingRateHistoryRefresh,
+      ...(newsSentimentEnrichment && newsSentimentScoring
+        ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
+        : {})
+    })
     const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore })
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
@@ -443,6 +509,12 @@ export function getIntelligenceModule(
       archiveService,
       replayService,
       translationService,
+      newsSentiment: {
+        settingsStore: newsSentimentSettingsStore,
+        ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
+        ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
+        ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {})
+      },
       sourcesService,
       publicQueryService,
       rawRecordStore,

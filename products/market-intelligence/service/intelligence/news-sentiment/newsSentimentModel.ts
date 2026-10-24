@@ -7,7 +7,7 @@ import {
   type NewsSentimentSymbol
 } from '../schema/newsSentiment'
 
-export type NewsSentimentMessages = ReadonlyArray<{ role: 'system' | 'user'; content: string }>
+export type NewsSentimentMessages = Array<{ role: 'system' | 'user'; content: string }>
 
 export type ParsedNewsPolarity =
   | { ok: true; value: NewsSentimentJudgment }

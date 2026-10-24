@@ -5,6 +5,8 @@ export const INTELLIGENCE_ASSESS_CHANGED_ITEMS_JOB = 'market-intelligence.assess
 export const INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB = 'market-intelligence.refreshSentimentAggregates'
 export const INTELLIGENCE_REEVALUATE_CLUSTERS_JOB = 'market-intelligence.reevaluateClusters'
 export const INTELLIGENCE_REEVALUATE_SENTIMENT_SCOPES_JOB = 'market-intelligence.reevaluateSentimentScopes'
+export const INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB = 'market-intelligence.enrichNewsDocuments'
+export const INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB = 'market-intelligence.scoreNewsSentiment'
 export const INTELLIGENCE_ARCHIVE_COMPACTION_JOB = 'market-intelligence.archiveCompaction'
 export const INTELLIGENCE_PARQUET_EXPORT_JOB = 'market-intelligence.parquetExport'
 export const INTELLIGENCE_PURGE_JOB = 'market-intelligence.purge'
@@ -19,6 +21,8 @@ export const INTELLIGENCE_JOB_IDS = [
   INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB,
   INTELLIGENCE_REEVALUATE_CLUSTERS_JOB,
   INTELLIGENCE_REEVALUATE_SENTIMENT_SCOPES_JOB,
+  INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB,
+  INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB,
   INTELLIGENCE_ARCHIVE_COMPACTION_JOB,
   INTELLIGENCE_PARQUET_EXPORT_JOB,
   INTELLIGENCE_PURGE_JOB,

@@ -49,6 +49,7 @@ import type {
   IntelligencePipelineStateStorage
 } from '../store/intelligencePipelineStateStorage'
 import { createEmptyIntelligencePipelineSnapshot } from '../store/intelligencePipelineStateStorage'
+import { NEWS_SENTIMENT_SOURCE_IDS } from '../schema/newsSentiment'
 import type { IntelligenceRuntimeStateStorage } from '../store/intelligenceRuntimeStateStorage'
 import type { IntelligenceRuntimeStateHistoryStorage } from '../store/intelligenceRuntimeStateHistoryStorage'
 import {
@@ -576,6 +577,9 @@ export function createIntelligencePipeline(deps?: {
           queueJob(queuedJobs, 'market-intelligence.assessChangedItems')
           queueJob(queuedJobs, 'market-intelligence.refreshSentimentAggregates')
           queueJob(queuedJobs, 'market-intelligence.translateItems')
+          if ((NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(rawRecord.sourceId)) {
+            queueJob(queuedJobs, 'market-intelligence.enrichNewsDocuments')
+          }
         } else if (recordIgnored && ignoredAudit?.ignoredReasonCode) {
           rawRecordStore.markIgnored(rawRecord.rawRecordId, {
             ignoredReasonCode: ignoredAudit.ignoredReasonCode,

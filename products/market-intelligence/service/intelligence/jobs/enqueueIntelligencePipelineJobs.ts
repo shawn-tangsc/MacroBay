@@ -13,7 +13,9 @@ export async function enqueueIntelligencePipelineJobs(
       jobPayload = { itemIds: payload.newItemIds, reason: 'new-item' }
     } else if (
       (handlerId === 'market-intelligence.assessChangedItems' ||
-        handlerId === 'market-intelligence.refreshSentimentAggregates') &&
+        handlerId === 'market-intelligence.refreshSentimentAggregates' ||
+        handlerId === 'market-intelligence.enrichNewsDocuments' ||
+        handlerId === 'market-intelligence.scoreNewsSentiment') &&
       Array.isArray(payload.newItemIds)
     ) {
       jobPayload = { ...payload, itemIds: payload.newItemIds }
