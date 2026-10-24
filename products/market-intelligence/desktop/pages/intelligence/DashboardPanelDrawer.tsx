@@ -11,6 +11,7 @@ import { ProviderDetail } from '../../settings/intelligence-sources/ProviderDeta
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
 import '../../settings/intelligence-sources/intelligence-sources.css'
 import { panelView, type PanelView, type SourceView } from '../../../service/intelligence/application/sourceProjection'
+import { mergeDashboardPanelView } from './dashboardPanelMerge'
 import type { PanelId } from '../../../service/intelligence/application/providerRegistry'
 
 function isCalendar(source: SourceView): boolean {
@@ -33,10 +34,11 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
   const [busy, setBusy] = useState<string>()
 
   async function load(): Promise<PanelView> {
+    const local = panelView(panelId)
     try {
-      return await intelligenceSourcesClient.getPanelView(panelId) ?? panelView(panelId)!
+      return mergeDashboardPanelView(await intelligenceSourcesClient.getPanelView(panelId), local)
     } catch {
-      return panelView(panelId)!
+      return local!
     }
   }
 

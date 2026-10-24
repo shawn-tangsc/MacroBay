@@ -5,6 +5,8 @@ import type { SafeModelProvider } from '@platform/ai/providers/modelProviderType
 
 import type { NewsSentimentSettingsView } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
+import { intelligenceTranslationClient } from '../../../shared/ipc/intelligenceTranslationClient'
+import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import type { NewsSentimentText } from './NewsSentimentCard'
 
 export function NewsSentimentSettingsModal(props: {
@@ -18,6 +20,7 @@ export function NewsSentimentSettingsModal(props: {
   const [enabled, setEnabled] = useState(true)
   const [modelRef, setModelRef] = useState('')
   const [providers, setProviders] = useState<SafeModelProvider[]>([])
+  const [translationEnabled, setTranslationEnabled] = useState<boolean>()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
 
@@ -26,14 +29,16 @@ export function NewsSentimentSettingsModal(props: {
     let cancelled = false
     void Promise.all([
       props.client.getSettings(),
-      Promise.resolve(window.platform?.modelProviders?.list() as Promise<SafeModelProvider[]> | undefined)
+      Promise.resolve(window.platform?.modelProviders?.list() as Promise<SafeModelProvider[]> | undefined),
+      intelligenceTranslationClient.getSettings().catch(() => undefined)
     ])
-      .then(([next, models]) => {
+      .then(([next, models, translation]) => {
         if (cancelled) return
         setView(next)
         setEnabled(next.settings.modelScoringEnabled)
         setModelRef(next.settings.providerId && next.settings.modelId ? `${next.settings.providerId}:${next.settings.modelId}` : '')
         setProviders(models ?? [])
+        setTranslationEnabled(translation?.autoTranslateEnabled)
       })
       .catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
@@ -75,6 +80,7 @@ export function NewsSentimentSettingsModal(props: {
       onOk={() => void save()}
       open={props.open}
       title={text.settingsModal.title}
+      zIndex={1400}
     >
       <div className="mi-news-settings">
         <label className="mi-news-settings__row">
@@ -91,6 +97,17 @@ export function NewsSentimentSettingsModal(props: {
             value={modelRef}
           />
         </label>
+        <div className="mi-news-settings__row">
+          <span>{text.settingsModal.translation.label}</span>
+          <span className="mi-news-settings__hint">
+            {translationEnabled === undefined
+              ? '—'
+              : translationEnabled ? text.settingsModal.translation.on : text.settingsModal.translation.off}
+          </span>
+          <button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} type="button">
+            {text.settingsModal.translation.open}
+          </button>
+        </div>
         <p className="mi-news-settings__hint">{text.settingsModal.hint}</p>
         {error ? <p className="mi-news-settings__error" role="alert">{text.settingsModal.failed}</p> : null}
       </div>

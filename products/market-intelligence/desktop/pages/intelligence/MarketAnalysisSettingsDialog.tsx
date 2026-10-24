@@ -67,6 +67,7 @@ export function MarketAnalysisSettingsDialog(props: {
       onOk={() => void submit()}
       open={props.open}
       title={text.settingsTitle}
+      zIndex={1400}
     >
       <div className="mi-analysis-timeline__settings-row">
         <div>
