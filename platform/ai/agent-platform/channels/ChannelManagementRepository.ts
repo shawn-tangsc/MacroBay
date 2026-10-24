@@ -1056,6 +1056,7 @@ export class ChannelManagementRepository {
          on conflict(channel_id) do update set generation = excluded.generation, lifecycle_state = 'inactive', updated_at = excluded.updated_at`
       )
       .run(channelId, (prior?.generation ?? 0) + 1, now)
+    this.mirrorChannel(channelId)
   }
 
   /** Never leave a historic `feishu` row runnable just because it is outside the Lark management view. */
