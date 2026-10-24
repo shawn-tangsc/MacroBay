@@ -15,6 +15,7 @@ type Channel = {
 }
 
 type Conversation = { id: string; kind: string; targetEnabled: boolean }
+type RuntimeStatus = { channelId: string; generation: number; lifecycle: string; updatedAt: string | null }
 type Candidate = { id: string; kind: 'direct' | 'group' | 'channel'; displayLabel: string | null; firstSeenAt: string; lastSeenAt: string; hitCount: number; status: 'pending' | 'allowed' | 'ignored' }
 type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 type Agent = { id: string; name: string }
@@ -37,6 +38,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [policies, setPolicies] = useState<Policy[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [candidates, setCandidates] = useState<Candidate[]>([])
+  const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
   const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
@@ -56,14 +58,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }
 
   const reloadDetails = async (channelId: string): Promise<void> => {
-    const [nextPolicies, nextConversations, nextCandidates] = await Promise.all([
+    const [nextPolicies, nextConversations, nextCandidates, nextRuntime] = await Promise.all([
       window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
       window.platform.channels.listConversations({ id: channelId, limit: 100 }),
-      window.platform.channels.listCandidates({ id: channelId, limit: 100 })
+      window.platform.channels.listCandidates({ id: channelId, limit: 100 }),
+      window.platform.channels.runtimeStatus({ id: channelId })
     ])
     setPolicies(nextPolicies as Policy[])
     setConversations(nextConversations as Conversation[])
     setCandidates(nextCandidates as Candidate[])
+    setRuntimeStatus(nextRuntime as RuntimeStatus)
   }
 
   useEffect(() => {
@@ -76,6 +80,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setPolicies([])
       setConversations([])
       setCandidates([])
+      setRuntimeStatus(null)
     }
   }, [current?.id])
 
@@ -211,6 +216,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <Button disabled={!credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)} onClick={() => void saveCredential()}>{labels.channelSaveCredential}</Button>
             </>}
             <p>{labels.channelState[current.state]}</p>
+            <p>{labels.channelRuntimeGeneration}: {runtimeStatus?.generation ?? 0} · {labels.channelRuntimeLifecycle}: {runtimeStatus?.lifecycle ?? 'missing'}</p>
             <section>
               <strong>{labels.channelCandidates}</strong>
               {candidates.length === 0 ? <p>{labels.channelCandidatesEmpty}</p> : candidates.map((candidate) => (
