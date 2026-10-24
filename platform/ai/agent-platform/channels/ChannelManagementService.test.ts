@@ -640,8 +640,8 @@ describe('ChannelManagementService', () => {
     expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
     const service = new ChannelManagementService({ repository, vault, cipher, registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]), handoff: new ChannelSecureHandoff() })
     const credential = await credentialHandoff(service, id, 'token-a')
-    vault.prepareMigration = async (input: { channelId: string }) => ({
-      credentialRef: `channel-migration:${input.channelId}:fingerprint`, sourceFingerprint: 'fingerprint',
+    vault.prepareMigration = async () => ({
+      credentialRef: `channel-migration:${id}:fingerprint`, sourceFingerprint: 'fingerprint',
       fingerprintKeyId: 'key', migrationPermit: 'permit'
     })
     let releasePut!: () => void
