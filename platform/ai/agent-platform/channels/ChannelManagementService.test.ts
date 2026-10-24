@@ -780,7 +780,7 @@ describe('ChannelManagementService', () => {
     await expect(service.rotate({ id, actorId: 'user-a', senderId: 7, handoff })).resolves.toMatchObject({ ok: false, code: 'channel-management-metadata-failed' })
     expect(database.connection.prepare('select requested_enabled,migration_state,credential_revision from agent_channels where id=?').get(id)).toEqual({
       requested_enabled: 0,
-      migration_state: 'configuration-ready',
+      migration_state: 'disabled',
       credential_revision: 1
     })
     expect(database.connection.prepare("select purpose,state,expected_revision from channel_management_operations where channel_id=?").get(id)).toEqual({
@@ -816,7 +816,7 @@ describe('ChannelManagementService', () => {
     vault.inspectRevision = 4
     await service.recover()
     expect(database.connection.prepare('select credential_revision,credential_health,migration_state from agent_channels where id=?').get(id)).toEqual({
-      credential_revision: 1, credential_health: 'unavailable', migration_state: 'configuration-ready'
+      credential_revision: 1, credential_health: 'unavailable', migration_state: 'disabled'
     })
     expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'revoked-cleanup' })
   })
@@ -853,7 +853,7 @@ describe('ChannelManagementService', () => {
     vault.failPutReserved = false
     const retry = await credentialHandoff(service, id, 'token-b')
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff: retry })).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get(id)).toEqual({ requested_enabled: 0, migration_state: 'configuration-ready' })
+    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get(id)).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
   })
 
   it('only allows policies and targets tied to this C03 channel, and their DTOs never reveal protected keys', () => {
