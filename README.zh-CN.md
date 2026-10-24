@@ -40,8 +40,8 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 追不到来源记录和时间戳的结论，就应该被报告成缺口。这就是整个产品：**不是一个只能凭信任接受的一段话。**
 
 <p align="center">
-  <a href="./docs/assets/screenshots/demo.gif">
-    <img src="./docs/assets/screenshots/demo-poster.png" alt="MacroBay 加密市场情报看板、分析与分析智能体" width="100%">
+  <a href="./docs/assets/screenshots/demo-en.gif">
+    <img src="./docs/assets/screenshots/demo-en-poster.png" alt="MacroBay 加密市场情报看板、分析与分析智能体" width="100%">
   </a>
 </p>
 

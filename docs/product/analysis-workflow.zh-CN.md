@@ -4,7 +4,7 @@
 
 市场情报流程的目标，是让问题、证据和解读保持在一起。
 
-![分析与智能体](../assets/screenshots/demo-poster.png)
+![分析与智能体](../assets/screenshots/demo-en-poster.png)
 
 ## 1. 选择市场或标的
 

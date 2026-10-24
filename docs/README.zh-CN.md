@@ -4,7 +4,7 @@
 
 **把市场情报变成可以核对的分析。**
 
-![MacroBay 市场情报看板](./assets/screenshots/demo.gif)
+![MacroBay 市场情报看板](./assets/screenshots/demo-en.gif)
 
 MacroBay 是一个本地桌面应用：打开看板，问分析智能体“最近发生了什么”，然后查看每个数字背后的
 来源和截止时间。它不是把新闻丢给模型、再生成一段没有依据的总结。

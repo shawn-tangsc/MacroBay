@@ -5,7 +5,7 @@
 市场分析智能体是产品自带的智能体，运行在平台的 Claude Code 运行时上。它读取市场证据，输出
 条件化分析。
 
-![智能体在看板上做条件化分析](../assets/screenshots/demo-agent.gif)
+![智能体在看板上做条件化分析](../assets/screenshots/demo-agent-en.gif)
 
 ## 和普通聊天有什么不同
 
