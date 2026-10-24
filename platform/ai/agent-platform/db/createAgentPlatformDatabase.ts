@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 type AgentPlatformMigration = {
   id: string
-  up: string
+  up: string | ((connection: DatabaseSync) => void)
 }
 
 const migrations: AgentPlatformMigration[] = [
@@ -1261,6 +1261,149 @@ const migrations: AgentPlatformMigration[] = [
       drop table if exists channel_credential_migrations;
       drop table if exists channel_legacy_channels;
     `
+  },
+  {
+    id: '0038_channel_bridge_compat',
+    up: (connection) => {
+      const columns = connection.prepare('pragma table_info(agent_channels)').all() as Array<{ name: string }>
+      // Fresh databases already have the legacy carrier table; only repair a canonical-only database.
+      if (columns.some((column) => column.name === 'type')) return
+
+      connection.exec(`
+        drop table if exists agent_channels_next;
+        create table agent_channels_bridge (
+          id text primary key,
+          type text not null,
+          name text not null,
+          agent_id text,
+          workspace_json text,
+          public_config_json text,
+          credential_ref text,
+          credential_revision integer,
+          requested_enabled integer not null default 0,
+          migration_state text not null default 'credential-missing',
+          migration_error_code text,
+          legacy_session_state text,
+          created_at text not null,
+          updated_at text not null,
+          config_json text,
+          session_id text,
+          is_active integer,
+          active_chat_ids_json text,
+          permission_mode text,
+          credential_health text not null default 'missing',
+          mutation_epoch integer not null default 0,
+          adapter_key text generated always as (case when type = 'feishu' then 'lark' else type end) virtual,
+          lifecycle_state text generated always as (
+            case migration_state
+              when 'runtime-ready' then 'enabled'
+              when 'configuration-ready' then 'ready'
+              else migration_state
+            end
+          ) virtual
+        );
+
+        insert into agent_channels_bridge (
+          id, type, name, agent_id, public_config_json, credential_ref, credential_revision,
+          requested_enabled, migration_state, migration_error_code, created_at, updated_at,
+          credential_health, mutation_epoch
+        ) select
+          id,
+          case adapter_key when 'lark' then 'feishu' else adapter_key end,
+          name, agent_id, public_config_json, credential_ref, credential_revision,
+          requested_enabled,
+          case lifecycle_state
+            when 'enabled' then 'runtime-ready'
+            when 'ready' then 'configuration-ready'
+            else lifecycle_state
+          end,
+          migration_error_code, created_at, updated_at, credential_health, mutation_epoch
+        from agent_channels;
+
+        create table agent_channels_next (
+          id text primary key,
+          adapter_key text not null,
+          name text not null,
+          agent_id text,
+          public_config_json text not null default '{}',
+          credential_ref text,
+          credential_revision integer,
+          credential_health text not null default 'missing',
+          requested_enabled integer not null default 0,
+          lifecycle_state text not null default 'credential-missing',
+          mutation_epoch integer not null default 0,
+          migration_error_code text,
+          created_at text not null,
+          updated_at text not null
+        );
+
+        insert into agent_channels_next (
+          id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+          created_at, updated_at
+        ) select
+          id, case adapter_key when 'lark' then 'lark' else adapter_key end,
+          name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+          created_at, updated_at
+        from agent_channels;
+
+        drop table agent_channels;
+        alter table agent_channels_bridge rename to agent_channels;
+
+        create trigger agent_channels_next_insert after insert on agent_channels begin
+          insert into agent_channels_next (
+            id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+            credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+            created_at, updated_at
+          ) values (
+            new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+            coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+            new.credential_health, new.requested_enabled,
+            case new.migration_state
+              when 'runtime-ready' then 'enabled'
+              when 'configuration-ready' then 'ready'
+              else new.migration_state
+            end,
+            new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+          ) on conflict(id) do update set
+            adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+            public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+            credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+            requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+            mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+            created_at = excluded.created_at, updated_at = excluded.updated_at;
+        end;
+
+        create trigger agent_channels_next_update after update on agent_channels begin
+          insert into agent_channels_next (
+            id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+            credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+            created_at, updated_at
+          ) values (
+            new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+            coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+            new.credential_health, new.requested_enabled,
+            case new.migration_state
+              when 'runtime-ready' then 'enabled'
+              when 'configuration-ready' then 'ready'
+              else new.migration_state
+            end,
+            new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+          ) on conflict(id) do update set
+            adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+            public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+            credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+            requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+            mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+            created_at = excluded.created_at, updated_at = excluded.updated_at;
+        end;
+
+        create trigger agent_channels_next_delete after delete on agent_channels begin
+          delete from agent_channels_next where id = old.id;
+        end;
+      `)
+    }
   }
 ]
 
@@ -1300,7 +1443,8 @@ function applyMigrations(connection: DatabaseSync): void {
     if (applied?.id) continue
 
     runInTransaction(connection, () => {
-      connection.exec(migration.up)
+      if (typeof migration.up === 'string') connection.exec(migration.up)
+      else migration.up(connection)
       connection
         .prepare('insert into agent_platform_migrations (id, applied_at) values (?, ?)')
         .run(migration.id, new Date().toISOString())
