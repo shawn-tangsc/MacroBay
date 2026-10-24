@@ -180,6 +180,9 @@ export class ChannelCredentialMigrationReconciler {
   private async reconcileFallback(): Promise<void> {
     if (!this.options.readLegacyState || !this.options.writeLegacyState) return
     const scrubPending = this.getFallbackScrubState() === 'pending'
+    // Never read the sensitive fallback once SQLite owns durable state; the only exception is
+    // an interrupted scrub, which must finish before the file can be ignored.
+    if (this.hasPersistedState() && !scrubPending && !this.hasTombstones()) return
     const legacy = await this.options.readLegacyState() as LegacyStateFile
     if (!legacy || typeof legacy !== 'object' || Array.isArray(legacy)) return
     const hasChannelsKey = Object.prototype.hasOwnProperty.call(legacy, 'channels')
@@ -217,6 +220,12 @@ export class ChannelCredentialMigrationReconciler {
     } catch {
       // The pending marker is the only durable recovery data; it contains no source content.
     }
+  }
+
+  private hasTombstones(): boolean {
+    return Boolean(this.options.database.connection.prepare(
+      'select 1 as present from channel_management_tombstones limit 1'
+    ).get())
   }
 
   private hasPersistedState(): boolean {

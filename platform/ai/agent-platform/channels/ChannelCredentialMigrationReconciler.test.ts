@@ -164,7 +164,8 @@ describe('ChannelCredentialMigrationReconciler', () => {
     let fallback: Record<string, unknown> = {
       ...createDefaultAgentPersistentState(),
       agents: [{ id: 'agent-fallback', type: 'claude-code', name: 'Fallback agent', model: null, modelName: null, orderKey: '1', createdAt: now.toISOString(), updatedAt: now.toISOString() }],
-      sessions: [{ id: 'session-fallback', agentId: 'agent-fallback', name: 'Fallback session', workspaceId: null, workspace: null, orderKey: '1', createdAt: now.toISOString(), updatedAt: now.toISOString() }],
+      workspaces: [{ id: 'workspace-fallback', name: 'Fallback', path: '/tmp/fallback', type: 'system', orderKey: '0', createdAt: now.toISOString(), updatedAt: now.toISOString() }],
+      sessions: [{ id: 'session-fallback', agentId: 'agent-fallback', name: 'Fallback session', workspaceId: 'workspace-fallback', workspace: { id: 'workspace-fallback', name: 'Fallback', path: '/tmp/fallback', type: 'system', orderKey: '0', createdAt: now.toISOString(), updatedAt: now.toISOString() }, orderKey: '1', createdAt: now.toISOString(), updatedAt: now.toISOString() }],
       tasks: [{ id: 'task-fallback', agentId: 'agent-fallback', name: 'Fallback task', prompt: 'Run', trigger: { kind: 'interval', ms: 60_000 }, timeoutMinutes: 2, workspace: { type: 'system' }, channelIds: [], enabled: false, status: 'paused', createdAt: now.toISOString(), updatedAt: now.toISOString() }],
       channels: [legacyChannel({ bot_token: 'fallback-token' })]
     }
