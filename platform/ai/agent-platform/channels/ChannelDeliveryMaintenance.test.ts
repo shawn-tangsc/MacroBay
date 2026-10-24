@@ -12,11 +12,18 @@ describe('ChannelDeliveryMaintenance', () => {
       values ('old', 'channel-a', 'agent-a', 'conversation-a', 'task-result', 'hash', 'opaque', 'delivered', '2026-01-01', '2026-01-01', '2026-01-01');
     `)
     let tick: (() => void) | undefined
+    const delays: number[] = []
     const maintenance = new ChannelDeliveryMaintenance({
       repository: new ChannelDeliveryRepository(database), now: () => new Date('2026-07-19T00:00:00.000Z'),
-      setInterval: (callback, delay) => { expect(delay).toBe(15 * 60_000); tick = callback; return 1 as never }, clearInterval: () => {}
+      setInterval: (callback, delay) => {
+        delays.push(delay)
+        if (delay === 15 * 60_000) tick = callback
+        return delays.length as never
+      },
+      clearInterval: () => {}
     })
     const dispose = maintenance.start()
+    expect(delays).toEqual([15 * 60_000, 30_000])
     expect(database.connection.prepare("select count(*) as count from channel_delivery_attempts where id = 'old'").get()).toEqual({ count: 0 })
     tick?.()
     dispose()

@@ -1080,6 +1080,19 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_channel_inbound_candidates_pending
         on channel_inbound_candidates(channel_id, status, last_seen_at desc, id asc);
     `
+  },
+  {
+    // Delivery retry metadata. Retry text is encrypted and only used for non-inbound sources.
+    id: '0031_channel_delivery_retry',
+    up: `
+      alter table channel_delivery_attempts add column source_id text;
+      alter table channel_delivery_attempts add column retry_payload_ciphertext blob;
+      alter table channel_delivery_attempts add column retry_payload_key_ref text;
+      alter table channel_delivery_attempts add column retry_payload_key_revision integer;
+      alter table channel_delivery_attempts add column next_attempt_at text;
+      create index idx_channel_delivery_attempts_due
+        on channel_delivery_attempts(status, next_attempt_at asc, id asc);
+    `
   }
 ]
 

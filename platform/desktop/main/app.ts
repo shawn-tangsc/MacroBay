@@ -794,7 +794,10 @@ const larkRuntimeMaintenance = new LarkRuntimeMaintenance(larkRuntimeRepository)
 const qqRuntimeMaintenance = new QqRuntimeMaintenance(qqRuntimeRepository)
 const discordRuntimeMaintenance = new DiscordRuntimeMaintenance(discordRuntimeRepository)
 const wechatRuntimeMaintenance = new WechatRuntimeMaintenance(wechatEnrollmentRepository, wechatRuntimeRepository)
-const channelDeliveryMaintenance = new ChannelDeliveryMaintenance({ repository: channelDeliveryRepository })
+const channelDeliveryMaintenance = new ChannelDeliveryMaintenance({
+  repository: channelDeliveryRepository,
+  retryDue: () => channelDeliveryService.retryDue()
+})
 const deliverTaskResultToChannels = createTaskChannelDelivery({
   delivery: channelDeliveryService,
   repository: channelDeliveryRepository,

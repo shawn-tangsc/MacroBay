@@ -83,6 +83,31 @@ describe('ChannelDeliveryService', () => {
     expect(transport.send).toHaveBeenCalledOnce()
   })
 
+  it('retries a rate-limited task delivery after its backoff and clears the encrypted payload', async () => {
+    const { database, transport } = harness()
+    let now = new Date('2026-07-18T00:00:00.000Z')
+    const cipher = {
+      ...cipherForTests(),
+      encrypt: async (_channelId: string, value: Uint8Array) => ({ ciphertext: value, keyRef: 'ref', keyRevision: 1 }),
+      decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext
+    }
+    const service = new ChannelDeliveryService({
+      repository: new ChannelDeliveryRepository(database), cipher, transport, now: () => now
+    })
+    transport.send.mockResolvedValueOnce({ kind: 'failed', code: 'delivery-rate-limited' } as never).mockResolvedValue({ kind: 'delivered' })
+
+    expect((await service.deliver({ channelId: 'channel-a', agentId: 'agent-a', conversationId: 'conversation-a', source: 'task-result', sourceId: 'run-retry', text: 'retry me' })).status).toBe('failed')
+    expect(database.connection.prepare("select status, next_attempt_at from channel_delivery_attempts where source_id='run-retry'").get()).toMatchObject({ status: 'pending', next_attempt_at: expect.any(String) })
+
+    await service.retryDue()
+    expect(transport.send).toHaveBeenCalledTimes(1)
+
+    now = new Date('2026-07-18T00:00:06.000Z')
+    await service.retryDue()
+    expect(transport.send).toHaveBeenCalledTimes(2)
+    expect(database.connection.prepare("select status, retry_payload_ciphertext from channel_delivery_attempts where source_id='run-retry'").get()).toEqual({ status: 'delivered', retry_payload_ciphertext: null })
+  })
+
   it('treats unclassified transport errors as unknown and retries only with idempotency evidence', async () => {
     const { service, transport } = harness()
     transport.send.mockRejectedValueOnce(new Error('provider raw error: secret'))

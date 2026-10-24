@@ -43,9 +43,9 @@ export class ChannelDeliveryRepository {
         source: input.source, sourceHash, idempotencyKey: `channel-delivery:${randomUUID()}`, status: 'pending'
       }
       this.database.connection.prepare(
-        `insert into channel_delivery_attempts (id, channel_id, agent_id, conversation_id, source_type, source_hash, idempotency_key, status, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
-      ).run(attempt.id, attempt.channelId, attempt.agentId, attempt.conversationId, attempt.source, attempt.sourceHash, attempt.idempotencyKey, input.now.toISOString(), input.now.toISOString())
+        `insert into channel_delivery_attempts (id, channel_id, agent_id, conversation_id, source_type, source_hash, source_id, idempotency_key, status, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)`
+      ).run(attempt.id, attempt.channelId, attempt.agentId, attempt.conversationId, attempt.source, attempt.sourceHash, input.sourceId, attempt.idempotencyKey, input.now.toISOString(), input.now.toISOString())
       return attempt
     })
   }
@@ -79,12 +79,63 @@ export class ChannelDeliveryRepository {
     })
   }
 
+  setRetryPayload(input: {
+    attemptId: string
+    ciphertext: Uint8Array
+    keyRef: string
+    keyRevision: number
+  }): void {
+    this.database.connection.prepare(
+      `update channel_delivery_attempts
+       set retry_payload_ciphertext = ?, retry_payload_key_ref = ?, retry_payload_key_revision = ?
+       where id = ? and status in ('pending', 'sending')`
+    ).run(input.ciphertext, input.keyRef, input.keyRevision, input.attemptId)
+  }
+
+  listDueRetries(now = new Date(), limit = 20): Array<{
+    attemptId: string
+    channelId: string
+    agentId: string
+    conversationId: string
+    source: ChannelDeliverySource
+    sourceId: string
+    ciphertext: Uint8Array
+    keyRef: string
+    keyRevision: number
+  }> {
+    const rows = this.database.connection.prepare(
+      `select id, channel_id, agent_id, conversation_id, source_type, source_id,
+              retry_payload_ciphertext, retry_payload_key_ref, retry_payload_key_revision
+       from channel_delivery_attempts
+       where status = 'pending' and next_attempt_at is not null and next_attempt_at <= ?
+         and source_type <> 'inbound-reply' and source_id is not null
+         and retry_payload_ciphertext is not null and retry_payload_key_ref is not null
+         and retry_payload_key_revision is not null
+       order by next_attempt_at asc, id asc limit ?`
+    ).all(now.toISOString(), Math.max(1, Math.min(limit, 100))) as Array<{
+      id: string; channel_id: string; agent_id: string; conversation_id: string
+      source_type: ChannelDeliverySource; source_id: string
+      retry_payload_ciphertext: Uint8Array; retry_payload_key_ref: string; retry_payload_key_revision: number
+    }>
+    return rows.map((row) => ({
+      attemptId: row.id,
+      channelId: row.channel_id,
+      agentId: row.agent_id,
+      conversationId: row.conversation_id,
+      source: row.source_type,
+      sourceId: row.source_id,
+      ciphertext: row.retry_payload_ciphertext,
+      keyRef: row.retry_payload_key_ref,
+      keyRevision: row.retry_payload_key_revision
+    }))
+  }
+
   // An old sender cannot overwrite a newer owner. A lifecycle fence after transport begins
   // preserves an unknown outcome instead of asserting delivery.
-  finish(input: { owner: ChannelDeliverySendOwner; status: Exclude<ChannelDeliveryStatus, 'pending' | 'sending'>; errorCode: string | null; executionClaim?: ChannelExecutionClaim; now: Date }): boolean {
+  finish(input: { owner: ChannelDeliverySendOwner; status: Exclude<ChannelDeliveryStatus, 'pending' | 'sending'>; errorCode: string | null; retryable?: boolean; executionClaim?: ChannelExecutionClaim; now: Date }): boolean {
     return this.database.transact(() => {
       const row = this.database.connection.prepare(
-        `select id, channel_id, agent_id, conversation_id, source_type from channel_delivery_attempts
+        `select id, channel_id, agent_id, conversation_id, source_type, attempt_count from channel_delivery_attempts
          where id = ? and status = 'sending' and send_owner_token = ? and send_revision = ? and send_lease_expires_at = ? and send_lease_expires_at > ?`
       ).get(input.owner.attemptId, input.owner.token, input.owner.revision, input.owner.leaseExpiresAt, input.now.toISOString()) as OwnedRow | undefined
       if (!row) return false
@@ -92,16 +143,40 @@ export class ChannelDeliveryRepository {
         channelId: row.channel_id, agentId: row.agent_id, conversationId: row.conversation_id, source: row.source_type,
         sourceId: '', requireTarget: row.source_type !== 'inbound-reply', executionClaim: input.executionClaim, now: input.now
       })
-      const status = authorized ? input.status : 'unknown-after-send'
+      const failed = authorized ? input.status : 'unknown-after-send'
       const code = authorized ? input.errorCode : 'delivery-lifecycle-fenced'
+      const retryAt = failed === 'failed' && input.retryable && row.attempt_count < 5
+        ? new Date(input.now.getTime() + deliveryBackoffMs(row.attempt_count)).toISOString()
+        : null
+      const status = retryAt ? 'pending' : failed
       const changed = this.database.connection.prepare(
         `update channel_delivery_attempts set status = ?, stable_error_code = ?, send_owner_token = null,
-           send_owner_generation = null, send_lease_expires_at = null, updated_at = ?, completed_at = ?
+           send_owner_generation = null, send_lease_expires_at = null, updated_at = ?, completed_at = ?,
+           next_attempt_at = ?
          where id = ? and status = 'sending' and send_owner_token = ? and send_revision = ? and send_lease_expires_at = ?`
-      ).run(status, code, input.now.toISOString(), input.now.toISOString(), input.owner.attemptId, input.owner.token, input.owner.revision, input.owner.leaseExpiresAt).changes
-      if (changed === 1) this.audit(row.channel_id, input.owner.attemptId, `channel-delivery-${status}`, input.now)
+      ).run(status, code, input.now.toISOString(), retryAt ? null : input.now.toISOString(), retryAt,
+        input.owner.attemptId, input.owner.token, input.owner.revision, input.owner.leaseExpiresAt).changes
+      if (changed === 1) {
+        if (!retryAt) this.clearRetryPayloadInTransaction(input.owner.attemptId)
+        this.audit(row.channel_id, input.owner.attemptId, `channel-delivery-${status}`, input.now)
+      }
       return changed === 1
     })
+  }
+
+  markRetryTerminal(attemptId: string, code: string, now = new Date()): void {
+    this.database.connection.prepare(
+      `update channel_delivery_attempts set status = 'failed', stable_error_code = ?, next_attempt_at = null,
+         retry_payload_ciphertext = null, retry_payload_key_ref = null, retry_payload_key_revision = null,
+         completed_at = ?, updated_at = ? where id = ? and status = 'pending'`
+    ).run(code, now.toISOString(), now.toISOString(), attemptId)
+  }
+
+  private clearRetryPayloadInTransaction(attemptId: string): void {
+    this.database.connection.prepare(
+      `update channel_delivery_attempts set retry_payload_ciphertext = null, retry_payload_key_ref = null,
+         retry_payload_key_revision = null where id = ?`
+    ).run(attemptId)
   }
 
   // Recheck a durable owner immediately before crossing the transport boundary. This cannot
@@ -231,13 +306,16 @@ export class ChannelDeliveryRepository {
 
 type ClaimInput = { channelId: string; agentId: string; conversationId: string; source: ChannelDeliverySource; sourceId: string; requireTarget: boolean; executionClaim?: ChannelExecutionClaim; now: Date }
 type AttemptRow = { id: string; channel_id: string; agent_id: string; conversation_id: string; source_type: ChannelDeliverySource; source_hash: string; idempotency_key: string; status: ChannelDeliveryStatus }
-type OwnedRow = { id: string; channel_id: string; agent_id: string; conversation_id: string; source_type: ChannelDeliverySource }
+type OwnedRow = { id: string; channel_id: string; agent_id: string; conversation_id: string; source_type: ChannelDeliverySource; attempt_count: number }
 type ConversationCipherRow = { channel_id: string; conversation_key_ciphertext: Uint8Array; conversation_key_ref: string; conversation_key_revision: number }
 type AttemptViewRow = AttemptRow & { stable_error_code: string | null; created_at: string; updated_at: string; completed_at: string | null }
 type TaskAttemptRow = { id: string; channel_id: string; status: ChannelDeliveryStatus; stable_error_code: string | null; created_at: string; completed_at: string | null }
 type AuditRow = { id: string; channel_id: string; attempt_id: string | null; code: string; created_at: string }
 
 function canOwn(status: ChannelDeliveryStatus, retryUnknown: boolean): boolean { return status === 'pending' || (retryUnknown && status === 'unknown-after-send') }
+function deliveryBackoffMs(attemptCount: number): number {
+  return [5_000, 30_000, 120_000, 600_000, 1_800_000][Math.max(0, Math.min(attemptCount - 1, 4))] ?? 1_800_000
+}
 function hash(value: string): string { return createHash('sha256').update(value).digest('base64url') }
 function taskHashes(runLogId: string): [string, string, string] { return ['completed', 'failed', 'cancelled'].map((status) => hash(`${runLogId}:${status}`)) as [string, string, string] }
 function mapAttempt(row: AttemptRow): DeliveryAttempt { return { id: row.id, channelId: row.channel_id, agentId: row.agent_id, conversationId: row.conversation_id, source: row.source_type, sourceHash: row.source_hash, idempotencyKey: row.idempotency_key, status: row.status } }

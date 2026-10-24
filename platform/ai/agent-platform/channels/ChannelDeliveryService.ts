@@ -45,6 +45,15 @@ export class ChannelDeliveryService {
       if (!owner) {
         return { status: 'skipped', attemptId: attempt.id, errorCode: 'delivery-not-authorized' }
       }
+      if (request.source !== 'inbound-reply') {
+        const encrypted = await this.deps.cipher.encrypt(request.channelId, new TextEncoder().encode(output))
+        this.deps.repository.setRetryPayload({
+          attemptId: attempt.id,
+          ciphertext: encrypted.ciphertext,
+          keyRef: encrypted.keyRef,
+          keyRevision: encrypted.keyRevision
+        })
+      }
       const providerConversationKey = new TextDecoder().decode(await this.deps.cipher.decrypt({
         channelId: key.channelId, ciphertext: key.ciphertext, keyRef: key.keyRef, keyRevision: key.keyRevision
       }))
@@ -58,7 +67,7 @@ export class ChannelDeliveryService {
       const result = await this.deps.transport.send({ channelId: request.channelId, providerConversationKey, text: output, idempotencyKey: attempt.idempotencyKey })
       const status = result.kind
       const errorCode = result.kind === 'failed' ? result.code : null
-      const committed = this.deps.repository.finish({ owner, status, errorCode, executionClaim: request.executionClaim, now: this.now() })
+      const committed = this.deps.repository.finish({ owner, status, errorCode, retryable: isRetryableDeliveryError(errorCode), executionClaim: request.executionClaim, now: this.now() })
       return committed
         ? { status, attemptId: attempt.id, errorCode }
         : { status: 'unknown-after-send', attemptId: attempt.id, errorCode: 'delivery-lifecycle-fenced' }
@@ -83,5 +92,35 @@ export class ChannelDeliveryService {
     return Promise.all(targets.map((target) => this.deliver({ ...input, conversationId: target.conversationId })))
   }
 
+  /** Sends due retryable attempts from their encrypted payload; inbound replies use the run ledger. */
+  async retryDue(limit = 20): Promise<void> {
+    const due = this.deps.repository.listDueRetries(this.now(), limit)
+    for (const row of due) {
+      try {
+        const plaintext = await this.deps.cipher.decrypt({
+          channelId: row.channelId,
+          ciphertext: row.ciphertext,
+          keyRef: row.keyRef,
+          keyRevision: row.keyRevision
+        })
+        const result = await this.deliver({
+          channelId: row.channelId,
+          agentId: row.agentId,
+          conversationId: row.conversationId,
+          source: row.source,
+          sourceId: row.sourceId,
+          text: new TextDecoder().decode(plaintext)
+        })
+        if (result.status === 'skipped' && result.errorCode === 'delivery-not-authorized') {
+          this.deps.repository.markRetryTerminal(row.attemptId, 'delivery-not-authorized', this.now())
+        }
+      } catch { /* The next maintenance pass retries or the attempt stays terminal. */ }
+    }
+  }
+
   private now(): Date { return this.deps.now?.() ?? new Date() }
+}
+
+function isRetryableDeliveryError(code: string | null): boolean {
+  return code === 'delivery-rate-limited' || code === 'delivery-host-unavailable'
 }
