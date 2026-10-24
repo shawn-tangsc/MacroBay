@@ -1093,6 +1093,25 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_channel_delivery_attempts_due
         on channel_delivery_attempts(status, next_attempt_at asc, id asc);
     `
+  },
+  {
+    // Canonical read projection over the legacy carrier columns. The destructive rebuild waits
+    // until the legacy credential reconciler no longer needs config_json/migration_state.
+    id: '0032_channel_adapter_key_projection',
+    up: `
+      alter table agent_channels add column adapter_key text
+        generated always as (case when type = 'feishu' then 'lark' else type end) virtual;
+      alter table agent_channels add column lifecycle_state text
+        generated always as (
+          case migration_state
+            when 'runtime-ready' then 'enabled'
+            when 'configuration-ready' then 'ready'
+            else migration_state
+          end
+        ) virtual;
+      create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
+      create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state);
+    `
   }
 ]
 
