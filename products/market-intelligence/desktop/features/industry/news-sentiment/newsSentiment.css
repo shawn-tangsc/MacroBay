@@ -144,3 +144,33 @@
   .mi-news-drawer__body { grid-template-columns: minmax(0, 1fr); }
   .mi-news-drawer__detail { border-left: 0; border-top: 1px solid var(--border, #2a352b); padding-left: 0; padding-top: 10px; }
 }
+
+/* Empty state: centred in whatever height the column gives it, so the card reads as a state
+   rather than as a panel that failed to load. */
+.mi-news-sentiment__state--empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 18px;
+  text-align: center;
+  color: var(--muted, #93a196);
+}
+.mi-news-sentiment__state--empty > svg { opacity: .55; }
+.mi-news-sentiment__state--empty strong { font-size: 12.5px; color: var(--text, #e7efe5); font-weight: 600; }
+.mi-news-sentiment__state--empty p { margin: 0; max-width: 290px; font-size: 11px; line-height: 1.6; }
+.mi-news-sentiment__state--empty .is-primary {
+  margin-top: 4px;
+  border: 1px solid color-mix(in srgb, var(--accent, #d9f67f) 70%, transparent);
+  border-radius: 3px;
+  background: var(--accent, #d9f67f);
+  color: #10160e;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mi-news-sentiment__state--empty .is-primary:disabled { opacity: .6; cursor: default; }
+.mi-news-sentiment__state--empty .is-link { margin-top: 2px; font-size: 10.5px; }

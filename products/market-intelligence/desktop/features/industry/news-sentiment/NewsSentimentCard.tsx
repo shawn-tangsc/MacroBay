@@ -64,15 +64,17 @@ export function NewsSentimentCard(props: {
       ) : loading && !view ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><p>{text.loading}</p></div>
       ) : !summary ? (
-        <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
-          <p>{text.empty}</p>
+        <div className="mi-news-sentiment__state mi-news-sentiment__state--empty" data-news-sentiment-state="empty">
+          <Newspaper aria-hidden="true" size={22} />
+          <strong>{text.emptyTitle}</strong>
+          <p>{text.emptyBody}</p>
           {props.onEnableSources ? (
-            <button disabled={props.enablingSources} onClick={props.onEnableSources} type="button">
+            <button className="is-primary" disabled={props.enablingSources} onClick={props.onEnableSources} type="button">
               {props.enablingSources ? text.enablingSources : text.enableSources}
             </button>
           ) : null}
           {props.enableSourcesFailed ? <p role="alert">{text.enableSourcesFailed}</p> : null}
-          <button onClick={props.onOpenAll} type="button">{text.openAll}</button>
+          <button className="is-link" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
         </div>
       ) : (
         <>
