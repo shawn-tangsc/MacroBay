@@ -2039,8 +2039,8 @@ describe('claude code runtime dependency helpers', () => {
             tools: [
               expect.objectContaining({
                 name: 'skill__code-reader__read-docs',
-                description: 'Code Reader skill tool: Read Docs',
-                schema: { type: 'object' }
+                description: expect.stringContaining('Code Reader skill tool: Read Docs'),
+                schema: expect.anything()
               })
             ]
           }

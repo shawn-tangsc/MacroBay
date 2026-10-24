@@ -84,10 +84,13 @@ describe('buildSkillToolSdkMcpServers', () => {
     expect(Object.keys(servers)).toEqual(['agent-skills'])
     expect(sdk.tool).toHaveBeenCalledWith(
       'skill__code-reader__read-docs',
-      'Code Reader skill tool: Read Docs',
-      { type: 'object' },
+      expect.stringContaining('Code Reader skill tool: Read Docs'),
+      expect.anything(),
       expect.any(Function)
     )
+    const skillSchema = sdk.tool.mock.calls[0]?.[2] as { safeParse: (value: unknown) => { success: boolean } }
+    expect(skillSchema.safeParse({ path: 'README.md' }).success).toBe(true)
+    expect(skillSchema.safeParse({ unexpected: true }).success).toBe(false)
 
     const handler = sdk.tool.mock.calls[0]?.[3] as (args: Record<string, unknown>) => Promise<unknown>
     await expect(handler({ path: 'README.md' })).resolves.toEqual({

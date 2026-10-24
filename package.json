@@ -64,6 +64,7 @@
     "node-ical": "0.27.1",
     "proxy-agent": "^8.0.2",
     "telegram-markdown-v2": "^0.0.4",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
   }
 }
