@@ -127,7 +127,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     }
     await reconciler.reconcile()
 
-    const missingVault = createVaultFake()
+    const missingVault = createVaultFake({ providerInitiallyPresent: false })
     await new ChannelCredentialMigrationReconciler({ database, vault: missingVault, now: () => now }).reconcile()
 
     expect(missingVault.delete).not.toHaveBeenCalled()
