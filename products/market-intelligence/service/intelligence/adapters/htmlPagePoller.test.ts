@@ -96,7 +96,9 @@ describe('htmlPagePollerAdapter', () => {
         language: 'en',
         adapterConfig: {
           pageUrl: 'https://www.binance.com/en/support/announcement',
-          pageSize: 20
+          pageSize: 20,
+          // The fixture is historical; the freshness window is covered by the parser test.
+          maxAgeDays: 0
         }
       } as never,
       runId: 'run-1'
