@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { conclusionBlocksFromStructured, parseConclusionBlocks, conclusionSummaryText, conclusionWithoutDirection, readConclusionDirection } from './analysisConclusionBlocks'
+import { conclusionBlocksFromStructured, parseConclusionBlocks, conclusionSummaryText, conclusionWithoutDirection, readConclusion, readConclusionDirection } from './analysisConclusionBlocks'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 describe('conclusion block parsing', () => {
@@ -90,19 +90,20 @@ describe('direction keys and legacy terms', () => {
   })
 })
 
-describe('structured conclusion blocks', () => {
-  const conclusion = {
-    summary: '收益率上行压制风险资产。',
-    change: 'ETF 净流出 6,540 万美元。',
-    causalChain: '通胀高于前值 → 实际利率上升 → 风险资产承压。',
-    conditions: ['通胀粘性持续。', '美元不回落。'],
-    macro: '美债收益率上行。',
-    evidenceStrength: '反向证据较弱。',
-    dataGaps: ['缺少市场预期值。']
-  }
+const structuredConclusion = {
+  direction: 'bearish' as const,
+  summary: '收益率上行压制风险资产。',
+  change: 'ETF 净流出 6,540 万美元。',
+  causalChain: '通胀高于前值 → 实际利率上升 → 风险资产承压。',
+  conditions: ['通胀粘性持续。', '美元不回落。'],
+  macro: '美债收益率上行。',
+  evidenceStrength: '反向证据较弱。',
+  dataGaps: ['缺少市场预期值。']
+}
 
+describe('structured conclusion blocks', () => {
   it('maps fields to the same block kinds the labelled paragraph produced', () => {
-    expect(conclusionBlocksFromStructured(conclusion)).toEqual([
+    expect(conclusionBlocksFromStructured(structuredConclusion)).toEqual([
       { kind: 'text', text: '收益率上行压制风险资产。' },
       { kind: 'change', text: 'ETF 净流出 6,540 万美元。' },
       { kind: 'causal-chain', text: '通胀高于前值 → 实际利率上升 → 风险资产承压。' },
@@ -115,8 +116,24 @@ describe('structured conclusion blocks', () => {
   })
 
   it('omits empty optional fields instead of rendering empty rows', () => {
-    const kinds = conclusionBlocksFromStructured({ ...conclusion, macro: null, evidenceStrength: null, conditions: [], dataGaps: [] })
+    const kinds = conclusionBlocksFromStructured({ ...structuredConclusion, macro: null, evidenceStrength: null, conditions: [], dataGaps: [] })
       .map(block => block.kind)
     expect(kinds).toEqual(['text', 'change', 'causal-chain'])
+  })
+})
+
+describe('reading a conclusion of either contract generation', () => {
+  it('reads the structured generation without needing the legacy field', () => {
+    const reading = readConclusion({ conclusion: structuredConclusion })
+    expect(reading.direction).toBe('bearish')
+    expect(reading.verdict).toBe('收益率上行压制风险资产。')
+    expect(reading.blocks[0]).toEqual({ kind: 'text', text: '收益率上行压制风险资产。' })
+  })
+
+  it('still reads a legacy labelled paragraph when no structured conclusion was written', () => {
+    const reading = readConclusion({ eventAssessment: '方向：偏空：资金面转弱。本次变化：净流入转为流出。' })
+    expect(reading.direction).toBe('bearish')
+    expect(reading.verdict).toBe('资金面转弱。')
+    expect(reading.blocks.map(block => block.kind)).toEqual(['text', 'change'])
   })
 })

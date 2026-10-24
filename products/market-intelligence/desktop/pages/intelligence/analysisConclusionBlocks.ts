@@ -1,4 +1,6 @@
-import { parseConclusionDirection } from './analysisConclusionDirectionPolicy'
+import type { AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
+import type { MarketAnalysisReadableLocale, MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
+import { parseConclusionDirection, type AnalysisConclusionDirection } from './analysisConclusionDirectionPolicy'
 
 /**
  * Presentation policy for the published conclusion body.
@@ -35,7 +37,12 @@ export type AnalysisConclusionBlock = Readonly<{ kind: AnalysisConclusionBlockKi
  */
 export function parseConclusionBlocks(conclusion: string): readonly AnalysisConclusionBlock[] {
   // The legacy contract carried «方向：<术语>：»; structured summaries never reach this parser.
-  const withoutMarker = parseConclusionDirection(conclusion).body.trim()
+  return splitConclusionBlocks(parseConclusionDirection(conclusion).body)
+}
+
+/** The block split itself, for callers that already stripped the direction marker. */
+function splitConclusionBlocks(body: string): readonly AnalysisConclusionBlock[] {
+  const withoutMarker = body.trim()
   if (!withoutMarker) return []
 
   // Split on every known label, keeping the label with the part that follows it.
@@ -113,6 +120,36 @@ export function conclusionSummaryText(body: string): string {
     .filter(index => index >= 0)
   if (cuts.length === 0) return text.trim()
   return text.slice(0, Math.min(...cuts)).replace(/[，,、；;\s]+$/u, '').trim()
+}
+
+/**
+ * One published conclusion, read through whichever contract generation wrote it.
+ *
+ * Current runs write the structured `conclusion`; summaries published before it carry the labelled
+ * `eventAssessment` paragraph instead. Every surface reads through here, so no surface can show one
+ * generation's fields while the other is published: the at-a-glance card read only the legacy field
+ * and lost the verdict entirely once the structured contract started being written.
+ */
+export type ConclusionReading = Readonly<{
+  /** Undefined when the published conclusion carries no explicit direction. */
+  direction?: AnalysisConclusionDirection
+  /** The whole conclusion as renderable blocks, in contract order. */
+  blocks: readonly AnalysisConclusionBlock[]
+  /** The one-sentence verdict: the structured summary, or the legacy paragraph before its first label. */
+  verdict: string
+}>
+
+export function readConclusion(
+  summary: Pick<AnalysisSummary, 'conclusion' | 'eventAssessment'>,
+  readableNames?: MarketAnalysisReadableNames,
+  locale: MarketAnalysisReadableLocale = 'zh-CN'
+): ConclusionReading {
+  const structured = summary.conclusion
+  if (structured) {
+    return { direction: structured.direction, blocks: conclusionBlocksFromStructured(structured), verdict: structured.summary.trim() }
+  }
+  const legacy = parseConclusionDirection(summary.eventAssessment ?? '', readableNames, locale)
+  return { direction: legacy.direction, blocks: splitConclusionBlocks(legacy.body), verdict: conclusionSummaryText(legacy.body) }
 }
 
 /** The direction the conclusion states, read from its own leading marker, for a coloured tag. */

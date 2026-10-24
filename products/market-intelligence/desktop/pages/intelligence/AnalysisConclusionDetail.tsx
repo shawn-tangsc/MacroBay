@@ -3,9 +3,9 @@ import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalys
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import { formatChangeEntries, type MarketAnalysisChangeEntry } from './marketAnalysisChangeFormat'
-import { conclusionBlocksFromStructured, parseConclusionBlocks } from './analysisConclusionBlocks'
+import { readConclusion } from './analysisConclusionBlocks'
 import { AnalysisDirectionsBlock, type AnalysisDirectionsText } from './AnalysisDirectionsBlock'
-import { analysisConclusionDirectionPolicy, parseConclusionDirection, type AnalysisConclusionDirection } from './analysisConclusionDirectionPolicy'
+import { analysisConclusionDirectionPolicy, type AnalysisConclusionDirection } from './analysisConclusionDirectionPolicy'
 
 export type AnalysisDetailText = Readonly<{
   /** Panel heading used by the node detail drawer. */
@@ -75,12 +75,10 @@ export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: Ma
   const formatTime = useShellTimeFormat()
   const summary = detail.summary
   const locale = text.readableLocale ?? 'zh-CN'
-  // Two contract generations: a structured conclusion (current) or the legacy labelled paragraph.
-  const structured = summary.conclusion
-  const legacy = structured ? undefined : parseConclusionDirection(summary.eventAssessment ?? '', conclusionReadableNames, locale)
-  const direction = structured?.direction ?? legacy?.direction
-  const blocks = (structured ? conclusionBlocksFromStructured(structured) : parseConclusionBlocks(legacy?.body ?? ''))
-    .map(block => ({ ...block, text: localizeAnalysisMagnitudeUnits(block.text, locale) }))
+  // Two contract generations: a structured conclusion (current) or the legacy labelled paragraph,
+  // read through the same projection the at-a-glance card uses.
+  const { direction, blocks } = readConclusion(summary, conclusionReadableNames, locale)
+  const localizedBlocks = blocks.map(block => ({ ...block, text: localizeAnalysisMagnitudeUnits(block.text, locale) }))
   return <div className="mi-analysis-timeline__detail-content">
     <section className="mi-analysis-timeline__conclusion" data-direction={direction ?? 'none'}
       style={direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[direction]})` } as React.CSSProperties : undefined}>
@@ -90,7 +88,7 @@ export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: Ma
       </header>
       {(detail.summary.directions ?? []).length > 0 ? <AnalysisDirectionsBlock directions={detail.summary.directions!} text={text.directions} /> : null}
       <div className="mi-analysis-conclusion__body">
-        {blocks.map((block, index) => block.kind === 'text'
+        {localizedBlocks.map((block, index) => block.kind === 'text'
           ? <p className="mi-analysis-conclusion__text" key={`text-${index}`}>{block.text}</p>
           : <div className="mi-analysis-conclusion__block" data-block={block.kind} key={`${block.kind}-${index}`}>
             <span className="mi-analysis-conclusion__block-title">{text.conclusionBlocks[block.kind] ?? block.kind}</span>

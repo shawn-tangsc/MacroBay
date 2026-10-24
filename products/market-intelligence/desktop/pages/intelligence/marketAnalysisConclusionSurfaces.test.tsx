@@ -146,6 +146,31 @@ describe('market analysis conclusion surfaces', () => {
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.getSummary', { id: 'mi-as-1' })
   })
 
+  it('shows the verdict from the structured conclusion, not only the operation directions', async () => {
+    // Reported symptom: the card showed 操作方向建议 and no conclusion text. The card read
+    // `eventAssessment`, which current runs no longer write; the verdict now lives in the
+    // structured `conclusion`, the same contract the detail drawer already reads.
+    const structured = {
+      direction: 'bearish',
+      summary: '通胀读数高于前值压低实际利率下行空间，稳定币收缩叠加 ETF 净流出，现货买盘转弱。',
+      change: '无变化。',
+      causalChain: '通胀高于前值 → 实际利率下行受限 → 现货需求下降。',
+      conditions: ['稳定币继续收缩。'],
+      macro: null,
+      evidenceStrength: null,
+      dataGaps: []
+    }
+    // Same merged text the dashboard layout hands the card, so the direction label is real here.
+    const { container } = await mountSurface([entry()], timeline =>
+      createElement(LatestAnalysisConclusionCard, { text: { ...timelineText, ...workspaceText }, workspaceText, timeline, onOpenDetail: vi.fn() }),
+      { summaryValue: { ...summary(), eventAssessment: undefined, conclusion: structured } })
+
+    const card = container.querySelector('.mi-analysis-conclusion-card') as HTMLElement
+    expect(card.querySelector('.mi-analysis-conclusion-card__conclusion')?.textContent).toContain(structured.summary)
+    expect(card.querySelector('.mi-analysis-conclusion__direction')?.textContent).toBe('偏空')
+    expect(card.querySelector('.mi-analysis-conclusion-card__body')?.getAttribute('data-direction')).toBe('bearish')
+  })
+
   it('keeps the conclusion card out of the main area while the capability is off', async () => {
     const disabled = await mountSurface([entry()], timeline =>
       createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),

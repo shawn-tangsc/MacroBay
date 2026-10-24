@@ -2,12 +2,13 @@ import { useEffect } from 'react'
 import { Button } from 'antd'
 import { Sparkles } from 'lucide-react'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
+import { localizeAnalysisMagnitudeUnits } from '../../../contracts/marketAnalysisReadableText'
 import type { AnalysisConclusionDetail, AnalysisDetailText } from './AnalysisConclusionDetail'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
-import { analysisConclusionDirectionPolicy, parseConclusionDirection } from './analysisConclusionDirectionPolicy'
+import { analysisConclusionDirectionPolicy } from './analysisConclusionDirectionPolicy'
 import { AnalysisDirectionsBlock } from './AnalysisDirectionsBlock'
-import { conclusionSummaryText } from './analysisConclusionBlocks'
+import { readConclusion } from './analysisConclusionBlocks'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import type { UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisSettings } from './useMarketAnalysisSettings'
@@ -43,10 +44,15 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   const latest = selectLatestPublishedEntry(state.entries)
   const detail = latest ? details[latest.id] : undefined
   const pending = latest ? detailState[latest.id] : undefined
-  const conclusion = parseConclusionDirection(detail?.summary.eventAssessment ?? '', conclusionReadableNames, text.readableLocale ?? 'zh-CN')
+  // Both contract generations, read exactly as the drawer reads them: the structured conclusion
+  // current runs write, or the legacy labelled paragraph. Reading only the legacy field is what left
+  // this card with the operation directions and no verdict once the structured contract shipped.
+  const locale = text.readableLocale ?? 'zh-CN'
+  const reading = detail ? readConclusion(detail.summary, conclusionReadableNames, locale) : undefined
   // The verdict only: the card is read at a glance and the labelled parts (本次变化、因果链…) are one
   // click away in the drawer, so they are cut here rather than shortened.
-  const verdict = conclusionSummaryText(conclusion.body)
+  const verdict = localizeAnalysisMagnitudeUnits(reading?.verdict ?? '', locale)
+  const direction = reading?.direction
 
   useEffect(() => {
     if (latest) timeline.ensureDetail(latest)
@@ -69,10 +75,10 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
     {!latest && !state.loading ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
     {latest && pending === 'loading' ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionLoading}</p> : null}
     {latest && pending === 'unavailable' ? <p role="alert" className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionUnavailable}</p> : null}
-    {latest && detail ? <div className="mi-analysis-conclusion-card__body" data-direction={conclusion.direction ?? 'none'}
-      style={conclusion.direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[conclusion.direction]})` } as React.CSSProperties : undefined}>
+    {latest && detail ? <div className="mi-analysis-conclusion-card__body" data-direction={direction ?? 'none'}
+      style={direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[direction]})` } as React.CSSProperties : undefined}>
       <p className="mi-analysis-conclusion-card__conclusion">
-        {conclusion.direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[conclusion.direction]}`}>{text.conclusionDirection[conclusion.direction]}</span> : null}
+        {direction ? <span className="mi-analysis-conclusion__direction" role="note" aria-label={`${text.conclusionDirection.label}：${text.conclusionDirection[direction]}`}>{text.conclusionDirection[direction]}</span> : null}
         {verdict}
       </p>
       {(detail.summary.directions ?? []).length > 0 ? <AnalysisDirectionsBlock directions={detail.summary.directions!} text={text.directions} hideLowConfidenceRows /> : null}
