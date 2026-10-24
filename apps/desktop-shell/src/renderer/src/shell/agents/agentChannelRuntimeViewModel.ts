@@ -1,4 +1,4 @@
-import type { AgentChannelRuntimeSnapshot, AgentChannelRuntimeSnapshotEntry } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot, AgentChannelRuntimeSnapshotEntry } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentChannelEntity } from '@platform/ai/agent-platform/schemas/channelSchemas'
 
 import type { AgentText } from './agentText'

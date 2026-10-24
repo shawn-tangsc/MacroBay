@@ -1,6 +1,6 @@
 import { Drawer } from 'antd'
 
-import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentSessionRuntimeStateBySessionId } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { AgentSessionPanelPosition } from '@platform/settings/schema/appSettings'

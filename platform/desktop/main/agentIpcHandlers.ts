@@ -16,7 +16,7 @@ import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/a
 import type { ToolApprovalDecision } from '../../ai/agent-platform/runtime/policy'
 import type { AgentSkillsRuntimeCatalog } from '../../ai/agent-platform/skills/skillRuntimeSchemas'
 import type { AgentStoreState } from '../../ai/agent-platform/store/agentStore'
-import type { AgentChannelRuntimeSnapshot } from '../../ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '../../ai/agent-platform/channels/channelRuntimeSnapshot'
 import { addRuntimeErrorTurnToState, buildRuntimeTurnResult } from '../../ai/agent-platform/runtime/agentTurnPersistence'
 import type { AgentRuntimeId } from '../../ai/agent-platform/runtime/compatibility/agentRuntimeCompatibilityTypes'
 import {

@@ -16,7 +16,7 @@ import type {
 import type { AgentSessionWorkspaceSource } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { AgentSaveIntent } from '@platform/ai/agent-platform/agents/agentConfigDescriptor'
-import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 
 export async function selectSessionViaApi(platform: Window['platform'], sessionId: string): Promise<AgentStoreState> {

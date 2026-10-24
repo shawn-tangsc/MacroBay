@@ -2,7 +2,7 @@ import type {
   AgentChannelRuntimeSnapshot,
   AgentChannelRuntimeSnapshotEntry,
   AgentChannelRuntimeState
-} from './ChannelRuntimeService'
+} from './channelRuntimeSnapshot'
 import type { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
 
 type SupervisorDependencies = {

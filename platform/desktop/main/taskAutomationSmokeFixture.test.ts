@@ -8,12 +8,11 @@ import {
   TASK_AUTOMATION_SMOKE_CREATE_PROMPT,
   TASK_AUTOMATION_SMOKE_RUNTIME_FAILURE_PROMPT,
   createTaskAutomationSmokeDriver,
-  createTaskAutomationSmokeLoopbackHost,
   createTaskAutomationSmokeSeed
 } from './taskAutomationSmokeFixture'
 
 describe('task automation smoke fixture', () => {
-  it('seeds generic local task data with a loopback-only channel sentinel', () => {
+  it('seeds generic local task data without channel credentials', () => {
     const seed = createTaskAutomationSmokeSeed('2026-07-17T00:00:00.000Z')
 
     expect(seed.agents).toEqual([
@@ -21,14 +20,6 @@ describe('task automation smoke fixture', () => {
         id: TASK_AUTOMATION_SMOKE_AGENT_ID,
         configuration: expect.objectContaining({ permission_mode: 'bypassPermissions' })
       })
-    ])
-    expect(seed.channels).toEqual([
-      expect.objectContaining({
-        id: 'task-smoke-loopback',
-        activeChatIds: ['task-smoke-chat'],
-        config: { bot_token: 'loopback-only' }
-      }),
-      expect.objectContaining({ id: 'task-smoke-inactive', isActive: false, config: { bot_token: 'loopback-only' } })
     ])
     expect(JSON.stringify(seed)).not.toContain('http')
     expect(JSON.stringify(seed)).not.toContain('api-key')
@@ -39,7 +30,6 @@ describe('task automation smoke fixture', () => {
 
     expect(source).not.toMatch(/from ['"][^'"]*telegram/i)
     expect(source).not.toMatch(/\b(fetch|WebSocket|https?)\b/)
-    expect(source).toContain("bot_token: 'loopback-only'")
   })
 
   it('recognizes only the documented fixture prompt before invoking the shared Agent task tool', async () => {
@@ -112,14 +102,4 @@ describe('task automation smoke fixture', () => {
     })).rejects.toThrow('task-smoke-runtime-failed')
   })
 
-  it('keeps loopback delivery in-process, failing one target before a local retry succeeds', async () => {
-    const sent: Array<{ chatId: string; text: string }> = []
-    const host = createTaskAutomationSmokeLoopbackHost(sent)
-    await host.connect()
-
-    await expect(host.sendMessage?.('task-smoke-chat', 'first')).rejects.toThrow('task-smoke-delivery-failed')
-    await expect(host.sendMessage?.('task-smoke-chat', 'retry')).resolves.toBeUndefined()
-
-    expect(sent).toEqual([{ chatId: 'task-smoke-chat', text: 'retry' }])
-  })
 })
