@@ -16,6 +16,8 @@ import type {
   IntelligenceWorkspaceView
 } from '../application/intelligenceWorkspaceQueries'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
+import { enqueueIntelligencePipelineJobs } from '../jobs/enqueueIntelligencePipelineJobs'
+import { INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -99,7 +101,11 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
   register(PRODUCT_ID, 'intelligence.saveNewsSentimentSettings', async (payload) => {
     const patch = (payload ?? {}) as Record<string, unknown>
     if (typeof patch !== 'object' || Array.isArray(patch)) throw new Error('A settings patch is required.')
-    return getIntelligenceModule(jobRuntime).newsSentiment.settings.save(patch as never)
+    const result = await getIntelligenceModule(jobRuntime).newsSentiment.settings.save(patch as never)
+    // A new model or switch only affects items judged after it; rescore the recent ones now so the
+    // card does not keep showing rule judgments until the next collection happens to run.
+    await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {}).catch(() => undefined)
+    return result
   })
 
   register(PRODUCT_ID, 'intelligence.getDetail', async (payload) => {
