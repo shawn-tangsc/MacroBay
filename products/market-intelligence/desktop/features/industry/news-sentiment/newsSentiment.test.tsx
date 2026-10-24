@@ -98,7 +98,7 @@ describe('NewsSentimentFeature', () => {
         onRefresh={() => undefined} onSelectItem={() => undefined} onWindowChange={() => undefined} text={text}
         view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} window="24h" />
     )
-    expect(container.textContent).toContain(text.emptyTitle)
+    expect(container.textContent).toContain(text.empty)
     expect(container.textContent).not.toContain('0.00')
   })
 })

@@ -21,17 +21,10 @@ export function NewsSentimentCard(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
-  onEnableSources?: () => void
-  onCollectNow?: () => void
-  enablingSources?: boolean
-  collecting?: boolean
-  enableSourcesFailed?: boolean
-  enabledSourceCount?: number
 }): React.ReactElement {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
   const summary = view?.state === 'available' ? view.summary : undefined
-  const enabledSourceCount = props.enabledSourceCount ?? 0
   const drivers = summary ? [...(view?.items ?? [])].sort((a, b) => b.strength * b.confidence - a.strength * a.confidence).slice(0, 3) : []
 
   return (
@@ -68,21 +61,8 @@ export function NewsSentimentCard(props: {
       ) : loading && !view ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><p>{text.loading}</p></div>
       ) : !summary ? (
-        <div className="mi-news-sentiment__state mi-news-sentiment__state--empty" data-news-sentiment-state="empty">
-          <Newspaper aria-hidden="true" size={22} />
-          <strong>{enabledSourceCount > 0 ? text.waitingTitle.replace('{count}', String(enabledSourceCount)) : text.emptyTitle}</strong>
-          <p>{enabledSourceCount > 0 ? text.waitingBody : text.emptyBody}</p>
-          {enabledSourceCount > 0 ? (
-            <button className="is-primary" disabled={props.collecting} onClick={props.onCollectNow} type="button">
-              {props.collecting ? text.collecting : text.collectNow}
-            </button>
-          ) : props.onEnableSources ? (
-            <button className="is-primary" disabled={props.enablingSources} onClick={props.onEnableSources} type="button">
-              {props.enablingSources ? text.enablingSources : text.enableSources}
-            </button>
-          ) : null}
-          {props.enableSourcesFailed ? <p role="alert">{text.enableSourcesFailed}</p> : null}
-          <button className="is-link" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
+        <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
+          <p>{text.empty}</p>
         </div>
       ) : (
         <>
