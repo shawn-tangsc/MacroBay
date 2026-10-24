@@ -10,6 +10,7 @@ import { ChannelSecureHandoff } from '../ChannelSecureHandoff'
 import { parseLegacyChannelCredentialMigrationSource } from '../channelCredentialMigrationContracts'
 import { decodeWechatConversation, encodeWechatConversation, splitWechatText } from './WechatContracts'
 import { WechatDeliveryTransport } from './WechatDeliveryTransport'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { WechatEnrollmentRepository } from './WechatEnrollmentRepository'
 import { WechatRuntimeManager } from './WechatRuntimeManager'
 import { WechatRuntimeRepository } from './WechatRuntimeRepository'
@@ -180,6 +181,7 @@ describe('WeChat Release F safety foundation', () => {
         values('legacy-pending','legacy-wechat','pending','2026-07-01','2026-07-01'),
         ('legacy-terminal','legacy-wechat','cancelled','2026-07-01','2026-07-01');
     `)
+    seedChannelAdapterSupport(database, ['telegram'])
     const repository = new ChannelManagementRepository(database)
     const enrollments = new WechatEnrollmentRepository(database)
     const runtime = new WechatRuntimeRepository(database)

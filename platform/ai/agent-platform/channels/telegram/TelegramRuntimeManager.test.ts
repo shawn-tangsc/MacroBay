@@ -5,6 +5,7 @@ import { ChannelInboundRepository } from '../ChannelInboundRepository'
 import { TelegramDeliveryTransport } from './TelegramDeliveryTransport'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramRuntimeManager } from './TelegramRuntimeManager'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 
 describe('TelegramRuntimeManager', () => {
   it('contains Vault/getMe failures and leaves no client or host lifetime behind', async () => {
@@ -69,4 +70,5 @@ function seedActive(database: ReturnType<typeof createAgentPlatformDatabase>): v
     insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('channel-a','telegram','Telegram','agent-a','{}',1,'runtime-ready','configured','2026-07-19','2026-07-19');
     insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('channel-a',1,'active','2026-07-19');
   `)
+  seedChannelAdapterSupport(database, ['telegram'])
 }

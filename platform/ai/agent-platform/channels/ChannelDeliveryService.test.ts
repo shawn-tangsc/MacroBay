@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelDeliveryRepository } from './ChannelDeliveryRepository'
 import { ChannelDeliveryService } from './ChannelDeliveryService'
+import { seedChannelAdapterSupport } from './channelTestSupport'
 
 describe('ChannelDeliveryService', () => {
   it('uses only enabled targets, stores no text, and keeps one terminal attempt per source', async () => {
@@ -203,6 +204,7 @@ function harness(enabled = true, beforeSendOwnership?: () => void) {
     insert into channel_conversations (id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at) values ('conversation-discovered', 'channel-a', x'646973636f7665726564', 'ref', 1, 'hash-b', 'direct', 'session-b', '2026-01-01', '2026-01-01');
     ${enabled ? "insert into channel_delivery_targets (id, channel_id, conversation_id, enabled, created_at, updated_at) values ('target-a', 'channel-a', 'conversation-a', 1, '2026-01-01', '2026-01-01');" : ''}
   `)
+  seedChannelAdapterSupport(database, ['telegram', 'slack', 'lark'])
   const transport = { send: vi.fn(async () => ({ kind: 'delivered' as const })), supportsIdempotency: vi.fn(() => false) }
   const cipher = cipherForTests()
   return { database, transport, service: new ChannelDeliveryService({ repository: new ChannelDeliveryRepository(database), cipher, transport, now: () => new Date('2026-07-18T00:00:00.000Z'), beforeSendOwnership }) }

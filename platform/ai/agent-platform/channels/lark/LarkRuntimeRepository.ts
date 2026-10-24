@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { larkChannelSql, runtimeAuthorizedChannelSql } from '../ChannelManagementPredicates'
+import { larkChannelSql, supportedChannelSql } from '../ChannelManagementPredicates'
 
 const LARK_CHANNEL_C_SQL = larkChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** Lark runtime persistence is code-only metadata; events and provider identifiers remain encrypted C03 payload. */
 export class LarkRuntimeRepository {

@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { runtimeAuthorizedChannelSql } from '../ChannelManagementPredicates'
+import { supportedChannelSql } from '../ChannelManagementPredicates'
 
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** Metadata-only polling cursor. It never stores a Telegram update body or token. */
 export class TelegramOffsetRepository {

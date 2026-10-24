@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ChannelCredentialArchiveReservedInspection, ChannelCredentialMigrationReservation, ChannelCredentialSafeView, ChannelCredentialVault, ChannelPayloadCipher } from '../../../secrets/channels/channelCredentialContracts'
 import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegistry'
+import { seedChannelAdapterSupport } from './channelTestSupport'
 import { assertLarkSecret, assertSlackSecret } from './ChannelManagementContracts'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
 import { ChannelManagementService } from './ChannelManagementService'
@@ -1072,6 +1073,7 @@ async function encryptHandoff(
 
 function harness(options: { failDelete?: boolean; failArchiveDelete?: boolean; failPutReserved?: boolean; failRotate?: boolean; failDestroy?: boolean } = {}) {
   const database = createAgentPlatformDatabase(':memory:')
+  seedChannelAdapterSupport(database, ['telegram'])
   database.connection.exec(`insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','general','Agent','[]','[]','0','2026-01-01','2026-01-01')`)
   const vault = new FakeVault(options.failDelete ?? false, options.failArchiveDelete ?? false, options.failPutReserved ?? false, options.failRotate ?? false)
   const cipher = new FakeCipher(options.failDestroy ?? false)

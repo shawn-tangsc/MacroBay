@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { discordChannelSql, runtimeAuthorizedChannelSql } from '../ChannelManagementPredicates'
+import { discordChannelSql, supportedChannelSql } from '../ChannelManagementPredicates'
 
 const DISCORD_CHANNEL_C_SQL = discordChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** State transition only; authorization remains inside DiscordRuntimeRepository.commitIfCurrent. */
 export function discordGatewayStateUpsertSql(): string {

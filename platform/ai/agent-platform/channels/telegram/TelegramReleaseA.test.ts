@@ -10,6 +10,7 @@ import { createDefaultAppSettings } from '../../../../settings/schema/appSetting
 import { splitTelegramText, stableTelegramAttachment } from './TelegramContracts'
 import { TelegramApiClient } from './TelegramApiClient'
 import { TelegramDeliveryTransport } from './TelegramDeliveryTransport'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramPollingHost } from './TelegramPollingHost'
 import { normalizeTelegramUpdate } from './TelegramUpdateNormalizer'
@@ -150,6 +151,7 @@ function seedActive(database: ReturnType<typeof createAgentPlatformDatabase>, ch
   database.connection.prepare("insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-19','2026-07-19')").run()
   database.connection.prepare("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values(?, 'telegram', 'Telegram', 'agent-a', '{}', 1, 'runtime-ready', 'configured', '2026-07-19','2026-07-19')").run(channelId)
   database.connection.prepare("insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,?, 'active','2026-07-19')").run(channelId, generation)
+  seedChannelAdapterSupport(database, ['telegram'])
 }
 
 function response(status: number, body: unknown): Response {

@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
-import { runtimeAuthorizedChannelSql } from './ChannelManagementPredicates'
+import { supportedChannelSql } from './ChannelManagementPredicates'
 import type { ChannelDeliveryAttemptView, ChannelDeliverySource, ChannelDeliveryStatus, ChannelDeliveryAuditView } from './ChannelDeliveryContracts'
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
 
-const MANAGED_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const SUPPORTED_CHANNEL_C_SQL = supportedChannelSql('c')
 
 export type DeliveryAttempt = {
   id: string
@@ -113,7 +113,7 @@ export class ChannelDeliveryRepository {
        and exists (select 1 from channel_conversations v join agent_channels c on c.id = v.channel_id
          join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active' join agent_entities a on a.id = c.agent_id
          where v.id = d.conversation_id and v.channel_id = d.channel_id and c.agent_id = d.agent_id
-           and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+           and ${SUPPORTED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
            and (d.source_type = 'inbound-reply' or exists (select 1 from channel_delivery_targets t where t.channel_id = v.channel_id and t.conversation_id = v.id and t.enabled = 1))
            and (? is null or exists (select 1 from channel_inbound_work_items w join channel_receipts r on r.id = w.receipt_id
              where w.id = ? and w.receipt_id = ? and w.channel_id = v.channel_id and w.conversation_id = v.id and w.dispatch_id = ?
@@ -137,20 +137,21 @@ export class ChannelDeliveryRepository {
     const row = this.database.connection.prepare(
       `select v.channel_id, v.conversation_key_ciphertext, v.conversation_key_ref, v.conversation_key_revision
        from channel_conversations v join agent_channels c on c.id = v.channel_id
-       where v.id = ? and ${MANAGED_CHANNEL_C_SQL}`
+       where v.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
     ).get(conversationId) as ConversationCipherRow | undefined
     return row ? { channelId: row.channel_id, ciphertext: row.conversation_key_ciphertext, keyRef: row.conversation_key_ref, keyRevision: row.conversation_key_revision } : null
   }
 
   listEnabledTargets(channelId: string, agentId: string): Array<{ conversationId: string }> {
-    return this.database.connection.prepare(
+    const rows = this.database.connection.prepare(
       `select t.conversation_id from channel_delivery_targets t join channel_conversations v on v.id = t.conversation_id and v.channel_id = t.channel_id
        join agent_channels c on c.id = t.channel_id join agent_entities a on a.id = c.agent_id
        join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active'
-       where t.channel_id = ? and t.enabled = 1 and c.agent_id = ? and ${MANAGED_CHANNEL_C_SQL}
+       where t.channel_id = ? and t.enabled = 1 and c.agent_id = ? and ${SUPPORTED_CHANNEL_C_SQL}
          and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
        order by t.updated_at asc, t.id asc`
-    ).all(channelId, agentId) as Array<{ conversationId: string }>
+    ).all(channelId, agentId) as Array<{ conversation_id: string }>
+    return rows.map((row) => ({ conversationId: row.conversation_id }))
   }
 
   hasEnabledTarget(channelId: string, agentId: string): boolean {
@@ -177,8 +178,8 @@ export class ChannelDeliveryRepository {
   listTaskAttempts(input: { agentId: string; runLogId: string; limit: number; offset: number }): { attempts: Array<{ id: string; channelId: string; status: ChannelDeliveryStatus; errorCode: string | null; createdAt: string; completedAt: string | null }>; total: number } {
     const hashes = taskHashes(input.runLogId)
     const where = `d.agent_id = ? and d.source_type = 'task-result' and d.source_hash in (?, ?, ?)`
-    const rows = this.database.connection.prepare(`select d.id, d.channel_id, d.status, d.stable_error_code, d.created_at, d.completed_at from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${MANAGED_CHANNEL_C_SQL} and ${where} order by d.created_at desc, d.id desc limit ? offset ?`).all(input.agentId, ...hashes, Math.max(1, Math.min(input.limit, 100)), Math.max(0, input.offset)) as TaskAttemptRow[]
-    const total = (this.database.connection.prepare(`select count(*) as count from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${MANAGED_CHANNEL_C_SQL} and ${where}`).get(input.agentId, ...hashes) as { count: number }).count
+    const rows = this.database.connection.prepare(`select d.id, d.channel_id, d.status, d.stable_error_code, d.created_at, d.completed_at from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${SUPPORTED_CHANNEL_C_SQL} and ${where} order by d.created_at desc, d.id desc limit ? offset ?`).all(input.agentId, ...hashes, Math.max(1, Math.min(input.limit, 100)), Math.max(0, input.offset)) as TaskAttemptRow[]
+    const total = (this.database.connection.prepare(`select count(*) as count from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${SUPPORTED_CHANNEL_C_SQL} and ${where}`).get(input.agentId, ...hashes) as { count: number }).count
     return { attempts: rows.map((row) => ({ id: row.id, channelId: row.channel_id, status: row.status, errorCode: row.stable_error_code, createdAt: row.created_at, completedAt: row.completed_at })), total }
   }
 
@@ -186,7 +187,7 @@ export class ChannelDeliveryRepository {
     const row = this.database.connection.prepare(
       `select d.id, d.channel_id, d.agent_id, d.conversation_id, d.source_type, d.source_hash, d.idempotency_key, d.status
        from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id
-       where ${MANAGED_CHANNEL_C_SQL} and d.id = ? and d.agent_id = ? and d.source_type = 'task-result' and d.source_hash in (?, ?, ?)`
+       where ${SUPPORTED_CHANNEL_C_SQL} and d.id = ? and d.agent_id = ? and d.source_type = 'task-result' and d.source_hash in (?, ?, ?)`
     ).get(input.attemptId, input.agentId, ...taskHashes(input.runLogId)) as AttemptRow | undefined
     return row ? mapAttempt(row) : null
   }
@@ -213,7 +214,7 @@ export class ChannelDeliveryRepository {
       `select 1 from channel_conversations v join agent_channels c on c.id = v.channel_id
        join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active'
        join agent_entities a on a.id = c.agent_id
-       where v.id = ? and v.channel_id = ? and c.agent_id = ? and ${MANAGED_CHANNEL_C_SQL}
+       where v.id = ? and v.channel_id = ? and c.agent_id = ? and ${SUPPORTED_CHANNEL_C_SQL}
          and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
          and (? = 0 or exists (select 1 from channel_delivery_targets t where t.channel_id = v.channel_id and t.conversation_id = v.id and t.enabled = 1))
          and (? is null or exists (select 1 from channel_inbound_work_items w join channel_receipts r on r.id = w.receipt_id

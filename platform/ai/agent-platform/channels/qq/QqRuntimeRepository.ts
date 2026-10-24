@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { qqChannelSql, runtimeAuthorizedChannelSql } from '../ChannelManagementPredicates'
+import { qqChannelSql, supportedChannelSql } from '../ChannelManagementPredicates'
 
 const QQ_CHANNEL_C_SQL = qqChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** State transition only; authorization remains inside QqRuntimeRepository.commitIfCurrent. */
 export function qqGatewayStateUpsertSql(): string {

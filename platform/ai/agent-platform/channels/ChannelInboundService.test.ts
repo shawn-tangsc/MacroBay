@@ -11,6 +11,7 @@ import { createAgentSqliteStore } from '../store/agentSqliteStore'
 import type { ChannelInboundFacts } from './ChannelInboundContracts'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelInboundService } from './ChannelInboundService'
+import { seedChannelAdapterSupport } from './channelTestSupport'
 
 const directories: string[] = []
 
@@ -762,6 +763,7 @@ function seedRuntimeReadyChannel(database: AgentPlatformDatabase, id: string): v
     `insert into agent_channels (id, type, name, agent_id, requested_enabled, migration_state, created_at, updated_at)
      values (?, 'telegram', ?, 'agent-1', 1, 'runtime-ready', '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z')`
   ).run(id, id)
+  seedChannelAdapterSupport(database, ['telegram'])
 }
 
 function seedActiveWork(database: AgentPlatformDatabase, count: number): void {

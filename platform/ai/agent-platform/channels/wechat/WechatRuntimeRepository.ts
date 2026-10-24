@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { runtimeAuthorizedChannelSql, wechatChannelSql } from '../ChannelManagementPredicates'
+import { supportedChannelSql, wechatChannelSql } from '../ChannelManagementPredicates'
 
 const WECHAT_CHANNEL_C_SQL = wechatChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** Cursor/context state is deliberately inert until official iLink polling is frozen and independently evidenced. */
 export class WechatRuntimeRepository {

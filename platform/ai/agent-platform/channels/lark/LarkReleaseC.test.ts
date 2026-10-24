@@ -4,6 +4,7 @@ import { LarkApiClient } from './LarkApiClient'
 import { decodeLarkConversation, encodeLarkConversation, splitLarkText } from './LarkContracts'
 import { LarkDeliveryTransport } from './LarkDeliveryTransport'
 import { LarkRuntimeRepository } from './LarkRuntimeRepository'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { LarkLongConnectionHost } from './LarkLongConnectionHost'
 import { LarkRuntimeManager } from './LarkRuntimeManager'
 import { normalizeLarkEvent } from './LarkUpdateNormalizer'
@@ -116,6 +117,7 @@ describe('Lark Release C contracts', () => {
         ('slack-a','slack-owner','enable',1,'2026-07-20','2026-07-20'),
         ('lark-a','lark-owner','enable',1,'2026-07-20','2026-07-20');
     `)
+    seedChannelAdapterSupport(database, ['telegram'])
     const management = new ChannelManagementRepository(database)
     const inbound = new ChannelInboundRepository(database)
 

@@ -2,12 +2,13 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../schemas/channelSchemas'
-import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedFeishuSql, isolatedWechatSql, managedChannelSql } from './ChannelManagementPredicates'
+import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedFeishuSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
 
 const MANAGED_CHANNEL_SQL = managedChannelSql()
 const MANAGED_CHANNEL_C_SQL = managedChannelSql('c')
 const MANAGED_CHANNEL_CH_SQL = managedChannelSql('ch')
+const SUPPORTED_CHANNEL_SQL = supportedChannelSql()
 const ISOLATED_FEISHU_C_SQL = isolatedFeishuSql('c')
 const ISOLATED_WECHAT_C_SQL = isolatedWechatSql('c')
 const BLOCKED_RUNTIME_C_SQL = blockedRuntimeChannelSql('c')
@@ -716,7 +717,7 @@ export class ChannelManagementRepository {
       const states = owner.purpose === 'enable' ? "('configuration-ready', 'disabled')" : "('runtime-ready')"
       const changed = this.database.connection.prepare(
         `update agent_channels set requested_enabled = 1, migration_state = 'runtime-ready', updated_at = ?
-         where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state in ${states}
+         where id = ? and ${SUPPORTED_CHANNEL_SQL} and migration_state in ${states}
            and credential_ref is not null and credential_revision is not null and credential_health = 'configured'
            and exists (select 1 from agent_entities a where a.id = agent_channels.agent_id)
            and not exists (select 1 from channel_management_operations o where o.channel_id = agent_channels.id

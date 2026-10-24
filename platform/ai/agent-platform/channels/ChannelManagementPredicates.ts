@@ -34,16 +34,13 @@ export function supportedChannelSql(alias = ''): string {
   ))`
 }
 
-/** Temporary release-line gate: only Telegram has a runtime path until the support gate is enabled. */
-export function runtimeAuthorizedChannelSql(alias = ''): string {
-  const column = (name: string) => alias ? `${alias}.${name}` : name
-  return `(${managedChannelSql(alias)} and ${column('type')}='telegram')`
-}
-
-/** This list intentionally names only adapters without accepted real-smoke evidence in this release line. */
+/** Managed rows whose adapter is not currently supported; startup/quit must fence them. */
 export function blockedRuntimeChannelSql(alias = ''): string {
   const column = (name: string) => alias ? `${alias}.${name}` : name
-  return `${column('type')} in ('slack','feishu','qq','discord') or (${column('type')}='wechat' and ${column('public_config_json')}='{}')`
+  return `(${managedChannelSql(alias)} and not exists (
+    select 1 from channel_adapter_support s
+    where s.adapter_key = ${adapterKeySql(column('type'))} and s.status = 'supported'
+  ))`
 }
 
 export function qqChannelSql(alias = ''): string {

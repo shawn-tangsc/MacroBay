@@ -10,6 +10,7 @@ import { ChannelAdapterAcceptanceRegistry } from '../ChannelAdapterAcceptanceReg
 import { ChannelSecureHandoff } from '../ChannelSecureHandoff'
 import { DiscordApiClient } from './DiscordApiClient'
 import { decodeDiscordConversation, encodeDiscordConversation, splitDiscordText } from './DiscordContracts'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { DiscordDeliveryTransport } from './DiscordDeliveryTransport'
 import { DiscordRuntimeManager } from './DiscordRuntimeManager'
 import { discordGatewayStateUpsertSql, DiscordRuntimeRepository } from './DiscordRuntimeRepository'
@@ -99,6 +100,7 @@ describe('Discord Release E contracts', () => {
 
   it('startup and quit fence a forged Discord owner without affecting managed Telegram', () => {
     const database = databaseForDiscord(); seedActiveDiscord(database)
+    seedChannelAdapterSupport(database, ['telegram'])
     database.connection.exec("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('telegram-a','telegram','Telegram','agent-a','{}',1,'runtime-ready','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('telegram-a',1,'active','2026-07-20'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('discord-a','discord-owner','enable',1,'2026-07-20','2026-07-20'),('telegram-a','telegram-owner','enable',1,'2026-07-20','2026-07-20')")
     const management = new ChannelManagementRepository(database)
     expect(management.activeRuntimeOwners('2026-07-20T00:00:00.000Z')).toEqual([{ channelId: 'telegram-a', generation: 1, token: 'telegram-owner' }])

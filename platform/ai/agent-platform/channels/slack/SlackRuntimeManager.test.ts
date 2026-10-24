@@ -8,6 +8,7 @@ import { SlackDeliveryTransport } from './SlackDeliveryTransport'
 import { SlackRuntimeManager } from './SlackRuntimeManager'
 import { SlackRuntimeRepository } from './SlackRuntimeRepository'
 import { SlackSocketModeHost } from './SlackSocketModeHost'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 
 describe('Slack Socket Mode runtime', () => {
   it('persists only opaque runtime state across a file SQLite restart and fences stale generations', async () => {
@@ -351,4 +352,5 @@ function seedActiveSlack(database: ReturnType<typeof createAgentPlatformDatabase
     insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('slack-a','slack','Slack','agent-a','{}',1,'runtime-ready','configured','2026-07-20','2026-07-20');
     insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('slack-a',1,'active','2026-07-20');
   `)
+  seedChannelAdapterSupport(database, ['slack'])
 }
