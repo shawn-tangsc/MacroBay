@@ -23,7 +23,6 @@ import {
   ChannelInboundRepository,
   ChannelInboundService,
   ChannelDeliveryMaintenance,
-  ChannelRuntimeService,
   ChannelCredentialMigrationReconciler,
   ChannelDeliveryRepository,
   ChannelDeliveryService,
@@ -58,7 +57,7 @@ import {
   WechatRuntimeManager,
   WechatRuntimeMaintenance,
   ChannelDeliveryTransportRouter,
-  type AgentChannelRuntimeSnapshot
+  ChannelRuntimeSupervisor
 } from '../../ai/agent-platform/channels'
 import { createElectronChannelCredentialVault } from '../../secrets/channels'
 import { createAssistantImageMessageService } from '../../ai/assistant-platform/images/assistantImageMessageService'
@@ -209,10 +208,8 @@ import {
 } from './workspaceTestFixtures'
 import {
   createTaskAutomationSmokeDriver,
-  createTaskAutomationSmokeLoopbackHost,
   createTaskAutomationSmokeSeed
 } from './taskAutomationSmokeFixture'
-import { ChannelRuntimeHostRegistry } from './channelRuntimeHostRegistry'
 import {
   createClaudeAgentSdkRuntime,
   createClaudeSdkPreferredExecutor,
@@ -234,8 +231,6 @@ import {
   DEFAULT_MIN_WINDOW_HEIGHT,
   DEFAULT_MIN_WINDOW_WIDTH
 } from '../../ui/window/windowSizing'
-import type { AgentChannelType } from '../../ai/agent-platform/schemas/channelSchemas'
-import type { AgentChannelRuntimeHostFactory } from '../../ai/agent-platform/channels/channelRuntimeHost'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -590,13 +585,6 @@ let disposeLarkRuntimeMaintenance: (() => void) | null = null
 let disposeQqRuntimeMaintenance: (() => void) | null = null
 let disposeDiscordRuntimeMaintenance: (() => void) | null = null
 let disposeWechatRuntimeMaintenance: (() => void) | null = null
-const channelRuntimeHostRegistry = new ChannelRuntimeHostRegistry()
-const taskAutomationSmokeDeliveredMessages: Array<{ chatId: string; text: string }> = []
-if (taskAutomationSmokeProfile.enabled) {
-  registerChannelRuntimeHostFactory('telegram', async () =>
-    createTaskAutomationSmokeLoopbackHost(taskAutomationSmokeDeliveredMessages)
-  )
-}
 /**
  * P1-06m：退出第一件事 —— 把 debounce（250ms）窗口内的待写布局**有界落盘**并记录结果。
  * 放在所有其它清理之前：后续清理可能很慢甚至挂住，绝不让它吃掉退出前最后一次布局变更。
@@ -644,7 +632,6 @@ async function disposePlatformRuntimes(): Promise<void> {
   await productServiceDisposerRegistry.disposeAll()
   await Promise.allSettled([
     agentRuntimeService.dispose(),
-    channelRuntimeService.dispose(),
     mcpRuntimeService.dispose()
   ])
   // workspace：有界 flush 后释放路由目标；flush 超时/失败只如实上报，不阻断其余清理。
@@ -654,22 +641,14 @@ async function disposePlatformRuntimes(): Promise<void> {
   panelWorkspaceForDisposal = null
   jobRunStore.close()
 }
-function broadcastChannelRuntimeSnapshot(snapshot: AgentChannelRuntimeSnapshot): void {
+function broadcastChannelRuntimeSnapshot(snapshot: ReturnType<ChannelRuntimeSupervisor['snapshot']>): void {
   getMainWindow()?.webContents.send(IpcChannels.agentsChannelRuntimeStateChanged, snapshot)
 }
-const channelRuntimeService = new ChannelRuntimeService({
-  createChannelHost: (channel, context) => channelRuntimeHostRegistry.createHost(channel, context),
-  // Legacy host events have no C03 execution claim and must not create sessions, run Agents,
-  // or send. Future adapters enter ChannelInboundService and the exact-claim coordinator.
-  handleIncomingText: async () => {},
-  onSnapshotChanged: (snapshot) => {
-    broadcastChannelRuntimeSnapshot(snapshot)
-  },
-  persistChannelConfig: async (channelId, nextConfig) => {
-    await agentServices.channels.update(channelId, {
-      config: nextConfig
-    })
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, await agentServices.state.getState())
+const channelRuntimeSupervisor = new ChannelRuntimeSupervisor({
+  query: channelManagementRepository.query,
+  restart: async (channelId) => {
+    await channelManagementService.restart({ id: channelId, actorId: 'agent-runtime-ui' })
+    broadcastChannelRuntimeSnapshot(channelRuntimeSupervisor.snapshot())
   }
 })
 const telegramDeliveryTransport = new TelegramDeliveryTransport()
@@ -865,7 +844,7 @@ agentStateCoordinator = createAgentStateCoordinator({
   syncSkillsRuntimeFromState,
   syncProductToolsRuntimeFromState: syncProductToolsRuntimeFromState,
   syncMcpRuntimeFromState: (state) => mcpRuntimeService.syncFromState(state),
-  syncChannelsFromState: (state) => channelRuntimeService.syncFromState(state),
+  syncChannelsFromState: () => undefined,
   syncTaskSchedulerFromState: (state) => agentTaskSchedulerRuntimeService.syncFromState(state),
   emitStateChanged: (state) => {
     getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
@@ -1080,11 +1059,8 @@ const agentIpcHandlers = createAgentIpcHandlers(
     getProductToolCallTrace: async (toolCallId: string) => agentRepositories.productToolTraces.get(toolCallId)
   },
   {
-    getChannelRuntimeSnapshot: (options) => channelRuntimeService.getSnapshot(options),
-    restartChannelRuntime: async (channelId) => {
-      await channelRuntimeService.restartChannel(channelId)
-      return channelRuntimeService.getSnapshot({ includeDiagnostics: true })
-    }
+    getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot(),
+    restartChannelRuntime: (channelId) => channelRuntimeSupervisor.restart(channelId)
   },
   agentModelCompatibilityControl,
   {
@@ -1210,7 +1186,6 @@ async function mergeAndReplaceAgentSessionState(
   syncSkillsRuntimeFromState(nextState)
   syncProductToolsRuntimeFromState(nextState)
   mcpRuntimeService.syncFromState(nextState)
-  void channelRuntimeService.syncFromState(nextState)
   agentTaskSchedulerRuntimeService.syncFromState(nextState)
   getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
   return nextState
@@ -1235,12 +1210,6 @@ async function syncAgentStateAfterMutation(previousState: AgentStoreState): Prom
   return agentStateCoordinator.syncAfterMutation(previousState)
 }
 
-function registerChannelRuntimeHostFactory(type: AgentChannelType, factory: AgentChannelRuntimeHostFactory): void {
-  // Legacy host factories bypass C03 owner/fence semantics. Only the Telegram smoke fixture is allowed here.
-  if (type !== 'telegram') throw new Error('channel-runtime-adapter-blocked')
-  channelRuntimeHostRegistry.register(type, factory)
-}
-
 export type DesktopAppBootstrapOptions = {
   productManifests?: readonly ProductManifest[]
   productAgentSeedFactories?: readonly ProductAgentSeedFactory[]
@@ -1260,7 +1229,6 @@ export type DesktopAppBootstrapOptions = {
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
-    registerChannelRuntimeHostFactory: (type: AgentChannelType, factory: AgentChannelRuntimeHostFactory) => void
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
     getAgentState?: () => Promise<AgentStoreState>
@@ -2456,7 +2424,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       platformFetch: getPlatformFetch(),
       secretVault: providerSecretVault,
       registerProductAgentToolHandler,
-      registerChannelRuntimeHostFactory,
       registerProductCache,
       registerProductDisposer: productServiceDisposerRegistry.register,
       getAgentState: () => agentStore.getState(),
@@ -2551,7 +2518,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   disposeWechatRuntimeMaintenance = wechatRuntimeMaintenance.start()
   syncProductToolsRuntimeFromState(await agentStore.getState())
   mcpRuntimeService.syncFromState(await agentStore.getState())
-  void channelRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.start()
   agentRuntimeService.subscribe((snapshot) => {

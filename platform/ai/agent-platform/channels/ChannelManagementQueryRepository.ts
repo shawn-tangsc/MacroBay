@@ -66,6 +66,51 @@ export class ChannelManagementQueryRepository {
       : { channelId, generation: 0, lifecycle: 'missing', updatedAt: null }
   }
 
+  /**
+   * One row per channel/conversation binding. Channels without conversations still produce one row
+   * with a null session so the settings surface can render them.
+   */
+  runtimeRows(): Array<{
+    channelId: string
+    type: ChannelRow['type']
+    agentId: string
+    requestedEnabled: boolean
+    migrationState: string
+    generation: number
+    lifecycleState: 'active' | 'inactive' | 'deleted' | null
+    sessionId: string | null
+  }> {
+    const rows = this.database.connection.prepare(
+      `select c.id, c.type, c.agent_id, c.requested_enabled, c.migration_state,
+              g.generation, g.lifecycle_state, v.agent_session_id
+       from agent_channels c
+       left join channel_runtime_generations g on g.channel_id = c.id
+       left join channel_conversations v on v.channel_id = c.id
+       where ${MANAGED_CHANNEL_SQL} and c.migration_state <> 'legacy'
+         and not exists (select 1 from channel_management_tombstones t where t.channel_id = c.id)
+       order by c.updated_at desc, c.id asc, v.created_at asc`
+    ).all() as Array<{
+      id: string
+      type: ChannelRow['type']
+      agent_id: string
+      requested_enabled: number
+      migration_state: string
+      generation: number | null
+      lifecycle_state: 'active' | 'inactive' | 'deleted' | null
+      agent_session_id: string | null
+    }>
+    return rows.map((row) => ({
+      channelId: row.id,
+      type: row.type,
+      agentId: row.agent_id,
+      requestedEnabled: row.requested_enabled === 1,
+      migrationState: row.migration_state,
+      generation: row.generation ?? 0,
+      lifecycleState: row.lifecycle_state,
+      sessionId: row.agent_session_id
+    }))
+  }
+
   deliveryAttempts(channelId: string, limit: number, offset: number): ChannelDeliveryAttemptSafeView[] {
     return (this.database.connection.prepare(
       `select id, source_type, status, stable_error_code, created_at, updated_at, completed_at
