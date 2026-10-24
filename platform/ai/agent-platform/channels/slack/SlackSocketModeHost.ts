@@ -43,7 +43,9 @@ export class SlackSocketModeHost {
       // A successful REST URL fetch is not a connection success. Only open resets retry budget.
       this.reconnectAttempt = 0
     }
-    socket.onmessage = (event) => { void this.handle(event.data, socket) }
+    socket.onmessage = (event) => {
+      void this.handle(event.data, socket).catch(() => this.auditCurrent(socket, 'slack-envelope-failed'))
+    }
     socket.onerror = () => this.auditCurrent(socket, 'slack-socket-error')
     socket.onclose = () => {
       // A late close from a replaced socket must not schedule a second host.
