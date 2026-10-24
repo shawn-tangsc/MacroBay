@@ -71,7 +71,7 @@ export class ChannelManagementRepository {
   }
 
   create(input: { id: string; type?: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'; name: string; agentId: string; now: string }): boolean {
-    return this.database.connection
+    const created = this.database.connection
       .prepare(
         `insert into agent_channels (
           id, type, name, agent_id, public_config_json, requested_enabled, migration_state, created_at, updated_at
@@ -79,6 +79,8 @@ export class ChannelManagementRepository {
           where not exists (select 1 from channel_management_tombstones where channel_id = ?)`
       )
       .run(input.id, input.type ?? 'telegram', input.name, input.agentId, input.type === 'feishu' ? '{"domain":"lark"}' : '{}', input.now, input.now, input.id).changes === 1
+    if (created) this.mirrorChannel(input.id)
+    return created
   }
 
   channelType(id: string): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' | null {
@@ -117,7 +119,10 @@ export class ChannelManagementRepository {
            where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
         )
         .run(input.name, input.agentId, input.now, id).changes
-      if (changed) this.fence(id, input.now)
+      if (changed) {
+        this.mirrorChannel(id)
+        this.fence(id, input.now)
+      }
       return changed === 1
     })
   }
@@ -132,7 +137,10 @@ export class ChannelManagementRepository {
            where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
         )
         .run(now, id).changes
-      if (changed) this.fence(id, now)
+      if (changed) {
+        this.mirrorChannel(id)
+        this.fence(id, now)
+      }
       return changed === 1
     })
   }
@@ -169,7 +177,10 @@ export class ChannelManagementRepository {
            )` : ''}`
       )
       .run(input.ref, input.revision, input.now, input.id, expected, expected, ...(input.owner ? [input.owner.token] : [])).changes
-      if (result) this.fence(input.id, input.now)
+      if (result) {
+        this.mirrorChannel(input.id)
+        this.fence(input.id, input.now)
+      }
       return result
     })
     return changed === 1
@@ -1005,6 +1016,33 @@ export class ChannelManagementRepository {
       this.fence(operation.channelId, now)
       return true
     })
+  }
+
+  private mirrorChannel(id: string): void {
+    this.database.connection.prepare(
+      `insert into agent_channels_next (
+         id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+         credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+         created_at, updated_at
+       )
+       select id, case when type = 'feishu' then 'lark' else type end, name, agent_id,
+         coalesce(public_config_json, '{}'), credential_ref, credential_revision, credential_health,
+         requested_enabled,
+         case migration_state
+           when 'runtime-ready' then 'enabled'
+           when 'configuration-ready' then 'ready'
+           else migration_state
+         end,
+         mutation_epoch, migration_error_code, created_at, updated_at
+       from agent_channels where id = ?
+       on conflict(id) do update set
+         adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+         public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+         credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+         requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+         mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+         created_at = excluded.created_at, updated_at = excluded.updated_at`
+    ).run(id)
   }
 
   private fence(channelId: string, now: string): void {
