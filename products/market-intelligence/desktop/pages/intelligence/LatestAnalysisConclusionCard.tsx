@@ -32,11 +32,15 @@ export function selectLatestPublishedEntry(entries: readonly MarketAnalysisTimel
  * analysis so the current judgement is the first thing on screen; selecting an
  * older node opens the detail drawer instead of replacing this card.
  */
-export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, onOpenDetail }: Readonly<{
+export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, onOpenDetail, onOpenTimeline, openTimelineLabel, enableAnalysisLabel, analysisOffHint }: Readonly<{
   text: Pick<AnalysisDetailText, 'status' | 'conclusion' | 'conclusionDirection' | 'directions' | 'readableLocale'>
   workspaceText: LatestConclusionText
   timeline: UseMarketAnalysisTimelineResult
   onOpenDetail: (entry: MarketAnalysisTimelineEntry) => void
+  onOpenTimeline?: () => void
+  openTimelineLabel?: string
+  enableAnalysisLabel?: string
+  analysisOffHint?: string
 }>): React.ReactElement | null {
   const { state, details, detailState } = timeline
   const formatTime = useShellTimeFormat()
@@ -61,13 +65,24 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
   // With the capability switched off the card has nothing to offer — no new conclusion will be
   // published and the actions behind it are disabled — so it stays out of the main area instead of
   // occupying the reader's first screen with a stale verdict.
-  if (analysisSettings.settings?.enabled === false) return null
+  if (analysisSettings.settings?.enabled === false) {
+    return <section className="mi-analysis-conclusion-card" role={analysisConclusionSurfacePolicy.cardRole} aria-label={workspaceText.latestConclusion}>
+      <header>
+        <div><Sparkles size={15} aria-hidden="true" /><h2>{workspaceText.latestConclusion}</h2></div>
+      </header>
+      <div className="mi-analysis-conclusion-card__state">
+        <p>{analysisOffHint}</p>
+        {onOpenTimeline ? <Button size="small" type="primary" onClick={onOpenTimeline}>{enableAnalysisLabel}</Button> : null}
+      </div>
+    </section>
+  }
 
   return <section className="mi-analysis-conclusion-card" role={analysisConclusionSurfacePolicy.cardRole} aria-label={workspaceText.latestConclusion}>
     <header>
       <div><Sparkles size={15} aria-hidden="true" /><h2>{workspaceText.latestConclusion}</h2></div>
       <div>
         {latest ? <><time>{formatTime(latest.occurredAt, 'second')}</time><em>{text.status[latest.status]}</em></> : null}
+        {onOpenTimeline ? <Button size="small" onClick={onOpenTimeline}>{openTimelineLabel}</Button> : null}
         {latest && detail ? <Button size="small" onClick={() => onOpenDetail(latest)}>{workspaceText.openDetail}</Button> : null}
       </div>
     </header>

@@ -9,6 +9,7 @@ import { MarketAnalysisAgentWorkspace } from './MarketAnalysisAgentWorkspace'
 import { MarketCalendarCard } from './MarketCalendarCard'
 import { useCalendarCardData, type CalendarCardReactionReader } from './useCalendarCardData'
 import { AnalysisDetailDrawer } from './AnalysisDetailDrawer'
+import { AnalysisTimelineDrawer } from './AnalysisTimelineDrawer'
 import { LatestAnalysisConclusionCard } from './LatestAnalysisConclusionCard'
 import type { AnalysisSelectionState } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
@@ -81,6 +82,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   const [binding, setBinding] = useState<AnalysisWorkspaceBinding>()
   const [selectionState, setSelectionState] = useState<AnalysisSelectionState>('none')
   const [openEntryId, setOpenEntryId] = useState<string>()
+  const [timelineOpen, setTimelineOpen] = useState(false)
   const [conclusionHost, setConclusionHost] = useState<HTMLDivElement | null>(null)
   // Frozen at mount: a new instant per render would re-query the calendar on every render.
   // One selection at a time, shared by the timeline entries and the calendar card, so the floating
@@ -142,6 +144,10 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           workspaceText={workspaceText}
           timeline={timeline}
           onOpenDetail={entry => { setOpenEntry(entry); timeline.ensureDetail(entry) }}
+          onOpenTimeline={() => setTimelineOpen(true)}
+          openTimelineLabel={text.analysisDrawer.open}
+          enableAnalysisLabel={text.analysisTimeline.enableAnalysis}
+          analysisOffHint={text.analysisTimeline.analysisOffHint}
         />, conclusionHost) : null}
         {/* The dashboard owns its layout; it renders the mount point and this
             layout only supplies the ref, so `children` gets the injected prop. The calendar's
@@ -153,6 +159,15 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})
         })}
+        <AnalysisTimelineDrawer
+          onClose={() => setTimelineOpen(false)}
+          onOpenChange={setOpenEntry}
+          open={timelineOpen}
+          openEntry={openEntry}
+          text={text.analysisTimeline}
+          timeline={timeline}
+          title={text.analysisDrawer.title}
+        />
         <AnalysisDetailDrawer
           text={detailText}
           workspaceText={workspaceText}

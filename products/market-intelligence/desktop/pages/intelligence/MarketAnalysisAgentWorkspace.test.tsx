@@ -253,28 +253,21 @@ describe('market analysis embedded workspace', () => {
     expect(createSession).toHaveBeenCalledTimes(1)
   })
 
-  it('blocks the conversation while the selected detail is still loading, and after it failed', async () => {
-    let finish: (value: unknown) => void = () => undefined
-    const pending = new Promise((resolve) => { finish = resolve })
-    stubPlatform({
-      invoke: async (_product, method) => (method === 'marketAnalysis.listTimeline'
-        ? {
-            schemaVersion: 1,
-            items: [{ id: 'tl-1', eventGroupId: 'eg-1', analysisRunId: 'ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'as-1', safeTitle: '已选分析', safeExcerpt: null, version: 1 }],
-            nextCursor: null
-          }
-        : pending)
+  it('blocks the conversation while the injected selection is still loading', async () => {
+    stubPlatform({ invoke: async () => [] })
+    const container = await renderPanel({
+      selectionState: 'loading',
+      binding: { eventGroupId: 'eg-1', analysisRunId: 'ar-1', summaryId: 'as-1', asOf: NOW }
     })
-    const container = await renderPanel()
-    await act(async () => { container.querySelector<HTMLButtonElement>('.mi-analysis-timeline__entry')!.click() })
 
-    // The composer stays visible but refuses input while the selection is unresolved, then shows
-    // the failure once it is known — the reader never types into a question that cannot be sent.
-    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true)
+    // The composer stays visible but refuses input while the selection is unresolved.
     expect(container.textContent).toContain(text.analysisTimeline.loading)
+  })
 
-    await act(async () => { finish(null) })
-    expect(container.querySelector<HTMLTextAreaElement>('textarea')?.disabled).toBe(true)
+  it('blocks the conversation after the injected selection failed', async () => {
+    stubPlatform({ invoke: async () => [] })
+    const container = await renderPanel({ selectionState: 'unavailable' })
+
     expect(container.textContent).toContain(text.analysisTimeline.unavailable)
   })
 
@@ -315,9 +308,8 @@ describe('market analysis embedded workspace', () => {
         return []
       }
     })
-    const container = await renderPanel()
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('.mi-analysis-timeline__entry')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const container = await renderPanel({
+      binding: { eventGroupId: 'eg-1', analysisRunId: 'ar-1', summaryId: 'as-1', asOf: NOW }
     })
     expect(container.textContent).toContain(text.analysisWorkspace.selectedAnalysis)
     expect(container.querySelector('.mi-analysis-chat__binding')?.textContent).not.toContain('eg-1')

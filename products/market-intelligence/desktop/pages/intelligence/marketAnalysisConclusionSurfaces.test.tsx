@@ -171,11 +171,13 @@ describe('market analysis conclusion surfaces', () => {
     expect(card.querySelector('.mi-analysis-conclusion-card__body')?.getAttribute('data-direction')).toBe('bearish')
   })
 
-  it('keeps the conclusion card out of the main area while the capability is off', async () => {
+  it('keeps the card but shows the off state while the capability is off', async () => {
     const disabled = await mountSurface([entry()], timeline =>
       createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),
       { analysisSettings: { enabled: false } })
-    expect(disabled.container.querySelector('.mi-analysis-conclusion-card')).toBeNull()
+    const offCard = disabled.container.querySelector('.mi-analysis-conclusion-card')
+    expect(offCard).not.toBeNull()
+    expect(offCard?.querySelector('.mi-analysis-conclusion-card__state')).not.toBeNull()
 
     const enabled = await mountSurface([entry()], timeline =>
       createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),

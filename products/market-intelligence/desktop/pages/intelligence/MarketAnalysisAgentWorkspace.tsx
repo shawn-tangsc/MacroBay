@@ -8,7 +8,7 @@ import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorksp
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import type { AnalysisSelectionState, UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
-import { TimelinePanel } from './TimelinePanel'
+import { NewsSentimentFeature } from '../../features/industry/news-sentiment'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
 import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayoutPolicy'
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
@@ -49,16 +49,14 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, openEntry: injectedOpenEntry, onOpenChange: injectedOpenChange, timelineText, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const contextRenderers = useMemo(
     () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
     [t.contextAnalysis, t.selectedEvent]
   )
-  const panelText: MarketAnalysisTimelineText = timelineText ?? text.analysisTimeline
   const [ownBinding, setOwnBinding] = useState<AnalysisWorkspaceBinding>()
   const [ownSelectionState, setOwnSelectionState] = useState<AnalysisSelectionState>('none')
-  const [ownOpenEntry, setOwnOpenEntry] = useState<MarketAnalysisTimelineEntry>()
   const ownTimeline = useMarketAnalysisTimeline({
     text: { loading: text.analysisTimeline.loading, unavailable: text.analysisTimeline.unavailable, attemptFailed: text.analysisTimeline.attemptFailed, failureReasons: text.analysisTimeline.failureReasons, initialAnalysisFailed: text.analysisTimeline.initialAnalysisFailed },
     onSelect: setOwnBinding,
@@ -70,9 +68,7 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
   const timeline = injectedTimeline ?? ownTimeline
   const selectionState = injectedState ?? ownSelectionState
   const binding = injectedBinding ?? ownBinding
-  const openEntry = injectedOpenEntry ?? ownOpenEntry
   const setBinding = onBindingChange ?? setOwnBinding
-  const setOpenEntry = injectedOpenChange ?? setOwnOpenEntry
   const selectionBlocked = selectionState === 'loading' || selectionState === 'unavailable'
   const [chatPercent, setChatPercent] = useState<number>(layout.initialChatPercent)
   const container = useRef<HTMLElement>(null)
@@ -157,7 +153,7 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
       onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = container.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
-    <TimelinePanel text={panelText} timeline={timeline} openEntry={openEntry} onOpenChange={setOpenEntry} />
+    <NewsSentimentFeature text={text.newsSentiment} />
     <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
   </aside>
 }
