@@ -597,7 +597,8 @@ describe('ChannelManagementService', () => {
     expect(database.connection.prepare('select credential_ref,credential_revision,migration_state from agent_channels where id=?').get(id)).toEqual({
       credential_ref: 'reserved-ref', credential_revision: 1, migration_state: 'configuration-ready'
     })
-    expect(vault.reservedDeletes).toBe(0)
+    // Provision is serialized per channel: the stale reservation is cleaned before the winner writes.
+    expect(vault.reservedDeletes).toBe(1)
   })
 
   it('cannot delete a winner that adopts the same ref after stale cleanup has claimed it', async () => {
@@ -1173,6 +1174,7 @@ class FakeVault implements ChannelCredentialVault {
   async deleteReservedIfRevision() { this.reservedDeletes += 1; if (this.failReservedDelete) throw new Error('unavailable'); return true }
   async claimReservedCleanup() { this.cleanupClaim = `claim-${this.reservedDeletes}`; return { revision: 1, cleanupToken: this.cleanupClaim } }
   async deleteReservedIfCleanupClaim(input: { cleanupToken: string }) {
+    console.log('CLEANUP', new Error().stack)
     this.reservedDeletes += 1
     if (this.failReservedDelete) throw new Error('unavailable')
     return input.cleanupToken === this.cleanupClaim
