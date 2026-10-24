@@ -19,6 +19,7 @@ import {
 } from '../../ai/agent-platform/runtime/tasks'
 import {
   ChannelInboundExecutionCoordinator,
+  ChannelDispatchRunRepository,
   ChannelInboundExecutionRunner,
   ChannelInboundRepository,
   ChannelInboundService,
@@ -670,11 +671,13 @@ const channelDeliveryService = new ChannelDeliveryService({
     wechat: wechatDeliveryTransport
   })
 })
+const channelDispatchRuns = new ChannelDispatchRunRepository(agentDatabase)
 const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinator({
   inbound: channelInboundRepository,
   delivery: channelDeliveryService,
   cipher: channelCredentialVault.payloadCipher,
-  runtime: agentRuntimeService
+  runtime: agentRuntimeService,
+  runs: channelDispatchRuns
 })
 const channelInboundExecutionRunner = new ChannelInboundExecutionRunner({
   inbound: channelInboundRepository,

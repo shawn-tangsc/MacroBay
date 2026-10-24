@@ -14,6 +14,48 @@ describe('ChannelInboundExecutionCoordinator', () => {
     expect(runtime.sendMessage).not.toHaveBeenCalled()
   })
 
+  it('marks a recovered started run interrupted instead of calling the Agent twice', async () => {
+    const runtime = { sendMessage: vi.fn() }
+    const runs = { get: vi.fn(() => ({ status: 'started' as const })), fail: vi.fn() }
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value)
+    }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never, delivery: {} as never, cipher: {} as never, runtime: runtime as never, runs: runs as never
+    })
+    await expect(coordinator.execute(claim)).resolves.toBe('failed')
+    expect(runtime.sendMessage).not.toHaveBeenCalled()
+    expect(runs.fail).toHaveBeenCalledWith('dispatch-a', 'interrupted', expect.any(Date))
+  })
+
+  it('redelivers a stored result without rerunning the Agent after completion', async () => {
+    const runtime = { sendMessage: vi.fn() }
+    const runs = {
+      get: vi.fn(() => ({ status: 'completed' as const })),
+      getResult: vi.fn(() => ({ textCiphertext: new Uint8Array([1]), textKeyRef: 'ref', textKeyRevision: 1, status: 'pending' as const })),
+      markResult: vi.fn()
+    }
+    const delivery = { deliverStreamFinal: vi.fn(async () => ({ status: 'delivered' })) }
+    const inbound = {
+      admitDispatch: vi.fn(() => ({ ...claim, conversationId: 'conversation-a', ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 })),
+      getConversationBinding: vi.fn(() => ({ agentId: 'agent-a', sessionId: 'session-a' })),
+      finalizeDispatch: vi.fn(() => true),
+      renewDispatchLease: vi.fn((value) => value)
+    }
+    const coordinator = new ChannelInboundExecutionCoordinator({
+      inbound: inbound as never, delivery: delivery as never,
+      cipher: { decrypt: async () => new TextEncoder().encode('stored reply') } as never,
+      runtime: runtime as never, runs: runs as never
+    })
+    await expect(coordinator.execute(claim)).resolves.toBe('completed')
+    expect(runtime.sendMessage).not.toHaveBeenCalled()
+    expect(delivery.deliverStreamFinal).toHaveBeenCalledWith(expect.objectContaining({ text: 'stored reply' }), ['stored reply'])
+    expect(runs.markResult).toHaveBeenCalledWith('dispatch-a', 'delivered', expect.any(Date))
+  })
+
   it('takes a provider-invisible initial claim before entering the same coordinator gate', async () => {
     const inbound = { takeInitialExecutionClaim: vi.fn(() => null) }
     const runtime = { sendMessage: vi.fn() }

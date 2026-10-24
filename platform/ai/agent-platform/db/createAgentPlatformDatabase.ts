@@ -1021,6 +1021,38 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_channel_conversations_channel_updated
         on channel_conversations(channel_id, updated_at desc, id asc);
     `
+  },
+  {
+    // Durable execution ledger: a started dispatch is never re-run after a crash.
+    id: '0030_channel_dispatch_runs',
+    up: `
+      create table channel_dispatch_runs (
+        dispatch_id text primary key,
+        channel_id text not null,
+        work_item_id text not null unique,
+        conversation_id text not null,
+        status text not null check (status in ('started','completed','failed','interrupted')),
+        started_at text not null,
+        finished_at text,
+        updated_at text not null
+      );
+      create index idx_channel_dispatch_runs_recovery
+        on channel_dispatch_runs(status, updated_at asc, dispatch_id asc);
+
+      create table channel_dispatch_results (
+        dispatch_id text primary key,
+        channel_id text not null,
+        conversation_id text not null,
+        text_ciphertext blob not null,
+        text_key_ref text not null,
+        text_key_revision integer not null,
+        status text not null check (status in ('pending','delivered','failed')),
+        created_at text not null,
+        updated_at text not null
+      );
+      create index idx_channel_dispatch_results_status
+        on channel_dispatch_results(status, updated_at asc, dispatch_id asc);
+    `
   }
 ]
 
