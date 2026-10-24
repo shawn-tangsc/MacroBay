@@ -32,6 +32,7 @@ export type NewsSentimentClient = Readonly<{
   getItem: (input: { itemId: string; asOf: string }) => Promise<NewsSentimentItemDetail | undefined>
   getSettings: () => Promise<NewsSentimentSettingsView>
   saveSettings: (patch: Partial<NewsSentimentSettings>) => Promise<NewsSentimentSettingsView>
+  rescore: () => Promise<{ queued: boolean }>
 }>
 
 export function createNewsSentimentClient(invoke: Invoke = platformInvoke): NewsSentimentClient {

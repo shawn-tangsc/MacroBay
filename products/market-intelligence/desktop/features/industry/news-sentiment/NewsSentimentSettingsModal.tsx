@@ -23,6 +23,8 @@ export function NewsSentimentSettingsModal(props: {
   const [translationEnabled, setTranslationEnabled] = useState<boolean>()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
+  const [rescoring, setRescoring] = useState(false)
+  const [rescoreNotice, setRescoreNotice] = useState<string>()
 
   useEffect(() => {
     if (!props.open) return
@@ -108,6 +110,25 @@ export function NewsSentimentSettingsModal(props: {
             {text.settingsModal.translation.open}
           </button>
         </div>
+        <div className="mi-news-settings__row">
+          <span>{text.settingsModal.rescore}</span>
+          <button
+            className="mi-news-settings__link"
+            disabled={rescoring}
+            onClick={() => {
+              setRescoring(true)
+              setRescoreNotice(undefined)
+              void props.client.rescore()
+                .then(() => setRescoreNotice(text.settingsModal.rescored))
+                .catch(() => setRescoreNotice(text.settingsModal.rescoreFailed))
+                .finally(() => setRescoring(false))
+            }}
+            type="button"
+          >
+            {rescoring ? text.settingsModal.rescoring : text.settingsModal.rescore}
+          </button>
+        </div>
+        {rescoreNotice ? <p className="mi-news-settings__hint" role="status">{rescoreNotice}</p> : null}
         <p className="mi-news-settings__hint">{text.settingsModal.hint}</p>
         {error ? <p className="mi-news-settings__error" role="alert">{text.settingsModal.failed}</p> : null}
       </div>

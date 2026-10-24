@@ -98,6 +98,13 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     getIntelligenceModule(jobRuntime).newsSentiment.settings.get()
   )
 
+  register(PRODUCT_ID, 'intelligence.rescoreNewsSentiment', async () => {
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.scoring) throw new Error('News sentiment is unavailable.')
+    await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {})
+    return { queued: true }
+  })
+
   register(PRODUCT_ID, 'intelligence.saveNewsSentimentSettings', async (payload) => {
     const patch = (payload ?? {}) as Record<string, unknown>
     if (typeof patch !== 'object' || Array.isArray(patch)) throw new Error('A settings patch is required.')
