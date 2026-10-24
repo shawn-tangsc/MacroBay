@@ -1,4 +1,4 @@
-[English](./README.md) | [中文](./README.zh-CN.md)
+[English](./README.md) | [中文](./README.zh-CN.md) | [← 仓库首页](../README.zh-CN.md)
 
 # MacroBay 观潮
 
