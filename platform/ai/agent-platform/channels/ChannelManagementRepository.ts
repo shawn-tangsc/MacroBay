@@ -284,8 +284,7 @@ export class ChannelManagementRepository {
       if (knownRef && !isProviderRefForChannel(knownRef, id)) throw new Error('channel-delete-known-ref-invalid')
       const payloadKeyRefs = this.knownPayloadKeyRefs(id)
       if (!payloadKeyRefs.every((ref) => isPayloadKeyRefForChannel(ref, id))) throw new Error('channel-delete-known-ref-invalid')
-      const legacyMigrations = this.knownLegacyMigrations(id)
-      if (legacyMigrations === null) throw new Error('channel-delete-known-ref-invalid')
+      const legacyMigrations: LegacyMigrationRef[] = []
       this.invalidateLifecycleOwner(id)
       this.database.connection
         .prepare(
@@ -1139,8 +1138,6 @@ export class ChannelManagementRepository {
       'channel_runtime_audits',
       'channel_conversations',
       'channel_runtime_generations',
-      'channel_legacy_discovery_archives',
-      'channel_credential_migrations',
       'channel_telegram_offsets',
       'channel_telegram_runtime_audits',
       'channel_slack_runtime_state',
@@ -1168,32 +1165,7 @@ export class ChannelManagementRepository {
     return [...new Set(refs.map((row) => row.ref))]
   }
 
-  private knownLegacyMigrations(channelId: string): LegacyMigrationRef[] | null {
-    const channel = this.database.connection.prepare('select type, public_config_json from agent_channels where id = ?').get(channelId) as { type: string; public_config_json: string } | undefined
-    if (channel?.type === 'slack' || channel?.type === 'qq' || channel?.type === 'discord' || channel?.type === 'wechat' || (channel?.type === 'feishu' && isLarkPublicConfig(channel.public_config_json))) return []
-    if (channel?.type !== 'telegram' && channel?.type !== 'wechat') return null
-    const migrations = this.database.connection.prepare(
-      `select purpose, credential_ref, source_fingerprint, fingerprint_key_id, migration_permit
-       from channel_credential_migrations where channel_id = ?`
-    ).all(channelId) as Array<{
-      purpose: string; credential_ref: string; source_fingerprint: string
-      fingerprint_key_id: string; migration_permit: string
-    }>
-    if (!migrations.every((migration) => isValidLegacyMigrationRow(migration, channelId))) return null
-    const archives = this.database.connection.prepare(
-      'select archive_ref from channel_legacy_discovery_archives where channel_id = ?'
-    ).all(channelId) as Array<{ archive_ref: string }>
-    const archiveRefs = migrations.filter((row) => row.purpose === 'legacy-discovery-archive').map((row) => row.credential_ref)
-    if (new Set(archiveRefs).size !== archiveRefs.length || archives.length !== archiveRefs.length || !archives.every((archive) => archiveRefs.includes(archive.archive_ref))) return null
-    return migrations.map((row) => ({
-      purpose: row.purpose as LegacyMigrationRef['purpose'],
-      type: channel.type as LegacyMigrationRef['type'],
-      ref: row.credential_ref,
-      fingerprint: row.source_fingerprint,
-      keyId: row.fingerprint_key_id,
-      permit: row.migration_permit
-    }))
-  }
+
 }
 
 function parsePayloadKeyRefs(value: string, channelId: string): string[] | null {

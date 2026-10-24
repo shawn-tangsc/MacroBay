@@ -1253,6 +1253,14 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_agent_channels_next_lifecycle
         on agent_channels_next(lifecycle_state, updated_at asc, id asc);
     `
+  },
+  {
+    id: '0036_drop_legacy_channel_tables',
+    up: `
+      drop table if exists channel_legacy_discovery_archives;
+      drop table if exists channel_credential_migrations;
+      drop table if exists channel_legacy_channels;
+    `
   }
 ]
 
