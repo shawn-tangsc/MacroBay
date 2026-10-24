@@ -1,4 +1,4 @@
-import { Button, Input, Select, Switch, Tag } from 'antd'
+import { Button, Input, Popconfirm, Select, Switch, Tag } from 'antd'
 import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -278,9 +278,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             <Button disabled={current.state !== 'runtime-ready'} icon={<RotateCw size={14} />} onClick={() => void window.platform.channels.restart({ id: current.id, actorId: 'settings-user' }).then(reload)}>
               {labels.channelRestart}
             </Button>
-            <Button danger icon={<Trash2 size={14} />} onClick={() => void window.platform.channels.remove({ id: current.id, actorId: 'settings-user' }).then(reload)}>
-              {labels.channelDelete}
-            </Button>
+            <Popconfirm
+              title={labels.channelDeleteConfirm}
+              okText={labels.channelDelete}
+              cancelText={labels.channelCancel}
+              onConfirm={() => void window.platform.channels.remove({ id: current.id, actorId: 'settings-user' }).then(reload)}
+            >
+              <Button danger icon={<Trash2 size={14} />}>{labels.channelDelete}</Button>
+            </Popconfirm>
           </>
         ) : null}
       </main>
