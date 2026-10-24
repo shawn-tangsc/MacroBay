@@ -60,6 +60,11 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.getMonitoringScope': excluded('user-private-data'),
   'intelligence.getOperationsHealth': exposed('get_operations_health'),
   'intelligence.getSentimentAggregates': excluded('internal-view'),
+  // The news sentiment panel is composed by the workbench, not answered as an agent question.
+  'intelligence.getNewsSentiment': excluded('internal-view'),
+  'intelligence.getNewsSentimentItem': excluded('internal-view'),
+  'intelligence.getNewsSentimentSettings': excluded('internal-view'),
+  'intelligence.saveNewsSentimentSettings': excluded('internal-view'),
   'intelligence.getSourceHealth': exposed('get_source_health'),
   'intelligence.getTimeline': exposed('get_intelligence_timeline'),
   'intelligence.getWorkspaceState': excluded('internal-view'),
