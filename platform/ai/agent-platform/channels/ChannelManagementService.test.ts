@@ -334,7 +334,7 @@ describe('ChannelManagementService', () => {
     await vi.waitFor(() => expect(releasePrepare).toBeTypeOf('function'))
     if (mutation === 'disable') service.disable({ id, actorId: 'user-b' })
     else if (mutation === 'update') service.update({ id, name: 'New name', agentId: 'agent-a', actorId: 'user-b' })
-    else await service.delete({ id, actorId: 'user-b' })
+    else { void service.delete({ id, actorId: 'user-b' }) }
     releasePrepare()
 
     await expect(first).resolves.toMatchObject({ ok: false, code: 'channel-management-metadata-failed' })
@@ -591,8 +591,8 @@ describe('ChannelManagementService', () => {
     await vi.waitFor(() => expect(releaseA).toBeTypeOf('function'))
     service.disable({ id, actorId: 'user-b' })
     const second = service.provision({ id, actorId: 'user-b', senderId: 7, handoff: await credentialHandoff(service, id, 'same-token') })
-    await expect(second).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
     releaseA()
+    await expect(second).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })
     await expect(first).resolves.toMatchObject({ ok: false })
     expect(database.connection.prepare('select credential_ref,credential_revision,migration_state from agent_channels where id=?').get(id)).toEqual({
       credential_ref: 'reserved-ref', credential_revision: 1, migration_state: 'configuration-ready'
@@ -626,8 +626,9 @@ describe('ChannelManagementService', () => {
       vault.cleanupClaim = null
       return { credentialRef: 'reserved-ref', revision: 1, maskedFields: {} }
     }
-    await expect(service.provision({ id, actorId: 'user-b', senderId: 7, handoff: await credentialHandoff(service, id, 'same-token') })).resolves.toMatchObject({ ok: true })
+    const winner = service.provision({ id, actorId: 'user-b', senderId: 7, handoff: await credentialHandoff(service, id, 'same-token') })
     releaseDelete()
+    await expect(winner).resolves.toMatchObject({ ok: true })
     await expect(first).resolves.toMatchObject({ ok: false })
     expect(database.connection.prepare('select credential_ref,credential_revision from agent_channels where id=?').get(id)).toEqual({ credential_ref: 'reserved-ref', credential_revision: 1 })
   })
