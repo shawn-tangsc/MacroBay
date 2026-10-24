@@ -5,7 +5,8 @@ import type {
   IntelligenceTranslationSettings,
   IntelligenceTranslationSourceType,
   IntelligenceTranslationStatus,
-  IntelligenceTranslationTargetLocale
+  IntelligenceTranslationTargetLocale,
+  TranslateIntelligenceItemsJobInput
 } from '../schema/intelligenceTranslation'
 import type { IntelligenceItem, IntelligenceItemRevision } from '../schema/intelligenceRecord'
 
@@ -38,6 +39,20 @@ export function isChineseLanguage(language?: string): boolean {
 
 export function isEnglishLanguage(language?: string): boolean {
   return Boolean((language ?? 'en').toLowerCase().startsWith('en'))
+}
+
+/**
+ * 自动翻译关闭时，只有读者显式触发的两种原因可以继续跑。
+ *
+ * 入口一致性：`normalizeRawRecords` 无条件把 `translateItems` 入队，所以门控必须在这里，
+ * 不能只放在 `maybeEnqueueForNewItems` 里（设计 154 §7.6）。
+ */
+export function shouldTranslateForReason(
+  settings: Pick<IntelligenceTranslationSettings, 'autoTranslateEnabled'>,
+  reason: TranslateIntelligenceItemsJobInput['reason']
+): boolean {
+  if (settings.autoTranslateEnabled) return true
+  return reason === 'manual-selection' || reason === 'retry-failed'
 }
 
 export function needsTranslation(

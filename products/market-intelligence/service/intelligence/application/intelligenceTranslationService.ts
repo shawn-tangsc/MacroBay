@@ -33,7 +33,8 @@ import {
   needsTranslation,
   resolveEffectiveRevision,
   resolveItemSourceLanguage,
-  resolveTargetLocale
+  resolveTargetLocale,
+  shouldTranslateForReason
 } from './intelligenceTranslationHelpers'
 import { sanitizeIntelligenceText } from './intelligenceItemLabels'
 import {
@@ -320,6 +321,10 @@ export function createIntelligenceTranslationService(deps: {
         readModelDefaults(),
         readProviders()
       ])
+      // 自动翻译关闭时，pipeline 仍会把 new-item 入队；在这里停住，而不是让每个新条目都调用模型。
+      if (!shouldTranslateForReason(settings, input.reason)) {
+        return { processed: 0, failed: 0 }
+      }
       // 每次任务开始时解析：显式绑定优先，其次模型服务的默认翻译模型，最后沿用供应商默认聊天模型。
       const model = resolveTranslationModel({ settings, modelDefaults, providers })
       const targetLocale = input.targetLocale ?? resolveTargetLocale(settings, appLanguage)
