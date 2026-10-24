@@ -32,6 +32,25 @@ describe('regulatorRelevanceClassifier', () => {
     expect(result.ignoredReasonCode).toBe('scope-not-matched')
   })
 
+  it('ignores agency boilerplate that only names the commission', () => {
+    const result = classifyRegulatorRelevance({
+      sourceId: 'sec-rss',
+      title: 'SEC Announces Fiscal Year 2027 Examination Priorities',
+      summary:
+        'The Securities and Exchange Commission today announced the Division of Examinations’ Fiscal Year 2027 examination priorities.'
+    })
+    expect(result.outcome).toBe('ignore')
+  })
+
+  it('ignores generic enforcement when the commission name is the only venue mention', () => {
+    const result = classifyRegulatorRelevance({
+      sourceId: 'sec-rss',
+      title: 'SEC Charges Two Individuals With Orchestrating Fraud Scheme That Targeted Veterans',
+      summary: 'The Securities and Exchange Commission charged two individuals with orchestrating a fraud scheme.'
+    })
+    expect(result.outcome).toBe('ignore')
+  })
+
   it('returns context-only for low-confidence crypto mentions', () => {
     const result = classifyRegulatorRelevance({
       sourceId: 'cftc-rss',
