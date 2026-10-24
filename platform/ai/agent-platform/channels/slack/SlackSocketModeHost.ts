@@ -81,7 +81,8 @@ export class SlackSocketModeHost {
   }
 
   private async handle(data: unknown, sourceSocket: PlatformWebSocket): Promise<void> {
-    if (!this.isCurrentSocket(sourceSocket) || typeof data !== 'string' || data.length > 1_000_000) return this.close()
+    if (!this.isCurrentSocket(sourceSocket)) return
+    if (typeof data !== 'string' || data.length > 1_000_000) return this.close()
     let envelope: SlackSocketEnvelope
     try { envelope = JSON.parse(data) as SlackSocketEnvelope } catch { this.auditCurrent(sourceSocket, 'slack-envelope-invalid'); return }
     const envelopeId = typeof envelope.envelope_id === 'string' && envelope.envelope_id.length <= 512 ? envelope.envelope_id : null

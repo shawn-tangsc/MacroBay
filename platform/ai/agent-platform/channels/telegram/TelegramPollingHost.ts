@@ -69,7 +69,7 @@ export class TelegramPollingHost {
       this.schedule(delay)
       return
     }
-    this.backoffMs = 1_000
+    let retry = false
     for (const update of response.value) {
       if (this.deps.signal.aborted || !this.deps.isCurrent()) return this.close()
       const fact = normalizeTelegramUpdate(update, this.deps.botUsername)
@@ -96,8 +96,15 @@ export class TelegramPollingHost {
           }
         }
       })
-      if (!isAcknowledged(result)) break
+      if (!isAcknowledged(result)) { retry = true; break }
     }
+    if (retry) {
+      const delay = this.backoffMs
+      this.backoffMs = Math.min(60_000, this.backoffMs * 2)
+      this.schedule(delay)
+      return
+    }
+    this.backoffMs = 1_000
     this.schedule(0)
   }
 }
