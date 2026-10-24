@@ -1276,7 +1276,7 @@ async function createSdkOptionsForPrewarm(
   }
 }
 
-function buildWarmQueryReuseKey(
+export function buildWarmQueryReuseKey(
   options: ClaudeAgentSdkRuntimeOptions,
   warmQueryReuseSignature: string
 ): string {
@@ -1295,7 +1295,9 @@ function buildWarmQueryReuseKey(
     strictMcpConfig: options.strictMcpConfig,
     allowDangerouslySkipPermissions: options.allowDangerouslySkipPermissions ?? false,
     outputFormat: options.outputFormat ?? null,
-    mcpServers: options.mcpServers ?? null
+    // Only the server identity belongs in the reuse key. The values include live in-process MCP
+    // server instances, which are cyclic and must never be walked.
+    mcpServers: options.mcpServers ? describeMcpServers(options.mcpServers) : null
   })
 }
 
@@ -1388,18 +1390,43 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(stabilizeForStringify(value))
 }
 
-function stabilizeForStringify(value: unknown): unknown {
+function describeMcpServers(servers: Record<string, unknown>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(servers)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, config]) => [name, readServerKind(config)])
+  )
+}
+
+function readServerKind(config: unknown): string {
+  if (!config || typeof config !== 'object') return 'unknown'
+  const type = (config as Record<string, unknown>).type
+  if (typeof type === 'string') return type
+  return 'stdio'
+}
+
+function stabilizeForStringify(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
   if (Array.isArray(value)) {
-    return value.map((item) => stabilizeForStringify(item))
+    return value.map((item) => stabilizeForStringify(item, seen))
   }
 
   if (value && typeof value === 'object') {
-    return Object.fromEntries(
+    if (seen.has(value)) return '[circular]'
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) {
+      // Runtime handles (MCP server instances, sockets, abort controllers) carry internal cycles and
+      // are not part of the policy; name the kind instead of walking them.
+      return `[${value.constructor?.name ?? 'object'}]`
+    }
+    seen.add(value)
+    const result = Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .filter(([, item]) => typeof item !== 'function' && item !== undefined)
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, stabilizeForStringify(item)])
+        .map(([key, item]) => [key, stabilizeForStringify(item, seen)])
     )
+    seen.delete(value)
+    return result
   }
 
   return value
