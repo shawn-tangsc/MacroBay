@@ -5,7 +5,7 @@ import {
   type BuiltInWorkspacePageTitleKey
 } from '@platform/workspace/registry/builtInWorkspacePages'
 import type { LucideIcon } from 'lucide-react'
-import { Bell, Bot, Database, Globe2, KeyRound, Languages, ListChecks } from 'lucide-react'
+import { Bell, Bot, Database, Globe2, KeyRound, Languages, ListChecks, MessagesSquare } from 'lucide-react'
 
 import { platformText } from '../../i18n/platformText'
 import { resolveShellIcon } from './shellIconRegistry'
@@ -64,6 +64,7 @@ export type BuiltInSettingsPanelId =
   | 'preferences'
   | 'notifications'
   | 'task-automation'
+  | 'channels'
 
 export interface BuiltInSettingsPanel {
   id: BuiltInSettingsPanelId
@@ -81,7 +82,8 @@ export function createBuiltInSettingsPanels(language: AppLanguage): BuiltInSetti
     { id: 'storage-cache', label: t.settings.storageAndCache, icon: Database },
     { id: 'task-automation', label: t.settings.taskAutomation, icon: ListChecks },
     { id: 'preferences', label: t.settings.basicSettings, icon: Languages },
-    { id: 'notifications', label: t.settings.notifications, icon: Bell }
+    { id: 'notifications', label: t.settings.notifications, icon: Bell },
+    { id: 'channels', label: t.settings.channels, icon: MessagesSquare }
   ]
 }
 
@@ -93,6 +95,7 @@ export function isBuiltInSettingsPanelId(value: string): value is BuiltInSetting
     value === 'storage-cache' ||
     value === 'task-automation' ||
     value === 'preferences' ||
-    value === 'notifications'
+    value === 'notifications' ||
+    value === 'channels'
   )
 }

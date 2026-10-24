@@ -21,6 +21,7 @@ import { AssistantLibrarySettingsPage } from '../settings/assistants/AssistantLi
 import { NotificationSettingsPane } from '../settings/NotificationSettingsPane'
 import { StorageCacheSettingsPage } from '../settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from '../settings/task-automation/TaskAutomationSettingsPage'
+import { ChannelSettingsPage } from '../settings/channels/ChannelSettingsPage'
 import { WebSearchSettingsPage } from '../settings/web-search/WebSearchSettingsPage'
 import { createBuiltInPageAdapters, type BuiltInPageMounts } from './builtInPageAdapters'
 import { ProductContributionHost } from './ProductContributionHost'
@@ -229,6 +230,7 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'web-search' ? <WebSearchSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'storage-cache' ? <StorageCacheSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'task-automation' ? <TaskAutomationSettingsPage language={language} /> : null}
+      {isBuiltInSettingsPanelId(panelKey) && panelKey === 'channels' ? <ChannelSettingsPage language={language} /> : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'notifications' ? (
         <NotificationSettingsPane
           title={text.settings.notifications}

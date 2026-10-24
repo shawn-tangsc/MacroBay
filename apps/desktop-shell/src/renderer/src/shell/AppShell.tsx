@@ -109,6 +109,7 @@ import { NotificationSettingsPane } from './settings/NotificationSettingsPane'
 import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
 import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
+import { ChannelSettingsPage } from './settings/channels/ChannelSettingsPage'
 import { WebSearchSettingsPage } from './settings/web-search/WebSearchSettingsPage'
 import { VisualIdentityAvatar } from './VisualIdentityAvatar'
 
@@ -1112,6 +1113,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'task-automation' ? (
           <TaskAutomationSettingsPage language={settings.language} />
+        ) : null}
+        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
+          <ChannelSettingsPage language={settings.language} />
         ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? renderPreferences() : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
