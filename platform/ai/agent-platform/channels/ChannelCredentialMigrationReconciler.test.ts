@@ -22,7 +22,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect((await store.getState()).channels).toEqual([])
     expect(vault.putReserved).toHaveBeenCalledWith(expect.objectContaining({ value: { bot_token: 'telegram-secret' } }))
     const row = database.connection.prepare(
-      'select config_json, session_id, active_chat_ids_json, permission_mode, migration_state from agent_channels where id = ?'
+      'select config_json, session_id, active_chat_ids_json, permission_mode, migration_state from channel_legacy_channels where id = ?'
     ).get('channel-1') as Record<string, unknown>
     expect(row).toEqual({ config_json: null, session_id: null, active_chat_ids_json: null, permission_mode: null, migration_state: 'completed' })
     expect(JSON.stringify(row)).not.toContain('telegram-secret')
@@ -46,7 +46,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
       replace: async () => createDefaultAgentPersistentState()
     })
     await expect(services.channels.create(channel)).rejects.toThrow('channel-legacy-write-rejected')
-    expect(database.connection.prepare('select count(*) as total from agent_channels').get()).toEqual({ total: 0 })
+    expect(database.connection.prepare('select count(*) as total from channel_legacy_channels').get()).toEqual({ total: 0 })
   })
 
   it('commits the reserved journal before calling putReserved and reuses its ref on retry', async () => {
@@ -59,7 +59,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
 
     await reconciler.reconcile()
     const firstRef = (database.connection.prepare("select credential_ref from channel_credential_migrations where purpose = 'provider-credential'").get() as { credential_ref: string }).credential_ref
-    database.connection.prepare("update agent_channels set migration_state = 'legacy', config_json = ?, credential_ref = null where id = 'channel-1'")
+    database.connection.prepare("update channel_legacy_channels set migration_state = 'legacy', config_json = ?, credential_ref = null where id = 'channel-1'")
       .run(JSON.stringify({ bot_token: 'telegram-secret' }))
     await reconciler.reconcile()
     const secondRef = (database.connection.prepare("select credential_ref from channel_credential_migrations where purpose = 'provider-credential'").get() as { credential_ref: string }).credential_ref
@@ -72,12 +72,12 @@ describe('ChannelCredentialMigrationReconciler', () => {
     const vault = createVaultFake({ dynamicProviderFingerprint: true })
     const reconciler = new ChannelCredentialMigrationReconciler({ database, vault, now: () => now })
     await reconciler.reconcile()
-    database.connection.prepare("update agent_channels set migration_state = 'legacy-scrubbed' where id = 'channel-1'").run()
+    database.connection.prepare("update channel_legacy_channels set migration_state = 'legacy-scrubbed' where id = 'channel-1'").run()
     database.connection.prepare("update channel_credential_migrations set state = 'legacy-scrubbed'").run()
 
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
 
-    expect(database.connection.prepare("select migration_state from agent_channels where id = 'channel-1'").get()).toEqual({ migration_state: 'completed' })
+    expect(database.connection.prepare("select migration_state from channel_legacy_channels where id = 'channel-1'").get()).toEqual({ migration_state: 'completed' })
     expect(database.connection.prepare("select state from channel_credential_migrations where purpose = 'provider-credential'").get()).toEqual({ state: 'completed' })
   })
 
@@ -99,7 +99,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     await reconciler.reconcile()
 
     // The metadata transaction used real SQLite and committed before completion failed.
-    expect(database.connection.prepare("select migration_state, credential_ref from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state, credential_ref from channel_legacy_channels where id = 'channel-1'").get())
       .toMatchObject({ migration_state: 'legacy-scrubbed', credential_ref: 'channel-migration:channel-1:provider' })
     expect(vault.delete).not.toHaveBeenCalled()
 
@@ -107,7 +107,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
 
     expect(vault.inspectReserved).toHaveBeenCalledWith(expect.objectContaining({ credentialRef: 'channel-migration:channel-1:provider' }))
     expect(vault.delete).not.toHaveBeenCalled()
-    expect(database.connection.prepare("select migration_state from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state from channel_legacy_channels where id = 'channel-1'").get())
       .toEqual({ migration_state: 'completed' })
   })
 
@@ -131,7 +131,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     await new ChannelCredentialMigrationReconciler({ database, vault: missingVault, now: () => now }).reconcile()
 
     expect(missingVault.delete).not.toHaveBeenCalled()
-    expect(database.connection.prepare("select migration_state, credential_ref from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state, credential_ref from channel_legacy_channels where id = 'channel-1'").get())
       .toMatchObject({ migration_state: 'quarantined', credential_ref: 'channel-migration:channel-1:provider' })
     expect(database.connection.prepare("select state from channel_credential_migrations where purpose = 'provider-credential'").get())
       .toEqual({ state: 'legacy-scrubbed' })
@@ -300,7 +300,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(vault.prepareMigration).not.toHaveBeenCalled()
     expect(vault.putReserved).not.toHaveBeenCalled()
     expect(JSON.stringify(database.connection.prepare('select * from agent_platform_state_entries').all())).not.toContain('fallback-token')
-    expect(JSON.stringify(database.connection.prepare('select * from agent_channels').all())).not.toContain('/private/fallback-path')
+    expect(JSON.stringify(database.connection.prepare('select * from channel_legacy_channels').all())).not.toContain('/private/fallback-path')
   })
 
   it('preserves fallback non-channel state while a pending scrub blocks Channel hydration', async () => {
@@ -401,7 +401,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(vault.prepareMigration).not.toHaveBeenCalled()
     expect(vault.putReserved).not.toHaveBeenCalled()
     const row = database.connection.prepare(
-      "select migration_state, requested_enabled, migration_error_code, credential_ref from agent_channels where id = 'channel-1'"
+      "select migration_state, requested_enabled, migration_error_code, credential_ref from channel_legacy_channels where id = 'channel-1'"
     ).get() as Record<string, unknown>
     expect(row).toEqual({
       migration_state: 'quarantined',
@@ -420,11 +420,11 @@ describe('ChannelCredentialMigrationReconciler', () => {
     database.connection.exec(`
       create table scrub_fault_once (id integer primary key);
       insert into scrub_fault_once values (1);
-      create trigger defeat_provider_scrub after update on agent_channels
+      create trigger defeat_provider_scrub after update on channel_legacy_channels
       when new.migration_state = 'legacy-scrubbed' and exists (select 1 from scrub_fault_once)
       begin
         delete from scrub_fault_once;
-        update agent_channels set config_json = '{"bot_token":"trigger-secret"}' where id = new.id;
+        update channel_legacy_channels set config_json = '{"bot_token":"trigger-secret"}' where id = new.id;
       end;
     `)
     const vault = createVaultFake()
@@ -432,7 +432,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
 
     const row = database.connection.prepare(
-      "select config_json, session_id, active_chat_ids_json, permission_mode, migration_state, requested_enabled from agent_channels where id = 'channel-1'"
+      "select config_json, session_id, active_chat_ids_json, permission_mode, migration_state, requested_enabled from channel_legacy_channels where id = 'channel-1'"
     ).get() as Record<string, unknown>
     expect(row).toEqual({
       config_json: null, session_id: null, active_chat_ids_json: null, permission_mode: null,
@@ -450,11 +450,11 @@ describe('ChannelCredentialMigrationReconciler', () => {
     database.connection.exec(`
       create table reenrollment_scrub_fault_once (id integer primary key);
       insert into reenrollment_scrub_fault_once values (1);
-      create trigger defeat_reenrollment_scrub after update on agent_channels
+      create trigger defeat_reenrollment_scrub after update on channel_legacy_channels
       when new.migration_state = 'quarantined' and exists (select 1 from reenrollment_scrub_fault_once)
       begin
         delete from reenrollment_scrub_fault_once;
-        update agent_channels set config_json = '{"token_path":"/private/triggered-wechat.json"}' where id = new.id;
+        update channel_legacy_channels set config_json = '{"token_path":"/private/triggered-wechat.json"}' where id = new.id;
       end;
     `)
     const vault = createVaultFake()
@@ -462,7 +462,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
 
     const row = database.connection.prepare(
-      "select config_json, session_id, active_chat_ids_json, permission_mode, migration_state, requested_enabled, migration_error_code from agent_channels where id = 'channel-1'"
+      "select config_json, session_id, active_chat_ids_json, permission_mode, migration_state, requested_enabled, migration_error_code from channel_legacy_channels where id = 'channel-1'"
     ).get() as Record<string, unknown>
     expect(row).toEqual({
       config_json: null, session_id: null, active_chat_ids_json: null, permission_mode: null,
@@ -495,7 +495,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     }
 
     await reconciler.reconcile()
-    expect(database.connection.prepare("select migration_state from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state from channel_legacy_channels where id = 'channel-1'").get())
       .toEqual({ migration_state: 'legacy-scrubbed' })
     expect(database.connection.prepare(
       "select count(*) as total from channel_credential_migrations where state = 'completed'"
@@ -503,7 +503,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
 
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
 
-    expect(database.connection.prepare("select migration_state from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state from channel_legacy_channels where id = 'channel-1'").get())
       .toEqual({ migration_state: 'completed' })
     expect(database.connection.prepare(
       "select count(*) as total from channel_credential_migrations where state = 'completed'"
@@ -515,7 +515,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     insertLegacyChannel(database, 'telegram', { bot_token: 'telegram-secret' }, ['chat-1'])
     const vault = createVaultFake()
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
-    database.connection.prepare("update agent_channels set migration_state = 'legacy-scrubbed' where id = 'channel-1'").run()
+    database.connection.prepare("update channel_legacy_channels set migration_state = 'legacy-scrubbed' where id = 'channel-1'").run()
     database.connection.prepare("update channel_credential_migrations set state = 'legacy-scrubbed'").run()
 
     const missingArchiveVault = createVaultFake({ archiveInitiallyPresent: false })
@@ -524,7 +524,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(missingArchiveVault.inspectReserved).toHaveBeenCalled()
     expect(missingArchiveVault.inspectReservedArchive).toHaveBeenCalled()
     expect(missingArchiveVault.delete).not.toHaveBeenCalled()
-    expect(database.connection.prepare("select migration_state from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state from channel_legacy_channels where id = 'channel-1'").get())
       .toEqual({ migration_state: 'quarantined' })
     expect(database.connection.prepare(
       "select count(*) as total from channel_credential_migrations where state = 'completed'"
@@ -536,7 +536,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     insertLegacyChannel(database, 'telegram', { bot_token: 'telegram-secret' }, ['chat-1'])
     const vault = createVaultFake()
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
-    database.connection.prepare("update agent_channels set migration_state = 'legacy-scrubbed' where id = 'channel-1'").run()
+    database.connection.prepare("update channel_legacy_channels set migration_state = 'legacy-scrubbed' where id = 'channel-1'").run()
     database.connection.prepare("update channel_credential_migrations set state = 'legacy-scrubbed'").run()
 
     const missingProviderVault = createVaultFake({ providerInitiallyPresent: false })
@@ -545,7 +545,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(missingProviderVault.inspectReserved).toHaveBeenCalled()
     expect(missingProviderVault.inspectReservedArchive).toHaveBeenCalled()
     expect(missingProviderVault.delete).not.toHaveBeenCalled()
-    expect(database.connection.prepare("select migration_state from agent_channels where id = 'channel-1'").get())
+    expect(database.connection.prepare("select migration_state from channel_legacy_channels where id = 'channel-1'").get())
       .toEqual({ migration_state: 'quarantined' })
     expect(database.connection.prepare(
       "select count(*) as total from channel_credential_migrations where state = 'completed'"
@@ -562,10 +562,10 @@ describe('ChannelCredentialMigrationReconciler', () => {
       ? '{"token_path":"/private/persistent-trigger.json"}'
       : '{"bot_token":"persistent-trigger-secret"}'
     database.connection.exec(`
-      create trigger persistent_scrub_fault after update on agent_channels
+      create trigger persistent_scrub_fault after update on channel_legacy_channels
       when new.migration_state in ('legacy-scrubbed', 'quarantined')
       begin
-        update agent_channels set config_json = '${restoredConfig}' where id = new.id;
+        update channel_legacy_channels set config_json = '${restoredConfig}' where id = new.id;
       end;
     `)
     const vault = createVaultFake()
@@ -576,7 +576,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     await expect(store.getState()).rejects.toThrow('channel migration scrub')
 
     const row = database.connection.prepare(
-      "select config_json, migration_state, requested_enabled, migration_error_code from agent_channels where id = 'channel-1'"
+      "select config_json, migration_state, requested_enabled, migration_error_code from channel_legacy_channels where id = 'channel-1'"
     ).get() as Record<string, unknown>
     expect(row).toMatchObject({
       config_json: JSON.stringify(config), migration_state: 'quarantined', requested_enabled: 0,
@@ -606,7 +606,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(unavailableArchiveVault.prepareMigration).not.toHaveBeenCalled()
     expect(unavailableArchiveVault.inspectReserved).not.toHaveBeenCalled()
     expect(database.connection.prepare(
-      "select migration_state, requested_enabled, migration_error_code, credential_ref from agent_channels where id = 'channel-1'"
+      "select migration_state, requested_enabled, migration_error_code, credential_ref from channel_legacy_channels where id = 'channel-1'"
     ).get()).toEqual({
       migration_state: 'quarantined', requested_enabled: 0,
       migration_error_code: 'channel-legacy-credential-reenrollment-required', credential_ref: null
@@ -618,7 +618,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     insertLegacyChannel(database, 'telegram', { bot_token: 'direct-secret' })
     const vault = createVaultFake({ dynamicProviderFingerprint: true })
     await new ChannelCredentialMigrationReconciler({ database, vault, now: () => now }).reconcile()
-    database.connection.prepare("update agent_channels set migration_state = 'legacy', config_json = ? where id = 'channel-1'")
+    database.connection.prepare("update channel_legacy_channels set migration_state = 'legacy', config_json = ? where id = 'channel-1'")
       .run(JSON.stringify({ bot_token: 'direct-secret' }))
     database.connection.prepare("insert into agent_platform_state_entries (key, value_json, updated_at) values ('channels', ?, ?)")
       .run(JSON.stringify([legacyChannel({ bot_token: 'conflicting-secret' })]), now.toISOString())
@@ -627,7 +627,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
 
     expect(vault.delete).not.toHaveBeenCalled()
     expect(database.connection.prepare(
-      "select migration_state, requested_enabled, credential_ref from agent_channels where id = 'channel-1'"
+      "select migration_state, requested_enabled, credential_ref from channel_legacy_channels where id = 'channel-1'"
     ).get()).toMatchObject({
       migration_state: 'quarantined',
       requested_enabled: 0,
@@ -642,7 +642,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     const failingVault = createVaultFake({ failDelete: true, dynamicProviderFingerprint: true })
     await new ChannelCredentialMigrationReconciler({ database, vault: failingVault, now: () => now }).reconcile()
     database.connection.prepare(
-      "update agent_channels set migration_state = 'legacy', config_json = ?, credential_ref = null, public_config_json = null where id = 'channel-1'"
+      "update channel_legacy_channels set migration_state = 'legacy', config_json = ?, credential_ref = null, public_config_json = null where id = 'channel-1'"
     ).run(JSON.stringify({ bot_token: 'second-secret' }))
 
     await new ChannelCredentialMigrationReconciler({ database, vault: failingVault, now: () => now }).reconcile()
@@ -670,7 +670,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(vault.putReserved).not.toHaveBeenCalled()
     expect(vault.putReservedArchive).toHaveBeenCalledWith(expect.objectContaining({ candidates: ['chat-1'] }))
     const row = database.connection.prepare(
-      'select config_json, session_id, active_chat_ids_json, migration_state, migration_error_code, legacy_session_state from agent_channels where id = ?'
+      'select config_json, session_id, active_chat_ids_json, migration_state, migration_error_code, legacy_session_state from channel_legacy_channels where id = ?'
     ).get('channel-1') as Record<string, unknown>
     expect(row).toMatchObject({
       config_json: null,
@@ -692,7 +692,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
 
     expect(vault.putReserved).not.toHaveBeenCalled()
     const row = database.connection.prepare(
-      'select config_json, session_id, active_chat_ids_json, permission_mode, migration_state, migration_error_code from agent_channels where id = ?'
+      'select config_json, session_id, active_chat_ids_json, permission_mode, migration_state, migration_error_code from channel_legacy_channels where id = ?'
     ).get('channel-1') as Record<string, unknown>
     expect(row).toMatchObject({
       config_json: null,
@@ -761,7 +761,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(vault.putReserved).not.toHaveBeenCalled()
     expect(vault.prepareArchiveMigration).not.toHaveBeenCalled()
     expect(vault.putReservedArchive).not.toHaveBeenCalled()
-    const row = database.connection.prepare('select config_json,session_id,active_chat_ids_json,requested_enabled,migration_state from agent_channels where id=?').get('channel-1') as Record<string, unknown>
+    const row = database.connection.prepare('select config_json,session_id,active_chat_ids_json,requested_enabled,migration_state from channel_legacy_channels where id=?').get('channel-1') as Record<string, unknown>
     expect(row).toEqual({ config_json: null, session_id: null, active_chat_ids_json: null, requested_enabled: 0, migration_state: 'quarantined' })
     expect(database.connection.prepare("select 1 from agent_platform_state_entries where key='channels'").get()).toBeUndefined()
     expect(writeFallback).toHaveBeenCalledWith(expect.objectContaining({ channels: [] }))
@@ -792,7 +792,7 @@ describe('ChannelCredentialMigrationReconciler', () => {
     expect(vault.putReserved).not.toHaveBeenCalled()
     expect(vault.prepareArchiveMigration).not.toHaveBeenCalled()
     expect(vault.putReservedArchive).not.toHaveBeenCalled()
-    expect(database.connection.prepare('select 1 from agent_channels where id=?').get('channel-1')).toBeUndefined()
+    expect(database.connection.prepare('select 1 from channel_legacy_channels where id=?').get('channel-1')).toBeUndefined()
   })
 })
 
@@ -804,7 +804,7 @@ function insertLegacyChannel(
   sessionId?: string
 ): void {
   database.connection.prepare(
-    `insert into agent_channels (
+    `insert into channel_legacy_channels (
       id, type, name, agent_id, session_id, workspace_json, config_json, is_active, active_chat_ids_json,
       permission_mode, created_at, updated_at
     ) values ('channel-1', ?, 'Legacy channel', null, ?, '{}', ?, 1, ?, null, ?, ?)`

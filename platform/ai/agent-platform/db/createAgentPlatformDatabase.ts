@@ -1112,6 +1112,49 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
       create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state);
     `
+  },
+  {
+    // Move legacy carrier rows out of the managed table so the reconciler no longer depends on it.
+    id: '0033_channel_legacy_quarantine',
+    up: `
+      create table channel_legacy_channels (
+        id text primary key,
+        type text not null,
+        name text not null,
+        agent_id text,
+        workspace_json text,
+        public_config_json text,
+        credential_ref text,
+        credential_revision integer,
+        requested_enabled integer not null default 0,
+        migration_state text not null default 'legacy',
+        migration_error_code text,
+        legacy_session_state text,
+        created_at text not null,
+        updated_at text not null,
+        config_json text,
+        session_id text,
+        is_active integer,
+        active_chat_ids_json text,
+        permission_mode text
+      );
+
+      insert or ignore into channel_legacy_channels (
+        id, type, name, agent_id, workspace_json, public_config_json, credential_ref, credential_revision,
+        requested_enabled, migration_state, migration_error_code, legacy_session_state, created_at, updated_at,
+        config_json, session_id, is_active, active_chat_ids_json, permission_mode
+      ) select
+        id, type, name, agent_id, workspace_json, public_config_json, credential_ref, credential_revision,
+        requested_enabled, migration_state, migration_error_code, legacy_session_state, created_at, updated_at,
+        config_json, session_id, is_active, active_chat_ids_json, permission_mode
+      from agent_channels
+      where migration_state = 'legacy'
+         or type not in ('telegram','slack','qq','discord','feishu','wechat')
+         or (type = 'feishu' and public_config_json is not '{"domain":"lark"}')
+         or (type = 'wechat' and public_config_json is not '{}');
+
+      delete from agent_channels where id in (select id from channel_legacy_channels);
+    `
   }
 ]
 

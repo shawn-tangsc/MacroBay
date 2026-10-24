@@ -66,7 +66,7 @@ export class ChannelCredentialMigrationReconciler {
     const rows = this.options.database.connection.prepare(
       `select id, type, name, agent_id, workspace_json, config_json, session_id, is_active,
               active_chat_ids_json, permission_mode, created_at, updated_at
-       from agent_channels where migration_state = 'legacy' order by id asc`
+       from channel_legacy_channels where migration_state = 'legacy' order by id asc`
     ).all() as LegacyChannelRow[]
     for (const row of rows) {
       if (!blockedChannelIds.has(row.id)) await this.reconcileSource(row, toLegacySource(row))
@@ -88,7 +88,7 @@ export class ChannelCredentialMigrationReconciler {
       if (this.isTombstoned(journal.channel_id)) continue
       const row = this.options.database.connection.prepare(
         `select id, type, name, agent_id, workspace_json, config_json, session_id, is_active,
-                active_chat_ids_json, permission_mode, created_at, updated_at from agent_channels where id = ?`
+                active_chat_ids_json, permission_mode, created_at, updated_at from channel_legacy_channels where id = ?`
       ).get(journal.channel_id) as LegacyChannelRow | undefined
       if (!row) continue
       const migration: MigrationJournal = {
@@ -224,7 +224,7 @@ export class ChannelCredentialMigrationReconciler {
       "select 1 as present from agent_platform_state_entries limit 1"
     ).get() as { present?: number } | undefined
     if (row?.present) return true
-    const tables = ['agent_entities', 'agent_sessions', 'agent_workspaces', 'agent_channels']
+    const tables = ['agent_entities', 'agent_sessions', 'agent_workspaces', 'agent_channels', 'channel_legacy_channels']
     return tables.some((table) => Boolean(this.options.database.connection.prepare(`select 1 as present from ${table} limit 1`).get()))
   }
 
@@ -315,7 +315,7 @@ export class ChannelCredentialMigrationReconciler {
         const now = this.now()
         this.upsertLegacyRow(row)
         this.options.database.connection.prepare(
-          `update agent_channels set public_config_json = ?, credential_ref = ?, credential_revision = ?,
+          `update channel_legacy_channels set public_config_json = ?, credential_ref = ?, credential_revision = ?,
              requested_enabled = ?, migration_state = 'legacy-scrubbed', migration_error_code = null,
              legacy_session_state = ?, config_json = null, session_id = null, is_active = 0,
              active_chat_ids_json = null, permission_mode = null, updated_at = ? where id = ?`
@@ -431,7 +431,7 @@ export class ChannelCredentialMigrationReconciler {
     this.options.database.transact(() => {
       this.upsertLegacyRow(row)
       this.options.database.connection.prepare(
-        `update agent_channels set public_config_json = null, credential_ref = null, credential_revision = null,
+        `update channel_legacy_channels set public_config_json = null, credential_ref = null, credential_revision = null,
            requested_enabled = 0, migration_state = 'quarantined', migration_error_code = ?, legacy_session_state = ?,
            config_json = null, session_id = null, is_active = 0, active_chat_ids_json = null, permission_mode = null,
            updated_at = ? where id = ?`
@@ -461,7 +461,7 @@ export class ChannelCredentialMigrationReconciler {
         this.upsertLegacyRow(row)
         const now = this.now()
         this.options.database.connection.prepare(
-          `update agent_channels set public_config_json = null, credential_ref = null, credential_revision = null,
+          `update channel_legacy_channels set public_config_json = null, credential_ref = null, credential_revision = null,
              requested_enabled = 0, migration_state = 'quarantined', migration_error_code = ?, legacy_session_state = ?,
              config_json = null, session_id = null, is_active = 0, active_chat_ids_json = null, permission_mode = null,
              updated_at = ? where id = ?`
@@ -500,7 +500,7 @@ export class ChannelCredentialMigrationReconciler {
   private upsertLegacyRow(row: LegacyChannelRow): void {
     if (this.isTombstoned(row.id)) return
     this.options.database.connection.prepare(
-      `insert into agent_channels (
+      `insert into channel_legacy_channels (
         id, type, name, agent_id, workspace_json, config_json, session_id, is_active, active_chat_ids_json,
         permission_mode, created_at, updated_at
       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -519,7 +519,7 @@ export class ChannelCredentialMigrationReconciler {
   private scrubTombstonedSource(row: LegacyChannelRow): void {
     this.options.database.transact(() => {
       this.options.database.connection.prepare(
-        `update agent_channels set public_config_json = null, credential_ref = null, credential_revision = null,
+        `update channel_legacy_channels set public_config_json = null, credential_ref = null, credential_revision = null,
            requested_enabled = 0, migration_state = 'quarantined', migration_error_code = ?,
            config_json = null, session_id = null, is_active = 0, active_chat_ids_json = null, permission_mode = null,
            updated_at = ? where id = ?`
@@ -574,7 +574,7 @@ export class ChannelCredentialMigrationReconciler {
 
   private quarantineCommittedMetadata(row: LegacyChannelRow, errorCode: string): void {
     this.options.database.connection.prepare(
-      `update agent_channels set requested_enabled = 0, migration_state = 'quarantined', migration_error_code = ?,
+      `update channel_legacy_channels set requested_enabled = 0, migration_state = 'quarantined', migration_error_code = ?,
          config_json = null, session_id = null, is_active = 0, active_chat_ids_json = null, permission_mode = null,
          updated_at = ? where id = ?`
     ).run(errorCode, this.now(), row.id)
@@ -595,7 +595,7 @@ export class ChannelCredentialMigrationReconciler {
   private hasJournalMetadataReference(channelId: string, journal: MigrationSourceConflictError): boolean {
     if (journal.purpose === 'provider-credential') {
       const row = this.options.database.connection.prepare(
-        'select 1 as present from agent_channels where id = ? and credential_ref = ?'
+        'select 1 as present from channel_legacy_channels where id = ? and credential_ref = ?'
       ).get(channelId, journal.journal.credentialRef)
       return Boolean(row)
     }
@@ -607,7 +607,7 @@ export class ChannelCredentialMigrationReconciler {
 
   private hasAnyMetadataReference(channelId: string): boolean {
     const credential = this.options.database.connection.prepare(
-      'select 1 as present from agent_channels where id = ? and credential_ref is not null'
+      'select 1 as present from channel_legacy_channels where id = ? and credential_ref is not null'
     ).get(channelId)
     if (credential) return true
     return Boolean(this.options.database.connection.prepare(
@@ -617,7 +617,7 @@ export class ChannelCredentialMigrationReconciler {
 
   private hasScrubbedLegacyFields(channelId: string): boolean {
     const row = this.options.database.connection.prepare(
-      'select config_json, session_id, active_chat_ids_json, permission_mode from agent_channels where id = ?'
+      'select config_json, session_id, active_chat_ids_json, permission_mode from channel_legacy_channels where id = ?'
     ).get(channelId) as Record<string, unknown> | undefined
     if (!row) return false
     return Object.values(row).every((value) => value === null)
@@ -650,7 +650,7 @@ export class ChannelCredentialMigrationReconciler {
     this.options.database.transact(() => {
       for (const journal of journals) this.setJournalState(journal.id, 'completed', null)
       this.options.database.connection.prepare(
-        "update agent_channels set migration_state = 'completed', migration_error_code = null where id = ?"
+        "update channel_legacy_channels set migration_state = 'completed', migration_error_code = null where id = ?"
       ).run(row.id)
     })
   }
@@ -694,7 +694,7 @@ export class ChannelCredentialMigrationReconciler {
 
   private async cleanupUnreferencedProviderCredential(channelId: string, credential: MigrationJournal): Promise<void> {
     const referenced = this.options.database.connection.prepare(
-      'select 1 as present from agent_channels where id = ? and credential_ref = ?'
+      'select 1 as present from channel_legacy_channels where id = ? and credential_ref = ?'
     ).get(channelId, credential.credentialRef)
     if (referenced) return
     try {
@@ -748,7 +748,7 @@ export class ChannelCredentialMigrationReconciler {
       try {
         await this.options.vault.deleteReservedArchive({
           channelId: archive.channel_id,
-          type: (this.options.database.connection.prepare('select type from agent_channels where id = ?').get(archive.channel_id) as { type?: AgentChannelType } | undefined)?.type ?? 'telegram',
+          type: (this.options.database.connection.prepare('select type from channel_legacy_channels where id = ?').get(archive.channel_id) as { type?: AgentChannelType } | undefined)?.type ?? 'telegram',
           credentialRef: archive.archive_ref,
           sourceFingerprint: journal.source_fingerprint,
           fingerprintKeyId: journal.fingerprint_key_id,
