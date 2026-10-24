@@ -1,4 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="MacroBay mark">
-  <path d="M11 38C18.5 17.5 25.5 17.5 32 38c6.5 20.5 13.5 20.5 21 0" fill="none" stroke="#D8FF62" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="32" cy="38" r="3.6" fill="#D8FF62"/>
+  <path d="M11 36h9l4-12 7 22 5-15 3 5h14" fill="none" stroke="#E8B45A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="32" cy="32" r="2.8" fill="#E8B45A"/>
 </svg>
