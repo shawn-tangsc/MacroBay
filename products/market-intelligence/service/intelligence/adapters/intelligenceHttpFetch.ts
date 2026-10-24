@@ -6,7 +6,7 @@ import { sourceSupportsCredentials } from '../schema/intelligenceSource'
 import type { SourceProfileStore } from '../application/sourceProfileStore'
 import type { IntelligenceCredentialStore } from '../store/intelligenceCredentialStore'
 
-const DEFAULT_USER_AGENT = 'MacroBay/1.0 (intelligence-collector; +https://macrobay.app)'
+export const INTELLIGENCE_DEFAULT_USER_AGENT = 'MacroBay/1.0 (intelligence-collector; +https://macrobay.app)'
 
 export function createIntelligenceFetchText(deps: {
   profileStore: SourceProfileStore
@@ -32,7 +32,7 @@ export async function executeIntelligenceFetchTarget(
   const definition = getIntelligenceSourceDefinition(sourceId)
   const headers: Record<string, string> = {
     Accept: '*/*',
-    'User-Agent': DEFAULT_USER_AGENT,
+    'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT,
     ...target.headers
   }
 

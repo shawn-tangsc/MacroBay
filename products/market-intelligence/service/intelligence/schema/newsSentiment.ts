@@ -16,6 +16,24 @@ export type NewsDocumentState = 'available' | 'too-short' | 'failed'
 
 export type NewsSentimentWindow = '1h' | '4h' | '24h'
 
+/** 舆情只看这四个文本源；CFTC 端点失效，P0 不启用。 */
+export const NEWS_SENTIMENT_SOURCE_IDS = [
+  'sec-rss',
+  'coindesk-rss',
+  'binance-announcements',
+  'okx-latest-announcements'
+] as const
+
+/** 正文可抓的三个源；Binance 文章页被 WAF 拦截，只做标题级。 */
+export const NEWS_SENTIMENT_BODY_SOURCE_IDS = ['sec-rss', 'coindesk-rss', 'okx-latest-announcements'] as const
+
+/** OKX 只对这三类公告打分（采集与时间线不变）。 */
+export const OKX_SENTIMENT_ANN_TYPES = [
+  'announcements-trading-updates',
+  'announcements-api',
+  'announcements-deposit-withdrawal-suspension-resumption'
+] as const
+
 export const NEWS_SENTIMENT_WINDOWS: readonly NewsSentimentWindow[] = ['1h', '4h', '24h']
 
 export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, number>> = {
