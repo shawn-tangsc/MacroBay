@@ -24,7 +24,8 @@ The dashboard groups the market picture into panels:
 - macro context;
 - cross-asset observations;
 - capital conditions;
-- the latest published analysis.
+- the latest published analysis;
+- [news sentiment](./news-sentiment.md) — directional judgments for recent text events.
 
 Each panel is backed by the same evidence records the agent uses. A number on the dashboard can be
 traced to its source instead of ending at a chart label.

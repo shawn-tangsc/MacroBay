@@ -18,7 +18,8 @@ Analyst. Both are marked **coming soon** and cannot be configured yet.
 ## What ships now, and what comes next
 
 Crypto intelligence is the current focus, and it keeps getting deeper: more venues and derivatives
-coverage, ETF and flow history, on-chain signals, and event-driven alerts.
+coverage, ETF and flow history, on-chain signals, and event-driven alerts. Recent text events also
+carry a directional read in the dashboard's [news sentiment](./news-sentiment.md) card.
 
 The portal already shows the next two columns — the Equities Market Analyst and the Futures Market
 Analyst — but they are marked **coming soon**: no sources, no dashboard, nothing to configure. When
