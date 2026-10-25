@@ -93,17 +93,26 @@ export function NewsSentimentDrawer(props: {
     const runId = runIdRef.current + 1
     runIdRef.current = runId
     setTranslatingAll(true)
+    const concurrency = Math.min(TRANSLATION_CONCURRENCY, pending.length)
     setTranslationStates((current) => {
       const next = { ...current }
       for (const row of pending) if (!next[row.itemId]) next[row.itemId] = 'waiting'
+      // Mark the first workers immediately so the queue never looks stuck on all-waiting.
+      for (const row of pending.slice(0, concurrency)) next[row.itemId] = 'translating'
       return next
     })
     let cursor = 0
-    const workers = Array.from({ length: Math.min(TRANSLATION_CONCURRENCY, pending.length) }, async () => {
+    const workers = Array.from({ length: concurrency }, async () => {
       while (runIdRef.current === runId && cursor < pending.length) {
         const row = pending[cursor]
         cursor += 1
-        if (row) await translateItem(row.itemId)
+        if (!row) continue
+        if (translatedBodies[row.itemId]) {
+          setTranslationStates((current) => ({ ...current, [row.itemId]: 'translated' }))
+          continue
+        }
+        setTranslationStates((current) => ({ ...current, [row.itemId]: 'translating' }))
+        await translateItem(row.itemId)
       }
     })
     await Promise.all(workers)
