@@ -18,9 +18,6 @@ export function channelAdapterKeyForType(type: string): ChannelAdapterKey {
 }
 
 /** SQL expression mapping a `type` column to its adapter key. */
-export function adapterKeySql(column: string): string {
-  return `(case when ${column} = 'feishu' then 'lark' else ${column} end)`
-}
 
 /**
  * The single runtime authorization gate. Every inbound, delivery, lifecycle and provider-state
@@ -77,10 +74,6 @@ export function larkChannelSql(alias = ''): string {
 }
 
 /** Historic Feishu rows must be fenced, not merely hidden, when they appear runtime-capable. */
-export function isolatedFeishuSql(alias = ''): string {
-  const column = (name: string) => alias ? `${alias}.${name}` : name
-  return `(${column('type')}='feishu' and ${column('public_config_json')} is not '${LARK_PUBLIC_CONFIG_JSON}')`
-}
 
 export function isLarkPublicConfig(value: unknown): boolean {
   return value === LARK_PUBLIC_CONFIG_JSON
