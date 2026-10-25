@@ -100,10 +100,11 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
 
   register(PRODUCT_ID, 'intelligence.translateNewsSentimentBody', async (payload) => {
     const itemId = typeof (payload as { itemId?: unknown })?.itemId === 'string' ? String((payload as { itemId: string }).itemId) : ''
+    const force = (payload as { force?: unknown })?.force === true
     if (!itemId) throw new Error('An itemId is required.')
     const module = getIntelligenceModule(jobRuntime)
     if (!module.newsSentiment.bodyTranslation) throw new Error('Body translation is unavailable.')
-    const result = await module.newsSentiment.bodyTranslation.translate(itemId, { manual: true })
+    const result = await module.newsSentiment.bodyTranslation.translate(itemId, { manual: true, force })
     console.log('MI_BODY_TRANSLATE', itemId, result.state)
     return result
   })

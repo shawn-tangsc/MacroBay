@@ -54,7 +54,7 @@ export function createNewsSentimentBodyTranslationService(deps: {
       return record.state
     },
 
-    async translate(itemId: string, options: { manual?: boolean } = {}): Promise<BodyTranslationResult> {
+    async translate(itemId: string, options: { manual?: boolean; force?: boolean } = {}): Promise<BodyTranslationResult> {
       const { settings, targetLocale } = await deps.readSettings()
       // Manual drawer actions run even when auto translation is off; only an explicit body switch off
       // plus the auto flag can suppress the background path.
@@ -64,7 +64,7 @@ export function createNewsSentimentBodyTranslationService(deps: {
       if (!body || body.length < MIN_BODY_CHARS) return { state: 'unavailable' }
       const hash = bodyHash(body)
       const existing = deps.store.getBodyTranslation(itemId)
-      if (existing?.state === 'translated' && existing.bodyHash === hash && existing.targetLocale === targetLocale && existing.bodyText) {
+      if (!options.force && existing?.state === 'translated' && existing.bodyHash === hash && existing.targetLocale === targetLocale && existing.bodyText) {
         return { state: 'translated', body: existing.bodyText, cached: true }
       }
 

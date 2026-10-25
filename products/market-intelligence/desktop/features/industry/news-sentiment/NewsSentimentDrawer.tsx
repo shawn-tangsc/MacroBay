@@ -52,20 +52,20 @@ export function NewsSentimentDrawer(props: {
   const activeTranslationState = activeId ? translationStates[activeId] ?? active?.bodyTranslationState ?? 'missing' : 'missing'
   const activeTranslatedBody = activeId ? translatedBodies[activeId] : undefined
 
-  const translateItem = useCallback(async (itemId: string) => {
+  const translateItem = useCallback(async (itemId: string, force = false) => {
     const row = (view?.items ?? []).find((entry) => entry.itemId === itemId)
-    if (row?.bodyTranslationState === 'translated' || translatedBodies[itemId]) return
+    if (!force && (row?.bodyTranslationState === 'translated' || translatedBodies[itemId])) return
     setTranslationStates((current) => ({ ...current, [itemId]: 'translating' }))
-    void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: [itemId] }).catch(() => undefined)
+    if (!force) void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: [itemId] }).catch(() => undefined)
     const clientTranslate = typeof props.client.translateBody === 'function'
       ? props.client.translateBody
-      : (id: string) => {
+      : (id: string, retranslate?: boolean) => {
           const products = window.platform?.products
           if (!products?.invoke) return Promise.reject(new Error('Product IPC bridge is unavailable.'))
-          return products.invoke('market-intelligence', 'intelligence.translateNewsSentimentBody', { itemId: id }) as Promise<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string }>
+          return products.invoke('market-intelligence', 'intelligence.translateNewsSentimentBody', { itemId: id, force: retranslate }) as Promise<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string }>
         }
     try {
-      const result = await clientTranslate(itemId)
+      const result = await clientTranslate(itemId, force)
       if (result.state === 'translated' && result.body) {
         setTranslatedBodies((current) => ({ ...current, [itemId]: result.body! }))
         setTranslationStates((current) => ({ ...current, [itemId]: 'translated' }))
@@ -362,14 +362,20 @@ export function NewsSentimentDrawer(props: {
           <>
             <div className="mi-news-drawer__context-mask" onClick={() => setContextMenu(undefined)} />
             <div className="mi-news-drawer__context" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
-              <button
-                disabled={(translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'}
-                onClick={() => { const itemId = contextMenu.itemId; setContextMenu(undefined); void translateItem(itemId) }}
-                role="menuitem"
-                type="button"
-              >
-                {text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody}
-              </button>
+              {(() => {
+                const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
+                return (
+                  <button
+                    onClick={() => { const itemId = contextMenu.itemId; setContextMenu(undefined); void translateItem(itemId, translated) }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    {translated
+                      ? text.drawer.translationStatus?.retranslateOne ?? text.drawer.detail.translateBody
+                      : text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody}
+                  </button>
+                )
+              })()}
             </div>
           </>
         ) : null}
