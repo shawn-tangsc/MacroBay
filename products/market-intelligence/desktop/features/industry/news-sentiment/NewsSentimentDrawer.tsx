@@ -94,7 +94,15 @@ export function NewsSentimentDrawer(props: {
       for (const row of pending) if (!next[row.itemId]) next[row.itemId] = 'waiting'
       return next
     })
-    for (const row of pending) await translateItem(row.itemId)
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(TRANSLATION_CONCURRENCY, pending.length) }, async () => {
+      while (cursor < pending.length) {
+        const row = pending[cursor]
+        cursor += 1
+        if (row) await translateItem(row.itemId)
+      }
+    })
+    await Promise.all(workers)
     setTranslatingAll(false)
     props.onRefresh()
   }, [rows, translateItem, translationStates])
