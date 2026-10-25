@@ -61,7 +61,7 @@ describe('extractNewsBody', () => {
 
   it('drops the publisher disclosure when no article container exists', () => {
     const html = `<p>Strategy, Strive face balancing act between bitcoin buying and preferred stock dividends.</p>
-      <p>Disclosure &amp; Policies: CoinDesk is an award-winning media outlet that covers the cryptocurrency industry.</p>
+      <p>Disclosure &amp; Polices : CoinDesk is an award-winning media outlet that covers the cryptocurrency industry.</p>
       <p>Bullish owns and invests in digital asset businesses and digital assets.</p>`
     const result = extractNewsBody({ sourceId: 'coindesk-rss', html })
     expect(result.text).toContain('Strategy, Strive face balancing act')

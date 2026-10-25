@@ -46,7 +46,7 @@ export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, numb
 export const NEWS_SENTIMENT_PROMPT_VERSION = 'news-polarity-v1'
 
 /** 正文抽取器版本：选择器变更时递增，旧正文不会被当成新格式复用。 */
-export const NEWS_SENTIMENT_EXTRACTION_VERSION = 'news-body-v1'
+export const NEWS_SENTIMENT_EXTRACTION_VERSION = 'news-body-v2'
 
 export const NEWS_SENTIMENT_LIMITS = Object.freeze({
   /** 正文落库上限。 */

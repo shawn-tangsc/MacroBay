@@ -5,6 +5,7 @@ import type { ModelDefaultsSettings } from '@platform/settings/schema/appSetting
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import {
   NEWS_SENTIMENT_CAVEATS,
+  NEWS_SENTIMENT_EXTRACTION_VERSION,
   NEWS_SENTIMENT_PROMPT_VERSION,
   NEWS_SENTIMENT_SOURCE_IDS,
   OKX_SENTIMENT_ANN_TYPES,
@@ -64,7 +65,7 @@ export function createNewsSentimentScoringService(deps: {
       const requestedIds = input.itemIds?.length ? new Set(input.itemIds) : undefined
       const candidates = admitted
         .filter((item) => !requestedIds || requestedIds.has(item.itemId))
-        .filter((item) => !isCurrent(deps.store.getLatestSentiment(item.itemId, deps.now()), useModel, modelRef))
+        .filter((item) => !isCurrent(deps.store.getLatestSentiment(item.itemId, deps.now()), useModel, modelRef, deps.store.getDocument(item.itemId)))
         .slice(0, deps.maxPerRun ?? 20)
 
       let processed = 0
@@ -181,9 +182,12 @@ function isAdmittedItem(item: {
 function isCurrent(
   latest: NewsSentimentRecord | undefined,
   useModel: boolean,
-  modelRef: string | undefined
+  modelRef: string | undefined,
+  document?: { extractionVersion: string }
 ): boolean {
   if (!latest) return false
+  // A new extraction version means the old judgment was made from a different body (or none).
+  if (document && document.extractionVersion !== NEWS_SENTIMENT_EXTRACTION_VERSION) return false
   if (!useModel) return latest.engine === 'rules'
   return (
     latest.engine === 'model' &&

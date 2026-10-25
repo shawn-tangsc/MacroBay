@@ -69,7 +69,7 @@ import {
 } from './jobs/intelligenceJobIds'
 import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
-import { INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
+import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { statSync } from 'node:fs'
 import { getPlatformFetch } from '@platform/network/platformFetch'
@@ -517,7 +517,7 @@ export function getIntelligenceModule(
     if (newsSentimentStore) {
       void enqueueIntelligencePipelineJobs(
         jobRuntime,
-        [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
+        [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
         {}
       ).catch(() => undefined)
     }

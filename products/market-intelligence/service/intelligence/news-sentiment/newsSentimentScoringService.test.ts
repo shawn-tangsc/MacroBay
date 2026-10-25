@@ -6,6 +6,7 @@ import { createDefaultProviderState } from '@platform/ai/providers/providerStore
 import { createNewsSentimentSqliteStore } from './newsSentimentStore'
 import { createInMemoryNewsSentimentSettingsStorage, createNewsSentimentSettingsStore } from './newsSentimentSettingsStore'
 import { createNewsSentimentScoringService, type NewsSentimentInvoke } from './newsSentimentScoringService'
+import { NEWS_SENTIMENT_EXTRACTION_VERSION } from '../schema/newsSentiment'
 
 const BODY =
   'The SEC approved rule changes that clear the way for options on spot Ether ETFs, a step the industry has sought for more than a year.'
@@ -55,7 +56,7 @@ async function harness(options: { withModel: boolean }) {
     fetchedAt: '2026-10-24T12:05:00.000Z',
     bodyText: BODY,
     bodyChars: BODY.length,
-    extractionVersion: 'news-body-v1',
+    extractionVersion: NEWS_SENTIMENT_EXTRACTION_VERSION,
     state: 'available'
   })
   const { state, providerId, modelId } = readyProviders()

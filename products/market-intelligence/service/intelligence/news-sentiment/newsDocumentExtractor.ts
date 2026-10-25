@@ -28,7 +28,7 @@ const CONTAINERS: Readonly<Record<string, ContainerRule>> = {
 }
 
 const CHROME_RE =
-  /^(official websites use \.gov|secure \.gov websites|share this article|copy link|make preferred|\d+ min read|advertisement|subscribe|sign up|related|latest crypto news|skip to main content|disclosure & policies|coindesk is an award-winning|bullish owns and invests|may receive bullish equity-based compensation|editorial policies|this article is for informational purposes|follow us on)/i
+  /^(official websites use \.gov|secure \.gov websites|share this article|copy link|make preferred|\d+ min read|advertisement|subscribe|sign up|related|latest crypto news|skip to main content|disclosure\s*&|coindesk is an award-winning|bullish owns and invests|may receive bullish equity-based compensation|editorial policies|this article is for informational purposes|follow us on)/i
 
 /** 纯函数：HTML → 正文文本。不依赖 DOM，不引第三方正文库。 */
 export function extractNewsBody(input: { sourceId: string; html: string; maxChars?: number }): ExtractedNewsBody {
