@@ -5,6 +5,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { productText } from '../../../shared/i18n/productText'
 import type { NewsSentimentItemView, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
+import { NewsSentimentStrength } from './NewsSentimentStrength'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
 
@@ -86,7 +87,7 @@ export function NewsSentimentCard(props: {
                   <i className={`is-${item.polarity}`} aria-hidden="true" />
                   <span className="mi-news-sentiment__title">{item.displayTitle ?? item.title}</span>
                 </span>
-                <small>{item.sourceName} · {formatTime(item.publishedAt, 'minute')}</small>
+                <small className="mi-news-sentiment__driver-meta">{item.sourceName} · {formatTime(item.publishedAt, 'minute')} <NewsSentimentStrength compact strength={item.strength} text={text} /></small>
               </button>
             ))}
           </div>

@@ -7,6 +7,7 @@ import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../ser
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
+import { NewsSentimentStrength } from './NewsSentimentStrength'
 
 function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   return Promise.race([
@@ -366,13 +367,7 @@ export function NewsSentimentDrawer(props: {
                 ) : null}
                 <div className="mi-news-drawer__badges">
                   <span className={`mi-news-sentiment__pill is-${active.polarity}`}>{labelText(text, active.polarity)}</span>
-                  <span className="mi-news-drawer__strength" aria-label={`${text.drawer.detail.strength} ${active.strength}/5 · ${strengthLabel(text, active.strength)}`}>
-                    <em>{text.drawer.detail.strength}</em>
-                    {[1, 2, 3, 4, 5].map((level) => (
-                      <i className={level <= active.strength ? 'is-on' : undefined} key={level} aria-hidden="true" />
-                    ))}
-                    <small>{strengthLabel(text, active.strength)}</small>
-                  </span>
+                  <NewsSentimentStrength strength={active.strength} text={text} />
                   <span>{text.drawer.detail.confidence} {active.confidence}%</span>
                   {active.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
                 </div>
@@ -454,11 +449,4 @@ function filterRows(view: NewsSentimentView | undefined, filters: NewsSentimentF
     if (filters.scope !== 'market' && !row.symbols.includes(filters.scope)) return false
     return true
   })
-}
-
-function strengthLabel(text: NewsSentimentText, strength: number): string {
-  const levels = text.drawer.detail.strengthLevels
-  if (strength <= 2) return levels?.weak ?? '弱'
-  if (strength >= 4) return levels?.strong ?? '强'
-  return levels?.medium ?? '中'
 }
