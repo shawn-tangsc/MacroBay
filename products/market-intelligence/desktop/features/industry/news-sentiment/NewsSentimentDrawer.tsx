@@ -41,6 +41,7 @@ export function NewsSentimentDrawer(props: {
   const [translationStates, setTranslationStates] = useState<Record<string, 'waiting' | 'translating' | 'translated' | 'failed'>>({})
   const [translatedBodies, setTranslatedBodies] = useState<Record<string, string>>({})
   const [translatingAll, setTranslatingAll] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
@@ -259,7 +260,7 @@ export function NewsSentimentDrawer(props: {
                 className={`mi-news-drawer__row${row.itemId === activeId ? ' is-selected' : ''}`}
                 key={row.itemId}
                 onClick={() => setSelectedId(row.itemId)}
-                onContextMenu={(event) => { event.preventDefault(); if (rowState !== 'translated') void translateItem(row.itemId) }}
+                onContextMenu={(event) => { event.preventDefault(); setContextMenu({ itemId: row.itemId, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 80) }) }}
                 role="listitem"
                 type="button"
                 title={text.drawer.translationStatus?.contextMenu}
@@ -346,6 +347,21 @@ export function NewsSentimentDrawer(props: {
             )}
           </aside>
         </div>
+        {contextMenu ? (
+          <>
+            <div className="mi-news-drawer__context-mask" onClick={() => setContextMenu(undefined)} />
+            <div className="mi-news-drawer__context" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
+              <button
+                disabled={(translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'}
+                onClick={() => { const itemId = contextMenu.itemId; setContextMenu(undefined); void translateItem(itemId) }}
+                role="menuitem"
+                type="button"
+              >
+                {text.drawer.translationStatus.translateOne}
+              </button>
+            </div>
+          </>
+        ) : null}
       </div>
     </Drawer>
   )
