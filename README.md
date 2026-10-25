@@ -42,13 +42,11 @@ A claim that cannot be traced to a source record and a timestamp is supposed to 
 That is the whole product: **not a paragraph you have to take on faith.**
 
 <p align="center">
-  <a href="./docs/assets/screenshots/demo-en.gif">
-    <img src="./docs/assets/screenshots/demo-en-poster.png" alt="MacroBay crypto intelligence dashboard, analysis, and analyst agent" width="100%">
-  </a>
+  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: crypto market checklist, market status, cross-asset returns, capital conditions, sentiment, funding and the watchlist" width="100%">
 </p>
 
 <p align="center">
-  <sub>Dashboard, evidence, analyst agent, calendar, and model settings. Click the image to play the 38-second demo.</sub>
+  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
 </p>
 
 Built for people whose read has to survive a follow-up question.

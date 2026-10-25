@@ -5,6 +5,11 @@
 The market analyst is a product-owned agent built on the platform's Claude Code runtime. It reads
 market evidence and publishes conditional analysis.
 
+![The dashboard and the analyst agent working on the same evidence](../assets/screenshots/demo-en-poster.png)
+
+The dashboard on the left and the agent on the right read the same evidence records. The recording
+below shows the same view in motion:
+
 ![Agent analysis over the market dashboard](../assets/screenshots/demo-agent-en.gif)
 
 ## What makes it different from ordinary chat
