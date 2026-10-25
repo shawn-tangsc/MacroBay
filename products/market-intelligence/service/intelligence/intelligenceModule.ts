@@ -223,6 +223,27 @@ function getProductDataDir(): string {
   return join(app.getPath('userData'), 'products', PRODUCT_ID)
 }
 
+/**
+ * Publishers disagree about who may read them: SEC.gov returns 403 to a browser user agent but 200
+ * to the identified collector, while CoinDesk hands a body-less variant to the collector UA. Pick
+ * the headers per host instead of one global article fingerprint.
+ */
+function articleFetchHeaders(url: string): Record<string, string> {
+  if (url.includes('sec.gov')) {
+    return { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
+  }
+  if (url.includes('binance.com/bapi')) {
+    return { Accept: 'application/json', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
+  }
+  return {
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache'
+  }
+}
+
 export function getIntelligenceModule(
   jobRuntime: JobRuntime,
   platformHooks?: IntelligenceModulePlatformHooks
@@ -413,14 +434,7 @@ export function getIntelligenceModule(
               {
                 url,
                 method: 'GET',
-                headers: {
-                  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                  'Accept-Language': 'en-US,en;q=0.9',
-                  Referer: 'https://www.coindesk.com/',
-                  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-                  'Cache-Control': 'no-cache',
-                  Pragma: 'no-cache'
-                },
+                headers: articleFetchHeaders(url),
                 timeoutMs: 15_000
               },
               { retryPolicy: { maxAttempts: 1 } }
