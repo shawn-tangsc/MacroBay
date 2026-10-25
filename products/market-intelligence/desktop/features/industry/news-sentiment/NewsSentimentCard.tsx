@@ -66,18 +66,6 @@ export function NewsSentimentCard(props: {
         </div>
       ) : (
         <>
-          <div className="mi-news-sentiment__summary">
-            <span className={`mi-news-sentiment__pill is-${summary.label}`} data-news-sentiment-label={summary.label} title={text.summaryHint}>
-              {text.overall} · {labelText(text, summary.label)}
-            </span>
-            <strong>{text.counts.replace('{count}', String(filteredItems.length))}</strong>
-            <span className="mi-news-sentiment__breakdown">
-              {text.breakdown
-                .replace('{bull}', String(count(items(view), 'bullish')))
-                .replace('{bear}', String(count(items(view), 'bearish')))
-                .replace('{flat}', String(filteredItems.filter((item) => item.polarity === 'neutral').length))}
-            </span>
-          </div>
           <div
             className="mi-news-sentiment__drivers"
             onScroll={(event) => {
@@ -119,12 +107,4 @@ export function labelText(text: NewsSentimentText, label: string): string {
   if (label === 'negative' || label === 'bearish') return text.labels.bearish
   if (label === 'mixed') return text.labels.mixed
   return text.labels.neutral
-}
-
-function items(view: NewsSentimentView | undefined): NewsSentimentItemView[] {
-  return view?.items ?? []
-}
-
-function count(rows: NewsSentimentItemView[], polarity: string): number {
-  return rows.filter((row) => row.polarity === polarity).length
 }
