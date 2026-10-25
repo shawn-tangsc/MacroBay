@@ -103,7 +103,7 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     if (!itemId) throw new Error('An itemId is required.')
     const module = getIntelligenceModule(jobRuntime)
     if (!module.newsSentiment.bodyTranslation) throw new Error('Body translation is unavailable.')
-    const result = await module.newsSentiment.bodyTranslation.translate(itemId)
+    const result = await module.newsSentiment.bodyTranslation.translate(itemId, { manual: true })
     console.log('MI_BODY_TRANSLATE', itemId, result.state)
     return result
   })
