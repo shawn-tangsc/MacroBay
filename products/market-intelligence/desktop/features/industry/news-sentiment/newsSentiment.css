@@ -221,5 +221,6 @@
 
 .mi-news-drawer__row-waiting { color: var(--muted, #93a196); font-size: 9.5px; border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
 
-.mi-news-sentiment__drivers { max-height: 268px; overflow-y: auto; }
+.mi-news-sentiment__drivers { flex: 1 1 0; min-height: 0; overflow-y: auto; }
+.mi-news-sentiment__footer { margin-top: auto; }
 .mi-news-sentiment__loadmore { margin: 4px 0 0; color: var(--muted, #93a196); font-size: 10px; text-align: center; }
