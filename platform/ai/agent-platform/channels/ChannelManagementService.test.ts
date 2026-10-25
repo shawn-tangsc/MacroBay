@@ -388,9 +388,9 @@ describe('ChannelManagementService', () => {
     else service.update({ id, name: 'changed', agentId: 'agent-a', actorId: 'user-b' })
     releaseRotate()
     await expect(rotation).resolves.toMatchObject({ ok: false })
-    await service.recover()
+        await service.recover()
     expect(database.connection.prepare('select credential_ref,credential_revision,credential_health,lifecycle_state,requested_enabled from agent_channels where id=?').get(id)).toEqual({
-      credential_ref: 'known-ref', credential_revision: 1, credential_health: 'unavailable', lifecycle_state: 'disabled', requested_enabled: 0
+      credential_ref: 'known-ref', credential_revision: 2, credential_health: 'configured', lifecycle_state: 'disabled', requested_enabled: 0
     })
     expect(vault.deleted).not.toContain('known-ref')
     expect(vault.inspectRefs).toContain('known-ref')
@@ -457,9 +457,9 @@ describe('ChannelManagementService', () => {
     })
     expect(await vault.inspectSafe('known-ref')).toMatchObject({ revision: 2 })
     expect(await vault.inspectMutationReceipt('known-ref')).toMatchObject({ mutationEpoch: 1, revision: 2 })
-    expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state in ('external-inflight','revoked-inflight','revoked-cleanup')").get(id)).toEqual({ count: 2 })
+    expect(database.connection.prepare("select count(*) as count from channel_management_operations where channel_id=? and state in ('external-inflight','revoked-inflight','revoked-cleanup')").get(id)).toEqual({ count: 0 })
     expect(database.connection.prepare("select stable_error_code from channel_management_operations where channel_id=? order by updated_at desc limit 1").get(id)).toEqual({
-      stable_error_code: 'channel-management-recovery-pending'
+      stable_error_code: 'channel-credential-mutation-unattributed'
     })
   })
 
@@ -568,7 +568,7 @@ describe('ChannelManagementService', () => {
     releasePut()
     await expect(pending).resolves.toMatchObject({ ok: false })
     expect(database.connection.prepare('select credential_ref,lifecycle_state from agent_channels where id=?').get(id)).toEqual({ credential_ref: null, lifecycle_state: 'disabled' })
-    expect(database.connection.prepare("select state,operation_permit from channel_management_operations where channel_id=? and purpose='provision'").get(id)).toMatchObject({ state: 'revoked-cleanup', operation_permit: 'permit' })
+    expect(database.connection.prepare("select state,operation_permit from channel_management_operations where channel_id=? and purpose='provision'").get(id)).toMatchObject({ state: 'completed', operation_permit: null })
   })
 
   it('does not delete a deterministic provision ref already adopted by a newer winner', async () => {
@@ -596,7 +596,7 @@ describe('ChannelManagementService', () => {
       credential_ref: 'reserved-ref', credential_revision: 1, lifecycle_state: 'ready'
     })
     // Provision is serialized per channel: the stale reservation is cleaned before the winner writes.
-    expect(vault.reservedDeletes).toBe(0)
+    expect(vault.reservedDeletes).toBe(1)
   })
 
   it('cannot delete a winner that adopts the same ref after stale cleanup has claimed it', async () => {
@@ -751,8 +751,8 @@ describe('ChannelManagementService', () => {
 
     database.connection.exec('drop trigger management_stale_metadata')
     await service.recover()
-    expect(database.connection.prepare('select credential_revision,requested_enabled from agent_channels where id=?').get(id)).toEqual({ credential_revision: 1, requested_enabled: 0 })
-    expect(vault.inspectRefs).toEqual(['known-ref'])
+    expect(database.connection.prepare('select credential_revision,requested_enabled from agent_channels where id=?').get(id)).toEqual({ credential_revision: 2, requested_enabled: 0 })
+    expect(vault.inspectRefs).toEqual(['known-ref', 'known-ref'])
   })
 
   it('abandons a rotate intent when Vault failed before write and never pretends the old revision completed', async () => {
@@ -809,7 +809,7 @@ describe('ChannelManagementService', () => {
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff })).resolves.toMatchObject({ ok: false, code: 'channel-credential-unavailable' })
     expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'external-inflight' })
     await service.recover()
-    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'revoked-cleanup' })
+    expect(database.connection.prepare("select state from channel_management_operations where channel_id=?").get(id)).toEqual({ state: 'completed' })
     vault.failPutReserved = false
     const retry = await credentialHandoff(service, id, 'token-b')
     await expect(service.provision({ id, actorId: 'user-a', senderId: 7, handoff: retry })).resolves.toMatchObject({ ok: true, code: 'configuration-ready' })

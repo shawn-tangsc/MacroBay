@@ -92,7 +92,7 @@ export class ChannelManagementRepository {
   /** Recovery may identify a deleting Channel only to consume its already-journaled Vault capability. */
   knownChannelType(id: string): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' | null {
     const row = this.database.connection.prepare(
-      `select case when adapter_key = 'lark' then 'feishu' else adapter_key end as type from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state <> 'disabled'`
+      `select case when adapter_key = 'lark' then 'feishu' else adapter_key end as type from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL}`
     ).get(id) as { type: AgentChannelType } | undefined
     return row?.type === 'telegram' || row?.type === 'slack' || row?.type === 'feishu' || row?.type === 'qq' || row?.type === 'discord' || row?.type === 'wechat' ? row.type : null
   }
