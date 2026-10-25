@@ -40,6 +40,7 @@ export type NewsSentimentItemView = {
   modelRef?: string
   promptVersion?: string
   caveats: string[]
+  bodyTranslationState?: 'translated' | 'failed' | 'missing'
 }
 
 export type NewsSentimentView = {
@@ -104,7 +105,10 @@ export function createNewsSentimentQuery(deps: {
 
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
-        const items = visible.map((row) => toItemView(row, itemsById.get(row.itemId), translations[row.itemId]))
+        const items = visible.map((row) => ({
+          ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
+          bodyTranslationState: deps.bodyTranslation?.status?.(row.itemId) ?? 'missing'
+        }))
         const aggregate = aggregateView(visible, itemsById, input, asOf)
         const caveats = [...new Set(visible.flatMap((row) => row.caveats))]
 

@@ -48,10 +48,17 @@ export function createNewsSentimentBodyTranslationService(deps: {
       return record && body && record.bodyHash === hash ? record : undefined
     },
 
-    async translate(itemId: string): Promise<BodyTranslationResult> {
+    status(itemId: string): 'translated' | 'failed' | 'missing' {
+      const { record, hash } = cached(itemId)
+      if (!record || record.bodyHash !== hash) return 'missing'
+      return record.state
+    },
+
+    async translate(itemId: string, options: { manual?: boolean } = {}): Promise<BodyTranslationResult> {
       const { settings, targetLocale } = await deps.readSettings()
-      // Older settings files predate translateBody; only an explicit false disables it.
-      if (!settings.autoTranslateEnabled || settings.translateBody === false) return { state: 'off' }
+      // Manual drawer actions run even when auto translation is off; only an explicit body switch off
+      // plus the auto flag can suppress the background path.
+      if (!options.manual && (!settings.autoTranslateEnabled || settings.translateBody === false)) return { state: 'off' }
       const document = deps.store.getDocument(itemId)
       const body = document?.state === 'available' ? document.bodyText : undefined
       if (!body || body.length < MIN_BODY_CHARS) return { state: 'unavailable' }
