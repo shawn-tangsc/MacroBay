@@ -52,7 +52,7 @@ export function createNewsSentimentEnrichmentService(deps: {
           continue
         }
         const existing = deps.store.getDocument(itemId)
-        if (existing && (existing.state === 'available' || existing.state === 'too-short')) {
+        if (existing?.state === 'available') {
           skipped += 1
           continue
         }
@@ -100,9 +100,9 @@ function needsDocument(
   itemId: string
 ): boolean {
   const document = store.getDocument(itemId)
-  if (!document) return true
-  if (document.state === 'failed') return true
-  return false
+  // Only a stored body is final. A short or failed fetch may have been a different response
+  // variant, so the next pass tries again instead of keeping an empty excerpt forever.
+  return !document || document.state !== 'available'
 }
 
 function failedDocument(
