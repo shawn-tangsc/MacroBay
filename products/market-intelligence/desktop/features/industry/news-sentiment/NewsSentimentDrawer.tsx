@@ -47,6 +47,7 @@ export function NewsSentimentDrawer(props: {
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  const runIdRef = useRef(0)
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
@@ -87,6 +88,8 @@ export function NewsSentimentDrawer(props: {
   const translateAll = useCallback(async () => {
     const pending = rows.filter((row) => (translationStates[row.itemId] ?? row.bodyTranslationState) !== 'translated')
     if (pending.length === 0) return
+    const runId = runIdRef.current + 1
+    runIdRef.current = runId
     void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: pending.map((row) => row.itemId) }).catch(() => undefined)
     setTranslatingAll(true)
     setTranslationStates((current) => {
@@ -96,16 +99,29 @@ export function NewsSentimentDrawer(props: {
     })
     let cursor = 0
     const workers = Array.from({ length: Math.min(TRANSLATION_CONCURRENCY, pending.length) }, async () => {
-      while (cursor < pending.length) {
+      while (runIdRef.current === runId && cursor < pending.length) {
         const row = pending[cursor]
         cursor += 1
         if (row) await translateItem(row.itemId)
       }
     })
     await Promise.all(workers)
-    setTranslatingAll(false)
-    props.onRefresh()
+    if (runIdRef.current === runId) {
+      setTranslatingAll(false)
+      props.onRefresh()
+    }
   }, [rows, translateItem, translationStates])
+
+  const cancelTranslation = useCallback(() => {
+    runIdRef.current += 1
+    setTranslatingAll(false)
+    setTranslationStates((current) => {
+      const next = { ...current }
+      for (const [itemId, state] of Object.entries(next)) if (state === 'waiting') delete next[itemId]
+      return next
+    })
+  }, [])
+
 
   useEffect(() => {
     if (props.open && props.focusItemId) setSelectedId(props.focusItemId)
@@ -194,11 +210,12 @@ export function NewsSentimentDrawer(props: {
           {translationEnabled ? (
             <button
               className="mi-news-drawer__action"
-              disabled={translatingAll}
-              onClick={() => void translateAll()}
+              onClick={() => { if (translatingAll) cancelTranslation(); else void translateAll() }}
               type="button"
             >
-              {translatingAll ? text.settingsModal.translating : text.settingsModal.translateAll ?? text.settingsModal.retryTranslation}
+              {translatingAll
+                ? text.settingsModal.cancelTranslate
+                : text.settingsModal.translateAll ?? text.settingsModal.retryTranslation}
             </button>
           ) : null}
           <button
@@ -309,8 +326,13 @@ export function NewsSentimentDrawer(props: {
                   <span className={`mi-news-sentiment__pill is-${row.polarity}`}>
                     {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
                   </span>
-                  {translationEnabled && (rowState === 'translating' || rowState === 'waiting') ? (
-                    <span className="mi-news-drawer__row-loading" role="status" aria-label={text.drawer.translationStatus?.[rowState] ?? rowState}>
+                  {translationEnabled && rowState === 'waiting' ? (
+                    <span className="mi-news-drawer__row-waiting" title={text.drawer.translationStatus?.waitingHint}>
+                      {text.drawer.translationStatus?.waiting ?? 'waiting'}
+                    </span>
+                  ) : null}
+                  {translationEnabled && rowState === 'translating' ? (
+                    <span className="mi-news-drawer__row-loading" role="status" aria-label={text.drawer.translationStatus?.translating}>
                       <i aria-hidden="true" />
                     </span>
                   ) : null}

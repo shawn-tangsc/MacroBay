@@ -218,3 +218,5 @@
   font-size: 10px; padding: 2px 8px; cursor: pointer;
 }
 .mi-news-drawer__body-toggle button[aria-pressed="true"] { color: var(--accent, #d9f67f); border-color: var(--accent, #d9f67f); }
+
+.mi-news-drawer__row-waiting { color: var(--muted, #93a196); font-size: 9.5px; border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
