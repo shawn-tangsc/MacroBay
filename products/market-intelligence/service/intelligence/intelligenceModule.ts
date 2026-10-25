@@ -496,6 +496,7 @@ export function getIntelligenceModule(
           store: newsSentimentStore,
           pipeline,
           translation: translationService,
+          getDisplayLocale: getAppLanguage,
           ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
           now: () => new Date().toISOString()
         })

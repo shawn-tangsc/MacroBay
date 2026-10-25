@@ -90,6 +90,7 @@ export function createNewsSentimentQuery(deps: {
       }
 
       try {
+        const displayLocale = await deps.getDisplayLocale?.()
         const from = new Date(Date.parse(asOf) - NEWS_SENTIMENT_WINDOW_MS[window]).toISOString()
         const rows = deps.store.listLatestSentiment({ from, to: asOf, limit: 500 })
         const itemsById = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item]))
@@ -112,11 +113,11 @@ export function createNewsSentimentQuery(deps: {
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
         const items = visible.map((row) => {
-          const translatedTitle = deps.bodyTranslation?.get(row.itemId)?.titleText
+          const translatedTitle = deps.bodyTranslation?.get(row.itemId, displayLocale)?.titleText
           return {
             ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
             ...(translatedTitle ? { displayTitle: translatedTitle } : {}),
-            bodyTranslationState: deps.bodyTranslation?.status?.(row.itemId) ?? 'missing'
+            bodyTranslationState: deps.bodyTranslation?.status?.(row.itemId, displayLocale) ?? 'missing'
           }
         })
         const aggregate = aggregateView(visible, itemsById, input, asOf)
@@ -158,8 +159,9 @@ export function createNewsSentimentQuery(deps: {
       if (!item) return undefined
       const translations = await readTranslations(deps.translation, [input.itemId])
       const document = deps.store.getDocument(input.itemId)
-      const translatedBody = deps.bodyTranslation?.get(input.itemId)?.bodyText
-      const bodyTitle = translatedBody ? deps.bodyTranslation?.get(input.itemId)?.titleText : undefined
+      const displayLocale = await deps.getDisplayLocale?.()
+      const translatedBody = deps.bodyTranslation?.get(input.itemId, displayLocale)?.bodyText
+      const bodyTitle = translatedBody ? deps.bodyTranslation?.get(input.itemId, displayLocale)?.titleText : undefined
       return {
         ...toItemView(row, item, translations[input.itemId]),
         ...(bodyTitle ? { displayTitle: bodyTitle } : {}),

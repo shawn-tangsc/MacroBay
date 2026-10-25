@@ -44,14 +44,17 @@ export function createNewsSentimentBodyTranslationService(deps: {
   }
 
   return {
-    get(itemId: string): NewsBodyTranslationRecord | undefined {
+    get(itemId: string, targetLocale?: string): NewsBodyTranslationRecord | undefined {
       const { record, body, hash } = cached(itemId)
-      return record && body && record.bodyHash === hash ? record : undefined
+      if (!record || !body || record.bodyHash !== hash) return undefined
+      if (targetLocale && record.targetLocale !== targetLocale) return undefined
+      return record
     },
 
-    status(itemId: string): 'translated' | 'failed' | 'missing' {
+    status(itemId: string, targetLocale?: string): 'translated' | 'failed' | 'missing' {
       const { record, hash } = cached(itemId)
       if (!record || record.bodyHash !== hash) return 'missing'
+      if (targetLocale && record.targetLocale !== targetLocale) return 'missing'
       return record.state
     },
 
