@@ -357,7 +357,7 @@ export function NewsSentimentDrawer(props: {
                 role="menuitem"
                 type="button"
               >
-                {text.drawer.translationStatus.translateOne}
+                {text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody}
               </button>
             </div>
           </>
