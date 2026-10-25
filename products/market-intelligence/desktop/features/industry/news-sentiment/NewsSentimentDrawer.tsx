@@ -67,7 +67,7 @@ export function NewsSentimentDrawer(props: {
       open={props.open}
       rootClassName="mi-news-drawer-root"
       title={text.drawer.title}
-      width={1000}
+      width={1040}
     >
       <div className="mi-news-drawer">
         <header className="mi-news-drawer__toolbar">
