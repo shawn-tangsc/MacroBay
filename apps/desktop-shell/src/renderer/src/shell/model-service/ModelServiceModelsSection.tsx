@@ -125,6 +125,11 @@ export function ModelServiceModelsSection({
   const toggleProtocol = (tab: ModelProtocolTab): void => {
     setActiveProtocols((current) => ({ ...current, [tab]: !current[tab] }))
   }
+  /** 只测这一个模型：与全量检测同一条链路（联通性 + 协议），不发全量请求。 */
+  function testModel(modelId: string): void {
+    if (detection.running) return
+    void detection.start(['connectivity', 'protocol'], [modelId])
+  }
   const visibleGroups = groups
     .map((group) => ({
       ...group,
@@ -312,6 +317,8 @@ export function ModelServiceModelsSection({
                       availability={resolveModelAvailabilityView(provider, model)}
                       detectionStatus={detection.statusFor(model.id)}
                       detectionResult={detection.resultFor(model.id)}
+                      testDisabled={detection.running}
+                      onTestModel={testModel}
                       isRemovingModel={isRemovingModel}
                       onEditModel={onEditModel}
                       onRemoveModel={onRemoveModel}

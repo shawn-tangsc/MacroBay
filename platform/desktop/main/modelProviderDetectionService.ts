@@ -5,6 +5,7 @@ import {
   type ModelDetectionResult
 } from '../../ai/providers/modelDetection'
 import type { ModelChatProtocol, ModelProvider } from '../../ai/providers/modelProviderTypes'
+import type { ModelAvailabilityUpdate } from '../../ai/providers/modelAvailability'
 
 /**
  * PLAT-82：「检测模型」的主进程运行器。
@@ -98,7 +99,7 @@ export function createModelProviderDetectionService(input: {
 
     const provider = await input.resolveProvider(providerId)
     if (!provider) throw new Error(`Provider "${providerId}" was not found.`)
-    // 缺省 = 全部模型；带 `modelIds` 时按供应商顺序收窄（自动检测只测新增/变更/过期的那几个）。
+    // 缺省 = 全部模型；带 `modelIds` 时按供应商顺序收窄（单模型测试只传一个 id）。
     const selected = normalizeModelIds(request?.modelIds)
     const models = selected === undefined
       ? provider.models
@@ -117,13 +118,20 @@ export function createModelProviderDetectionService(input: {
       onResult: (result) => input.onProgress(result)
     }).then(
       async (outcome) => {
-        const availability = outcome.results
-          .filter((result) => result.status === 'ok' || result.status === 'failed')
-          .map((result) => ({
-            modelId: result.modelId,
-            status: result.status as 'ok' | 'failed',
-            ...(result.reasonCode ? { reasonCode: result.reasonCode } : {})
-          }))
+        // 只认**联通性**结论：协议（messages/responses）失败不代表这个模型不能聊天，
+        // 不能把它写成「不可用」；跳过/取消也不写。
+        const availability = outcome.results.flatMap((result): ModelAvailabilityUpdate[] => {
+          const connectivity = result.connectivity
+          if (connectivity?.status === 'ok') return [{ modelId: result.modelId, status: 'ok' as const }]
+          if (connectivity?.status === 'failed') {
+            return [{
+              modelId: result.modelId,
+              status: 'failed' as const,
+              ...(connectivity.reasonCode ? { reasonCode: connectivity.reasonCode } : {})
+            }]
+          }
+          return []
+        })
         if (input.recordModelAvailability && availability.length > 0) {
           try {
             await input.recordModelAvailability(providerId, availability, new Date().toISOString())

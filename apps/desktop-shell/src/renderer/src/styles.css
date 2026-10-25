@@ -11388,6 +11388,11 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--text);
 }
 
+/* 单模型测试进行中：图标转圈（按钮本身已被禁用）。 */
+.model-service-row-icon .spin {
+  animation: spin 800ms linear infinite;
+}
+
 .model-service-row-icon:disabled {
   cursor: default;
   opacity: 0.45;

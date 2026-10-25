@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { modelAvailabilityFingerprint } from '@platform/ai/providers/modelAvailability'
@@ -72,6 +72,7 @@ afterEach(async () => {
   root = undefined
   document.body.replaceChildren()
   resetModelDetectionControllerForTests()
+  Reflect.deleteProperty(window, 'platform')
 })
 
 /** 模型区只读 provider 的 id / 端点 / Key 掩码（行内可用性判过期）与模型数组。 */
@@ -271,6 +272,36 @@ describe('PLAT-82 模型行：能力 chip + 本会话检测结果', () => {
     await clickType(container, 'text')
     const rows = [...container.querySelectorAll('[data-model-row]')].map((entry) => entry.getAttribute('data-model-row'))
     expect(rows).toEqual(['deepseek-r1-0528', 'deepseek-v3.2'])
+  })
+
+  it('runs a single-model check from the row action (same lanes as the full run)', async () => {
+    const detectModels = vi.fn(async () => ({ accepted: true, total: 1 }))
+    Object.defineProperty(window, 'platform', {
+      configurable: true,
+      value: {
+        modelProviders: {
+          detectModels,
+          onModelDetectionProgress: () => () => undefined,
+          onModelDetectionDone: () => () => undefined
+        }
+      }
+    })
+    const container = await mountGroups()
+    const button = row(container, 'deepseek-v3.2')?.querySelector<HTMLButtonElement>('[data-model-row-test]')
+    expect(button).not.toBeNull()
+    // 媒体模型没有联通性测试，不显示单测按钮。
+    expect(row(container, 'doubao-seedream-3-0-t2i')?.querySelector('[data-model-row-test]')).toBeNull()
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(detectModels).toHaveBeenCalledTimes(1)
+    expect(detectModels).toHaveBeenCalledWith('aionly', expect.objectContaining({
+      modes: ['connectivity', 'protocol'],
+      modelIds: ['deepseek-v3.2']
+    }))
   })
 
   it('opens the detection dialog from the toolbar', async () => {

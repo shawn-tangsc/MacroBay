@@ -2,9 +2,11 @@ import {
   AudioLines,
   Boxes,
   Eye,
+  FlaskConical,
   Image as ImageIcon,
   Lightbulb,
   ListOrdered,
+  Loader2,
   Mic,
   Minus,
   ScanText,
@@ -33,7 +35,7 @@ import { buildModelCostTitle, formatModelCost } from './modelPricingDisplay'
 import { ModelServiceProtocolChip } from './ModelServiceProtocolChip'
 
 import { modelAvailabilityLabel, modelAvailabilityTitle } from './modelAvailabilityDisplay'
-import type { ModelAvailabilityView } from './modelAvailabilityView'
+import { isAvailabilityProbeModel, type ModelAvailabilityView } from './modelAvailabilityView'
 import { resolveModelMessagesSupport } from './modelMessagesSupport'
 import type { ModelDetectionModelStatus } from './useModelDetection'
 
@@ -52,6 +54,8 @@ export function ModelServiceModelRow({
   detectionStatus,
   detectionResult,
   isRemovingModel,
+  testDisabled = false,
+  onTestModel = () => undefined,
   onEditModel,
   onRemoveModel
 }: {
@@ -65,6 +69,10 @@ export function ModelServiceModelRow({
   /** PLAT-82：本会话检测明细（派生行内文案与标红协议）。 */
   detectionResult?: ModelDetectionResult
   isRemovingModel: boolean
+  /** 该供应商已有 run 在跑：单测按钮整体禁用，避免叠加请求。 */
+  testDisabled?: boolean
+  /** 只测这一个模型（与全量检测同一条链路）。 */
+  onTestModel?: (modelId: string) => void
   onEditModel: (model: ModelDefinition) => void
   onRemoveModel: (modelId: string) => Promise<boolean>
 }): React.ReactElement {
@@ -217,6 +225,18 @@ export function ModelServiceModelRow({
         ))}
       </span>
       <span className="model-service-model-actions">
+        {isAvailabilityProbeModel(model) ? (
+          <button
+            type="button"
+            className="model-service-row-icon"
+            data-model-row-test
+            title={labels.testModel}
+            aria-label={labels.testModel}
+            disabled={testDisabled}
+            onClick={() => onTestModel(model.id)}>
+            {detectionStatus === 'testing' ? <Loader2 size={13} className="spin" /> : <FlaskConical size={13} />}
+          </button>
+        ) : null}
         <button
           type="button"
           className="model-service-row-icon"

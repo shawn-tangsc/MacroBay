@@ -5,6 +5,7 @@ import type { ModelDetectionMode, ModelDetectionResult } from '@platform/ai/prov
 import {
   getModelDetectionSnapshot,
   isDetectionRunning,
+  isModelBeingDetected,
   resultForModel,
   runningModelDetectionIds,
   startModelDetection,
@@ -48,7 +49,8 @@ function toRowStatus(
     if (result.status === 'cancelled') return 'cancelled'
     return 'failed'
   }
-  return isDetectionRunning(snapshot, providerId) ? 'testing' : undefined
+  // 单模型 run 只把目标模型标成「测试中」，同供应商的其它行保持原状。
+  return isModelBeingDetected(snapshot, providerId, modelId) ? 'testing' : undefined
 }
 
 /** 进度分母来自 run 登记时的模型数，分子只数**已产出结果**的模型（一模型一条结果）。 */

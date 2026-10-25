@@ -224,6 +224,37 @@ describe('PLAT-82 model provider detection service', () => {
     expect(recordModelAvailability).not.toHaveBeenCalled()
   })
 
+  it('records the connectivity verdict even when a protocol lane fails', async () => {
+    const fetchImpl = vi.fn(async (url: string) =>
+      url.endsWith('/messages')
+        ? new Response('{"error":"messages not supported"}', { status: 404 })
+        : new Response('{}', { status: 200 })) as unknown as typeof fetch
+    const recordModelAvailability = vi.fn(async () => undefined)
+    const service = createModelProviderDetectionService({
+      resolveProvider: async () => ({
+        ...provider(),
+        endpoints: [
+          { protocol: 'chat-completions', baseUrl: 'https://api.example.test' },
+          { protocol: 'messages', baseUrl: 'https://api.example.test/anthropic' }
+        ],
+        models: [chatModel('a')]
+      }),
+      fetch: () => fetchImpl,
+      onProgress: vi.fn(),
+      onDone: vi.fn(),
+      recordModelAvailability
+    })
+
+    await service.detectModels('acme', { modes: ['connectivity', 'protocol'], runId: 'run-lane' })
+    await vi.waitFor(() => expect(recordModelAvailability).toHaveBeenCalledTimes(1))
+    // 协议端点 404 只说明 messages 走不通，不代表模型不能聊天 ⇒ 结论仍是可用。
+    expect(recordModelAvailability).toHaveBeenCalledWith(
+      'acme',
+      [{ modelId: 'a', status: 'ok' }],
+      expect.any(String)
+    )
+  })
+
   it('does not record skipped results (disabled provider)', async () => {
     const recordModelAvailability = vi.fn(async () => undefined)
     const service = createModelProviderDetectionService({

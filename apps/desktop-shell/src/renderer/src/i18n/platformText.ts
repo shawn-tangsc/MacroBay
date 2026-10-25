@@ -847,6 +847,8 @@ export type PlatformText = {
     modelName: string
     addModel: string
     editModel: string
+    /** 只测这一个模型（行内按钮）。 */
+    testModel: string
     saveModel: string
     removeModel: string
     pinModel: string
@@ -1868,6 +1870,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       modelName: '模型名称',
       addModel: '添加模型',
       editModel: '编辑模型',
+      testModel: '测试此模型',
       saveModel: '保存',
       removeModel: '移除',
       pinModel: '置顶模型',
@@ -2886,6 +2889,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       modelName: 'Model Name',
       addModel: 'Add Model',
       editModel: 'Edit Model',
+      testModel: 'Test this model',
       saveModel: 'Save',
       removeModel: 'Remove',
       pinModel: 'Pin Model',
