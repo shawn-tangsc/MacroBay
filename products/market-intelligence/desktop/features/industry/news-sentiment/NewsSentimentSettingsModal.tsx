@@ -108,6 +108,7 @@ export function NewsSentimentSettingsModal(props: {
             value={modelRef}
           />
         </label>
+        <p className="mi-news-settings__hint">{text.settingsModal.judgeHint}</p>
         <div className="mi-news-settings__row">
           <span>{text.settingsModal.translation.label}</span>
           <span className="mi-news-settings__hint">
