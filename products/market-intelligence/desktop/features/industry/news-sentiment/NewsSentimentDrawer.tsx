@@ -31,6 +31,8 @@ export function NewsSentimentDrawer(props: {
   const [selectedId, setSelectedId] = useState<string>()
   const [detail, setDetail] = useState<NewsSentimentItemDetail>()
   const [detailFailed, setDetailFailed] = useState(false)
+  const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
+  const [actionNotice, setActionNotice] = useState<string>()
 
   const rows = useMemo(() => filterRows(view, props.filters), [view, props.filters])
   const activeId = selectedId && rows.some((row) => row.itemId === selectedId) ? selectedId : rows[0]?.itemId
@@ -87,7 +89,38 @@ export function NewsSentimentDrawer(props: {
           </div>
           <button className="mi-news-drawer__action" onClick={props.onRefresh} type="button">{text.refresh}</button>
           <button className="mi-news-drawer__action" onClick={props.onOpenSettings} type="button">{text.drawer.settings}</button>
+          <button
+            className="mi-news-drawer__action"
+            disabled={Boolean(actionBusy)}
+            onClick={() => {
+              setActionBusy('rescore')
+              setActionNotice(undefined)
+              void props.client.rescore()
+                .then(() => setActionNotice(text.settingsModal.rescored))
+                .catch(() => setActionNotice(text.settingsModal.rescoreFailed))
+                .finally(() => setActionBusy(undefined))
+            }}
+            type="button"
+          >
+            {actionBusy === 'rescore' ? text.settingsModal.rescoring : text.settingsModal.rescore}
+          </button>
+          <button
+            className="mi-news-drawer__action"
+            disabled={Boolean(actionBusy)}
+            onClick={() => {
+              setActionBusy('rebuild')
+              setActionNotice(undefined)
+              void props.client.rebuild()
+                .then(() => setActionNotice(text.settingsModal.rebuilt))
+                .catch(() => setActionNotice(text.settingsModal.rebuildFailed))
+                .finally(() => setActionBusy(undefined))
+            }}
+            type="button"
+          >
+            {actionBusy === 'rebuild' ? text.settingsModal.rebuilding : text.settingsModal.rebuild}
+          </button>
         </header>
+        {actionNotice ? <p className="mi-news-drawer__notice" role="status">{actionNotice}</p> : null}
 
         {view?.state === 'available' && view.summary ? (
           <div className="mi-news-drawer__summary">
