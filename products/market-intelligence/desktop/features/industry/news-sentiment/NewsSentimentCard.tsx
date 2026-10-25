@@ -28,7 +28,7 @@ export function NewsSentimentCard(props: {
         (a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.strength * b.confidence - a.strength * a.confidence
       )
     : []
-  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items.length])
+  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0])
   const visibleDrivers = drivers.slice(0, visibleCount)
 
   return (
