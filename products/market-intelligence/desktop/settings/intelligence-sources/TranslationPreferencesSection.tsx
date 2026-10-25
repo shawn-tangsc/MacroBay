@@ -4,6 +4,7 @@ import { Button, Select, Switch } from 'antd'
 import { resolveConfiguredModel, parseConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
 import type {
@@ -74,6 +75,7 @@ export function TranslationPreferencesSection(props: {
     translatedCount: props.moduleStatus?.translatedCount ?? 0
   }
   const language = useShellLanguage()
+  const formatTime = useShellTimeFormat()
   const modelCandidates = useMemo<ModelPickerCandidate[]>(
     () =>
       props.modelProviders.flatMap((provider) =>
@@ -180,7 +182,7 @@ export function TranslationPreferencesSection(props: {
               <StatusPill label={props.labels.translatedCount} value={String(counts.translatedCount)} />
               <StatusPill
                 label={props.labels.lastJobAt}
-                value={props.moduleStatus.lastJobAt ?? props.labels.saved}
+                value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : props.labels.saved}
                 wide
               />
             </>
