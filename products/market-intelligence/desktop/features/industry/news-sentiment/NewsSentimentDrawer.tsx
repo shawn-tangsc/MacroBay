@@ -67,7 +67,7 @@ export function NewsSentimentDrawer(props: {
       open={props.open}
       rootClassName="mi-news-drawer-root"
       title={text.drawer.title}
-      width={960}
+      width={1000}
     >
       <div className="mi-news-drawer">
         <header className="mi-news-drawer__toolbar">
@@ -164,15 +164,17 @@ export function NewsSentimentDrawer(props: {
                 role="listitem"
                 type="button"
               >
-                <time>{formatTime(row.publishedAt, 'minute')}</time>
+                <span className="mi-news-drawer__row-top">
+                  <time>{formatTime(row.publishedAt, 'minute')}</time>
+                  <span className={`mi-news-sentiment__pill is-${row.polarity}`}>
+                    {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
+                  </span>
+                  <small className="mi-news-drawer__source">{row.sourceName}</small>
+                  <span className="mi-news-drawer__symbols">
+                    {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
+                  </span>
+                </span>
                 <span className="mi-news-drawer__title">{row.displayTitle ?? row.title}</span>
-                <span className={`mi-news-sentiment__pill is-${row.polarity}`}>
-                  {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
-                </span>
-                <small>{row.sourceName}</small>
-                <span className="mi-news-drawer__symbols">
-                  {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
-                </span>
               </button>
             ))}
           </div>
