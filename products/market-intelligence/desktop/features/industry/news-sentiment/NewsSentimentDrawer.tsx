@@ -5,6 +5,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
+import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { labelText, sentimentIcon } from './NewsSentimentCard'
 import type { NewsSentimentFilters } from './useNewsSentiment'
@@ -19,7 +20,7 @@ export function NewsSentimentDrawer(props: {
   filters: NewsSentimentFilters
   focusItemId?: string
   onFilters: (next: Partial<NewsSentimentFilters>) => void
-  onWindowChange: (window: '1h' | '4h' | '24h') => void
+  onWindowChange: (window: NewsSentimentWindow) => void
   onClose: () => void
   onOpenSettings: () => void
   onRefresh: () => void
@@ -72,7 +73,7 @@ export function NewsSentimentDrawer(props: {
       <div className="mi-news-drawer">
         <header className="mi-news-drawer__toolbar">
           <div className="mi-news-sentiment__window" role="group" aria-label={text.drawer.title}>
-            {(['1h', '4h', '24h'] as const).map((window) => (
+            {NEWS_SENTIMENT_WINDOWS.map((window) => (
               <button
                 aria-pressed={props.window === window}
                 className={props.window === window ? 'is-on' : undefined}

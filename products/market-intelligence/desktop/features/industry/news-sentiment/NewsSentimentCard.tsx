@@ -3,12 +3,12 @@ import { GitCompareArrows, Minus, Newspaper, RefreshCw, Settings, TrendingDown, 
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { productText } from '../../../shared/i18n/productText'
-import type { NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentItemView, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
 
-const WINDOWS: NewsSentimentWindow[] = ['1h', '4h', '24h']
+const WINDOWS: readonly NewsSentimentWindow[] = NEWS_SENTIMENT_WINDOWS
 
 export function NewsSentimentCard(props: {
   text: NewsSentimentText

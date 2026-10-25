@@ -14,7 +14,7 @@ export type NewsSentimentSymbol = 'BTC' | 'ETH'
 
 export type NewsDocumentState = 'available' | 'too-short' | 'failed'
 
-export type NewsSentimentWindow = '1h' | '4h' | '24h'
+export type NewsSentimentWindow = '1h' | '4h' | '24h' | '7d'
 
 /** 舆情只看这四个文本源；CFTC 端点失效，P0 不启用。 */
 export const NEWS_SENTIMENT_SOURCE_IDS = [
@@ -34,12 +34,13 @@ export const OKX_SENTIMENT_ANN_TYPES = [
   'announcements-deposit-withdrawal-suspension-resumption'
 ] as const
 
-export const NEWS_SENTIMENT_WINDOWS: readonly NewsSentimentWindow[] = ['1h', '4h', '24h']
+export const NEWS_SENTIMENT_WINDOWS: readonly NewsSentimentWindow[] = ['1h', '4h', '24h', '7d']
 
 export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, number>> = {
   '1h': 60 * 60 * 1000,
   '4h': 4 * 60 * 60 * 1000,
-  '24h': 24 * 60 * 60 * 1000
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000
 }
 
 /** 提示词版本：改动提示词必须同时改它，否则旧判断不会被重新评分。 */
