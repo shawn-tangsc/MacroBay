@@ -413,7 +413,7 @@ export function getIntelligenceModule(
               {
                 url,
                 method: 'GET',
-                headers: { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT },
+                headers: { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
                 timeoutMs: 15_000
               },
               { retryPolicy: { maxAttempts: 1 } }

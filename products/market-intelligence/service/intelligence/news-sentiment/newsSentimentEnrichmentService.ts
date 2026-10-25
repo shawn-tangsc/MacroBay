@@ -27,6 +27,10 @@ export function createNewsSentimentEnrichmentService(deps: {
   fetchArticle: NewsArticleFetcher
   now: () => string
   maxPerRun?: number
+  /** Space out article requests; the publisher throttles bursts. */
+  paceMs?: number
+  /** Retry a short extraction once after this delay; throttled responses often come back empty. */
+  retryShortAfterMs?: number
 }) {
   const bodySources = new Set<string>(NEWS_SENTIMENT_BODY_SOURCE_IDS)
 
@@ -48,7 +52,8 @@ export function createNewsSentimentEnrichmentService(deps: {
       let failed = 0
       let skipped = 0
 
-      for (const itemId of requested.slice(0, deps.maxPerRun ?? 20)) {
+      for (const [index, itemId] of requested.slice(0, deps.maxPerRun ?? 20).entries()) {
+        if (index > 0 && deps.paceMs) await sleep(deps.paceMs)
         const item = items.find((entry) => entry.itemId === itemId)
         if (!item || !bodySources.has(item.sourceId)) {
           skipped += 1
@@ -82,9 +87,12 @@ export function createNewsSentimentEnrichmentService(deps: {
             failed += 1
             continue
           }
-          const extracted = item.sourceId === 'binance-announcements'
-            ? extractBinanceAnnouncementBody({ json: response.bodyText })
-            : extractNewsBody({ sourceId: item.sourceId, html: response.bodyText })
+          let extracted = extract(item.sourceId, response.bodyText)
+          if (extracted.state !== 'available' && deps.retryShortAfterMs) {
+            await sleep(deps.retryShortAfterMs)
+            const retry = await deps.fetchArticle(fetchUrl)
+            if (retry.status >= 200 && retry.status < 300) extracted = extract(item.sourceId, retry.bodyText)
+          }
           deps.store.upsertDocument({
             itemId,
             sourceId: item.sourceId,
@@ -105,6 +113,16 @@ export function createNewsSentimentEnrichmentService(deps: {
       return { processed, available, tooShort, failed, skipped }
     }
   }
+}
+
+function extract(sourceId: string, bodyText: string): ReturnType<typeof extractNewsBody> {
+  return sourceId === 'binance-announcements'
+    ? extractBinanceAnnouncementBody({ json: bodyText })
+    : extractNewsBody({ sourceId, html: bodyText })
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function needsDocument(
