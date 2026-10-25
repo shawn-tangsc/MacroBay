@@ -37,6 +37,8 @@ export function createNewsSentimentEnrichmentService(deps: {
         ? input.itemIds
         : items
             .filter((item) => bodySources.has(item.sourceId) && needsDocument(deps.store, item.itemId))
+            // The pass is capped; newest first so the visible window gets bodies before older backlog.
+            .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
             .slice(0, deps.maxPerRun ?? 20)
             .map((item) => item.itemId)
 
