@@ -14,6 +14,7 @@ export type ChannelInboundAuditCode =
   | 'channel-agent-missing'
   | 'channel-work-capacity-exhausted'
   | 'channel-lifecycle-fenced'
+  | 'channel-inbound-failed'
 
 export type ChannelConversationRecord = {
   id: string
@@ -164,6 +165,10 @@ export class ChannelInboundRepository {
 
   recordRejectedLifecycle(channelId: string, generation: number, code: 'channel-agent-missing' | 'channel-stale-generation', now = new Date()): void {
     this.database.transact(() => this.audit(channelId, generation, code, now))
+  }
+
+  recordInboundFailure(channelId: string, generation: number, now = new Date()): void {
+    this.database.transact(() => this.audit(channelId, generation, 'channel-inbound-failed', now))
   }
 
   getConversation(channelId: string, keyHash: string): ChannelConversationRecord | null {

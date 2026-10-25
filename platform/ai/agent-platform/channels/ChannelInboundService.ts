@@ -149,6 +149,8 @@ export class ChannelInboundService {
         if (admissionId) this.deps.repository.releaseAdmission(admissionId)
       }
     } catch {
+      // Preserve the provider retry contract, but leave a bounded audit trail for persistent failures.
+      try { this.deps.repository.recordInboundFailure(request.channelId, request.generation, this.now()) } catch {}
       return retry()
     }
   }
