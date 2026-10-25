@@ -69,6 +69,16 @@ describe('extractNewsBody', () => {
     expect(result.text).not.toContain('Bullish owns and invests')
   })
 
+  it('collects every article block when the publisher splits one story into several containers', () => {
+    const html = `<div class="document-body"><p>Jack Dorsey's payments company Block has unveiled a voice AI model.</p></div>
+      <div class="document-body"><p>For now, Dessa remains a research preview rather than a publicly available product.</p></div>
+      <div class="document-body"><p>Block has not disclosed the model's size, benchmark results or a public release date.</p></div>`
+    const result = extractNewsBody({ sourceId: 'coindesk-rss', html })
+    expect(result.text).toContain('Jack Dorsey')
+    expect(result.text).toContain('research preview')
+    expect(result.text).toContain('benchmark results')
+  })
+
   it('marks a short extraction as too-short', () => {
     const html = '<article><p>Too short.</p></article>'
     const result = extractNewsBody({ sourceId: 'okx-latest-announcements', html })

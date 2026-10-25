@@ -46,23 +46,35 @@ export function extractNewsBody(input: { sourceId: string; html: string; maxChar
 function selectContainer(html: string, rule: ContainerRule | undefined): string | undefined {
   if (!rule) return undefined
   if (rule.kind === 'tag') return extractTag(html, rule.tag)
-  return extractDivByClass(html, rule.token)
+  return extractDivsByClass(html, rule.token)
 }
 
-/** 从某个 class 命中的 div 开始做标签配平，避免非贪婪正则在第一个内层 </div> 截断。 */
-function extractDivByClass(html: string, token: string): string | undefined {
-  const opener = new RegExp(`<div[^>]*class="[^"]*${escapeRegExp(token)}[^"]*"[^>]*>`, 'i').exec(html)
-  if (!opener) return undefined
-  const start = opener.index + opener[0].length
-  let depth = 1
-  const tagRe = /<\/?div\b[^>]*>/gi
-  tagRe.lastIndex = start
-  let match: RegExpExecArray | null
-  while ((match = tagRe.exec(html))) {
-    depth += match[0].startsWith('</') ? -1 : 1
-    if (depth === 0) return html.slice(start, match.index)
+/**
+ * CoinDesk splits one article across several sibling `document-body` blocks (a summary block plus
+ * the sections between embeds), so taking the first match returns only a teaser. Collect every
+ * balanced block instead; nested matches are skipped because the outer slice already covers them.
+ */
+function extractDivsByClass(html: string, token: string): string | undefined {
+  const openerRe = new RegExp(`<div[^>]*class="[^"]*${escapeRegExp(token)}[^"]*"[^>]*>`, 'gi')
+  const chunks: string[] = []
+  let coveredUntil = 0
+  let opener: RegExpExecArray | null
+  while ((opener = openerRe.exec(html))) {
+    if (opener.index < coveredUntil) continue
+    const start = opener.index + opener[0].length
+    let depth = 1
+    const tagRe = /<\/?div\b[^>]*>/gi
+    tagRe.lastIndex = start
+    let match: RegExpExecArray | null
+    let end = html.length
+    while ((match = tagRe.exec(html))) {
+      depth += match[0].startsWith('</') ? -1 : 1
+      if (depth === 0) { end = match.index; break }
+    }
+    chunks.push(html.slice(start, end))
+    coveredUntil = end
   }
-  return html.slice(start)
+  return chunks.length > 0 ? chunks.join('\n') : undefined
 }
 
 function extractTag(html: string, tag: string): string | undefined {
