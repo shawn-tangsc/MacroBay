@@ -205,12 +205,24 @@ export function createIntelligenceTranslationService(deps: {
 
     async getModuleStatus(): Promise<SafeTranslationModuleStatus> {
       const records = await readRecords()
+      const sourceByItem = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item.sourceId]))
+      const bySource: Record<string, { pendingCount: number; failedCount: number; translatedCount: number }> = {}
+      for (const record of records) {
+        const sourceId = sourceByItem.get(record.sourceId)
+        if (!sourceId) continue
+        const counts = bySource[sourceId] ?? { pendingCount: 0, failedCount: 0, translatedCount: 0 }
+        if (record.status === 'pending') counts.pendingCount += 1
+        else if (record.status === 'failed') counts.failedCount += 1
+        else if (record.status === 'translated') counts.translatedCount += 1
+        bySource[sourceId] = counts
+      }
       return {
         pendingCount: records.filter((record) => record.status === 'pending').length,
         failedCount: records.filter((record) => record.status === 'failed').length,
         translatedCount: records.filter((record) => record.status === 'translated').length,
         lastJobAt,
-        lastJobSummary
+        lastJobSummary,
+        bySource
       }
     },
 

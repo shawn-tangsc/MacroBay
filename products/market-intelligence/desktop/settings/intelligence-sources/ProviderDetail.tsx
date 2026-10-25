@@ -272,7 +272,7 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
     </div>
     {showSourceDetails ? <div className="source-provider-detail__details">
 
-      {translation ? <TranslationPreferencesSection {...translation} /> : null}
+      {translation ? <TranslationPreferencesSection {...translation} sourceIds={provider.sources.map((source) => source.sourceId)} /> : null}
     </div> : null}
   </section>
 }
