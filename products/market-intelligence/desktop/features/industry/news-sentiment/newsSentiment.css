@@ -212,3 +212,10 @@
 .mi-news-drawer__strength i { width: 4px; height: 9px; border-radius: 1px; background: var(--border, #2a352b); }
 .mi-news-drawer__strength i.is-on { background: var(--accent, #d9f67f); }
 .mi-news-drawer__strength small { margin-left: 4px; font-size: 9.5px; }
+
+.mi-news-drawer__body-toggle { display: inline-flex; gap: 2px; margin: 8px 0 6px; }
+.mi-news-drawer__body-toggle button {
+  border: 1px solid var(--border, #2a352b); background: transparent; color: var(--muted, #93a196);
+  font-size: 10px; padding: 2px 8px; cursor: pointer;
+}
+.mi-news-drawer__body-toggle button[aria-pressed="true"] { color: var(--accent, #d9f67f); border-color: var(--accent, #d9f67f); }

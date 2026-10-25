@@ -42,6 +42,7 @@ export function NewsSentimentDrawer(props: {
   const [translationStates, setTranslationStates] = useState<Record<string, 'waiting' | 'translating' | 'translated' | 'failed'>>({})
   const [translatedBodies, setTranslatedBodies] = useState<Record<string, string>>({})
   const [translatingAll, setTranslatingAll] = useState(false)
+  const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
@@ -50,7 +51,9 @@ export function NewsSentimentDrawer(props: {
   const activeId = selectedId && rows.some((row) => row.itemId === selectedId) ? selectedId : rows[0]?.itemId
   const active = (view?.items ?? []).find((row) => row.itemId === activeId)
   const activeTranslationState = activeId ? translationStates[activeId] ?? active?.bodyTranslationState ?? 'missing' : 'missing'
-  const activeTranslatedBody = activeId ? translatedBodies[activeId] : undefined
+  const activeTranslatedBody = activeId ? translatedBodies[activeId] ?? detail?.translatedBodyExcerpt : undefined
+  const hasTranslatedBody = Boolean(activeTranslatedBody) || activeTranslationState === 'translated'
+  const displayedBody = bodyView === 'original' ? detail?.bodyExcerpt : activeTranslatedBody ?? detail?.bodyExcerpt
 
   const translateItem = useCallback(async (itemId: string, force = false) => {
     const row = (view?.items ?? []).find((entry) => entry.itemId === itemId)
@@ -95,7 +98,8 @@ export function NewsSentimentDrawer(props: {
 
   useEffect(() => {
     if (props.open && props.focusItemId) setSelectedId(props.focusItemId)
-  }, [props.open, props.focusItemId])
+    setBodyView('translated')
+  }, [props.open, props.focusItemId, activeId])
 
   useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
@@ -332,14 +336,20 @@ export function NewsSentimentDrawer(props: {
                     {text.drawer.detail.translateBody}
                   </button>
                 ) : null}
+                {hasTranslatedBody && activeTranslationState !== 'translating' ? (
+                  <div className="mi-news-drawer__body-toggle" role="group">
+                    <button aria-pressed={bodyView === 'original'} onClick={() => setBodyView('original')} type="button">{text.drawer.detail.original}</button>
+                    <button aria-pressed={bodyView === 'translated'} onClick={() => setBodyView('translated')} type="button">{text.drawer.detail.translated}</button>
+                  </div>
+                ) : null}
                 <p className="mi-news-drawer__bodytext">
                   {activeTranslationState === 'translating' || activeTranslationState === 'waiting' ? (
                     <span className="mi-news-drawer__translating" role="status">
                       <i aria-hidden="true" />
                       {text.drawer.detail.translatingBody}
                     </span>
-                  ) : activeTranslatedBody ? (
-                    activeTranslatedBody
+                  ) : displayedBody ? (
+                    displayedBody
                   ) : activeTranslationState === 'failed' ? (
                     <>{text.drawer.detail.translationFailed}<br />{detail?.bodyExcerpt ?? text.drawer.detail.noBody}</>
                   ) : detailFailed ? (

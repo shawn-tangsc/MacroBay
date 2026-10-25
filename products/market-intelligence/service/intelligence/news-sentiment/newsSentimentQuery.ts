@@ -65,6 +65,7 @@ export type NewsSentimentView = {
 
 export type NewsSentimentItemDetail = NewsSentimentItemView & {
   bodyExcerpt?: string
+  translatedBodyExcerpt?: string
   asOf: string
 }
 
@@ -151,11 +152,10 @@ export function createNewsSentimentQuery(deps: {
       const translatedBody = deps.bodyTranslation?.get(input.itemId)?.bodyText
       return {
         ...toItemView(row, item, translations[input.itemId]),
-        ...(translatedBody
-          ? { bodyExcerpt: translatedBody.slice(0, 8_000) }
-          : document?.state === 'available' && document.bodyText
-            ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
-            : {}),
+        ...(document?.state === 'available' && document.bodyText
+          ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
+          : {}),
+        ...(translatedBody ? { translatedBodyExcerpt: translatedBody.slice(0, 8_000) } : {}),
         asOf
       }
     }
