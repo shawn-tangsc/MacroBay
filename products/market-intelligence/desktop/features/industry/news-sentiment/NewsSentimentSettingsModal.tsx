@@ -13,6 +13,7 @@ export function NewsSentimentSettingsModal(props: {
   open: boolean
   text: NewsSentimentText
   client: Pick<NewsSentimentClient, 'getSettings' | 'saveSettings' | 'rescore'>
+  showTranslation?: boolean
   onClose: () => void
 }): React.ReactElement {
   const { text } = props
@@ -32,7 +33,7 @@ export function NewsSentimentSettingsModal(props: {
     void Promise.all([
       props.client.getSettings(),
       Promise.resolve(window.platform?.modelProviders?.list() as Promise<SafeModelProvider[]> | undefined),
-      intelligenceTranslationClient.getSettings().catch(() => undefined)
+      showTranslation ? intelligenceTranslationClient.getSettings().catch(() => undefined) : Promise.resolve(undefined)
     ])
       .then(([next, models, translation]) => {
         if (cancelled) return
@@ -45,7 +46,7 @@ export function NewsSentimentSettingsModal(props: {
       })
       .catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
-  }, [props.open, props.client])
+  }, [props.open, props.client, showTranslation])
 
   const translationModelLabel = useMemo(() => {
     const ref = translationModelId.trim()

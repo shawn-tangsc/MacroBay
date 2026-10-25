@@ -14,7 +14,6 @@ import {
 import type { NewsSentimentStore } from './newsSentimentStore'
 import type { NewsBodyTranslationRecord } from '../schema/newsSentiment'
 import { isRoutineNewsNotice } from './newsSentimentRules'
-import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 
 type TranslationReader = {
   resolveDisplayTexts: (input: {
@@ -81,6 +80,10 @@ export function createNewsSentimentQuery(deps: {
   store: Pick<NewsSentimentStore, 'listLatestSentiment' | 'getLatestSentiment' | 'getDocument'>
   pipeline: Pick<IntelligencePipeline, 'listItems'>
   translation?: TranslationReader
+  getDisplayLocale?: () => Promise<string>
+  bodyTranslation?: {
+    get: (itemId: string, targetLocale?: string) => NewsBodyTranslationRecord | undefined
+  }
   now: () => string
 }) {
   return {
@@ -120,11 +123,11 @@ export function createNewsSentimentQuery(deps: {
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
         const items = visible.map((row) => {
-          const translatedTitle = deps.bodyTranslation?.get(row.itemId, displayLocale)?.titleText
+          const body = deps.bodyTranslation?.get(row.itemId, displayLocale)
           return {
             ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
-            ...(translatedTitle ? { displayTitle: translatedTitle } : {}),
-            bodyTranslationState: deps.bodyTranslation?.status?.(row.itemId, displayLocale) ?? 'missing'
+            ...(body?.titleText ? { displayTitle: body.titleText } : {}),
+            bodyTranslationState: (body?.state === 'translated' || body?.state === 'failed' ? body.state : 'missing') as NewsSentimentItemView['bodyTranslationState']
           }
         })
         const aggregate = aggregateView(visible, itemsById, input, asOf)
@@ -168,8 +171,9 @@ export function createNewsSentimentQuery(deps: {
       const translations = await readTranslations(deps.translation, [input.itemId])
       const document = deps.store.getDocument(input.itemId)
       const displayLocale = await deps.getDisplayLocale?.()
-      const translatedBody = deps.bodyTranslation?.get(input.itemId, displayLocale)?.bodyText
-      const bodyTitle = translatedBody ? deps.bodyTranslation?.get(input.itemId, displayLocale)?.titleText : undefined
+      const body = deps.bodyTranslation?.get(input.itemId, displayLocale)
+      const translatedBody = body?.bodyText
+      const bodyTitle = body?.titleText
       return {
         ...toItemView(row, item, translations[input.itemId]),
         ...(bodyTitle ? { displayTitle: bodyTitle } : {}),

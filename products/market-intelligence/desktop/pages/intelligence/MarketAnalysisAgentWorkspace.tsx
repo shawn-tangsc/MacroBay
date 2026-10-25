@@ -109,7 +109,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       const body = detail.translatedBodyExcerpt ?? detail.bodyExcerpt ?? ''
       return [
         `${text.newsSentiment.title}: ${selectedNews.title}`,
-        `${text.newsSentiment.filters.source}: ${detail.sourceName} · ${detail.publishedAt}`,
+        `${text.newsSentiment.drawer.filters.source}: ${detail.sourceName} · ${detail.publishedAt}`,
         `${text.newsSentiment.labels[detail.polarity] ?? detail.polarity} · ${detail.strength}/5 · ${detail.confidence}%`,
         body.slice(0, 3_000)
       ].join('\n')

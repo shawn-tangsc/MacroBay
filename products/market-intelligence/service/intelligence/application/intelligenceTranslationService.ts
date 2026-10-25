@@ -174,8 +174,7 @@ export function createIntelligenceTranslationService(deps: {
         accepted.targetLocale !== undefined ||
         accepted.translateTitle !== undefined ||
         accepted.translateSummary !== undefined ||
-        accepted.translateEvidenceExcerpt !== undefined ||
-        accepted.translateBody !== undefined
+        accepted.translateEvidenceExcerpt !== undefined
       ) {
         await this.queueMissing({ reason: 'settings-change' })
       }
@@ -667,7 +666,6 @@ function pickSettingsPatch(
   if (typeof patch.translateEvidenceExcerpt === 'boolean') {
     next.translateEvidenceExcerpt = patch.translateEvidenceExcerpt
   }
-  if (typeof patch.translateBody === 'boolean') next.translateBody = patch.translateBody
   return next
 }
 

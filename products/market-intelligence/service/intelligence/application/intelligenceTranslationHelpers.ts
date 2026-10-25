@@ -22,7 +22,6 @@ export function createDefaultTranslationSettings(
     // Automatic translation is headline-only. Summaries and bodies are deliberate manual actions.
     translateSummary: false,
     translateEvidenceExcerpt: false,
-    translateBody: true,
     updatedAt: new Date().toISOString()
   }
 }

@@ -52,7 +52,9 @@ export function createNewsSentimentClient(invoke: Invoke = platformInvoke): News
     getItem: (input) => call<NewsSentimentItemDetail | undefined>('intelligence.getNewsSentimentItem', input),
     getSettings: () => call<NewsSentimentSettingsView>('intelligence.getNewsSentimentSettings'),
     saveSettings: (patch) => call<NewsSentimentSettingsView>('intelligence.saveNewsSentimentSettings', patch),
-    rescore: () => call<{ queued: boolean }>('intelligence.rescoreNewsSentiment')
+    rescore: () => call<{ queued: boolean }>('intelligence.rescoreNewsSentiment'),
+    rebuild: () => call<{ queued: boolean }>('intelligence.rebuildNewsSentiment'),
+    translateBody: (itemId, force) => call<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string; title?: string; errorCode?: string }>('intelligence.translateNewsSentimentBody', { itemId, force })
   }
 }
 

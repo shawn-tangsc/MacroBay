@@ -38,7 +38,6 @@ export function TranslationPreferencesSection(props: {
     translateTitle: string
     translateSummary: string
     translateEvidenceExcerpt: string
-    translateBody: string
     queueMissing: string
     saving: string
     saved: string
@@ -170,13 +169,6 @@ export function TranslationPreferencesSection(props: {
               size="small"
               checked={settings.translateEvidenceExcerpt}
               onChange={(translateEvidenceExcerpt) => props.onChange({ translateEvidenceExcerpt })}
-            />
-          </SettingRow>
-          <SettingRow label={props.labels.translateBody}>
-            <Switch
-              size="small"
-              checked={settings.translateBody}
-              onChange={(translateBody) => props.onChange({ translateBody })}
             />
           </SettingRow>
         </div>

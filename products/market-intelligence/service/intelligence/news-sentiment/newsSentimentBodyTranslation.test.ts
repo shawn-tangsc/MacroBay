@@ -27,9 +27,9 @@ function harness() {
 describe('newsSentimentBodyTranslation', () => {
   it('translates once and serves the cached body on the next open', async () => {
     const { service, invoke } = harness()
-    const first = await service.translate('item-a')
+    const first = await service.translate('item-a', { manual: true })
     expect(first).toMatchObject({ state: 'translated', cached: false })
-    const second = await service.translate('item-a')
+    const second = await service.translate('item-a', { manual: true })
     expect(second).toMatchObject({ state: 'translated', cached: true })
     expect(invoke).toHaveBeenCalledTimes(2)
     expect(service.get('item-a')?.bodyText).toContain('ETF')

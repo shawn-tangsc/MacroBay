@@ -4,10 +4,14 @@ import { Drawer, Select } from 'antd'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
-import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
+import { labelText, sentimentIcon } from './newsSentimentPresentation'
+import type { NewsSentimentFilters } from './useNewsSentiment'
+
+const TRANSLATION_CONCURRENCY = 5
 
 function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   return Promise.race([
@@ -15,8 +19,7 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
   ])
 }
-import { labelText, sentimentIcon } from './NewsSentimentCard'
-import type { NewsSentimentFilters } from './useNewsSentiment'
+
 
 export function NewsSentimentDrawer(props: {
   open: boolean
@@ -24,7 +27,7 @@ export function NewsSentimentDrawer(props: {
   view?: NewsSentimentView
   loading: boolean
   failed: boolean
-  window: string
+  window: NewsSentimentWindow
   filters: NewsSentimentFilters
   focusItemId?: string
   onFilters: (next: Partial<NewsSentimentFilters>) => void
@@ -32,7 +35,7 @@ export function NewsSentimentDrawer(props: {
   onClose: () => void
   onOpenSettings: () => void
   onRefresh: () => void
-  client: Pick<NewsSentimentClient, 'getItem'>
+  client: Pick<NewsSentimentClient, 'getItem' | 'rescore' | 'rebuild' | 'translateBody'>
   translationEnabled?: boolean
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
@@ -70,7 +73,7 @@ export function NewsSentimentDrawer(props: {
       : (id: string, retranslate?: boolean) => {
           const products = window.platform?.products
           if (!products?.invoke) return Promise.reject(new Error('Product IPC bridge is unavailable.'))
-          return products.invoke('market-intelligence', 'intelligence.translateNewsSentimentBody', { itemId: id, force: retranslate }) as Promise<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string }>
+          return products.invoke('market-intelligence', 'intelligence.translateNewsSentimentBody', { itemId: id, force: retranslate }) as Promise<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string; title?: string }>
         }
     try {
       const result = await clientTranslate(itemId, force)
@@ -225,7 +228,7 @@ export function NewsSentimentDrawer(props: {
             >
               {translatingAll
                 ? text.settingsModal.cancelTranslate
-                : text.settingsModal.translateAll ?? text.settingsModal.retryTranslation}
+                : text.settingsModal.translateAll}
             </button>
           ) : null}
           <button

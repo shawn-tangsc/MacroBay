@@ -174,6 +174,7 @@ type IntelligenceModule = {
     enrichment?: ReturnType<typeof createNewsSentimentEnrichmentService>
     scoring?: ReturnType<typeof createNewsSentimentScoringService>
     query?: ReturnType<typeof createNewsSentimentQuery>
+    bodyTranslation?: ReturnType<typeof createNewsSentimentBodyTranslationService>
     settings: {
       get: () => Promise<NewsSentimentSettingsView>
       save: (patch: Partial<NewsSentimentSettings>) => Promise<NewsSentimentSettingsView>
