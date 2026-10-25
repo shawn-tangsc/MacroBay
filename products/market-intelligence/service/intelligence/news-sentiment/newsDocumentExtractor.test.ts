@@ -79,6 +79,15 @@ describe('extractNewsBody', () => {
     expect(result.text).toContain('benchmark results')
   })
 
+  it('falls back to main text when the article uses divs instead of paragraphs', () => {
+    const long = 'Stablecoins are ready for prime time because settlement is faster and cheaper than card rails. '.repeat(4)
+    const html = `<main><div>${long}</div><div>Disclosure &amp; Polices : CoinDesk is an award-winning media outlet.</div></main>`
+    const result = extractNewsBody({ sourceId: 'coindesk-rss', html })
+    expect(result.state).toBe('available')
+    expect(result.text).toContain('Stablecoins are ready')
+    expect(result.text).not.toContain('award-winning media outlet')
+  })
+
   it('marks a short extraction as too-short', () => {
     const html = '<article><p>Too short.</p></article>'
     const result = extractNewsBody({ sourceId: 'okx-latest-announcements', html })

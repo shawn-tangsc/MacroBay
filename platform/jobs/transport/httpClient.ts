@@ -15,6 +15,8 @@ export type HttpClientRequest = {
   conditionalHeaders?: Record<string, string>
   /** Passed to fetch; article fetches use no-store to bypass the Electron HTTP cache. */
   cache?: RequestCache
+  /** Passed to fetch; article reads omit cookies so a metered session cannot hide the body. */
+  credentials?: RequestCredentials
 }
 
 export type HttpClientResponse = {
@@ -80,7 +82,8 @@ export async function httpRequest(
         headers,
         body: request.body,
         signal: controller.signal,
-        ...(request.cache ? { cache: request.cache } : {})
+        ...(request.cache ? { cache: request.cache } : {}),
+        ...(request.credentials ? { credentials: request.credentials } : {})
       })
 
       clearTimeout(timeoutId)

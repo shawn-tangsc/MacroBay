@@ -453,6 +453,7 @@ export function getIntelligenceModule(
                 method: 'GET',
                 headers: articleFetchHeaders(url),
                 cache: 'no-store',
+                credentials: 'omit',
                 timeoutMs: 15_000
               },
               { retryPolicy: { maxAttempts: 1 } }

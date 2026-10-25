@@ -37,13 +37,14 @@ export function createNewsSentimentEnrichmentService(deps: {
   return {
     async enrichItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentEnrichmentResult> {
       const items = deps.pipeline.listItems()
+      const limit = input.limit ?? deps.maxPerRun ?? 20
       const requested = input.itemIds?.length
         ? input.itemIds
         : items
             .filter((item) => bodySources.has(item.sourceId) && needsDocument(deps.store, item.itemId))
             // The pass is capped; newest first so the visible window gets bodies before older backlog.
             .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
-            .slice(0, deps.maxPerRun ?? 20)
+            .slice(0, limit)
             .map((item) => item.itemId)
 
       let processed = 0
@@ -52,7 +53,7 @@ export function createNewsSentimentEnrichmentService(deps: {
       let failed = 0
       let skipped = 0
 
-      for (const [index, itemId] of requested.slice(0, input.limit ?? deps.maxPerRun ?? 20).entries()) {
+      for (const [index, itemId] of requested.slice(0, limit).entries()) {
         if (index > 0 && deps.paceMs) await sleep(deps.paceMs)
         const item = items.find((entry) => entry.itemId === itemId)
         if (!item || !bodySources.has(item.sourceId)) {

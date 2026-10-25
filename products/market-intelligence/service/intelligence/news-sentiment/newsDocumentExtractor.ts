@@ -32,7 +32,10 @@ const CHROME_RE =
 export function extractNewsBody(input: { sourceId: string; html: string; maxChars?: number }): ExtractedNewsBody {
   const maxChars = input.maxChars ?? NEWS_SENTIMENT_LIMITS.bodyChars
   const container = selectContainer(input.html, CONTAINERS[input.sourceId])
-  const text = paragraphsToText(container ?? input.html, maxChars)
+  const primary = paragraphsToText(container ?? input.html, maxChars)
+  // Some CoinDesk responses render the story outside `document-body` and use divs instead of
+  // paragraphs. Fall back to the readable main region rather than storing a zero-length body.
+  const text = primary.length >= NEWS_BODY_MIN_CHARS ? primary : readableFallback(input.html, maxChars)
   return {
     text,
     chars: text.length,
@@ -82,6 +85,23 @@ function extractTag(html: string, tag: string): string | undefined {
   return close > start ? html.slice(start, close) : html.slice(start)
 }
 
+
+/** Last-resort readable text: main/article content with block boundaries, disclosure removed. */
+function readableFallback(html: string, maxChars: number): string {
+  const region = extractTag(html, 'main') ?? extractTag(html, 'article') ?? html
+  const cleaned = region
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<(nav|header|footer|aside|form|svg|noscript|iframe)\b[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<\/(p|div|li|section|blockquote|h[1-6]|tr)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+  const blocks = decodeEntities(cleaned.replace(/<[^>]+>/g, ' '))
+    .split('\n')
+    .map((block) => block.replace(/\s+/g, ' ').trim())
+    .filter((block) => block.length >= 30 && !CHROME_RE.test(block))
+  const joined = blocks.join('\n\n')
+  return joined.length <= maxChars ? joined : joined.slice(0, maxChars)
+}
 function paragraphsToText(html: string, maxChars: number): string {
   const cleaned = html
     .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
