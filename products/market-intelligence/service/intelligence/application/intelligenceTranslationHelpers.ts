@@ -21,6 +21,7 @@ export function createDefaultTranslationSettings(
     translateTitle: true,
     translateSummary: true,
     translateEvidenceExcerpt: true,
+    translateBody: true,
     updatedAt: new Date().toISOString()
   }
 }
@@ -96,11 +97,13 @@ export function resolveEffectiveRevision(
 export function buildItemTranslationFields(
   item: IntelligenceItem,
   revision: IntelligenceItemRevision | undefined,
-  settings: IntelligenceTranslationSettings
+  settings: IntelligenceTranslationSettings,
+  body?: string
 ): { title?: string; summary?: string; body?: string; revisionId?: string } {
   return {
     title: settings.translateTitle ? revision?.title ?? item.title : undefined,
     summary: settings.translateSummary ? revision?.summary ?? item.summary : undefined,
+    body: settings.translateBody && body ? body.slice(0, 6_000) : undefined,
     revisionId: revision?.revisionId
   }
 }

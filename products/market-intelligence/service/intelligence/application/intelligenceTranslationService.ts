@@ -59,6 +59,8 @@ export function createIntelligenceTranslationService(deps: {
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
   /** 默认模型可用性判据与翻译请求共用同一份供应商状态。 */
   getProviderState?: () => Promise<ProviderState>
+  /** Stored article body from the news-sentiment document store. */
+  getBodyText?: (itemId: string) => string | undefined
 }) {
   let lastJobSummary: string | undefined
   let lastJobAt: string | undefined
@@ -174,7 +176,8 @@ export function createIntelligenceTranslationService(deps: {
         accepted.targetLocale !== undefined ||
         accepted.translateTitle !== undefined ||
         accepted.translateSummary !== undefined ||
-        accepted.translateEvidenceExcerpt !== undefined
+        accepted.translateEvidenceExcerpt !== undefined ||
+        accepted.translateBody !== undefined
       ) {
         await this.queueMissing({ reason: 'settings-change' })
       }
@@ -257,7 +260,7 @@ export function createIntelligenceTranslationService(deps: {
       const item = deps.pipeline.listItems().find((entry) => entry.itemId === input.itemId)
       if (!item) return undefined
       const context = await loadDisplayResolutionContext()
-      return resolveDisplayTextForItem(item, input.textMode, context)
+      return resolveDisplayTextForItem(item, input.textMode, context, deps.getBodyText?.(input.itemId))
     },
 
     async resolveDisplayTexts(input: {
@@ -273,7 +276,7 @@ export function createIntelligenceTranslationService(deps: {
         const item = itemsById.get(itemId)
         return [
           itemId,
-          item ? resolveDisplayTextForItem(item, input.textMode, context) : undefined
+          item ? resolveDisplayTextForItem(item, input.textMode, context, deps.getBodyText?.(itemId)) : undefined
         ] as const
       })
       return Object.fromEntries(resolvedEntries)
@@ -307,7 +310,7 @@ export function createIntelligenceTranslationService(deps: {
       }
 
       const revision = resolveEffectiveRevision(item, deps.pipeline.listRevisions())
-      const fields = buildItemTranslationFields(item, revision, settings)
+      const fields = buildItemTranslationFields(item, revision, settings, deps.getBodyText?.(item.itemId))
       const sourceHash = computeTranslationSourceHash(fields)
       const active = findActiveTranslationRecord(records, {
         sourceType: 'item',
@@ -455,12 +458,13 @@ function resolveDisplayTextForItem(
     targetLocale: IntelligenceTranslationTargetLocale
     records: IntelligenceTranslationRecord[]
     revisions: IntelligenceItemRevision[]
-  }
+  },
+  body?: string
 ): SafeTranslationDisplayText {
   const definition = getIntelligenceSourceDefinition(item.sourceId)
   const sourceLanguage = resolveItemSourceLanguage(item, definition?.language)
   const revision = resolveEffectiveRevision(item, context.revisions)
-  const fields = buildItemTranslationFields(item, revision, context.settings)
+  const fields = buildItemTranslationFields(item, revision, context.settings, body)
   const sourceHash = computeTranslationSourceHash(fields)
   const originalTitle = sanitizeIntelligenceText(revision?.title ?? item.title)
   const originalSummary = sanitizeIntelligenceText(revision?.summary ?? item.summary)
@@ -485,10 +489,13 @@ function resolveDisplayTextForItem(
   const useTranslated = textMode !== 'original'
   const translatedTitle = active?.titleTranslated
   const translatedSummary = active?.summaryTranslated
+  const translatedBody = active?.bodyTranslated
 
   return {
     title: useTranslated && active?.status === 'translated' && translatedTitle ? translatedTitle : originalTitle,
     summary: useTranslated && active?.status === 'translated' && translatedSummary ? translatedSummary : originalSummary,
+    body: useTranslated && active?.status === 'translated' && translatedBody ? translatedBody : body,
+    originalBody: body,
     originalTitle,
     originalSummary,
     status: active?.status ?? 'pending',
@@ -550,7 +557,8 @@ function selectTranslationCandidates(
   input: TranslateIntelligenceItemsJobInput,
   settings: IntelligenceTranslationSettings,
   targetLocale: IntelligenceTranslationTargetLocale,
-  records: IntelligenceTranslationRecord[]
+  records: IntelligenceTranslationRecord[],
+  getBodyText?: (itemId: string) => string | undefined
 ): TranslationCandidate[] {
   const itemIds = resolveRequestedItemIds(pipeline, input, records)
   const candidates: TranslationCandidate[] = []
@@ -562,7 +570,7 @@ function selectTranslationCandidates(
     const definition = getIntelligenceSourceDefinition(item.sourceId)
     const sourceLanguage = resolveItemSourceLanguage(item, definition?.language)
     const revision = resolveEffectiveRevision(item, pipeline.listRevisions())
-    const fields = buildItemTranslationFields(item, revision, settings)
+    const fields = buildItemTranslationFields(item, revision, settings, getBodyText?.(itemId))
     const sourceHash = computeTranslationSourceHash(fields)
 
     if (!needsTranslation(sourceLanguage, targetLocale)) {
@@ -597,7 +605,7 @@ function selectTranslationCandidates(
       sourceLanguage,
       title: sanitizeIntelligenceText(revision?.title ?? item.title),
       summary: sanitizeIntelligenceText(revision?.summary ?? item.summary),
-      body: createSafeEvidenceExcerpt(sanitizeIntelligenceText(revision?.summary ?? item.summary))
+      body: fields.body
     })
   }
 
@@ -650,6 +658,7 @@ function pickSettingsPatch(
   if (typeof patch.translateEvidenceExcerpt === 'boolean') {
     next.translateEvidenceExcerpt = patch.translateEvidenceExcerpt
   }
+  if (typeof patch.translateBody === 'boolean') next.translateBody = patch.translateBody
   return next
 }
 

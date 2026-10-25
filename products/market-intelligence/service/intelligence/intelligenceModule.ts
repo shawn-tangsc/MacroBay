@@ -423,6 +423,7 @@ export function getIntelligenceModule(
         }),
       fetch: getPlatformFetch()
     })
+    let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
     const translationService = createIntelligenceTranslationService({
       storage: translationStorage,
       pipeline,
@@ -430,12 +431,12 @@ export function getIntelligenceModule(
       structuredModelInvocation,
       getAppLanguage,
       getProviderState: hooks?.getProviderState,
-      getModelDefaults: hooks?.getModelDefaults
+      getModelDefaults: hooks?.getModelDefaults,
+      getBodyText: (itemId) => newsSentimentStore?.getDocument(itemId)?.bodyText
     })
     const newsSentimentSettingsStore = createNewsSentimentSettingsStore(
       createNewsSentimentSettingsJsonStorage(join(dataDir, 'intelligence-news-sentiment-settings.json'))
     )
-    let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
     try {
       newsSentimentStore = createNewsSentimentSqliteStore(join(dataDir, newsSentimentStoragePolicy.fileName))
     } catch {

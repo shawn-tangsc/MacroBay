@@ -143,11 +143,14 @@ export function createNewsSentimentQuery(deps: {
       if (!item) return undefined
       const translations = await readTranslations(deps.translation, [input.itemId])
       const document = deps.store.getDocument(input.itemId)
+      const translatedBody = translations[input.itemId]?.body
       return {
         ...toItemView(row, item, translations[input.itemId]),
-        ...(document?.state === 'available' && document.bodyText
-          ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
-          : {}),
+        ...(translatedBody
+          ? { bodyExcerpt: translatedBody.slice(0, 8_000) }
+          : document?.state === 'available' && document.bodyText
+            ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
+            : {}),
         asOf
       }
     }

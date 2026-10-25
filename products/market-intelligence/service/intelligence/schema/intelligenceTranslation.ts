@@ -23,6 +23,8 @@ export type IntelligenceTranslationSettings = {
   translateTitle: boolean
   translateSummary: boolean
   translateEvidenceExcerpt: boolean
+  /** Translate the stored article body, not only the headline and summary. */
+  translateBody: boolean
   updatedAt: string
 }
 

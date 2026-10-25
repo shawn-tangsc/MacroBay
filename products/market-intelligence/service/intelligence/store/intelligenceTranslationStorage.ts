@@ -141,6 +141,7 @@ function normalizeSettings(
     translateTitle: candidate.translateTitle ?? defaults.translateTitle,
     translateSummary: candidate.translateSummary ?? defaults.translateSummary,
     translateEvidenceExcerpt: candidate.translateEvidenceExcerpt ?? defaults.translateEvidenceExcerpt,
+    translateBody: candidate.translateBody ?? defaults.translateBody,
     updatedAt: candidate.updatedAt ?? defaults.updatedAt
   }
 }
