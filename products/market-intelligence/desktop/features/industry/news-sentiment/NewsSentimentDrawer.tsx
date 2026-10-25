@@ -118,7 +118,7 @@ export function NewsSentimentDrawer(props: {
             onClick={() => {
               setActionBusy('translate')
               setActionNotice(undefined)
-              void withTimeout(intelligenceTranslationClient.retryFailed({ reason: 'retry-failed', filters: { timeRange: '7d', limit: 100 } }))
+              void withTimeout(intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', filters: { timeRange: '7d', limit: 100 } }))
                 .then(() => setActionNotice(text.settingsModal.translationQueued))
                 .catch(() => setActionNotice(text.settingsModal.translationRetryFailed))
                 .finally(() => setActionBusy(undefined))
