@@ -6,6 +6,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { productText } from '../../../shared/i18n/productText'
 import type { NewsSentimentItemView, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import { labelText } from './newsSentimentPresentation'
+import { passesNeutralFilter } from './newsSentimentFilters'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
@@ -24,11 +25,11 @@ export function NewsSentimentCard(props: {
 }): React.ReactElement {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
-  const summary = view?.state === 'available' ? view.summary : undefined
+  const available = view?.state === 'available'
   const [visibleCount, setVisibleCount] = useState(8)
   const includeNeutral = props.includeNeutral ?? true
-  const filteredItems = includeNeutral ? (view?.items ?? []) : (view?.items ?? []).filter((item) => item.polarity !== 'neutral')
-  const drivers = summary
+  const filteredItems = (view?.items ?? []).filter((item) => passesNeutralFilter(item, includeNeutral))
+  const drivers = available
     ? [...filteredItems].sort(
         (a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.strength * b.confidence - a.strength * a.confidence
       )
@@ -63,7 +64,7 @@ export function NewsSentimentCard(props: {
         </div>
       ) : loading && !view ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><p>{text.loading}</p></div>
-      ) : !summary ? (
+      ) : !available ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
           <p>{text.empty}</p>
         </div>
@@ -89,7 +90,7 @@ export function NewsSentimentCard(props: {
             ))}
           </div>
           <footer className="mi-news-sentiment__footer">
-            {summary.engineMix.rules > 0 ? <span className="mi-news-sentiment__badge">{text.engine.rules}</span> : null}
+            {filteredItems.some((item) => item.engine === 'rules') ? <span className="mi-news-sentiment__badge">{text.engine.rules}</span> : null}
             {view?.caveats.includes('news-body-limited') ? <span>{text.bodyLimited}</span> : null}
           </footer>
         </>

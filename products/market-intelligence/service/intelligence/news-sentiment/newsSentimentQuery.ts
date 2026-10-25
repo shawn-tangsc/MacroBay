@@ -100,26 +100,26 @@ export function createNewsSentimentQuery(deps: {
         const from = new Date(Date.parse(asOf) - NEWS_SENTIMENT_WINDOW_MS[window]).toISOString()
         const rows = deps.store.listLatestSentiment({ from, to: asOf, limit: 500 })
         const itemsById = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item]))
-        const visible = rows
+        const scopedRows = rows
           .filter((row) => {
             const item = itemsById.get(row.itemId)
             if (!item) return false
             return !isRoutineNewsNotice({ title: item.title, polarity: row.polarity, strength: row.strength })
           })
           .filter((row) => matchesScope(row, input.scope))
+        const availableSources = [...new Map(scopedRows.map((row) => [
+          row.sourceId,
+          getIntelligenceSourceDefinition(row.sourceId)?.displayName ?? row.sourceId
+        ])).entries()].map(([sourceId, sourceName]) => ({ sourceId, sourceName })).sort((left, right) => left.sourceName.localeCompare(right.sourceName))
+        const visible = scopedRows
           .filter((row) => !input.direction || input.direction === 'all' || row.polarity === input.direction)
           .filter((row) => !input.sourceId || row.sourceId === input.sourceId)
           .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
           .slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)))
 
         if (visible.length === 0) {
-          return { state: 'empty', asOf, generatedAt, window, items: [], caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow] }
+          return { state: 'empty', asOf, generatedAt, window, items: [], availableSources, caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow] }
         }
-
-        const availableSources = [...new Map(rows.map((row) => [
-          row.sourceId,
-          getIntelligenceSourceDefinition(row.sourceId)?.displayName ?? row.sourceId
-        ])).entries()].map(([sourceId, sourceName]) => ({ sourceId, sourceName })).sort((left, right) => left.sourceName.localeCompare(right.sourceName))
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
         const items = visible.map((row) => {
@@ -130,7 +130,7 @@ export function createNewsSentimentQuery(deps: {
             bodyTranslationState: (body?.state === 'translated' || body?.state === 'failed' ? body.state : 'missing') as NewsSentimentItemView['bodyTranslationState']
           }
         })
-        const aggregate = aggregateView(visible, itemsById, input, asOf)
+        const aggregate = window === 'all' ? undefined : aggregateView(visible, itemsById, input, asOf)
         const caveats = [...new Set(visible.flatMap((row) => row.caveats))]
 
         return {
@@ -138,7 +138,7 @@ export function createNewsSentimentQuery(deps: {
           asOf,
           generatedAt,
           window,
-          summary: {
+          ...(aggregate ? { summary: {
             label: aggregate.label,
             score: aggregate.score,
             itemCount: visible.length,
@@ -151,7 +151,7 @@ export function createNewsSentimentQuery(deps: {
               rules: visible.filter((row) => row.engine === 'rules').length
             },
             lastScoredAt: visible.map((row) => row.scoredAt).sort().at(-1)
-          },
+          } } : {}),
           items,
           availableSources,
           caveats
