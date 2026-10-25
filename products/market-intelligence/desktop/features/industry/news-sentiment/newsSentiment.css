@@ -194,7 +194,6 @@
 
 .mi-news-drawer__row-failed { color: var(--mi-news-negative, #ff8a9b); font-size: 9.5px; }
 
-.mi-news-drawer__context-mask { position: fixed; inset: 0; z-index: 1000; }
 .mi-news-drawer__context {
   position: fixed; z-index: 1001; min-width: 132px; padding: 3px;
   background: var(--panel, #171d18); border: 1px solid var(--border, #2a352b); border-radius: 4px;

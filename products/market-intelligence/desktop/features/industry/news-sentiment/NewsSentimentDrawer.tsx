@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Drawer, Select } from 'antd'
 
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -46,6 +46,7 @@ export function NewsSentimentDrawer(props: {
   const [translatingAll, setTranslatingAll] = useState(false)
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
+  const contextMenuRef = useRef<HTMLDivElement>(null)
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
@@ -102,6 +103,20 @@ export function NewsSentimentDrawer(props: {
     if (props.open && props.focusItemId) setSelectedId(props.focusItemId)
     setBodyView('translated')
   }, [props.open, props.focusItemId, activeId])
+
+  useEffect(() => {
+    if (!contextMenu) return
+    const dismiss = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(undefined)
+    }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setContextMenu(undefined) }
+    document.addEventListener('pointerdown', dismiss, true)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', dismiss, true)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
@@ -377,8 +392,7 @@ export function NewsSentimentDrawer(props: {
         </div>
         {translationEnabled && contextMenu ? (
           <>
-            <div className="mi-news-drawer__context-mask" onClick={() => setContextMenu(undefined)} />
-            <div className="mi-news-drawer__context" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
+            <div className="mi-news-drawer__context" ref={contextMenuRef} style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
               {(() => {
                 const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
                 return (
