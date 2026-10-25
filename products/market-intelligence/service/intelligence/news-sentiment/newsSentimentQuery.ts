@@ -216,7 +216,7 @@ function toSignal(
     itemId: row.itemId,
     scopeType,
     scopeKey,
-    horizon: window as IntelligenceSentimentHorizon,
+    horizon: (window === 'all' ? '24h' : window) as IntelligenceSentimentHorizon,
     sourceGroup: item?.sourceCategory ?? row.sourceId,
     sentimentLabel: polarityToLabel(row.polarity),
     strength: row.strength,

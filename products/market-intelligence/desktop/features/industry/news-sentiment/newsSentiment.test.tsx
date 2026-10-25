@@ -133,11 +133,13 @@ describe('NewsSentimentFeature', () => {
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
     await act(async () => { open?.click() })
     await act(async () => {})
-    const buttons = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__toolbar .mi-news-sentiment__window button')]
-    const target = buttons.find((button) => button.textContent?.trim() === '24h')
-    await act(async () => { target?.click() })
+    const selector = document.body.querySelector<HTMLElement>('.mi-news-drawer__time .ant-select-selector')
+    await act(async () => { selector?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
     await act(async () => {})
-    expect(target?.getAttribute('aria-pressed')).toBe('true')
+    const option = [...document.body.querySelectorAll<HTMLElement>('.ant-select-item-option')]
+      .find((entry) => entry.textContent?.trim() === '24h')
+    await act(async () => { option?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await act(async () => {})
     expect(query).toHaveBeenLastCalledWith(expect.objectContaining({ window: '24h' }))
   })
 

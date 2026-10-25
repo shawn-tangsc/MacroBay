@@ -188,19 +188,18 @@ export function NewsSentimentDrawer(props: {
     >
       <div className="mi-news-drawer">
         <header className="mi-news-drawer__toolbar">
-          <div className="mi-news-sentiment__window" role="group" aria-label={text.drawer.title}>
-            {NEWS_SENTIMENT_WINDOWS.map((window) => (
-              <button
-                aria-pressed={props.window === window}
-                className={props.window === window ? 'is-on' : undefined}
-                key={window}
-                onClick={() => props.onWindowChange(window)}
-                type="button"
-              >
-                {window}
-              </button>
-            ))}
-          </div>
+          <Select
+            aria-label={text.drawer.filters.direction}
+            className="mi-news-drawer__time"
+            onChange={(value: NewsSentimentWindow) => props.onWindowChange(value)}
+            options={[
+              ...NEWS_SENTIMENT_WINDOWS.map((window) => ({ value: window, label: window })),
+              { value: 'all', label: text.drawer.filters.all }
+            ]}
+            popupMatchSelectWidth={false}
+            size="small"
+            value={props.window}
+          />
           <button className="mi-news-drawer__action" onClick={props.onRefresh} type="button">{text.refresh}</button>
           <button className="mi-news-drawer__action" onClick={props.onOpenSettings} type="button">{text.drawer.settings}</button>
           <button
