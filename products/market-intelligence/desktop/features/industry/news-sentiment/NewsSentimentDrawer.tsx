@@ -251,21 +251,6 @@ export function NewsSentimentDrawer(props: {
         </header>
         {actionNotice ? <p className="mi-news-drawer__notice" role="status">{actionNotice}</p> : null}
 
-        {view?.state === 'available' && view.summary ? (
-          <div className="mi-news-drawer__summary">
-            <span className={`mi-news-sentiment__pill is-${view.summary.label}`} title={text.summaryHint}>{text.overall} · {labelText(text, view.summary.label)}</span>
-            <strong>{text.counts.replace('{count}', String(view.summary.itemCount))}</strong>
-            <span>{view.summary.score.toFixed(2)}</span>
-            <small>
-              {text.breakdown
-                .replace('{bull}', String((view?.items ?? []).filter((row) => row.polarity === 'bullish').length))
-                .replace('{bear}', String((view?.items ?? []).filter((row) => row.polarity === 'bearish').length))
-                .replace('{flat}', String(view.summary.neutralCount))}
-            </small>
-            <small className="mi-news-drawer__mix">{text.engine.model} {view.summary.engineMix.model} · {text.engine.rules} {view.summary.engineMix.rules}</small>
-          </div>
-        ) : null}
-
         <div className="mi-news-drawer__filters">
           <label>
             <span>{text.drawer.filters.direction}</span>
