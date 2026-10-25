@@ -419,6 +419,17 @@ export function createIntelligenceTranslationService(deps: {
           continue
         }
 
+        let bodyTranslated = modelResult.output.body
+        if (candidate.kind === 'translate' && candidate.body && targetLocale !== candidate.sourceLanguage) {
+          bodyTranslated = await translateBodyInChunks({
+            invoke: deps.structuredModelInvocation,
+            providerId: modelResult.providerId,
+            modelId: modelResult.modelId,
+            itemId: candidate.itemId,
+            body: candidate.body,
+            targetLocale
+          }) ?? bodyTranslated
+        }
         records = upsertRecord(records, {
           ...pendingRecord,
           status: 'translated',
@@ -426,7 +437,7 @@ export function createIntelligenceTranslationService(deps: {
           modelId: modelResult.modelId,
           titleTranslated: modelResult.output.title,
           summaryTranslated: modelResult.output.summary,
-          bodyTranslated: modelResult.output.body,
+          ...(bodyTranslated ? { bodyTranslated } : {}),
           translatedAt: new Date().toISOString()
         })
         processed += 1
@@ -450,6 +461,44 @@ export function createIntelligenceTranslationService(deps: {
   }
 }
 
+
+/** Long bodies are translated in bounded chunks; one large JSON response tends to drop `body`. */
+async function translateBodyInChunks(input: {
+  invoke: StructuredModelInvocationService['invoke']
+  providerId: string
+  modelId: string
+  itemId: string
+  body: string
+  targetLocale: string
+}): Promise<string | undefined> {
+  const chunks: string[] = []
+  let rest = input.body
+  while (rest.length > 0 && chunks.length < 8) {
+    if (rest.length <= 2_000) { chunks.push(rest); break }
+    const cut = rest.lastIndexOf('\n\n', 2_000)
+    const end = cut > 400 ? cut : 2_000
+    chunks.push(rest.slice(0, end))
+    rest = rest.slice(end).replace(/^\s+/, '')
+  }
+  const translated: string[] = []
+  for (const [index, chunk] of chunks.entries()) {
+    const result = await input.invoke({
+      taskId: `market-intelligence.translation:${input.itemId}:body:${index}`,
+      providerId: input.providerId,
+      modelId: input.modelId,
+      messages: [
+        { role: 'system', content: `Translate the article body into ${input.targetLocale}. Preserve symbols, names, numbers and dates. Return JSON only with key body.` },
+        { role: 'user', content: JSON.stringify({ body: chunk }) }
+      ],
+      parse: (value: unknown) => {
+        const record = value as Record<string, unknown>
+        return { body: typeof record?.body === 'string' ? record.body : '' }
+      }
+    })
+    if (result.ok && result.output.body) translated.push(result.output.body)
+  }
+  return translated.length > 0 ? translated.join('\n\n') : undefined
+}
 function resolveDisplayTextForItem(
   item: IntelligenceItem,
   textMode: 'translated' | 'original' | undefined,

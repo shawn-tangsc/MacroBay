@@ -605,6 +605,9 @@ export function getIntelligenceModule(
         }
       }
     })().catch(() => undefined)
+    // Handlers are registered above; queue the translation reconcile before the source runtime so a
+    // body-hash change from a previous run does not leave the reader with English article bodies.
+    void translationService.queueMissing({ reason: 'settings-change' }).catch(() => undefined)
     void ensureDefaultNewsSources
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
