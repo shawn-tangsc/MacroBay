@@ -41,6 +41,7 @@ export function NewsSentimentDrawer(props: {
   const [detailFailed, setDetailFailed] = useState(false)
   const [translatingBody, setTranslatingBody] = useState(false)
   const [translatedBody, setTranslatedBody] = useState<{ itemId: string; body: string }>()
+  const [translationFailed, setTranslationFailed] = useState(false)
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild' | 'translate'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
@@ -54,12 +55,17 @@ export function NewsSentimentDrawer(props: {
 
   useEffect(() => {
     if (!props.open || !activeId) return
+    if (typeof props.client.translateBody !== 'function') { setTranslatingBody(false); return }
     let cancelled = false
     setTranslatingBody(true)
+    setTranslationFailed(false)
     void props.client.translateBody(activeId)
       .then((result) => {
-        if (!cancelled && result.state === 'translated' && result.body) {
+        if (cancelled) return
+        if (result.state === 'translated' && result.body) {
           setTranslatedBody({ itemId: activeId, body: result.body })
+        } else if (result.state === 'failed') {
+          setTranslationFailed(true)
         }
       })
       .catch(() => undefined)
@@ -248,6 +254,11 @@ export function NewsSentimentDrawer(props: {
                   <span className={`mi-news-sentiment__pill is-${row.polarity}`}>
                     {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
                   </span>
+                  {row.itemId === activeId && translatingBody ? (
+                    <span className="mi-news-drawer__row-loading" role="status" aria-label={text.drawer.detail.translatingBody}>
+                      <i aria-hidden="true" />
+                    </span>
+                  ) : null}
                   <small className="mi-news-drawer__source">{row.sourceName}</small>
                   <span className="mi-news-drawer__symbols">
                     {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
@@ -287,13 +298,20 @@ export function NewsSentimentDrawer(props: {
                   </blockquote>
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
-                  {translatingBody
-                    ? text.drawer.detail.translatingBody
-                    : translatedBody?.itemId === activeId && translatedBody.body
-                      ? translatedBody.body
-                      : detailFailed
-                        ? text.unavailable
-                        : detail?.bodyExcerpt ?? text.drawer.detail.noBody}
+                  {translatingBody ? (
+                    <span className="mi-news-drawer__translating" role="status">
+                      <i aria-hidden="true" />
+                      {text.drawer.detail.translatingBody}
+                    </span>
+                  ) : translatedBody?.itemId === activeId && translatedBody.body ? (
+                    translatedBody.body
+                  ) : translationFailed ? (
+                    <>{text.drawer.detail.translationFailed}<br />{detail?.bodyExcerpt ?? detail?.bodyExcerpt ?? text.drawer.detail.noBody}</>
+                  ) : detailFailed ? (
+                    text.unavailable
+                  ) : (
+                    detail?.bodyExcerpt ?? text.drawer.detail.noBody
+                  )}
                 </p>
                 <footer>
                   {detail?.promptVersion ? <span>{text.drawer.detail.prompt}: {detail.promptVersion}</span> : null}
