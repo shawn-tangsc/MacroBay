@@ -69,7 +69,7 @@ import {
 } from './jobs/intelligenceJobIds'
 import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
 import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
-import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
+import { INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { statSync } from 'node:fs'
 import { getPlatformFetch } from '@platform/network/platformFetch'
@@ -510,26 +510,16 @@ export function getIntelligenceModule(
         ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
         : {})
     })
-    // A fresh install, or a database cleared between runs, starts with no judgments while the
-    // pipeline already holds admitted items. Backfill once; the score job is idempotent and the
-    // empty check keeps every later startup quiet.
+    // Judgments are event-driven: normalize only sends the items it just created. A cleared
+    // database, a partial write failure, or a settings change leaves older admitted items with no
+    // current row and no event to bring them back. One idempotent pass per start reconciles them
+    // from title and summary; the score service skips anything already current and caps the pass.
     if (newsSentimentStore) {
-      try {
-        const existing = newsSentimentStore.listLatestSentiment({
-          from: '1970-01-01T00:00:00.000Z',
-          to: new Date(Date.now() + 86_400_000).toISOString(),
-          limit: 1
-        })
-        if (existing.length === 0) {
-          void enqueueIntelligencePipelineJobs(
-            jobRuntime,
-            [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
-            {}
-          ).catch(() => undefined)
-        }
-      } catch {
-        // A read failure must not stop the workspace from mounting.
-      }
+      void enqueueIntelligencePipelineJobs(
+        jobRuntime,
+        [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
+        {}
+      ).catch(() => undefined)
     }
     const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore })
     // The analysis switches own the model as well as the on/off state: a background job may only
