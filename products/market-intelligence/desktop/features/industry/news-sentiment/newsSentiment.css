@@ -82,16 +82,17 @@
 
 .mi-news-sentiment__drivers { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 2px; }
 .mi-news-sentiment__drivers button {
-  display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 7px; align-items: baseline;
+  display: flex; flex-direction: column; gap: 3px; align-items: stretch;
   border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent);
-  background: transparent; text-align: left; padding: 6px 0; cursor: pointer; color: inherit;
+  background: transparent; text-align: left; padding: 7px 0; cursor: pointer; color: inherit;
 }
+.mi-news-sentiment__driver-line { display: flex; align-items: flex-start; gap: 7px; min-width: 0; }
 .mi-news-sentiment__drivers button:last-child { border-bottom: 0; }
-.mi-news-sentiment__drivers i { width: 6px; height: 6px; border-radius: 50%; background: var(--mi-news-neutral); }
+.mi-news-sentiment__drivers i { flex: none; width: 6px; height: 6px; margin-top: 5px; border-radius: 50%; background: var(--mi-news-neutral); }
 .mi-news-sentiment__drivers i.is-bullish { background: var(--mi-news-positive); }
 .mi-news-sentiment__drivers i.is-bearish { background: var(--mi-news-negative); }
-.mi-news-sentiment__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--text, #e7efe5); }
-.mi-news-sentiment__drivers small { color: var(--muted, #93a196); font-size: 9.5px; white-space: nowrap; }
+.mi-news-sentiment__title { white-space: normal; overflow: visible; text-overflow: clip; font-size: 11px; line-height: 1.45; color: var(--text, #e7efe5); }
+.mi-news-sentiment__drivers small { color: var(--muted, #93a196); font-size: 9.5px; white-space: normal; }
 .mi-news-sentiment__footer { display: flex; align-items: center; gap: 8px; padding: 7px 12px 9px; border-top: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent); font-size: 9.5px; color: var(--muted, #93a196); }
 .mi-news-sentiment__footer button { margin-left: auto; }
 .mi-news-sentiment__badge { border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
