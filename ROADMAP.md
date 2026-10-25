@@ -13,8 +13,10 @@ scope may change as the product evolves.
 
 ## Investment intelligence
 
-- [ ] **Multi-platform sentiment analysis.** Add sentiment coverage across news, social, and
-  community sources, with the same source and time-boundary rules as other evidence.
+- [x] **News sentiment from curated text sources.** Per-item direction, strength and confidence
+  with source, time and evidence; routine operational notices filtered out; optional translation.
+- [ ] **Extend sentiment beyond news.** Add social and community sources to the existing sentiment
+  surface, with the same source and time-boundary rules as other evidence.
 - [ ] **Market data module.** Add a first-class market-data surface for instruments, quotes, candles,
   and market state.
 - [ ] **Review and replay module.** Reconstruct a decision with the evidence that was available at
