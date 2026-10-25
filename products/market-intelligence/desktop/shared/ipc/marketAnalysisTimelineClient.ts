@@ -1,10 +1,16 @@
 import {
   MARKET_ANALYSIS_IPC_METHODS
 } from '../../../contracts/marketAnalysisIpcContracts'
+import { MARKET_ANALYSIS_CONTRACT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import type { AnalysisConclusion, AnalysisConclusionDirection } from '../../../contracts/marketAnalysisContracts'
 
 const PRODUCT_ID = 'market-intelligence'
 const MAX_TIMELINE_ITEMS = 50
+/**
+ * Bound on a list the model authored: the same ceiling the summary validator upstream enforces, so
+ * this side can never refuse a collection the service itself accepted.
+ */
+const MAX_MODEL_LIST_ITEMS = MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems
 /** Bound on the change list a run detail may carry, mirroring the frozen record. */
 const MAX_CHANGE_FACTS = 200
 
@@ -299,7 +305,12 @@ function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'
   // turn the detail into "unavailable".
   if (!isExactRecordWithOptionals(value, fields, ['directions', 'eventAssessment', 'conclusion']) || value.schemaVersion !== 1 ||
     !isText(value.id) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1 ||
-    !isStringList(value.dataCaveats) || !isStringList(value.evidenceRefs) || !isCanonicalTime(value.createdAt)) return undefined
+    !isCanonicalTime(value.createdAt)) return undefined
+  // Caveats are rendered, so an over-long list is truncated; the evidence references are only
+  // counted (never sent on), so they are read whole and the audit count stays exact.
+  const dataCaveats = readStringList(value.dataCaveats, MAX_MODEL_LIST_ITEMS)
+  const evidenceRefs = readReferenceList(value.evidenceRefs)
+  if (!dataCaveats || !evidenceRefs) return undefined
   const conclusion = sanitizeConclusion((value as { conclusion?: unknown }).conclusion)
   if (conclusion === false) return undefined
   const eventAssessment = typeof value.eventAssessment === 'string' ? value.eventAssessment : undefined
@@ -324,8 +335,8 @@ function sanitizeSummary(value: unknown): MarketAnalysisTimelineDetail['summary'
     counterEvidence,
     nextCatalysts,
     ...(directions ? { directions } : {}),
-    evidenceCount: value.evidenceRefs.length,
-    dataCaveats: value.dataCaveats,
+    evidenceCount: evidenceRefs.length,
+    dataCaveats,
     createdAt: value.createdAt
   }
 }
@@ -335,17 +346,19 @@ function sanitizeConclusion(value: unknown): AnalysisConclusion | undefined | fa
   if (!isExactRecord(value, ['direction', 'summary', 'change', 'causalChain', 'conditions', 'macro', 'evidenceStrength', 'dataGaps'])) return false
   const direction = sanitizeDirectionKey(value.direction)
   if (!direction || !isText(value.summary) || !isText(value.change) || !isText(value.causalChain) ||
-    !isStringList(value.conditions) || !isStringList(value.dataGaps) ||
     !(value.macro === null || isText(value.macro)) || !(value.evidenceStrength === null || isText(value.evidenceStrength))) return false
+  const conditions = readStringList(value.conditions, MAX_MODEL_LIST_ITEMS)
+  const dataGaps = readStringList(value.dataGaps, MAX_MODEL_LIST_ITEMS)
+  if (!conditions || !dataGaps) return false
   return {
     direction,
     summary: value.summary,
     change: value.change,
     causalChain: value.causalChain,
-    conditions: value.conditions,
+    conditions,
     macro: value.macro as string | null,
     evidenceStrength: value.evidenceStrength as string | null,
-    dataGaps: value.dataGaps
+    dataGaps
   }
 }
 
@@ -370,7 +383,7 @@ function sanitizeDirections(value: unknown): NonNullable<MarketAnalysisTimelineD
     // exact-key check that omitted it would reject every real payload and blank the whole detail.
     if (!isExactRecord(entry, ['horizon', 'direction', 'rationale', 'confidence', 'evidenceRefIds']) ||
       !isText(entry.horizon) || !isText(entry.direction) || !isText(entry.rationale) || !isText(entry.confidence) ||
-      !isStringList(entry.evidenceRefIds)) return undefined
+      !readReferenceList(entry.evidenceRefIds)) return undefined
     return { horizon: entry.horizon, direction: entry.direction, rationale: entry.rationale, confidence: entry.confidence }
   })
   return directions.every(Boolean)
@@ -399,9 +412,11 @@ function sanitizePredictions(value: unknown): MarketAnalysisTimelineDetail['pred
   if (!Array.isArray(value)) return undefined
   const predictions = value.map((item) => {
     const fields = ['id', 'summaryId', 'asset', 'horizonStart', 'horizonEnd', 'baseCase', 'conditions', 'invalidation', 'nextCatalyst', 'status', 'verificationDueAt', 'createdAt']
-    if (!isExactRecord(item, fields) || !isText(item.id) || !['BTC', 'ETH'].includes(item.asset as string) || !isText(item.baseCase) || !isStringList(item.conditions) ||
+    if (!isExactRecord(item, fields) || !isText(item.id) || !['BTC', 'ETH'].includes(item.asset as string) || !isText(item.baseCase) ||
       !isText(item.invalidation) || !['pending', 'confirmed', 'partially-confirmed', 'invalidated', 'expired', 'insufficient-data'].includes(item.status as string) || !isCanonicalTime(item.verificationDueAt)) return undefined
-    return { id: item.id, asset: item.asset as 'BTC' | 'ETH', baseCase: item.baseCase, conditions: item.conditions, invalidation: item.invalidation, status: item.status as MarketAnalysisTimelineDetail['predictions'][number]['status'], verificationDueAt: item.verificationDueAt }
+    const conditions = readStringList(item.conditions, MAX_MODEL_LIST_ITEMS)
+    if (!conditions) return undefined
+    return { id: item.id, asset: item.asset as 'BTC' | 'ETH', baseCase: item.baseCase, conditions, invalidation: item.invalidation, status: item.status as MarketAnalysisTimelineDetail['predictions'][number]['status'], verificationDueAt: item.verificationDueAt }
   })
   return predictions.some((item) => !item) ? undefined : (predictions as MarketAnalysisTimelineDetail['predictions']).slice(0, MAX_TIMELINE_ITEMS)
 }
@@ -504,8 +519,28 @@ function isExactRecord(value: unknown, fields: readonly string[]): value is Reco
   }
 }
 
-function isStringList(value: unknown): value is readonly string[] {
-  return Array.isArray(value) && value.length <= MAX_TIMELINE_ITEMS && value.every(isText)
+/**
+ * Reads a list the renderer displays, truncating it to `limit` instead of rejecting a long one.
+ *
+ * Length is a rendering bound, never a validity rule. `isStringList` used to reject anything past
+ * fifty items, so a summary that cited sixty-two evidence rows — the newest and richest analysis in
+ * the store — turned its whole detail into 「最新结论详情暂不可用」, and the card healed by itself only
+ * when a later, smaller run became the newest node. Only a malformed item fails now.
+ */
+function readStringList(value: unknown, limit: number): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const items = value.slice(0, limit)
+  return items.every(isText) ? items as readonly string[] : undefined
+}
+
+/**
+ * Reads a stored list of references (evidence and fact identifiers).
+ *
+ * These are counted rather than drawn, so they never reach a screen and are not truncated: the
+ * audit "证据数量" has to be the number the run actually cited instead of a page-sized cap.
+ */
+function readReferenceList(value: unknown): readonly string[] | undefined {
+  return Array.isArray(value) && value.every(isText) ? value as readonly string[] : undefined
 }
 
 function isText(value: unknown): value is string {

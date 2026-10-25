@@ -179,6 +179,46 @@ describe('marketAnalysisTimelineClient', () => {
     expect(result.state === 'available' ? result.detail.summary.knownFacts : []).toHaveLength(50)
   })
 
+  it('keeps a summary that cites more evidence rows than a timeline page holds', async () => {
+    // The reported symptom: 最新 AI 结论 said "最新结论详情暂不可用" for the newest node and healed by
+    // itself once a smaller run became the newest one. The stored snapshot cited 62 evidence rows and
+    // the renderer rejected any string list longer than the 50-item timeline page — a payload bound
+    // applied to a validity rule, which blanked exactly the richest analysis.
+    const entry = {
+      id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
+      occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', version: 1
+    }
+    const evidenceRefs = Array.from({ length: 62 }, (_, index) => `query:source:metric:${index}`)
+    const longList = (prefix: string) => Array.from({ length: 54 }, (_, index) => `${prefix} ${index}`)
+    const invoke = vi.fn(async (_productId: string, method: string) => {
+      if (method === 'marketAnalysis.getAnalysisRun') return {
+        id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'correction', status: 'succeeded', failureCode: null,
+        queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: evidenceRefs.length
+      }
+      if (method === 'marketAnalysis.getSummary') return {
+        id: 'mi-as-1', schemaVersion: 1, analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', version: 1,
+        conclusion: {
+          direction: 'bearish', summary: '资金面收缩压制风险资产。', change: 'ETF 连续净流出。',
+          causalChain: 'ETF 净流出 → 现货买盘减弱 → 价格承压。', conditions: longList('条件'), macro: null,
+          evidenceStrength: null, dataGaps: longList('缺口')
+        },
+        knownFacts: [], transmissionHypotheses: [], marketReaction: [], supportingEvidence: [], counterEvidence: [],
+        scenarios: [], directions: [], nextCatalysts: [], dataCaveats: longList('限制'), evidenceRefs, createdAt: asOf
+      }
+      return []
+    })
+    vi.stubGlobal('window', { platform: { products: { invoke } } })
+
+    const result = await marketAnalysisTimelineClient.getDetail(entry)
+    expect(result.state).toBe('available')
+    if (result.state !== 'available') return
+    expect(result.detail.summary.conclusion?.summary).toBe('资金面收缩压制风险资产。')
+    expect(result.detail.summary.conclusion?.conditions).toHaveLength(54)
+    expect(result.detail.summary.dataCaveats).toHaveLength(54)
+    // Counted, not truncated: the audit number must be what the run actually cited.
+    expect(result.detail.summary.evidenceCount).toBe(62)
+  })
+
   it('carries the operation directions through the wire, one row per horizon', async () => {
     const entry = {
       id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis' as const, status: 'published' as const,
