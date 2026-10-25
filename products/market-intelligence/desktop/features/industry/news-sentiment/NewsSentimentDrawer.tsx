@@ -34,6 +34,7 @@ export function NewsSentimentDrawer(props: {
   onRefresh: () => void
   client: Pick<NewsSentimentClient, 'getItem'>
   translationEnabled?: boolean
+  onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
   const { text, view } = props
   const translationEnabled = props.translationEnabled !== false
@@ -315,7 +316,7 @@ export function NewsSentimentDrawer(props: {
                 aria-current={row.itemId === activeId}
                 className={`mi-news-drawer__row${row.itemId === activeId ? ' is-selected' : ''}`}
                 key={row.itemId}
-                onClick={() => setSelectedId(row.itemId)}
+                onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
                 onContextMenu={translationEnabled ? (event) => { event.preventDefault(); setContextMenu({ itemId: row.itemId, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 80) }) } : undefined}
                 role="listitem"
                 type="button"

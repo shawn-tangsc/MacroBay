@@ -40,6 +40,7 @@ export function NewsSentimentFeature(props: {
         onOpenAll={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
+        onSelectContext={props.onSelectContext}
         onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true); props.onSelectContext?.(item) }}
         text={props.text}
         view={state.view}
@@ -55,6 +56,7 @@ export function NewsSentimentFeature(props: {
         onFilters={state.setFilters}
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
+        onSelectContext={props.onSelectContext}
         onWindowChange={state.setWindow}
         open={drawerOpen}
         text={props.text}
