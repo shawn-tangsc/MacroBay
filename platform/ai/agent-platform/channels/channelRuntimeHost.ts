@@ -1,5 +1,4 @@
 import type { AgentChannelEntity } from '../schemas/channelSchemas'
-import type { AgentChannelRuntimeActivityUpdate } from './channelRuntimeActivity'
 
 export type AgentChannelRuntimeErrorKind =
   | 'config'
@@ -86,10 +85,6 @@ export type AgentChannelRuntimeHost = {
     }
   ) => Promise<void>
   onTextUpdate?: (chatId: string, text: string) => Promise<void>
-  onRuntimeActivityUpdate?: (
-    chatId: string,
-    update: AgentChannelRuntimeActivityUpdate
-  ) => Promise<void>
   onStreamComplete?: (chatId: string, finalText: string) => Promise<boolean>
   onStreamError?: (chatId: string, errorText: string) => Promise<void>
 }

@@ -5,7 +5,7 @@ import {
   createAgentStoreState,
   type AgentStoreState
 } from '@platform/ai/agent-platform/store/agentStore'
-import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import { mergeAgentStoreSeeds, normalizeAgentStoreState } from '@platform/ai/agent-platform/store/agentPersistentStore'
 import { createPlatformAgentSeed } from '@platform/ai/agent-platform/seeds'

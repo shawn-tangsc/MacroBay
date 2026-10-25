@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AgentEntity } from '../../ai/agent-platform/schemas/agentSchemas'
-import type { AgentChannelRuntimeSnapshot } from '../../ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '../../ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentSessionEntity } from '../../ai/agent-platform/schemas/sessionSchemas'
 import type { AgentWorkspaceEntity } from '../../ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentSkillsRuntimeCatalog } from '../../ai/agent-platform/skills/skillRuntimeSchemas'

@@ -4,6 +4,8 @@ import type { IntelligenceArchiveService } from '../application/intelligenceArch
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import type { IntelligenceReplayService } from '../application/intelligenceReplayService'
 import type { IntelligenceTranslationService } from '../application/intelligenceTranslationService'
+import type { createNewsSentimentEnrichmentService } from '../news-sentiment/newsSentimentEnrichmentService'
+import type { createNewsSentimentScoringService } from '../news-sentiment/newsSentimentScoringService'
 import { isDefillamaStablecoinRetiredPath } from '../application/sourceCatalog'
 import { isZeroXRouterSource } from '../application/zeroXRouterSourcePolicy'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
@@ -17,7 +19,9 @@ import {
   INTELLIGENCE_PURGE_JOB,
   INTELLIGENCE_REEVALUATE_CLUSTERS_JOB,
   INTELLIGENCE_REEVALUATE_SENTIMENT_SCOPES_JOB,
+  INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB,
   INTELLIGENCE_REFRESH_SENTIMENT_AGGREGATES_JOB,
+  INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB,
   INTELLIGENCE_REINDEX_JOB,
   INTELLIGENCE_REPLAY_WINDOW_JOB,
   INTELLIGENCE_TRANSLATE_ITEMS_JOB
@@ -30,6 +34,10 @@ export function registerIntelligenceJobs(
     archiveService?: IntelligenceArchiveService
     replayService?: IntelligenceReplayService
     translationService?: Pick<IntelligenceTranslationService, 'translateItems'>
+    newsSentiment?: {
+      enrichItems: ReturnType<typeof createNewsSentimentEnrichmentService>['enrichItems']
+      scoreItems: ReturnType<typeof createNewsSentimentScoringService>['scoreItems']
+    }
     capitalConditions?: { refresh: () => Promise<unknown> }
     etfFlowHistory?: { refresh: () => Promise<unknown> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
@@ -80,6 +88,39 @@ export function registerIntelligenceJobs(
     await context.log({
       level: 'info',
       message: `Translated ${result.processed} item(s); ${result.failed} failed.`
+    })
+  })
+
+  jobRuntime.registerHandler(INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, async (payload, context) => {
+    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number }
+    if (!deps.newsSentiment) {
+      await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
+      return
+    }
+    const result = await deps.newsSentiment.enrichItems(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds, limit: input.limit })
+    await context.log({
+      level: 'info',
+      message: `Enriched ${result.processed} news item(s); ${result.available} available, ${result.tooShort} short, ${result.failed} failed.`
+    })
+    if (input.rebuild) {
+      await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], { rebuild: true })
+    } else if (input.itemIds?.length) {
+      await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {
+        newItemIds: input.itemIds
+      })
+    }
+  })
+
+  jobRuntime.registerHandler(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB, async (payload, context) => {
+    const input = payload as { itemIds?: string[]; rebuild?: boolean; limit?: number }
+    if (!deps.newsSentiment) {
+      await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
+      return
+    }
+    const result = await deps.newsSentiment.scoreItems(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds, limit: input.limit })
+    await context.log({
+      level: 'info',
+      message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, skipped ${result.skipped}.`
     })
   })
 

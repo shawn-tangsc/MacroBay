@@ -5,6 +5,7 @@ import type { ModelDetectionMode, ModelDetectionResult } from '@platform/ai/prov
 import {
   getModelDetectionSnapshot,
   isDetectionRunning,
+  isModelBeingDetected,
   resultForModel,
   runningModelDetectionIds,
   startModelDetection,
@@ -31,7 +32,8 @@ export type UseModelDetection = {
   resultFor: (modelId: string) => ModelDetectionResult | undefined
   /** 行内状态：有结果取结果；run 在跑且无结果 ⇒ testing。 */
   statusFor: (modelId: string) => ModelDetectionModelStatus | undefined
-  start: (modes: readonly ModelDetectionMode[]) => Promise<string | null>
+  /** `modelIds` 缺省 = 该供应商全部模型（自动检测只传新增/变更/过期的那几个）。 */
+  start: (modes: readonly ModelDetectionMode[], modelIds?: readonly string[]) => Promise<string | null>
   stop: (runId?: string) => void
 }
 
@@ -47,7 +49,8 @@ function toRowStatus(
     if (result.status === 'cancelled') return 'cancelled'
     return 'failed'
   }
-  return isDetectionRunning(snapshot, providerId) ? 'testing' : undefined
+  // 单模型 run 只把目标模型标成「测试中」，同供应商的其它行保持原状。
+  return isModelBeingDetected(snapshot, providerId, modelId) ? 'testing' : undefined
 }
 
 /** 进度分母来自 run 登记时的模型数，分子只数**已产出结果**的模型（一模型一条结果）。 */
@@ -80,7 +83,7 @@ export function useModelDetection(providerId: string | undefined): UseModelDetec
     progress: progressOf(run),
     resultFor: (modelId) => (providerId ? resultForModel(snapshot, providerId, modelId) : undefined),
     statusFor: (modelId) => (providerId ? toRowStatus(snapshot, providerId, modelId) : undefined),
-    start: (modes) => (providerId ? startModelDetection(providerId, modes) : Promise.resolve(null)),
+    start: (modes, modelIds) => (providerId ? startModelDetection(providerId, modes, modelIds) : Promise.resolve(null)),
     stop: (runId) => stopModelDetection(runId)
   }
 }

@@ -1,10 +1,10 @@
-[English](./README.md) | [中文](./README.zh-CN.md)
+[English](./README.md) | [中文](./README.zh-CN.md) | [← 仓库首页](../README.zh-CN.md)
 
 # MacroBay 观潮
 
 **把市场情报变成可以核对的分析。**
 
-![MacroBay 市场情报看板](./assets/screenshots/demo.gif)
+![MacroBay 市场情报看板](./assets/screenshots/demo-en.gif)
 
 MacroBay 是一个本地桌面应用：打开看板，问分析智能体“最近发生了什么”，然后查看每个数字背后的
 来源和截止时间。它不是把新闻丢给模型、再生成一段没有依据的总结。
@@ -86,6 +86,9 @@ MIT 许可证只覆盖代码，不覆盖行情数据或供应商内容。MacroBa
 - [分析流程](./product/analysis-workflow.zh-CN.md)
 - [可追溯性](./product/traceability.zh-CN.md)
 - [数字货币市场解读员](./product/crypto-market-analyst.zh-CN.md)
+- [给靠这个吃饭的人](./product/for-professionals.zh-CN.md)
+- [给还在学这个市场的人](./product/for-newcomers.zh-CN.md)
+- [舆情（新闻情绪）](./product/news-sentiment.zh-CN.md)
 - [分析智能体](./product/analyst-agent.zh-CN.md)
 - [架构](./platform/architecture.zh-CN.md)
 - [路线图](../ROADMAP.zh-CN.md)

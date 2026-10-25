@@ -12,6 +12,7 @@ import type {
   ProviderWebsiteLinks
 } from '../modelProviderTypes'
 import { normalizeModelSupportedProtocols } from '../modelChatProtocol'
+import { normalizeModelAvailability } from '../modelAvailability'
 import { isSystemProviderId } from '../providerPresets'
 import {
   normalizeProviderChatEndpoints,
@@ -59,6 +60,7 @@ type ModelRow = {
   probe_status: string | null
   probe_reason: string | null
   protocol_probed_at: string | null
+  availability_json: string | null
   context_length: number | null
   max_completion_tokens: number | null
   pricing_json: string | null
@@ -225,6 +227,10 @@ function fromModelRow(row: ModelRow): ModelDefinition {
     ...(row.probe_status === 'passed' || row.probe_status === 'failed' || row.probe_status === 'unsupported'
       ? { probeStatus: row.probe_status }
       : {}),
+    ...(() => {
+      const availability = normalizeModelAvailability(parseJson<unknown>(row.availability_json, null))
+      return availability ? { availability } : {}
+    })(),
     ...(row.probe_reason !== null ? { probeReason: row.probe_reason } : {}),
     ...(row.provider_declared === 1 ? { providerDeclared: true } : {}),
     ...(row.preset_model === 1 ? { presetModel: true } : {}),
@@ -279,6 +285,7 @@ function toModelRow(providerId: string, model: ModelDefinition, sortIndex: numbe
     probe_status: model.probeStatus ?? null,
     probe_reason: model.probeReason ?? null,
     protocol_probed_at: model.protocolProbedAt ?? null,
+    availability_json: model.availability ? JSON.stringify(model.availability) : null,
     context_length: model.contextLength ?? null,
     max_completion_tokens: model.maxCompletionTokens ?? null,
     pricing_json: model.pricing ? JSON.stringify(model.pricing) : null,
@@ -347,9 +354,10 @@ function writeProviderModels(connection: DatabaseSync, provider: PersistedModelP
           provider_id, model_id, name, group_name, capabilities_json, chat_protocol,
           supported_protocols_json, declared_protocols_json, probed_protocols_json,
           messages_support, responses_support, declaration_source,
-          probe_status, probe_reason, protocol_probed_at, context_length, max_completion_tokens,
+          probe_status, probe_reason, protocol_probed_at, availability_json,
+          context_length, max_completion_tokens,
           pricing_json, preset_model, preset_stale, provider_declared, sort_index
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(provider_id, model_id) do update set
           name = excluded.name,
           group_name = excluded.group_name,
@@ -364,6 +372,7 @@ function writeProviderModels(connection: DatabaseSync, provider: PersistedModelP
           probe_status = excluded.probe_status,
           probe_reason = excluded.probe_reason,
           protocol_probed_at = excluded.protocol_probed_at,
+          availability_json = excluded.availability_json,
           context_length = excluded.context_length,
           max_completion_tokens = excluded.max_completion_tokens,
           pricing_json = excluded.pricing_json,
@@ -388,6 +397,7 @@ function writeProviderModels(connection: DatabaseSync, provider: PersistedModelP
         row.probe_status,
         row.probe_reason,
         row.protocol_probed_at,
+        row.availability_json,
         row.context_length,
         row.max_completion_tokens,
         row.pricing_json,
@@ -449,7 +459,7 @@ function modelRowContent(row: ModelRow): string {
     row.provider_id, row.model_id, row.name, row.group_name, row.capabilities_json, row.chat_protocol,
     row.supported_protocols_json, row.declared_protocols_json, row.probed_protocols_json,
     row.messages_support, row.responses_support, row.declaration_source,
-    row.probe_status, row.probe_reason, row.protocol_probed_at, row.context_length,
+    row.probe_status, row.probe_reason, row.protocol_probed_at, row.availability_json, row.context_length,
     row.max_completion_tokens, row.pricing_json, row.preset_model, row.preset_stale, row.provider_declared,
     row.sort_index
   ])

@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 
 type AgentPlatformMigration = {
   id: string
-  up: string
+  up: string | ((connection: DatabaseSync) => void)
 }
 
 const migrations: AgentPlatformMigration[] = [
@@ -972,6 +972,478 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_channel_wechat_runtime_audits_channel_created
         on channel_wechat_runtime_audits(channel_id, created_at desc, id asc);
     `
+  },
+  {
+    // One row per adapter key. Every runtime query joins this projection instead of naming an adapter.
+    id: '0027_channel_adapter_support',
+    up: `
+      create table channel_adapter_support (
+        adapter_key text primary key
+          check (adapter_key in ('telegram','slack','lark','qq','discord','wechat')),
+        status text not null
+          check (status in ('supported','blocked')),
+        adapter_version text not null,
+        evidence_recorded_at text,
+        updated_at text not null
+      );
+    `
+  },
+  {
+    // A deleted Agent session must not leave a channel bound to a missing session.
+    id: '0028_channel_conversation_session_integrity',
+    up: `
+      create table channel_conversations_v2 (
+        id text primary key,
+        channel_id text not null,
+        conversation_key_ciphertext blob not null,
+        conversation_key_ref text not null,
+        conversation_key_revision integer not null,
+        conversation_key_hash text not null,
+        conversation_kind text not null,
+        agent_session_id text,
+        created_at text not null,
+        updated_at text not null,
+        unique(channel_id, conversation_key_hash),
+        unique(agent_session_id)
+      );
+
+      insert into channel_conversations_v2 (
+        id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+        conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
+      ) select
+        id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+        conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
+      from channel_conversations;
+
+      drop table channel_conversations;
+      alter table channel_conversations_v2 rename to channel_conversations;
+
+      create index idx_channel_conversations_channel_updated
+        on channel_conversations(channel_id, updated_at desc, id asc);
+    `
+  },
+  {
+    // Durable execution ledger: a started dispatch is never re-run after a crash.
+    id: '0030_channel_dispatch_runs',
+    up: `
+      create table channel_dispatch_runs (
+        dispatch_id text primary key,
+        channel_id text not null,
+        work_item_id text not null unique,
+        conversation_id text not null,
+        status text not null check (status in ('started','completed','failed','interrupted')),
+        started_at text not null,
+        finished_at text,
+        updated_at text not null
+      );
+      create index idx_channel_dispatch_runs_recovery
+        on channel_dispatch_runs(status, updated_at asc, dispatch_id asc);
+
+      create table channel_dispatch_results (
+        dispatch_id text primary key,
+        channel_id text not null,
+        conversation_id text not null,
+        text_ciphertext blob not null,
+        text_key_ref text not null,
+        text_key_revision integer not null,
+        status text not null check (status in ('pending','delivered','failed')),
+        created_at text not null,
+        updated_at text not null
+      );
+      create index idx_channel_dispatch_results_status
+        on channel_dispatch_results(status, updated_at asc, dispatch_id asc);
+    `
+  },
+  {
+    // Unknown inbound conversations are recorded as key-only candidates; message bodies never land here.
+    id: '0029_channel_inbound_candidates',
+    up: `
+      create table channel_inbound_candidates (
+        id text primary key,
+        channel_id text not null,
+        conversation_kind text not null check (conversation_kind in ('direct','group','channel')),
+        user_key_ciphertext blob not null,
+        user_key_ref text not null,
+        user_key_revision integer not null,
+        user_key_hash text not null,
+        conversation_key_ciphertext blob not null,
+        conversation_key_ref text not null,
+        conversation_key_revision integer not null,
+        conversation_key_hash text not null,
+        display_label text,
+        first_seen_at text not null,
+        last_seen_at text not null,
+        hit_count integer not null default 1,
+        status text not null default 'pending' check (status in ('pending','allowed','ignored')),
+        unique(channel_id, conversation_kind, user_key_hash, conversation_key_hash)
+      );
+      create index idx_channel_inbound_candidates_pending
+        on channel_inbound_candidates(channel_id, status, last_seen_at desc, id asc);
+    `
+  },
+  {
+    // Delivery retry metadata. Retry text is encrypted and only used for non-inbound sources.
+    id: '0031_channel_delivery_retry',
+    up: `
+      alter table channel_delivery_attempts add column source_id text;
+      alter table channel_delivery_attempts add column retry_payload_ciphertext blob;
+      alter table channel_delivery_attempts add column retry_payload_key_ref text;
+      alter table channel_delivery_attempts add column retry_payload_key_revision integer;
+      alter table channel_delivery_attempts add column next_attempt_at text;
+      create index idx_channel_delivery_attempts_due
+        on channel_delivery_attempts(status, next_attempt_at asc, id asc);
+    `
+  },
+  {
+    // Canonical read projection over the legacy carrier columns. The destructive rebuild waits
+    // until the legacy credential reconciler no longer needs config_json/migration_state.
+    id: '0032_channel_adapter_key_projection',
+    up: `
+      alter table agent_channels add column adapter_key text
+        generated always as (case when type = 'feishu' then 'lark' else type end) virtual;
+      alter table agent_channels add column lifecycle_state text
+        generated always as (
+          case migration_state
+            when 'runtime-ready' then 'enabled'
+            when 'configuration-ready' then 'ready'
+            else migration_state
+          end
+        ) virtual;
+      create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
+      create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state);
+    `
+  },
+  {
+    // Move legacy carrier rows out of the managed table so the reconciler no longer depends on it.
+    id: '0033_channel_legacy_quarantine',
+    up: `
+      create table channel_legacy_channels (
+        id text primary key,
+        type text not null,
+        name text not null,
+        agent_id text,
+        workspace_json text,
+        public_config_json text,
+        credential_ref text,
+        credential_revision integer,
+        requested_enabled integer not null default 0,
+        migration_state text not null default 'legacy',
+        migration_error_code text,
+        legacy_session_state text,
+        created_at text not null,
+        updated_at text not null,
+        config_json text,
+        session_id text,
+        is_active integer,
+        active_chat_ids_json text,
+        permission_mode text
+      );
+
+      insert or ignore into channel_legacy_channels (
+        id, type, name, agent_id, workspace_json, public_config_json, credential_ref, credential_revision,
+        requested_enabled, migration_state, migration_error_code, legacy_session_state, created_at, updated_at,
+        config_json, session_id, is_active, active_chat_ids_json, permission_mode
+      ) select
+        id, type, name, agent_id, workspace_json, public_config_json, credential_ref, credential_revision,
+        requested_enabled, migration_state, migration_error_code, legacy_session_state, created_at, updated_at,
+        config_json, session_id, is_active, active_chat_ids_json, permission_mode
+      from agent_channels
+      where migration_state = 'legacy'
+         or type not in ('telegram','slack','qq','discord','feishu','wechat')
+         or (type = 'feishu' and public_config_json is not '{"domain":"lark"}')
+         or (type = 'wechat' and public_config_json is not '{}');
+
+      delete from agent_channels where id in (select id from channel_legacy_channels);
+    `
+  },
+  {
+    // Transitional canonical table: old table stays the write source, triggers mirror into this one.
+    id: '0034_channel_canonical_shadow',
+    up: `
+      create table agent_channels_next (
+        id text primary key,
+        adapter_key text not null,
+        name text not null,
+        agent_id text,
+        public_config_json text not null default '{}',
+        credential_ref text,
+        credential_revision integer,
+        credential_health text not null default 'missing',
+        requested_enabled integer not null default 0,
+        lifecycle_state text not null default 'credential-missing',
+        mutation_epoch integer not null default 0,
+        migration_error_code text,
+        created_at text not null,
+        updated_at text not null
+      );
+
+      insert into agent_channels_next (
+        id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+        credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code, created_at, updated_at
+      ) select
+        id, case when adapter_key = 'lark' then 'lark' else adapter_key end,
+        name, agent_id, coalesce(public_config_json, '{}'), credential_ref, credential_revision,
+        credential_health, requested_enabled,
+        case lifecycle_state
+          when 'runtime-ready' then 'enabled'
+          when 'configuration-ready' then 'ready'
+          when 'deleting' then 'deleting'
+          when 'credential-missing' then 'credential-missing'
+          else 'disabled'
+        end,
+        mutation_epoch, migration_error_code, created_at, updated_at
+      from agent_channels;
+
+      create trigger agent_channels_next_insert after insert on agent_channels begin
+        insert into agent_channels_next (
+          id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code, created_at, updated_at
+        ) values (
+          new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+          coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+          new.credential_health, new.requested_enabled,
+          case new.migration_state
+            when 'runtime-ready' then 'enabled'
+            when 'configuration-ready' then 'ready'
+            when 'deleting' then 'deleting'
+            when 'credential-missing' then 'credential-missing'
+            else 'disabled'
+          end,
+          new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+        ) on conflict(id) do update set
+          adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+          public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+          credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+          requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+          mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+          created_at = excluded.created_at, updated_at = excluded.updated_at;
+      end;
+
+      create trigger agent_channels_next_update after update on agent_channels begin
+        insert into agent_channels_next (
+          id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code, created_at, updated_at
+        ) values (
+          new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+          coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+          new.credential_health, new.requested_enabled,
+          case new.migration_state
+            when 'runtime-ready' then 'enabled'
+            when 'configuration-ready' then 'ready'
+            when 'deleting' then 'deleting'
+            when 'credential-missing' then 'credential-missing'
+            else 'disabled'
+          end,
+          new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+        ) on conflict(id) do update set
+          adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+          public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+          credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+          requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+          mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+          created_at = excluded.created_at, updated_at = excluded.updated_at;
+      end;
+
+      create trigger agent_channels_next_delete after delete on agent_channels begin
+        delete from agent_channels_next where id = old.id;
+      end;
+
+      create index idx_agent_channels_next_agent_updated
+        on agent_channels_next(agent_id, updated_at desc, id asc);
+      create index idx_agent_channels_next_lifecycle
+        on agent_channels_next(lifecycle_state, updated_at asc, id asc);
+    `
+  },
+  {
+    id: '0036_drop_legacy_channel_tables',
+    up: `
+      drop table if exists channel_legacy_discovery_archives;
+      drop table if exists channel_credential_migrations;
+      drop table if exists channel_legacy_channels;
+    `
+  },
+  {
+    id: '0038_channel_bridge_compat',
+    up: (connection) => {
+      const columns = connection.prepare('pragma table_info(agent_channels)').all() as Array<{ name: string }>
+      // Fresh databases already have the legacy carrier table; only repair a canonical-only database.
+      if (columns.some((column) => column.name === 'type')) return
+
+      connection.exec(`
+        drop table if exists agent_channels_next;
+        create table agent_channels_bridge (
+          id text primary key,
+          type text not null,
+          name text not null,
+          agent_id text,
+          workspace_json text,
+          public_config_json text,
+          credential_ref text,
+          credential_revision integer,
+          requested_enabled integer not null default 0,
+          migration_state text not null default 'credential-missing',
+          migration_error_code text,
+          legacy_session_state text,
+          created_at text not null,
+          updated_at text not null,
+          config_json text,
+          session_id text,
+          is_active integer,
+          active_chat_ids_json text,
+          permission_mode text,
+          credential_health text not null default 'missing',
+          mutation_epoch integer not null default 0,
+          adapter_key text generated always as (case when type = 'feishu' then 'lark' else type end) virtual,
+          lifecycle_state text generated always as (
+            case migration_state
+              when 'runtime-ready' then 'enabled'
+              when 'configuration-ready' then 'ready'
+              else migration_state
+            end
+          ) virtual
+        );
+
+        insert into agent_channels_bridge (
+          id, type, name, agent_id, public_config_json, credential_ref, credential_revision,
+          requested_enabled, migration_state, migration_error_code, created_at, updated_at,
+          credential_health, mutation_epoch
+        ) select
+          id,
+          case adapter_key when 'lark' then 'feishu' else adapter_key end,
+          name, agent_id, public_config_json, credential_ref, credential_revision,
+          requested_enabled,
+          case lifecycle_state
+            when 'enabled' then 'runtime-ready'
+            when 'ready' then 'configuration-ready'
+            else lifecycle_state
+          end,
+          migration_error_code, created_at, updated_at, credential_health, mutation_epoch
+        from agent_channels;
+
+        create table agent_channels_next (
+          id text primary key,
+          adapter_key text not null,
+          name text not null,
+          agent_id text,
+          public_config_json text not null default '{}',
+          credential_ref text,
+          credential_revision integer,
+          credential_health text not null default 'missing',
+          requested_enabled integer not null default 0,
+          lifecycle_state text not null default 'credential-missing',
+          mutation_epoch integer not null default 0,
+          migration_error_code text,
+          created_at text not null,
+          updated_at text not null
+        );
+
+        insert into agent_channels_next (
+          id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+          created_at, updated_at
+        ) select
+          id, case adapter_key when 'lark' then 'lark' else adapter_key end,
+          name, agent_id, public_config_json, credential_ref, credential_revision,
+          credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+          created_at, updated_at
+        from agent_channels;
+
+        drop table agent_channels;
+        alter table agent_channels_bridge rename to agent_channels;
+
+        create trigger agent_channels_next_insert after insert on agent_channels begin
+          insert into agent_channels_next (
+            id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+            credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+            created_at, updated_at
+          ) values (
+            new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+            coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+            new.credential_health, new.requested_enabled,
+            case new.migration_state
+              when 'runtime-ready' then 'enabled'
+              when 'configuration-ready' then 'ready'
+              else new.migration_state
+            end,
+            new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+          ) on conflict(id) do update set
+            adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+            public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+            credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+            requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+            mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+            created_at = excluded.created_at, updated_at = excluded.updated_at;
+        end;
+
+        create trigger agent_channels_next_update after update on agent_channels begin
+          insert into agent_channels_next (
+            id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+            credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+            created_at, updated_at
+          ) values (
+            new.id, case when new.type = 'feishu' then 'lark' else new.type end, new.name, new.agent_id,
+            coalesce(new.public_config_json, '{}'), new.credential_ref, new.credential_revision,
+            new.credential_health, new.requested_enabled,
+            case new.migration_state
+              when 'runtime-ready' then 'enabled'
+              when 'configuration-ready' then 'ready'
+              else new.migration_state
+            end,
+            new.mutation_epoch, new.migration_error_code, new.created_at, new.updated_at
+          ) on conflict(id) do update set
+            adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
+            public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
+            credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
+            requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
+            mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
+            created_at = excluded.created_at, updated_at = excluded.updated_at;
+        end;
+
+        create trigger agent_channels_next_delete after delete on agent_channels begin
+          delete from agent_channels_next where id = old.id;
+        end;
+      `)
+    }
+  },
+  {
+    id: '0039_channel_canonical_final',
+    up: `
+      drop trigger if exists agent_channels_next_insert;
+      drop trigger if exists agent_channels_next_update;
+      drop trigger if exists agent_channels_next_delete;
+      create table agent_channels_canonical (
+        id text primary key,
+        adapter_key text not null
+          check (adapter_key in ('telegram','slack','lark','qq','discord','wechat')),
+        name text not null,
+        agent_id text,
+        public_config_json text not null default '{}',
+        credential_ref text,
+        credential_revision integer,
+        credential_health text not null default 'missing'
+          check (credential_health in ('missing','configured','unavailable')),
+        requested_enabled integer not null default 0,
+        lifecycle_state text not null default 'credential-missing'
+          check (lifecycle_state in ('credential-missing','ready','enabled','disabled','deleting')),
+        mutation_epoch integer not null default 0,
+        migration_error_code text,
+        created_at text not null,
+        updated_at text not null
+      );
+      insert into agent_channels_canonical (
+        id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+        credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+        created_at, updated_at
+      ) select id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+        credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+        created_at, updated_at from agent_channels_next;
+      drop table agent_channels;
+      drop table agent_channels_next;
+      alter table agent_channels_canonical rename to agent_channels;
+      create index idx_agent_channels_agent_updated on agent_channels(agent_id, updated_at desc, id asc);
+      create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state, updated_at asc, id asc);
+      create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
+    `
   }
 ]
 
@@ -1011,7 +1483,8 @@ function applyMigrations(connection: DatabaseSync): void {
     if (applied?.id) continue
 
     runInTransaction(connection, () => {
-      connection.exec(migration.up)
+      if (typeof migration.up === 'string') connection.exec(migration.up)
+      else migration.up(connection)
       connection
         .prepare('insert into agent_platform_migrations (id, applied_at) values (?, ?)')
         .run(migration.id, new Date().toISOString())

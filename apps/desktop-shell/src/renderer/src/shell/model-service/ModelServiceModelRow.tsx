@@ -2,9 +2,11 @@ import {
   AudioLines,
   Boxes,
   Eye,
+  FlaskConical,
   Image as ImageIcon,
   Lightbulb,
   ListOrdered,
+  Loader2,
   Mic,
   Minus,
   ScanText,
@@ -32,33 +34,45 @@ import { modelProtocolLabel } from './modelProtocolFilter'
 import { buildModelCostTitle, formatModelCost } from './modelPricingDisplay'
 import { ModelServiceProtocolChip } from './ModelServiceProtocolChip'
 
+import { modelAvailabilityLabel, modelAvailabilityTitle } from './modelAvailabilityDisplay'
+import { isAvailabilityProbeModel, type ModelAvailabilityView } from './modelAvailabilityView'
 import { resolveModelMessagesSupport } from './modelMessagesSupport'
 import type { ModelDetectionModelStatus } from './useModelDetection'
 
 /**
- * PLAT-82：模型行只显示**能力 chip** 与本会话检测结果。
+ * 模型行：能力 chip + 可用性结论 + 本会话检测结果。
  *
- * 删除了持久化的「未验证 / 已验证」与 `data-model-probe-icon`：厂商声明是事实源，
- * 检测只能对本会话做临时标红（`data-model-protocol-failed`）。
+ * 可用性结论（`availability`）是落库的「上次检测」事实，只在没有本会话结果时显示；
+ * 本会话结果优先，因为它是刚发生的证据。厂商声明仍是协议的事实源：
+ * 检测只能对本会话做临时标红（`data-model-protocol-failed`），不改声明。
  */
 export function ModelServiceModelRow({
   labels,
   providerId,
   model,
+  availability,
   detectionStatus,
   detectionResult,
   isRemovingModel,
+  testDisabled = false,
+  onTestModel = () => undefined,
   onEditModel,
   onRemoveModel
 }: {
   labels: PlatformText['models']
   providerId: string
   model: ModelDefinition
+  /** 落库的可用性结论（渲染层已判过期）。 */
+  availability?: ModelAvailabilityView
   /** PLAT-82：本会话检测状态（只在内存）。 */
   detectionStatus?: ModelDetectionModelStatus
   /** PLAT-82：本会话检测明细（派生行内文案与标红协议）。 */
   detectionResult?: ModelDetectionResult
   isRemovingModel: boolean
+  /** 该供应商已有 run 在跑：单测按钮整体禁用，避免叠加请求。 */
+  testDisabled?: boolean
+  /** 只测这一个模型（与全量检测同一条链路）。 */
+  onTestModel?: (modelId: string) => void
   onEditModel: (model: ModelDefinition) => void
   onRemoveModel: (modelId: string) => Promise<boolean>
 }): React.ReactElement {
@@ -126,6 +140,15 @@ export function ModelServiceModelRow({
         ? labels.detectionProtocolFailedTitle(failedProtocols.map((protocol) => modelProtocolLabel(labels, protocol)).join(' / '))
         : undefined}>
       <span className="model-service-model-name">{model.name}</span>
+      {detectionStatus === undefined && availability !== undefined ? (
+        <span
+          className="model-service-model-availability"
+          data-model-availability={availability.stale ? 'stale' : availability.status}
+          title={modelAvailabilityTitle(labels, availability)}>
+          {modelAvailabilityLabel(labels, availability)}
+        </span>
+      ) : null}
+
       {statusText !== undefined ? (
         <span
           className="model-service-model-detection"
@@ -202,6 +225,18 @@ export function ModelServiceModelRow({
         ))}
       </span>
       <span className="model-service-model-actions">
+        {isAvailabilityProbeModel(model) ? (
+          <button
+            type="button"
+            className="model-service-row-icon"
+            data-model-row-test
+            title={labels.testModel}
+            aria-label={labels.testModel}
+            disabled={testDisabled}
+            onClick={() => onTestModel(model.id)}>
+            {detectionStatus === 'testing' ? <Loader2 size={13} className="spin" /> : <FlaskConical size={13} />}
+          </button>
+        ) : null}
         <button
           type="button"
           className="model-service-row-icon"

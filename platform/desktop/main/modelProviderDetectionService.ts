@@ -5,6 +5,7 @@ import {
   type ModelDetectionResult
 } from '../../ai/providers/modelDetection'
 import type { ModelChatProtocol, ModelProvider } from '../../ai/providers/modelProviderTypes'
+import type { ModelAvailabilityUpdate } from '../../ai/providers/modelAvailability'
 
 /**
  * PLAT-82：「检测模型」的主进程运行器。
@@ -20,6 +21,12 @@ import type { ModelChatProtocol, ModelProvider } from '../../ai/providers/modelP
 export type ModelDetectionRequest = {
   modes: ModelDetectionMode[]
   runId: string
+  /**
+   * 只检测这些模型（按供应商顺序过滤）；缺省 = 全部模型。
+   *
+   * 自动检测用它把范围收窄到「新增 / 变更 / 结论过期」的模型，避免每次保存都全量发请求。
+   */
+  modelIds?: string[]
 }
 
 export type ModelDetectionAcceptance = {
@@ -35,6 +42,18 @@ export type ModelProviderDetectionService = {
 }
 
 const DETECTION_MODES: readonly ModelDetectionMode[] = ['connectivity', 'protocol']
+
+/** `undefined` = 没传（全部模型）；空数组 = 明确一个都不测（`total: 0`）。 */
+function normalizeModelIds(raw: unknown): Set<string> | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (!Array.isArray(raw)) return undefined
+  return new Set(
+    raw
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  )
+}
 
 function normalizeModes(raw: unknown): ModelDetectionMode[] | null {
   if (!Array.isArray(raw)) return null
@@ -58,6 +77,16 @@ export function createModelProviderDetectionService(input: {
     providerId: string,
     updates: ReadonlyArray<{ modelId: string; protocols: ModelChatProtocol[] }>
   ) => Promise<void>
+  /**
+   * 可用性结论写回：只写 `ok` / `failed`，跳过与取消不写。
+   *
+   * 写库失败不影响 done 上报（否则界面会永远停在"检测中"）。
+   */
+  recordModelAvailability?: (
+    providerId: string,
+    updates: ReadonlyArray<{ modelId: string; status: 'ok' | 'failed'; reasonCode?: string }>,
+    checkedAt: string
+  ) => Promise<void>
 }): ModelProviderDetectionService {
   const runs = new Map<string, AbortController>()
 
@@ -70,8 +99,11 @@ export function createModelProviderDetectionService(input: {
 
     const provider = await input.resolveProvider(providerId)
     if (!provider) throw new Error(`Provider "${providerId}" was not found.`)
-    // 一次 run = 该供应商的全部模型（不再有单模型过滤：结果只存内存，UI 直接读）。
-    const models = provider.models
+    // 缺省 = 全部模型；带 `modelIds` 时按供应商顺序收窄（单模型测试只传一个 id）。
+    const selected = normalizeModelIds(request?.modelIds)
+    const models = selected === undefined
+      ? provider.models
+      : provider.models.filter((model) => selected.has(model.id))
 
     const controller = new AbortController()
     runs.set(runId, controller)
@@ -86,6 +118,27 @@ export function createModelProviderDetectionService(input: {
       onResult: (result) => input.onProgress(result)
     }).then(
       async (outcome) => {
+        // 只认**联通性**结论：协议（messages/responses）失败不代表这个模型不能聊天，
+        // 不能把它写成「不可用」；跳过/取消也不写。
+        const availability = outcome.results.flatMap((result): ModelAvailabilityUpdate[] => {
+          const connectivity = result.connectivity
+          if (connectivity?.status === 'ok') return [{ modelId: result.modelId, status: 'ok' as const }]
+          if (connectivity?.status === 'failed') {
+            return [{
+              modelId: result.modelId,
+              status: 'failed' as const,
+              ...(connectivity.reasonCode ? { reasonCode: connectivity.reasonCode } : {})
+            }]
+          }
+          return []
+        })
+        if (input.recordModelAvailability && availability.length > 0) {
+          try {
+            await input.recordModelAvailability(providerId, availability, new Date().toISOString())
+          } catch {
+            // 结论存不下也不能让 done 丢掉。
+          }
+        }
         const updates = collectProbedProtocols(outcome.results)
         if (input.recordProbedProtocols && updates.length > 0) {
           try {

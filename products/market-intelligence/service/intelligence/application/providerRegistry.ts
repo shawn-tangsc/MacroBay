@@ -153,7 +153,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'SEC',
     category: 'macro',
     credential: 'none',
-    sources: [src({ sourceId: 'sec-rss', displayName: 'SEC press releases', visibility: 'advanced', adapterRef: 'sec-rss' })]
+    sources: [src({ sourceId: 'sec-rss', displayName: 'SEC press releases', visibility: 'advanced', panels: ['dashboard'], adapterRef: 'sec-rss' })]
   }),
   provider({
     providerId: 'cftc',
@@ -168,7 +168,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'binance-announcements', displayName: 'Binance announcements', adapterRef: 'binance-announcements' }),
+      src({ sourceId: 'binance-announcements', displayName: 'Binance announcements', panels: ['dashboard'], adapterRef: 'binance-announcements' }),
       src({ sourceId: 'binance-api-updates', displayName: 'Binance API updates', adapterRef: 'binance-api-updates' }),
       src({ sourceId: 'binance-spot-market', displayName: 'Binance spot market', adapterRef: 'binance-spot-market' }),
       src({ sourceId: 'binance-futures-positioning', displayName: 'Binance futures positioning', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' }),
@@ -181,7 +181,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'okx-latest-announcements', displayName: 'OKX latest announcements', adapterRef: 'okx-latest-announcements' }),
+      src({ sourceId: 'okx-latest-announcements', displayName: 'OKX latest announcements', panels: ['dashboard'], adapterRef: 'okx-latest-announcements' }),
       src({ sourceId: 'okx-api-announcements', displayName: 'OKX API announcements', adapterRef: 'okx-api-announcements' })
     ]
   }),
@@ -214,7 +214,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'CoinDesk',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', adapterRef: 'coindesk-rss' })]
+    sources: [src({ sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', panels: ['dashboard'], adapterRef: 'coindesk-rss' })]
   }),
   provider({
     providerId: 'ethereum-foundation',

@@ -92,7 +92,10 @@ const api = {
     listPolicies: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListPolicies, input),
     deletePolicy: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsDeletePolicy, input),
     listConversations: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListConversations, input),
-    setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input)
+    setTarget: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsSetTarget, input),
+    listCandidates: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsListCandidates, input),
+    allowCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsAllowCandidate, input),
+    ignoreCandidate: (input: unknown) => ipcRenderer.invoke(IpcChannels.channelsIgnoreCandidate, input)
   },
   modelProviders: {
     list: () => ipcRenderer.invoke(IpcChannels.modelProvidersList),
@@ -148,10 +151,14 @@ const api = {
       }),
     /**
      * PLAT-82：开始一次「检测模型」（联通性 / 协议支持，可多选）。
-     * 结果不落库：进度经 `onModelDetectionProgress` 逐模型推送，结束经 `onModelDetectionDone`。
+     * 进度经 `onModelDetectionProgress` 逐模型推送，结束经 `onModelDetectionDone`；
+     * 可用性结论（ok/failed + 时间 + 配置指纹）由主进程落库。
+     * `modelIds` 缺省 = 全部模型（自动检测只传新增/变更/过期的那几个）。
      */
-    detectModels: (providerId: string, options: { modes: ModelDetectionMode[]; runId: string }) =>
-      ipcRenderer.invoke(IpcChannels.modelProvidersDetectModels, providerId, options),
+    detectModels: (
+      providerId: string,
+      options: { modes: ModelDetectionMode[]; runId: string; modelIds?: string[] }
+    ) => ipcRenderer.invoke(IpcChannels.modelProvidersDetectModels, providerId, options),
     /** 取消一次检测；未知 runId 幂等成功。 */
     cancelModelDetection: (runId: string) => ipcRenderer.invoke(IpcChannels.modelProvidersCancelModelDetection, runId),
     /** 订阅单模型结果（完整 `ModelDetectionResult`，一条模型一条事件）。返回取消订阅函数。 */

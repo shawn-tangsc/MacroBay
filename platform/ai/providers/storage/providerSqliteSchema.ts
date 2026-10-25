@@ -182,6 +182,20 @@ const migrations: ReadonlyArray<ProviderSqliteMigration> = Object.freeze([
       if (columns.some((column) => column.name === 'removed_endpoint_protocols_json')) return
       connection.exec('alter table model_providers add column removed_endpoint_protocols_json text;')
     }
+  },
+  {
+    /**
+     * 模型可用性结论列：最近一次联通性检测的 `ok` / `failed` + 时间 + 配置指纹。
+     *
+     * 新库同样走这条 ALTER（0001 是已发布的迁移，不再改动）。旧的 `probe_status`
+     * 三列仍是历史协议探测列，不复用、不回填。
+     */
+    id: '0009_model_availability_column',
+    up: (connection) => {
+      const columns = connection.prepare('pragma table_info(model_models)').all() as unknown as Array<{ name?: string }>
+      if (columns.some((column) => column.name === 'availability_json')) return
+      connection.exec('alter table model_models add column availability_json text;')
+    }
   }
 ])
 

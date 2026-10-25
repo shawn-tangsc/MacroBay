@@ -2,7 +2,7 @@ import type { ClassifiedSourceEvent, SourceClassifierInput } from './sourceClass
 
 const CRYPTO_ENTITY_RE =
   /\b(bitcoin|btc|ether|ethereum|eth|stablecoin|token|digital asset|crypto|defi|staking|etf|blockchain)\b/i
-const VENUE_RE = /\b(coinbase|binance|kraken|okx|exchange|broker-dealer)\b/i
+const VENUE_RE = /\b(coinbase|binance|kraken|okx|crypto exchange|exchange operator|broker-dealer)\b/i
 const NEGATIVE_RE =
   /\b(enforcement|lawsuit|charges|penalty|investigation|restriction|halt|cease|fraud|violation)\b/i
 const POSITIVE_RE =

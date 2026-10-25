@@ -4,6 +4,7 @@ import { LarkApiClient } from './LarkApiClient'
 import { decodeLarkConversation, encodeLarkConversation, splitLarkText } from './LarkContracts'
 import { LarkDeliveryTransport } from './LarkDeliveryTransport'
 import { LarkRuntimeRepository } from './LarkRuntimeRepository'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { LarkLongConnectionHost } from './LarkLongConnectionHost'
 import { LarkRuntimeManager } from './LarkRuntimeManager'
 import { normalizeLarkEvent } from './LarkUpdateNormalizer'
@@ -53,7 +54,7 @@ describe('Lark Release C contracts', () => {
     const database = createAgentPlatformDatabase(':memory:')
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-20','2026-07-20');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('lark-a','feishu','Lark','agent-a','{"domain":"lark"}',1,'runtime-ready','configured','2026-07-20','2026-07-20');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('lark-a','lark','Lark','agent-a','{"domain":"lark"}',1,'enabled','configured','2026-07-20','2026-07-20');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('lark-a',1,'active','2026-07-20');
     `)
     const runtime = new LarkRuntimeRepository(database)
@@ -70,7 +71,7 @@ describe('Lark Release C contracts', () => {
     const database = createAgentPlatformDatabase(':memory:')
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-20','2026-07-20');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('not-lark','feishu','Legacy','agent-a','${publicConfig}',1,'runtime-ready','configured','2026-07-20','2026-07-20');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('not-lark','lark','Legacy','agent-a','${publicConfig}',1,'enabled','configured','2026-07-20','2026-07-20');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('not-lark',1,'active','2026-07-20');
     `)
     const runtime = new LarkRuntimeRepository(database)
@@ -89,7 +90,7 @@ describe('Lark Release C contracts', () => {
     management.disableRuntimeGeneration('lark-a', 1, '2026-07-20T00:00:00.000Z')
 
     expect(runtime.auditIfCurrent('lark-a', 1, 'lark-runtime-evidence-missing')).toBe(false)
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get('lark-a')).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('lark-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('lark-a')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(database.connection.prepare('select count(*) as count from channel_telegram_runtime_audits where channel_id=?').get('lark-a')).toEqual({ count: 0 })
     expect(database.connection.prepare('select count(*) as count from channel_lark_runtime_audits where channel_id=?').get('lark-a')).toEqual({ count: 0 })
@@ -103,11 +104,11 @@ describe('Lark Release C contracts', () => {
         ('agent-b','custom','Agent B','[]','[]','b','2026-07-20','2026-07-20'),
         ('agent-c','custom','Agent C','[]','[]','c','2026-07-20','2026-07-20'),
         ('agent-d','custom','Agent D','[]','[]','d','2026-07-20','2026-07-20');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values
-        ('legacy-feishu','feishu','Legacy','agent-a','${publicConfig}',1,'runtime-ready','configured','2026-07-20','2026-07-20'),
-        ('telegram-a','telegram','Telegram','agent-b','{}',1,'runtime-ready','configured','2026-07-20','2026-07-20'),
-        ('slack-a','slack','Slack','agent-c','{}',1,'runtime-ready','configured','2026-07-20','2026-07-20'),
-        ('lark-a','feishu','Lark','agent-d','{"domain":"lark"}',1,'runtime-ready','configured','2026-07-20','2026-07-20');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values
+        ('legacy-feishu','lark','Legacy','agent-a','${publicConfig}',1,'enabled','configured','2026-07-20','2026-07-20'),
+        ('telegram-a','telegram','Telegram','agent-b','{}',1,'enabled','configured','2026-07-20','2026-07-20'),
+        ('slack-a','slack','Slack','agent-c','{}',1,'enabled','configured','2026-07-20','2026-07-20'),
+        ('lark-a','lark','Lark','agent-d','{"domain":"lark"}',1,'enabled','configured','2026-07-20','2026-07-20');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values
         ('legacy-feishu',1,'active','2026-07-20'),('telegram-a',1,'active','2026-07-20'),('slack-a',1,'active','2026-07-20'),('lark-a',1,'active','2026-07-20');
       insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values
@@ -116,6 +117,7 @@ describe('Lark Release C contracts', () => {
         ('slack-a','slack-owner','enable',1,'2026-07-20','2026-07-20'),
         ('lark-a','lark-owner','enable',1,'2026-07-20','2026-07-20');
     `)
+    seedChannelAdapterSupport(database, ['telegram'])
     const management = new ChannelManagementRepository(database)
     const inbound = new ChannelInboundRepository(database)
 
@@ -123,14 +125,14 @@ describe('Lark Release C contracts', () => {
     expect(inbound.getCurrentAgentId('legacy-feishu', 1)).toBeNull()
     // Bootstrap discovery fences isolated storage rows before it returns any runtime owner.
     expect(management.activeRuntimeOwners('2026-07-20T00:00:00.000Z').map((owner) => owner.channelId).sort()).toEqual(['telegram-a'])
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get('legacy-feishu')).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('legacy-feishu')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('legacy-feishu')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id=?').get('legacy-feishu')).toEqual({ count: 0 })
 
     // A later quit sees no active isolated row; managed owners retain their usual shutdown fence.
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:01:00.000Z')).not.toContain('legacy-feishu')
     for (const channelId of ['telegram-a', 'slack-a', 'lark-a']) {
-      expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get(channelId)).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+      expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(channelId)).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     }
   })
 
@@ -138,14 +140,14 @@ describe('Lark Release C contracts', () => {
     const database = createAgentPlatformDatabase(':memory:')
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-20','2026-07-20');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('legacy-feishu','feishu','Legacy','agent-a','${publicConfig}',1,'runtime-ready','configured','2026-07-20','2026-07-20');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('legacy-feishu','lark','Legacy','agent-a','${publicConfig}',1,'enabled','configured','2026-07-20','2026-07-20');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('legacy-feishu',1,'active','2026-07-20');
       insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('legacy-feishu','legacy-owner','enable',1,'2026-07-20','2026-07-20');
     `)
     const management = new ChannelManagementRepository(database)
 
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:00:00.000Z')).toEqual(['legacy-feishu'])
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get('legacy-feishu')).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('legacy-feishu')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('legacy-feishu')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id=?').get('legacy-feishu')).toEqual({ count: 0 })
   })
@@ -224,7 +226,7 @@ class FakeSocket {
 function seedActiveLark(database: ReturnType<typeof createAgentPlatformDatabase>): void {
   database.connection.exec(`
     insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-20','2026-07-20');
-    insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('lark-a','feishu','Lark','agent-a','{"domain":"lark"}',1,'runtime-ready','configured','2026-07-20','2026-07-20');
+    insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('lark-a','lark','Lark','agent-a','{"domain":"lark"}',1,'enabled','configured','2026-07-20','2026-07-20');
     insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('lark-a',1,'active','2026-07-20');
   `)
 }

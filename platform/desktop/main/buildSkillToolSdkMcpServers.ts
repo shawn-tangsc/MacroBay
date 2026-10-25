@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 import type { AgentRuntimeComposition } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
 import type { AgentRuntimeSessionChunk } from '../../ai/agent-platform/runtime/runtimeTypes'
 import type { AgentStoreState } from '../../ai/agent-platform/store/agentStore'
@@ -35,6 +37,18 @@ type BuildSkillToolSdkMcpServersInput = {
 
 const skillToolMcpServerKey = 'agent-skills'
 
+/**
+ * Skill tools are file readers. The SDK rejects plain JSON Schema, so the shape is declared in Zod,
+ * and every field stays optional because a call without a path returns the capability summary.
+ */
+const skillToolInputSchema = z
+  .object({
+    path: z.string().optional(),
+    filePath: z.string().optional(),
+    sourcePath: z.string().optional()
+  })
+  .strict()
+
 export async function buildSkillToolSdkMcpServers(input: BuildSkillToolSdkMcpServersInput): Promise<Record<string, unknown>> {
   if (input.composition.skills.skills.length === 0 || input.composition.skills.toolIds.length === 0) return {}
 
@@ -46,8 +60,8 @@ export async function buildSkillToolSdkMcpServers(input: BuildSkillToolSdkMcpSer
       const toolId = buildSkillRuntimeToolId(skill, toolName)
       return sdk.tool!(
         toolId,
-        `${skill.name} skill tool: ${toolName}`,
-        { type: 'object' },
+        `${skill.name} skill tool: ${toolName}. Pass {"path": "<file>"} to read a file the skill declares; omit it for a summary.`,
+        skillToolInputSchema,
         async (args) => {
           input.emitChunk?.({
             type: 'tool-input-start',

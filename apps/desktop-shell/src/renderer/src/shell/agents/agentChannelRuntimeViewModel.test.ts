@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 
 import { agentText } from './agentText'
 import { buildSessionChannelRuntimeBadgeBySessionId } from './agentChannelRuntimeViewModel'

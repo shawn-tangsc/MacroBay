@@ -11,6 +11,7 @@ import {
 import type { AgentRuntimeSessionChunk } from '../../ai/agent-platform/runtime/runtimeTypes'
 import type { AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 import type { ProductAgentToolRegistry } from '../../ai/agent-platform/productTools/ProductAgentToolRegistry'
+import { jsonSchemaToZod } from '../../ai/agent-platform/tools/jsonSchemaToZod'
 
 type ProductAgentToolSdkModule = {
   tool?: (
@@ -57,7 +58,9 @@ export async function buildProductAgentToolSdkMcpServers(
 
     const sdkTools = descriptors.map((descriptor) => {
       const registration = input.registry.resolve(pkg.productId, descriptor.toolName)
-      const inputSchema = registration?.inputSchema ?? { type: 'object' }
+      // The SDK's in-process MCP server only accepts Zod schemas, so render the manifest's JSON
+      // Schema through the shared adapter instead of handing it the raw object.
+      const inputSchema = jsonSchemaToZod(registration?.inputSchema ?? { type: 'object', additionalProperties: true })
 
       return sdk.tool!(
         descriptor.toolName,

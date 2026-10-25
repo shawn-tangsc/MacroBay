@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import type { AgentProductToolPackageBinding } from '@platform/ai/agent-platform/productTools/productAgentToolSchemas'
+
 import { createCryptoMarketAnalystAgentSeed } from './cryptoMarketAnalyst'
 
 describe('crypto market analyst product seed', () => {
@@ -14,7 +16,22 @@ describe('crypto market analyst product seed', () => {
     })
     expect(seed.sessions).toEqual([])
     expect(seed.messagesBySessionId).toEqual({})
-    expect(seed.agentSkills).toEqual([{ agentId: 'crypto-market-analyst', skillId: 'market-analysis-skill-v1', isEnabled: true }])
+    expect(seed.agentSkills).toEqual([
+      { agentId: 'crypto-market-analyst', skillId: 'market-analysis-skill-v1', isEnabled: true },
+      { agentId: 'crypto-market-analyst', skillId: 'intelligence-ops-skill-v1', isEnabled: true }
+    ])
+  })
+
+  it('seeds the default read-only product tool package binding', () => {
+    const seed = createCryptoMarketAnalystAgentSeed()
+    const binding = seed.agentProductToolPackages?.[0] as AgentProductToolPackageBinding | undefined
+
+    expect(binding).toEqual({
+      agentId: 'crypto-market-analyst',
+      productId: 'market-intelligence',
+      permissionMode: 'allow-read-only',
+      updatedAt: '2026-01-01T00:00:00.000Z'
+    })
   })
 
   it('localizes the built-in copy for English workspaces', () => {

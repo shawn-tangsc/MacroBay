@@ -27,6 +27,24 @@ export type BinanceArticleListResponse = {
   }
 }
 
+export const BINANCE_DEFAULT_MAX_AGE_DAYS = 7
+
+/**
+ * 列表接口一次返回全部历史（实测 4 年、140 条）。没有这个窗口，首次接入会把几年旧公告
+ * 全量灌进时间线。`maxAgeDays <= 0` 表示不截断，仅供夹具测试显式关闭。
+ */
+export function selectRecentBinanceArticles(
+  articles: readonly BinanceArticlePayload[],
+  input: { nowMs: number; maxAgeDays?: number }
+): BinanceArticlePayload[] {
+  const maxAgeDays = input.maxAgeDays ?? BINANCE_DEFAULT_MAX_AGE_DAYS
+  if (!Number.isFinite(maxAgeDays) || maxAgeDays <= 0) return [...articles]
+  const cutoff = input.nowMs - maxAgeDays * 86_400_000
+  return articles.filter(
+    (article) => typeof article.releaseDate === 'number' && article.releaseDate >= cutoff
+  )
+}
+
 export function buildBinanceListQueryUrl(config: IntelligenceSourceConfig): string {
   const baseUrl = String(
     config.adapterConfig.listQueryUrl ??

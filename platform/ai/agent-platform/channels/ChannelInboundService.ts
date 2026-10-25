@@ -54,9 +54,10 @@ export class ChannelInboundService {
         this.enqueueInitialClaim(this.deps.repository.findInitialClaim(request.channelId, eventHash, this.now()))
         return { disposition: 'duplicate' }
       }
-      const [event, encryptedConversation, payload] = await Promise.all([
+      const [event, encryptedConversation, encryptedUser, payload] = await Promise.all([
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerEventKey)),
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerConversationKey)),
+        this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerUserKey)),
         this.deps.encryption.cipher.encrypt(request.channelId, encodeChannelInboundPayload(request))
       ])
       const [conversationHash, userHash] = await Promise.all([
@@ -65,6 +66,24 @@ export class ChannelInboundService {
       ])
       const now = this.now()
       const decision = this.policyDecision(request, userHash, conversationHash)
+      if (decision === 'channel-policy-denied') {
+        try {
+          this.deps.repository.upsertCandidate({
+            channelId: request.channelId,
+            kind: request.conversationKind,
+            userKeyCiphertext: encryptedUser.ciphertext,
+            userKeyRef: encryptedUser.keyRef,
+            userKeyRevision: encryptedUser.keyRevision,
+            userKeyHash: userHash,
+            conversationKeyCiphertext: encryptedConversation.ciphertext,
+            conversationKeyRef: encryptedConversation.keyRef,
+            conversationKeyRevision: encryptedConversation.keyRevision,
+            conversationKeyHash: conversationHash,
+            ...(request.providerUserLabel ? { displayLabel: request.providerUserLabel } : {}),
+            now
+          })
+        } catch { /* Discovery is best-effort; the denied message must still be acknowledged. */ }
+      }
       const isNewCommand = request.text?.trim() === '/new'
       const admissionId = decision ? null : this.deps.repository.reserveAdmission(request.channelId, request.generation, now)
       if (!decision && !admissionId) return retry()
@@ -79,6 +98,17 @@ export class ChannelInboundService {
             generation: request.generation,
             providerConversationKey: request.providerConversationKey
           })
+        }
+        if (!decision && !isNewCommand && conversation && !conversation.record.sessionId) {
+          conversation = {
+            record: await this.ensureConversationSession({
+              channelId: request.channelId,
+              generation: request.generation,
+              keyHash: conversationHash,
+              agentId
+            }),
+            created: conversation.created
+          }
         }
         const result = this.deps.repository.handleClaim({
           channelId: request.channelId,
@@ -119,6 +149,8 @@ export class ChannelInboundService {
         if (admissionId) this.deps.repository.releaseAdmission(admissionId)
       }
     } catch {
+      // Preserve the provider retry contract, but leave a bounded audit trail for persistent failures.
+      try { this.deps.repository.recordInboundFailure(request.channelId, request.generation, this.now()) } catch {}
       return retry()
     }
   }
@@ -190,6 +222,19 @@ export class ChannelInboundService {
     }
   }
 
+  listCandidates(channelId: string, limit = 100) {
+    return this.deps.repository.listCandidates(channelId, limit)
+  }
+
+  allowCandidate(input: { channelId: string; candidateId: string; enableTarget: boolean }): string | null {
+    if (!this.deps.repository.managedChannelExists(input.channelId)) return null
+    return this.deps.repository.allowCandidate(input)
+  }
+
+  ignoreCandidate(channelId: string, candidateId: string): boolean {
+    return this.deps.repository.ignoreCandidate(channelId, candidateId)
+  }
+
   setDeliveryTarget(input: { channelId: string; conversationId: string; enabled: boolean }): boolean {
     return this.deps.repository.setDeliveryTarget(input.channelId, input.conversationId, input.enabled, this.now())
   }
@@ -200,9 +245,44 @@ export class ChannelInboundService {
     return this.deps.contentGuard?.(request) ?? null
   }
 
+  private async ensureConversationSession(input: {
+    channelId: string
+    generation: number
+    keyHash: string
+    agentId: string
+  }): Promise<ChannelConversationRecord> {
+    const operationId = this.deps.repository.reserveConversationOperation(
+      input.channelId, input.keyHash, input.generation, input.agentId, this.now()
+    )
+    if (!operationId) throw new Error('Channel conversation operation is already active.')
+    let sessionId: string | null = null
+    let bound = false
+    try {
+      sessionId = await this.deps.sessions.createForConversation({ channelId: input.channelId, agentId: input.agentId })
+      if (!sessionId.trim() || !this.deps.repository.replaceConversationSession(
+        input.channelId, input.keyHash, sessionId, input.generation, input.agentId, this.now()
+      )) {
+        throw new Error('Channel conversation session rebind failed.')
+      }
+      bound = true
+      const record = this.deps.repository.getConversation(input.channelId, input.keyHash)
+      if (!record) throw new Error('Channel conversation disappeared during session rebind.')
+      return record
+    } finally {
+      if (sessionId && !bound) await this.deps.sessions.discardUnbound(sessionId)
+      this.deps.repository.releaseConversationOperation(input.channelId, input.keyHash, operationId)
+    }
+  }
+
   private async resolveConversation(request: ChannelInboundRequest, agentId: string, hash: string, encrypted: { ciphertext: Uint8Array; keyRef: string; keyRevision: number }): Promise<{ record: ChannelConversationRecord; created: boolean }> {
     const existing = this.deps.repository.getConversation(request.channelId, hash)
-    if (existing) return { record: existing, created: false }
+    if (existing) {
+      if (existing.sessionId && this.deps.sessions.exists) {
+        const alive = await this.deps.sessions.exists(existing.sessionId)
+        if (!alive) return { record: { ...existing, sessionId: null }, created: false }
+      }
+      return { record: existing, created: false }
+    }
     const resolutionKey = `${request.channelId}:${hash}`
     const inFlight = this.conversationResolutions.get(resolutionKey)
     if (inFlight) return inFlight
@@ -252,8 +332,10 @@ export class ChannelInboundService {
     conversation: { record: ChannelConversationRecord; created: boolean } | null
   ): Promise<void> {
     if (!conversation?.created) return
-    if (this.deps.repository.deleteUnboundConversation(channelId, keyHash, conversation.record.sessionId)) {
-      await this.deps.sessions.discardUnbound(conversation.record.sessionId)
+    const sessionId = conversation.record.sessionId
+    if (!sessionId) return
+    if (this.deps.repository.deleteUnboundConversation(channelId, keyHash, sessionId)) {
+      await this.deps.sessions.discardUnbound(sessionId)
     }
   }
 

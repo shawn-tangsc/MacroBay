@@ -51,7 +51,6 @@ describe('resolveAvailableSettingsPanelKey', () => {
   })
 
   it('falls back to the default panel instead of rendering a blank pane', () => {
-    expect(resolveAvailableSettingsPanelKey('channels', entries)).toBe('models')
     expect(resolveAvailableSettingsPanelKey('unknown-panel', entries)).toBe('models')
   })
 })

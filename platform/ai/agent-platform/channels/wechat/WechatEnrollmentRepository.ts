@@ -4,7 +4,7 @@ import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase
 import { wechatChannelSql } from '../ChannelManagementPredicates'
 
 const WECHAT_CHANNEL_C_SQL = wechatChannelSql('c')
-const WECHAT_MUTABLE_C_SQL = `${WECHAT_CHANNEL_C_SQL} and c.migration_state not in ('legacy','quarantined','deleting') and not exists (select 1 from channel_management_tombstones t where t.channel_id=c.id)`
+const WECHAT_MUTABLE_C_SQL = `${WECHAT_CHANNEL_C_SQL} and c.lifecycle_state not in ('disabled','deleting') and not exists (select 1 from channel_management_tombstones t where t.channel_id=c.id)`
 
 export type WechatQrEnrollmentSafeView = { operationId: string; state: 'pending' | 'expired' | 'cancelled'; expiresAt: string }
 

@@ -11,13 +11,17 @@ import {
 } from './ChannelManagementContracts'
 import { ChannelManagementCredentialService } from './ChannelManagementCredentialService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
+import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
+import { channelAdapterDescriptor } from './channelAdapterDescriptors'
+import { channelAdapterKeyForType } from './ChannelManagementPredicates'
 
 type ManagementDependencies = {
   repository: ChannelManagementRepository
   vault: ChannelCredentialVault
   cipher: ChannelPayloadCipher
   registry: ChannelAdapterAcceptanceRegistry
+  acceptance?: { isSupported: (adapterType: AgentChannelType) => boolean }
   handoff: ChannelSecureHandoff
   runtime?: {
     start: (channelId: string, generation: number, ownerToken: string) => Promise<boolean>
@@ -47,11 +51,16 @@ export class ChannelManagementService {
   }
 
   catalog(): ChannelManagementCatalogEntry[] {
-    return this.deps.registry.list().map((entry) => ({
-      type: entry.adapterType,
-      status: entry.status === 'supported' ? 'supported' : entry.status === 'planned' ? 'planned' : 'blocked',
-      reason: entry.status === 'supported' ? 'evidence-complete' : entry.status === 'planned' ? 'release-a-pending' : 'adapter-blocked'
-    }))
+    return this.deps.registry.list().map((entry) => {
+      const descriptor = channelAdapterDescriptor(channelAdapterKeyForType(entry.adapterType))
+      return {
+        type: entry.adapterType,
+        status: entry.status === 'supported' ? 'supported' : entry.status === 'planned' ? 'planned' : 'blocked',
+        reason: entry.status === 'supported' ? 'evidence-complete' : entry.status === 'planned' ? 'release-a-pending' : 'adapter-blocked',
+        implemented: descriptor.implemented,
+        credentialFields: descriptor.credentialFields
+      }
+    })
   }
 
   list() {
@@ -147,7 +156,8 @@ export class ChannelManagementService {
     const id = this.requireMutableChannel(input.id)
     const channel = this.deps.repository.query.get(id)
     if (!channel) return { ok: false, code: 'channel-not-found' }
-    if (!this.deps.registry.canEnable(channel.type)) return this.enableRejected(id, input.actorId, channel)
+    if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
+    if (!this.deps.repository.credentialMetadata(id)) return this.enableRejected(id, input.actorId, channel, 'channel-credential-missing')
     const owner = this.deps.repository.beginLifecycleOwner(id, 'enable', randomUUID(), this.now())
     if (owner) return this.enableRuntime(id, input.actorId, channel, owner)
     // A running Channel keeps its existing runtime owner; repeated enable is intentionally idempotent.
@@ -159,36 +169,27 @@ export class ChannelManagementService {
     const id = this.requireMutableChannel(input.id)
     const channel = this.deps.repository.query.get(id)
     if (!channel) return { ok: false, code: 'channel-not-found' }
-    if (!this.deps.registry.canEnable(channel.type)) return this.enableRejected(id, input.actorId, channel)
+    if (!this.canEnableAdapter(channel.type)) return this.enableRejected(id, input.actorId, channel)
     const owner = this.deps.repository.beginLifecycleOwner(id, 'restart', randomUUID(), this.now())
     if (owner) this.deps.runtime?.stop(id)
     return owner ? this.startRestart(id, input.actorId, channel, owner) : this.enableRejected(id, input.actorId, channel, 'adapter-runtime-start-failed')
   }
 
-  private async enableRuntime(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
-    const credentialCode = await this.verifyCredential(id)
-    if (credentialCode) {
-      this.deps.repository.failPendingLifecycleOwner(id, owner, this.now())
-      return this.enableRejected(id, actorId, channel, credentialCode)
-    }
-    const activeOwner = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
-    if (!activeOwner?.generation) {
-      this.deps.repository.clearPendingLifecycleOwner(id, owner)
-      return this.enableRejected(id, actorId, channel, 'channel-agent-missing')
-    }
-    this.deps.runtime?.stop(id)
-    let started = false
-    try { started = Boolean(this.deps.runtime && await this.deps.runtime.start(id, activeOwner.generation, owner.token)) } catch {}
-    if (!started || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
-      this.deps.runtime?.stop(id, owner.token)
-      this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
-      return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
-    }
-    this.deps.repository.audit(id, assertIdentifier(actorId), 'request-enable', null, this.now())
-    return { ok: true, code: 'runtime-ready', channel: this.deps.repository.query.get(id) ?? undefined }
+  private enableRuntime(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
+    return this.startOwnedRuntime(id, actorId, channel, owner, false)
   }
 
-  private async startRestart(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
+  private startRestart(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
+    return this.startOwnedRuntime(id, actorId, channel, owner, true)
+  }
+
+  private async startOwnedRuntime(
+    id: string,
+    actorId: unknown,
+    channel: NonNullable<ReturnType<ChannelManagementService['get']>>,
+    owner: import('./ChannelManagementRepository').TelegramLifecycleOwner,
+    restart: boolean
+  ): Promise<ChannelManagementResult> {
     const credentialCode = await this.verifyCredential(id)
     if (credentialCode) {
       this.deps.repository.failPendingLifecycleOwner(id, owner, this.now())
@@ -197,7 +198,7 @@ export class ChannelManagementService {
     const activeOwner = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
     if (!activeOwner?.generation) {
       this.deps.repository.clearPendingLifecycleOwner(id, owner)
-      return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
+      return this.enableRejected(id, actorId, channel, restart ? 'adapter-runtime-start-failed' : 'channel-agent-missing')
     }
     this.deps.runtime?.stop(id)
     let started = false
@@ -207,9 +208,14 @@ export class ChannelManagementService {
       this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
       return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
     }
-    this.deps.repository.audit(id, assertIdentifier(actorId), 'restart', null, this.now())
-    return { ok: true, code: 'restarted', channel: this.deps.repository.query.get(id) ?? undefined }
+    this.deps.repository.audit(id, assertIdentifier(actorId), restart ? 'restart' : 'request-enable', null, this.now())
+    return {
+      ok: true,
+      code: restart ? 'restarted' : 'runtime-ready',
+      channel: this.deps.repository.query.get(id) ?? undefined
+    }
   }
+
 
   async beginCredential(input: { id: unknown; senderId: unknown }) {
     const id = this.requireMutableChannel(input.id)
@@ -307,6 +313,24 @@ export class ChannelManagementService {
     })
   }
 
+  /** Restarts channels whose intent survived a graceful quit; unsupported/broken rows are disabled. */
+  async resumeRequested(): Promise<void> {
+    for (const id of this.deps.repository.resumableChannelIds()) {
+      const channel = this.deps.repository.query.get(id)
+      const result = channel?.state === 'runtime-ready'
+        ? await this.restart({ id, actorId: 'channel-startup' })
+        : await this.requestEnable({ id, actorId: 'channel-startup' })
+      if (!result.ok) {
+        if (result.code === 'adapter-runtime-start-failed') {
+          // Transient start failures keep the intent; the next boot retries through enable.
+          this.deps.repository.preserveResumeIntent(id, this.now())
+        } else {
+          this.disable({ id, actorId: 'channel-startup' })
+        }
+      }
+    }
+  }
+
   async recover(): Promise<void> {
     await this.credentials.recover()
     for (const credential of this.deps.repository.managedCredentialRows()) {
@@ -375,13 +399,14 @@ export class ChannelManagementService {
     const prior = this.channelMutations.get(channelId) ?? Promise.resolve()
     let release!: () => void
     const current = new Promise<void>((resolve) => { release = resolve })
-    this.channelMutations.set(channelId, prior.then(() => current))
+    const queued = prior.then(() => current)
+    this.channelMutations.set(channelId, queued)
     await prior
     try {
       return await action()
     } finally {
       release()
-      if (this.channelMutations.get(channelId) === current) this.channelMutations.delete(channelId)
+      if (this.channelMutations.get(channelId) === queued) this.channelMutations.delete(channelId)
     }
   }
 
@@ -401,6 +426,10 @@ export class ChannelManagementService {
       const safe = await this.deps.vault.inspectSafe?.(metadata.ref)
       return safe?.revision === metadata.revision ? null : 'channel-credential-unavailable'
     } catch { return 'channel-credential-unavailable' }
+  }
+
+  private canEnableAdapter(adapterType: AgentChannelType): boolean {
+    return this.deps.acceptance?.isSupported(adapterType) ?? this.deps.registry.canEnable(adapterType)
   }
 
   private enableRejected(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, code: ChannelManagementResult['code'] = 'adapter-not-supported'): ChannelManagementResult {

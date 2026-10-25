@@ -47,7 +47,8 @@ export class QqGatewayHost {
   }
 
   private async handle(data: unknown, source: Socket): Promise<void> {
-    if (!this.current(source) || typeof data !== 'string' || data.length > 1_000_000) return this.close()
+    if (!this.current(source)) return
+    if (typeof data !== 'string' || data.length > 1_000_000) return this.close()
     let dispatch: VerifiedDispatch | null
     try { dispatch = this.deps.parseVerifiedDispatch(data) } catch { this.audit(source, 'qq-dispatch-invalid'); return }
     if (!dispatch || !Number.isSafeInteger(dispatch.sequence) || dispatch.sequence < 0) { this.audit(source, 'qq-dispatch-invalid'); return }

@@ -15,7 +15,7 @@ export type ProductAgentToolPackageEditorView = {
   tools: Array<{
     toolName: string
     description: string
-    readOnly: true
+    readOnly: boolean
     requiresTemporalBoundary: boolean
     schemaVersion: number
     requiresApproval: ProductAgentToolApprovalMode

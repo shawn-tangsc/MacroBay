@@ -5,6 +5,7 @@ import { ChannelInboundRepository } from '../ChannelInboundRepository'
 import { TelegramDeliveryTransport } from './TelegramDeliveryTransport'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramRuntimeManager } from './TelegramRuntimeManager'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 
 describe('TelegramRuntimeManager', () => {
   it('contains Vault/getMe failures and leaves no client or host lifetime behind', async () => {
@@ -36,10 +37,10 @@ describe('TelegramRuntimeManager', () => {
     seedActive(database)
     const manager = createManager(database, async () => null)
     manager.stopAllAndFence(() => {
-      database.connection.prepare("update agent_channels set requested_enabled=0,migration_state='disabled' where id='channel-a'").run()
+      database.connection.prepare("update agent_channels set requested_enabled=0,lifecycle_state='disabled' where id='channel-a'").run()
       database.connection.prepare("update channel_runtime_generations set generation=2,lifecycle_state='inactive' where channel_id='channel-a'").run()
     })
-    expect(database.connection.prepare("select requested_enabled,migration_state from agent_channels where id='channel-a'").get()).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare("select requested_enabled,lifecycle_state from agent_channels where id='channel-a'").get()).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(new ChannelInboundRepository(database).isCurrentActive('channel-a', 1)).toBe(false)
   })
 
@@ -57,7 +58,7 @@ describe('TelegramRuntimeManager', () => {
 function createManager(database: ReturnType<typeof createAgentPlatformDatabase>, token: () => Promise<string | null>, fetch: typeof globalThis.fetch = vi.fn() as never): TelegramRuntimeManager {
   return new TelegramRuntimeManager({
     inbound: new ChannelInboundRepository(database), inboundService: {} as never, offsets: new TelegramOffsetRepository(database),
-    vault: { get: async () => token() } as never, getPlatformFetch: () => fetch,
+    vault: { get: async () => ({ bot_token: await token() }) } as never, getPlatformFetch: () => fetch,
     delivery: new TelegramDeliveryTransport(), getCredential: () => ({ ref: 'known', revision: 1 }),
     ownsLifecycleOwner: (_channelId, token, generation) => token === 'owner-a' && generation === 1
   })
@@ -66,7 +67,8 @@ function createManager(database: ReturnType<typeof createAgentPlatformDatabase>,
 function seedActive(database: ReturnType<typeof createAgentPlatformDatabase>): void {
   database.connection.exec(`
     insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-19','2026-07-19');
-    insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('channel-a','telegram','Telegram','agent-a','{}',1,'runtime-ready','configured','2026-07-19','2026-07-19');
+    insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('channel-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-07-19','2026-07-19');
     insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('channel-a',1,'active','2026-07-19');
   `)
+  seedChannelAdapterSupport(database, ['telegram'])
 }

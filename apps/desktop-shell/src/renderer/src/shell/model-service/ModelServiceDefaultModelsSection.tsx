@@ -1,7 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
 
-import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { ModelDefaultsSettings } from '@platform/settings/schema/appSettings'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -13,6 +13,7 @@ import {
   primaryDefaultModelFields,
   type DefaultModelField
 } from './modelServiceDefaultModels'
+import { useModelAvailabilityCheck } from './useModelAvailabilityCheck'
 
 type ModelServiceDefaultModelsSectionProps = {
   labels: PlatformText['models']
@@ -20,6 +21,60 @@ type ModelServiceDefaultModelsSectionProps = {
   values: ModelDefaultsSettings
   /** 即时保存（无保存按钮）：与全站设置一致，变更即写回。 */
   onChange: (field: DefaultModelField, value: string) => void
+}
+
+/**
+ * 单个默认模型选择器：选择框后面直接带可用性图标。
+ *
+ * 只对**这个选择器选中的那一个模型**做联通性探测（没有新鲜结论时才发请求）；
+ * 不遍历供应商模型列表，也不因为别的选择器而批量探测。
+ */
+function DefaultModelFieldRow({
+  field,
+  label,
+  value,
+  providers,
+  labels,
+  onChange
+}: {
+  field: DefaultModelField
+  label: string
+  value: string
+  providers: readonly SafeModelProvider[]
+  labels: PlatformText['models']
+  onChange: (field: DefaultModelField, value: string) => void
+}): React.ReactElement {
+  const selected = splitDefaultModelValue(value)
+  const provider = selected ? providers.find((entry) => entry.id === selected.providerId) : undefined
+  const model: ModelDefinition | undefined = selected
+    ? provider?.models.find((entry) => entry.id === selected.modelId)
+    : undefined
+  // 只测这一个：有新鲜结论就不发请求，见 `useModelAvailabilityCheck`。
+  useModelAvailabilityCheck({ provider, model })
+
+  return (
+    <span className="model-service-default-item" data-default-model-row={field}>
+      <span className="model-service-default-item-label">{label}</span>
+      <span className="model-service-default-chip" data-default-model-select={field}>
+        <ModelPicker
+          pickerId={`default-model-${field}`}
+          value={value || null}
+          onChange={(next) => onChange(field, next)}
+          models={buildDefaultModelCandidates(providers, field)}
+          providers={providers}
+          labels={labels}
+          constraints={defaultModelConstraints(field)}
+        />
+      </span>
+    </span>
+  )
+}
+
+function splitDefaultModelValue(value: string): { providerId: string; modelId: string } | null {
+  const trimmed = value.trim()
+  const index = trimmed.indexOf(':')
+  if (index <= 0 || index === trimmed.length - 1) return null
+  return { providerId: trimmed.slice(0, index), modelId: trimmed.slice(index + 1) }
 }
 
 /**
@@ -49,20 +104,15 @@ export function ModelServiceDefaultModelsSection({
 
   function renderRow(field: DefaultModelField): React.ReactElement {
     return (
-      <span className="model-service-default-item" data-default-model-row={field} key={field}>
-        <span className="model-service-default-item-label">{labelOf[field]}</span>
-        <span className="model-service-default-chip" data-default-model-select={field}>
-          <ModelPicker
-            pickerId={`default-model-${field}`}
-            value={values[field] || null}
-            onChange={(value) => onChange(field, value)}
-            models={buildDefaultModelCandidates(providers, field)}
-            providers={providers}
-            labels={labels}
-            constraints={defaultModelConstraints(field)}
-          />
-        </span>
-      </span>
+      <DefaultModelFieldRow
+        key={field}
+        field={field}
+        label={labelOf[field]}
+        value={values[field] || ''}
+        providers={providers}
+        labels={labels}
+        onChange={onChange}
+      />
     )
   }
 

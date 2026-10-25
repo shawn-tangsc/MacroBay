@@ -33,7 +33,9 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
       pageUrl: 'https://www.binance.com/en/support/announcement',
       listQueryUrl: 'https://www.binance.com/bapi/apex/v1/public/apex/cms/article/list/query',
       pageSize: 20,
-      language: 'en'
+      language: 'en',
+      // 列表接口返回全部历史；只收最近 7 天，避免首次接入回填几年公告。
+      maxAgeDays: 7
     }
   }),
   source({

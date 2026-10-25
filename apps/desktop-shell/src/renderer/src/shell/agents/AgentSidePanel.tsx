@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button, Input, Tooltip } from 'antd'
 import { Bot, MessageSquarePlus, Search, Trash2 } from 'lucide-react'
 
-import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentSessionRuntimeStateBySessionId } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { AgentSessionPanelPosition } from '@platform/settings/schema/appSettings'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'

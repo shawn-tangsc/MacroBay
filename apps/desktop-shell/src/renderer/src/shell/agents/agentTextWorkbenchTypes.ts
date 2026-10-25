@@ -158,6 +158,7 @@ export type AgentTextWorkbench = {
       productToolPermissionPrompt: string
       staleProductToolBinding: string
       readOnlyBadge: string
+      writableBadge: string
       requiresAsOfBadge: string
       saveAgentBeforeSkillTitle: string
       saveAgentBeforeSkillDescription: string

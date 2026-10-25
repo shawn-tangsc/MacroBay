@@ -10,6 +10,7 @@ import { createDefaultAppSettings } from '../../../../settings/schema/appSetting
 import { splitTelegramText, stableTelegramAttachment } from './TelegramContracts'
 import { TelegramApiClient } from './TelegramApiClient'
 import { TelegramDeliveryTransport } from './TelegramDeliveryTransport'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { TelegramOffsetRepository } from './TelegramOffsetRepository'
 import { TelegramPollingHost } from './TelegramPollingHost'
 import { normalizeTelegramUpdate } from './TelegramUpdateNormalizer'
@@ -70,8 +71,8 @@ describe('Telegram Release A contracts', () => {
   it.each(['slack', 'feishu', 'qq', 'discord'] as const)('refuses forged active %s rows in the Telegram offset gate', (type) => {
     const database = createAgentPlatformDatabase(':memory:')
     database.connection.prepare("insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-20','2026-07-20')").run()
-    database.connection.prepare("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values(?,?,?, 'agent-a', ?,1,'runtime-ready','configured','2026-07-20','2026-07-20')").run(
-      `${type}-a`, type, type, type === 'feishu' ? '{"domain":"lark"}' : '{}'
+    database.connection.prepare("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values(?,?,?, 'agent-a', ?,1,'enabled','configured','2026-07-20','2026-07-20')").run(
+      `${type}-a`, type === 'feishu' ? 'lark' : type, `${type}-a`, type === 'feishu' ? '{"domain":"lark"}' : '{}'
     )
     database.connection.prepare("insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,1,'active','2026-07-20')").run(`${type}-a`)
     const offsets = new TelegramOffsetRepository(database)
@@ -102,7 +103,7 @@ describe('Telegram Release A contracts', () => {
     seedActive(database, 'channel-a', 1)
     const offsets = new TelegramOffsetRepository(database)
     const inbound = { receive: vi.fn(async (request: { acknowledge: () => Promise<void> }) => {
-      database.connection.prepare("update agent_channels set requested_enabled=0,migration_state='disabled' where id='channel-a'").run()
+      database.connection.prepare("update agent_channels set requested_enabled=0,lifecycle_state='disabled' where id='channel-a'").run()
       database.connection.prepare("update channel_runtime_generations set generation=2,lifecycle_state='inactive' where channel_id='channel-a'").run()
       await expect(request.acknowledge()).rejects.toThrow('telegram-offset-commit-failed')
       return { disposition: 'retry' as const }
@@ -148,8 +149,9 @@ describe('Telegram Release A contracts', () => {
 
 function seedActive(database: ReturnType<typeof createAgentPlatformDatabase>, channelId: string, generation: number): void {
   database.connection.prepare("insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','2026-07-19','2026-07-19')").run()
-  database.connection.prepare("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values(?, 'telegram', 'Telegram', 'agent-a', '{}', 1, 'runtime-ready', 'configured', '2026-07-19','2026-07-19')").run(channelId)
+  database.connection.prepare("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values(?, 'telegram', 'Telegram', 'agent-a', '{}', 1, 'enabled', 'configured', '2026-07-19','2026-07-19')").run(channelId)
   database.connection.prepare("insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values(?,?, 'active','2026-07-19')").run(channelId, generation)
+  seedChannelAdapterSupport(database, ['telegram'])
 }
 
 function response(status: number, body: unknown): Response {

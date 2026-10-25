@@ -86,7 +86,9 @@ export function ProductToolPackagesCatalog({
             {pkg.tools.map((tool) => (
               <li key={tool.toolName}>
                 <span>{tool.toolName}</span>
-                <Tag>{text.editor.tools.readOnlyBadge}</Tag>
+                <Tag color={tool.readOnly ? undefined : 'orange'}>
+                  {tool.readOnly ? text.editor.tools.readOnlyBadge : text.editor.tools.writableBadge}
+                </Tag>
                 {tool.requiresTemporalBoundary ? <Tag>{text.editor.tools.requiresAsOfBadge}</Tag> : null}
                 <Tag>v{tool.schemaVersion}</Tag>
               </li>

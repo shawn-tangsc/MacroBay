@@ -29,7 +29,11 @@ import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registe
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
-import { registerIntelligenceProductTools } from './intelligence/product-tools/registerIntelligenceProductTools'
+import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
+import type {
+  CrossAssetOps,
+  MacroCalendarOps
+} from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
@@ -39,6 +43,7 @@ import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calenda
 import { createMacroCalendarProviderSettingsService } from './intelligence/macro-calendar/macroCalendarProviderSettingsService'
 import { createUnifiedMacroCalendarProfileStore } from './intelligence/macro-calendar/macroCalendarUnifiedProfileStore'
 import { registerMacroEconomicCalendarIpc } from './intelligence/macro-calendar/ipc/registerMacroEconomicCalendarIpc'
+import { createMacroCalendarWriteActions } from './intelligence/macro-calendar/macroCalendarWriteActions'
 import { registerMacroMarketIpc, registerDashboardFeedStatusIpc } from './intelligence/macro-market/ipc/registerMacroMarketIpc'
 import { createMacroMarketSnapshotQuery } from './intelligence/macro-market/macroMarketSnapshotQuery'
 import { registerMacroRatesIpc } from './intelligence/macro-rates/ipc/registerMacroRatesIpc'
@@ -438,5 +443,77 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // Start only now that the socket constructor is bound: a first reconcile before this would fail
   // once and then sit in backoff for a whole profile-check interval.
   void intelligenceModule.macroMarketLive.reconcile().catch(() => undefined)
-  registerIntelligenceProductTools(deps.registerProductAgentToolHandler, deps.jobRuntime)
+  // The agent write surface reaches these two runtimes only through the facades below. The calendar
+  // writes are the same functions `registerMacroEconomicCalendarIpc` calls (one factory, one result
+  // boundary), and the three reads are what the audit records before/after and what the calendar
+  // revision hashes. The cross-asset lease runtime stays the single implementation too.
+  const macroCalendarWriteActions = createMacroCalendarWriteActions({
+    manualBlsIcs: macroCalendarBackend.manualBlsIcs,
+    providerSettings: macroCalendarProviderSettings,
+    connection: {
+      testProviderConnection: macroCalendarBackend.testProviderConnection,
+      releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
+      releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
+    },
+    blsEmploymentRefresh: blsEmploymentMvpRefresh,
+    blsEmploymentSchedule: blsScheduleAndLatestValues,
+    fedFomcRefresh: macroCalendarBackend.fedFomcRefresh
+  })
+  const macroCalendarOps: MacroCalendarOps = {
+    saveProviderProfile: (input) => macroCalendarWriteActions.saveProviderProfile(input),
+    runProviderNow: (providerId) => macroCalendarWriteActions.runProviderNow({ providerId }),
+    testProviderConnection: (providerId) =>
+      macroCalendarWriteActions.testProviderConnection({ providerId }),
+    setReleaseTime: (input) => macroCalendarWriteActions.setReleaseTime(input),
+    clearReleaseTime: (eventKey) => macroCalendarWriteActions.clearReleaseTime({ eventKey }),
+    refreshBlsEmployment: (input) => macroCalendarWriteActions.refreshBlsEmployment(input),
+    refreshFedFomc: (input) => macroCalendarWriteActions.refreshFedFomc(input),
+    syncBlsSchedule: (input) => macroCalendarWriteActions.syncBlsSchedule(input),
+    previewManualIcs: (input) => macroCalendarWriteActions.previewManualIcs(input),
+    importManualIcs: (input) => macroCalendarWriteActions.importManualIcs(input),
+    readConfiguration: async () => {
+      const [profiles, overrides] = await Promise.all([
+        calendarProfiles.list(),
+        macroCalendarBackend.releaseTimeOverrideStore.list()
+      ])
+      return {
+        providers: Object.fromEntries(
+          profiles.map((profile) => [profile.providerId, profile.enabled === true])
+        ),
+        releaseTimes: Object.fromEntries(
+          overrides.map((override) => [
+            override.eventKey,
+            { scheduledAt: override.scheduledAt, scheduledDate: override.scheduledDate }
+          ])
+        )
+      }
+    },
+    readProviderState: async (providerId) => {
+      const profiles = await calendarProfiles.list()
+      const profile = profiles.find((candidate) => candidate.providerId === providerId)
+      return profile ? profile.enabled === true : null
+    },
+    readReleaseTime: async (eventKey) => {
+      const override = await macroCalendarBackend.releaseTimeOverrideStore.get(eventKey)
+      return override
+        ? { scheduledAt: override.scheduledAt, scheduledDate: override.scheduledDate }
+        : null
+    }
+  }
+  const crossAssetOps: CrossAssetOps = {
+    acquire: async () => (crossAssetRuntime ? crossAssetRuntime.acquire() : { state: 'unavailable' as const }),
+    renew: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.renew(leaseId) : { state: 'unavailable' as const }),
+    release: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.release(leaseId) : { state: 'unavailable' as const }),
+    refresh: async (leaseId) => (crossAssetRuntime ? crossAssetRuntime.refresh(leaseId) : { state: 'unavailable' as const }),
+    testInterface: async () => (crossAssetRuntime ? crossAssetRuntime.testInterface() : { state: 'unavailable' as const }),
+    cancelInterfaceTest: async () =>
+      crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const }),
+    readConfiguration: () => crossAssetConfiguration.read()
+  }
+  registerIntelligenceAgentToolHandlers(deps.registerProductAgentToolHandler, {
+    jobRuntime: deps.jobRuntime,
+    getAppLanguage: deps.getAppLanguage,
+    macroCalendarOps,
+    crossAssetOps
+  })
 }

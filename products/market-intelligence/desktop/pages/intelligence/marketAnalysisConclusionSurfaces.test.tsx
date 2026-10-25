@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement, useState } from 'react'
+import { act, createElement, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -87,6 +87,45 @@ const clickEntry = async (container: HTMLElement) => {
   await act(async () => { container.querySelector<HTMLButtonElement>('.mi-analysis-timeline__entry')?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
 }
 
+/**
+ * Mounts the workspace hook with the same "read the newest node" effect the conclusion card runs,
+ * and a summary read that fails `failures` times before it answers.
+ */
+async function mountDetailProbe(options: Readonly<{ failures: number }>): Promise<{ reads: () => number; holder: { current: UseMarketAnalysisTimelineResult } }> {
+  vi.useFakeTimers()
+  let summaryReads = 0
+  const invoke = vi.fn(async (_product: string, method: string) => {
+    if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [entry()], nextCursor: null }
+    if (method === 'marketAnalysis.getLatestAttempt') return null
+    if (method === 'marketAnalysis.getAnalysisRun') return {
+      id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null,
+      queuedAt: asOf, startedAt: asOf, completedAt: asOf, asOf, dataCutoff: asOf, evidenceCount: 1, change: null
+    }
+    if (method === 'marketAnalysis.getSummary') {
+      summaryReads += 1
+      if (summaryReads <= options.failures) throw new Error('analysis-summary-not-found')
+      return summary()
+    }
+    return []
+  })
+  vi.stubGlobal('platform', { products: { invoke } })
+  const holder = { current: undefined as unknown as UseMarketAnalysisTimelineResult }
+  function Probe(): null {
+    const timeline = useMarketAnalysisTimeline({ text: timelineText })
+    holder.current = timeline
+    const latest = selectLatestPublishedEntry(timeline.state.entries)
+    useEffect(() => { if (latest) timeline.ensureDetail(latest) }, [latest?.id])
+    return null
+  }
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => root?.render(createElement(Probe)))
+  await act(async () => {})
+  await act(async () => {})
+  return { reads: () => summaryReads, holder }
+}
+
 describe('analysis conclusion direction markers', () => {
   it('reads the controlled direction vocabulary and strips the marker from the body', () => {
     expect(parseConclusionDirection('方向：偏多：ETF 连续流入，资金面转强。')).toEqual({ direction: 'bullish', body: 'ETF 连续流入，资金面转强。' })
@@ -146,11 +185,58 @@ describe('market analysis conclusion surfaces', () => {
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.getSummary', { id: 'mi-as-1' })
   })
 
-  it('keeps the conclusion card out of the main area while the capability is off', async () => {
+  it('shows the verdict from the structured conclusion, not only the operation directions', async () => {
+    // Reported symptom: the card showed 操作方向建议 and no conclusion text. The card read
+    // `eventAssessment`, which current runs no longer write; the verdict now lives in the
+    // structured `conclusion`, the same contract the detail drawer already reads.
+    const structured = {
+      direction: 'bearish',
+      summary: '通胀读数高于前值压低实际利率下行空间，稳定币收缩叠加 ETF 净流出，现货买盘转弱。',
+      change: '无变化。',
+      causalChain: '通胀高于前值 → 实际利率下行受限 → 现货需求下降。',
+      conditions: ['稳定币继续收缩。'],
+      macro: null,
+      evidenceStrength: null,
+      dataGaps: []
+    }
+    // Same merged text the dashboard layout hands the card, so the direction label is real here.
+    const { container } = await mountSurface([entry()], timeline =>
+      createElement(LatestAnalysisConclusionCard, { text: { ...timelineText, ...workspaceText }, workspaceText, timeline, onOpenDetail: vi.fn() }),
+      { summaryValue: { ...summary(), eventAssessment: undefined, conclusion: structured } })
+
+    const card = container.querySelector('.mi-analysis-conclusion-card') as HTMLElement
+    expect(card.querySelector('.mi-analysis-conclusion-card__conclusion')?.textContent).toContain(structured.summary)
+    expect(card.querySelector('.mi-analysis-conclusion__direction')?.textContent).toBe('偏空')
+    expect(card.querySelector('.mi-analysis-conclusion-card__body')?.getAttribute('data-direction')).toBe('bearish')
+  })
+
+  it('keeps the newest conclusion on screen when the run cites more evidence than a page holds', async () => {
+    // Reported symptom: 最新 AI 结论 alternated between the verdict and "最新结论详情暂不可用". The
+    // newest summary cited 62 evidence rows, and the renderer refused any string list longer than
+    // the 50-item timeline page, so the richest node was the one that blanked — until a smaller run
+    // became the newest. The card must read the published conclusion here, not the failure copy.
+    const { container } = await mountSurface([entry()], timeline =>
+      createElement(LatestAnalysisConclusionCard, { text: { ...timelineText, ...workspaceText }, workspaceText, timeline, onOpenDetail: vi.fn() }),
+      {
+        summaryValue: {
+          ...summary(),
+          evidenceRefs: Array.from({ length: 62 }, (_, index) => `query:source:metric:${index}`),
+          dataCaveats: Array.from({ length: 54 }, (_, index) => `限制 ${index}`)
+        }
+      })
+
+    const text = container.textContent ?? ''
+    expect(text).not.toContain(workspaceText.latestConclusionUnavailable)
+    expect(container.querySelector('.mi-analysis-conclusion-card__conclusion')?.textContent).toContain(completeConclusion)
+  })
+
+  it('keeps the card but shows the off state while the capability is off', async () => {
     const disabled = await mountSurface([entry()], timeline =>
       createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),
       { analysisSettings: { enabled: false } })
-    expect(disabled.container.querySelector('.mi-analysis-conclusion-card')).toBeNull()
+    const offCard = disabled.container.querySelector('.mi-analysis-conclusion-card')
+    expect(offCard).not.toBeNull()
+    expect(offCard?.querySelector('.mi-analysis-conclusion-card__state')).not.toBeNull()
 
     const enabled = await mountSurface([entry()], timeline =>
       createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }),
@@ -164,6 +250,27 @@ describe('market analysis conclusion surfaces', () => {
       createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }))
 
     expect(container.textContent).toContain(workspaceText.latestConclusionEmpty)
+  })
+
+  it('re-reads a node whose detail read failed, so the card heals without a reload', async () => {
+    // Nothing re-read a node after a failed detail read, so one transient fault — the service
+    // reloading its store, a summary written a moment after the run — pinned the newest conclusion
+    // to "暂不可用" until a different node became the newest, which read as the card coming and going.
+    const { reads, holder } = await mountDetailProbe({ failures: 1 })
+
+    expect(holder.current.detailState['mi-tl-1']).toBe('unavailable')
+    await act(async () => { await vi.advanceTimersByTimeAsync(analysisTimelineRefreshPolicy.detailRetryDelaysMs[0]) })
+    expect(holder.current.details['mi-tl-1']).toBeDefined()
+    expect(holder.current.detailState['mi-tl-1']).toBeUndefined()
+    expect(reads()).toBe(2)
+  })
+
+  it('stops retrying a detail that keeps failing instead of polling it forever', async () => {
+    const { reads } = await mountDetailProbe({ failures: Number.POSITIVE_INFINITY })
+
+    const totalRetryMs = analysisTimelineRefreshPolicy.detailRetryDelaysMs.reduce((sum, delay) => sum + delay, 0)
+    await act(async () => { await vi.advanceTimersByTimeAsync(totalRetryMs + 60_000) })
+    expect(reads()).toBe(1 + analysisTimelineRefreshPolicy.detailRetryDelaysMs.length)
   })
 
   it('never stays in the loading state when the service never answers', async () => {

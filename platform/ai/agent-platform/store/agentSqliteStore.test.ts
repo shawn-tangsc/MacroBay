@@ -2492,8 +2492,8 @@ function seedRuntimeReadyChannel(
 ): void {
   database.connection.prepare(
     `insert into agent_channels (
-      id, type, name, agent_id, workspace_json, public_config_json, requested_enabled, migration_state,
-      created_at, updated_at, config_json, is_active
-    ) values (?, 'telegram', 'Runtime channel', ?, '{"type":"system"}', '{}', 1, 'runtime-ready', ?, ?, '{}', 1)`
+      id, adapter_key, name, agent_id, public_config_json, requested_enabled, lifecycle_state,
+      credential_health, created_at, updated_at
+    ) values (?, 'telegram', 'Runtime channel', ?, '{}', 1, 'enabled', 'configured', ?, ?)`
   ).run(id, agentId, createdAt, createdAt)
 }

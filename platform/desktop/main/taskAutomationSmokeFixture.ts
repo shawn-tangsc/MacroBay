@@ -2,7 +2,6 @@ import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/a
 import { buildRuntimeTurnResult, createRuntimeTextData } from '../../ai/agent-platform/runtime/agentTurnPersistence'
 import type { AgentRuntimeDriver } from '../../ai/agent-platform/runtime/runtimeTypes'
 import type { TaskManagementToolRuntimeService } from '../../ai/agent-platform/runtime/tasks/TaskManagementToolRuntimeService'
-import type { AgentChannelRuntimeHost } from '../../ai/agent-platform/channels/channelRuntimeHost'
 import { addAgentSessionMessage, type AgentStoreSeed, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 
 export const TASK_AUTOMATION_SMOKE_AGENT_ID = 'task-smoke-agent'
@@ -45,32 +44,6 @@ export function createTaskAutomationSmokeSeed(createdAt: string): AgentStoreSeed
       createdAt,
       updatedAt: createdAt
     }],
-    channels: [
-      {
-        id: 'task-smoke-loopback',
-        type: 'telegram',
-        name: 'Task smoke loopback',
-        agentId: TASK_AUTOMATION_SMOKE_AGENT_ID,
-        workspace: { type: 'system' },
-        config: { bot_token: 'loopback-only' },
-        activeChatIds: ['task-smoke-chat'],
-        isActive: true,
-        createdAt,
-        updatedAt: createdAt
-      },
-      {
-        id: 'task-smoke-inactive',
-        type: 'telegram',
-        name: 'Task smoke inactive',
-        agentId: TASK_AUTOMATION_SMOKE_AGENT_ID,
-        workspace: { type: 'system' },
-        config: { bot_token: 'loopback-only' },
-        activeChatIds: [],
-        isActive: false,
-        createdAt,
-        updatedAt: createdAt
-      }
-    ],
     activeAgentId: TASK_AUTOMATION_SMOKE_AGENT_ID,
     activeSessionId: smokeSessionId
   }
@@ -113,23 +86,6 @@ export function createTaskAutomationSmokeDriver(deps: {
     },
     cancelMessage: () => false,
     cancelSession: () => false
-  }
-}
-
-export function createTaskAutomationSmokeLoopbackHost(
-  deliveredMessages: Array<{ chatId: string; text: string }>
-): AgentChannelRuntimeHost {
-  let shouldFail = true
-  return {
-    connect: async () => undefined,
-    close: async () => undefined,
-    sendMessage: async (chatId, text) => {
-      if (shouldFail) {
-        shouldFail = false
-        throw new Error('task-smoke-delivery-failed')
-      }
-      deliveredMessages.push({ chatId, text })
-    }
   }
 }
 

@@ -151,6 +151,19 @@ export type PlatformText = {
     channelUpdate: string
     channelEnable: string
     channelEnableBlocked: string
+    channelAdapterUnavailable: string
+    channelCandidates: string
+    channelCandidatesEmpty: string
+    channelCandidateUnknown: string
+    channelCandidateAllow: string
+    channelCandidateIgnore: string
+    channelCandidateAlsoTarget: string
+    channelDeleteConfirm: string
+    channelCancel: string
+    channelRuntimeGeneration: string
+    channelRuntimeLifecycle: string
+    channelRuntimeMissing: string
+    channelOperationFailed: string
     channelCatalogStatus: Record<'planned' | 'blocked' | 'supported', string>
     channelConversationKind: Record<'direct' | 'group' | 'channel', string>
     channelState: Record<'credential-missing' | 'configuration-ready' | 'disabled' | 'deleting' | 'runtime-ready', string>
@@ -566,6 +579,18 @@ export type PlatformText = {
     detectStop: string
     detectStopped: string
     detectClose: string
+    /** 落库的「上次检测」结论：行内短词 + title 明细。 */
+    modelAvailabilityOk: string
+    modelAvailabilityFailed: string
+    /** 配置变过、结论不再适用。 */
+    modelAvailabilityStale: string
+    modelAvailabilityStaleHint: string
+    /** 从未检测过（模型选择器里的灰圈）。 */
+    modelAvailabilityNeverChecked: string
+    modelAvailabilityFailedWithReason: (reason: string) => string
+    modelAvailabilityCheckedAt: (status: string, checkedAt: string) => string
+    /** 一次检测 run 结束后的汇总（成功 / 失败 / 跳过）。 */
+    detectionRunSummary: (ok: number, failed: number, skipped: number) => string
     providerNames: Record<string, string>
     modelRetiredTag: string
     /** PLAT-80：模型服务页顶部「默认模型」区块。 */
@@ -824,6 +849,8 @@ export type PlatformText = {
     modelName: string
     addModel: string
     editModel: string
+    /** 只测这一个模型（行内按钮）。 */
+    testModel: string
     saveModel: string
     removeModel: string
     pinModel: string
@@ -1245,7 +1272,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
-      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
+      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -1588,6 +1615,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectStop: '停止',
       detectStopped: '已停止',
       detectClose: '关闭',
+      modelAvailabilityOk: '可用',
+      modelAvailabilityFailed: '不可用',
+      modelAvailabilityStale: '待检测',
+      modelAvailabilityStaleHint: '配置已变更，等待自动检测',
+      modelAvailabilityNeverChecked: '尚未检测',
+      modelAvailabilityFailedWithReason: (reason) => `不可用 · ${reason}`,
+      modelAvailabilityCheckedAt: (status, checkedAt) => `${status} · 上次检测 ${checkedAt}`,
+      detectionRunSummary: (ok, failed, skipped) =>
+        `检测完成：成功 ${ok} · 失败 ${failed} · 跳过 ${skipped}`,
       providerNames: {
         silicon: '硅基流动',
         tokenrhythm: '基元律动',
@@ -1836,6 +1872,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       modelName: '模型名称',
       addModel: '添加模型',
       editModel: '编辑模型',
+      testModel: '测试此模型',
       saveModel: '保存',
       removeModel: '移除',
       pinModel: '置顶模型',
@@ -2249,7 +2286,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: 'Storage and Cache',
       taskAutomation: 'Task Automation',
       basicSettings: 'Basic Settings',
-      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
+      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',
@@ -2594,6 +2631,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectStop: 'Stop',
       detectStopped: 'Stopped',
       detectClose: 'Close',
+      modelAvailabilityOk: 'Available',
+      modelAvailabilityFailed: 'Unavailable',
+      modelAvailabilityStale: 'Not checked',
+      modelAvailabilityStaleHint: 'Configuration changed; waiting for the automatic check',
+      modelAvailabilityNeverChecked: 'Not checked yet',
+      modelAvailabilityFailedWithReason: (reason) => `Unavailable · ${reason}`,
+      modelAvailabilityCheckedAt: (status, checkedAt) => `${status} · last checked ${checkedAt}`,
+      detectionRunSummary: (ok, failed, skipped) =>
+        `Check finished: ${ok} passed · ${failed} failed · ${skipped} skipped`,
       providerNames: {
         silicon: 'SiliconFlow',
         tokenrhythm: 'TokenRhythm',
@@ -2845,6 +2891,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       modelName: 'Model Name',
       addModel: 'Add Model',
       editModel: 'Edit Model',
+      testModel: 'Test this model',
       saveModel: 'Save',
       removeModel: 'Remove',
       pinModel: 'Pin Model',

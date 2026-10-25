@@ -21,6 +21,11 @@ export type ModelDetectionRun = {
   results: Readonly<Record<string, ModelDetectionResult>>
   /** run 开始时供应商的模型数（进度分母）。 */
   total: number
+  /**
+   * 本次 run 的目标模型；缺省 = 该供应商全部模型（全量检测）。
+   * 单模型测试只包含一个 id ⇒ `statusFor` 只把这个模型标成「测试中」。
+   */
+  modelIds?: readonly string[]
   /** 主进程已发 done（正常结束或停止）。 */
   finished: boolean
   stopped: boolean
@@ -37,6 +42,7 @@ type MutableRun = {
   modes: ModelDetectionMode[]
   results: Map<string, ModelDetectionResult>
   total: number
+  modelIds?: readonly string[]
   finished: boolean
   stopped: boolean
 }
@@ -57,6 +63,7 @@ function publish(): void {
       stopped: run.stopped,
       results: Object.fromEntries(run.results),
       total: run.total,
+      ...(run.modelIds === undefined ? {} : { modelIds: run.modelIds }),
       finished: run.finished
     }
   }
@@ -102,14 +109,19 @@ export function subscribeModelDetection(listener: () => void): () => void {
 /** 启动一次检测；`accepted === false`（重复 runId）时不登记 run。 */
 export async function startModelDetection(
   providerId: string,
-  modes: readonly ModelDetectionMode[]
+  modes: readonly ModelDetectionMode[],
+  modelIds?: readonly string[]
 ): Promise<string | null> {
   const api = window.platform?.modelProviders
   if (!api?.detectModels) return null
   ensureBridge()
   sequence += 1
   const runId = `detection-${Date.now()}-${sequence}`
-  const accepted = await api.detectModels(providerId, { modes: [...modes], runId })
+  const accepted = await api.detectModels(providerId, {
+    modes: [...modes],
+    runId,
+    ...(modelIds === undefined ? {} : { modelIds: [...modelIds] })
+  })
   if (!accepted.accepted) return null
   runs.set(runId, {
     runId,
@@ -117,6 +129,7 @@ export async function startModelDetection(
     modes: [...modes],
     results: new Map(),
     total: accepted.total,
+    ...(modelIds === undefined ? {} : { modelIds: [...modelIds] }),
     finished: false,
     stopped: false
   })
@@ -167,6 +180,20 @@ export function resultForModel(
 /** 该供应商是否有 run 仍在跑（用于「停止」与「测试中…」）。 */
 export function isDetectionRunning(current: ModelDetectionSnapshot, providerId: string): boolean {
   return Object.values(current.runs).some((run) => run.providerId === providerId && !run.finished && !run.stopped)
+}
+
+/** 这个模型是否属于某个仍在跑的 run（单模型 run 不把同供应商的其它模型标成「测试中」）。 */
+export function isModelBeingDetected(
+  current: ModelDetectionSnapshot,
+  providerId: string,
+  modelId: string
+): boolean {
+  return Object.values(current.runs).some((run) =>
+    run.providerId === providerId
+    && !run.finished
+    && !run.stopped
+    && (run.modelIds === undefined || run.modelIds.includes(modelId))
+  )
 }
 
 /** 全局可停止的 run（切到别的供应商后仍能停 A）。 */

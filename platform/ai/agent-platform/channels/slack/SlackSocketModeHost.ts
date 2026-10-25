@@ -43,7 +43,9 @@ export class SlackSocketModeHost {
       // A successful REST URL fetch is not a connection success. Only open resets retry budget.
       this.reconnectAttempt = 0
     }
-    socket.onmessage = (event) => { void this.handle(event.data, socket) }
+    socket.onmessage = (event) => {
+      void this.handle(event.data, socket).catch(() => this.auditCurrent(socket, 'slack-envelope-failed'))
+    }
     socket.onerror = () => this.auditCurrent(socket, 'slack-socket-error')
     socket.onclose = () => {
       // A late close from a replaced socket must not schedule a second host.
@@ -81,7 +83,8 @@ export class SlackSocketModeHost {
   }
 
   private async handle(data: unknown, sourceSocket: PlatformWebSocket): Promise<void> {
-    if (!this.isCurrentSocket(sourceSocket) || typeof data !== 'string' || data.length > 1_000_000) return this.close()
+    if (!this.isCurrentSocket(sourceSocket)) return
+    if (typeof data !== 'string' || data.length > 1_000_000) return this.close()
     let envelope: SlackSocketEnvelope
     try { envelope = JSON.parse(data) as SlackSocketEnvelope } catch { this.auditCurrent(sourceSocket, 'slack-envelope-invalid'); return }
     const envelopeId = typeof envelope.envelope_id === 'string' && envelope.envelope_id.length <= 512 ? envelope.envelope_id : null

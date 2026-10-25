@@ -8,8 +8,8 @@ const handoff = readFileSync(resolve(root, 'shell/settings/channels/secureCreden
 const navigation = readFileSync(resolve(root, 'shell/navigation/builtInNavEntries.ts'), 'utf8')
 
 describe('channel settings boundary', () => {
-  it('keeps the panel out of this build and credential transport in WebCrypto', () => {
-    expect(navigation).not.toContain("id: 'channels'")
+  it('keeps the panel registered and credential transport in WebCrypto', () => {
+    expect(navigation).toContain("id: 'channels'")
     expect(page).toContain('clearSensitiveDraft(setCredentialDraft)')
     expect(page).toContain('clearSensitiveDraft(setAppCredentialDraft)')
     expect(page).toContain('clearSensitiveDraft(setPolicyDraft)')

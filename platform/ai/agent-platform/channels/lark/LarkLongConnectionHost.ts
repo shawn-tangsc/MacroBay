@@ -58,7 +58,8 @@ export class LarkLongConnectionHost {
   }
 
   private async handle(data: unknown, source: Socket): Promise<void> {
-    if (!this.current(source) || typeof data !== 'string' || data.length > 1_000_000) return this.close()
+    if (!this.current(source)) return
+    if (typeof data !== 'string' || data.length > 1_000_000) return this.close()
     let envelope: VerifiedEnvelope | null
     try { envelope = this.deps.parseVerifiedEnvelope(data) } catch { this.audit(source, 'lark-envelope-invalid'); return }
     if (!envelope) { this.audit(source, 'lark-event-ignored'); return }

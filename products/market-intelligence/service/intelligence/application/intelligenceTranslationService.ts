@@ -33,7 +33,8 @@ import {
   needsTranslation,
   resolveEffectiveRevision,
   resolveItemSourceLanguage,
-  resolveTargetLocale
+  resolveTargetLocale,
+  shouldTranslateForReason
 } from './intelligenceTranslationHelpers'
 import { sanitizeIntelligenceText } from './intelligenceItemLabels'
 import {
@@ -204,12 +205,24 @@ export function createIntelligenceTranslationService(deps: {
 
     async getModuleStatus(): Promise<SafeTranslationModuleStatus> {
       const records = await readRecords()
+      const sourceByItem = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item.sourceId]))
+      const bySource: Record<string, { pendingCount: number; failedCount: number; translatedCount: number }> = {}
+      for (const record of records) {
+        const sourceId = sourceByItem.get(record.sourceId)
+        if (!sourceId) continue
+        const counts = bySource[sourceId] ?? { pendingCount: 0, failedCount: 0, translatedCount: 0 }
+        if (record.status === 'pending') counts.pendingCount += 1
+        else if (record.status === 'failed') counts.failedCount += 1
+        else if (record.status === 'translated') counts.translatedCount += 1
+        bySource[sourceId] = counts
+      }
       return {
         pendingCount: records.filter((record) => record.status === 'pending').length,
         failedCount: records.filter((record) => record.status === 'failed').length,
         translatedCount: records.filter((record) => record.status === 'translated').length,
         lastJobAt,
-        lastJobSummary
+        lastJobSummary,
+        bySource
       }
     },
 
@@ -320,6 +333,10 @@ export function createIntelligenceTranslationService(deps: {
         readModelDefaults(),
         readProviders()
       ])
+      // 自动翻译关闭时，pipeline 仍会把 new-item 入队；在这里停住，而不是让每个新条目都调用模型。
+      if (!shouldTranslateForReason(settings, input.reason)) {
+        return { processed: 0, failed: 0 }
+      }
       // 每次任务开始时解析：显式绑定优先，其次模型服务的默认翻译模型，最后沿用供应商默认聊天模型。
       const model = resolveTranslationModel({ settings, modelDefaults, providers })
       const targetLocale = input.targetLocale ?? resolveTargetLocale(settings, appLanguage)
@@ -406,7 +423,6 @@ export function createIntelligenceTranslationService(deps: {
           modelId: modelResult.modelId,
           titleTranslated: modelResult.output.title,
           summaryTranslated: modelResult.output.summary,
-          bodyTranslated: modelResult.output.body,
           translatedAt: new Date().toISOString()
         })
         processed += 1
@@ -430,6 +446,7 @@ export function createIntelligenceTranslationService(deps: {
   }
 }
 
+
 function resolveDisplayTextForItem(
   item: IntelligenceItem,
   textMode: 'translated' | 'original' | undefined,
@@ -438,7 +455,8 @@ function resolveDisplayTextForItem(
     targetLocale: IntelligenceTranslationTargetLocale
     records: IntelligenceTranslationRecord[]
     revisions: IntelligenceItemRevision[]
-  }
+  },
+  body?: string
 ): SafeTranslationDisplayText {
   const definition = getIntelligenceSourceDefinition(item.sourceId)
   const sourceLanguage = resolveItemSourceLanguage(item, definition?.language)
@@ -468,10 +486,13 @@ function resolveDisplayTextForItem(
   const useTranslated = textMode !== 'original'
   const translatedTitle = active?.titleTranslated
   const translatedSummary = active?.summaryTranslated
+  const translatedBody = active?.bodyTranslated
 
   return {
     title: useTranslated && active?.status === 'translated' && translatedTitle ? translatedTitle : originalTitle,
     summary: useTranslated && active?.status === 'translated' && translatedSummary ? translatedSummary : originalSummary,
+    body: useTranslated && active?.status === 'translated' && translatedBody ? translatedBody : body,
+    originalBody: body,
     originalTitle,
     originalSummary,
     status: active?.status ?? 'pending',
@@ -533,7 +554,8 @@ function selectTranslationCandidates(
   input: TranslateIntelligenceItemsJobInput,
   settings: IntelligenceTranslationSettings,
   targetLocale: IntelligenceTranslationTargetLocale,
-  records: IntelligenceTranslationRecord[]
+  records: IntelligenceTranslationRecord[],
+  getBodyText?: (itemId: string) => string | undefined
 ): TranslationCandidate[] {
   const itemIds = resolveRequestedItemIds(pipeline, input, records)
   const candidates: TranslationCandidate[] = []
@@ -580,7 +602,6 @@ function selectTranslationCandidates(
       sourceLanguage,
       title: sanitizeIntelligenceText(revision?.title ?? item.title),
       summary: sanitizeIntelligenceText(revision?.summary ?? item.summary),
-      body: createSafeEvidenceExcerpt(sanitizeIntelligenceText(revision?.summary ?? item.summary))
     })
   }
 
@@ -608,7 +629,19 @@ function resolveRequestedItemIds(
   }
 
   if (ids.size === 0) {
-    return pipeline.listItems().slice(0, input.filters?.limit ?? 50).map((item) => item.itemId)
+    const rangeMs = input.filters?.timeRange === '24h'
+      ? 24 * 60 * 60 * 1000
+      : input.filters?.timeRange === '7d'
+        ? 7 * 24 * 60 * 60 * 1000
+        : input.filters?.timeRange === '30d'
+          ? 30 * 24 * 60 * 60 * 1000
+          : undefined
+    const cutoff = rangeMs === undefined ? undefined : Date.now() - rangeMs
+    return pipeline.listItems()
+      .filter((item) => cutoff === undefined || Date.parse(item.publishedAt ?? '') >= cutoff)
+      .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
+      .slice(0, input.filters?.limit ?? 50)
+      .map((item) => item.itemId)
   }
 
   return [...ids]

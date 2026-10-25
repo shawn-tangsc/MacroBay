@@ -15,6 +15,9 @@ import type {
   IntelligenceWorkspaceFilters,
   IntelligenceWorkspaceView
 } from '../application/intelligenceWorkspaceQueries'
+import type { NewsSentimentQuery } from '../schema/newsSentiment'
+import { enqueueIntelligencePipelineJobs } from '../jobs/enqueueIntelligencePipelineJobs'
+import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -75,6 +78,60 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
 
   register(PRODUCT_ID, 'intelligence.getSentimentAggregates', async (payload) => {
     return getIntelligenceService(jobRuntime).getSentimentAggregates((payload ?? {}) as IntelligenceWorkspaceFilters)
+  })
+
+  register(PRODUCT_ID, 'intelligence.getNewsSentiment', async (payload) => {
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.query) throw new Error('News sentiment is unavailable.')
+    return module.newsSentiment.query.query((payload ?? {}) as NewsSentimentQuery)
+  })
+
+  register(PRODUCT_ID, 'intelligence.getNewsSentimentItem', async (payload) => {
+    const input = (payload ?? {}) as { itemId?: string; asOf?: string }
+    if (!input.itemId?.trim() || !input.asOf?.trim()) throw new Error('itemId and asOf are required.')
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.query) throw new Error('News sentiment is unavailable.')
+    return module.newsSentiment.query.getItem({ itemId: input.itemId, asOf: input.asOf })
+  })
+
+  register(PRODUCT_ID, 'intelligence.getNewsSentimentSettings', async () =>
+    getIntelligenceModule(jobRuntime).newsSentiment.settings.get()
+  )
+
+  register(PRODUCT_ID, 'intelligence.translateNewsSentimentBody', async (payload) => {
+    const itemId = typeof (payload as { itemId?: unknown })?.itemId === 'string' ? String((payload as { itemId: string }).itemId) : ''
+    const force = (payload as { force?: unknown })?.force === true
+    if (!itemId) throw new Error('An itemId is required.')
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.bodyTranslation) throw new Error('Body translation is unavailable.')
+    const result = await module.newsSentiment.bodyTranslation.translate(itemId, { manual: true, force })
+    console.log('MI_BODY_TRANSLATE', itemId, result.state)
+    return result
+  })
+
+  register(PRODUCT_ID, 'intelligence.rebuildNewsSentiment', async () => {
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.store) throw new Error('News sentiment storage is unavailable.')
+    module.newsSentiment.store.clearAll()
+    await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB], { rebuild: true })
+    return { queued: true }
+  })
+
+  register(PRODUCT_ID, 'intelligence.rescoreNewsSentiment', async () => {
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.scoring) throw new Error('News sentiment is unavailable.')
+    await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {})
+    return { queued: true }
+  })
+
+  register(PRODUCT_ID, 'intelligence.saveNewsSentimentSettings', async (payload) => {
+    const patch = (payload ?? {}) as Record<string, unknown>
+    if (typeof patch !== 'object' || Array.isArray(patch)) throw new Error('A settings patch is required.')
+    const result = await getIntelligenceModule(jobRuntime).newsSentiment.settings.save(patch as never)
+    // A new model or switch only affects items judged after it; rescore the recent ones now so the
+    // card does not keep showing rule judgments until the next collection happens to run.
+    await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {}).catch(() => undefined)
+    return result
   })
 
   register(PRODUCT_ID, 'intelligence.getDetail', async (payload) => {

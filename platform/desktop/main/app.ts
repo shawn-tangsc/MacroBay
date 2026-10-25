@@ -19,16 +19,15 @@ import {
 } from '../../ai/agent-platform/runtime/tasks'
 import {
   ChannelInboundExecutionCoordinator,
+  ChannelDispatchRunRepository,
   ChannelInboundExecutionRunner,
   ChannelInboundRepository,
   ChannelInboundService,
   ChannelDeliveryMaintenance,
-  ChannelRuntimeService,
-  ChannelCredentialMigrationReconciler,
   ChannelDeliveryRepository,
   ChannelDeliveryService,
   ChannelAdapterAcceptanceRegistry,
-  ChannelAdapterEvidenceRepository,
+  ChannelAcceptanceService,
   ChannelManagementRepository,
   ChannelManagementService,
   ChannelSecureHandoff,
@@ -58,7 +57,7 @@ import {
   WechatRuntimeManager,
   WechatRuntimeMaintenance,
   ChannelDeliveryTransportRouter,
-  type AgentChannelRuntimeSnapshot
+  ChannelRuntimeSupervisor
 } from '../../ai/agent-platform/channels'
 import { createElectronChannelCredentialVault } from '../../secrets/channels'
 import { createAssistantImageMessageService } from '../../ai/assistant-platform/images/assistantImageMessageService'
@@ -209,10 +208,8 @@ import {
 } from './workspaceTestFixtures'
 import {
   createTaskAutomationSmokeDriver,
-  createTaskAutomationSmokeLoopbackHost,
   createTaskAutomationSmokeSeed
 } from './taskAutomationSmokeFixture'
-import { ChannelRuntimeHostRegistry } from './channelRuntimeHostRegistry'
 import {
   createClaudeAgentSdkRuntime,
   createClaudeSdkPreferredExecutor,
@@ -234,8 +231,6 @@ import {
   DEFAULT_MIN_WINDOW_HEIGHT,
   DEFAULT_MIN_WINDOW_WIDTH
 } from '../../ui/window/windowSizing'
-import type { AgentChannelType } from '../../ai/agent-platform/schemas/channelSchemas'
-import type { AgentChannelRuntimeHostFactory } from '../../ai/agent-platform/channels/channelRuntimeHost'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -375,8 +370,8 @@ const channelInboundRepository = new ChannelInboundRepository(agentDatabase)
 const channelDeliveryRepository = new ChannelDeliveryRepository(agentDatabase)
 const channelManagementRepository = new ChannelManagementRepository(agentDatabase)
 const channelAdapterRegistry = new ChannelAdapterAcceptanceRegistry()
-const channelAdapterEvidenceRepository = new ChannelAdapterEvidenceRepository(agentDatabase)
-channelAdapterEvidenceRepository.load(channelAdapterRegistry)
+const channelAcceptance = new ChannelAcceptanceService(agentDatabase)
+channelAcceptance.load(channelAdapterRegistry)
 const telegramOffsetRepository = new TelegramOffsetRepository(agentDatabase)
 const slackRuntimeRepository = new SlackRuntimeRepository(agentDatabase)
 const larkRuntimeRepository = new LarkRuntimeRepository(agentDatabase)
@@ -394,13 +389,8 @@ const channelManagementService = new ChannelManagementService({
   vault: channelCredentialVault,
   cipher: channelCredentialVault.payloadCipher,
   registry: channelAdapterRegistry,
+  acceptance: channelAcceptance,
   handoff: new ChannelSecureHandoff()
-})
-const channelCredentialMigrationReconciler = new ChannelCredentialMigrationReconciler({
-  database: agentDatabase,
-  vault: channelCredentialVault,
-  readLegacyState: () => legacyAgentStorage.read(),
-  writeLegacyState: (state) => legacyAgentStorage.write(state as AgentStoreState)
 })
 const agentStore = createAgentSqliteStoreWithOptions(
   agentDatabase,
@@ -411,8 +401,7 @@ const agentStore = createAgentSqliteStoreWithOptions(
       ? createWorkspaceTestFixtureAgentSeed('2026-10-06T00:00:00.000Z')
       : createDefaultAgentPersistentState(),
   {
-    legacyStateLoader: () => legacyAgentStorage.read(),
-    channelMigrationReconciler: channelCredentialMigrationReconciler
+    legacyStateLoader: () => legacyAgentStorage.read()
   }
 )
 const agentServices = createAgentPlatformServices(agentStore, {
@@ -589,13 +578,6 @@ let disposeLarkRuntimeMaintenance: (() => void) | null = null
 let disposeQqRuntimeMaintenance: (() => void) | null = null
 let disposeDiscordRuntimeMaintenance: (() => void) | null = null
 let disposeWechatRuntimeMaintenance: (() => void) | null = null
-const channelRuntimeHostRegistry = new ChannelRuntimeHostRegistry()
-const taskAutomationSmokeDeliveredMessages: Array<{ chatId: string; text: string }> = []
-if (taskAutomationSmokeProfile.enabled) {
-  registerChannelRuntimeHostFactory('telegram', async () =>
-    createTaskAutomationSmokeLoopbackHost(taskAutomationSmokeDeliveredMessages)
-  )
-}
 /**
  * P1-06m：退出第一件事 —— 把 debounce（250ms）窗口内的待写布局**有界落盘**并记录结果。
  * 放在所有其它清理之前：后续清理可能很慢甚至挂住，绝不让它吃掉退出前最后一次布局变更。
@@ -637,13 +619,12 @@ async function disposePlatformRuntimes(): Promise<void> {
   await qqRuntimeManager.dispose()
   await discordRuntimeManager.dispose()
   await wechatRuntimeManager.dispose()
-  channelManagementRepository.stopAllRuntimeAndFence(new Date().toISOString())
+  channelManagementRepository.fenceAllForQuit(new Date().toISOString())
   agentTaskSchedulerRuntimeService.stop()
   jobRuntimeForDisposal?.stopAll()
   await productServiceDisposerRegistry.disposeAll()
   await Promise.allSettled([
     agentRuntimeService.dispose(),
-    channelRuntimeService.dispose(),
     mcpRuntimeService.dispose()
   ])
   // workspace：有界 flush 后释放路由目标；flush 超时/失败只如实上报，不阻断其余清理。
@@ -653,22 +634,14 @@ async function disposePlatformRuntimes(): Promise<void> {
   panelWorkspaceForDisposal = null
   jobRunStore.close()
 }
-function broadcastChannelRuntimeSnapshot(snapshot: AgentChannelRuntimeSnapshot): void {
+function broadcastChannelRuntimeSnapshot(snapshot: ReturnType<ChannelRuntimeSupervisor['snapshot']>): void {
   getMainWindow()?.webContents.send(IpcChannels.agentsChannelRuntimeStateChanged, snapshot)
 }
-const channelRuntimeService = new ChannelRuntimeService({
-  createChannelHost: (channel, context) => channelRuntimeHostRegistry.createHost(channel, context),
-  // Legacy host events have no C03 execution claim and must not create sessions, run Agents,
-  // or send. Future adapters enter ChannelInboundService and the exact-claim coordinator.
-  handleIncomingText: async () => {},
-  onSnapshotChanged: (snapshot) => {
-    broadcastChannelRuntimeSnapshot(snapshot)
-  },
-  persistChannelConfig: async (channelId, nextConfig) => {
-    await agentServices.channels.update(channelId, {
-      config: nextConfig
-    })
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, await agentServices.state.getState())
+const channelRuntimeSupervisor = new ChannelRuntimeSupervisor({
+  query: channelManagementRepository.query,
+  restart: async (channelId) => {
+    await channelManagementService.restart({ id: channelId, actorId: 'agent-runtime-ui' })
+    broadcastChannelRuntimeSnapshot(channelRuntimeSupervisor.snapshot())
   }
 })
 const telegramDeliveryTransport = new TelegramDeliveryTransport()
@@ -690,11 +663,22 @@ const channelDeliveryService = new ChannelDeliveryService({
     wechat: wechatDeliveryTransport
   })
 })
+const channelDispatchRuns = new ChannelDispatchRunRepository(agentDatabase)
 const channelInboundExecutionCoordinator = new ChannelInboundExecutionCoordinator({
   inbound: channelInboundRepository,
   delivery: channelDeliveryService,
   cipher: channelCredentialVault.payloadCipher,
-  runtime: agentRuntimeService
+  runtime: agentRuntimeService,
+  runs: channelDispatchRuns,
+  failureText: async (kind) => {
+    const language = (await settingsStore.get()).language
+    if (language === 'zh-CN') {
+      return kind === 'run-interrupted' ? '上一条消息处理被中断，请重新发送。' : '处理失败，请稍后重试。'
+    }
+    return kind === 'run-interrupted'
+      ? 'The previous request was interrupted. Please send it again.'
+      : 'The request failed. Please try again later.'
+  }
 })
 const channelInboundExecutionRunner = new ChannelInboundExecutionRunner({
   inbound: channelInboundRepository,
@@ -710,7 +694,8 @@ channelInboundService = new ChannelInboundService({
       name: 'Channel conversation',
       workspace: { type: 'system' }
     })).id,
-    discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) }
+    discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
+    exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
   },
   onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
 })
@@ -810,7 +795,10 @@ const larkRuntimeMaintenance = new LarkRuntimeMaintenance(larkRuntimeRepository)
 const qqRuntimeMaintenance = new QqRuntimeMaintenance(qqRuntimeRepository)
 const discordRuntimeMaintenance = new DiscordRuntimeMaintenance(discordRuntimeRepository)
 const wechatRuntimeMaintenance = new WechatRuntimeMaintenance(wechatEnrollmentRepository, wechatRuntimeRepository)
-const channelDeliveryMaintenance = new ChannelDeliveryMaintenance({ repository: channelDeliveryRepository })
+const channelDeliveryMaintenance = new ChannelDeliveryMaintenance({
+  repository: channelDeliveryRepository,
+  retryDue: () => channelDeliveryService.retryDue()
+})
 const deliverTaskResultToChannels = createTaskChannelDelivery({
   delivery: channelDeliveryService,
   repository: channelDeliveryRepository,
@@ -864,7 +852,7 @@ agentStateCoordinator = createAgentStateCoordinator({
   syncSkillsRuntimeFromState,
   syncProductToolsRuntimeFromState: syncProductToolsRuntimeFromState,
   syncMcpRuntimeFromState: (state) => mcpRuntimeService.syncFromState(state),
-  syncChannelsFromState: (state) => channelRuntimeService.syncFromState(state),
+  syncChannelsFromState: () => undefined,
   syncTaskSchedulerFromState: (state) => agentTaskSchedulerRuntimeService.syncFromState(state),
   emitStateChanged: (state) => {
     getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
@@ -1079,11 +1067,8 @@ const agentIpcHandlers = createAgentIpcHandlers(
     getProductToolCallTrace: async (toolCallId: string) => agentRepositories.productToolTraces.get(toolCallId)
   },
   {
-    getChannelRuntimeSnapshot: (options) => channelRuntimeService.getSnapshot(options),
-    restartChannelRuntime: async (channelId) => {
-      await channelRuntimeService.restartChannel(channelId)
-      return channelRuntimeService.getSnapshot({ includeDiagnostics: true })
-    }
+    getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot(),
+    restartChannelRuntime: (channelId) => channelRuntimeSupervisor.restart(channelId)
   },
   agentModelCompatibilityControl,
   {
@@ -1209,7 +1194,6 @@ async function mergeAndReplaceAgentSessionState(
   syncSkillsRuntimeFromState(nextState)
   syncProductToolsRuntimeFromState(nextState)
   mcpRuntimeService.syncFromState(nextState)
-  void channelRuntimeService.syncFromState(nextState)
   agentTaskSchedulerRuntimeService.syncFromState(nextState)
   getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, nextState)
   return nextState
@@ -1234,12 +1218,6 @@ async function syncAgentStateAfterMutation(previousState: AgentStoreState): Prom
   return agentStateCoordinator.syncAfterMutation(previousState)
 }
 
-function registerChannelRuntimeHostFactory(type: AgentChannelType, factory: AgentChannelRuntimeHostFactory): void {
-  // Legacy host factories bypass C03 owner/fence semantics. Only the Telegram smoke fixture is allowed here.
-  if (type !== 'telegram') throw new Error('channel-runtime-adapter-blocked')
-  channelRuntimeHostRegistry.register(type, factory)
-}
-
 export type DesktopAppBootstrapOptions = {
   productManifests?: readonly ProductManifest[]
   productAgentSeedFactories?: readonly ProductAgentSeedFactory[]
@@ -1259,7 +1237,6 @@ export type DesktopAppBootstrapOptions = {
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
-    registerChannelRuntimeHostFactory: (type: AgentChannelType, factory: AgentChannelRuntimeHostFactory) => void
     registerProductCache: ReturnType<typeof createProductCacheRegistrar>
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
     getAgentState?: () => Promise<AgentStoreState>
@@ -1525,6 +1502,23 @@ function registerIpcHandlers(
     })
   })
 
+  ipcMain.handle(IpcChannels.channelsListCandidates, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelInboundService.listCandidates(String(value.id), typeof value.limit === 'number' ? value.limit : 100)
+  })
+  ipcMain.handle(IpcChannels.channelsAllowCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelInboundService.allowCandidate({
+      channelId: String(value.channelId ?? value.id),
+      candidateId: String(value.candidateId),
+      enableTarget: assertBoolean(value.enableTarget)
+    })
+  })
+  ipcMain.handle(IpcChannels.channelsIgnoreCandidate, (_event: IpcMainInvokeEvent, input: unknown) => {
+    const value = asChannelInput(input)
+    return channelInboundService.ignoreCandidate(String(value.channelId ?? value.id), String(value.candidateId))
+  })
+
   ipcMain.handle(IpcChannels.modelProvidersList, () => providerStore.list())
   ipcMain.handle(IpcChannels.modelProvidersUpsert, async (_event: IpcMainInvokeEvent, provider: ModelProviderInput) => {
     const result = await providerStore.upsert(provider)
@@ -1668,21 +1662,25 @@ function registerIpcHandlers(
       getMainWindow()?.webContents.send(IpcChannels.modelProvidersDetectionDone, runId, payload)
     },
     // PLAT-82：run 结束后把「实测通过」的协议写回模型（一次写入；状态文案不落库）。
-    recordProbedProtocols: (providerId, updates) => providerStore.recordProbedProtocols(providerId, updates)
+    recordProbedProtocols: (providerId, updates) => providerStore.recordProbedProtocols(providerId, updates),
+    // 可用性结论：只写 ok / failed；渲染层用同一指纹函数判过期。
+    recordModelAvailability: (providerId, updates, checkedAt) =>
+      providerStore.recordModelAvailability(providerId, updates, checkedAt)
   })
   ipcMain.handle(
     IpcChannels.modelProvidersDetectModels,
     async (
       _event: IpcMainInvokeEvent,
       providerId: string,
-      options?: { modes?: unknown; runId?: unknown }
+      options?: { modes?: unknown; runId?: unknown; modelIds?: unknown }
     ) => {
       if (typeof providerId !== 'string' || !providerId.trim()) {
         throw new Error('providerId is required.')
       }
       return modelProviderDetection.detectModels(providerId, {
         modes: (options?.modes ?? []) as ModelDetectionMode[],
-        runId: typeof options?.runId === 'string' ? options.runId : ''
+        runId: typeof options?.runId === 'string' ? options.runId : '',
+        ...(Array.isArray(options?.modelIds) ? { modelIds: options.modelIds as string[] } : {})
       })
     }
   )
@@ -2455,7 +2453,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       platformFetch: getPlatformFetch(),
       secretVault: providerSecretVault,
       registerProductAgentToolHandler,
-      registerChannelRuntimeHostFactory,
       registerProductCache,
       registerProductDisposer: productServiceDisposerRegistry.register,
       getAgentState: () => agentStore.getState(),
@@ -2537,6 +2534,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       else telegramOffsetRepository.auditBootstrapFenced(channelId, 'telegram-runtime-start-failed')
     }
   }
+  await channelManagementService.resumeRequested()
   taskAutomationMaintenance.recoverAfterRestart()
   disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
   disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)
@@ -2550,7 +2548,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   disposeWechatRuntimeMaintenance = wechatRuntimeMaintenance.start()
   syncProductToolsRuntimeFromState(await agentStore.getState())
   mcpRuntimeService.syncFromState(await agentStore.getState())
-  void channelRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.start()
   agentRuntimeService.subscribe((snapshot) => {

@@ -2,9 +2,10 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
+import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { modelAvailabilityFingerprint } from '@platform/ai/providers/modelAvailability'
 
 import { platformText } from '../../i18n/platformText'
 import type { ModelGroup } from '../modelGrouping'
@@ -20,7 +21,7 @@ const labels = platformText['en-US'].models
 
 type Fixture = Pick<
   ModelDefinition,
-  'id' | 'name' | 'capabilities' | 'contextLength' | 'maxCompletionTokens' | 'pricing' | 'freeOverride'
+  'id' | 'name' | 'capabilities' | 'contextLength' | 'maxCompletionTokens' | 'pricing' | 'freeOverride' | 'availability'
 >
 
 function model(
@@ -71,7 +72,22 @@ afterEach(async () => {
   root = undefined
   document.body.replaceChildren()
   resetModelDetectionControllerForTests()
+  Reflect.deleteProperty(window, 'platform')
 })
+
+/** 模型区只读 provider 的 id / 端点 / Key 掩码（行内可用性判过期）与模型数组。 */
+function providerFixture(value: ModelGroup[]): SafeModelProvider {
+  return {
+    id: 'aionly',
+    name: 'AiOnly',
+    enabled: true,
+    baseUrl: 'https://api.aionly.test',
+    endpoints: [{ protocol: 'chat-completions', baseUrl: 'https://api.aionly.test' }],
+    hasApiKey: true,
+    apiKeyPreview: 'sk-a**********wxyz',
+    models: value.flatMap((group) => group.models)
+  }
+}
 
 async function mountGroups(value: ModelGroup[] = groups): Promise<HTMLElement> {
   await act(async () => root?.unmount())
@@ -84,7 +100,7 @@ async function mountGroups(value: ModelGroup[] = groups): Promise<HTMLElement> {
   await act(async () => {
     root?.render(createElement(ModelServiceModelsSection, {
       labels,
-      providerId: 'aionly',
+      provider: providerFixture(value),
       groups: value,
       modelCount: value.reduce((total, group) => total + group.models.length, 0),
       staleModelCount: 0,
@@ -258,6 +274,36 @@ describe('PLAT-82 模型行：能力 chip + 本会话检测结果', () => {
     expect(rows).toEqual(['deepseek-r1-0528', 'deepseek-v3.2'])
   })
 
+  it('runs a single-model check from the row action (same lanes as the full run)', async () => {
+    const detectModels = vi.fn(async () => ({ accepted: true, total: 1 }))
+    Object.defineProperty(window, 'platform', {
+      configurable: true,
+      value: {
+        modelProviders: {
+          detectModels,
+          onModelDetectionProgress: () => () => undefined,
+          onModelDetectionDone: () => () => undefined
+        }
+      }
+    })
+    const container = await mountGroups()
+    const button = row(container, 'deepseek-v3.2')?.querySelector<HTMLButtonElement>('[data-model-row-test]')
+    expect(button).not.toBeNull()
+    // 媒体模型没有联通性测试，不显示单测按钮。
+    expect(row(container, 'doubao-seedream-3-0-t2i')?.querySelector('[data-model-row-test]')).toBeNull()
+
+    await act(async () => {
+      button?.click()
+      await Promise.resolve()
+    })
+
+    expect(detectModels).toHaveBeenCalledTimes(1)
+    expect(detectModels).toHaveBeenCalledWith('aionly', expect.objectContaining({
+      modes: ['connectivity', 'protocol'],
+      modelIds: ['deepseek-v3.2']
+    }))
+  })
+
   it('opens the detection dialog from the toolbar', async () => {
     const container = await mountGroups()
     await act(async () => {
@@ -284,6 +330,66 @@ describe('PLAT-82 模型行：能力 chip + 本会话检测结果', () => {
     // 名称与右侧簇是同一行的兄弟节点；actions 不单独占行。
     expect(entry?.querySelector('.model-service-model-name + .capability-pills + .model-service-model-actions')).not.toBeNull()
     expect(entry?.querySelectorAll('[data-model-row]')).toHaveLength(0)
+  })
+})
+
+describe('模型可用性结论', () => {
+  const config = {
+    endpoints: [{ protocol: 'chat-completions' as const, baseUrl: 'https://api.aionly.test' }],
+    apiKeyPreview: 'sk-a**********wxyz'
+  }
+  const checkedAt = '2026-10-25T05:00:00.000Z'
+  const chat = { chat: true }
+
+  it('shows the stored verdict (可用 / 不可用) when the session has no result', async () => {
+    const ok = model('avail-ok', chat)
+    const failed = model('avail-failed', chat)
+    const container = await mountGroups([{
+      name: 'Availability',
+      models: [
+        {
+          ...ok,
+          availability: {
+            status: 'ok',
+            checkedAt,
+            fingerprint: modelAvailabilityFingerprint(config, ok)
+          }
+        },
+        {
+          ...failed,
+          availability: {
+            status: 'failed',
+            reasonCode: 'http_401',
+            checkedAt,
+            fingerprint: modelAvailabilityFingerprint(config, failed)
+          }
+        }
+      ]
+    }])
+
+    const okRow = row(container, 'avail-ok')
+    expect(okRow?.querySelector('[data-model-availability]')?.textContent).toBe(labels.modelAvailabilityOk)
+    expect(okRow?.querySelector('[data-model-availability]')?.getAttribute('data-model-availability')).toBe('ok')
+
+    const failedRow = row(container, 'avail-failed')
+    expect(failedRow?.querySelector('[data-model-availability]')?.textContent).toBe(labels.modelAvailabilityFailed)
+    expect(failedRow?.querySelector('[data-model-availability]')?.getAttribute('title'))
+      .toContain(labels.probeReasonAuth)
+  })
+
+  it('marks a verdict written before the last config change as 待检测', async () => {
+    const stale = model('avail-stale', chat)
+    const container = await mountGroups([{
+      name: 'Availability',
+      models: [{
+        ...stale,
+        availability: { status: 'ok', checkedAt, fingerprint: 'av1-from-an-older-config' }
+      }]
+    }])
+
+    const entry = row(container, 'avail-stale')
+    expect(entry?.querySelector('[data-model-availability]')?.textContent).toBe(labels.modelAvailabilityStale)
+    expect(entry?.querySelector('[data-model-availability]')?.getAttribute('data-model-availability')).toBe('stale')
   })
 })
 

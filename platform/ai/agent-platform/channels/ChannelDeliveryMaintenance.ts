@@ -8,6 +8,7 @@ export class ChannelDeliveryMaintenance {
 
   constructor(private readonly deps: {
     repository: ChannelDeliveryRepository
+    retryDue?: () => Promise<void>
     now?: () => Date
     setInterval?: (callback: () => void, intervalMs: number) => Timer
     clearInterval?: (timer: Timer) => void
@@ -19,7 +20,16 @@ export class ChannelDeliveryMaintenance {
 
   start(): () => void {
     this.runSlice()
-    const timer = (this.deps.setInterval ?? setInterval)(() => this.runSlice(), 15 * 60_000)
-    return () => (this.deps.clearInterval ?? clearInterval)(timer)
+    void this.retrySlice()
+    const cleanup = (this.deps.setInterval ?? setInterval)(() => this.runSlice(), 15 * 60_000)
+    const retries = (this.deps.setInterval ?? setInterval)(() => { void this.retrySlice() }, 30_000)
+    return () => {
+      ;(this.deps.clearInterval ?? clearInterval)(cleanup)
+      ;(this.deps.clearInterval ?? clearInterval)(retries)
+    }
+  }
+
+  private async retrySlice(): Promise<void> {
+    try { await this.deps.retryDue?.() } catch { /* bounded maintenance; never surface as an unhandled rejection */ }
   }
 }

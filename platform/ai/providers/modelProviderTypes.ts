@@ -45,6 +45,21 @@ export type ModelDeclarationSource = 'provider_list'
 
 export type ModelProbeStatus = 'passed' | 'failed' | 'unsupported'
 
+/**
+ * 模型可用性结论：`ok` = 最近一次联通性检测通过，`failed` = 未通过（带原因短码）。
+ *
+ * 只由主进程写（`providerStore.recordModelAvailability`）；渲染层读 `status` / `reasonCode` /
+ * `checkedAt`，并用同一份指纹函数判断是否已过期。
+ */
+export type ModelAvailability = {
+  status: 'ok' | 'failed'
+  reasonCode?: string
+  /** ISO 时间戳。 */
+  checkedAt: string
+  /** 写入时的配置指纹；与当前配置不一致 ⇒ 结论过期。 */
+  fingerprint: string
+}
+
 export type ModelPricing = {
   currency: string
   promptPerMillion: number
@@ -103,6 +118,15 @@ export type ModelDefinition = {
   probeStatus?: ModelProbeStatus
   /** PLAT-62：失败原因短码（timeout/http_401/http_429/account_balance_insufficient/...）。 */
   probeReason?: string
+  /**
+   * 「这个模型上次能不能用」的结论（服务端写入，渲染层只读）。
+   *
+   * 由检测 run 的联通性结果落库：只写 `ok` / `failed`，跳过与取消不写；
+   * `fingerprint` 是写入时的配置指纹（端点 + Key 掩码 + 模型 id / 协议 / 能力），
+   * 读取方用 `isModelAvailabilityStale` 判断结论是否还适用于当前配置。
+   * 与上面的 `probeStatus` 不同：那三个字段是历史协议探测列，已停止写入。
+   */
+  availability?: ModelAvailability
   /** PLAT-62：该模型的探测结果来自供应商 /v1/models 声明（同步写入）。 */
   providerDeclared?: boolean
   /**

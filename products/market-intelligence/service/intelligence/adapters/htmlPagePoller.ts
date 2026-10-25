@@ -13,6 +13,7 @@ import {
   isBinanceHtmlSource,
   parseBinanceArticleListResponse,
   parseBinanceArticlePayload,
+  selectRecentBinanceArticles,
   type BinanceArticlePayload
 } from './binanceAnnouncementsParser'
 import {
@@ -131,10 +132,15 @@ async function collectBinanceArticles(input: {
   }
 
   const articles = parseBinanceArticleListResponse(response.bodyText)
+  const configuredMaxAge = Number(input.config.adapterConfig.maxAgeDays)
+  const recent = selectRecentBinanceArticles(articles, {
+    nowMs: Date.now(),
+    maxAgeDays: Number.isFinite(configuredMaxAge) ? configuredMaxAge : undefined
+  })
   return binanceArticlesToRawRecords({
     config: input.config,
     runId: input.runId,
-    articles
+    articles: recent
   })
 }
 

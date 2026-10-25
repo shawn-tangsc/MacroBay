@@ -4,6 +4,7 @@ import { Button, Select, Switch } from 'antd'
 import { resolveConfiguredModel, parseConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
 import type {
@@ -24,6 +25,8 @@ const TRANSLATION_MODEL_CONSTRAINTS: ModelPickerConstraints = {
 export function TranslationPreferencesSection(props: {
   settings?: SafeIntelligenceTranslationSettings
   moduleStatus?: SafeTranslationModuleStatus
+  /** The provider's own sources; omitted keeps the global module counts. */
+  sourceIds?: readonly string[]
   modelProviders: SafeModelProvider[]
   saving: boolean
   queuing: boolean
@@ -54,7 +57,25 @@ export function TranslationPreferencesSection(props: {
   onQueueMissing: () => void
 }): React.ReactElement {
   const settings = props.settings
+  const scopedCounts = useMemo(() => {
+    if (!props.sourceIds?.length || !props.moduleStatus?.bySource) return undefined
+    const totals = { pendingCount: 0, failedCount: 0, translatedCount: 0 }
+    for (const sourceId of props.sourceIds) {
+      const counts = props.moduleStatus.bySource[sourceId]
+      if (!counts) continue
+      totals.pendingCount += counts.pendingCount
+      totals.failedCount += counts.failedCount
+      totals.translatedCount += counts.translatedCount
+    }
+    return totals
+  }, [props.sourceIds, props.moduleStatus])
+  const counts = scopedCounts ?? {
+    pendingCount: props.moduleStatus?.pendingCount ?? 0,
+    failedCount: props.moduleStatus?.failedCount ?? 0,
+    translatedCount: props.moduleStatus?.translatedCount ?? 0
+  }
   const language = useShellLanguage()
+  const formatTime = useShellTimeFormat()
   const modelCandidates = useMemo<ModelPickerCandidate[]>(
     () =>
       props.modelProviders.flatMap((provider) =>
@@ -156,12 +177,12 @@ export function TranslationPreferencesSection(props: {
         <div className="intelligence-translation-status">
           {props.moduleStatus ? (
             <>
-              <StatusPill label={props.labels.pendingCount} value={String(props.moduleStatus.pendingCount)} />
-              <StatusPill label={props.labels.failedCount} value={String(props.moduleStatus.failedCount)} />
-              <StatusPill label={props.labels.translatedCount} value={String(props.moduleStatus.translatedCount)} />
+              <StatusPill label={props.labels.pendingCount} value={String(counts.pendingCount)} />
+              <StatusPill label={props.labels.failedCount} value={String(counts.failedCount)} />
+              <StatusPill label={props.labels.translatedCount} value={String(counts.translatedCount)} />
               <StatusPill
                 label={props.labels.lastJobAt}
-                value={props.moduleStatus.lastJobAt ?? props.labels.saved}
+                value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : props.labels.saved}
                 wide
               />
             </>
@@ -176,8 +197,8 @@ export function TranslationPreferencesSection(props: {
       <div className="intelligence-translation-meta">
         {props.moduleStatus ? (
           <small>
-            {props.labels.moduleStatus}: {props.labels.pendingCount} {props.moduleStatus.pendingCount} ·{' '}
-            {props.labels.failedCount} {props.moduleStatus.failedCount}
+            {props.labels.moduleStatus}: {props.labels.pendingCount} {counts.pendingCount} ·{' '}
+            {props.labels.failedCount} {counts.failedCount}
           </small>
         ) : null}
         {props.errorCode ? <small data-tone="error">{props.errorCode}</small> : null}

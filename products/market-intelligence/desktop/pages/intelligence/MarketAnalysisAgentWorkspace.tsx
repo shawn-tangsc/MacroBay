@@ -8,7 +8,8 @@ import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorksp
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import type { AnalysisSelectionState, UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
-import { TimelinePanel } from './TimelinePanel'
+import { NewsSentimentFeature } from '../../features/industry/news-sentiment'
+import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
 import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayoutPolicy'
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
@@ -30,6 +31,7 @@ type Props = {
   openEntry?: MarketAnalysisTimelineEntry
   onOpenChange?: (entry: MarketAnalysisTimelineEntry | undefined) => void
   timelineText?: MarketAnalysisTimelineText
+  language?: 'zh-CN' | 'en-US'
   /** The calendar card that takes the conversation's place in the column. */
   card?: ReactNode
   /** The calendar event the reader selected, as the line the card itself rendered. */
@@ -49,16 +51,14 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, openEntry: injectedOpenEntry, onOpenChange: injectedOpenChange, timelineText, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const contextRenderers = useMemo(
     () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
     [t.contextAnalysis, t.selectedEvent]
   )
-  const panelText: MarketAnalysisTimelineText = timelineText ?? text.analysisTimeline
   const [ownBinding, setOwnBinding] = useState<AnalysisWorkspaceBinding>()
   const [ownSelectionState, setOwnSelectionState] = useState<AnalysisSelectionState>('none')
-  const [ownOpenEntry, setOwnOpenEntry] = useState<MarketAnalysisTimelineEntry>()
   const ownTimeline = useMarketAnalysisTimeline({
     text: { loading: text.analysisTimeline.loading, unavailable: text.analysisTimeline.unavailable, attemptFailed: text.analysisTimeline.attemptFailed, failureReasons: text.analysisTimeline.failureReasons, initialAnalysisFailed: text.analysisTimeline.initialAnalysisFailed },
     onSelect: setOwnBinding,
@@ -70,13 +70,16 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
   const timeline = injectedTimeline ?? ownTimeline
   const selectionState = injectedState ?? ownSelectionState
   const binding = injectedBinding ?? ownBinding
-  const openEntry = injectedOpenEntry ?? ownOpenEntry
   const setBinding = onBindingChange ?? setOwnBinding
-  const setOpenEntry = injectedOpenChange ?? setOwnOpenEntry
   const selectionBlocked = selectionState === 'loading' || selectionState === 'unavailable'
   const [chatPercent, setChatPercent] = useState<number>(layout.initialChatPercent)
   const container = useRef<HTMLElement>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [selectedNews, setSelectedNews] = useState<{ itemId: string; title: string }>()
+
+  useEffect(() => {
+    if (selectedContextLabel) setSelectedNews(undefined)
+  }, [selectedContextLabel])
   // A selected calendar event travels with the question as an identity reference, the same way a
   // bound analysis node does, so the agent knows exactly which event is being asked about.
   // The matching timeline entry supplies the readable card title; never show the raw run ids.
@@ -84,7 +87,7 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
     ? timeline?.state.entries.find(entry => entry.analysisRunId === binding.analysisRunId)?.safeTitle
       ?? (timeline?.state.selected?.analysisRunId === binding.analysisRunId ? timeline.state.selected.safeTitle : undefined)
     : undefined
-  const chat = useMarketAnalysisChat(binding, t.newConversation, selectedContextLabel ? {
+  const calendarContext = selectedContextLabel ? {
     label: selectedContextLabel,
     reference: `[${text.calendarCard.eventContext.heading}: ${selectedContextLabel}]`,
     ...(selectedEventKey && selectedEventMonth ? { payload: { eventKey: selectedEventKey, month: selectedEventMonth } } : {}),
@@ -95,7 +98,25 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
       }) as MacroCalendarEventContextResult
       return formatCalendarEventFactContext(data, text.calendarCard.eventContext)
     } } : {})
-  } : undefined, selectedAnalysisTitle ?? t.contextAnalysis)
+  } : undefined
+  const newsContext = selectedNews ? {
+    label: selectedNews.title,
+    reference: `[${text.newsSentiment.title}: ${selectedNews.title}]`,
+    payload: { itemId: selectedNews.itemId },
+    facts: async () => {
+      const detail = await newsSentimentClient.getItem({ itemId: selectedNews.itemId, asOf: new Date().toISOString() })
+      if (!detail) return `${text.newsSentiment.title}: ${selectedNews.title}`
+      const body = detail.translatedBodyExcerpt ?? detail.bodyExcerpt ?? ''
+      return [
+        `${text.newsSentiment.title}: ${selectedNews.title}`,
+        `${text.newsSentiment.drawer.filters.source}: ${detail.sourceName} · ${detail.publishedAt}`,
+        `${text.newsSentiment.labels[detail.polarity] ?? detail.polarity} · ${detail.strength}/5 · ${detail.confidence}%`,
+        body.slice(0, 3_000)
+      ].join('\n')
+    }
+  } : undefined
+  const chatContext = newsContext ?? calendarContext
+  const chat = useMarketAnalysisChat(binding, t.newConversation, chatContext, selectedAnalysisTitle ?? t.contextAnalysis)
   const resize = (percent: number) => setChatPercent(Math.max(layout.minChatPercent, Math.min(layout.maxChatPercent, percent)))
 
   // The conversation lives in the floating control now; the card takes its grid row.
@@ -129,12 +150,16 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
           />
         </header>
         <div className="mi-analysis-chat__binding">
-          {selectedContextLabel
-            ? <span title={selectedContextLabel}>{t.selectedEvent}·{selectedContextLabel}</span>
-            : selectionBlocked ? <span>{selectionState === 'loading' ? text.analysisTimeline.loading : text.analysisTimeline.unavailable}</span> : binding ? <span>{t.selectedAnalysis}</span> : <span>{t.noSelection}</span>}
-          {selectedContextLabel && onClearSelectedContext
-            ? <Button size="small" type="text" onClick={onClearSelectedContext}>{t.clearSelection}</Button>
-            : binding || selectionState === 'unavailable' ? <Button size="small" type="text" onClick={() => setBinding(undefined)}>{t.clearSelection}</Button> : null}
+          {selectedNews
+            ? <span title={selectedNews.title}>{t.selectedNews}·{selectedNews.title}</span>
+            : selectedContextLabel
+              ? <span title={selectedContextLabel}>{t.selectedEvent}·{selectedContextLabel}</span>
+              : selectionBlocked ? <span>{selectionState === 'loading' ? text.analysisTimeline.loading : text.analysisTimeline.unavailable}</span> : binding ? <span>{t.selectedAnalysis}</span> : <span>{t.noSelection}</span>}
+          {selectedNews
+            ? <Button size="small" type="text" onClick={() => setSelectedNews(undefined)}>{t.clearSelection}</Button>
+            : selectedContextLabel && onClearSelectedContext
+              ? <Button size="small" type="text" onClick={onClearSelectedContext}>{t.clearSelection}</Button>
+              : binding || selectionState === 'unavailable' ? <Button size="small" type="text" onClick={() => setBinding(undefined)}>{t.clearSelection}</Button> : null}
         </div>
         {chat.sessionId && chat.agent
           ? <AgentChatSurface
@@ -157,7 +182,11 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
       onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = container.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
-    <TimelinePanel text={panelText} timeline={timeline} openEntry={openEntry} onOpenChange={setOpenEntry} />
+    <NewsSentimentFeature
+      language={language}
+      text={text.newsSentiment}
+      onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
+    />
     <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
   </aside>
 }

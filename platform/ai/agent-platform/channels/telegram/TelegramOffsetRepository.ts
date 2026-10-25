@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { runtimeAuthorizedChannelSql } from '../ChannelManagementPredicates'
+import { supportedChannelSql } from '../ChannelManagementPredicates'
 
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** Metadata-only polling cursor. It never stores a Telegram update body or token. */
 export class TelegramOffsetRepository {
@@ -23,8 +23,8 @@ export class TelegramOffsetRepository {
         `select 1 from channel_runtime_generations g join agent_channels c on c.id = g.channel_id
          join agent_entities a on a.id = c.agent_id
          where g.channel_id = ? and g.generation = ? and g.lifecycle_state = 'active'
-           and c.type = 'telegram' and ${RUNTIME_CHANNEL_C_SQL}
-           and c.migration_state = 'runtime-ready' and c.requested_enabled = 1`
+           and c.adapter_key = 'telegram' and ${RUNTIME_CHANNEL_C_SQL}
+           and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
       ).get(channelId, generation)
       if (!current) return false
       const previous = this.get(channelId)
@@ -55,8 +55,8 @@ export class TelegramOffsetRepository {
       `insert into channel_telegram_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
        where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active'
-           and c.type='telegram' and ${RUNTIME_CHANNEL_C_SQL}
-           and c.migration_state='runtime-ready' and c.requested_enabled=1)`
+           and c.adapter_key='telegram' and ${RUNTIME_CHANNEL_C_SQL}
+           and c.lifecycle_state='enabled' and c.requested_enabled=1)`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
   }
 

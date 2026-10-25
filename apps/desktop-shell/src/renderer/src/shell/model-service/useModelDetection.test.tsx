@@ -9,6 +9,7 @@ import type { ModelDetectionResult } from '@platform/ai/providers/modelDetection
 import {
   getModelDetectionSnapshot,
   isDetectionRunning,
+  isModelBeingDetected,
   resetModelDetectionControllerForTests,
   resultForModel,
   runningModelDetectionIds,
@@ -74,6 +75,19 @@ afterEach(() => {
 })
 
 describe('PLAT-82 model detection controller (memory only)', () => {
+  it('tracks a single-model run so only that model counts as "testing"', async () => {
+    const api = installPlatform()
+    const starting = startModelDetection('lanyun', ['connectivity', 'protocol'], ['m1'])
+    api.deferred[0]!.resolve({ accepted: true, total: 1 })
+    await starting
+
+    const snapshot = getModelDetectionSnapshot()
+    expect(isModelBeingDetected(snapshot, 'lanyun', 'm1')).toBe(true)
+    expect(isModelBeingDetected(snapshot, 'lanyun', 'm2')).toBe(false)
+    // 全量 run 仍把同供应商的所有模型都算作测试中。
+    expect(isDetectionRunning(snapshot, 'lanyun')).toBe(true)
+  })
+
   it('collects per-model results from progress events and marks the run finished', async () => {
     const api = installPlatform()
     const starting = startModelDetection('lanyun', ['connectivity'])

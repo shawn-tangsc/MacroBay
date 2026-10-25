@@ -54,22 +54,7 @@ export class ChannelManagementCredentialService {
       throw new Error('channel-management-recovery-pending')
     }
     await this.deps.cipher.destroy(operation.channelId, operation.payloadKeyRefs)
-    const legacyMigrations = operation.legacyMigrations ?? []
-    const providerRefs = new Set(legacyMigrations
-      .filter((migration) => migration.purpose === 'provider-credential')
-      .map((migration) => migration.ref))
-    if (operation.ref) providerRefs.add(operation.ref)
-    for (const ref of providerRefs) await this.deps.vault.delete(ref)
-    for (const archive of legacyMigrations.filter((migration) => migration.purpose === 'legacy-discovery-archive')) {
-      await this.deps.vault.deleteReservedArchive({
-        channelId: operation.channelId,
-        type: archive.type,
-        credentialRef: archive.ref,
-        sourceFingerprint: archive.fingerprint,
-        fingerprintKeyId: archive.keyId,
-        migrationPermit: archive.permit
-      })
-    }
+    if (operation.ref) await this.deps.vault.delete(operation.ref)
     if (!this.deps.repository.completeDelete(operation.channelId, operation.id)) {
       throw new Error('channel-delete-finalization-failed')
     }
@@ -235,7 +220,8 @@ export class ChannelManagementCredentialService {
         return
       }
       if (safe.revision !== operation.expectedRevision + 1) throw new Error('channel-management-recovery-pending')
-      if (!(await this.hasRotationReceipt(operation, safe.revision))) {
+      const receipt = await this.hasRotationReceipt(operation, safe.revision)
+    if (!receipt) {
         this.deps.repository.markRevokedRotationUnavailable(operation, this.deps.now())
         this.deps.repository.completeUnattributedRotation(operation, this.deps.now())
         return
@@ -346,7 +332,8 @@ export class ChannelManagementCredentialService {
       this.deps.repository.markRevokedRotationUnavailable(operation, this.deps.now())
       throw new Error('channel-management-recovery-pending')
     }
-    if (!(await this.hasRotationReceipt(operation, safe.revision))) {
+    const receipt = await this.hasRotationReceipt(operation, safe.revision)
+    if (!receipt) {
       // A different operation advanced this normal ref. Retain it, but never adopt it as this journal's result.
       this.deps.repository.markRevokedRotationUnavailable(operation, this.deps.now())
       this.deps.repository.completeUnattributedRotation(operation, this.deps.now())

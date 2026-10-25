@@ -293,8 +293,6 @@ describe('product registry generator', () => {
 
       expect(productServicesSource).toContain('registerProductAgentToolHandler')
       expect(productServicesSource).toContain('ProductAgentToolHandlerRegistration')
-      expect(productServicesSource).toContain('registerChannelRuntimeHostFactory')
-      expect(productServicesSource).toContain('AgentChannelRuntimeHostFactory')
       expect(productServicesSource).toContain('registerProductCache')
       expect(productServicesSource).toContain('ProductCacheRegistrar')
       expect(productServicesSource).toContain('registerProductDisposer')

@@ -3,6 +3,7 @@ import { resolveModelCapabilities } from '@platform/ai/providers/modelCapability
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 
 import type { PlatformText } from '../../../i18n/platformText'
+import { resolveModelAvailabilityView } from '../../model-service/modelAvailabilityView'
 import { resolveProviderDisplayName } from '../../model-service/providerDisplayName'
 import {
   MODEL_PICKER_PROTOCOL_ORDER,
@@ -74,6 +75,7 @@ export function buildModelPickerOptions(
     if (seenValues.has(value)) continue
     seenValues.add(value)
     const providerName = resolveProviderDisplayName(labels, provider)
+    const availability = resolveModelAvailabilityView(provider, model)
     options.push({
       value,
       providerId: provider.id,
@@ -83,6 +85,7 @@ export function buildModelPickerOptions(
       categories: resolveModelPickerCategories(capabilities, model),
       priceTag: resolveModelPickerPriceTag(model),
       protocols,
+      ...(availability ? { availability } : {}),
       searchText: `${model.name} ${model.id} ${providerName} ${provider.id}`.toLowerCase()
     })
   }

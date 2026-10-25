@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { buildSessionProxyConfig } from '../../../../network/proxyConfig'
 import { createDefaultAppSettings } from '../../../../settings/schema/appSettings'
@@ -62,6 +62,7 @@ describe('Slack Release B contracts', () => {
     const transport = new SlackDeliveryTransport()
     transport.setClient('slack-a', client, { isCurrent: () => current, signal: controller.signal })
     const pending = transport.send({ channelId: 'slack-a', providerConversationKey: 'slack:conversation:C1', text: 'hello', idempotencyKey: 'opaque' })
+    await vi.waitFor(() => expect(resolve).toBeTypeOf('function'))
     current = false
     resolve(response(200, { ok: true }))
     await expect(pending).resolves.toEqual({ kind: 'failed', code: 'delivery-host-unavailable' })

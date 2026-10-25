@@ -1748,6 +1748,23 @@ h1 {
   --web-search-ok: hsl(152 55% 34%);
 }
 
+
+/*
+ * antd portals drawers to <body> at full height, so the drawer header lands inside the window's
+ * topbar drag band. Drag regions are geometric, not DOM- or z-index-based: without no-drag the
+ * close control is painted over the band but the press is treated as a window drag. This applies
+ * to every portaled drawer; inline drawers (getContainer={false}) simply inherit a no-op here.
+ */
+.ant-drawer-mask,
+.ant-drawer-content-wrapper,
+.ant-drawer-content,
+.ant-drawer-header,
+.ant-drawer-body,
+.ant-drawer-footer,
+.ant-drawer-close {
+  -webkit-app-region: no-drag;
+}
+
 .web-search-provider-drawer .ant-drawer-content {
   background: var(--web-search-panel-bg);
 }
@@ -10221,6 +10238,30 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
 }
 
+/* 可用性图标：绿勾 = 可用，红叉 = 不可用，灰圈 = 待检测 / 尚未检测。 */
+.model-availability-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--muted);
+}
+
+.model-picker-trigger .model-availability-icon {
+  margin-left: 6px;
+}
+
+.model-picker-option-name + .model-availability-icon {
+  margin-left: 4px;
+}
+
+.model-availability-icon.is-ok {
+  color: var(--success, #3d9a6a);
+}
+
+.model-availability-icon.is-failed {
+  color: var(--danger);
+}
+
 .model-picker-trigger-provider {
   flex: 0 1 auto;
   min-width: 0;
@@ -11285,6 +11326,26 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--danger);
 }
 
+/* 落库的可用性结论：只在没有本会话结果时出现（配置变过 ⇒ 待检测）。 */
+.model-service-model-availability {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.model-service-model-availability[data-model-availability='ok'] {
+  color: var(--success, #3d9a6a);
+}
+
+.model-service-model-availability[data-model-availability='failed'] {
+  color: var(--danger);
+}
+
+.model-service-model-availability[data-model-availability='stale'] {
+  color: var(--muted);
+}
+
 /* 厂商声明过的协议实测失败：只做**本会话**标红，不覆盖厂商声明结论。 */
 .capability-tag.capability-protocol-failed {
   color: var(--danger);
@@ -11342,6 +11403,11 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .model-service-row-icon:hover:not(:disabled) {
   background: var(--surface-soft);
   color: var(--text);
+}
+
+/* 单模型测试进行中：图标转圈（按钮本身已被禁用）。 */
+.model-service-row-icon .spin {
+  animation: spin 800ms linear infinite;
 }
 
 .model-service-row-icon:disabled {

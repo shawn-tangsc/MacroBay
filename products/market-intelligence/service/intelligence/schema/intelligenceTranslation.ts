@@ -96,12 +96,20 @@ export type SafeTranslationJobSummary = {
   reason: TranslateIntelligenceItemsJobInput['reason']
 }
 
+export type SafeTranslationSourceCounts = {
+  pendingCount: number
+  failedCount: number
+  translatedCount: number
+}
+
 export type SafeTranslationModuleStatus = {
   pendingCount: number
   failedCount: number
   translatedCount: number
   lastJobAt?: string
   lastJobSummary?: string
+  /** Per intelligence source, so a provider page reports only its own work. */
+  bySource?: Readonly<Record<string, SafeTranslationSourceCounts>>
 }
 
 export type TranslationModelOutput = {

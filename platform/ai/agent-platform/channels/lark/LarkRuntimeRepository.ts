@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../../db/createAgentPlatformDatabase'
-import { larkChannelSql, runtimeAuthorizedChannelSql } from '../ChannelManagementPredicates'
+import { larkChannelSql, supportedChannelSql } from '../ChannelManagementPredicates'
 
 const LARK_CHANNEL_C_SQL = larkChannelSql('c')
-const RUNTIME_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const RUNTIME_CHANNEL_C_SQL = supportedChannelSql('c')
 
 /** Lark runtime persistence is code-only metadata; events and provider identifiers remain encrypted C03 payload. */
 export class LarkRuntimeRepository {
@@ -16,7 +16,7 @@ export class LarkRuntimeRepository {
       const current = this.database.connection.prepare(
         `select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
-           and c.migration_state='runtime-ready' and c.requested_enabled=1`
+           and c.lifecycle_state='enabled' and c.requested_enabled=1`
       ).get(channelId, generation)
       if (!current) return false
       return this.database.connection.prepare(
@@ -31,7 +31,7 @@ export class LarkRuntimeRepository {
       `insert into channel_lark_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
        where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
-           and c.migration_state='runtime-ready' and c.requested_enabled=1)`
+           and c.lifecycle_state='enabled' and c.requested_enabled=1)`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1
   }
 

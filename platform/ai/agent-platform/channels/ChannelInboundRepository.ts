@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
-import { runtimeAuthorizedChannelSql } from './ChannelManagementPredicates'
+import { supportedChannelSql } from './ChannelManagementPredicates'
 import type { ChannelConversationKind } from './channelContracts'
 import type { ChannelDispatchAdmission, ChannelDispatchFinalStatus, ChannelExecutionClaim } from './ChannelInboundContracts'
 
@@ -14,6 +14,7 @@ export type ChannelInboundAuditCode =
   | 'channel-agent-missing'
   | 'channel-work-capacity-exhausted'
   | 'channel-lifecycle-fenced'
+  | 'channel-inbound-failed'
 
 export type ChannelConversationRecord = {
   id: string
@@ -23,7 +24,36 @@ export type ChannelConversationRecord = {
   keyRevision: number
   keyHash: string
   kind: ChannelConversationKind
-  sessionId: string
+  sessionId: string | null
+}
+
+export type ChannelCandidateRecord = {
+  id: string
+  channelId: string
+  kind: ChannelConversationKind
+  userKeyCiphertext: Uint8Array
+  userKeyRef: string
+  userKeyRevision: number
+  userKeyHash: string
+  conversationKeyCiphertext: Uint8Array
+  conversationKeyRef: string
+  conversationKeyRevision: number
+  conversationKeyHash: string
+  displayLabel: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  hitCount: number
+  status: 'pending' | 'allowed' | 'ignored'
+}
+
+export type ChannelCandidateSafeView = {
+  id: string
+  kind: ChannelConversationKind
+  displayLabel: string | null
+  firstSeenAt: string
+  lastSeenAt: string
+  hitCount: number
+  status: 'pending' | 'allowed' | 'ignored'
 }
 
 export type ChannelWorkItemRecord = {
@@ -43,7 +73,7 @@ export type ChannelWorkItemRecord = {
 
 type ReceiptRow = { id: string; status: string }
 
-const MANAGED_CHANNEL_C_SQL = runtimeAuthorizedChannelSql('c')
+const SUPPORTED_CHANNEL_C_SQL = supportedChannelSql('c')
 
 export class ChannelInboundRepository {
   private readonly database: AgentPlatformDatabase
@@ -86,7 +116,7 @@ export class ChannelInboundRepository {
        join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.generation = ? and g.lifecycle_state = 'active'
-         and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.agent_id is not null and length(trim(c.agent_id)) > 0`
     ).get(channelId, generation) as { agent_id: string } | undefined
     return row?.agent_id ?? null
@@ -98,7 +128,7 @@ export class ChannelInboundRepository {
        join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.lifecycle_state = 'active'
-         and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.agent_id is not null and length(trim(c.agent_id)) > 0`
     ).get(channelId) as { agent_id: string } | undefined
     return row?.agent_id ?? null
@@ -116,7 +146,8 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.conversation_id = ? and w.dispatch_id = ?
          and w.status = 'dispatching' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
-         and r.generation = ? and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1`
+         and r.generation = ? and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
+         and v.agent_session_id is not null`
     ).get(
       input.claim.workItemId, input.claim.receiptId, input.claim.channelId, input.conversationId, input.claim.dispatchId,
       input.claim.leaseToken, input.claim.leaseExpiresAt, (input.now ?? new Date()).toISOString(), input.claim.generation
@@ -134,6 +165,10 @@ export class ChannelInboundRepository {
 
   recordRejectedLifecycle(channelId: string, generation: number, code: 'channel-agent-missing' | 'channel-stale-generation', now = new Date()): void {
     this.database.transact(() => this.audit(channelId, generation, code, now))
+  }
+
+  recordInboundFailure(channelId: string, generation: number, now = new Date()): void {
+    this.database.transact(() => this.audit(channelId, generation, 'channel-inbound-failed', now))
   }
 
   getConversation(channelId: string, keyHash: string): ChannelConversationRecord | null {
@@ -170,7 +205,7 @@ export class ChannelInboundRepository {
        join agent_entities a on a.id = c.agent_id
        where r.channel_id = ? and r.provider_event_key_hash = ? and r.status = 'processing'
          and w.status = 'processing' and w.lease_token is not null and w.lease_expires_at > ?
-         and g.lifecycle_state = 'active' and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1`
+         and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
     ).get(channelId, eventHash, now.toISOString()) as InitialClaimRow | undefined
     return row ? {
       workItemId: row.id,
@@ -192,7 +227,7 @@ export class ChannelInboundRepository {
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
          and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
          and r.generation = ? and g.lifecycle_state = 'active'
-         and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1`
+         and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
     ).get(
       claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
       claim.leaseToken, claim.leaseExpiresAt, now.toISOString(), claim.generation
@@ -297,6 +332,136 @@ export class ChannelInboundRepository {
        on conflict(channel_id, conversation_id) do update set enabled = excluded.enabled, updated_at = excluded.updated_at`
     ).run(randomUUID(), channelId, conversationId, enabled ? 1 : 0, now.toISOString(), now.toISOString())
     return true
+  }
+
+  managedChannelExists(channelId: string): boolean {
+    return Boolean(this.database.connection.prepare(
+      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
+    ).get(channelId))
+  }
+
+  upsertCandidate(input: {
+    channelId: string
+    kind: ChannelConversationKind
+    userKeyCiphertext: Uint8Array
+    userKeyRef: string
+    userKeyRevision: number
+    userKeyHash: string
+    conversationKeyCiphertext: Uint8Array
+    conversationKeyRef: string
+    conversationKeyRevision: number
+    conversationKeyHash: string
+    displayLabel?: string
+    now?: Date
+  }): void {
+    const now = (input.now ?? new Date()).toISOString()
+    this.database.connection.prepare(
+      `insert into channel_inbound_candidates (
+         id, channel_id, conversation_kind, user_key_ciphertext, user_key_ref, user_key_revision, user_key_hash,
+         conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash,
+         display_label, first_seen_at, last_seen_at, hit_count, status
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'pending')
+       on conflict(channel_id, conversation_kind, user_key_hash, conversation_key_hash) do update set
+         last_seen_at = excluded.last_seen_at,
+         hit_count = channel_inbound_candidates.hit_count + 1,
+         display_label = coalesce(excluded.display_label, channel_inbound_candidates.display_label)`
+    ).run(
+      randomUUID(), input.channelId, input.kind, input.userKeyCiphertext, input.userKeyRef, input.userKeyRevision,
+      input.userKeyHash, input.conversationKeyCiphertext, input.conversationKeyRef, input.conversationKeyRevision,
+      input.conversationKeyHash, input.displayLabel ?? null, now, now
+    )
+  }
+
+  listCandidates(channelId: string, limit = 100): ChannelCandidateSafeView[] {
+    const rows = this.database.connection.prepare(
+      `select id, conversation_kind, display_label, first_seen_at, last_seen_at, hit_count, status
+       from channel_inbound_candidates
+       where channel_id = ? and status = 'pending'
+       order by last_seen_at desc, id asc limit ?`
+    ).all(channelId, Math.max(1, Math.min(limit, 200))) as Array<{
+      id: string; conversation_kind: ChannelConversationKind; display_label: string | null
+      first_seen_at: string; last_seen_at: string; hit_count: number
+      status: 'pending' | 'allowed' | 'ignored'
+    }>
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.conversation_kind,
+      displayLabel: row.display_label,
+      firstSeenAt: row.first_seen_at,
+      lastSeenAt: row.last_seen_at,
+      hitCount: row.hit_count,
+      status: row.status
+    }))
+  }
+
+  getCandidate(channelId: string, candidateId: string): ChannelCandidateRecord | null {
+    const row = this.database.connection.prepare(
+      `select * from channel_inbound_candidates where channel_id = ? and id = ?`
+    ).get(channelId, candidateId) as Record<string, unknown> | undefined
+    return row ? {
+      id: row.id as string,
+      channelId: row.channel_id as string,
+      kind: row.conversation_kind as ChannelConversationKind,
+      userKeyCiphertext: row.user_key_ciphertext as Uint8Array,
+      userKeyRef: row.user_key_ref as string,
+      userKeyRevision: row.user_key_revision as number,
+      userKeyHash: row.user_key_hash as string,
+      conversationKeyCiphertext: row.conversation_key_ciphertext as Uint8Array,
+      conversationKeyRef: row.conversation_key_ref as string,
+      conversationKeyRevision: row.conversation_key_revision as number,
+      conversationKeyHash: row.conversation_key_hash as string,
+      displayLabel: (row.display_label as string | null) ?? null,
+      firstSeenAt: row.first_seen_at as string,
+      lastSeenAt: row.last_seen_at as string,
+      hitCount: row.hit_count as number,
+      status: row.status as 'pending' | 'allowed' | 'ignored'
+    } : null
+  }
+
+  /** Allows a candidate without ever decrypting its provider keys. */
+  allowCandidate(input: {
+    channelId: string
+    candidateId: string
+    enableTarget: boolean
+    now?: Date
+  }): string | null {
+    const now = input.now ?? new Date()
+    if (!this.managedChannelExists(input.channelId)) return null
+    return this.database.transact(() => {
+      const candidate = this.getCandidate(input.channelId, input.candidateId)
+      if (!candidate || candidate.status !== 'pending') return null
+      this.database.connection.prepare(
+        `insert or ignore into channel_allow_policies (
+           id, channel_id, subject_type, subject_key_ciphertext, subject_key_ref, subject_key_revision,
+           subject_key_hash, conversation_kind, created_at
+         ) values (?, ?, 'user', ?, ?, ?, ?, ?, ?)`
+      ).run(randomUUID(), input.channelId, candidate.userKeyCiphertext, candidate.userKeyRef, candidate.userKeyRevision, candidate.userKeyHash, candidate.kind, now.toISOString())
+
+      let conversationId = this.database.connection.prepare(
+        'select id from channel_conversations where channel_id = ? and conversation_key_hash = ?'
+      ).get(input.channelId, candidate.conversationKeyHash) as { id: string } | undefined
+      if (!conversationId) {
+        const id = randomUUID()
+        this.database.connection.prepare(
+          `insert into channel_conversations (
+             id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision,
+             conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at
+           ) values (?, ?, ?, ?, ?, ?, ?, null, ?, ?)`
+        ).run(id, input.channelId, candidate.conversationKeyCiphertext, candidate.conversationKeyRef, candidate.conversationKeyRevision, candidate.conversationKeyHash, candidate.kind, now.toISOString(), now.toISOString())
+        conversationId = { id }
+      }
+      this.setDeliveryTarget(input.channelId, conversationId.id, input.enableTarget, now)
+      this.database.connection.prepare(
+        "update channel_inbound_candidates set status = 'allowed', last_seen_at = ? where channel_id = ? and id = ?"
+      ).run(now.toISOString(), input.channelId, input.candidateId)
+      return conversationId.id
+    })
+  }
+
+  ignoreCandidate(channelId: string, candidateId: string, now = new Date()): boolean {
+    return this.database.connection.prepare(
+      "update channel_inbound_candidates set status = 'ignored', last_seen_at = ? where channel_id = ? and id = ? and status = 'pending'"
+    ).run(now.toISOString(), channelId, candidateId).changes === 1
   }
 
   allow(channelId: string, input: {
@@ -429,7 +594,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = ? and r.generation = ? and g.lifecycle_state = 'active'
-               and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+               and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
         ).run(leaseToken, lease, now.toISOString(), row.id, row.receipt_id, row.generation).changes
         if (updated === 1) {
@@ -463,7 +628,7 @@ export class ChannelInboundRepository {
                join agent_channels c on c.id = g.channel_id
                join agent_entities a on a.id = c.agent_id
                where g.channel_id = channel_inbound_work_items.channel_id and g.lifecycle_state = 'active'
-                 and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+                 and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
              )`
         ).run(now.toISOString(), row.id).changes
         if (quarantined === 1) {
@@ -489,7 +654,7 @@ export class ChannelInboundRepository {
          where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
            and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
            and r.generation = ? and g.lifecycle_state = 'active'
-           and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1`
+           and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1`
       ).get(
         claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
         claim.leaseToken, claim.leaseExpiresAt, now.toISOString(), claim.generation
@@ -531,7 +696,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where g.channel_id = channel_inbound_work_items.channel_id
-               and g.lifecycle_state = 'active' and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.leaseToken, claim.generation).changes
       if (quarantined === 1) {
@@ -557,7 +722,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
-               and g.lifecycle_state = 'active' and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(
         leaseExpiresAt, now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
@@ -579,7 +744,7 @@ export class ChannelInboundRepository {
              join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
-               and g.lifecycle_state = 'active' and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+               and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
            )`
       ).run(
         status, now.toISOString(), claim.workItemId, claim.receiptId, claim.channelId, claim.dispatchId,
@@ -697,7 +862,7 @@ export class ChannelInboundRepository {
            join agent_channels c on c.id = g.channel_id
            join agent_entities a on a.id = c.agent_id
            where g.channel_id = w.channel_id and g.lifecycle_state = 'active'
-             and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+             and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          )
        order by w.lease_expires_at asc, w.id asc limit ?`
     ).all(now.toISOString(), Math.max(1, Math.min(limit, 500))) as Array<{ id: string; receipt_id: string; channel_id: string; generation: number }>
@@ -723,7 +888,7 @@ export class ChannelInboundRepository {
 
 type ConversationRow = {
   id: string; channel_id: string; conversation_key_ciphertext: Uint8Array; conversation_key_ref: string
-  conversation_key_revision: number; conversation_key_hash: string; conversation_kind: ChannelConversationKind; agent_session_id: string
+  conversation_key_revision: number; conversation_key_hash: string; conversation_kind: ChannelConversationKind; agent_session_id: string | null
 }
 type WorkRow = {
   id: string; receipt_id: string; channel_id: string; conversation_id: string; dispatch_id: string; payload_ciphertext: Uint8Array

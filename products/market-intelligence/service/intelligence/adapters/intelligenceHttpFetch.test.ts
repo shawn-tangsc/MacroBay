@@ -51,6 +51,30 @@ describe('createIntelligenceFetchText', () => {
     )
   })
 
+  it('declares a contact in the default user agent', async () => {
+    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: 'ok' })
+    const fetchText = createIntelligenceFetchText({
+      profileStore: {
+        resolveProfile: async () => ({
+          profileId: 'profile-1',
+          sourceId: 'coindesk-rss',
+          enabled: true,
+          collectionPreset: 'balanced',
+          includeInSentiment: true,
+          scopePolicy: 'watchlist-priority',
+          rawArchiveEnabled: false,
+          retentionMode: 'balanced',
+          autoReplayAfterParserUpgrade: false,
+          updatedAt: '2026-07-05T10:00:00.000Z'
+        })
+      }
+    })
+
+    await fetchText('https://example.com/feed.xml', 'coindesk-rss')
+    const request = mockedHttpRequest.mock.calls.at(-1)?.[0]
+    expect(request?.headers?.['User-Agent']).toMatch(/\+https?:\/\//)
+  })
+
   it('throws when the provider returns an error status', async () => {
     mockedHttpRequest.mockResolvedValueOnce({
       status: 503,

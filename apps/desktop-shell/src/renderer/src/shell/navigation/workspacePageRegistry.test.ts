@@ -113,8 +113,8 @@ describe('shell workspace page registry（P2-01 loader 投影）', () => {
     const menuKeys = new Set(shellRegistry().list().map((page) => page.menuKey))
     const settingsPanelIds = createBuiltInSettingsPanels('zh-CN').map((panel) => panel.id)
 
-    expect(settingsPanelIds).toHaveLength(7)
-    expect(settingsPanelIds).not.toContain('channels')
+    expect(settingsPanelIds).toHaveLength(8)
+    expect(settingsPanelIds).toContain('channels')
     expect(settingsPanelIds.filter((id) => menuKeys.has(id))).toEqual([])
     expect(menuKeys.has('settings')).toBe(true)
     expect([...menuKeys].filter((key) => key === 'settings')).toHaveLength(1)

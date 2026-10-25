@@ -3,7 +3,7 @@ import {
   getActiveSession,
   type AgentStoreState
 } from '@platform/ai/agent-platform/store/agentStore'
-import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/ChannelRuntimeService'
+import type { AgentChannelRuntimeSnapshot } from '@platform/ai/agent-platform/channels/channelRuntimeSnapshot'
 import type { AgentRuntimeCompatibilityResult } from '@platform/ai/agent-platform/runtime/compatibility/agentRuntimeCompatibilityTypes'
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'

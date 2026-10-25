@@ -233,9 +233,7 @@ import type {
   ProductAgentToolInvokeInput,
   ProductAgentToolInvokeResult
 } from '@platform/ai/agent-platform/productTools/productAgentToolSchemas'
-import type { AgentChannelRuntimeHostFactory } from '@platform/ai/agent-platform/channels/channelRuntimeHost'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
-import type { AgentChannelType } from '@platform/ai/agent-platform/schemas/channelSchemas'
 import type { AssistantProgrammaticInvocationClient } from '@platform/ai/assistant-platform/invocation/AssistantProgrammaticInvocationService'
 import type { ProductCacheRegistrar } from '@platform/storage/cache-governance/productCacheRegistrar'
 import type { ProductServiceDisposerRegistrar } from '@platform/product-registry/productServiceDisposerRegistry'
@@ -254,7 +252,6 @@ export type ProductServiceDependencies = {
   platformFetch: typeof fetch
   secretVault: SecretVault
   registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
-  registerChannelRuntimeHostFactory: (type: AgentChannelType, factory: AgentChannelRuntimeHostFactory) => void
   registerProductCache: ProductCacheRegistrar
   registerProductDisposer: ProductServiceDisposerRegistrar
   getAgentState?: () => Promise<AgentStoreState>

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { createAgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { ChannelDeliveryRepository } from './ChannelDeliveryRepository'
 import { ChannelDeliveryService } from './ChannelDeliveryService'
+import { seedChannelAdapterSupport } from './channelTestSupport'
 
 describe('ChannelDeliveryService', () => {
   it('uses only enabled targets, stores no text, and keeps one terminal attempt per source', async () => {
@@ -37,8 +38,8 @@ describe('ChannelDeliveryService', () => {
       delete from channel_conversations;
       delete from channel_runtime_generations;
       delete from agent_channels;
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,created_at,updated_at)
-        values('legacy-feishu','feishu','Legacy','agent-a','${publicConfig}',1,'runtime-ready','2026-01-01','2026-01-01');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,created_at,updated_at)
+        values('legacy-feishu','lark','Legacy','agent-a','${publicConfig}',1,'enabled','2026-01-01','2026-01-01');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('legacy-feishu',1,'active','2026-01-01');
       insert into channel_conversations(id,channel_id,conversation_key_ciphertext,conversation_key_ref,conversation_key_revision,conversation_key_hash,conversation_kind,agent_session_id,created_at,updated_at)
         values('legacy-conversation','legacy-feishu',x'70726f7669646572','ref',1,'legacy-hash','direct','session-a','2026-01-01','2026-01-01');
@@ -76,10 +77,35 @@ describe('ChannelDeliveryService', () => {
 
   it.each(['telegram', 'slack', 'feishu'])('keeps %s managed delivery authorization intact', async (type) => {
     const { database, service, transport } = harness()
-    database.connection.prepare('update agent_channels set type=?,public_config_json=? where id=?').run(type, type === 'feishu' ? '{"domain":"lark"}' : '{}', 'channel-a')
+    database.connection.prepare('update agent_channels set adapter_key=?,public_config_json=? where id=?').run(type === 'feishu' ? 'lark' : type, type === 'feishu' ? '{"domain":"lark"}' : '{}', 'channel-a')
     await expect(service.deliver({ channelId: 'channel-a', agentId: 'agent-a', conversationId: 'conversation-a', source: 'task-result', sourceId: `run-${type}`, text: 'result' }))
       .resolves.toEqual(expect.objectContaining({ status: 'delivered' }))
     expect(transport.send).toHaveBeenCalledOnce()
+  })
+
+  it('retries a rate-limited task delivery after its backoff and clears the encrypted payload', async () => {
+    const { database, transport } = harness()
+    let now = new Date('2026-07-18T00:00:00.000Z')
+    const cipher = {
+      ...cipherForTests(),
+      encrypt: async (_channelId: string, value: Uint8Array) => ({ ciphertext: value, keyRef: 'ref', keyRevision: 1 }),
+      decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext
+    }
+    const service = new ChannelDeliveryService({
+      repository: new ChannelDeliveryRepository(database), cipher, transport, now: () => now
+    })
+    transport.send.mockResolvedValueOnce({ kind: 'failed', code: 'delivery-rate-limited' } as never).mockResolvedValue({ kind: 'delivered' })
+
+    expect((await service.deliver({ channelId: 'channel-a', agentId: 'agent-a', conversationId: 'conversation-a', source: 'task-result', sourceId: 'run-retry', text: 'retry me' })).status).toBe('failed')
+    expect(database.connection.prepare("select status, next_attempt_at from channel_delivery_attempts where source_id='run-retry'").get()).toMatchObject({ status: 'pending', next_attempt_at: expect.any(String) })
+
+    await service.retryDue()
+    expect(transport.send).toHaveBeenCalledTimes(1)
+
+    now = new Date('2026-07-18T00:00:06.000Z')
+    await service.retryDue()
+    expect(transport.send).toHaveBeenCalledTimes(2)
+    expect(database.connection.prepare("select status, retry_payload_ciphertext from channel_delivery_attempts where source_id='run-retry'").get()).toEqual({ status: 'delivered', retry_payload_ciphertext: null })
   })
 
   it('treats unclassified transport errors as unknown and retries only with idempotency evidence', async () => {
@@ -196,13 +222,14 @@ describe('ChannelDeliveryService', () => {
 function harness(enabled = true, beforeSendOwnership?: () => void) {
   const database = createAgentPlatformDatabase(':memory:')
   database.connection.exec(`
-    insert into agent_entities (id, type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at) values ('agent-a', 'general', 'Agent', '[]', '[]', '0', '2026-01-01', '2026-01-01');
-    insert into agent_channels (id, type, name, agent_id, requested_enabled, migration_state, created_at, updated_at) values ('channel-a', 'telegram', 'Channel', 'agent-a', 1, 'runtime-ready', '2026-01-01', '2026-01-01');
+    insert into agent_entities(id,type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at) values ('agent-a', 'general', 'Agent', '[]', '[]', '0', '2026-01-01', '2026-01-01');
+    insert into agent_channels (id, adapter_key, name, agent_id, requested_enabled, lifecycle_state, created_at, updated_at) values ('channel-a', 'telegram', 'Channel', 'agent-a', 1, 'enabled', '2026-01-01', '2026-01-01');
     insert into channel_runtime_generations (channel_id, generation, lifecycle_state, updated_at) values ('channel-a', 1, 'active', '2026-01-01');
     insert into channel_conversations (id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at) values ('conversation-a', 'channel-a', x'70726f76696465722d636f6e766572736174696f6e2d61', 'ref', 1, 'hash-a', 'direct', 'session-a', '2026-01-01', '2026-01-01');
     insert into channel_conversations (id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at) values ('conversation-discovered', 'channel-a', x'646973636f7665726564', 'ref', 1, 'hash-b', 'direct', 'session-b', '2026-01-01', '2026-01-01');
     ${enabled ? "insert into channel_delivery_targets (id, channel_id, conversation_id, enabled, created_at, updated_at) values ('target-a', 'channel-a', 'conversation-a', 1, '2026-01-01', '2026-01-01');" : ''}
   `)
+  seedChannelAdapterSupport(database, ['telegram', 'slack', 'lark'])
   const transport = { send: vi.fn(async () => ({ kind: 'delivered' as const })), supportsIdempotency: vi.fn(() => false) }
   const cipher = cipherForTests()
   return { database, transport, service: new ChannelDeliveryService({ repository: new ChannelDeliveryRepository(database), cipher, transport, now: () => new Date('2026-07-18T00:00:00.000Z'), beforeSendOwnership }) }

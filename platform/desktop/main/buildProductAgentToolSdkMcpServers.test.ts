@@ -19,7 +19,8 @@ describe('buildProductAgentToolSdkMcpServers', () => {
       required: ['symbol'],
       properties: {
         symbol: { type: 'string' }
-      }
+      },
+      additionalProperties: false
     }
 
     registry.registerToolMetadata({
@@ -90,7 +91,9 @@ describe('buildProductAgentToolSdkMcpServers', () => {
     })
 
     expect(Object.keys(servers)).toEqual(['market-intelligence'])
-    expect(capturedSchemas[0]).toEqual(inputSchema)
+    const schema = capturedSchemas[0] as { safeParse: (value: unknown) => { success: boolean } }
+    expect(schema.safeParse({ symbol: 'BTC' }).success).toBe(true)
+    expect(schema.safeParse({ symbol: 'BTC', extra: true }).success).toBe(false)
 
     const handler = sdk.tool.mock.calls[0]?.[3] as (args: Record<string, unknown>) => Promise<unknown>
     await handler({ symbol: 'sample-input' })

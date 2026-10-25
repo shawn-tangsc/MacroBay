@@ -8,6 +8,7 @@ import { ChannelInboundRepository } from '../ChannelInboundRepository'
 import { ChannelAdapterAcceptanceRegistry } from '../ChannelAdapterAcceptanceRegistry'
 import { ChannelSecureHandoff } from '../ChannelSecureHandoff'
 import { QqApiClient } from './QqApiClient'
+import { seedChannelAdapterSupport } from '../channelTestSupport'
 import { decodeQqConversation, encodeQqConversation, splitQqText } from './QqContracts'
 import { QqDeliveryTransport } from './QqDeliveryTransport'
 import { QqRuntimeManager } from './QqRuntimeManager'
@@ -83,10 +84,11 @@ describe('QQ Release D contracts', () => {
 
   it('startup and quit fence a forged QQ owner without affecting managed Telegram', () => {
     const database = databaseForQq(); seedActiveQq(database)
-    database.connection.exec("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('telegram-a','telegram','Telegram','agent-a','{}',1,'runtime-ready','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('telegram-a',1,'active','2026-07-20'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('qq-a','qq-owner','enable',1,'2026-07-20','2026-07-20'),('telegram-a','telegram-owner','enable',1,'2026-07-20','2026-07-20')")
+    seedChannelAdapterSupport(database, ['telegram'])
+    database.connection.exec("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('telegram-a',1,'active','2026-07-20'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('qq-a','qq-owner','enable',1,'2026-07-20','2026-07-20'),('telegram-a','telegram-owner','enable',1,'2026-07-20','2026-07-20')")
     const management = new ChannelManagementRepository(database)
     expect(management.activeRuntimeOwners('2026-07-20T00:00:00.000Z')).toEqual([{ channelId: 'telegram-a', generation: 1, token: 'telegram-owner' }])
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get('qq-a')).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('qq-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('qq-a')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(management.stopAllRuntimeAndFence('2026-07-20T00:01:00.000Z')).toContain('telegram-a')
   })
@@ -128,6 +130,6 @@ function databaseForQq() { const database = createAgentPlatformDatabase(':memory
 function commitGatewayState(database: ReturnType<typeof createAgentPlatformDatabase>, channelId: string, generation: number, sequence: number) {
   return database.connection.prepare(qqGatewayStateUpsertSql()).run(channelId, generation, sequence, '2026-07-20').changes
 }
-function seedActiveQq(database: ReturnType<typeof createAgentPlatformDatabase>) { database.connection.exec("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('qq-a','qq','QQ','agent-a','{}',1,'runtime-ready','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('qq-a',1,'active','2026-07-20')") }
+function seedActiveQq(database: ReturnType<typeof createAgentPlatformDatabase>) { database.connection.exec("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('qq-a','qq','QQ','agent-a','{}',1,'enabled','configured','2026-07-20','2026-07-20'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('qq-a',1,'active','2026-07-20')") }
 function response(): Response { return { ok: true, status: 200, headers: new Headers(), json: async () => ({}) } as Response }
 class FakeSocket { sent: string[] = []; onopen: ((event: unknown) => void) | null = null; onclose: ((event: unknown) => void) | null = null; onerror: ((event: unknown) => void) | null = null; onmessage: ((event: { data: unknown }) => void) | null = null; close(): void {}; send(value: string): void { this.sent.push(value) } }

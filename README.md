@@ -42,16 +42,21 @@ A claim that cannot be traced to a source record and a timestamp is supposed to 
 That is the whole product: **not a paragraph you have to take on faith.**
 
 <p align="center">
-  <a href="./docs/assets/screenshots/demo-en.gif">
-    <img src="./docs/assets/screenshots/demo-en-poster.png" alt="MacroBay crypto intelligence dashboard, analysis, and analyst agent" width="100%">
-  </a>
+  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: crypto market checklist, market status, cross-asset returns, capital conditions, sentiment, funding and the watchlist" width="100%">
 </p>
 
 <p align="center">
-  <sub>Dashboard, evidence, analyst agent, calendar, and model settings. Click the image to play the 38-second demo.</sub>
+  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
 </p>
 
-Built for people whose read has to survive a follow-up question.
+Built for people whose read has to survive a follow-up question — whether that is your first cycle or your fourth.
+
+## Who it is for
+
+- **[Trading for a living →](./docs/product/for-professionals.md)** — one screen instead of five, and a
+  conclusion that survives "how do you know?".
+- **[Still learning the market →](./docs/product/for-newcomers.md)** — the same screen, except it
+  explains the plumbing while you read it.
 
 ## Why crypto first
 
@@ -83,6 +88,21 @@ time on every reading, and make the AI show its work.
   and Solana status.
 - **An analyst with a visible trace.** It reads the same evidence, separates facts from assumptions,
   asks a structured question when a choice changes the answer, and shows the tools it ran.
+
+## Reading it teaches you the market
+
+Most crypto tools assume you already know why funding matters. Here the explanation sits next to the
+number: the key readings carry a plain-language note about what they mean, and every conclusion
+spells out the causal chain, the conditions that would break it, and the gaps.
+
+That is the part a newcomer usually has to assemble from ten threads and a group chat: what moved
+price, through which channel, and what would prove it wrong. Read a few of those and the market stops
+being a black box — you are no longer memorising indicators, you are watching cause and effect with
+the receipts attached. One reading gives you a number; the next tells you the channel it works
+through — after a few, you can explain the move yourself.
+
+It is not a course, and it is not advice. It is a desk that lays out its reasoning every time you
+open it.
 
 ## How a complete answer looks
 

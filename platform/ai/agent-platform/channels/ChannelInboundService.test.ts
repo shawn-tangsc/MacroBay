@@ -11,6 +11,7 @@ import { createAgentSqliteStore } from '../store/agentSqliteStore'
 import type { ChannelInboundFacts } from './ChannelInboundContracts'
 import { ChannelInboundRepository } from './ChannelInboundRepository'
 import { ChannelInboundService } from './ChannelInboundService'
+import { seedChannelAdapterSupport } from './channelTestSupport'
 
 const directories: string[] = []
 
@@ -39,6 +40,21 @@ describe('ChannelInboundService', () => {
     expect(cipher.encrypt).toHaveBeenCalled()
   })
 
+  it('rebinds a conversation to a fresh session after its agent session is deleted', async () => {
+    const { service, database } = createHarness()
+    await allow(service, 'channel-a', 'user-a')
+    expect((await receive(service, 'channel-a', {})).disposition).toBe('acknowledged')
+    const first = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    expect(first.agent_session_id).toBeTruthy()
+
+    database.connection.prepare('update channel_conversations set agent_session_id = null').run()
+    expect((await receive(service, 'channel-a', { providerEventKey: 'event-after-session-delete' })).disposition).toBe('acknowledged')
+
+    const rebound = database.connection.prepare('select agent_session_id from channel_conversations').get() as { agent_session_id: string }
+    expect(rebound.agent_session_id).toBeTruthy()
+    expect(rebound.agent_session_id).not.toBe(first.agent_session_id)
+  })
+
   it('requires explicit allow policy and structured mention for groups and channels, without turning discovery into targets', async () => {
     const { service, database, repository } = createHarness()
     await allow(service, 'channel-a', 'user-a', 'group')
@@ -52,9 +68,32 @@ describe('ChannelInboundService', () => {
     expect(channelWithoutMention.disposition).toBe('ignored')
     expect(directDenied.disposition).toBe('ignored')
     expect(database.connection.prepare('select count(*) as count from channel_delivery_targets').get()).toEqual({ count: 0 })
-    expect(database.connection.prepare('select code from channel_runtime_audits order by created_at, id').all()).toEqual([
-      { code: 'channel-mention-required' }, { code: 'channel-mention-required' }, { code: 'channel-policy-denied' }
-    ])
+    const auditCodes = (database.connection.prepare('select code from channel_runtime_audits').all() as Array<{ code: string }>)
+      .map((row) => row.code).sort()
+    expect(auditCodes).toEqual(['channel-mention-required', 'channel-mention-required', 'channel-policy-denied'])
+  })
+
+  it('records a denied conversation as a key-only candidate and allows it without provider ids', async () => {
+    const { service, database } = createHarness()
+    const denied = await receive(service, 'channel-a', { providerUserKey: 'user-x', providerUserLabel: 'Alice', providerConversationKey: 'conversation-x' })
+    expect(denied.disposition).toBe('ignored')
+
+    const candidates = service.listCandidates('channel-a')
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0]).toMatchObject({ kind: 'direct', hitCount: 1, status: 'pending', displayLabel: 'Alice' })
+    expect(JSON.stringify(database.connection.prepare('select * from channel_inbound_candidates').all())).not.toContain('conversation-x')
+
+    const conversationId = service.allowCandidate({
+      channelId: 'channel-a', candidateId: candidates[0].id, enableTarget: true
+    })
+    expect(conversationId).toBeTruthy()
+    expect(database.connection.prepare('select count(*) as count from channel_allow_policies').get()).toEqual({ count: 1 })
+    expect(database.connection.prepare('select count(*) as count from channel_delivery_targets where enabled=1').get()).toEqual({ count: 1 })
+
+    const accepted = await receive(service, 'channel-a', {
+      providerEventKey: 'event-after-allow', providerUserKey: 'user-x', providerConversationKey: 'conversation-x'
+    })
+    expect(accepted.disposition).toBe('acknowledged')
   })
 
   it('claims concurrent duplicates once, acknowledges both, and never creates a second dispatch', async () => {
@@ -707,7 +746,7 @@ describe('ChannelInboundService', () => {
     const { service, database } = createHarness()
     await allow(service, 'channel-a', 'user-a')
     await receive(service, 'channel-a', { text: 'provider body must stay encrypted' })
-    database.connection.prepare("update agent_channels set migration_state = 'completed' where id = 'channel-a'").run()
+    database.connection.prepare("update agent_channels set lifecycle_state = 'disabled' where id = 'channel-a'").run()
 
     const state = await createAgentSqliteStore(database).getState()
     expect(JSON.stringify(state)).not.toContain('provider body must stay encrypted')
@@ -754,14 +793,14 @@ function createCipher(): ChannelPayloadCipher & { encrypt: ReturnType<typeof vi.
 
 function seedRuntimeReadyChannel(database: AgentPlatformDatabase, id: string): void {
   database.connection.prepare(
-    `insert or ignore into agent_entities (
-      id, type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at
+    `insert or ignore into agent_entities(id,type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at
     ) values ('agent-1', 'general', 'Agent', '[]', '[]', '0', '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z')`
   ).run()
   database.connection.prepare(
-    `insert into agent_channels (id, type, name, agent_id, requested_enabled, migration_state, created_at, updated_at)
-     values (?, 'telegram', ?, 'agent-1', 1, 'runtime-ready', '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z')`
+    `insert into agent_channels (id, adapter_key, name, agent_id, requested_enabled, lifecycle_state, created_at, updated_at)
+     values (?, 'telegram', ?, 'agent-1', 1, 'enabled', '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z')`
   ).run(id, id)
+  seedChannelAdapterSupport(database, ['telegram'])
 }
 
 function seedActiveWork(database: AgentPlatformDatabase, count: number): void {

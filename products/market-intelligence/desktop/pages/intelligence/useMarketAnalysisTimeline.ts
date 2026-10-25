@@ -76,7 +76,15 @@ export const analysisTimelineRefreshPolicy = Object.freeze({
    * it means the service is not answering; turning that into a visible failure is
    * better than a spinner that never ends.
    */
-  readTimeoutMs: 15_000
+  readTimeoutMs: 15_000,
+  /**
+   * A node detail is a second read of the store the list just answered from, and it can fail on
+   * its own: the run, the summary and the snapshot are three separate reads, and the service may be
+   * reloading the store behind them. Nothing re-read a node after a failure, so one transient fault
+   * pinned the newest conclusion to "暂不可用" until a different node became the newest. These are the
+   * wait intervals between the bounded retries; after the last one the failure is final.
+   */
+  detailRetryDelaysMs: [1_500, 4_000, 10_000] as readonly number[]
 })
 
 /** Resolves a read against a bounded wait so a silent service cannot hang the UI. */
@@ -383,18 +391,47 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   const detailCache = useRef(details)
   detailCache.current = details
   const detailRequests = useRef(new Set<string>())
+  const detailRetryTimers = useRef(new Set<ReturnType<typeof setTimeout>>())
+
+  /** One detail read, plus a bounded self-heal: a failed read is retried, then reported. */
+  const readDetail = (entry: MarketAnalysisTimelineEntry, failure = 0): void => {
+    // The id stays reserved across the retries, so a second surface asking for the same node joins
+    // this attempt chain instead of starting another one beside it.
+    detailRequests.current.add(entry.id)
+    void marketAnalysisTimelineClient.getDetail(entry).then(result => {
+      if (result.state === 'available') {
+        detailRequests.current.delete(entry.id)
+        setDetailState(current => { const next = { ...current }; delete next[entry.id]; return next })
+        setDetails(current => ({ ...current, [entry.id]: result.detail }))
+        return
+      }
+      // The failure copy stays on screen while a retry runs: alternating it with "正在读取…" once
+      // per attempt is the flashing this card was reported for. A successful retry replaces it.
+      setDetailState(current => ({ ...current, [entry.id]: 'unavailable' }))
+      const delay = analysisTimelineRefreshPolicy.detailRetryDelaysMs[failure]
+      if (delay === undefined) {
+        detailRequests.current.delete(entry.id)
+        return
+      }
+      const timer = setTimeout(() => {
+        detailRetryTimers.current.delete(timer)
+        readDetail(entry, failure + 1)
+      }, delay)
+      detailRetryTimers.current.add(timer)
+    })
+  }
 
   const ensureDetail = (entry: MarketAnalysisTimelineEntry): void => {
     if (detailCache.current[entry.id] || detailRequests.current.has(entry.id)) return
-    detailRequests.current.add(entry.id)
-    setDetailState(current => ({ ...current, [entry.id]: 'loading' }))
-    void marketAnalysisTimelineClient.getDetail(entry).then(result => {
-      detailRequests.current.delete(entry.id)
-      setDetailState(current => { const next = { ...current }; delete next[entry.id]; return next })
-      if (result.state === 'available') setDetails(current => ({ ...current, [entry.id]: result.detail }))
-      else setDetailState(current => ({ ...current, [entry.id]: 'unavailable' }))
-    })
+    setDetailState(current => ({ ...current, [entry.id]: current[entry.id] ?? 'loading' }))
+    readDetail(entry)
   }
+
+  // A pending detail retry belongs to this workspace: it must not fire after it is gone.
+  useEffect(() => () => {
+    for (const timer of detailRetryTimers.current) clearTimeout(timer)
+    detailRetryTimers.current.clear()
+  }, [])
 
   return {
     state, attempt, requestState, selectionState, details, detailState, load, select, clearSelection, ensureDetail,

@@ -158,6 +158,118 @@ describe('PLAT-82 model provider detection service', () => {
     expect(recordProbedProtocols).not.toHaveBeenCalled()
   })
 
+  it('probes only the requested model ids and records availability before done', async () => {
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? '{}')) as { model?: string }
+      return body.model === 'b'
+        ? new Response('{"error":"invalid key"}', { status: 401 })
+        : new Response('{}', { status: 200 })
+    }) as unknown as typeof fetch
+    const done = vi.fn()
+    const recordModelAvailability = vi.fn(async () => undefined)
+    const service = createModelProviderDetectionService({
+      resolveProvider: async () => ({ ...provider(), models: [chatModel('a'), chatModel('b'), chatModel('c')] }),
+      fetch: () => fetchImpl,
+      onProgress: vi.fn(),
+      onDone: done,
+      recordModelAvailability
+    })
+
+    await expect(service.detectModels('acme', {
+      modes: ['connectivity'],
+      runId: 'run-ids',
+      modelIds: ['c', 'b']
+    })).resolves.toEqual({ accepted: true, total: 2 })
+    await vi.waitFor(() => expect(done).toHaveBeenCalledTimes(1))
+
+    // 只发两次请求（a 不在名单里），且顺序仍按供应商模型顺序。
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(recordModelAvailability).toHaveBeenCalledTimes(1)
+    const [providerId, updates, checkedAt] = recordModelAvailability.mock.calls[0] as unknown as [
+      string,
+      Array<{ modelId: string; status: string; reasonCode?: string }>,
+      string
+    ]
+    expect(providerId).toBe('acme')
+    // 结果按完成顺序上报（并发 5），这里只断言集合与条数。
+    expect(updates).toHaveLength(2)
+    expect(updates).toEqual(expect.arrayContaining([
+      { modelId: 'b', status: 'failed', reasonCode: 'http_401' },
+      { modelId: 'c', status: 'ok' }
+    ]))
+    expect(new Date(checkedAt).toString()).not.toBe('Invalid Date')
+    expect(recordModelAvailability.mock.invocationCallOrder[0])
+      .toBeLessThan(done.mock.invocationCallOrder[0] as number)
+  })
+
+  it('treats an empty model id list as "nothing to probe"', async () => {
+    const fetchImpl = vi.fn(async () => new Response('{}', { status: 200 })) as unknown as typeof fetch
+    const done = vi.fn()
+    const recordModelAvailability = vi.fn(async () => undefined)
+    const service = createModelProviderDetectionService({
+      resolveProvider: async () => ({ ...provider(), models: [chatModel('a')] }),
+      fetch: () => fetchImpl,
+      onProgress: vi.fn(),
+      onDone: done,
+      recordModelAvailability
+    })
+
+    await expect(service.detectModels('acme', {
+      modes: ['connectivity'],
+      runId: 'run-empty',
+      modelIds: []
+    })).resolves.toEqual({ accepted: true, total: 0 })
+    await vi.waitFor(() => expect(done).toHaveBeenCalledTimes(1))
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(recordModelAvailability).not.toHaveBeenCalled()
+  })
+
+  it('records the connectivity verdict even when a protocol lane fails', async () => {
+    const fetchImpl = vi.fn(async (url: string) =>
+      url.endsWith('/messages')
+        ? new Response('{"error":"messages not supported"}', { status: 404 })
+        : new Response('{}', { status: 200 })) as unknown as typeof fetch
+    const recordModelAvailability = vi.fn(async () => undefined)
+    const service = createModelProviderDetectionService({
+      resolveProvider: async () => ({
+        ...provider(),
+        endpoints: [
+          { protocol: 'chat-completions', baseUrl: 'https://api.example.test' },
+          { protocol: 'messages', baseUrl: 'https://api.example.test/anthropic' }
+        ],
+        models: [chatModel('a')]
+      }),
+      fetch: () => fetchImpl,
+      onProgress: vi.fn(),
+      onDone: vi.fn(),
+      recordModelAvailability
+    })
+
+    await service.detectModels('acme', { modes: ['connectivity', 'protocol'], runId: 'run-lane' })
+    await vi.waitFor(() => expect(recordModelAvailability).toHaveBeenCalledTimes(1))
+    // 协议端点 404 只说明 messages 走不通，不代表模型不能聊天 ⇒ 结论仍是可用。
+    expect(recordModelAvailability).toHaveBeenCalledWith(
+      'acme',
+      [{ modelId: 'a', status: 'ok' }],
+      expect.any(String)
+    )
+  })
+
+  it('does not record skipped results (disabled provider)', async () => {
+    const recordModelAvailability = vi.fn(async () => undefined)
+    const service = createModelProviderDetectionService({
+      resolveProvider: async () => ({ ...provider(), enabled: false, models: [chatModel('a')] }),
+      fetch: () => (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch,
+      onProgress: vi.fn(),
+      onDone: vi.fn(),
+      recordModelAvailability
+    })
+
+    await service.detectModels('acme', { modes: ['connectivity'], runId: 'run-disabled' })
+    await vi.waitFor(() => expect(service.runningRunIds()).toEqual([]))
+    expect(recordModelAvailability).not.toHaveBeenCalled()
+  })
+
   it('requires at least one mode and a runId', async () => {
     const service = createModelProviderDetectionService({
       resolveProvider: async (providerId: string) => (providerId === 'acme' ? provider() : undefined),

@@ -4,6 +4,8 @@ export type ChannelManagementCatalogEntry = {
   type: AgentChannelType
   status: 'planned' | 'blocked' | 'supported'
   reason: 'release-a-pending' | 'adapter-blocked' | 'evidence-complete'
+  implemented: boolean
+  credentialFields: readonly string[]
 }
 
 export type ChannelManagementState = 'configuration-ready' | 'credential-missing' | 'deleting' | 'disabled' | 'runtime-ready'

@@ -301,7 +301,7 @@ export function ModelServiceProviderPage({
               onOpenRequestConfig={() => setRequestConfigOpen(true)}
             />
 
-            <ModelServiceModelsSection labels={labels} providerId={provider.id}
+            <ModelServiceModelsSection labels={labels} provider={provider}
               configuredProtocolCount={configuredModelChatProtocols(provider).length}
               groups={modelGroups}
               modelCount={modelCount}

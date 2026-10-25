@@ -31,7 +31,7 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
-import pulseMarkUrl from '../assets/brand/pulse-mark.svg'
+import brandMarkUrl from '../assets/brand/mark.svg'
 import { platformText } from '../i18n/platformText'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
@@ -109,6 +109,7 @@ import { NotificationSettingsPane } from './settings/NotificationSettingsPane'
 import { AssistantLibrarySettingsPage } from './settings/assistants/AssistantLibrarySettingsPage'
 import { StorageCacheSettingsPage } from './settings/storage-cache/StorageCacheSettingsPage'
 import { TaskAutomationSettingsPage } from './settings/task-automation/TaskAutomationSettingsPage'
+import { ChannelSettingsPage } from './settings/channels/ChannelSettingsPage'
 import { WebSearchSettingsPage } from './settings/web-search/WebSearchSettingsPage'
 import { VisualIdentityAvatar } from './VisualIdentityAvatar'
 
@@ -1113,6 +1114,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'task-automation' ? (
           <TaskAutomationSettingsPage language={settings.language} />
         ) : null}
+        {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'channels' ? (
+          <ChannelSettingsPage language={settings.language} />
+        ) : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'preferences' ? renderPreferences() : null}
         {isBuiltInSettingsPanelId(settingsPanelKey) && settingsPanelKey === 'notifications' ? renderNotifications() : null}
         {productSettingsEntry ? (
@@ -1727,7 +1731,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
       <aside className="global-sidebar">
         <div className="sidebar-logo">
-          <img src={pulseMarkUrl} alt="" aria-hidden="true" />
+          <img src={brandMarkUrl} alt="" aria-hidden="true" />
         </div>
         <nav className="nav-list" aria-label="Primary">
           {sidebarNavLayout.primaryItems.map((item) => {

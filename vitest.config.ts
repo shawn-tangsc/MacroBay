@@ -16,9 +16,6 @@ export default {
     // Session-slot behavior is defined in local wall-clock time; pin the test zone so a UTC
     // CI runner and a developer laptop produce the same assertions.
     env: { TZ: 'Asia/Shanghai' },
-    // Channel integrations are not exposed in this release: their settings page and agent panels
-    // are hidden, so their suites are outside the default run. Restore this entry together with
-    // the UI entries when the feature ships.
-    exclude: [...configDefaults.exclude, 'platform/ai/agent-platform/channels/**/*.test.ts']
+    exclude: [...configDefaults.exclude]
   }
 }

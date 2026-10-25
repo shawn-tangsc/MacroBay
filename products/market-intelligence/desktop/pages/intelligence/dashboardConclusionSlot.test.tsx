@@ -73,9 +73,10 @@ describe('dashboard conclusion slot', () => {
     await act(async () => root?.render(createElement(Surface)))
     await act(async () => {})
 
-    // The mount read must reach the list without a manual refresh; the layout
-    // injects the timeline into the workspace, so this is the production path.
-    expect(container.querySelectorAll('.mi-analysis-timeline__entry').length).toBeGreaterThan(0)
+    // The right column is the news sentiment card now; the analysis timeline lives in a drawer
+    // opened from the conclusion card.
+    expect(container.querySelector('[data-news-sentiment-card]')).not.toBeNull()
+    expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBe(0)
     // The workspace must not run a second, unused timeline reader when the
     // dashboard layout already owns one.
     expect(invoke.mock.calls.filter(call => call[1] === 'marketAnalysis.listTimeline')).toHaveLength(1)
@@ -90,6 +91,18 @@ describe('dashboard conclusion slot', () => {
     // dashboard header, which is what keeps the card in the same place on screen.
     const header = container.querySelector('.mi-crypto-dashboard__header')
     expect(header && slot && (header.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true)
+
+    const timelineButton = [...container.querySelectorAll('button')].find((button) => button.textContent === portal.analysisDrawer.open)
+    expect(timelineButton).toBeTruthy()
+    await act(async () => { timelineButton?.click() })
+    await act(async () => {})
+    expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBeGreaterThan(0)
+
+    const close = document.querySelector<HTMLButtonElement>('.mi-analysis-timeline-drawer__head button')
+    expect(close).not.toBeNull()
+    await act(async () => { close?.click() })
+    await act(async () => {})
+    expect(document.querySelectorAll('.mi-analysis-timeline__entry').length).toBe(0)
   })
 
   it('shows the verdict and the operation directions on the card, and nothing the reader kept for the drawer', async () => {
