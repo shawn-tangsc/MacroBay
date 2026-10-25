@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -11,7 +11,7 @@ import { isNewsPolarity, isNewsSymbol } from '../schema/newsSentiment'
 
 export const newsSentimentStoragePolicy = Object.freeze({
   fileName: 'intelligence-news-sentiment.sqlite',
-  schemaVersion: 1
+  schemaVersion: 2
 })
 
 export type NewsSentimentStore = ReturnType<typeof createNewsSentimentSqliteStore>
@@ -24,8 +24,13 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
  */
 export function createNewsSentimentSqliteStore(filePath: string) {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
-  const db = new DatabaseSync(filePath)
+  const db = openOrReset(filePath)
   db.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const storedVersion = Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
+  if (storedVersion !== newsSentimentStoragePolicy.schemaVersion) {
+    // One schema, no upgrade paths: derived rows are rebuilt from the pipeline instead.
+    db.exec('drop table if exists news_sentiment; drop table if exists news_document;')
+  }
   db.exec(`
     create table if not exists news_document (
       item_id text primary key,
@@ -34,7 +39,6 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       fetched_at text not null,
       body_text text,
       body_chars integer not null,
-      extraction_version text not null,
       state text not null check (state in ('available','too-short','failed')),
       failure_code text
     );
@@ -58,17 +62,18 @@ export function createNewsSentimentSqliteStore(filePath: string) {
     );
     create index if not exists idx_news_sentiment_published on news_sentiment(published_at);
   `)
+  db.exec(`pragma user_version = ${newsSentimentStoragePolicy.schemaVersion}`)
 
   return {
     upsertDocument(document: NewsDocumentRecord): void {
       assertDocument(document)
       db.prepare(`
-        insert into news_document (item_id, source_id, url, fetched_at, body_text, body_chars, extraction_version, state, failure_code)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        insert into news_document (item_id, source_id, url, fetched_at, body_text, body_chars, state, failure_code)
+        values (?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(item_id) do update set
           source_id=excluded.source_id, url=excluded.url, fetched_at=excluded.fetched_at,
           body_text=excluded.body_text, body_chars=excluded.body_chars,
-          extraction_version=excluded.extraction_version, state=excluded.state,
+          state=excluded.state,
           failure_code=excluded.failure_code
       `).run(
         document.itemId,
@@ -77,7 +82,6 @@ export function createNewsSentimentSqliteStore(filePath: string) {
         document.fetchedAt,
         document.bodyText ?? null,
         document.bodyChars,
-        document.extractionVersion,
         document.state,
         document.failureCode ?? null
       )
@@ -174,6 +178,17 @@ export function createNewsSentimentSqliteStore(filePath: string) {
   }
 }
 
+/** No migration path: a file that cannot be opened is discarded and rebuilt. */
+function openOrReset(filePath: string): DatabaseSync {
+  try {
+    return new DatabaseSync(filePath)
+  } catch (error) {
+    if (filePath === ':memory:') throw error
+    for (const suffix of ['', '-wal', '-shm']) rmSync(filePath + suffix, { force: true })
+    return new DatabaseSync(filePath)
+  }
+}
+
 function toDocument(row: Record<string, unknown>): NewsDocumentRecord {
   return {
     itemId: String(row.item_id),
@@ -182,7 +197,6 @@ function toDocument(row: Record<string, unknown>): NewsDocumentRecord {
     fetchedAt: String(row.fetched_at),
     ...(row.body_text == null ? {} : { bodyText: String(row.body_text) }),
     bodyChars: Number(row.body_chars),
-    extractionVersion: String(row.extraction_version),
     state: String(row.state) as NewsDocumentRecord['state'],
     ...(row.failure_code == null ? {} : { failureCode: String(row.failure_code) })
   }

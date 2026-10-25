@@ -10,7 +10,6 @@ const BASE: NewsDocumentRecord = {
   fetchedAt: '2026-10-24T12:01:00.000Z',
   bodyText: 'body',
   bodyChars: 4,
-  extractionVersion: 'news-body-v1',
   state: 'available'
 }
 

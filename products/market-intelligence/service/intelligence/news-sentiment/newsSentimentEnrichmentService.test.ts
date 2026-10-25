@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { createNewsSentimentSqliteStore } from './newsSentimentStore'
 import { createNewsSentimentEnrichmentService } from './newsSentimentEnrichmentService'
-import { NEWS_SENTIMENT_EXTRACTION_VERSION } from '../schema/newsSentiment'
 
 function item(overrides: Record<string, unknown>) {
   return {
@@ -66,7 +65,6 @@ describe('newsSentimentEnrichmentService', () => {
       fetchedAt: '2026-10-24T12:30:00.000Z',
       bodyText: 'body',
       bodyChars: 4,
-      extractionVersion: NEWS_SENTIMENT_EXTRACTION_VERSION,
       state: 'available'
     })
     const fetchArticle = vi.fn()
@@ -80,32 +78,6 @@ describe('newsSentimentEnrichmentService', () => {
     const result = await service.enrichItems({ itemIds: ['item-a'] })
     expect(result.skipped).toBe(1)
     expect(fetchArticle).not.toHaveBeenCalled()
-  })
-
-  it('refetches a document extracted with an outdated version', async () => {
-    const store = createNewsSentimentSqliteStore(':memory:')
-    store.upsertDocument({
-      itemId: 'item-a',
-      sourceId: 'coindesk-rss',
-      url: 'https://www.coindesk.com/x',
-      fetchedAt: '2026-10-24T12:30:00.000Z',
-      bodyText: 'body',
-      bodyChars: 4,
-      extractionVersion: 'news-body-v1',
-      state: 'available'
-    })
-    const fetchArticle = vi.fn(async () => ({ status: 200, bodyText: HTML }))
-    const service = createNewsSentimentEnrichmentService({
-      pipeline: { listItems: () => [item({})] },
-      store,
-      fetchArticle,
-      now: () => '2026-10-24T13:00:00.000Z'
-    })
-
-    const result = await service.enrichItems({ itemIds: ['item-a'] })
-    expect(result.available).toBe(1)
-    expect(fetchArticle).toHaveBeenCalledTimes(1)
-    expect(store.getDocument('item-a')?.extractionVersion).toBe(NEWS_SENTIMENT_EXTRACTION_VERSION)
   })
 
   it('marks a short extraction as too-short', async () => {

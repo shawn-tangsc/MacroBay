@@ -1,7 +1,6 @@
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
 import {
   NEWS_SENTIMENT_BODY_SOURCE_IDS,
-  NEWS_SENTIMENT_EXTRACTION_VERSION,
   type NewsDocumentRecord
 } from '../schema/newsSentiment'
 import { extractNewsBody } from './newsDocumentExtractor'
@@ -53,11 +52,7 @@ export function createNewsSentimentEnrichmentService(deps: {
           continue
         }
         const existing = deps.store.getDocument(itemId)
-        if (
-          existing &&
-          existing.extractionVersion === NEWS_SENTIMENT_EXTRACTION_VERSION &&
-          (existing.state === 'available' || existing.state === 'too-short')
-        ) {
+        if (existing && (existing.state === 'available' || existing.state === 'too-short')) {
           skipped += 1
           continue
         }
@@ -85,7 +80,6 @@ export function createNewsSentimentEnrichmentService(deps: {
             fetchedAt: deps.now(),
             ...(extracted.text ? { bodyText: extracted.text } : {}),
             bodyChars: extracted.chars,
-            extractionVersion: extracted.extractionVersion,
             state: extracted.state
           })
           if (extracted.state === 'available') available += 1
@@ -108,7 +102,7 @@ function needsDocument(
   const document = store.getDocument(itemId)
   if (!document) return true
   if (document.state === 'failed') return true
-  return document.extractionVersion !== NEWS_SENTIMENT_EXTRACTION_VERSION
+  return false
 }
 
 function failedDocument(
@@ -123,7 +117,6 @@ function failedDocument(
     url,
     fetchedAt,
     bodyChars: 0,
-    extractionVersion: NEWS_SENTIMENT_EXTRACTION_VERSION,
     state: 'failed',
     failureCode
   }

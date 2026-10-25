@@ -1,13 +1,11 @@
-import { NEWS_SENTIMENT_EXTRACTION_VERSION, NEWS_SENTIMENT_LIMITS } from '../schema/newsSentiment'
+import { NEWS_SENTIMENT_LIMITS } from '../schema/newsSentiment'
 
 export const NEWS_BODY_MIN_CHARS = 200
-export { NEWS_SENTIMENT_EXTRACTION_VERSION }
 
 export type ExtractedNewsBody = {
   text: string
   chars: number
   state: 'available' | 'too-short'
-  extractionVersion: string
 }
 
 type ContainerRule =
@@ -38,8 +36,7 @@ export function extractNewsBody(input: { sourceId: string; html: string; maxChar
   return {
     text,
     chars: text.length,
-    state: text.length >= NEWS_BODY_MIN_CHARS ? 'available' : 'too-short',
-    extractionVersion: NEWS_SENTIMENT_EXTRACTION_VERSION
+    state: text.length >= NEWS_BODY_MIN_CHARS ? 'available' : 'too-short'
   }
 }
 
