@@ -12,7 +12,7 @@ import type { NewsSentimentText } from './NewsSentimentCard'
 export function NewsSentimentSettingsModal(props: {
   open: boolean
   text: NewsSentimentText
-  client: Pick<NewsSentimentClient, 'getSettings' | 'saveSettings'>
+  client: Pick<NewsSentimentClient, 'getSettings' | 'saveSettings' | 'rescore'>
   onClose: () => void
 }): React.ReactElement {
   const { text } = props

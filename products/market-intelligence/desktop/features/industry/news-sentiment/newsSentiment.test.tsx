@@ -55,8 +55,9 @@ function client(overrides: Partial<NewsSentimentClient> = {}): NewsSentimentClie
     getItem: vi.fn(async () => ({ ...VIEW.items[0]!, bodyExcerpt: 'The SEC approved options.' })),
     getSettings: vi.fn(async () => SETTINGS),
     saveSettings: vi.fn(async () => SETTINGS),
+    rescore: vi.fn(async () => ({ queued: true })),
     ...overrides
-  } as NewsSentimentClient
+  }
 }
 
 let root: Root | undefined

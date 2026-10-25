@@ -49,7 +49,8 @@ export function createNewsSentimentClient(invoke: Invoke = platformInvoke): News
     query: (input) => call<NewsSentimentView>('intelligence.getNewsSentiment', input),
     getItem: (input) => call<NewsSentimentItemDetail | undefined>('intelligence.getNewsSentimentItem', input),
     getSettings: () => call<NewsSentimentSettingsView>('intelligence.getNewsSentimentSettings'),
-    saveSettings: (patch) => call<NewsSentimentSettingsView>('intelligence.saveNewsSentimentSettings', patch)
+    saveSettings: (patch) => call<NewsSentimentSettingsView>('intelligence.saveNewsSentimentSettings', patch),
+    rescore: () => call<{ queued: boolean }>('intelligence.rescoreNewsSentiment')
   }
 }
 
