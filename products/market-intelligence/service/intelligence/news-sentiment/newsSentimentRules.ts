@@ -105,3 +105,20 @@ function truncate(value: string): string {
   if (clean.length <= NEWS_SENTIMENT_LIMITS.evidenceQuoteChars) return clean
   return `${clean.slice(0, NEWS_SENTIMENT_LIMITS.evidenceQuoteChars - 1)}…`
 }
+
+/**
+ * Routine exchange notices (maintenance windows, API/system upgrades, read-only windows) are
+ * operationally relevant to the venue's users but carry no directional price signal. They must
+ * not occupy the "key sentiment" list merely because the classifier correctly calls them neutral.
+ */
+const ROUTINE_NOTICE_RE = /\b(?:scheduled\s+)?maintenance\b|\bsystem\s+(?:upgrade|update)\b|\bapi\s+(?:upgrade|update|maintenance)\b|\bread-only\b|\btemporarily\s+unavailable\b|\btrading\s+hours\b|\bholiday\s+(?:notice|schedule)\b/i
+
+export function isRoutineNewsNotice(input: {
+  title: string
+  polarity: string
+  strength: number
+}): boolean {
+  if (input.polarity !== 'neutral') return false
+  if (input.strength > 2) return false
+  return ROUTINE_NOTICE_RE.test(input.title)
+}

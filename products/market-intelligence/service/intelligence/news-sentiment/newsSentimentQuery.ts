@@ -13,6 +13,7 @@ import {
 } from '../schema/newsSentiment'
 import type { NewsSentimentStore } from './newsSentimentStore'
 import type { NewsBodyTranslationRecord } from '../schema/newsSentiment'
+import { isRoutineNewsNotice } from './newsSentimentRules'
 
 type TranslationReader = {
   resolveDisplayTexts: (input: {
@@ -93,7 +94,11 @@ export function createNewsSentimentQuery(deps: {
         const rows = deps.store.listLatestSentiment({ from, to: asOf, limit: 500 })
         const itemsById = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item]))
         const visible = rows
-          .filter((row) => itemsById.has(row.itemId))
+          .filter((row) => {
+            const item = itemsById.get(row.itemId)
+            if (!item) return false
+            return !isRoutineNewsNotice({ title: item.title, polarity: row.polarity, strength: row.strength })
+          })
           .filter((row) => matchesScope(row, input.scope))
           .filter((row) => !input.direction || input.direction === 'all' || row.polarity === input.direction)
           .filter((row) => !input.sourceId || row.sourceId === input.sourceId)
