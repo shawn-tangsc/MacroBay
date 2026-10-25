@@ -87,15 +87,6 @@ export function NewsSentimentCard(props: {
               </button>
             ))}
           </div>
-          {drivers.length > visibleCount ? (
-            <button
-              className="mi-news-sentiment__loadmore"
-              onClick={() => setVisibleCount((count) => Math.min(count + 8, drivers.length))}
-              type="button"
-            >
-              {text.loadMore.replace('{shown}', String(visibleCount)).replace('{total}', String(drivers.length))}
-            </button>
-          ) : null}
           <footer className="mi-news-sentiment__footer">
             {summary.engineMix.rules > 0 ? <span className="mi-news-sentiment__badge">{text.engine.rules}</span> : null}
             {view?.caveats.includes('news-body-limited') ? <span>{text.bodyLimited}</span> : null}

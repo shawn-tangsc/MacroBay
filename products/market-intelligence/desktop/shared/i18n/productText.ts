@@ -151,7 +151,7 @@ export const productText = {
             counts: '{count} 条',
             breakdown: '多 {bull} · 空 {bear} · 中性 {flat}',
             engine: { model: '模型', rules: '规则' },
-            bodyLimited: '部分条目仅依据标题', loadMore: '已显示 {shown}/{total}，继续下拉加载',
+            bodyLimited: '部分条目仅依据标题',
             openAll: '查看全部舆情',
             settings: '舆情设置',
             drawer: {
