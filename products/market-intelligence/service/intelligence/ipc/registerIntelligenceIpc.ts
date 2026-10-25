@@ -17,7 +17,7 @@ import type {
 } from '../application/intelligenceWorkspaceQueries'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import { enqueueIntelligencePipelineJobs } from '../jobs/enqueueIntelligencePipelineJobs'
-import { INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
+import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from '../jobs/intelligenceJobIds'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -97,6 +97,14 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
   register(PRODUCT_ID, 'intelligence.getNewsSentimentSettings', async () =>
     getIntelligenceModule(jobRuntime).newsSentiment.settings.get()
   )
+
+  register(PRODUCT_ID, 'intelligence.rebuildNewsSentiment', async () => {
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.store) throw new Error('News sentiment storage is unavailable.')
+    module.newsSentiment.store.clearAll()
+    await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB], { rebuild: true })
+    return { queued: true }
+  })
 
   register(PRODUCT_ID, 'intelligence.rescoreNewsSentiment', async () => {
     const module = getIntelligenceModule(jobRuntime)

@@ -66,6 +66,7 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.getNewsSentimentSettings': excluded('internal-view'),
   'intelligence.saveNewsSentimentSettings': excluded('internal-view'),
   'intelligence.rescoreNewsSentiment': excluded('internal-view'),
+  'intelligence.rebuildNewsSentiment': excluded('internal-view'),
   'intelligence.getSourceHealth': exposed('get_source_health'),
   'intelligence.getTimeline': exposed('get_intelligence_timeline'),
   'intelligence.getWorkspaceState': excluded('internal-view'),

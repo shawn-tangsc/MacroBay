@@ -65,6 +65,10 @@ export function createNewsSentimentSqliteStore(filePath: string) {
   db.exec(`pragma user_version = ${newsSentimentStoragePolicy.schemaVersion}`)
 
   return {
+    clearAll(): void {
+      db.exec('delete from news_sentiment; delete from news_document;')
+    },
+
     upsertDocument(document: NewsDocumentRecord): void {
       assertDocument(document)
       db.prepare(`

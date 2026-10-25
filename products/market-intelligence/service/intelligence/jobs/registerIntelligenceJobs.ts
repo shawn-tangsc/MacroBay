@@ -92,17 +92,19 @@ export function registerIntelligenceJobs(
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, async (payload, context) => {
-    const input = payload as { itemIds?: string[] }
+    const input = payload as { itemIds?: string[]; rebuild?: boolean }
     if (!deps.newsSentiment) {
       await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
       return
     }
-    const result = await deps.newsSentiment.enrichItems({ itemIds: input.itemIds })
+    const result = await deps.newsSentiment.enrichItems(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds })
     await context.log({
       level: 'info',
       message: `Enriched ${result.processed} news item(s); ${result.available} available, ${result.tooShort} short, ${result.failed} failed.`
     })
-    if (input.itemIds?.length) {
+    if (input.rebuild) {
+      await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], { rebuild: true })
+    } else if (input.itemIds?.length) {
       await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {
         newItemIds: input.itemIds
       })
@@ -110,12 +112,12 @@ export function registerIntelligenceJobs(
   })
 
   jobRuntime.registerHandler(INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB, async (payload, context) => {
-    const input = payload as { itemIds?: string[] }
+    const input = payload as { itemIds?: string[]; rebuild?: boolean }
     if (!deps.newsSentiment) {
       await context.log({ level: 'warn', message: 'News sentiment service unavailable.' })
       return
     }
-    const result = await deps.newsSentiment.scoreItems({ itemIds: input.itemIds })
+    const result = await deps.newsSentiment.scoreItems(input.rebuild ? { limit: 500 } : { itemIds: input.itemIds })
     await context.log({
       level: 'info',
       message: `Scored ${result.processed} news item(s); model ${result.model}, rules ${result.rules}, skipped ${result.skipped}.`

@@ -45,7 +45,7 @@ export function createNewsSentimentScoringService(deps: {
   maxPerRun?: number
 }) {
   return {
-    async scoreItems(input: { itemIds?: string[] }): Promise<NewsSentimentScoringResult> {
+    async scoreItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentScoringResult> {
       const settings = await deps.settingsStore.getSettings()
       const [providerState, modelDefaults] = await Promise.all([
         deps.getProviderState?.().catch(() => undefined) ?? Promise.resolve(undefined),
@@ -67,7 +67,7 @@ export function createNewsSentimentScoringService(deps: {
         .filter((item) => !isCurrent(deps.store.getLatestSentiment(item.itemId, deps.now()), useModel, modelRef))
         // The pass is capped; newest first so the visible window fills before older backlog.
         .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
-        .slice(0, deps.maxPerRun ?? 20)
+        .slice(0, input.limit ?? deps.maxPerRun ?? 20)
 
       let processed = 0
       let modelCount = 0

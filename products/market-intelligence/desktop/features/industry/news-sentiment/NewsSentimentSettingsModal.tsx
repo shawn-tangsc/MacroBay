@@ -25,6 +25,7 @@ export function NewsSentimentSettingsModal(props: {
   const [error, setError] = useState(false)
   const [rescoring, setRescoring] = useState(false)
   const [rescoreNotice, setRescoreNotice] = useState<string>()
+  const [rebuilding, setRebuilding] = useState(false)
 
   useEffect(() => {
     if (!props.open) return
@@ -129,6 +130,24 @@ export function NewsSentimentSettingsModal(props: {
           </button>
         </div>
         {rescoreNotice ? <p className="mi-news-settings__hint" role="status">{rescoreNotice}</p> : null}
+        <div className="mi-news-settings__row">
+          <span>{text.settingsModal.rebuild}</span>
+          <button
+            className="mi-news-settings__link"
+            disabled={rebuilding}
+            onClick={() => {
+              setRebuilding(true)
+              setRescoreNotice(undefined)
+              void props.client.rebuild()
+                .then(() => setRescoreNotice(text.settingsModal.rebuilt))
+                .catch(() => setRescoreNotice(text.settingsModal.rebuildFailed))
+                .finally(() => setRebuilding(false))
+            }}
+            type="button"
+          >
+            {rebuilding ? text.settingsModal.rebuilding : text.settingsModal.rebuild}
+          </button>
+        </div>
         <p className="mi-news-settings__hint">{text.settingsModal.hint}</p>
         {error ? <p className="mi-news-settings__error" role="alert">{text.settingsModal.failed}</p> : null}
       </div>

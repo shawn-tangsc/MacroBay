@@ -35,7 +35,7 @@ export function createNewsSentimentEnrichmentService(deps: {
   const bodySources = new Set<string>(NEWS_SENTIMENT_BODY_SOURCE_IDS)
 
   return {
-    async enrichItems(input: { itemIds?: string[] }): Promise<NewsSentimentEnrichmentResult> {
+    async enrichItems(input: { itemIds?: string[]; limit?: number }): Promise<NewsSentimentEnrichmentResult> {
       const items = deps.pipeline.listItems()
       const requested = input.itemIds?.length
         ? input.itemIds
@@ -52,7 +52,7 @@ export function createNewsSentimentEnrichmentService(deps: {
       let failed = 0
       let skipped = 0
 
-      for (const [index, itemId] of requested.slice(0, deps.maxPerRun ?? 20).entries()) {
+      for (const [index, itemId] of requested.slice(0, input.limit ?? deps.maxPerRun ?? 20).entries()) {
         if (index > 0 && deps.paceMs) await sleep(deps.paceMs)
         const item = items.find((entry) => entry.itemId === itemId)
         if (!item || !bodySources.has(item.sourceId)) {
