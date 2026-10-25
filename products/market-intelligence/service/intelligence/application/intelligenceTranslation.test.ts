@@ -87,10 +87,8 @@ describe('intelligenceTranslationService', () => {
     pipeline.listItems = () => [item]
     pipeline.listRevisions = () => []
 
-    const sourceHash = computeTranslationSourceHash({
-      title: item.title,
-      summary: item.summary
-    })
+    // Automatic translation now carries the title only, so the fixture hash must match that shape.
+    const sourceHash = computeTranslationSourceHash({ title: item.title })
     await storage.writeRecords([
       {
         translationId: 'translation-1',
