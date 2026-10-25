@@ -49,7 +49,7 @@ export const productText = {
           actions: { activate: '配置并激活', openDashboard: '打开看板', unavailable: '—' },
           analysisWorkspace: {
             openAgent: '完整 Agent 面板', stop: '停止', approvalRequired: '等待工具审批，请打开完整 Agent 面板处理；也可停止本次运行。',
-            title: '数字货币解读 Agent', chat: '分析对话', dashboard: '市场看板', view: '切换工作区', selectedAnalysis: '已绑定选中分析', selectedEvent: '选中事件', contextAnalysis: '引用分析',
+            title: '数字货币解读 Agent', chat: '分析对话', dashboard: '市场看板', view: '切换工作区', selectedAnalysis: '已绑定选中分析', selectedEvent: '选中事件', selectedNews: '选中舆情', contextAnalysis: '引用分析',
             newConversation: '市场解读对话', newChatAction: '新对话', sessionHistory: '历史会话', deleteSession: '删除会话', deleteSessionConfirm: '删除这个会话？', cancel: '取消', noSessions: '还没有历史会话', loading: '正在加载 Agent…', noSelection: '当前市场 · 可选择下方分析节点追问', clearSelection: '返回当前市场',
             empty: '向市场解读员提问，或选择下方时间轴中的分析。', input: '输入问题', placeholder: '想了解哪些市场变化？', followUpPlaceholder: '针对选中的分析继续提问…',
             send: '发送', sending: '分析中', resize: '调整日历与舆情高度', failed: '发送未完成，请检查会话记录和模型配置后再试。', modelRequired: '请在通用 Agent 设置中为数字货币市场解读员选择可用模型。',
@@ -1333,7 +1333,7 @@ export const productText = {
           actions: { activate: 'Configure and activate', openDashboard: 'Open dashboard', unavailable: '—' },
           analysisWorkspace: {
             openAgent: 'Full Agent panel', stop: 'Stop', approvalRequired: 'Waiting for tool approval. Open the full Agent panel to review, or stop this run.',
-            title: 'Crypto analysis Agent', chat: 'Analysis conversation', dashboard: 'Market dashboard', view: 'Switch workspace', selectedAnalysis: 'Selected analysis is bound', selectedEvent: 'Selected event', contextAnalysis: 'Quoted analysis',
+            title: 'Crypto analysis Agent', chat: 'Analysis conversation', dashboard: 'Market dashboard', view: 'Switch workspace', selectedAnalysis: 'Selected analysis is bound', selectedEvent: 'Selected event', selectedNews: 'Selected news', contextAnalysis: 'Quoted analysis',
             newConversation: 'Market analysis conversation', newChatAction: 'New chat', sessionHistory: 'History', deleteSession: 'Delete chat', deleteSessionConfirm: 'Delete this conversation?', cancel: 'Cancel', noSessions: 'No conversations yet', loading: 'Loading Agent…', noSelection: 'Current market · Select a timeline entry to follow up', clearSelection: 'Current market',
             empty: 'Ask the analyst a question or select an analysis below.', input: 'Your question', placeholder: 'What market changes would you like to understand?', followUpPlaceholder: 'Ask about the selected analysis…',
             send: 'Send', sending: 'Analyzing', resize: 'Resize calendar and sentiment', failed: 'Send did not complete. Check the conversation and model configuration before retrying.', modelRequired: 'Select an available model for the crypto analyst in the shared Agent settings.',

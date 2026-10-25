@@ -19,6 +19,8 @@ export function NewsSentimentFeature(props: {
   text: NewsSentimentText
   client?: NewsSentimentClient
   now?: () => Date
+  /** Publish the clicked item so the agent can start from that story. */
+  onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
   const client = props.client ?? newsSentimentClient
   const now = props.now ?? (() => new Date())
@@ -38,7 +40,7 @@ export function NewsSentimentFeature(props: {
         onOpenAll={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
-        onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true) }}
+        onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true); props.onSelectContext?.(item) }}
         text={props.text}
         view={state.view}
       />
