@@ -19,8 +19,9 @@ export function createDefaultTranslationSettings(
     autoTranslateEnabled: appLanguage === 'zh-CN',
     targetLocale: 'follow-app',
     translateTitle: true,
-    translateSummary: true,
-    translateEvidenceExcerpt: true,
+    // Automatic translation is headline-only. Summaries and bodies are deliberate manual actions.
+    translateSummary: false,
+    translateEvidenceExcerpt: false,
     translateBody: true,
     updatedAt: new Date().toISOString()
   }
