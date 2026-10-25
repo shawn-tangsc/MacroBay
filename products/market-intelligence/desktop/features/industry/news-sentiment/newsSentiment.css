@@ -242,3 +242,4 @@
 .mi-news-sentiment__neutral-filter button.is-on { color: var(--accent, #d9f67f); background: color-mix(in srgb, var(--accent, #d9f67f) 12%, transparent); }
 
 .mi-news-drawer__time { width: 92px; }
+

@@ -294,6 +294,21 @@ export function NewsSentimentDrawer(props: {
             />
           </label>
           <label>
+            <span>{text.neutralFilter.label}</span>
+            <Select
+              aria-label={text.neutralFilter.label}
+              onChange={(value: 'include' | 'exclude') => props.onFilters({ includeNeutral: value === 'include' })}
+              options={[
+                { value: 'include', label: text.neutralFilter.all },
+                { value: 'exclude', label: text.neutralFilter.exclude }
+              ]}
+              popupMatchSelectWidth={false}
+              size="small"
+              style={{ minWidth: 108 }}
+              value={props.filters.includeNeutral ? 'include' : 'exclude'}
+            />
+          </label>
+          <label>
             <span>{text.drawer.filters.scope}</span>
             <Select
               aria-label={text.drawer.filters.scope}
@@ -308,7 +323,7 @@ export function NewsSentimentDrawer(props: {
             />
           </label>
           {props.filters.direction !== 'all' || props.filters.sourceId !== 'all' || props.filters.scope !== 'market' ? (
-            <button className="mi-news-drawer__action" onClick={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market' })} type="button">
+            <button className="mi-news-drawer__action" onClick={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true })} type="button">
               {text.drawer.clearFilters}
             </button>
           ) : null}
@@ -456,6 +471,7 @@ function filterRows(view: NewsSentimentView | undefined, filters: NewsSentimentF
   return (view?.items ?? []).filter((row) => {
     if (filters.direction !== 'all' && row.polarity !== filters.direction) return false
     if (filters.sourceId !== 'all' && row.sourceId !== filters.sourceId) return false
+    if (!filters.includeNeutral && row.polarity === 'neutral') return false
     if (filters.scope !== 'market' && !row.symbols.includes(filters.scope)) return false
     return true
   })

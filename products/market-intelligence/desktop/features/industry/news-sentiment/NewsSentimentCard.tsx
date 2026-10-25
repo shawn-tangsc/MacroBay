@@ -18,12 +18,14 @@ export function NewsSentimentCard(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
+  includeNeutral?: boolean
+  onIncludeNeutralChange?: (includeNeutral: boolean) => void
 }): React.ReactElement {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
   const summary = view?.state === 'available' ? view.summary : undefined
   const [visibleCount, setVisibleCount] = useState(8)
-  const [includeNeutral, setIncludeNeutral] = useState(true)
+  const includeNeutral = props.includeNeutral ?? true
   const filteredItems = includeNeutral ? (view?.items ?? []) : (view?.items ?? []).filter((item) => item.polarity !== 'neutral')
   const drivers = summary
     ? [...filteredItems].sort(
@@ -40,8 +42,8 @@ export function NewsSentimentCard(props: {
         <h2>{text.title}</h2>
         <div className="mi-news-sentiment__header-actions">
           <span className="mi-news-sentiment__neutral-filter" role="group" aria-label={text.neutralFilter.label}>
-            <button aria-pressed={includeNeutral} className={includeNeutral ? 'is-on' : undefined} onClick={() => setIncludeNeutral(true)} type="button">{text.neutralFilter.all}</button>
-            <button aria-pressed={!includeNeutral} className={!includeNeutral ? 'is-on' : undefined} onClick={() => setIncludeNeutral(false)} type="button">{text.neutralFilter.exclude}</button>
+            <button aria-pressed={includeNeutral} className={includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(true)} type="button">{text.neutralFilter.all}</button>
+            <button aria-pressed={!includeNeutral} className={!includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(false)} type="button">{text.neutralFilter.exclude}</button>
           </span>
           <button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
           <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">

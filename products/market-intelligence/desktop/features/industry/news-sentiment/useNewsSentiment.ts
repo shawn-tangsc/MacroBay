@@ -8,6 +8,7 @@ export type NewsSentimentFilters = {
   direction: 'all' | 'bullish' | 'bearish' | 'neutral' | 'mixed'
   sourceId: 'all' | string
   scope: 'market' | NewsSentimentSymbol
+  includeNeutral: boolean
 }
 
 export type UseNewsSentimentResult = Readonly<{
@@ -21,7 +22,7 @@ export type UseNewsSentimentResult = Readonly<{
   refresh: () => void
 }>
 
-const DEFAULT_FILTERS: NewsSentimentFilters = { direction: 'all', sourceId: 'all', scope: 'market' }
+const DEFAULT_FILTERS: NewsSentimentFilters = { direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true }
 
 /** One read per window/refresh. Never polls: the dashboard is a snapshot, not a stream. */
 export function useNewsSentiment(input: {
