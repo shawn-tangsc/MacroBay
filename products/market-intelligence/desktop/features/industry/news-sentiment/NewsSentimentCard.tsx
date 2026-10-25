@@ -35,12 +35,15 @@ export function NewsSentimentCard(props: {
       <header className="mi-news-sentiment__header">
         <Newspaper aria-hidden="true" size={14} />
         <h2>{text.title}</h2>
-        <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">
-          <Settings aria-hidden="true" size={13} />
-        </button>
-        <button aria-label={text.refresh} className="mi-news-sentiment__icon" onClick={props.onRefresh} type="button">
-          <RefreshCw aria-hidden="true" size={13} />
-        </button>
+        <div className="mi-news-sentiment__header-actions">
+          <button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
+          <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">
+            <Settings aria-hidden="true" size={13} />
+          </button>
+          <button aria-label={text.refresh} className="mi-news-sentiment__icon" onClick={props.onRefresh} type="button">
+            <RefreshCw aria-hidden="true" size={13} />
+          </button>
+        </div>
       </header>
 
       {failed ? (
@@ -90,7 +93,6 @@ export function NewsSentimentCard(props: {
           <footer className="mi-news-sentiment__footer">
             {summary.engineMix.rules > 0 ? <span className="mi-news-sentiment__badge">{text.engine.rules}</span> : null}
             {view?.caveats.includes('news-body-limited') ? <span>{text.bodyLimited}</span> : null}
-            <button onClick={props.onOpenAll} type="button">{text.openAll} →</button>
           </footer>
         </>
       )}

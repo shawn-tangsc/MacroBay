@@ -223,3 +223,9 @@
 
 .mi-news-sentiment__drivers { flex: 1 1 0; min-height: 0; overflow-y: auto; }
 .mi-news-sentiment__footer { margin-top: auto; }
+
+.mi-news-sentiment__header-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.mi-news-sentiment__open-all {
+  border: 0; background: transparent; color: var(--accent, #d9f67f); font-size: 10px;
+  cursor: pointer; white-space: nowrap; padding: 0 2px;
+}
