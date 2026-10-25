@@ -13,6 +13,8 @@ export type HttpClientRequest = {
   body?: string
   timeoutMs?: number
   conditionalHeaders?: Record<string, string>
+  /** Passed to fetch; article fetches use no-store to bypass the Electron HTTP cache. */
+  cache?: RequestCache
 }
 
 export type HttpClientResponse = {
@@ -77,7 +79,8 @@ export async function httpRequest(
         method: request.method ?? 'GET',
         headers,
         body: request.body,
-        signal: controller.signal
+        signal: controller.signal,
+        ...(request.cache ? { cache: request.cache } : {})
       })
 
       clearTimeout(timeoutId)

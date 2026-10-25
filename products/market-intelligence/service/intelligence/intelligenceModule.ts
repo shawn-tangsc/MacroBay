@@ -228,6 +228,23 @@ function getProductDataDir(): string {
  * to the identified collector, while CoinDesk hands a body-less variant to the collector UA. Pick
  * the headers per host instead of one global article fingerprint.
  */
+/**
+ * Electron's net.fetch shares Chromium's HTTP cache. A body-less variant fetched once can be
+ * served again to every later request for the same URL, even with different headers, so article
+ * reads carry a unique query key as well as no-store.
+ */
+function articleFetchUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname.endsWith('coindesk.com') || parsed.hostname.endsWith('okx.com')) {
+      parsed.searchParams.set('mb_nocache', String(Date.now()))
+    }
+    return parsed.toString()
+  } catch {
+    return url
+  }
+}
+
 function articleFetchHeaders(url: string): Record<string, string> {
   if (url.includes('sec.gov')) {
     return { Accept: 'text/html', 'User-Agent': INTELLIGENCE_DEFAULT_USER_AGENT, 'Cache-Control': 'no-cache' }
@@ -432,9 +449,10 @@ export function getIntelligenceModule(
           fetchArticle: async (url) => {
             const response = await intelligenceHttpRequest(
               {
-                url,
+                url: articleFetchUrl(url),
                 method: 'GET',
                 headers: articleFetchHeaders(url),
+                cache: 'no-store',
                 timeoutMs: 15_000
               },
               { retryPolicy: { maxAttempts: 1 } }
