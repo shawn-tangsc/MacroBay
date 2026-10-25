@@ -633,7 +633,19 @@ function resolveRequestedItemIds(
   }
 
   if (ids.size === 0) {
-    return pipeline.listItems().slice(0, input.filters?.limit ?? 50).map((item) => item.itemId)
+    const rangeMs = input.filters?.timeRange === '24h'
+      ? 24 * 60 * 60 * 1000
+      : input.filters?.timeRange === '7d'
+        ? 7 * 24 * 60 * 60 * 1000
+        : input.filters?.timeRange === '30d'
+          ? 30 * 24 * 60 * 60 * 1000
+          : undefined
+    const cutoff = rangeMs === undefined ? undefined : Date.now() - rangeMs
+    return pipeline.listItems()
+      .filter((item) => cutoff === undefined || Date.parse(item.publishedAt ?? '') >= cutoff)
+      .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
+      .slice(0, input.filters?.limit ?? 50)
+      .map((item) => item.itemId)
   }
 
   return [...ids]
