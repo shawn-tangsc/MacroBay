@@ -7,6 +7,13 @@ import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../ser
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
+
+function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+  ])
+}
 import { labelText, sentimentIcon } from './NewsSentimentCard'
 import type { NewsSentimentFilters } from './useNewsSentiment'
 
@@ -95,7 +102,7 @@ export function NewsSentimentDrawer(props: {
             onClick={() => {
               setActionBusy('rescore')
               setActionNotice(undefined)
-              void props.client.rescore()
+              void withTimeout(props.client.rescore())
                 .then(() => setActionNotice(text.settingsModal.rescored))
                 .catch(() => setActionNotice(text.settingsModal.rescoreFailed))
                 .finally(() => setActionBusy(undefined))
@@ -115,7 +122,7 @@ export function NewsSentimentDrawer(props: {
                 setActionNotice(text.settingsModal.rebuildFailed)
                 return
               }
-              void props.client.rebuild()
+              void withTimeout(props.client.rebuild())
                 .then(() => setActionNotice(text.settingsModal.rebuilt))
                 .catch(() => setActionNotice(text.settingsModal.rebuildFailed))
                 .finally(() => setActionBusy(undefined))
