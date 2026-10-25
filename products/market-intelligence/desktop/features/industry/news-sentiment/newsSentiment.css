@@ -235,3 +235,8 @@
   border: 0; background: transparent; color: var(--accent, #d9f67f); font-size: 10px;
   cursor: pointer; white-space: nowrap; padding: 0 2px;
 }
+
+.mi-news-sentiment__neutral-filter { display: inline-flex; border: 1px solid var(--border, #2a352b); border-radius: 3px; overflow: hidden; }
+.mi-news-sentiment__neutral-filter button { border: 0; background: transparent; color: var(--muted, #93a196); font-size: 9.5px; padding: 2px 6px; cursor: pointer; }
+.mi-news-sentiment__neutral-filter button + button { border-left: 1px solid var(--border, #2a352b); }
+.mi-news-sentiment__neutral-filter button.is-on { color: var(--accent, #d9f67f); background: color-mix(in srgb, var(--accent, #d9f67f) 12%, transparent); }

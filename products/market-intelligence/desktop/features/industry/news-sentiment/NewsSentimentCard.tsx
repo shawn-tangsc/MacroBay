@@ -23,12 +23,14 @@ export function NewsSentimentCard(props: {
   const formatTime = useShellTimeFormat()
   const summary = view?.state === 'available' ? view.summary : undefined
   const [visibleCount, setVisibleCount] = useState(8)
+  const [includeNeutral, setIncludeNeutral] = useState(true)
+  const filteredItems = includeNeutral ? (view?.items ?? []) : (view?.items ?? []).filter((item) => item.polarity !== 'neutral')
   const drivers = summary
-    ? [...(view?.items ?? [])].sort(
+    ? [...filteredItems].sort(
         (a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.strength * b.confidence - a.strength * a.confidence
       )
     : []
-  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0])
+  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
 
   return (
@@ -37,6 +39,10 @@ export function NewsSentimentCard(props: {
         <Newspaper aria-hidden="true" size={14} />
         <h2>{text.title}</h2>
         <div className="mi-news-sentiment__header-actions">
+          <span className="mi-news-sentiment__neutral-filter" role="group" aria-label={text.neutralFilter.label}>
+            <button aria-pressed={includeNeutral} className={includeNeutral ? 'is-on' : undefined} onClick={() => setIncludeNeutral(true)} type="button">{text.neutralFilter.all}</button>
+            <button aria-pressed={!includeNeutral} className={!includeNeutral ? 'is-on' : undefined} onClick={() => setIncludeNeutral(false)} type="button">{text.neutralFilter.exclude}</button>
+          </span>
           <button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
           <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">
             <Settings aria-hidden="true" size={13} />
@@ -64,12 +70,12 @@ export function NewsSentimentCard(props: {
             <span className={`mi-news-sentiment__pill is-${summary.label}`} data-news-sentiment-label={summary.label}>
               {labelText(text, summary.label)}
             </span>
-            <strong>{text.counts.replace('{count}', String(summary.itemCount))}</strong>
+            <strong>{text.counts.replace('{count}', String(filteredItems.length))}</strong>
             <span className="mi-news-sentiment__breakdown">
               {text.breakdown
                 .replace('{bull}', String(count(items(view), 'bullish')))
                 .replace('{bear}', String(count(items(view), 'bearish')))
-                .replace('{flat}', String(summary.neutralCount))}
+                .replace('{flat}', String(filteredItems.filter((item) => item.polarity === 'neutral').length))}
             </span>
           </div>
           <div
