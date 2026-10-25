@@ -28,7 +28,7 @@ export function useNewsSentiment(input: {
   client: Pick<NewsSentimentClient, 'query'>
   now: () => Date
 }): UseNewsSentimentResult {
-  const [window, setWindow] = useState<NewsSentimentWindow>('7d')
+  const [window, setWindow] = useState<NewsSentimentWindow>('all')
   const [filters, setFiltersState] = useState<NewsSentimentFilters>(DEFAULT_FILTERS)
   const [view, setView] = useState<NewsSentimentView>()
   const [loading, setLoading] = useState(true)

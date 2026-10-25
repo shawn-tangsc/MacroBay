@@ -106,3 +106,20 @@ describe('newsSentimentQuery', () => {
     expect(view.state).toBe('empty')
   })
 })
+
+describe('all-time window', () => {
+  it('returns rows older than seven days', async () => {
+    const store = seed()
+    store.upsertSentiment({
+      itemId: 'item-old', sourceId: 'sec-rss', publishedAt: '2026-01-01T00:00:00.000Z', scoredAt: '2026-01-01T00:05:00.000Z',
+      polarity: 'neutral', strength: 1, confidence: 50, symbols: [], reasonCode: 'news.no-rule.v1', engine: 'rules', caveats: []
+    })
+    const view = await createNewsSentimentQuery({
+      store,
+      pipeline: { listItems: () => [...ITEMS, { itemId: 'item-old', sourceId: 'sec-rss', title: 'Old SEC notice', publishedAt: '2026-01-01T00:00:00.000Z' }] as never },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: 'all' })
+    expect(view.state).toBe('available')
+    expect(view.items.map((item) => item.itemId)).toContain('item-old')
+  })
+})
