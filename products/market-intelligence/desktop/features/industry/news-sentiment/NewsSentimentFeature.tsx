@@ -37,10 +37,8 @@ export function NewsSentimentFeature(props: {
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
         onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true) }}
-        onWindowChange={state.setWindow}
         text={props.text}
         view={state.view}
-        window={state.window}
       />
       <NewsSentimentDrawer
         translationEnabled={translationEnabled}
@@ -53,11 +51,9 @@ export function NewsSentimentFeature(props: {
         onFilters={state.setFilters}
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
-        onWindowChange={state.setWindow}
         open={drawerOpen}
         text={props.text}
         view={state.view}
-        window={state.window}
       />
       <NewsSentimentSettingsModal
           showTranslation={translationEnabled}

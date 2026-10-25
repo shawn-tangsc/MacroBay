@@ -129,8 +129,8 @@ describe('NewsSentimentFeature', () => {
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onRefresh={() => undefined} onSelectItem={() => undefined} onWindowChange={() => undefined} text={text}
-        view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} window="24h" />
+        onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
+        view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
     )
     expect(container.textContent).toContain(text.empty)
     expect(container.textContent).not.toContain('0.00')

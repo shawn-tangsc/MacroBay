@@ -3,20 +3,15 @@ import { GitCompareArrows, Minus, Newspaper, RefreshCw, Settings, TrendingDown, 
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { productText } from '../../../shared/i18n/productText'
-import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentItemView, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
-
-const WINDOWS: readonly NewsSentimentWindow[] = NEWS_SENTIMENT_WINDOWS
 
 export function NewsSentimentCard(props: {
   text: NewsSentimentText
   view?: NewsSentimentView
   loading: boolean
   failed: boolean
-  window: NewsSentimentWindow
-  onWindowChange: (window: NewsSentimentWindow) => void
   onOpenAll: () => void
   onOpenSettings: () => void
   onRefresh: () => void
@@ -36,19 +31,6 @@ export function NewsSentimentCard(props: {
       <header className="mi-news-sentiment__header">
         <Newspaper aria-hidden="true" size={14} />
         <h2>{text.title}</h2>
-        <div className="mi-news-sentiment__window" role="group" aria-label={text.title}>
-          {WINDOWS.map((window) => (
-            <button
-              aria-pressed={props.window === window}
-              className={props.window === window ? 'is-on' : undefined}
-              key={window}
-              onClick={() => props.onWindowChange(window)}
-              type="button"
-            >
-              {window}
-            </button>
-          ))}
-        </div>
         <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">
           <Settings aria-hidden="true" size={13} />
         </button>
