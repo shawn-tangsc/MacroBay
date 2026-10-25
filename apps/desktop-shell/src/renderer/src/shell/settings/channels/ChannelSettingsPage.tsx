@@ -40,6 +40,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [candidates, setCandidates] = useState<Candidate[]>([])
   const [candidateTargets, setCandidateTargets] = useState<Record<string, boolean>>({})
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
   const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
@@ -92,9 +93,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const create = async (): Promise<void> => {
     if (!agentId) return
-    await window.platform.channels.create({ type: createType, name, agentId, actorId: 'settings-user' })
-    setName('')
-    await reload()
+    try {
+      await window.platform.channels.create({ type: createType, name, agentId, actorId: 'settings-user' })
+      setName('')
+      await reload()
+    } catch {
+      setError(labels.channelOperationFailed)
+    }
   }
 
   const saveCredential = async (): Promise<void> => {
@@ -116,6 +121,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         : window.platform.channels.submitCredential
       await submit({ id: current.id, actorId: 'settings-user', handoff })
       await reload()
+    } catch {
+      setError(labels.channelOperationFailed)
     } finally {
       clearSensitiveDraft(setCredentialDraft)
       clearSensitiveDraft(setAppCredentialDraft)
@@ -124,8 +131,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
 
   const update = async (): Promise<void> => {
     if (!current || !editAgentId) return
-    await window.platform.channels.update({ id: current.id, name: editName, agentId: editAgentId, actorId: 'settings-user' })
-    await reload()
+    try {
+      await window.platform.channels.update({ id: current.id, name: editName, agentId: editAgentId, actorId: 'settings-user' })
+      await reload()
+    } catch {
+      setError(labels.channelOperationFailed)
+    }
   }
 
   const createPolicy = async (): Promise<void> => {
@@ -138,6 +149,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       })
       await window.platform.channels.createPolicy({ id: current.id, actorId: 'settings-user', handoff })
       await reloadDetails(current.id)
+    } catch {
+      setError(labels.channelOperationFailed)
     } finally {
       clearSensitiveDraft(setPolicyDraft)
     }
@@ -191,6 +204,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         ))}
       </aside>
       <main className="channel-settings-detail">
+        {error ? <p role="alert">{error}</p> : null}
         {current ? (
           <>
             <header>
@@ -235,13 +249,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                       channelId: current.id,
                       candidateId: candidate.id,
                       enableTarget: candidateTargets[candidate.id] ?? true
-                    }).then(() => reloadDetails(current.id))}
+                    }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
                   >
                     {labels.channelCandidateAllow}
                   </Button>
                   <Button
                     size="small"
-                    onClick={() => void window.platform.channels.ignoreCandidate({ channelId: current.id, candidateId: candidate.id }).then(() => reloadDetails(current.id))}
+                    onClick={() => void window.platform.channels.ignoreCandidate({ channelId: current.id, candidateId: candidate.id }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
                   >
                     {labels.channelCandidateIgnore}
                   </Button>
@@ -261,7 +275,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                 <Button
                   key={policy.id}
                   size="small"
-                  onClick={() => void window.platform.channels.deletePolicy({ channelId: current.id, policyId: policy.id, actorId: 'settings-user' }).then(() => reloadDetails(current.id))}
+                  onClick={() => void window.platform.channels.deletePolicy({ channelId: current.id, policyId: policy.id, actorId: 'settings-user' }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
                 >
                   {labels.channelPolicySubject[policy.subjectType]} {labels.channelDelete}
                 </Button>
@@ -280,26 +294,26 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                       conversationId: conversation.id,
                       enabled,
                       actorId: 'settings-user'
-                    }).then(() => reloadDetails(current.id))}
+                    }).then(() => reloadDetails(current.id)).catch(() => setError(labels.channelOperationFailed))}
                   />
                 </div>
               ))}
             </section> : null}
-            <Button icon={<ShieldOff size={14} />} onClick={() => void window.platform.channels.disable({ id: current.id, actorId: 'settings-user' }).then(reload)}>
+            <Button icon={<ShieldOff size={14} />} onClick={() => void window.platform.channels.disable({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}>
               {labels.channelDisable}
             </Button>
             {current.state !== 'runtime-ready' ? <p>{labels.channelEnableBlocked}</p> : null}
-            <Button disabled={!currentSupported || current.credential.status !== 'configured' || current.state === 'deleting'} onClick={() => void window.platform.channels.requestEnable({ id: current.id, actorId: 'settings-user' }).then(reload)}>
+            <Button disabled={!currentSupported || current.credential.status !== 'configured' || current.state === 'deleting'} onClick={() => void window.platform.channels.requestEnable({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}>
               {labels.channelEnable}
             </Button>
-            <Button disabled={current.state !== 'runtime-ready'} icon={<RotateCw size={14} />} onClick={() => void window.platform.channels.restart({ id: current.id, actorId: 'settings-user' }).then(reload)}>
+            <Button disabled={current.state !== 'runtime-ready'} icon={<RotateCw size={14} />} onClick={() => void window.platform.channels.restart({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}>
               {labels.channelRestart}
             </Button>
             <Popconfirm
               title={labels.channelDeleteConfirm}
               okText={labels.channelDelete}
               cancelText={labels.channelCancel}
-              onConfirm={() => void window.platform.channels.remove({ id: current.id, actorId: 'settings-user' }).then(reload)}
+              onConfirm={() => void window.platform.channels.remove({ id: current.id, actorId: 'settings-user' }).then(reload).catch(() => setError(labels.channelOperationFailed))}
             >
               <Button danger icon={<Trash2 size={14} />}>{labels.channelDelete}</Button>
             </Popconfirm>
