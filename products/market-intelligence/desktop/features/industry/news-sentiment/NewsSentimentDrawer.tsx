@@ -172,7 +172,8 @@ export function NewsSentimentDrawer(props: {
 
   const sourceOptions = useMemo(() => {
     const seen = new Map<string, string>()
-    for (const row of view?.items ?? []) seen.set(row.sourceId, row.sourceName)
+    for (const source of view?.availableSources ?? []) seen.set(source.sourceId, source.sourceName)
+    for (const row of view?.items ?? []) if (!seen.has(row.sourceId)) seen.set(row.sourceId, row.sourceName)
     return [{ value: 'all', label: text.drawer.filters.all }, ...[...seen].map(([value, label]) => ({ value, label }))]
   }, [view, text])
 

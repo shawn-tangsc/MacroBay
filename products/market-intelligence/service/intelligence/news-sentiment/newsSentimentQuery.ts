@@ -14,6 +14,7 @@ import {
 import type { NewsSentimentStore } from './newsSentimentStore'
 import type { NewsBodyTranslationRecord } from '../schema/newsSentiment'
 import { isRoutineNewsNotice } from './newsSentimentRules'
+import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 
 type TranslationReader = {
   resolveDisplayTexts: (input: {
@@ -61,6 +62,8 @@ export type NewsSentimentView = {
     lastScoredAt?: string
   }
   items: NewsSentimentItemView[]
+  /** Every source with rows in this window, before direction/source filters or routine filtering. */
+  availableSources?: { sourceId: string; sourceName: string }[]
   caveats: string[]
 }
 
@@ -110,6 +113,10 @@ export function createNewsSentimentQuery(deps: {
           return { state: 'empty', asOf, generatedAt, window, items: [], caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow] }
         }
 
+        const availableSources = [...new Map(rows.map((row) => [
+          row.sourceId,
+          getIntelligenceSourceDefinition(row.sourceId)?.displayName ?? row.sourceId
+        ])).entries()].map(([sourceId, sourceName]) => ({ sourceId, sourceName })).sort((left, right) => left.sourceName.localeCompare(right.sourceName))
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
         const items = visible.map((row) => {
@@ -143,6 +150,7 @@ export function createNewsSentimentQuery(deps: {
             lastScoredAt: visible.map((row) => row.scoredAt).sort().at(-1)
           },
           items,
+          availableSources,
           caveats
         }
       } catch {
