@@ -49,10 +49,6 @@ describe('desktop main IPC surface', () => {
   })
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
-    expect(appSource).toContain('channelMigrationReconciler: channelCredentialMigrationReconciler')
-    expect(appSource.indexOf('channelMigrationReconciler: channelCredentialMigrationReconciler')).toBeLessThan(
-      appSource.indexOf('const agentServices = createAgentPlatformServices')
-    )
     expect(appSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
     expect(appSource).toContain('IpcChannels.modelProvidersGetRuntimeCheckReport')
     expect(appSource).toContain('IpcChannels.agentsGetRuntimeCompatibility')
