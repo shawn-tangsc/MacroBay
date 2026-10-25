@@ -51,9 +51,11 @@ export function NewsSentimentFeature(props: {
         onFilters={state.setFilters}
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
+        onWindowChange={state.setWindow}
         open={drawerOpen}
         text={props.text}
         view={state.view}
+        window={state.window}
       />
       <NewsSentimentSettingsModal
           showTranslation={translationEnabled}

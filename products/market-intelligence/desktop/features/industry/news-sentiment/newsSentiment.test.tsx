@@ -126,6 +126,21 @@ describe('NewsSentimentFeature', () => {
     expect(document.body.querySelector('.mi-news-drawer__detail h3')?.textContent).toContain('SEC Approves Spot Ethereum ETF Options')
   })
 
+
+  it('changes the window from the drawer controls', async () => {
+    const query = vi.fn(async () => VIEW)
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const buttons = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__toolbar .mi-news-sentiment__window button')]
+    const target = buttons.find((button) => button.textContent?.trim() === '24h')
+    await act(async () => { target?.click() })
+    await act(async () => {})
+    expect(target?.getAttribute('aria-pressed')).toBe('true')
+    expect(query).toHaveBeenLastCalledWith(expect.objectContaining({ window: '24h' }))
+  })
+
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
