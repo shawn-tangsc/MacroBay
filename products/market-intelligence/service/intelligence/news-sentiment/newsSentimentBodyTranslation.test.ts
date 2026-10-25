@@ -11,13 +11,14 @@ function harness() {
     itemId: 'item-a', sourceId: 'coindesk-rss', url: 'https://example.com/a', fetchedAt: '2026-10-25T00:00:00.000Z',
     bodyText: BODY, bodyChars: BODY.length, state: 'available'
   })
-  const invoke = vi.fn(async () => ({ ok: true as const, output: { body: '美国证券交易委员会批准了现货以太坊 ETF 期权。' }, providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 } }))
+  const invoke = vi.fn(async (input: { taskId?: string }) => ({ ok: true as const, output: input.taskId?.endsWith(':title') ? { title: '美国证券交易委员会批准现货以太坊 ETF 期权' } : { body: '美国证券交易委员会批准了现货以太坊 ETF 期权。' }, providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 } }))
   const service = createNewsSentimentBodyTranslationService({
     store,
     invoke: invoke as never,
     readSettings: async () => ({ settings: { autoTranslateEnabled: true, translateBody: true, targetLocale: 'follow-app', providerId: 'p', modelId: 'm', translateTitle: true, translateSummary: true, translateEvidenceExcerpt: true, updatedAt: '2026-10-25T00:00:00.000Z' }, targetLocale: 'zh-CN' }),
     getProviderState: async () => ({ providers: [{ id: 'p', models: [{ id: 'm', capabilities: { chat: true } }] }] }) as never,
     getModelDefaults: async () => ({ translationModelId: 'p:m' }) as never,
+    getTitle: () => 'SEC Approves Spot Ethereum ETF Options',
     now: () => '2026-10-25T00:00:00.000Z'
   })
   return { store, invoke, service }
@@ -30,7 +31,7 @@ describe('newsSentimentBodyTranslation', () => {
     expect(first).toMatchObject({ state: 'translated', cached: false })
     const second = await service.translate('item-a')
     expect(second).toMatchObject({ state: 'translated', cached: true })
-    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(invoke).toHaveBeenCalledTimes(2)
     expect(service.get('item-a')?.bodyText).toContain('ETF')
   })
 
