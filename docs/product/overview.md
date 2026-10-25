@@ -30,7 +30,7 @@ The dashboard groups the market picture into panels:
 Each panel is backed by the same evidence records the agent uses. A number on the dashboard can be
 traced to its source instead of ending at a chart label.
 
-![Dashboard](../assets/screenshots/dashboard-en.png)
+![Dashboard: the full page from the AI conclusion down to funding](../assets/screenshots/dashboard-full-en.png)
 
 ### Macro calendar
 

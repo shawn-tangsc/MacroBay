@@ -27,7 +27,7 @@ MacroBay 回答一个很具体的问题：**发生了什么变化，你怎么知
 
 每个面板都由智能体使用的同一批证据记录支撑。看板上的数字可以追到来源，而不是停在图表标签上。
 
-![看板](../assets/screenshots/dashboard.png)
+![看板：从 AI 结论到资金费率的完整一屏](../assets/screenshots/dashboard-full-zh.png)
 
 ### 宏观日历
 
