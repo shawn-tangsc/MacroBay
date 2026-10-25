@@ -101,8 +101,11 @@ export function NewsSentimentDrawer(props: {
 
   useEffect(() => {
     if (props.open && props.focusItemId) setSelectedId(props.focusItemId)
+  }, [props.open, props.focusItemId])
+
+  useEffect(() => {
     setBodyView('translated')
-  }, [props.open, props.focusItemId, activeId])
+  }, [activeId])
 
   useEffect(() => {
     if (!contextMenu) return
