@@ -12,6 +12,7 @@ import {
   type NewsSentimentWindow
 } from '../schema/newsSentiment'
 import type { NewsSentimentStore } from './newsSentimentStore'
+import type { NewsBodyTranslationRecord } from '../schema/newsSentiment'
 
 type TranslationReader = {
   resolveDisplayTexts: (input: {
@@ -143,7 +144,7 @@ export function createNewsSentimentQuery(deps: {
       if (!item) return undefined
       const translations = await readTranslations(deps.translation, [input.itemId])
       const document = deps.store.getDocument(input.itemId)
-      const translatedBody = translations[input.itemId]?.body
+      const translatedBody = deps.bodyTranslation?.get(input.itemId)?.bodyText
       return {
         ...toItemView(row, item, translations[input.itemId]),
         ...(translatedBody

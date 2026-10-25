@@ -20,7 +20,7 @@ import { createMarketIntelligencePublicQueryService } from './public-query/publi
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
 import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService } from './application/marketAnalysisSettingsService'
-import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
+import { createDefaultTranslationSettings, resolveTargetLocale } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
 import {
@@ -54,6 +54,7 @@ import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './ne
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
+import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
@@ -431,8 +432,7 @@ export function getIntelligenceModule(
       structuredModelInvocation,
       getAppLanguage,
       getProviderState: hooks?.getProviderState,
-      getModelDefaults: hooks?.getModelDefaults,
-      getBodyText: (itemId) => newsSentimentStore?.getDocument(itemId)?.bodyText
+      getModelDefaults: hooks?.getModelDefaults
     })
     const newsSentimentSettingsStore = createNewsSentimentSettingsStore(
       createNewsSentimentSettingsJsonStorage(join(dataDir, 'intelligence-news-sentiment-settings.json'))
@@ -475,11 +475,25 @@ export function getIntelligenceModule(
           now: () => new Date().toISOString()
         })
       : undefined
+    const newsSentimentBodyTranslation = newsSentimentStore
+      ? createNewsSentimentBodyTranslationService({
+          store: newsSentimentStore,
+          invoke: structuredModelInvocation.invoke,
+          readSettings: async () => {
+            const settings = await translationStorage.readSettings()
+            return { settings, targetLocale: resolveTargetLocale(settings, await getAppLanguage()) }
+          },
+          getProviderState: hooks?.getProviderState,
+          getModelDefaults: hooks?.getModelDefaults,
+          now: () => new Date().toISOString()
+        })
+      : undefined
     const newsSentimentQuery = newsSentimentStore
       ? createNewsSentimentQuery({
           store: newsSentimentStore,
           pipeline,
           translation: translationService,
+          ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
           now: () => new Date().toISOString()
         })
       : undefined
@@ -605,9 +619,6 @@ export function getIntelligenceModule(
         }
       }
     })().catch(() => undefined)
-    // Handlers are registered above; queue the translation reconcile before the source runtime so a
-    // body-hash change from a previous run does not leave the reader with English article bodies.
-    void translationService.queueMissing({ reason: 'settings-change' }).catch(() => undefined)
     void ensureDefaultNewsSources
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
@@ -629,6 +640,7 @@ export function getIntelligenceModule(
       newsSentiment: {
         settingsStore: newsSentimentSettingsStore,
         ...(newsSentimentStore ? { store: newsSentimentStore } : {}),
+        ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
         ...(newsSentimentEnrichment ? { enrichment: newsSentimentEnrichment } : {}),
         ...(newsSentimentScoring ? { scoring: newsSentimentScoring } : {}),
         ...(newsSentimentQuery ? { query: newsSentimentQuery } : {}),

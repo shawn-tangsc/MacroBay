@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import type {
+  NewsBodyTranslationRecord,
   NewsDocumentRecord,
   NewsSentimentRecord,
   NewsSentimentSymbol
@@ -61,12 +62,23 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       primary key (item_id, scored_at)
     );
     create index if not exists idx_news_sentiment_published on news_sentiment(published_at);
+    create table if not exists news_body_translation (
+      item_id text primary key,
+      body_hash text not null,
+      target_locale text not null,
+      state text not null check (state in ('translated','failed')),
+      body_text text,
+      provider_id text,
+      model_id text,
+      error_code text,
+      translated_at text not null
+    );
   `)
   db.exec(`pragma user_version = ${newsSentimentStoragePolicy.schemaVersion}`)
 
   return {
     clearAll(): void {
-      db.exec('delete from news_sentiment; delete from news_document;')
+      db.exec('delete from news_sentiment; delete from news_document; delete from news_body_translation;')
     },
 
     upsertDocument(document: NewsDocumentRecord): void {
@@ -89,6 +101,22 @@ export function createNewsSentimentSqliteStore(filePath: string) {
         document.state,
         document.failureCode ?? null
       )
+    },
+
+    getBodyTranslation(itemId: string): NewsBodyTranslationRecord | undefined {
+      const row = db.prepare('select * from news_body_translation where item_id = ?').get(itemId) as Record<string, unknown> | undefined
+      return row ? toBodyTranslation(row) : undefined
+    },
+
+    upsertBodyTranslation(record: NewsBodyTranslationRecord): void {
+      db.prepare(`
+        insert into news_body_translation (item_id, body_hash, target_locale, state, body_text, provider_id, model_id, error_code, translated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(item_id) do update set
+          body_hash=excluded.body_hash, target_locale=excluded.target_locale, state=excluded.state,
+          body_text=excluded.body_text, provider_id=excluded.provider_id, model_id=excluded.model_id,
+          error_code=excluded.error_code, translated_at=excluded.translated_at
+      `).run(record.itemId, record.bodyHash, record.targetLocale, record.state, record.bodyText ?? null, record.providerId ?? null, record.modelId ?? null, record.errorCode ?? null, record.translatedAt)
     },
 
     getDocument(itemId: string): NewsDocumentRecord | undefined {
@@ -203,6 +231,20 @@ function toDocument(row: Record<string, unknown>): NewsDocumentRecord {
     bodyChars: Number(row.body_chars),
     state: String(row.state) as NewsDocumentRecord['state'],
     ...(row.failure_code == null ? {} : { failureCode: String(row.failure_code) })
+  }
+}
+
+function toBodyTranslation(row: Record<string, unknown>): NewsBodyTranslationRecord {
+  return {
+    itemId: String(row.item_id),
+    bodyHash: String(row.body_hash),
+    targetLocale: String(row.target_locale),
+    state: String(row.state) as NewsBodyTranslationRecord['state'],
+    ...(row.body_text == null ? {} : { bodyText: String(row.body_text) }),
+    ...(row.provider_id == null ? {} : { providerId: String(row.provider_id) }),
+    ...(row.model_id == null ? {} : { modelId: String(row.model_id) }),
+    ...(row.error_code == null ? {} : { errorCode: String(row.error_code) }),
+    translatedAt: String(row.translated_at)
   }
 }
 

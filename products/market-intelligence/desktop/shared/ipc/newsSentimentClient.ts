@@ -34,6 +34,7 @@ export type NewsSentimentClient = Readonly<{
   saveSettings: (patch: Partial<NewsSentimentSettings>) => Promise<NewsSentimentSettingsView>
   rescore: () => Promise<{ queued: boolean }>
   rebuild: () => Promise<{ queued: boolean }>
+  translateBody: (itemId: string) => Promise<{ state: 'translated' | 'off' | 'unavailable' | 'failed'; body?: string; errorCode?: string }>
 }>
 
 export function createNewsSentimentClient(invoke: Invoke = platformInvoke): NewsSentimentClient {

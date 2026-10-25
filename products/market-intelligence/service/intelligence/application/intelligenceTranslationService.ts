@@ -59,8 +59,6 @@ export function createIntelligenceTranslationService(deps: {
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
   /** 默认模型可用性判据与翻译请求共用同一份供应商状态。 */
   getProviderState?: () => Promise<ProviderState>
-  /** Stored article body from the news-sentiment document store. */
-  getBodyText?: (itemId: string) => string | undefined
 }) {
   let lastJobSummary: string | undefined
   let lastJobAt: string | undefined
@@ -260,7 +258,7 @@ export function createIntelligenceTranslationService(deps: {
       const item = deps.pipeline.listItems().find((entry) => entry.itemId === input.itemId)
       if (!item) return undefined
       const context = await loadDisplayResolutionContext()
-      return resolveDisplayTextForItem(item, input.textMode, context, deps.getBodyText?.(input.itemId))
+      return resolveDisplayTextForItem(item, input.textMode, context)
     },
 
     async resolveDisplayTexts(input: {
@@ -276,7 +274,7 @@ export function createIntelligenceTranslationService(deps: {
         const item = itemsById.get(itemId)
         return [
           itemId,
-          item ? resolveDisplayTextForItem(item, input.textMode, context, deps.getBodyText?.(itemId)) : undefined
+          item ? resolveDisplayTextForItem(item, input.textMode, context) : undefined
         ] as const
       })
       return Object.fromEntries(resolvedEntries)
@@ -310,7 +308,7 @@ export function createIntelligenceTranslationService(deps: {
       }
 
       const revision = resolveEffectiveRevision(item, deps.pipeline.listRevisions())
-      const fields = buildItemTranslationFields(item, revision, settings, deps.getBodyText?.(item.itemId))
+      const fields = buildItemTranslationFields(item, revision, settings)
       const sourceHash = computeTranslationSourceHash(fields)
       const active = findActiveTranslationRecord(records, {
         sourceType: 'item',
@@ -419,17 +417,6 @@ export function createIntelligenceTranslationService(deps: {
           continue
         }
 
-        let bodyTranslated = modelResult.output.body
-        if (candidate.kind === 'translate' && candidate.body && targetLocale !== candidate.sourceLanguage) {
-          bodyTranslated = await translateBodyInChunks({
-            invoke: deps.structuredModelInvocation,
-            providerId: modelResult.providerId,
-            modelId: modelResult.modelId,
-            itemId: candidate.itemId,
-            body: candidate.body,
-            targetLocale
-          }) ?? bodyTranslated
-        }
         records = upsertRecord(records, {
           ...pendingRecord,
           status: 'translated',
@@ -437,7 +424,6 @@ export function createIntelligenceTranslationService(deps: {
           modelId: modelResult.modelId,
           titleTranslated: modelResult.output.title,
           summaryTranslated: modelResult.output.summary,
-          ...(bodyTranslated ? { bodyTranslated } : {}),
           translatedAt: new Date().toISOString()
         })
         processed += 1
@@ -462,43 +448,6 @@ export function createIntelligenceTranslationService(deps: {
 }
 
 
-/** Long bodies are translated in bounded chunks; one large JSON response tends to drop `body`. */
-async function translateBodyInChunks(input: {
-  invoke: StructuredModelInvocationService['invoke']
-  providerId: string
-  modelId: string
-  itemId: string
-  body: string
-  targetLocale: string
-}): Promise<string | undefined> {
-  const chunks: string[] = []
-  let rest = input.body
-  while (rest.length > 0 && chunks.length < 8) {
-    if (rest.length <= 2_000) { chunks.push(rest); break }
-    const cut = rest.lastIndexOf('\n\n', 2_000)
-    const end = cut > 400 ? cut : 2_000
-    chunks.push(rest.slice(0, end))
-    rest = rest.slice(end).replace(/^\s+/, '')
-  }
-  const translated: string[] = []
-  for (const [index, chunk] of chunks.entries()) {
-    const result = await input.invoke({
-      taskId: `market-intelligence.translation:${input.itemId}:body:${index}`,
-      providerId: input.providerId,
-      modelId: input.modelId,
-      messages: [
-        { role: 'system', content: `Translate the article body into ${input.targetLocale}. Preserve symbols, names, numbers and dates. Return JSON only with key body.` },
-        { role: 'user', content: JSON.stringify({ body: chunk }) }
-      ],
-      parse: (value: unknown) => {
-        const record = value as Record<string, unknown>
-        return { body: typeof record?.body === 'string' ? record.body : '' }
-      }
-    })
-    if (result.ok && result.output.body) translated.push(result.output.body)
-  }
-  return translated.length > 0 ? translated.join('\n\n') : undefined
-}
 function resolveDisplayTextForItem(
   item: IntelligenceItem,
   textMode: 'translated' | 'original' | undefined,
@@ -513,7 +462,7 @@ function resolveDisplayTextForItem(
   const definition = getIntelligenceSourceDefinition(item.sourceId)
   const sourceLanguage = resolveItemSourceLanguage(item, definition?.language)
   const revision = resolveEffectiveRevision(item, context.revisions)
-  const fields = buildItemTranslationFields(item, revision, context.settings, body)
+  const fields = buildItemTranslationFields(item, revision, context.settings)
   const sourceHash = computeTranslationSourceHash(fields)
   const originalTitle = sanitizeIntelligenceText(revision?.title ?? item.title)
   const originalSummary = sanitizeIntelligenceText(revision?.summary ?? item.summary)
@@ -619,7 +568,7 @@ function selectTranslationCandidates(
     const definition = getIntelligenceSourceDefinition(item.sourceId)
     const sourceLanguage = resolveItemSourceLanguage(item, definition?.language)
     const revision = resolveEffectiveRevision(item, pipeline.listRevisions())
-    const fields = buildItemTranslationFields(item, revision, settings, getBodyText?.(itemId))
+    const fields = buildItemTranslationFields(item, revision, settings)
     const sourceHash = computeTranslationSourceHash(fields)
 
     if (!needsTranslation(sourceLanguage, targetLocale)) {
@@ -654,7 +603,6 @@ function selectTranslationCandidates(
       sourceLanguage,
       title: sanitizeIntelligenceText(revision?.title ?? item.title),
       summary: sanitizeIntelligenceText(revision?.summary ?? item.summary),
-      body: fields.body
     })
   }
 

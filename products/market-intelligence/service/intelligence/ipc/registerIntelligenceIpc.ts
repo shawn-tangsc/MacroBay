@@ -98,6 +98,14 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     getIntelligenceModule(jobRuntime).newsSentiment.settings.get()
   )
 
+  register(PRODUCT_ID, 'intelligence.translateNewsSentimentBody', async (payload) => {
+    const itemId = typeof (payload as { itemId?: unknown })?.itemId === 'string' ? String((payload as { itemId: string }).itemId) : ''
+    if (!itemId) throw new Error('An itemId is required.')
+    const module = getIntelligenceModule(jobRuntime)
+    if (!module.newsSentiment.bodyTranslation) throw new Error('Body translation is unavailable.')
+    return module.newsSentiment.bodyTranslation.translate(itemId)
+  })
+
   register(PRODUCT_ID, 'intelligence.rebuildNewsSentiment', async () => {
     const module = getIntelligenceModule(jobRuntime)
     if (!module.newsSentiment.store) throw new Error('News sentiment storage is unavailable.')

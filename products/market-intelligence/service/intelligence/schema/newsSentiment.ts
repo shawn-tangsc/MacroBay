@@ -12,6 +12,20 @@ export type NewsSentimentEngine = 'model' | 'rules'
 /** 只认 BTC / ETH；无符号的新闻只进 crypto-market。 */
 export type NewsSentimentSymbol = 'BTC' | 'ETH'
 
+export type NewsBodyTranslationState = 'translated' | 'failed'
+
+export type NewsBodyTranslationRecord = {
+  itemId: string
+  bodyHash: string
+  targetLocale: string
+  state: NewsBodyTranslationState
+  bodyText?: string
+  providerId?: string
+  modelId?: string
+  errorCode?: string
+  translatedAt: string
+}
+
 export type NewsDocumentState = 'available' | 'too-short' | 'failed'
 
 export type NewsSentimentWindow = '1h' | '4h' | '24h' | '7d'

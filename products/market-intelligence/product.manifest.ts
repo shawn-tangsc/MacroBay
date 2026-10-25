@@ -60,6 +60,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.saveNewsSentimentSettings' },
     { method: 'intelligence.rescoreNewsSentiment' },
     { method: 'intelligence.rebuildNewsSentiment' },
+    { method: 'intelligence.translateNewsSentimentBody' },
     { method: 'intelligence.getSourceHealth' },
     { method: 'intelligence.getTimeline' },
     { method: 'intelligence.getWorkspaceState' },

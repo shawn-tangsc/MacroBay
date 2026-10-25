@@ -39,6 +39,8 @@ export function NewsSentimentDrawer(props: {
   const [selectedId, setSelectedId] = useState<string>()
   const [detail, setDetail] = useState<NewsSentimentItemDetail>()
   const [detailFailed, setDetailFailed] = useState(false)
+  const [translatingBody, setTranslatingBody] = useState(false)
+  const [translatedBody, setTranslatedBody] = useState<{ itemId: string; body: string }>()
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild' | 'translate'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
@@ -49,6 +51,21 @@ export function NewsSentimentDrawer(props: {
   useEffect(() => {
     if (props.open && props.focusItemId) setSelectedId(props.focusItemId)
   }, [props.open, props.focusItemId])
+
+  useEffect(() => {
+    if (!props.open || !activeId) return
+    let cancelled = false
+    setTranslatingBody(true)
+    void props.client.translateBody(activeId)
+      .then((result) => {
+        if (!cancelled && result.state === 'translated' && result.body) {
+          setTranslatedBody({ itemId: activeId, body: result.body })
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => { if (!cancelled) setTranslatingBody(false) })
+    return () => { cancelled = true }
+  }, [props.open, activeId, props.client])
 
   useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
@@ -270,9 +287,13 @@ export function NewsSentimentDrawer(props: {
                   </blockquote>
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
-                  {detailFailed
-                    ? text.unavailable
-                    : detail?.bodyExcerpt ?? text.drawer.detail.noBody}
+                  {translatingBody
+                    ? text.drawer.detail.translatingBody
+                    : translatedBody?.itemId === activeId && translatedBody.body
+                      ? translatedBody.body
+                      : detailFailed
+                        ? text.unavailable
+                        : detail?.bodyExcerpt ?? text.drawer.detail.noBody}
                 </p>
                 <footer>
                   {detail?.promptVersion ? <span>{text.drawer.detail.prompt}: {detail.promptVersion}</span> : null}
