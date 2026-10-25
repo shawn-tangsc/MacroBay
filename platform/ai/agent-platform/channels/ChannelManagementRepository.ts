@@ -761,6 +761,20 @@ export class ChannelManagementRepository {
     })
   }
 
+  /** Keep startup intent for a transient runtime failure so the next boot can retry. */
+  preserveResumeIntent(channelId: string, now: string): boolean {
+    return this.database.transact(() => {
+      const changed = this.database.connection.prepare(
+        `update agent_channels set requested_enabled = 1,
+           lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'ready' end,
+           updated_at = ?
+         where id = ? and credential_ref is not null`
+      ).run(now, channelId).changes
+      if (changed) this.fence(channelId, now)
+      return changed === 1
+    })
+  }
+
   failPendingLifecycleOwner(channelId: string, owner: TelegramLifecycleOwner, now: string): boolean {
     return this.database.transact(() => {
       const cleared = this.database.connection.prepare(
@@ -852,7 +866,7 @@ export class ChannelManagementRepository {
     return (this.database.connection.prepare(
       `select c.id from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
-       where ${MANAGED_CHANNEL_C_SQL} and c.requested_enabled = 1 and c.lifecycle_state = 'enabled'
+       where ${MANAGED_CHANNEL_C_SQL} and c.requested_enabled = 1 and c.lifecycle_state in ('enabled', 'ready')
          and (g.lifecycle_state is null or g.lifecycle_state <> 'active')`
     ).all() as Array<{ id: string }>).map((row) => row.id)
   }

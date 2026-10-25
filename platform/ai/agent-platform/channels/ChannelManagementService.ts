@@ -320,8 +320,18 @@ export class ChannelManagementService {
   /** Restarts channels whose intent survived a graceful quit; unsupported/broken rows are disabled. */
   async resumeRequested(): Promise<void> {
     for (const id of this.deps.repository.resumableChannelIds()) {
-      const result = await this.restart({ id, actorId: 'channel-startup' })
-      if (!result.ok) this.disable({ id, actorId: 'channel-startup' })
+      const channel = this.deps.repository.query.get(id)
+      const result = channel?.state === 'runtime-ready'
+        ? await this.restart({ id, actorId: 'channel-startup' })
+        : await this.requestEnable({ id, actorId: 'channel-startup' })
+      if (!result.ok) {
+        if (result.code === 'adapter-runtime-start-failed') {
+          // Transient start failures keep the intent; the next boot retries through enable.
+          this.deps.repository.preserveResumeIntent(id, this.now())
+        } else {
+          this.disable({ id, actorId: 'channel-startup' })
+        }
+      }
     }
   }
 
