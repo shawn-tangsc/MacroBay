@@ -498,6 +498,57 @@ describe('PLAT-72 provider sqlite storage', () => {
     )[0].total).toBe(0)
   })
 
+  it('round-trips the availability verdict and keeps it across a reopen', async () => {
+    const { databasePath } = workspace()
+    const storage = createProviderSqliteStorage({ path: databasePath })
+    const availability = {
+      status: 'failed' as const,
+      reasonCode: 'http_401',
+      checkedAt: '2026-10-25T05:00:00.000Z',
+      fingerprint: 'av1-fixture'
+    }
+    await storage.read()
+    await storage.write({
+      providers: [provider({
+        id: 'custom-one',
+        models: [{ id: 'm1', name: 'M1', capabilities: { chat: true }, availability }]
+      })]
+    })
+    storage.close()
+
+    const reopened = createProviderSqliteStorage({ path: databasePath })
+    const state = await reopened.read() as { providers: ModelProvider[] }
+    reopened.close()
+    expect(state.providers[0]?.models[0]?.availability).toEqual(availability)
+    expect(queryRows<{ availability_json: string | null }>(
+      databasePath,
+      'select availability_json from model_models where model_id = ?',
+      'm1'
+    )[0].availability_json).toBe(JSON.stringify(availability))
+  })
+
+  it('adds the availability column to a database created before it existed', async () => {
+    const { databasePath } = workspace()
+    const first = createProviderSqliteStorage({ path: databasePath })
+    await first.read()
+    first.close()
+
+    // 模拟"旧库"：把列与 0009 记录一起退回。
+    const legacy = new DatabaseSync(databasePath)
+    legacy.exec('alter table model_models drop column availability_json;')
+    legacy.prepare('delete from model_provider_migrations where id = ?').run('0009_model_availability_column')
+    legacy.close()
+
+    const upgraded = createProviderSqliteStorage({ path: databasePath })
+    await upgraded.read()
+    upgraded.close()
+
+    const columns = queryRows<{ name: string }>(databasePath, 'pragma table_info(model_models)').map((row) => row.name)
+    expect(columns).toContain('availability_json')
+    expect(queryRows<{ id: string }>(databasePath, 'select id from model_provider_migrations').map((row) => row.id))
+      .toContain('0009_model_availability_column')
+  })
+
   it('exposes exactly one write entry point', async () => {
     const storageModule = await import('./providerSqliteStorage')
     expect(Object.keys(storageModule)).toEqual(['createProviderSqliteStorage'])

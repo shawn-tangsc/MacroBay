@@ -31,7 +31,8 @@ export type UseModelDetection = {
   resultFor: (modelId: string) => ModelDetectionResult | undefined
   /** 行内状态：有结果取结果；run 在跑且无结果 ⇒ testing。 */
   statusFor: (modelId: string) => ModelDetectionModelStatus | undefined
-  start: (modes: readonly ModelDetectionMode[]) => Promise<string | null>
+  /** `modelIds` 缺省 = 该供应商全部模型（自动检测只传新增/变更/过期的那几个）。 */
+  start: (modes: readonly ModelDetectionMode[], modelIds?: readonly string[]) => Promise<string | null>
   stop: (runId?: string) => void
 }
 
@@ -80,7 +81,7 @@ export function useModelDetection(providerId: string | undefined): UseModelDetec
     progress: progressOf(run),
     resultFor: (modelId) => (providerId ? resultForModel(snapshot, providerId, modelId) : undefined),
     statusFor: (modelId) => (providerId ? toRowStatus(snapshot, providerId, modelId) : undefined),
-    start: (modes) => (providerId ? startModelDetection(providerId, modes) : Promise.resolve(null)),
+    start: (modes, modelIds) => (providerId ? startModelDetection(providerId, modes, modelIds) : Promise.resolve(null)),
     stop: (runId) => stopModelDetection(runId)
   }
 }

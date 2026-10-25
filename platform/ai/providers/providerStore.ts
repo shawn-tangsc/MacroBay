@@ -30,6 +30,11 @@ import {
 } from './providerChatEndpoints'
 import { normalizeModelCapabilities } from './modelCapabilities'
 import { withModelPriceTag } from './modelPriceTag'
+import {
+  modelAvailabilityFingerprint,
+  normalizeModelAvailability,
+  type ModelAvailabilityUpdate
+} from './modelAvailability'
 import { inferModelCapabilities, isNonChatModelId, resolveModelCapabilities } from './modelCapabilityInference'
 import { applyModelSyncPlan, isProviderPresetModel, type ModelSyncPlan } from './providerModelSync'
 import { diffRemovedEndpointProtocols } from './providerEndpointMerge'
@@ -157,6 +162,17 @@ export type ProviderStore = {
     providerId: string,
     updates: readonly ModelProbedProtocolsUpdate[]
   ) => Promise<void>
+  /**
+   * 检测结束后写入**可用性结论**（一次写入，覆盖本次 run 的所有模型）。
+   *
+   * 只写 `ok` / `failed`；跳过与取消不写。指纹在这里按写入时的配置计算，
+   * 渲染层用同一个指纹函数判断结论是否已过期。
+   */
+  recordModelAvailability: (
+    providerId: string,
+    updates: readonly ModelAvailabilityUpdate[],
+    checkedAt: string
+  ) => Promise<void>
   removeModel: (providerId: string, modelId: string) => Promise<SafeModelProvider>
   setDefaultChatModel: (providerId: string, modelId: string) => Promise<SafeModelProvider>
   applyModelSync: (providerId: string, plan: ModelSyncPlan) => Promise<SafeModelProvider>
@@ -260,6 +276,24 @@ export function normalizeProviderState(
   return options.mergePresets === false ? normalized : mergeSystemProviderPresets(normalized)
 }
 
+/**
+ * 可用性结论由主进程写（`recordModelAvailability`），渲染层回传的整份 `models` 不得覆盖它。
+ *
+ * 保存 Key / 改名 / 改端点都会把界面上的模型数组原样带回（带 `availability`）；这里只认库里的值，
+ * 避免"编辑器回写 → 结论被清除"或"渲染层伪造结论"。
+ */
+function preserveModelAvailability(
+  models: readonly ModelDefinition[],
+  existingModels: readonly ModelDefinition[] | undefined
+): ModelDefinition[] {
+  const existingById = new Map((existingModels ?? []).map((model) => [model.id, model]))
+  return models.map((model) => {
+    const stored = existingById.get(model.id)?.availability
+    const { availability: _ignored, ...rest } = model
+    return stored ? { ...rest, availability: stored } : rest
+  })
+}
+
 export function upsertProvider(state: ProviderState, input: ModelProviderInput): ProviderState {
   const existing = state.providers.find((provider) => provider.id === input.id)
   /**
@@ -293,7 +327,7 @@ export function upsertProvider(state: ProviderState, input: ModelProviderInput):
     defaultChatModelId: input.defaultChatModelId ?? existing?.defaultChatModelId,
     apiKey: input.apiKey === undefined ? existing?.apiKey : input.apiKey,
     apiKeyAvailability: input.apiKey === undefined ? existing?.apiKeyAvailability : undefined,
-    models: input.models ?? existing?.models ?? []
+    models: preserveModelAvailability(input.models ?? existing?.models ?? [], existing?.models)
   })
 
   if (!provider) throw new Error('Provider id and name are required.')
@@ -370,6 +404,54 @@ export function applyProbedProtocols(
   return changed ? { providers } : state
 }
 
+/**
+ * 把一次检测 run 的结论写进模型记录（纯函数；一次 run 一次写入）。
+ *
+ * 指纹在这里按**写入时**的配置计算；读取方拿当前配置重算同一个指纹即可判过期。
+ * 结论只覆盖模型自身的可用性字段，不动协议集合、不动声明。
+ */
+export function applyModelAvailability(
+  state: ProviderState,
+  providerId: string,
+  updates: readonly ModelAvailabilityUpdate[],
+  checkedAt: string
+): ProviderState {
+  if (updates.length === 0) return state
+  const byModel = new Map(updates.map((update) => [update.modelId, update]))
+  let changed = false
+
+  const providers = state.providers.map((provider) => {
+    if (provider.id !== providerId) return provider
+    const fingerprintConfig = { endpoints: provider.endpoints, apiKeyPreview: provider.apiKeyPreview }
+    let providerChanged = false
+    const models = provider.models.map((model) => {
+      const update = byModel.get(model.id)
+      if (!update) return model
+      const availability = {
+        status: update.status,
+        ...(update.reasonCode ? { reasonCode: update.reasonCode } : {}),
+        checkedAt,
+        fingerprint: modelAvailabilityFingerprint(fingerprintConfig, model)
+      }
+      if (
+        model.availability?.status === availability.status &&
+        model.availability.reasonCode === availability.reasonCode &&
+        model.availability.checkedAt === availability.checkedAt &&
+        model.availability.fingerprint === availability.fingerprint
+      ) {
+        return model
+      }
+      providerChanged = true
+      return { ...model, availability }
+    })
+    if (!providerChanged) return provider
+    changed = true
+    return { ...provider, models }
+  })
+
+  return changed ? { providers } : state
+}
+
 export function removeProvider(state: ProviderState, providerId: string): ProviderState {
   return { providers: state.providers.filter((provider) => provider.id !== providerId) }
 }
@@ -382,7 +464,8 @@ export function addOrUpdateModel(state: ProviderState, providerId: string, model
   if (!model.id.trim() || !model.name.trim()) throw new Error('Model id and name are required.')
 
   return updateProvider(state, providerId, (provider) => {
-    const normalizedInput = normalizeModel(model)
+    // 可用性结论由主进程写：编辑器回写的模型对象不得携带/覆盖它（旧值在下面显式保留）。
+    const normalizedInput = normalizeModel({ ...model, availability: undefined })
     const normalizedModel = normalizedInput
       ? withModelSupportedProtocols(
         withModelChatProtocol(normalizedInput, provider.endpoints[0]?.protocol),
@@ -427,6 +510,8 @@ export function addOrUpdateModel(state: ProviderState, providerId: string, model
         ...(normalizedModel.protocolProbedAt ? {} : previous.protocolProbedAt ? { protocolProbedAt: previous.protocolProbedAt } : {}),
         ...(normalizedModel.probeStatus ? {} : previous.probeStatus ? { probeStatus: previous.probeStatus } : {}),
         ...(normalizedModel.probeReason ? {} : previous.probeReason ? { probeReason: previous.probeReason } : {}),
+        // 可用性结论是服务端写的事实：抽屉回写没带它时必须保留旧值（指纹会在读取时判过期）。
+        ...(normalizedModel.availability ? {} : previous.availability ? { availability: previous.availability } : {}),
         ...(normalizedModel.presetModel ? { presetModel: true } : previous.presetModel ? { presetModel: true } : {}),
         ...(normalizedModel.presetStale || previous.presetStale ? { presetStale: true } : {})
       }
@@ -665,6 +750,16 @@ export function createProviderStore(storage?: ProviderStorage, vault?: SecretVau
       await runMutation(async () => {
         const current = await load()
         const next = applyProbedProtocols(current, providerId, updates)
+        if (next === current) return undefined
+        await save(next)
+        return undefined
+      })
+    },
+    async recordModelAvailability(providerId, updates, checkedAt) {
+      if (updates.length === 0) return
+      await runMutation(async () => {
+        const current = await load()
+        const next = applyModelAvailability(current, providerId, updates, checkedAt)
         if (next === current) return undefined
         await save(next)
         return undefined
@@ -1214,6 +1309,11 @@ function normalizeModel(model: unknown): ModelDefinition | null {
     ...(typeof candidate.probeReason === 'string' && candidate.probeReason.trim()
       ? { probeReason: candidate.probeReason.trim() }
       : {}),
+    // 可用性结论 round-trip：脏值整条丢弃（状态/时间/指纹缺一不可）。
+    ...(() => {
+      const availability = normalizeModelAvailability(candidate.availability)
+      return availability ? { availability } : {}
+    })(),
     ...(candidate.providerDeclared === true ? { providerDeclared: true } : {}),
     ...(candidate.presetModel === true ? { presetModel: true } : {}),
     // PLAT-63 C：归档标记必须能 round-trip，否则「保留但不显示」会在下次加载变回普通模型。

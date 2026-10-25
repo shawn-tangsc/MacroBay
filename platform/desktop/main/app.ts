@@ -1662,21 +1662,25 @@ function registerIpcHandlers(
       getMainWindow()?.webContents.send(IpcChannels.modelProvidersDetectionDone, runId, payload)
     },
     // PLAT-82：run 结束后把「实测通过」的协议写回模型（一次写入；状态文案不落库）。
-    recordProbedProtocols: (providerId, updates) => providerStore.recordProbedProtocols(providerId, updates)
+    recordProbedProtocols: (providerId, updates) => providerStore.recordProbedProtocols(providerId, updates),
+    // 可用性结论：只写 ok / failed；渲染层用同一指纹函数判过期。
+    recordModelAvailability: (providerId, updates, checkedAt) =>
+      providerStore.recordModelAvailability(providerId, updates, checkedAt)
   })
   ipcMain.handle(
     IpcChannels.modelProvidersDetectModels,
     async (
       _event: IpcMainInvokeEvent,
       providerId: string,
-      options?: { modes?: unknown; runId?: unknown }
+      options?: { modes?: unknown; runId?: unknown; modelIds?: unknown }
     ) => {
       if (typeof providerId !== 'string' || !providerId.trim()) {
         throw new Error('providerId is required.')
       }
       return modelProviderDetection.detectModels(providerId, {
         modes: (options?.modes ?? []) as ModelDetectionMode[],
-        runId: typeof options?.runId === 'string' ? options.runId : ''
+        runId: typeof options?.runId === 'string' ? options.runId : '',
+        ...(Array.isArray(options?.modelIds) ? { modelIds: options.modelIds as string[] } : {})
       })
     }
   )

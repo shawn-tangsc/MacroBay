@@ -27,6 +27,7 @@ import { ModelServiceModelsSection } from './ModelServiceModelsSection'
 import { ModelServiceProviderRail } from './ModelServiceProviderRail'
 import { resolveProviderDisplayName } from './providerDisplayName'
 import { ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
+import { useAutoModelDetection } from './useAutoModelDetection'
 import { useModelServiceAutosave } from './useModelServiceAutosave'
 
 /**
@@ -136,6 +137,11 @@ export function ModelServiceProviderPage({
 
   const displayEnabled = pendingEnabled ?? enabled
   const provider = selectedProvider
+  // 配好 / 模型变更后自动检测「新增 / 变更 / 结论过期」的聊天模型（结果由主进程落库）。
+  const autoDetection = useAutoModelDetection({ provider })
+  const autoDetectionHint = autoDetection !== null && autoDetection.skipped > 0
+    ? labels.autoDetectionTruncated(autoDetection.started, autoDetection.skipped)
+    : null
   // PLAT-62 追加：proxy 供应商 + 中文界面 ⇒ 品牌块下方提示（布尔由页面算，组件不读全局）。
   const showMainlandProxyNotice =
     provider !== null && language === 'zh-CN' && providerReachabilityOf(provider.id) === 'proxy'
@@ -301,8 +307,9 @@ export function ModelServiceProviderPage({
               onOpenRequestConfig={() => setRequestConfigOpen(true)}
             />
 
-            <ModelServiceModelsSection labels={labels} providerId={provider.id}
+            <ModelServiceModelsSection labels={labels} provider={provider}
               configuredProtocolCount={configuredModelChatProtocols(provider).length}
+              autoDetectionHint={autoDetectionHint}
               groups={modelGroups}
               modelCount={modelCount}
               staleModelCount={provider.models.filter((model) => model.presetStale === true).length}

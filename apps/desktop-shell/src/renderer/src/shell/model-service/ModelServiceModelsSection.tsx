@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { ChevronRight, Filter, Plus, RefreshCw, Search } from 'lucide-react'
 
-import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
+import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 
 import type { PlatformText } from '../../i18n/platformText'
 import type { ModelGroup } from '../modelGrouping'
 
+import { resolveModelAvailabilityView } from './autoModelDetectionPlan'
 import { ModelServiceClearModelsControl } from './ModelServiceClearModelsControl'
 import { ModelServiceDetectControl } from './ModelServiceDetectControl'
 import { ModelServiceModelRow } from './ModelServiceModelRow'
@@ -33,8 +34,8 @@ import {
  */
 type ModelServiceModelsSectionProps = {
   labels: PlatformText['models']
-  /** PLAT-62：用于判断模型是否支持 Anthropic messages（智能体直连）。 */
-  providerId: string
+  /** 供应商（行内可用性结论要用端点 + Key 掩码判过期；`id` 用于检测视图）。 */
+  provider: SafeModelProvider
   /** PLAT-82：该供应商已配置的协议通道数（检测弹窗的"只有 1 条协议可测"）。 */
   configuredProtocolCount?: number
   groups: readonly ModelGroup[]
@@ -62,11 +63,13 @@ type ModelServiceModelsSectionProps = {
   syncErrorText: string | null
   /** A：原始信息（安全、已去前缀）；只有可读时才展示。 */
   syncErrorDetail: string | null
+  /** 自动检测因单批上限没测完时的提示（不发请求也能看到还差多少）。 */
+  autoDetectionHint?: string | null
 }
 
 export function ModelServiceModelsSection({
   labels,
-  providerId,
+  provider,
   configuredProtocolCount,
   groups,
   modelCount,
@@ -85,8 +88,10 @@ export function ModelServiceModelsSection({
   modelError,
   notice,
   syncErrorText,
-  syncErrorDetail
+  syncErrorDetail,
+  autoDetectionHint
 }: ModelServiceModelsSectionProps): React.ReactElement {
+  const providerId = provider.id
   const [searchOpen, setSearchOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(true)
@@ -254,6 +259,9 @@ export function ModelServiceModelsSection({
         </p>
       ) : null}
       {notice !== null ? <p className="model-service-hint" data-models-notice>{notice}</p> : null}
+      {autoDetectionHint !== null && autoDetectionHint !== undefined ? (
+        <p className="model-service-hint" data-models-auto-detection-hint>{autoDetectionHint}</p>
+      ) : null}
       {modelError !== null ? (
         <p className="model-service-inline-error" role="alert" data-models-error>
           {modelError}
@@ -288,6 +296,7 @@ export function ModelServiceModelsSection({
                       labels={labels}
                       providerId={providerId}
                       model={model}
+                      availability={resolveModelAvailabilityView(provider, model)}
                       detectionStatus={detection.statusFor(model.id)}
                       detectionResult={detection.resultFor(model.id)}
                       isRemovingModel={isRemovingModel}

@@ -577,6 +577,16 @@ export type PlatformText = {
     detectStop: string
     detectStopped: string
     detectClose: string
+    /** 落库的「上次检测」结论：行内短词 + title 明细。 */
+    modelAvailabilityOk: string
+    modelAvailabilityFailed: string
+    /** 配置变过、结论不再适用。 */
+    modelAvailabilityStale: string
+    modelAvailabilityStaleHint: string
+    modelAvailabilityFailedWithReason: (reason: string) => string
+    modelAvailabilityCheckedAt: (status: string, checkedAt: string) => string
+    /** 自动检测只测了一批：说明还剩多少要手动补测。 */
+    autoDetectionTruncated: (checked: number, remaining: number) => string
     providerNames: Record<string, string>
     modelRetiredTag: string
     /** PLAT-80：模型服务页顶部「默认模型」区块。 */
@@ -1599,6 +1609,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectStop: '停止',
       detectStopped: '已停止',
       detectClose: '关闭',
+      modelAvailabilityOk: '可用',
+      modelAvailabilityFailed: '不可用',
+      modelAvailabilityStale: '待检测',
+      modelAvailabilityStaleHint: '配置已变更，等待自动检测',
+      modelAvailabilityFailedWithReason: (reason) => `不可用 · ${reason}`,
+      modelAvailabilityCheckedAt: (status, checkedAt) => `${status} · 上次检测 ${checkedAt}`,
+      autoDetectionTruncated: (checked, remaining) =>
+        `已自动检测 ${checked} 个模型，另有 ${remaining} 个待检测；可在「检测模型」里手动补测。`,
       providerNames: {
         silicon: '硅基流动',
         tokenrhythm: '基元律动',
@@ -2605,6 +2623,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       detectStop: 'Stop',
       detectStopped: 'Stopped',
       detectClose: 'Close',
+      modelAvailabilityOk: 'Available',
+      modelAvailabilityFailed: 'Unavailable',
+      modelAvailabilityStale: 'Not checked',
+      modelAvailabilityStaleHint: 'Configuration changed; waiting for the automatic check',
+      modelAvailabilityFailedWithReason: (reason) => `Unavailable · ${reason}`,
+      modelAvailabilityCheckedAt: (status, checkedAt) => `${status} · last checked ${checkedAt}`,
+      autoDetectionTruncated: (checked, remaining) =>
+        `Automatically checked ${checked} model${checked === 1 ? '' : 's'}; ${remaining} still need a manual check in "Detect models".`,
       providerNames: {
         silicon: 'SiliconFlow',
         tokenrhythm: 'TokenRhythm',

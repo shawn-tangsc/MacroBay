@@ -102,14 +102,19 @@ export function subscribeModelDetection(listener: () => void): () => void {
 /** 启动一次检测；`accepted === false`（重复 runId）时不登记 run。 */
 export async function startModelDetection(
   providerId: string,
-  modes: readonly ModelDetectionMode[]
+  modes: readonly ModelDetectionMode[],
+  modelIds?: readonly string[]
 ): Promise<string | null> {
   const api = window.platform?.modelProviders
   if (!api?.detectModels) return null
   ensureBridge()
   sequence += 1
   const runId = `detection-${Date.now()}-${sequence}`
-  const accepted = await api.detectModels(providerId, { modes: [...modes], runId })
+  const accepted = await api.detectModels(providerId, {
+    modes: [...modes],
+    runId,
+    ...(modelIds === undefined ? {} : { modelIds: [...modelIds] })
+  })
   if (!accepted.accepted) return null
   runs.set(runId, {
     runId,
