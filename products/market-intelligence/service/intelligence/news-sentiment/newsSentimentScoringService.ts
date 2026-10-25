@@ -66,6 +66,8 @@ export function createNewsSentimentScoringService(deps: {
       const candidates = admitted
         .filter((item) => !requestedIds || requestedIds.has(item.itemId))
         .filter((item) => !isCurrent(deps.store.getLatestSentiment(item.itemId, deps.now()), useModel, modelRef, deps.store.getDocument(item.itemId)))
+        // The pass is capped; newest first so the visible window fills before older backlog.
+        .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
         .slice(0, deps.maxPerRun ?? 20)
 
       let processed = 0
