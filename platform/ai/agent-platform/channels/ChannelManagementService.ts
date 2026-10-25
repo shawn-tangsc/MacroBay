@@ -175,30 +175,21 @@ export class ChannelManagementService {
     return owner ? this.startRestart(id, input.actorId, channel, owner) : this.enableRejected(id, input.actorId, channel, 'adapter-runtime-start-failed')
   }
 
-  private async enableRuntime(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
-    const credentialCode = await this.verifyCredential(id)
-    if (credentialCode) {
-      this.deps.repository.failPendingLifecycleOwner(id, owner, this.now())
-      return this.enableRejected(id, actorId, channel, credentialCode)
-    }
-    const activeOwner = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
-    if (!activeOwner?.generation) {
-      this.deps.repository.clearPendingLifecycleOwner(id, owner)
-      return this.enableRejected(id, actorId, channel, 'channel-agent-missing')
-    }
-    this.deps.runtime?.stop(id)
-    let started = false
-    try { started = Boolean(this.deps.runtime && await this.deps.runtime.start(id, activeOwner.generation, owner.token)) } catch {}
-    if (!started || !this.deps.repository.ownsLifecycleOwner(id, activeOwner)) {
-      this.deps.runtime?.stop(id, owner.token)
-      this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
-      return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
-    }
-    this.deps.repository.audit(id, assertIdentifier(actorId), 'request-enable', null, this.now())
-    return { ok: true, code: 'runtime-ready', channel: this.deps.repository.query.get(id) ?? undefined }
+  private enableRuntime(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
+    return this.startOwnedRuntime(id, actorId, channel, owner, false)
   }
 
-  private async startRestart(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
+  private startRestart(id: string, actorId: unknown, channel: NonNullable<ReturnType<ChannelManagementService['get']>>, owner: import('./ChannelManagementRepository').TelegramLifecycleOwner): Promise<ChannelManagementResult> {
+    return this.startOwnedRuntime(id, actorId, channel, owner, true)
+  }
+
+  private async startOwnedRuntime(
+    id: string,
+    actorId: unknown,
+    channel: NonNullable<ReturnType<ChannelManagementService['get']>>,
+    owner: import('./ChannelManagementRepository').TelegramLifecycleOwner,
+    restart: boolean
+  ): Promise<ChannelManagementResult> {
     const credentialCode = await this.verifyCredential(id)
     if (credentialCode) {
       this.deps.repository.failPendingLifecycleOwner(id, owner, this.now())
@@ -207,7 +198,7 @@ export class ChannelManagementService {
     const activeOwner = this.deps.repository.activateOwnedRuntime(id, owner, this.now())
     if (!activeOwner?.generation) {
       this.deps.repository.clearPendingLifecycleOwner(id, owner)
-      return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
+      return this.enableRejected(id, actorId, channel, restart ? 'adapter-runtime-start-failed' : 'channel-agent-missing')
     }
     this.deps.runtime?.stop(id)
     let started = false
@@ -217,9 +208,14 @@ export class ChannelManagementService {
       this.deps.repository.failOwnedRuntime(id, activeOwner, this.now())
       return this.enableRejected(id, actorId, channel, 'adapter-runtime-start-failed')
     }
-    this.deps.repository.audit(id, assertIdentifier(actorId), 'restart', null, this.now())
-    return { ok: true, code: 'restarted', channel: this.deps.repository.query.get(id) ?? undefined }
+    this.deps.repository.audit(id, assertIdentifier(actorId), restart ? 'restart' : 'request-enable', null, this.now())
+    return {
+      ok: true,
+      code: restart ? 'restarted' : 'runtime-ready',
+      channel: this.deps.repository.query.get(id) ?? undefined
+    }
   }
+
 
   async beginCredential(input: { id: unknown; senderId: unknown }) {
     const id = this.requireMutableChannel(input.id)
