@@ -9,7 +9,9 @@ local Git configuration. It applies once the `main` ruleset is enabled in GitHub
 
 - `main` is always releasable and always green.
 - Changes land through short-lived branches and pull requests.
-- One pull request carries one semantic change.
+- A pull request stays reviewable: keep it to one area when you can, and bundle related work
+  otherwise. While the project is maintained by a single person, a change set that spans one
+  feature area is acceptable; unrelated areas still get their own pull request.
 - Releases are tags and GitHub Releases, not long-lived branches.
 - Published history is never rewritten.
 

@@ -40,7 +40,7 @@ git pull --ff-only
 git switch -c feat/short-description
 ```
 
-1. Keep one semantic change per pull request.
+1. Keep a pull request reviewable: related work may be bundled, unrelated areas should not be.
 2. Add or update tests for behavior changes.
 3. Run the verification commands before opening the PR.
 4. Update the public documentation when a user-facing behavior changes.

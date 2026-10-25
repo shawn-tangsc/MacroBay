@@ -1,4 +1,4 @@
-<!-- Keep one semantic change per PR. Use a Conventional Commit prefix in the title. -->
+<!-- Use a Conventional Commit prefix in the title. Keep the PR to one area where you can. -->
 
 ## What changed
 
@@ -19,7 +19,7 @@
 
 ## Scope
 
-- [ ] This PR contains one semantic change.
+- [ ] This PR bundles related work only; unrelated areas are split out.
 - [ ] Public docs and screenshots are updated where behavior changed.
 - [ ] No credentials, local data, generated registries, logs, or private notes are included.
 - [ ] The branch is rebased on `main`.
