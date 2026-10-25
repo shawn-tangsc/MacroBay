@@ -23,7 +23,6 @@ export type ChannelManagementOperation = {
   permit: string | null
   expectedRevision: number | null
   payloadKeyRefs: string[] | null
-  legacyMigrations: LegacyMigrationRef[] | null
   lifecycleOwnerToken: string | null
   mutationEpoch: number | null
   credentialCleanupRefs: CredentialCleanupRef[] | null
@@ -39,24 +38,13 @@ export type CredentialCleanupRef = {
   expectedRevision: number | null
 }
 
-export type LegacyMigrationRef = {
-  purpose: 'provider-credential' | 'legacy-discovery-archive'
-  type: 'telegram' | 'wechat'
-  ref: string
-  fingerprint: string
-  keyId: string
-  permit: string
-}
 
 export type TelegramLifecycleOwner = { token: string; purpose: 'enable' | 'restart' | 'mutation'; generation: number | null; epoch?: number | null }
 
-export function hasValidDeleteKnownRefs(operation: Pick<ChannelManagementOperation, 'channelId' | 'ref' | 'payloadKeyRefs' | 'legacyMigrations'>): boolean {
+export function hasValidDeleteKnownRefs(operation: Pick<ChannelManagementOperation, 'channelId' | 'ref' | 'payloadKeyRefs'>): boolean {
   return (operation.ref === '' || isProviderRefForChannel(operation.ref, operation.channelId)) &&
     operation.payloadKeyRefs !== null &&
-    operation.payloadKeyRefs.every((ref) => isPayloadKeyRefForChannel(ref, operation.channelId)) &&
-    operation.legacyMigrations !== null &&
-    operation.legacyMigrations.every((migration) => isValidLegacyMigrationRef(migration, operation.channelId)) &&
-    uniqueMigrationRefs(operation.legacyMigrations)
+    operation.payloadKeyRefs.every((ref) => isPayloadKeyRefForChannel(ref, operation.channelId))
 }
 
 export class ChannelManagementRepository {
@@ -233,12 +221,12 @@ export class ChannelManagementRepository {
 
   private reserveDeleteOperation(input: {
     id: string; channelId: string; ref: string; expectedRevision?: number; payloadKeyRefs: string[]
-    legacyMigrations: LegacyMigrationRef[]; credentialCleanupRefs: CredentialCleanupRef[]; now: string
+    credentialCleanupRefs: CredentialCleanupRef[]; now: string
   }): void {
     this.database.connection.prepare(
       `insert into channel_management_operations (id, channel_id, purpose, credential_ref, expected_revision, payload_key_refs_json, legacy_migrations_json, credential_cleanup_refs_json, state, created_at, updated_at)
        values (?, ?, 'delete', ?, ?, ?, ?, ?, 'reserved', ?, ?)`
-    ).run(input.id, input.channelId, input.ref, input.expectedRevision ?? null, JSON.stringify(input.payloadKeyRefs), JSON.stringify(input.legacyMigrations), JSON.stringify(input.credentialCleanupRefs), input.now, input.now)
+    ).run(input.id, input.channelId, input.ref, input.expectedRevision ?? null, JSON.stringify(input.payloadKeyRefs), '[]', JSON.stringify(input.credentialCleanupRefs), input.now, input.now)
   }
 
   beginDelete(id: string, operationId: string, now: string): ChannelManagementOperation | null {
@@ -274,7 +262,6 @@ export class ChannelManagementRepository {
       if (knownRef && !isProviderRefForChannel(knownRef, id)) throw new Error('channel-delete-known-ref-invalid')
       const payloadKeyRefs = this.knownPayloadKeyRefs(id)
       if (!payloadKeyRefs.every((ref) => isPayloadKeyRefForChannel(ref, id))) throw new Error('channel-delete-known-ref-invalid')
-      const legacyMigrations: LegacyMigrationRef[] = []
       this.invalidateLifecycleOwner(id)
       this.database.connection
         .prepare(
@@ -293,7 +280,6 @@ export class ChannelManagementRepository {
         ref: knownRef ?? '',
         expectedRevision: knownRevision ?? undefined,
         payloadKeyRefs,
-        legacyMigrations,
         credentialCleanupRefs: cleanupRefs,
         now
       })
@@ -307,7 +293,6 @@ export class ChannelManagementRepository {
         permit: null,
         expectedRevision: knownRevision,
         payloadKeyRefs,
-        legacyMigrations,
         lifecycleOwnerToken: null,
         mutationEpoch: null,
         credentialCleanupRefs: cleanupRefs,
@@ -334,10 +319,10 @@ export class ChannelManagementRepository {
     ).run(now, id)
     this.fence(id, now)
     this.clearC03Rows(id)
-    this.reserveDeleteOperation({ id: operationId, channelId: id, ref: '', payloadKeyRefs, legacyMigrations: [], credentialCleanupRefs: [], now })
+    this.reserveDeleteOperation({ id: operationId, channelId: id, ref: '', payloadKeyRefs, credentialCleanupRefs: [], now })
     return {
       id: operationId, channelId: id, purpose: 'delete', ref: '', fingerprint: null, keyId: null, permit: null,
-      expectedRevision: null, payloadKeyRefs, legacyMigrations: [], lifecycleOwnerToken: null,
+      expectedRevision: null, payloadKeyRefs, lifecycleOwnerToken: null,
       mutationEpoch: null, credentialCleanupRefs: [], state: 'reserved'
     }
   }
@@ -629,7 +614,6 @@ export class ChannelManagementRepository {
           operation_permit: string | null
           expected_revision: number | null
           payload_key_refs_json: string
-          legacy_migrations_json: string
           lifecycle_owner_token: string | null
           mutation_epoch: number | null
           credential_cleanup_refs_json: string
@@ -645,7 +629,6 @@ export class ChannelManagementRepository {
       permit: row.operation_permit,
       expectedRevision: row.expected_revision,
       payloadKeyRefs: parsePayloadKeyRefs(row.payload_key_refs_json, row.channel_id),
-      legacyMigrations: parseLegacyMigrations(row.legacy_migrations_json, row.channel_id),
       lifecycleOwnerToken: row.lifecycle_owner_token,
       mutationEpoch: row.mutation_epoch,
       credentialCleanupRefs: parseCredentialCleanupRefs(row.credential_cleanup_refs_json, row.channel_id),
@@ -1174,40 +1157,9 @@ function isValidPendingCredentialOperation(value: {
     isBase64Url(value.operation_permit, 512) && typeof value.source_fingerprint === 'string' && value.credential_ref === providerRef(channelId, value.source_fingerprint)
 }
 
-function parseLegacyMigrations(value: string, channelId: string): LegacyMigrationRef[] | null {
-  try {
-    const parsed: unknown = JSON.parse(value)
-    if (!Array.isArray(parsed)) return null
-    const migrations = parsed.filter((migration) => isValidLegacyMigrationRef(migration, channelId))
-    return migrations.length === parsed.length && uniqueMigrationRefs(migrations) ? migrations : null
-  } catch {
-    return null
-  }
-}
 
-function isValidLegacyMigrationRow(value: { purpose: string; credential_ref: string; source_fingerprint: string; fingerprint_key_id: string; migration_permit: string }, channelId: string): boolean {
-  return isValidLegacyMigrationRef({
-    purpose: value.purpose as LegacyMigrationRef['purpose'], type: 'telegram', ref: value.credential_ref,
-    fingerprint: value.source_fingerprint, keyId: value.fingerprint_key_id, permit: value.migration_permit
-  }, channelId)
-}
 
-function isValidLegacyMigrationRef(value: unknown, channelId: string): value is LegacyMigrationRef {
-  if (!value || typeof value !== 'object') return false
-  const migration = value as LegacyMigrationRef
-  if ((migration.purpose !== 'provider-credential' && migration.purpose !== 'legacy-discovery-archive') ||
-      (migration.type !== 'telegram' && migration.type !== 'wechat') ||
-      !isBase64Url(migration.fingerprint, 512) || !isOpaqueJournalValue(migration.keyId, 256) ||
-      !isBase64Url(migration.permit, 512)) return false
-  const expected = migration.purpose === 'legacy-discovery-archive'
-    ? archiveRef(channelId, migration.fingerprint)
-    : providerRef(channelId, migration.fingerprint)
-  return migration.ref === expected
-}
 
-function uniqueMigrationRefs(migrations: readonly LegacyMigrationRef[]): boolean {
-  return new Set(migrations.map((migration) => `${migration.purpose}:${migration.ref}`)).size === migrations.length
-}
 
 function isOpaqueJournalValue(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= max && !/[\u0000-\u001f\s]/.test(value)

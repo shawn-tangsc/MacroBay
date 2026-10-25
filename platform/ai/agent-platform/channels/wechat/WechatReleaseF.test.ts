@@ -279,7 +279,7 @@ describe('WeChat Release F safety foundation', () => {
         values('forged-provision','wechat-journal','provision','forged-reserved','fingerprint','key','permit','needs-recovery','now','now');
     `)
     const operation = repository.beginDelete('wechat-journal', 'wechat-delete-op', 'now')!
-    expect(operation).toMatchObject({ ref: '', expectedRevision: null, legacyMigrations: [], credentialCleanupRefs: [] })
+    expect(operation).toMatchObject({ ref: '', expectedRevision: null, credentialCleanupRefs: [] })
     expect(database.connection.prepare("select credential_ref,credential_cleanup_refs_json,legacy_migrations_json from channel_management_operations where id='wechat-delete-op'").get()).toEqual({
       credential_ref: '', credential_cleanup_refs_json: '[]', legacy_migrations_json: '[]'
     })
