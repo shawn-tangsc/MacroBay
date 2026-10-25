@@ -50,7 +50,8 @@ export function createNewsSentimentBodyTranslationService(deps: {
 
     async translate(itemId: string): Promise<BodyTranslationResult> {
       const { settings, targetLocale } = await deps.readSettings()
-      if (!settings.autoTranslateEnabled || !settings.translateBody) return { state: 'off' }
+      // Older settings files predate translateBody; only an explicit false disables it.
+      if (!settings.autoTranslateEnabled || settings.translateBody === false) return { state: 'off' }
       const document = deps.store.getDocument(itemId)
       const body = document?.state === 'available' ? document.bodyText : undefined
       if (!body || body.length < MIN_BODY_CHARS) return { state: 'unavailable' }

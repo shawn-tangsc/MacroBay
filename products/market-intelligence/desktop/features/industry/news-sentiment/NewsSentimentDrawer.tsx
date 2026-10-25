@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Drawer, Select } from 'antd'
 
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -53,25 +53,28 @@ export function NewsSentimentDrawer(props: {
     if (props.open && props.focusItemId) setSelectedId(props.focusItemId)
   }, [props.open, props.focusItemId])
 
-  useEffect(() => {
-    if (!props.open || !activeId) return
-    if (typeof props.client.translateBody !== 'function') { setTranslatingBody(false); return }
-    let cancelled = false
+  const requestBodyTranslation = useCallback(async (itemId: string) => {
+    if (typeof props.client.translateBody !== 'function') return
     setTranslatingBody(true)
     setTranslationFailed(false)
-    void props.client.translateBody(activeId)
-      .then((result) => {
-        if (cancelled) return
-        if (result.state === 'translated' && result.body) {
-          setTranslatedBody({ itemId: activeId, body: result.body })
-        } else if (result.state === 'failed') {
-          setTranslationFailed(true)
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => { if (!cancelled) setTranslatingBody(false) })
-    return () => { cancelled = true }
-  }, [props.open, activeId, props.client])
+    try {
+      const result = await props.client.translateBody(itemId)
+      if (result.state === 'translated' && result.body) {
+        setTranslatedBody({ itemId, body: result.body })
+      } else if (result.state === 'failed') {
+        setTranslationFailed(true)
+      }
+    } catch {
+      setTranslationFailed(true)
+    } finally {
+      setTranslatingBody(false)
+    }
+  }, [props.client])
+
+  useEffect(() => {
+    if (!props.open || !activeId) return
+    void requestBodyTranslation(activeId)
+  }, [props.open, activeId, requestBodyTranslation])
 
   useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
@@ -296,6 +299,11 @@ export function NewsSentimentDrawer(props: {
                     <span>{text.drawer.detail.evidence}</span>
                     {active.evidenceQuote}
                   </blockquote>
+                ) : null}
+                {!translatingBody && !(translatedBody?.itemId === activeId) && detail?.bodyExcerpt ? (
+                  <button className="mi-news-drawer__translate-body" onClick={() => void requestBodyTranslation(activeId!)} type="button">
+                    {text.drawer.detail.translateBody}
+                  </button>
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
                   {translatingBody ? (

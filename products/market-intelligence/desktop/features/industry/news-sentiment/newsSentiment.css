@@ -185,3 +185,9 @@
 }
 .mi-news-drawer__row-loading { display: inline-flex; align-items: center; color: var(--accent, #d9f67f); }
 @keyframes mi-news-spin { to { transform: rotate(360deg); } }
+
+.mi-news-drawer__translate-body {
+  align-self: flex-start; border: 1px solid var(--border, #2a352b); border-radius: 3px;
+  background: transparent; color: var(--accent, #d9f67f); font-size: 10.5px;
+  padding: 2px 8px; cursor: pointer;
+}
