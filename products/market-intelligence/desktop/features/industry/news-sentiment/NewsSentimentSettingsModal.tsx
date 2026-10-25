@@ -21,6 +21,7 @@ export function NewsSentimentSettingsModal(props: {
   const [modelRef, setModelRef] = useState('')
   const [providers, setProviders] = useState<SafeModelProvider[]>([])
   const [translationEnabled, setTranslationEnabled] = useState<boolean>()
+  const [translationModelId, setTranslationModelId] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(false)
 
@@ -39,10 +40,20 @@ export function NewsSentimentSettingsModal(props: {
         setModelRef(next.settings.providerId && next.settings.modelId ? `${next.settings.providerId}:${next.settings.modelId}` : '')
         setProviders(models ?? [])
         setTranslationEnabled(translation?.autoTranslateEnabled)
+        setTranslationModelId(translation?.defaultModelId ?? '')
       })
       .catch(() => { if (!cancelled) setError(true) })
     return () => { cancelled = true }
   }, [props.open, props.client])
+
+  const translationModelLabel = useMemo(() => {
+    const ref = translationModelId.trim()
+    if (!ref) return undefined
+    const [providerId, modelId] = ref.split(':')
+    const provider = providers.find((entry) => entry.id === providerId)
+    const model = provider?.models.find((entry) => entry.id === modelId)
+    return model ? `${provider?.name ?? providerId} / ${model.name}` : ref
+  }, [providers, translationModelId])
 
   const options = useMemo(() => {
     const models = providers.flatMap((provider) =>
@@ -108,6 +119,9 @@ export function NewsSentimentSettingsModal(props: {
             {text.settingsModal.translation.open}
           </button>
         </div>
+        <p className="mi-news-settings__hint">
+          {text.settingsModal.translation.modelLabel}: {translationModelLabel ?? text.settingsModal.translation.followDefault}
+        </p>
         <p className="mi-news-settings__hint">{text.settingsModal.hint}</p>
         {error ? <p className="mi-news-settings__error" role="alert">{text.settingsModal.failed}</p> : null}
       </div>
