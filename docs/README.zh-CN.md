@@ -86,6 +86,8 @@ MIT 许可证只覆盖代码，不覆盖行情数据或供应商内容。MacroBa
 - [分析流程](./product/analysis-workflow.zh-CN.md)
 - [可追溯性](./product/traceability.zh-CN.md)
 - [数字货币市场解读员](./product/crypto-market-analyst.zh-CN.md)
+- [给靠这个吃饭的人](./product/for-professionals.zh-CN.md)
+- [给还在学这个市场的人](./product/for-newcomers.zh-CN.md)
 - [舆情（新闻情绪）](./product/news-sentiment.zh-CN.md)
 - [分析智能体](./product/analyst-agent.zh-CN.md)
 - [架构](./platform/architecture.zh-CN.md)

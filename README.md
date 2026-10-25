@@ -51,6 +51,13 @@ That is the whole product: **not a paragraph you have to take on faith.**
 
 Built for people whose read has to survive a follow-up question — whether that is your first cycle or your fourth.
 
+## Who it is for
+
+- **[Trading for a living →](./docs/product/for-professionals.md)** — one screen instead of five, and a
+  conclusion that survives "how do you know?".
+- **[Still learning the market →](./docs/product/for-newcomers.md)** — the same screen, except it
+  explains the plumbing while you read it.
+
 ## Why crypto first
 
 Crypto is the hardest place to fake a market read, which makes it the right place to build one.
