@@ -6,6 +6,8 @@ import type { SafeModelProvider } from '@platform/ai/providers/modelProviderType
 import { resolveProviderVisual } from '@platform/ui/icons/modelProviderVisuals'
 
 import type { PlatformText } from '../../../i18n/platformText'
+import { isAvailabilityProbeModel, resolveModelAvailabilityView } from '../../model-service/modelAvailabilityView'
+import { ModelAvailabilityIcon } from '../../model-service/ModelAvailabilityIcon'
 import type { ModelProtocolTab } from '../../model-service/modelProtocolFilter'
 import { openModelServiceSettings } from '../../model-service/openModelServiceSettings'
 import { getProviderIconUrl } from '../../visualIconAssets'
@@ -101,6 +103,18 @@ export function ModelPicker({
     : null
 
   const logoUrl = selection ? getProviderIconUrl(providerIconKey(selection.providerId)) : undefined
+  // 选中模型的可用性结论：直接按 provider + model 计算（选中值可能已不在候选里，不能只查 options）。
+  const selectionModel = (() => {
+    if (!selection) return undefined
+    const modelId = selection.value.slice(selection.value.indexOf(':') + 1)
+    return providers.find((entry) => entry.id === selection.providerId)?.models.find((entry) => entry.id === modelId)
+  })()
+  const selectionProvider = selection
+    ? providers.find((entry) => entry.id === selection.providerId)
+    : undefined
+  const selectionAvailability = selectionProvider && selectionModel
+    ? resolveModelAvailabilityView(selectionProvider, selectionModel)
+    : undefined
   // tooltip 给出完整标识（模型名 + 厂商名 + `providerId:modelId`），省略号只裁显示。
   const triggerTitle = selection
     ? `${selection.modelName} · ${selection.providerName} · ${selection.value}`
@@ -184,6 +198,14 @@ export function ModelPicker({
         <span className="model-picker-trigger-name" data-model-picker-name>
           {selection?.modelName ?? placeholder ?? labels.pickerSelectModel}
         </span>
+        {/* 选择框后面直接给可用性图标：绿勾 = 可用，红叉 = 不可用，灰圈 = 待检测。 */}
+        {selection ? (
+          <ModelAvailabilityIcon
+            labels={labels}
+            view={selectionAvailability}
+            pending={selectionModel !== undefined && isAvailabilityProbeModel(selectionModel)}
+          />
+        ) : null}
         {selection ? (
           <span className="model-picker-trigger-provider" data-model-picker-provider>
             {selection.providerName}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Filter, Plus, RefreshCw, Search } from 'lucide-react'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
@@ -6,7 +6,7 @@ import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/
 import type { PlatformText } from '../../i18n/platformText'
 import type { ModelGroup } from '../modelGrouping'
 
-import { resolveModelAvailabilityView } from './autoModelDetectionPlan'
+import { resolveModelAvailabilityView } from './modelAvailabilityView'
 import { ModelServiceClearModelsControl } from './ModelServiceClearModelsControl'
 import { ModelServiceDetectControl } from './ModelServiceDetectControl'
 import { ModelServiceModelRow } from './ModelServiceModelRow'
@@ -63,8 +63,6 @@ type ModelServiceModelsSectionProps = {
   syncErrorText: string | null
   /** A：原始信息（安全、已去前缀）；只有可读时才展示。 */
   syncErrorDetail: string | null
-  /** 自动检测因单批上限没测完时的提示（不发请求也能看到还差多少）。 */
-  autoDetectionHint?: string | null
 }
 
 export function ModelServiceModelsSection({
@@ -88,8 +86,7 @@ export function ModelServiceModelsSection({
   modelError,
   notice,
   syncErrorText,
-  syncErrorDetail,
-  autoDetectionHint
+  syncErrorDetail
 }: ModelServiceModelsSectionProps): React.ReactElement {
   const providerId = provider.id
   const [searchOpen, setSearchOpen] = useState(false)
@@ -104,6 +101,22 @@ export function ModelServiceModelsSection({
 
   // PLAT-82：本会话的检测结果只读视图（不落库；切页/切供应商不清空）。
   const detection = useModelDetection(providerId)
+  // 一轮检测结束给一行汇总（自动检测静默跑完时，用户至少能看到「测了、结果如何」）。
+  const summarizedRun = useRef<string | null>(null)
+  const [runSummary, setRunSummary] = useState<string | null>(null)
+  const finishedRun = detection.run?.finished === true ? detection.run : undefined
+  useEffect(() => {
+    if (!finishedRun || summarizedRun.current === finishedRun.runId) return
+    summarizedRun.current = finishedRun.runId
+    const results = Object.values(finishedRun.results)
+    const count = (status: string): number => results.filter((result) => result.status === status).length
+    setRunSummary(labels.detectionRunSummary(count('ok'), count('failed'), count('skipped')))
+  }, [finishedRun, labels])
+  // 汇总属于某一家供应商：切供应商时不把上一家的结论挂在下面。
+  useEffect(() => {
+    summarizedRun.current = null
+    setRunSummary(null)
+  }, [providerId])
   const keyword = search.trim().toLowerCase()
   const allModels = groups.flatMap((group) => group.models)
   const counts = buildModelTypeCounts(allModels)
@@ -259,8 +272,8 @@ export function ModelServiceModelsSection({
         </p>
       ) : null}
       {notice !== null ? <p className="model-service-hint" data-models-notice>{notice}</p> : null}
-      {autoDetectionHint !== null && autoDetectionHint !== undefined ? (
-        <p className="model-service-hint" data-models-auto-detection-hint>{autoDetectionHint}</p>
+      {runSummary !== null ? (
+        <p className="model-service-hint" data-models-detection-summary>{runSummary}</p>
       ) : null}
       {modelError !== null ? (
         <p className="model-service-inline-error" role="alert" data-models-error>

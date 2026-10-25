@@ -583,10 +583,12 @@ export type PlatformText = {
     /** 配置变过、结论不再适用。 */
     modelAvailabilityStale: string
     modelAvailabilityStaleHint: string
+    /** 从未检测过（模型选择器里的灰圈）。 */
+    modelAvailabilityNeverChecked: string
     modelAvailabilityFailedWithReason: (reason: string) => string
     modelAvailabilityCheckedAt: (status: string, checkedAt: string) => string
-    /** 自动检测只测了一批：说明还剩多少要手动补测。 */
-    autoDetectionTruncated: (checked: number, remaining: number) => string
+    /** 一次检测 run 结束后的汇总（成功 / 失败 / 跳过）。 */
+    detectionRunSummary: (ok: number, failed: number, skipped: number) => string
     providerNames: Record<string, string>
     modelRetiredTag: string
     /** PLAT-80：模型服务页顶部「默认模型」区块。 */
@@ -1613,10 +1615,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       modelAvailabilityFailed: '不可用',
       modelAvailabilityStale: '待检测',
       modelAvailabilityStaleHint: '配置已变更，等待自动检测',
+      modelAvailabilityNeverChecked: '尚未检测',
       modelAvailabilityFailedWithReason: (reason) => `不可用 · ${reason}`,
       modelAvailabilityCheckedAt: (status, checkedAt) => `${status} · 上次检测 ${checkedAt}`,
-      autoDetectionTruncated: (checked, remaining) =>
-        `已自动检测 ${checked} 个模型，另有 ${remaining} 个待检测；可在「检测模型」里手动补测。`,
+      detectionRunSummary: (ok, failed, skipped) =>
+        `检测完成：成功 ${ok} · 失败 ${failed} · 跳过 ${skipped}`,
       providerNames: {
         silicon: '硅基流动',
         tokenrhythm: '基元律动',
@@ -2627,10 +2630,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       modelAvailabilityFailed: 'Unavailable',
       modelAvailabilityStale: 'Not checked',
       modelAvailabilityStaleHint: 'Configuration changed; waiting for the automatic check',
+      modelAvailabilityNeverChecked: 'Not checked yet',
       modelAvailabilityFailedWithReason: (reason) => `Unavailable · ${reason}`,
       modelAvailabilityCheckedAt: (status, checkedAt) => `${status} · last checked ${checkedAt}`,
-      autoDetectionTruncated: (checked, remaining) =>
-        `Automatically checked ${checked} model${checked === 1 ? '' : 's'}; ${remaining} still need a manual check in "Detect models".`,
+      detectionRunSummary: (ok, failed, skipped) =>
+        `Check finished: ${ok} passed · ${failed} failed · ${skipped} skipped`,
       providerNames: {
         silicon: 'SiliconFlow',
         tokenrhythm: 'TokenRhythm',

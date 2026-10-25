@@ -32,8 +32,8 @@ import { modelProtocolLabel } from './modelProtocolFilter'
 import { buildModelCostTitle, formatModelCost } from './modelPricingDisplay'
 import { ModelServiceProtocolChip } from './ModelServiceProtocolChip'
 
-import type { ModelAvailabilityView } from './autoModelDetectionPlan'
 import { modelAvailabilityLabel, modelAvailabilityTitle } from './modelAvailabilityDisplay'
+import type { ModelAvailabilityView } from './modelAvailabilityView'
 import { resolveModelMessagesSupport } from './modelMessagesSupport'
 import type { ModelDetectionModelStatus } from './useModelDetection'
 
@@ -140,6 +140,7 @@ export function ModelServiceModelRow({
           {modelAvailabilityLabel(labels, availability)}
         </span>
       ) : null}
+
       {statusText !== undefined ? (
         <span
           className="model-service-model-detection"

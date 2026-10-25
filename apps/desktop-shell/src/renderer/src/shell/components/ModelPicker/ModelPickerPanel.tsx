@@ -4,6 +4,7 @@ import { Filter, Search, X } from 'lucide-react'
 import { resolveProviderVisual } from '@platform/ui/icons/modelProviderVisuals'
 
 import type { PlatformText } from '../../../i18n/platformText'
+import { ModelAvailabilityIcon } from '../../model-service/ModelAvailabilityIcon'
 import { modelProtocolLabel, type ModelProtocolTab } from '../../model-service/modelProtocolFilter'
 import { getProviderIconUrl } from '../../visualIconAssets'
 import {
@@ -208,6 +209,7 @@ export function ModelPickerPanel({
                       </span>
                     ) : null}
                     <span className="model-picker-option-name">{option.modelName}</span>
+                    <ModelAvailabilityIcon labels={labels} view={option.availability} />
                     <small>{option.providerName}</small>
                   </button>
                 )

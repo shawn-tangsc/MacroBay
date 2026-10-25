@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { modelAvailabilityFingerprint } from '@platform/ai/providers/modelAvailability'
 
 import { platformText } from '../../../i18n/platformText'
 import { ModelPicker } from './ModelPicker'
@@ -109,6 +110,51 @@ describe('ModelPicker trigger', () => {
 
     expect(output).toContain('Beta Retired')
     expect(output).toContain('Beta Lab')
+  })
+
+  it('shows the availability verdict right after the selected model', () => {
+    const models: ModelDefinition[] = [
+      { id: 'ok', name: 'Available Model', capabilities: { chat: true } },
+      { id: 'bad', name: 'Failed Model', capabilities: { chat: true } },
+      { id: 'pending', name: 'Pending Model', capabilities: { chat: true } }
+    ]
+    const base = provider('gamma', 'Gamma', 'chat-completions', models)
+    const config = { endpoints: base.endpoints, apiKeyPreview: base.apiKeyPreview }
+    const withVerdict: SafeModelProvider = {
+      ...base,
+      models: models.map((model) => {
+        if (model.id === 'pending') return model
+        return {
+          ...model,
+          availability: {
+            status: model.id === 'ok' ? 'ok' as const : 'failed' as const,
+            ...(model.id === 'bad' ? { reasonCode: 'http_401' } : {}),
+            checkedAt: '2026-10-25T05:00:00.000Z',
+            fingerprint: modelAvailabilityFingerprint(config, model)
+          }
+        }
+      })
+    }
+    const render = (value: string): string => renderToStaticMarkup(
+      createElement(ModelPicker, {
+        value,
+        onChange: () => undefined,
+        models: withVerdict.models.map((model) => ({ providerId: 'gamma', model })),
+        providers: [withVerdict],
+        labels
+      })
+    )
+
+    const available = render('gamma:ok')
+    expect(available).toContain('data-model-availability-icon="ok"')
+    expect(available).toContain('is-ok')
+
+    const failed = render('gamma:bad')
+    expect(failed).toContain('data-model-availability-icon="failed"')
+    expect(failed).toContain(labels.probeReasonAuth)
+
+    expect(render('gamma:pending')).toContain('data-model-availability-icon="pending"')
+    expect(markup('silicon:deepseek-v3')).toContain('data-model-availability-icon="pending"')
   })
 })
 

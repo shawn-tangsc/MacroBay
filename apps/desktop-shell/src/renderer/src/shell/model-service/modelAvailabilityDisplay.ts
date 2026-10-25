@@ -1,6 +1,6 @@
 import type { PlatformText } from '../../i18n/platformText'
 
-import type { ModelAvailabilityView } from './autoModelDetectionPlan'
+import type { ModelAvailabilityView } from './modelAvailabilityView'
 import { probeReasonLabel } from './modelProbeReason'
 
 /**

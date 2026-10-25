@@ -1,5 +1,6 @@
 import type { ModelDefinition, ModelPriceTag } from '@platform/ai/providers/modelProviderTypes'
 
+import type { ModelAvailabilityView } from '../../model-service/modelAvailabilityView'
 import type { ModelProtocolTab } from '../../model-service/modelProtocolFilter'
 
 /**
@@ -78,6 +79,8 @@ export type ModelPickerOption = {
   priceTag: ModelPickerPriceTag | null
   /** 该模型**已声明**的协议（协议筛选口径，见 `modelPickerProtocols`）。 */
   protocols: readonly ModelProtocolTab[]
+  /** 上次检测的可用性结论（含是否过期）；从未检测 ⇒ 缺省。 */
+  availability?: ModelAvailabilityView
   /** 小写搜索文本：模型名 + 模型 id + 厂商展示名 + 厂商 id。 */
   searchText: string
 }

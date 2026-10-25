@@ -10221,6 +10221,30 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
 }
 
+/* 可用性图标：绿勾 = 可用，红叉 = 不可用，灰圈 = 待检测 / 尚未检测。 */
+.model-availability-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  color: var(--muted);
+}
+
+.model-picker-trigger .model-availability-icon {
+  margin-left: 6px;
+}
+
+.model-picker-option-name + .model-availability-icon {
+  margin-left: 4px;
+}
+
+.model-availability-icon.is-ok {
+  color: var(--success, #3d9a6a);
+}
+
+.model-availability-icon.is-failed {
+  color: var(--danger);
+}
+
 .model-picker-trigger-provider {
   flex: 0 1 auto;
   min-width: 0;
