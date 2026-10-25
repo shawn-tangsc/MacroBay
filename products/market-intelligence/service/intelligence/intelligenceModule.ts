@@ -20,7 +20,7 @@ import { createMarketIntelligencePublicQueryService } from './public-query/publi
 import { createIntelligenceTranslationService } from './application/intelligenceTranslationService'
 import { createMarketAnalysisSettingsJsonStorage, createMarketAnalysisSettingsStore } from './application/marketAnalysisSettingsStore'
 import { createMarketAnalysisSettingsService } from './application/marketAnalysisSettingsService'
-import { createDefaultTranslationSettings, resolveTargetLocale } from './application/intelligenceTranslationHelpers'
+import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
 import {
@@ -481,7 +481,9 @@ export function getIntelligenceModule(
           invoke: structuredModelInvocation.invoke,
           readSettings: async () => {
             const settings = await translationStorage.readSettings()
-            return { settings, targetLocale: resolveTargetLocale(settings, await getAppLanguage()) }
+            // Body translation always targets the language the app is currently displayed in, not a
+            // separate preference that could drift from the UI locale.
+            return { settings, targetLocale: await getAppLanguage() }
           },
           getProviderState: hooks?.getProviderState,
           getModelDefaults: hooks?.getModelDefaults,

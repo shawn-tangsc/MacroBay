@@ -23,7 +23,9 @@ export function NewsSentimentFeature(props: {
   const client = props.client ?? newsSentimentClient
   const now = props.now ?? (() => new Date())
   const state = useNewsSentiment({ client, now })
-  const translationEnabled = (props.language ?? 'zh-CN') === 'zh-CN'
+  // English is the source language for the feed, so the English UI has no translation surface.
+  // Any future non-English UI language reuses the same controls and translates into that language.
+  const translationEnabled = (props.language ?? 'zh-CN') !== 'en-US'
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
