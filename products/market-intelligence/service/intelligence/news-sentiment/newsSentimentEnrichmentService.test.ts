@@ -20,14 +20,17 @@ function item(overrides: Record<string, unknown>) {
 const HTML = `<div class="document-body"><p>${'The U.S. risks losing digital asset business to faster-moving jurisdictions in Asia. '.repeat(5)}</p></div>`
 
 describe('newsSentimentEnrichmentService', () => {
-  it('fetches and stores the body for a body source and skips Binance', async () => {
+  it('fetches and stores the body for every body source, including Binance CMS', async () => {
     const store = createNewsSentimentSqliteStore(':memory:')
-    const fetchArticle = vi.fn(async () => ({ status: 200, bodyText: HTML }))
+    const binanceJson = JSON.stringify({ data: { body: JSON.stringify({ node: 'root', child: [
+      { node: 'element', tag: 'p', child: [{ node: 'text', text: 'Binance will remove PTB, AA, OWL, DORA, ELIZAOS and MEMES. '.repeat(4) }] }
+    ] }) } })
+    const fetchArticle = vi.fn(async (url: string) => ({ status: 200, bodyText: url.includes('/bapi/') ? binanceJson : HTML }))
     const service = createNewsSentimentEnrichmentService({
       pipeline: {
         listItems: () => [
           item({}),
-          item({ itemId: 'item-b', sourceId: 'binance-announcements', url: 'https://www.binance.com/x' })
+          item({ itemId: 'item-b', sourceId: 'binance-announcements', url: 'https://www.binance.com/en/support/announcement/detail/abc123' })
         ]
       },
       store,
@@ -36,10 +39,11 @@ describe('newsSentimentEnrichmentService', () => {
     })
 
     const result = await service.enrichItems({ itemIds: ['item-a', 'item-b'] })
-    expect(result).toMatchObject({ processed: 1, available: 1, skipped: 1 })
-    expect(fetchArticle).toHaveBeenCalledTimes(1)
+    expect(result).toMatchObject({ processed: 2, available: 2, skipped: 0 })
+    expect(fetchArticle).toHaveBeenCalledTimes(2)
     expect(store.getDocument('item-a')?.state).toBe('available')
-    expect(store.getDocument('item-b')).toBeUndefined()
+    expect(store.getDocument('item-b')?.state).toBe('available')
+    expect(String(fetchArticle.mock.calls[1]?.[0])).toContain('articleCode=abc123')
   })
 
   it('records an HTTP failure without throwing the batch', async () => {

@@ -4,6 +4,7 @@ import {
   type NewsDocumentRecord
 } from '../schema/newsSentiment'
 import { extractNewsBody } from './newsDocumentExtractor'
+import { binanceAnnouncementCodeFromUrl, binanceAnnouncementDetailUrl, extractBinanceAnnouncementBody } from './binanceAnnouncementBody'
 import type { NewsSentimentStore } from './newsSentimentStore'
 
 export type NewsArticleFetcher = (url: string) => Promise<{ status: number; bodyText: string }>
@@ -17,7 +18,7 @@ export type NewsSentimentEnrichmentResult = Readonly<{
 }>
 
 /**
- * 抓正文并落 `news_document`。Binance 不在正文源里（WAF 拦截），由打分侧退回标题+摘要。
+ * 抓正文并落 `news_document`。Binance 公告页有 WAF，改走公开的 CMS detail API。
  * 单次运行有界，失败只写状态，不抛出整批。
  */
 export function createNewsSentimentEnrichmentService(deps: {
@@ -59,20 +60,29 @@ export function createNewsSentimentEnrichmentService(deps: {
 
         processed += 1
         const url = item.url?.trim()
+        const binanceCode = item.sourceId === 'binance-announcements' && url ? binanceAnnouncementCodeFromUrl(url) : undefined
+        const fetchUrl = item.sourceId === 'binance-announcements' ? (binanceCode ? binanceAnnouncementDetailUrl(binanceCode) : undefined) : url
         if (!url) {
           deps.store.upsertDocument(failedDocument(item, '', 'missing-url', deps.now()))
           failed += 1
           continue
         }
+        if (!fetchUrl) {
+          deps.store.upsertDocument(failedDocument(item, url, 'missing-article-code', deps.now()))
+          failed += 1
+          continue
+        }
 
         try {
-          const response = await deps.fetchArticle(url)
+          const response = await deps.fetchArticle(fetchUrl)
           if (response.status < 200 || response.status >= 300) {
             deps.store.upsertDocument(failedDocument(item, url, `http-${response.status}`, deps.now()))
             failed += 1
             continue
           }
-          const extracted = extractNewsBody({ sourceId: item.sourceId, html: response.bodyText })
+          const extracted = item.sourceId === 'binance-announcements'
+            ? extractBinanceAnnouncementBody({ json: response.bodyText })
+            : extractNewsBody({ sourceId: item.sourceId, html: response.bodyText })
           deps.store.upsertDocument({
             itemId,
             sourceId: item.sourceId,

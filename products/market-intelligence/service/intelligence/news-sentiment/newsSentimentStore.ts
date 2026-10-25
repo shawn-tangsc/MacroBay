@@ -232,7 +232,8 @@ function parseJsonArray(value: unknown): unknown[] {
 }
 
 function assertDocument(document: NewsDocumentRecord): void {
-  if (!document.itemId.trim() || !document.sourceId.trim() || !document.url.trim()) throw new Error('invalid-news-document')
+  if (!document.itemId.trim() || !document.sourceId.trim()) throw new Error('invalid-news-document')
+  if (document.state !== 'failed' && !document.url.trim()) throw new Error('invalid-news-document')
   assertIso(document.fetchedAt)
   if (!Number.isSafeInteger(document.bodyChars) || document.bodyChars < 0) throw new Error('invalid-news-document')
   if (!['available', 'too-short', 'failed'].includes(document.state)) throw new Error('invalid-news-document')
