@@ -1748,6 +1748,23 @@ h1 {
   --web-search-ok: hsl(152 55% 34%);
 }
 
+
+/*
+ * antd portals drawers to <body> at full height, so the drawer header lands inside the window's
+ * topbar drag band. Drag regions are geometric, not DOM- or z-index-based: without no-drag the
+ * close control is painted over the band but the press is treated as a window drag. This applies
+ * to every portaled drawer; inline drawers (getContainer={false}) simply inherit a no-op here.
+ */
+.ant-drawer-mask,
+.ant-drawer-content-wrapper,
+.ant-drawer-content,
+.ant-drawer-header,
+.ant-drawer-body,
+.ant-drawer-footer,
+.ant-drawer-close {
+  -webkit-app-region: no-drag;
+}
+
 .web-search-provider-drawer .ant-drawer-content {
   background: var(--web-search-panel-bg);
 }
