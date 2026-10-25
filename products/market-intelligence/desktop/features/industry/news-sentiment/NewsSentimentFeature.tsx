@@ -15,6 +15,7 @@ import './newsSentiment.css'
  * 卡片与抽屉共享同一个窗口状态，避免两处各读一份。
  */
 export function NewsSentimentFeature(props: {
+  language?: 'zh-CN' | 'en-US'
   text: NewsSentimentText
   client?: NewsSentimentClient
   now?: () => Date
@@ -22,6 +23,7 @@ export function NewsSentimentFeature(props: {
   const client = props.client ?? newsSentimentClient
   const now = props.now ?? (() => new Date())
   const state = useNewsSentiment({ client, now })
+  const translationEnabled = (props.language ?? 'zh-CN') === 'zh-CN'
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
@@ -41,6 +43,7 @@ export function NewsSentimentFeature(props: {
         window={state.window}
       />
       <NewsSentimentDrawer
+        translationEnabled={translationEnabled}
         client={client}
         failed={state.failed}
         filters={state.filters}
@@ -57,6 +60,7 @@ export function NewsSentimentFeature(props: {
         window={state.window}
       />
       <NewsSentimentSettingsModal
+          showTranslation={translationEnabled}
         client={client}
         onClose={() => setSettingsOpen(false)}
         open={settingsOpen}

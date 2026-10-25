@@ -30,6 +30,7 @@ type Props = {
   openEntry?: MarketAnalysisTimelineEntry
   onOpenChange?: (entry: MarketAnalysisTimelineEntry | undefined) => void
   timelineText?: MarketAnalysisTimelineText
+  language?: 'zh-CN' | 'en-US'
   /** The calendar card that takes the conversation's place in the column. */
   card?: ReactNode
   /** The calendar event the reader selected, as the line the card itself rendered. */
@@ -49,7 +50,7 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const contextRenderers = useMemo(
     () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
@@ -153,7 +154,7 @@ export function MarketAnalysisAgentWorkspace({ text, timeline: injectedTimeline,
       onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = container.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
-    <NewsSentimentFeature text={text.newsSentiment} />
+    <NewsSentimentFeature language={language} text={text.newsSentiment} />
     <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
   </aside>
 }

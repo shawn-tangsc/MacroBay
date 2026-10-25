@@ -20,6 +20,7 @@ export function NewsSentimentSettingsModal(props: {
   const [enabled, setEnabled] = useState(true)
   const [modelRef, setModelRef] = useState('')
   const [providers, setProviders] = useState<SafeModelProvider[]>([])
+  const showTranslation = props.showTranslation !== false
   const [translationEnabled, setTranslationEnabled] = useState<boolean>()
   const [translationModelId, setTranslationModelId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -109,20 +110,24 @@ export function NewsSentimentSettingsModal(props: {
           />
         </label>
         <p className="mi-news-settings__hint">{text.settingsModal.judgeHint}</p>
-        <div className="mi-news-settings__row">
-          <span>{text.settingsModal.translation.label}</span>
-          <span className="mi-news-settings__hint">
-            {translationEnabled === undefined
-              ? '—'
-              : translationEnabled ? text.settingsModal.translation.on : text.settingsModal.translation.off}
-          </span>
-          <button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} type="button">
-            {text.settingsModal.translation.open}
-          </button>
-        </div>
-        <p className="mi-news-settings__hint">
-          {text.settingsModal.translation.modelLabel}: {translationModelLabel ?? text.settingsModal.translation.followDefault}
-        </p>
+        {showTranslation ? (
+          <>
+            <div className="mi-news-settings__row">
+              <span>{text.settingsModal.translation.label}</span>
+              <span className="mi-news-settings__hint">
+                {translationEnabled === undefined
+                  ? '—'
+                  : translationEnabled ? text.settingsModal.translation.on : text.settingsModal.translation.off}
+              </span>
+              <button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} type="button">
+                {text.settingsModal.translation.open}
+              </button>
+            </div>
+            <p className="mi-news-settings__hint">
+              {text.settingsModal.translation.modelLabel}: {translationModelLabel ?? text.settingsModal.translation.followDefault}
+            </p>
+          </>
+        ) : null}
         <p className="mi-news-settings__hint">{text.settingsModal.hint}</p>
         {error ? <p className="mi-news-settings__error" role="alert">{text.settingsModal.failed}</p> : null}
       </div>

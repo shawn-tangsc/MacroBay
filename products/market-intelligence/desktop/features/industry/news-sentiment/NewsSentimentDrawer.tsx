@@ -33,8 +33,10 @@ export function NewsSentimentDrawer(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   client: Pick<NewsSentimentClient, 'getItem'>
+  translationEnabled?: boolean
 }): React.ReactElement {
   const { text, view } = props
+  const translationEnabled = props.translationEnabled !== false
   const formatTime = useShellTimeFormat()
   const [selectedId, setSelectedId] = useState<string>()
   const [detail, setDetail] = useState<NewsSentimentItemDetail>()
@@ -163,14 +165,16 @@ export function NewsSentimentDrawer(props: {
           >
             {actionBusy === 'rescore' ? text.settingsModal.rescoring : text.settingsModal.rescore}
           </button>
-          <button
-            className="mi-news-drawer__action"
-            disabled={translatingAll}
-            onClick={() => void translateAll()}
-            type="button"
-          >
-            {translatingAll ? text.settingsModal.translating : text.settingsModal.translateAll ?? text.settingsModal.retryTranslation}
-          </button>
+          {translationEnabled ? (
+            <button
+              className="mi-news-drawer__action"
+              disabled={translatingAll}
+              onClick={() => void translateAll()}
+              type="button"
+            >
+              {translatingAll ? text.settingsModal.translating : text.settingsModal.translateAll ?? text.settingsModal.retryTranslation}
+            </button>
+          ) : null}
           <button
             className="mi-news-drawer__action"
             disabled={Boolean(actionBusy)}
@@ -269,22 +273,22 @@ export function NewsSentimentDrawer(props: {
                 className={`mi-news-drawer__row${row.itemId === activeId ? ' is-selected' : ''}`}
                 key={row.itemId}
                 onClick={() => setSelectedId(row.itemId)}
-                onContextMenu={(event) => { event.preventDefault(); setContextMenu({ itemId: row.itemId, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 80) }) }}
+                onContextMenu={translationEnabled ? (event) => { event.preventDefault(); setContextMenu({ itemId: row.itemId, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 80) }) } : undefined}
                 role="listitem"
                 type="button"
-                title={text.drawer.translationStatus?.contextMenu}
+                title={translationEnabled ? text.drawer.translationStatus?.contextMenu : undefined}
               >
                 <span className="mi-news-drawer__row-top">
                   <time>{formatTime(row.publishedAt, 'minute')}</time>
                   <span className={`mi-news-sentiment__pill is-${row.polarity}`}>
                     {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
                   </span>
-                  {rowState === 'translating' || rowState === 'waiting' ? (
+                  {translationEnabled && (rowState === 'translating' || rowState === 'waiting') ? (
                     <span className="mi-news-drawer__row-loading" role="status" aria-label={text.drawer.translationStatus?.[rowState] ?? rowState}>
                       <i aria-hidden="true" />
                     </span>
                   ) : null}
-                  {rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed ?? 'failed'}</span> : null}
+                  {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed ?? 'failed'}</span> : null}
                   <small className="mi-news-drawer__source">{row.sourceName}</small>
                   <span className="mi-news-drawer__symbols">
                     {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
@@ -331,12 +335,12 @@ export function NewsSentimentDrawer(props: {
                     {active.evidenceQuote}
                   </blockquote>
                 ) : null}
-                {activeTranslationState !== 'translated' && activeTranslationState !== 'translating' && detail?.bodyExcerpt ? (
+                {translationEnabled && activeTranslationState !== 'translated' && activeTranslationState !== 'translating' && detail?.bodyExcerpt ? (
                   <button className="mi-news-drawer__translate-body" onClick={() => void translateItem(activeId!)} type="button">
                     {text.drawer.detail.translateBody}
                   </button>
                 ) : null}
-                {hasTranslatedBody && activeTranslationState !== 'translating' ? (
+                {translationEnabled && hasTranslatedBody && activeTranslationState !== 'translating' ? (
                   <div className="mi-news-drawer__body-toggle" role="group">
                     <button aria-pressed={bodyView === 'original'} onClick={() => setBodyView('original')} type="button">{text.drawer.detail.original}</button>
                     <button aria-pressed={bodyView === 'translated'} onClick={() => setBodyView('translated')} type="button">{text.drawer.detail.translated}</button>
@@ -344,10 +348,13 @@ export function NewsSentimentDrawer(props: {
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
                   {activeTranslationState === 'translating' || activeTranslationState === 'waiting' ? (
-                    <span className="mi-news-drawer__translating" role="status">
-                      <i aria-hidden="true" />
-                      {text.drawer.detail.translatingBody}
-                    </span>
+                    <>
+                      <span className="mi-news-drawer__translating" role="status">
+                        <i aria-hidden="true" />
+                        {text.drawer.detail.translatingBody}
+                      </span>
+                      {detail?.bodyExcerpt ? <><br />{detail.bodyExcerpt}</> : null}
+                    </>
                   ) : displayedBody ? (
                     displayedBody
                   ) : activeTranslationState === 'failed' ? (
@@ -368,7 +375,7 @@ export function NewsSentimentDrawer(props: {
             )}
           </aside>
         </div>
-        {contextMenu ? (
+        {translationEnabled && contextMenu ? (
           <>
             <div className="mi-news-drawer__context-mask" onClick={() => setContextMenu(undefined)} />
             <div className="mi-news-drawer__context" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">

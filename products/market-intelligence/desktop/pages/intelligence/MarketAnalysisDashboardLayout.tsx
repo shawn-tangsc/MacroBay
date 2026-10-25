@@ -189,6 +189,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         {eventDetail && renderEventDetailDrawer ? renderEventDetailDrawer(eventDetail, () => setEventDetail(undefined)) : null}
       </div>
 <MarketAnalysisAgentWorkspace
+        language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
         card={<MarketCalendarCard
           projection={cardData.projection}
