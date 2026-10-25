@@ -311,8 +311,14 @@ export function NewsSentimentDrawer(props: {
                 ) : null}
                 <div className="mi-news-drawer__badges">
                   <span className={`mi-news-sentiment__pill is-${active.polarity}`}>{labelText(text, active.polarity)}</span>
-                  <span>{active.strength}/5</span>
-                  <span>{active.confidence}%</span>
+                  <span className="mi-news-drawer__strength" aria-label={`${text.drawer.detail.strength} ${active.strength}/5 · ${strengthLabel(text, active.strength)}`}>
+                    <em>{text.drawer.detail.strength}</em>
+                    {[1, 2, 3, 4, 5].map((level) => (
+                      <i className={level <= active.strength ? 'is-on' : undefined} key={level} aria-hidden="true" />
+                    ))}
+                    <small>{strengthLabel(text, active.strength)}</small>
+                  </span>
+                  <span>{text.drawer.detail.confidence} {active.confidence}%</span>
                   {active.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
                 </div>
                 {active.evidenceQuote ? (
@@ -379,4 +385,11 @@ function filterRows(view: NewsSentimentView | undefined, filters: NewsSentimentF
     if (filters.scope !== 'market' && !row.symbols.includes(filters.scope)) return false
     return true
   })
+}
+
+function strengthLabel(text: NewsSentimentText, strength: number): string {
+  const levels = text.drawer.detail.strengthLevels
+  if (strength <= 2) return levels?.weak ?? '弱'
+  if (strength >= 4) return levels?.strong ?? '强'
+  return levels?.medium ?? '中'
 }
