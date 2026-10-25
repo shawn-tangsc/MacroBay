@@ -4,6 +4,7 @@ import { Drawer, Select } from 'antd'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
+import { intelligenceTranslationClient } from '../../../shared/ipc/intelligenceTranslationClient'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
@@ -55,6 +56,7 @@ export function NewsSentimentDrawer(props: {
     const row = (view?.items ?? []).find((entry) => entry.itemId === itemId)
     if (row?.bodyTranslationState === 'translated' || translatedBodies[itemId]) return
     setTranslationStates((current) => ({ ...current, [itemId]: 'translating' }))
+    void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: [itemId] }).catch(() => undefined)
     const clientTranslate = typeof props.client.translateBody === 'function'
       ? props.client.translateBody
       : (id: string) => {
@@ -67,6 +69,7 @@ export function NewsSentimentDrawer(props: {
       if (result.state === 'translated' && result.body) {
         setTranslatedBodies((current) => ({ ...current, [itemId]: result.body! }))
         setTranslationStates((current) => ({ ...current, [itemId]: 'translated' }))
+        window.setTimeout(() => props.onRefresh(), 800)
       } else {
         setTranslationStates((current) => ({ ...current, [itemId]: 'failed' }))
       }
@@ -78,6 +81,7 @@ export function NewsSentimentDrawer(props: {
   const translateAll = useCallback(async () => {
     const pending = rows.filter((row) => (translationStates[row.itemId] ?? row.bodyTranslationState) !== 'translated')
     if (pending.length === 0) return
+    void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: pending.map((row) => row.itemId) }).catch(() => undefined)
     setTranslatingAll(true)
     setTranslationStates((current) => {
       const next = { ...current }
@@ -86,6 +90,7 @@ export function NewsSentimentDrawer(props: {
     })
     for (const row of pending) await translateItem(row.itemId)
     setTranslatingAll(false)
+    props.onRefresh()
   }, [rows, translateItem, translationStates])
 
   useEffect(() => {
