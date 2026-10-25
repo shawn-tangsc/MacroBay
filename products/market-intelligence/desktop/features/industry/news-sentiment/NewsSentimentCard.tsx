@@ -25,7 +25,7 @@ export function NewsSentimentCard(props: {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
   const summary = view?.state === 'available' ? view.summary : undefined
-  const drivers = summary ? [...(view?.items ?? [])].sort((a, b) => b.strength * b.confidence - a.strength * a.confidence).slice(0, 3) : []
+  const drivers = summary ? [...(view?.items ?? [])].sort((a, b) => b.strength * b.confidence - a.strength * a.confidence) : []
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>

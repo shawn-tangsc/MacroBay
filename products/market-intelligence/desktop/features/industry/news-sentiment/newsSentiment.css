@@ -6,7 +6,7 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  align-self: start;
+  align-self: stretch;
   container-type: inline-size;
   container-name: mi-news-sentiment;
   background: var(--surface, #121814);
@@ -80,7 +80,7 @@
 .mi-news-sentiment__pill.is-mixed { color: #e6c76f; border-color: #5b4a2a; background: #241e12; }
 .mi-news-sentiment__pill.is-neutral { color: var(--mi-news-neutral); border-color: var(--border, #2a352b); background: transparent; }
 
-.mi-news-sentiment__drivers { display: flex; flex-direction: column; padding: 4px 12px 2px; }
+.mi-news-sentiment__drivers { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; padding: 4px 12px 2px; }
 .mi-news-sentiment__drivers button {
   display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 7px; align-items: baseline;
   border: 0; border-bottom: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent);
