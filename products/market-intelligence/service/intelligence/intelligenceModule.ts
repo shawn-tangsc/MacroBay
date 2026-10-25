@@ -68,6 +68,8 @@ import {
   INTELLIGENCE_REPLAY_WINDOW_JOB
 } from './jobs/intelligenceJobIds'
 import { registerIntelligenceJobs } from './jobs/registerIntelligenceJobs'
+import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipelineJobs'
+import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { statSync } from 'node:fs'
 import { getPlatformFetch } from '@platform/network/platformFetch'
@@ -508,6 +510,27 @@ export function getIntelligenceModule(
         ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
         : {})
     })
+    // A fresh install, or a database cleared between runs, starts with no judgments while the
+    // pipeline already holds admitted items. Backfill once; the score job is idempotent and the
+    // empty check keeps every later startup quiet.
+    if (newsSentimentStore) {
+      try {
+        const existing = newsSentimentStore.listLatestSentiment({
+          from: '1970-01-01T00:00:00.000Z',
+          to: new Date(Date.now() + 86_400_000).toISOString(),
+          limit: 1
+        })
+        if (existing.length === 0) {
+          void enqueueIntelligencePipelineJobs(
+            jobRuntime,
+            [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
+            {}
+          ).catch(() => undefined)
+        }
+      } catch {
+        // A read failure must not stop the workspace from mounting.
+      }
+    }
     const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore })
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
