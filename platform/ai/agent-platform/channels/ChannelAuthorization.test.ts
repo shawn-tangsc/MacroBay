@@ -12,8 +12,8 @@ describe('channel runtime authorization', () => {
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
         values('agent-a','custom','Agent','[]','[]','a','2026-10-24','2026-10-24');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at)
-        values('slack-a','slack','Slack','agent-a','{}',1,'runtime-ready','configured','2026-10-24','2026-10-24');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at)
+        values('slack-a','slack','Slack','agent-a','{}',1,'enabled','configured','2026-10-24','2026-10-24');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at)
         values('slack-a',1,'active','2026-10-24');
       insert into channel_conversations(id,channel_id,conversation_key_ciphertext,conversation_key_ref,conversation_key_revision,conversation_key_hash,conversation_kind,agent_session_id,created_at,updated_at)
@@ -40,8 +40,8 @@ describe('channel runtime authorization', () => {
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
         values('agent-a','custom','Agent','[]','[]','a','2026-10-24','2026-10-24');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at)
-        values('telegram-a','telegram','Telegram','agent-a','{}',1,'runtime-ready','configured','2026-10-24','2026-10-24');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at)
+        values('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','2026-10-24','2026-10-24');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at)
         values('telegram-a',1,'active','2026-10-24');
       insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at)
@@ -50,8 +50,8 @@ describe('channel runtime authorization', () => {
     seedChannelAdapterSupport(database, ['telegram'])
     const management = new ChannelManagementRepository(database)
     expect(management.fenceAllForQuit('2026-10-24T00:01:00.000Z')).toContain('telegram-a')
-    expect(database.connection.prepare("select requested_enabled,migration_state from agent_channels where id='telegram-a'").get()).toEqual({
-      requested_enabled: 1, migration_state: 'runtime-ready'
+    expect(database.connection.prepare("select requested_enabled,lifecycle_state from agent_channels where id='telegram-a'").get()).toEqual({
+      requested_enabled: 1, lifecycle_state: 'enabled'
     })
     expect(database.connection.prepare("select generation,lifecycle_state from channel_runtime_generations where channel_id='telegram-a'").get()).toEqual({
       generation: 2, lifecycle_state: 'inactive'
@@ -64,8 +64,8 @@ describe('channel runtime authorization', () => {
     database.connection.exec(`
       insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at)
         values('agent-a','custom','Agent','[]','[]','a','2026-10-24','2026-10-24');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at)
-        values('lark-a','feishu','Lark','agent-a','{"domain":"lark"}',1,'runtime-ready','configured','2026-10-24','2026-10-24');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at)
+        values('lark-a','lark','Lark','agent-a','{"domain":"lark"}',1,'enabled','configured','2026-10-24','2026-10-24');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at)
         values('lark-a',1,'active','2026-10-24');
     `)

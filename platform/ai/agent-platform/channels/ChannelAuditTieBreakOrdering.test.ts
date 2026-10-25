@@ -19,10 +19,10 @@ function ids(rows: Array<{ id: string }>): string[] {
 
 function seedManagedChannel(database: AgentPlatformDatabase): void {
   database.connection.exec(`
-    insert into agent_entities (id, type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at)
+    insert into agent_entities(id,type, name, mcps_json, disabled_tools_json, order_key, created_at, updated_at)
       values ('agent-a', 'general', 'Agent', '[]', '[]', '0', '2026-01-01', '2026-01-01');
-    insert into agent_channels (id, type, name, agent_id, requested_enabled, migration_state, created_at, updated_at)
-      values ('channel-a', 'telegram', 'Channel', 'agent-a', 1, 'runtime-ready', '2026-01-01', '2026-01-01');
+    insert into agent_channels (id, adapter_key, name, agent_id, requested_enabled, lifecycle_state, created_at, updated_at)
+      values ('channel-a', 'telegram', 'Channel', 'agent-a', 1, 'enabled', '2026-01-01', '2026-01-01');
   `)
 }
 

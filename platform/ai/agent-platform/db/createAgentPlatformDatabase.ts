@@ -1404,6 +1404,46 @@ const migrations: AgentPlatformMigration[] = [
         end;
       `)
     }
+  },
+  {
+    id: '0039_channel_canonical_final',
+    up: `
+      drop trigger if exists agent_channels_next_insert;
+      drop trigger if exists agent_channels_next_update;
+      drop trigger if exists agent_channels_next_delete;
+      create table agent_channels_canonical (
+        id text primary key,
+        adapter_key text not null
+          check (adapter_key in ('telegram','slack','lark','qq','discord','wechat')),
+        name text not null,
+        agent_id text,
+        public_config_json text not null default '{}',
+        credential_ref text,
+        credential_revision integer,
+        credential_health text not null default 'missing'
+          check (credential_health in ('missing','configured','unavailable')),
+        requested_enabled integer not null default 0,
+        lifecycle_state text not null default 'credential-missing'
+          check (lifecycle_state in ('credential-missing','ready','enabled','disabled','deleting')),
+        mutation_epoch integer not null default 0,
+        migration_error_code text,
+        created_at text not null,
+        updated_at text not null
+      );
+      insert into agent_channels_canonical (
+        id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+        credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+        created_at, updated_at
+      ) select id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
+        credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
+        created_at, updated_at from agent_channels_next;
+      drop table agent_channels;
+      drop table agent_channels_next;
+      alter table agent_channels_canonical rename to agent_channels;
+      create index idx_agent_channels_agent_updated on agent_channels(agent_id, updated_at desc, id asc);
+      create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state, updated_at asc, id asc);
+      create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
+    `
   }
 ]
 

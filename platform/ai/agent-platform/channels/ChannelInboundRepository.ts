@@ -112,7 +112,7 @@ export class ChannelInboundRepository {
   getCurrentAgentId(channelId: string, generation: number): string | null {
     const row = this.database.connection.prepare(
       `select c.agent_id from channel_runtime_generations g
-       join agent_channels_next c on c.id = g.channel_id
+       join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.generation = ? and g.lifecycle_state = 'active'
          and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -124,7 +124,7 @@ export class ChannelInboundRepository {
   getActiveAgentId(channelId: string): string | null {
     const row = this.database.connection.prepare(
       `select c.agent_id from channel_runtime_generations g
-       join agent_channels_next c on c.id = g.channel_id
+       join agent_channels c on c.id = g.channel_id
        join agent_entities a on a.id = c.agent_id
        where g.channel_id = ? and g.lifecycle_state = 'active'
          and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -140,7 +140,7 @@ export class ChannelInboundRepository {
       `select c.agent_id, v.agent_session_id from channel_inbound_work_items w
        join channel_receipts r on r.id = w.receipt_id
        join channel_conversations v on v.id = w.conversation_id and v.channel_id = w.channel_id
-       join agent_channels_next c on c.id = w.channel_id
+       join agent_channels c on c.id = w.channel_id
        join channel_runtime_generations g on g.channel_id = c.id and g.generation = r.generation and g.lifecycle_state = 'active'
        join agent_entities a on a.id = c.agent_id
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.conversation_id = ? and w.dispatch_id = ?
@@ -196,7 +196,7 @@ export class ChannelInboundRepository {
       `select w.id, w.receipt_id, w.channel_id, w.dispatch_id, w.lease_token, w.lease_expires_at, r.generation
        from channel_receipts r join channel_inbound_work_items w on w.receipt_id = r.id
        join channel_runtime_generations g on g.channel_id = r.channel_id and g.generation = r.generation
-       join agent_channels_next c on c.id = r.channel_id
+       join agent_channels c on c.id = r.channel_id
        join agent_entities a on a.id = c.agent_id
        where r.channel_id = ? and r.provider_event_key_hash = ? and r.status = 'processing'
          and w.status = 'processing' and w.lease_token is not null and w.lease_expires_at > ?
@@ -217,7 +217,7 @@ export class ChannelInboundRepository {
     return Boolean(this.database.connection.prepare(
       `select 1 from channel_inbound_work_items w join channel_receipts r on r.id = w.receipt_id
        join channel_runtime_generations g on g.channel_id = r.channel_id and g.generation = r.generation
-       join agent_channels_next c on c.id = r.channel_id
+       join agent_channels c on c.id = r.channel_id
        join agent_entities a on a.id = c.agent_id
        where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
          and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
@@ -331,7 +331,7 @@ export class ChannelInboundRepository {
 
   managedChannelExists(channelId: string): boolean {
     return Boolean(this.database.connection.prepare(
-      `select 1 from agent_channels_next c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
+      `select 1 from agent_channels c where c.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
     ).get(channelId))
   }
 
@@ -586,7 +586,7 @@ export class ChannelInboundRepository {
            where id = ? and exists (
              select 1 from channel_receipts r
              join channel_runtime_generations g on g.channel_id = r.channel_id
-             join agent_channels_next c on c.id = g.channel_id
+             join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = ? and r.generation = ? and g.lifecycle_state = 'active'
                and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -620,7 +620,7 @@ export class ChannelInboundRepository {
            where id = ? and status in ('processing', 'dispatching', 'unknown-after-restart')
              and not exists (
                select 1 from channel_runtime_generations g
-               join agent_channels_next c on c.id = g.channel_id
+               join agent_channels c on c.id = g.channel_id
                join agent_entities a on a.id = c.agent_id
                where g.channel_id = channel_inbound_work_items.channel_id and g.lifecycle_state = 'active'
                  and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -644,7 +644,7 @@ export class ChannelInboundRepository {
          from channel_inbound_work_items w
          join channel_receipts r on r.id = w.receipt_id
          join channel_runtime_generations g on g.channel_id = r.channel_id and g.generation = r.generation
-         join agent_channels_next c on c.id = r.channel_id
+         join agent_channels c on c.id = r.channel_id
          join agent_entities a on a.id = c.agent_id
          where w.id = ? and w.receipt_id = ? and w.channel_id = ? and w.dispatch_id = ?
            and w.status = 'processing' and w.lease_token = ? and w.lease_expires_at = ? and w.lease_expires_at > ?
@@ -688,7 +688,7 @@ export class ChannelInboundRepository {
            )
            and not exists (
              select 1 from channel_runtime_generations g
-             join agent_channels_next c on c.id = g.channel_id
+             join agent_channels c on c.id = g.channel_id
              join agent_entities a on a.id = c.agent_id
              where g.channel_id = channel_inbound_work_items.channel_id
                and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -714,7 +714,7 @@ export class ChannelInboundRepository {
            and exists (
              select 1 from channel_receipts r
              join channel_runtime_generations g on g.channel_id = r.channel_id and g.generation = r.generation
-             join agent_channels_next c on c.id = r.channel_id
+             join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
                and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -736,7 +736,7 @@ export class ChannelInboundRepository {
            and exists (
              select 1 from channel_receipts r
              join channel_runtime_generations g on g.channel_id = r.channel_id and g.generation = r.generation
-             join agent_channels_next c on c.id = r.channel_id
+             join agent_channels c on c.id = r.channel_id
              join agent_entities a on a.id = c.agent_id
              where r.id = channel_inbound_work_items.receipt_id and r.generation = ?
                and g.lifecycle_state = 'active' and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -854,7 +854,7 @@ export class ChannelInboundRepository {
        where w.status in ('processing', 'dispatching', 'unknown-after-restart') and (w.lease_expires_at is null or w.lease_expires_at <= ?)
          and not exists (
            select 1 from channel_runtime_generations g
-           join agent_channels_next c on c.id = g.channel_id
+           join agent_channels c on c.id = g.channel_id
            join agent_entities a on a.id = c.agent_id
            where g.channel_id = w.channel_id and g.lifecycle_state = 'active'
              and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1

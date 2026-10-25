@@ -185,7 +185,7 @@ export class ChannelDeliveryRepository {
     return this.database.transact(() => Boolean(this.database.connection.prepare(
       `select 1 from channel_delivery_attempts d where d.id = ? and d.status = 'sending' and d.send_owner_token = ?
        and d.send_revision = ? and d.send_lease_expires_at = ? and d.send_lease_expires_at > ?
-       and exists (select 1 from channel_conversations v join agent_channels_next c on c.id = v.channel_id
+       and exists (select 1 from channel_conversations v join agent_channels c on c.id = v.channel_id
          join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active' join agent_entities a on a.id = c.agent_id
          where v.id = d.conversation_id and v.channel_id = d.channel_id and c.agent_id = d.agent_id
            and ${SUPPORTED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -211,7 +211,7 @@ export class ChannelDeliveryRepository {
   getConversationKeyCipher(conversationId: string): { channelId: string; ciphertext: Uint8Array; keyRef: string; keyRevision: number } | null {
     const row = this.database.connection.prepare(
       `select v.channel_id, v.conversation_key_ciphertext, v.conversation_key_ref, v.conversation_key_revision
-       from channel_conversations v join agent_channels_next c on c.id = v.channel_id
+       from channel_conversations v join agent_channels c on c.id = v.channel_id
        where v.id = ? and ${SUPPORTED_CHANNEL_C_SQL}`
     ).get(conversationId) as ConversationCipherRow | undefined
     return row ? { channelId: row.channel_id, ciphertext: row.conversation_key_ciphertext, keyRef: row.conversation_key_ref, keyRevision: row.conversation_key_revision } : null
@@ -220,7 +220,7 @@ export class ChannelDeliveryRepository {
   listEnabledTargets(channelId: string, agentId: string): Array<{ conversationId: string }> {
     const rows = this.database.connection.prepare(
       `select t.conversation_id from channel_delivery_targets t join channel_conversations v on v.id = t.conversation_id and v.channel_id = t.channel_id
-       join agent_channels_next c on c.id = t.channel_id join agent_entities a on a.id = c.agent_id
+       join agent_channels c on c.id = t.channel_id join agent_entities a on a.id = c.agent_id
        join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active'
        where t.channel_id = ? and t.enabled = 1 and c.agent_id = ? and ${SUPPORTED_CHANNEL_C_SQL}
          and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
@@ -253,15 +253,15 @@ export class ChannelDeliveryRepository {
   listTaskAttempts(input: { agentId: string; runLogId: string; limit: number; offset: number }): { attempts: Array<{ id: string; channelId: string; status: ChannelDeliveryStatus; errorCode: string | null; createdAt: string; completedAt: string | null }>; total: number } {
     const hashes = taskHashes(input.runLogId)
     const where = `d.agent_id = ? and d.source_type = 'task-result' and d.source_hash in (?, ?, ?)`
-    const rows = this.database.connection.prepare(`select d.id, d.channel_id, d.status, d.stable_error_code, d.created_at, d.completed_at from channel_delivery_attempts d join agent_channels_next c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${SUPPORTED_CHANNEL_C_SQL} and ${where} order by d.created_at desc, d.id desc limit ? offset ?`).all(input.agentId, ...hashes, Math.max(1, Math.min(input.limit, 100)), Math.max(0, input.offset)) as TaskAttemptRow[]
-    const total = (this.database.connection.prepare(`select count(*) as count from channel_delivery_attempts d join agent_channels_next c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${SUPPORTED_CHANNEL_C_SQL} and ${where}`).get(input.agentId, ...hashes) as { count: number }).count
+    const rows = this.database.connection.prepare(`select d.id, d.channel_id, d.status, d.stable_error_code, d.created_at, d.completed_at from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${SUPPORTED_CHANNEL_C_SQL} and ${where} order by d.created_at desc, d.id desc limit ? offset ?`).all(input.agentId, ...hashes, Math.max(1, Math.min(input.limit, 100)), Math.max(0, input.offset)) as TaskAttemptRow[]
+    const total = (this.database.connection.prepare(`select count(*) as count from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id where ${SUPPORTED_CHANNEL_C_SQL} and ${where}`).get(input.agentId, ...hashes) as { count: number }).count
     return { attempts: rows.map((row) => ({ id: row.id, channelId: row.channel_id, status: row.status, errorCode: row.stable_error_code, createdAt: row.created_at, completedAt: row.completed_at })), total }
   }
 
   getTaskAttempt(input: { agentId: string; runLogId: string; attemptId: string }): DeliveryAttempt | null {
     const row = this.database.connection.prepare(
       `select d.id, d.channel_id, d.agent_id, d.conversation_id, d.source_type, d.source_hash, d.idempotency_key, d.status
-       from channel_delivery_attempts d join agent_channels_next c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id
+       from channel_delivery_attempts d join agent_channels c on c.id = d.channel_id join agent_entities a on a.id = c.agent_id
        where ${SUPPORTED_CHANNEL_C_SQL} and d.id = ? and d.agent_id = ? and d.source_type = 'task-result' and d.source_hash in (?, ?, ?)`
     ).get(input.attemptId, input.agentId, ...taskHashes(input.runLogId)) as AttemptRow | undefined
     return row ? mapAttempt(row) : null
@@ -286,7 +286,7 @@ export class ChannelDeliveryRepository {
 
   private isAuthorized(input: ClaimInput): boolean {
     return Boolean(this.database.connection.prepare(
-      `select 1 from channel_conversations v join agent_channels_next c on c.id = v.channel_id
+      `select 1 from channel_conversations v join agent_channels c on c.id = v.channel_id
        join channel_runtime_generations g on g.channel_id = c.id and g.lifecycle_state = 'active'
        join agent_entities a on a.id = c.agent_id
        where v.id = ? and v.channel_id = ? and c.agent_id = ? and ${SUPPORTED_CHANNEL_C_SQL}

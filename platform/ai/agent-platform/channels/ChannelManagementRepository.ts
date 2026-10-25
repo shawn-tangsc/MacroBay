@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import type { AgentChannelType } from '../schemas/channelSchemas'
-import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedFeishuSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
+import { blockedRuntimeChannelSql, isLarkPublicConfig, isolatedLarkSql, isolatedWechatSql, managedChannelSql, supportedChannelSql } from './ChannelManagementPredicates'
 import { ChannelManagementQueryRepository } from './ChannelManagementQueryRepository'
 
 const MANAGED_CHANNEL_SQL = managedChannelSql()
 const MANAGED_CHANNEL_C_SQL = managedChannelSql('c')
 const MANAGED_CHANNEL_CH_SQL = managedChannelSql('ch')
 const SUPPORTED_CHANNEL_SQL = supportedChannelSql()
-const ISOLATED_FEISHU_C_SQL = isolatedFeishuSql('c')
+const ISOLATED_LARK_C_SQL = isolatedLarkSql('c')
 const ISOLATED_WECHAT_C_SQL = isolatedWechatSql('c')
 const BLOCKED_RUNTIME_C_SQL = blockedRuntimeChannelSql('c')
 
@@ -74,18 +74,17 @@ export class ChannelManagementRepository {
     const created = this.database.connection
       .prepare(
         `insert into agent_channels (
-          id, type, name, agent_id, public_config_json, requested_enabled, migration_state, created_at, updated_at
+          id, adapter_key, name, agent_id, public_config_json, requested_enabled, lifecycle_state, created_at, updated_at
         ) select ?, ?, ?, ?, ?, 0, 'credential-missing', ?, ?
           where not exists (select 1 from channel_management_tombstones where channel_id = ?)`
       )
-      .run(input.id, input.type ?? 'telegram', input.name, input.agentId, input.type === 'feishu' ? '{"domain":"lark"}' : '{}', input.now, input.now, input.id).changes === 1
-    if (created) this.mirrorChannel(input.id)
+      .run(input.id, input.type === 'feishu' ? 'lark' : (input.type ?? 'telegram'), input.name, input.agentId, input.type === 'feishu' ? '{"domain":"lark"}' : '{}', input.now, input.now, input.id).changes === 1
     return created
   }
 
   channelType(id: string): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' | null {
     const row = this.database.connection.prepare(
-      `select type from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting','legacy')`
+      `select case when adapter_key = 'lark' then 'feishu' else adapter_key end as type from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
     ).get(id) as { type: AgentChannelType } | undefined
     return row?.type === 'telegram' || row?.type === 'slack' || row?.type === 'feishu' || row?.type === 'qq' || row?.type === 'discord' || row?.type === 'wechat' ? row.type : null
   }
@@ -93,19 +92,19 @@ export class ChannelManagementRepository {
   /** Recovery may identify a deleting Channel only to consume its already-journaled Vault capability. */
   knownChannelType(id: string): 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat' | null {
     const row = this.database.connection.prepare(
-      `select type from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state <> 'legacy'`
+      `select case when adapter_key = 'lark' then 'feishu' else adapter_key end as type from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state <> 'disabled'`
     ).get(id) as { type: AgentChannelType } | undefined
     return row?.type === 'telegram' || row?.type === 'slack' || row?.type === 'feishu' || row?.type === 'qq' || row?.type === 'discord' || row?.type === 'wechat' ? row.type : null
   }
 
   /** A WeChat storage row never has a generic credential recovery path in Release F. */
   isWechatStorageChannel(id: string): boolean {
-    return Boolean(this.database.connection.prepare(`select 1 from agent_channels where id = ? and type = 'wechat'`).get(id))
+    return Boolean(this.database.connection.prepare(`select 1 from agent_channels where id = ? and adapter_key = 'wechat'`).get(id))
   }
 
   isStrictWechatChannel(id: string): boolean {
     return Boolean(this.database.connection.prepare(
-      `select 1 from agent_channels where id = ? and type = 'wechat' and public_config_json = '{}'`
+      `select 1 from agent_channels where id = ? and adapter_key = 'wechat' and public_config_json = '{}'`
     ).get(id))
   }
 
@@ -115,14 +114,11 @@ export class ChannelManagementRepository {
       const changed = this.database.connection
         .prepare(
           `update agent_channels
-           set name = ?, agent_id = ?, requested_enabled = 0, migration_state = 'disabled', updated_at = ?
-           where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
+           set name = ?, agent_id = ?, requested_enabled = 0, lifecycle_state = 'disabled', updated_at = ?
+           where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
         )
         .run(input.name, input.agentId, input.now, id).changes
-      if (changed) {
-        this.mirrorChannel(id)
-        this.fence(id, input.now)
-      }
+      if (changed) this.fence(id, input.now)
       return changed === 1
     })
   }
@@ -133,14 +129,11 @@ export class ChannelManagementRepository {
       const changed = this.database.connection
         .prepare(
           `update agent_channels
-           set requested_enabled = 0, migration_state = 'disabled', updated_at = ?
-           where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
+           set requested_enabled = 0, lifecycle_state = 'disabled', updated_at = ?
+           where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
         )
         .run(now, id).changes
-      if (changed) {
-        this.mirrorChannel(id)
-        this.fence(id, now)
-      }
+      if (changed) this.fence(id, now)
       return changed === 1
     })
   }
@@ -149,7 +142,7 @@ export class ChannelManagementRepository {
     const row = this.database.connection
       .prepare(
         `select credential_ref, credential_revision from agent_channels
-         where id = ? and ${MANAGED_CHANNEL_SQL} and type <> 'wechat' and migration_state not in ('deleting', 'legacy')`
+         where id = ? and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and lifecycle_state not in ('deleting')`
       )
       .get(id) as { credential_ref: string | null; credential_revision: number | null } | undefined
     return row?.credential_ref && row.credential_revision !== null
@@ -167,8 +160,8 @@ export class ChannelManagementRepository {
       .prepare(
         `update agent_channels
          set credential_ref = ?, credential_revision = ?, requested_enabled = 0,
-             migration_state = 'configuration-ready', credential_health = 'configured', migration_error_code = null, updated_at = ?
-         where id = ? and ${MANAGED_CHANNEL_SQL} and type <> 'wechat' and migration_state not in ('deleting', 'legacy')
+             lifecycle_state = 'ready', credential_health = 'configured', migration_error_code = null, updated_at = ?
+         where id = ? and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and lifecycle_state not in ('deleting')
            and ((? is null and credential_revision is null) or credential_revision = ?)
            ${input.owner ? `and exists (
              select 1 from channel_telegram_lifecycle_operations o
@@ -177,10 +170,7 @@ export class ChannelManagementRepository {
            )` : ''}`
       )
       .run(input.ref, input.revision, input.now, input.id, expected, expected, ...(input.owner ? [input.owner.token] : [])).changes
-      if (result) {
-        this.mirrorChannel(input.id)
-        this.fence(input.id, input.now)
-      }
+      if (result) this.fence(input.id, input.now)
       return result
     })
     return changed === 1
@@ -218,8 +208,8 @@ export class ChannelManagementRepository {
           where exists (
             select 1 from agent_channels
             where id = ? and ${MANAGED_CHANNEL_SQL}
-              and (type <> 'wechat' or ? = 'delete')
-              and migration_state not in ('deleting', 'legacy')
+              and (adapter_key <> 'wechat' or ? = 'delete')
+              and lifecycle_state not in ('deleting')
           ) ${ownerGate}`
       )
       .run(
@@ -255,8 +245,8 @@ export class ChannelManagementRepository {
     return this.database.transact(() => {
       const row = this.database.connection
         .prepare(
-          `select type, public_config_json, credential_ref, credential_revision from agent_channels
-           where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
+          `select case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, public_config_json, credential_ref, credential_revision from agent_channels
+           where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
         )
         .get(id) as { type: string; public_config_json: string; credential_ref: string | null; credential_revision: number | null } | undefined
       if (!row) return null
@@ -288,7 +278,7 @@ export class ChannelManagementRepository {
       this.invalidateLifecycleOwner(id)
       this.database.connection
         .prepare(
-          `update agent_channels set requested_enabled = 0, migration_state = 'deleting', updated_at = ? where id = ?`
+          `update agent_channels set requested_enabled = 0, lifecycle_state = 'deleting', updated_at = ? where id = ?`
         )
         .run(now, id)
       this.fence(id, now)
@@ -339,8 +329,8 @@ export class ChannelManagementRepository {
     ).run(now, id)
     this.database.connection.prepare(
       `update agent_channels set credential_ref = null, credential_revision = null, credential_health = 'missing',
-         requested_enabled = 0, migration_state = 'deleting', migration_error_code = 'channel-credential-unsupported', updated_at = ?
-       where id = ? and type = 'wechat' and public_config_json = '{}'`
+         requested_enabled = 0, lifecycle_state = 'deleting', migration_error_code = 'channel-credential-unsupported', updated_at = ?
+       where id = ? and adapter_key = 'wechat' and public_config_json = '{}'`
     ).run(now, id)
     this.fence(id, now)
     this.clearC03Rows(id)
@@ -362,7 +352,7 @@ export class ChannelManagementRepository {
       if (!operation) return false
       this.clearC03Rows(channelId)
       this.database.connection.prepare(`delete from channel_management_operations where channel_id = ?`).run(channelId)
-      const removed = this.database.connection.prepare(`delete from agent_channels where id = ? and migration_state = 'deleting'`).run(channelId).changes
+      const removed = this.database.connection.prepare(`delete from agent_channels where id = ? and lifecycle_state = 'deleting'`).run(channelId).changes
       if (removed !== 1) throw new Error('channel delete finalization failed')
       this.database.connection.prepare(`insert or ignore into channel_management_tombstones(channel_id,deleted_at) values(?,?)`).run(channelId, new Date().toISOString())
       return true
@@ -478,7 +468,7 @@ export class ChannelManagementRepository {
 
   credentialReferences(channelId: string, ref: string, revision?: number): boolean {
     return Boolean(this.database.connection.prepare(
-      `select 1 from agent_channels where id = ? and credential_ref = ? and migration_state not in ('deleting', 'legacy')
+      `select 1 from agent_channels where id = ? and credential_ref = ? and lifecycle_state not in ('deleting')
        ${revision === undefined ? '' : 'and credential_revision = ?'}`
     ).get(channelId, ref, ...(revision === undefined ? [] : [revision])))
   }
@@ -490,7 +480,7 @@ export class ChannelManagementRepository {
       `update agent_channels set credential_revision = ?, requested_enabled = 0,
          credential_health = 'configured', migration_error_code = null, updated_at = ?
        where id = ? and ${MANAGED_CHANNEL_SQL} and credential_ref = ? and credential_revision = ?
-         and mutation_epoch = ? and migration_state not in ('deleting', 'legacy', 'runtime-ready')
+         and mutation_epoch = ? and lifecycle_state not in ('deleting', 'enabled')
          and not exists (select 1 from channel_telegram_lifecycle_operations o where o.channel_id = agent_channels.id)
          and exists (select 1 from channel_management_operations op where op.id = ? and op.channel_id = agent_channels.id
            and op.purpose = 'rotate' and op.lifecycle_owner_token = ? and op.mutation_epoch = ?
@@ -507,7 +497,7 @@ export class ChannelManagementRepository {
         `update agent_channels set credential_revision = ?, requested_enabled = 0,
            credential_health = 'configured', migration_error_code = null, updated_at = ?
          where id = ? and ${MANAGED_CHANNEL_SQL} and credential_ref = ? and credential_revision = ?
-           and mutation_epoch = ? and migration_state not in ('deleting', 'legacy', 'runtime-ready')
+           and mutation_epoch = ? and lifecycle_state not in ('deleting', 'enabled')
            and exists (select 1 from channel_telegram_lifecycle_operations o
              where o.channel_id = agent_channels.id and o.owner_token = ? and o.purpose = 'mutation' and o.generation is null)
            and exists (select 1 from channel_management_operations op
@@ -549,7 +539,7 @@ export class ChannelManagementRepository {
         `update agent_channels set requested_enabled = 0, credential_health = 'unavailable',
            migration_error_code = ?, updated_at = ?
          where id = ? and ${MANAGED_CHANNEL_SQL} and mutation_epoch = ?
-           and migration_state not in ('deleting', 'legacy', 'runtime-ready')`
+           and lifecycle_state not in ('deleting', 'enabled')`
       ).run(code, now, operation.channelId, operation.mutationEpoch)
       this.database.connection.prepare(
         `update channel_management_operations set state = 'completed', operation_permit = null,
@@ -570,7 +560,7 @@ export class ChannelManagementRepository {
       `update agent_channels set requested_enabled = 0, credential_health = 'unavailable',
          migration_error_code = 'channel-credential-revision-advanced', updated_at = ?
        where id = ? and ${MANAGED_CHANNEL_SQL} and credential_ref = ? and mutation_epoch = ?
-         and migration_state not in ('deleting', 'legacy', 'runtime-ready')
+         and lifecycle_state not in ('deleting', 'enabled')
          and not exists (select 1 from channel_telegram_lifecycle_operations o where o.channel_id = agent_channels.id)`
     ).run(now, operation.channelId, operation.ref, operation.mutationEpoch)
   }
@@ -581,7 +571,7 @@ export class ChannelManagementRepository {
       const metadata = this.database.connection.prepare(
         `select 1 from agent_channels
          where id = ? and ${MANAGED_CHANNEL_SQL} and credential_ref = ? and credential_revision = ?
-           and migration_state = 'configuration-ready'`
+           and lifecycle_state = 'ready'`
       ).get(operation.channelId, safe.credentialRef, safe.revision)
       if (!metadata) return false
       const completed = this.database.connection.prepare(
@@ -601,8 +591,8 @@ export class ChannelManagementRepository {
     return this.database.transact(() => {
       const updated = this.database.connection.prepare(
         `update agent_channels set credential_ref = ?, credential_revision = ?, requested_enabled = 0,
-           migration_state = 'configuration-ready', credential_health = 'configured', migration_error_code = null, updated_at = ?
-         where id = ? and ${MANAGED_CHANNEL_SQL} and type <> 'wechat' and migration_state not in ('deleting', 'legacy')
+           lifecycle_state = 'ready', credential_health = 'configured', migration_error_code = null, updated_at = ?
+         where id = ? and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and lifecycle_state not in ('deleting')
            and ((? is null and credential_revision is null) or credential_revision = ?)
            and exists (
              select 1 from channel_management_operations o
@@ -676,15 +666,15 @@ export class ChannelManagementRepository {
       const row = this.database.connection.prepare(
         `select 1 from agent_channels c where c.id = ? and ${MANAGED_CHANNEL_C_SQL}
            and ${purpose === 'enable'
-             ? "migration_state in ('configuration-ready','disabled')"
-             : "migration_state not in ('deleting','legacy')"}
+             ? "lifecycle_state in ('ready','disabled')"
+             : "lifecycle_state not in ('deleting')"}
            and not exists (select 1 from channel_telegram_lifecycle_operations o where o.channel_id = c.id)`
       ).get(channelId)
       if (!row) return null
       const epoch = purpose === 'mutation'
         ? this.database.connection.prepare(
           `update agent_channels set mutation_epoch = mutation_epoch + 1, updated_at = ?
-           where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
+           where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
         ).run(now, channelId).changes === 1
           ? (this.database.connection.prepare('select mutation_epoch from agent_channels where id = ?').get(channelId) as { mutation_epoch: number }).mutation_epoch
           : null
@@ -705,7 +695,7 @@ export class ChannelManagementRepository {
        from agent_channels c
        join channel_runtime_generations g on g.channel_id = c.id
        join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-       where c.id = ? and ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+       where c.id = ? and ${MANAGED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and g.lifecycle_state = 'active' and o.purpose in ('enable', 'restart') and o.generation = g.generation`
     ).get(channelId) as { generation: number; owner_token: string; purpose: string; owner_generation: number } | undefined
     if (!active) return null
@@ -724,10 +714,10 @@ export class ChannelManagementRepository {
       ).get(channelId, owner.token, owner.purpose)
       if (!current) return null
       if (owner.purpose === 'mutation') return null
-      const states = owner.purpose === 'enable' ? "('configuration-ready', 'disabled')" : "('runtime-ready')"
+      const states = owner.purpose === 'enable' ? "('ready', 'disabled')" : "('enabled')"
       const changed = this.database.connection.prepare(
-        `update agent_channels set requested_enabled = 1, migration_state = 'runtime-ready', updated_at = ?
-         where id = ? and ${SUPPORTED_CHANNEL_SQL} and migration_state in ${states}
+        `update agent_channels set requested_enabled = 1, lifecycle_state = 'enabled', updated_at = ?
+         where id = ? and ${SUPPORTED_CHANNEL_SQL} and lifecycle_state in ${states}
            and credential_ref is not null and credential_revision is not null and credential_health = 'configured'
            and exists (select 1 from agent_entities a where a.id = agent_channels.agent_id)
            and not exists (select 1 from channel_management_operations o where o.channel_id = agent_channels.id
@@ -780,8 +770,8 @@ export class ChannelManagementRepository {
       ).run(channelId, owner.token, owner.purpose, owner.generation).changes
       if (cleared !== 1) return false
       const changed = this.database.connection.prepare(
-        `update agent_channels set requested_enabled=0,migration_state='disabled',updated_at=?
-         where id=? and migration_state='runtime-ready' and requested_enabled=1`
+        `update agent_channels set requested_enabled=0,lifecycle_state='disabled',updated_at=?
+         where id=? and lifecycle_state='enabled' and requested_enabled=1`
       ).run(now, channelId).changes
       if (changed) this.fence(channelId, now)
       return changed === 1
@@ -795,7 +785,7 @@ export class ChannelManagementRepository {
       ).run(channelId, owner.token, owner.purpose).changes
       if (cleared !== 1) return false
       const changed = this.database.connection.prepare(
-        `update agent_channels set requested_enabled=0,migration_state='disabled',updated_at=? where id=? and migration_state not in ('deleting','legacy')`
+        `update agent_channels set requested_enabled=0,lifecycle_state='disabled',updated_at=? where id=? and lifecycle_state not in ('deleting')`
       ).run(now, channelId).changes
       if (changed) this.fence(channelId, now)
       return changed === 1
@@ -811,8 +801,8 @@ export class ChannelManagementRepository {
   disableRuntimeGeneration(channelId: string, generation: number, now: string): boolean {
     return this.database.transact(() => {
       const changed = this.database.connection.prepare(
-        `update agent_channels set requested_enabled=0,migration_state='disabled',updated_at=?
-         where id=? and migration_state='runtime-ready' and requested_enabled=1
+        `update agent_channels set requested_enabled=0,lifecycle_state='disabled',updated_at=?
+         where id=? and lifecycle_state='enabled' and requested_enabled=1
            and exists (select 1 from channel_runtime_generations g where g.channel_id=agent_channels.id and g.generation=? and g.lifecycle_state='active')`
       ).run(now, channelId, generation).changes
       if (changed) {
@@ -838,17 +828,17 @@ export class ChannelManagementRepository {
 
   stopAllRuntimeAndFence(now: string): string[] {
     return this.database.transact(() => {
-      const isolated = this.fenceIsolatedFeishuRuntimes(now)
+      const isolated = this.fenceIsolatedLarkRuntimes(now)
       const isolatedWechat = this.fenceIsolatedWechatRuntimes(now)
       const blockedAdapters = this.fenceBlockedAdapterRuntimes(now)
       const ids = this.database.connection.prepare(
         `select distinct c.id from agent_channels c left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-         where ${MANAGED_CHANNEL_C_SQL} and (o.channel_id is not null or (c.migration_state = 'runtime-ready' and c.requested_enabled = 1))`
+         where ${MANAGED_CHANNEL_C_SQL} and (o.channel_id is not null or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1))`
       ).all().map((row) => (row as { id: string }).id)
       for (const id of ids) {
         this.invalidateLifecycleOwner(id)
         this.database.connection.prepare(
-          `update agent_channels set requested_enabled = 0, migration_state = case when migration_state = 'deleting' then 'deleting' else 'disabled' end, updated_at = ? where id = ?`
+          `update agent_channels set requested_enabled = 0, lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'disabled' end, updated_at = ? where id = ?`
         ).run(now, id)
         this.fence(id, now)
       }
@@ -859,12 +849,12 @@ export class ChannelManagementRepository {
   /** Quit preserves user intent: fence generations and owners, but leave requested_enabled/state. */
   fenceAllForQuit(now: string): string[] {
     return this.database.transact(() => {
-      const isolated = this.fenceIsolatedFeishuRuntimes(now)
+      const isolated = this.fenceIsolatedLarkRuntimes(now)
       const isolatedWechat = this.fenceIsolatedWechatRuntimes(now)
       const blockedAdapters = this.fenceBlockedAdapterRuntimes(now)
       const ids = this.database.connection.prepare(
         `select distinct c.id from agent_channels c left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-         where ${MANAGED_CHANNEL_C_SQL} and (o.channel_id is not null or (c.migration_state = 'runtime-ready' and c.requested_enabled = 1))`
+         where ${MANAGED_CHANNEL_C_SQL} and (o.channel_id is not null or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1))`
       ).all().map((row) => (row as { id: string }).id)
       for (const id of ids) {
         this.invalidateLifecycleOwner(id)
@@ -879,14 +869,14 @@ export class ChannelManagementRepository {
     return (this.database.connection.prepare(
       `select c.id from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
-       where ${MANAGED_CHANNEL_C_SQL} and c.requested_enabled = 1 and c.migration_state = 'runtime-ready'
+       where ${MANAGED_CHANNEL_C_SQL} and c.requested_enabled = 1 and c.lifecycle_state = 'enabled'
          and (g.lifecycle_state is null or g.lifecycle_state <> 'active')`
     ).all() as Array<{ id: string }>).map((row) => row.id)
   }
 
   activeRuntimeOwners(now: string): Array<{ channelId: string; generation: number; token: string }> {
     return this.database.transact(() => {
-      this.fenceIsolatedFeishuRuntimes(now)
+      this.fenceIsolatedLarkRuntimes(now)
       this.fenceIsolatedWechatRuntimes(now)
       this.fenceBlockedAdapterRuntimes(now)
       const rows = this.database.connection.prepare(
@@ -894,7 +884,7 @@ export class ChannelManagementRepository {
        join channel_runtime_generations g on g.channel_id = c.id
        join agent_entities a on a.id = c.agent_id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-       where ${MANAGED_CHANNEL_C_SQL} and c.migration_state = 'runtime-ready' and c.requested_enabled = 1
+       where ${MANAGED_CHANNEL_C_SQL} and c.lifecycle_state = 'enabled' and c.requested_enabled = 1
          and c.credential_health = 'configured' and g.lifecycle_state = 'active'`
       ).all() as Array<{ channel_id: string; generation: number; owner_token: string | null; purpose: string | null; owner_generation: number | null }>
       const owners: Array<{ channelId: string; generation: number; token: string }> = []
@@ -917,8 +907,8 @@ export class ChannelManagementRepository {
   managedCredentialRows(): Array<{ channelId: string; ref: string; revision: number }> {
     return this.database.connection.prepare(
       `select id, credential_ref, credential_revision from agent_channels
-       where ${MANAGED_CHANNEL_SQL} and type <> 'wechat' and credential_ref is not null and credential_revision is not null
-         and migration_state not in ('deleting', 'legacy')`
+       where ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and credential_ref is not null and credential_revision is not null
+         and lifecycle_state not in ('deleting')`
     ).all().map((row) => ({
       channelId: (row as { id: string }).id,
       ref: (row as { credential_ref: string }).credential_ref,
@@ -929,7 +919,7 @@ export class ChannelManagementRepository {
   setCredentialHealth(channelId: string, health: 'configured' | 'missing' | 'unavailable', now: string): void {
     this.database.connection.prepare(
       `update agent_channels set credential_health = ?, updated_at = ?
-       where id = ? and ${MANAGED_CHANNEL_SQL} and migration_state not in ('deleting', 'legacy')`
+       where id = ? and ${MANAGED_CHANNEL_SQL} and lifecycle_state not in ('deleting')`
     ).run(health, now, channelId)
   }
 
@@ -950,7 +940,7 @@ export class ChannelManagementRepository {
          where exists (
            select 1 from channel_conversations c
            join agent_channels ch on ch.id = c.channel_id and ch.agent_id is not null
-             and ${MANAGED_CHANNEL_CH_SQL} and ch.type <> 'wechat' and ch.migration_state not in ('legacy', 'deleting')
+             and ${MANAGED_CHANNEL_CH_SQL} and ch.adapter_key <> 'wechat' and ch.lifecycle_state <> 'deleting'
            where c.id = ? and c.channel_id = ?
          )
          on conflict(channel_id, conversation_id) do update set enabled = excluded.enabled, updated_at = excluded.updated_at`
@@ -976,7 +966,7 @@ export class ChannelManagementRepository {
         ) select ?, ?, ?, ?, ?, ?, ?, ?, ?
           where exists (
             select 1 from agent_channels
-            where id = ? and ${MANAGED_CHANNEL_SQL} and type <> 'wechat' and migration_state not in ('deleting', 'legacy')
+            where id = ? and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and lifecycle_state not in ('deleting')
           )`
       )
       .run(randomUUID(), input.channelId, input.subjectType, input.ciphertext, input.keyRef, input.keyRevision, input.keyHash, input.conversationKind, input.now, input.channelId).changes === 1
@@ -986,7 +976,7 @@ export class ChannelManagementRepository {
     return this.database.connection.prepare(
       `delete from channel_allow_policies where id = ? and channel_id = ? and exists (
          select 1 from agent_channels where id = channel_allow_policies.channel_id
-           and ${MANAGED_CHANNEL_SQL} and type <> 'wechat' and migration_state not in ('deleting', 'legacy')
+           and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat' and lifecycle_state not in ('deleting')
        )`
     ).run(id, channelId).changes === 1
   }
@@ -997,9 +987,9 @@ export class ChannelManagementRepository {
     return this.database.transact(() => {
       const channel = this.database.connection.prepare(
         `update agent_channels set credential_ref = null, credential_revision = null, credential_health = 'missing',
-           requested_enabled = 0, migration_state = case when migration_state = 'deleting' then 'deleting' else 'credential-missing' end,
+           requested_enabled = 0, lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'credential-missing' end,
            migration_error_code = 'channel-credential-unsupported', updated_at = ?
-         where id = ? and type = 'wechat'`
+         where id = ? and adapter_key = 'wechat'`
       ).run(now, operation.channelId).changes
       if (!channel) return false
       this.database.connection.prepare(
@@ -1017,33 +1007,6 @@ export class ChannelManagementRepository {
     })
   }
 
-  private mirrorChannel(id: string): void {
-    this.database.connection.prepare(
-      `insert into agent_channels_next (
-         id, adapter_key, name, agent_id, public_config_json, credential_ref, credential_revision,
-         credential_health, requested_enabled, lifecycle_state, mutation_epoch, migration_error_code,
-         created_at, updated_at
-       )
-       select id, case when type = 'feishu' then 'lark' else type end, name, agent_id,
-         coalesce(public_config_json, '{}'), credential_ref, credential_revision, credential_health,
-         requested_enabled,
-         case migration_state
-           when 'runtime-ready' then 'enabled'
-           when 'configuration-ready' then 'ready'
-           else migration_state
-         end,
-         mutation_epoch, migration_error_code, created_at, updated_at
-       from agent_channels where id = ?
-       on conflict(id) do update set
-         adapter_key = excluded.adapter_key, name = excluded.name, agent_id = excluded.agent_id,
-         public_config_json = excluded.public_config_json, credential_ref = excluded.credential_ref,
-         credential_revision = excluded.credential_revision, credential_health = excluded.credential_health,
-         requested_enabled = excluded.requested_enabled, lifecycle_state = excluded.lifecycle_state,
-         mutation_epoch = excluded.mutation_epoch, migration_error_code = excluded.migration_error_code,
-         created_at = excluded.created_at, updated_at = excluded.updated_at`
-    ).run(id)
-  }
-
   private fence(channelId: string, now: string): void {
     const prior = this.database.connection
       .prepare(`select generation from channel_runtime_generations where channel_id = ?`)
@@ -1055,46 +1018,41 @@ export class ChannelManagementRepository {
          on conflict(channel_id) do update set generation = excluded.generation, lifecycle_state = 'inactive', updated_at = excluded.updated_at`
       )
       .run(channelId, (prior?.generation ?? 0) + 1, now)
-    this.mirrorChannel(channelId)
   }
 
   /** Never leave a historic `feishu` row runnable just because it is outside the Lark management view. */
-  private fenceIsolatedFeishuRuntimes(now: string): string[] {
+  private fenceIsolatedLarkRuntimes(now: string): string[] {
     const ids = this.database.connection.prepare(
       `select distinct c.id from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
-       where ${ISOLATED_FEISHU_C_SQL} and (
-         o.channel_id is not null or g.lifecycle_state = 'active' or (c.migration_state = 'runtime-ready' and c.requested_enabled = 1)
+       where ${ISOLATED_LARK_C_SQL} and (
+         o.channel_id is not null or g.lifecycle_state = 'active' or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1)
        )`
     ).all().map((row) => (row as { id: string }).id)
     for (const id of ids) {
       this.invalidateLifecycleOwner(id)
       this.database.connection.prepare(
-        `update agent_channels set requested_enabled = 0,
-           migration_state = case when migration_state = 'deleting' then 'deleting' else 'disabled' end,
-           updated_at = ? where id = ?`
+        `update agent_channels set requested_enabled = 0, lifecycle_state = 'disabled', updated_at = ? where id = ?`
       ).run(now, id)
       this.fence(id, now)
     }
     return ids
   }
-
-  /** A legacy or malformed WeChat storage row must never remain runnable beside the strict QR carrier. */
   private fenceIsolatedWechatRuntimes(now: string): string[] {
     const ids = this.database.connection.prepare(
       `select distinct c.id from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
        where ${ISOLATED_WECHAT_C_SQL} and (
-         o.channel_id is not null or g.lifecycle_state = 'active' or (c.migration_state = 'runtime-ready' and c.requested_enabled = 1)
+         o.channel_id is not null or g.lifecycle_state = 'active' or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1)
        )`
     ).all().map((row) => (row as { id: string }).id)
     for (const id of ids) {
       this.invalidateLifecycleOwner(id)
       this.database.connection.prepare(
         `update agent_channels set requested_enabled = 0,
-           migration_state = case when migration_state = 'deleting' then 'deleting' else 'disabled' end,
+           lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'disabled' end,
            updated_at = ? where id = ?`
       ).run(now, id)
       this.fence(id, now)
@@ -1109,14 +1067,14 @@ export class ChannelManagementRepository {
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_telegram_lifecycle_operations o on o.channel_id = c.id
        where ${BLOCKED_RUNTIME_C_SQL} and (
-         o.channel_id is not null or g.lifecycle_state = 'active' or (c.migration_state = 'runtime-ready' and c.requested_enabled = 1)
+         o.channel_id is not null or g.lifecycle_state = 'active' or (c.lifecycle_state = 'enabled' and c.requested_enabled = 1)
        )`
     ).all().map((row) => (row as { id: string }).id)
     for (const id of ids) {
       this.invalidateLifecycleOwner(id)
       this.database.connection.prepare(
         `update agent_channels set requested_enabled = 0,
-           migration_state = case when migration_state = 'deleting' then 'deleting' else 'disabled' end,
+           lifecycle_state = case when lifecycle_state = 'deleting' then 'deleting' else 'disabled' end,
            updated_at = ? where id = ?`
       ).run(now, id)
       this.fence(id, now)

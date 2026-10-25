@@ -14,7 +14,7 @@ export class LarkRuntimeRepository {
     if (!eventHash || eventHash.length > 512) return false
     return this.database.transact(() => {
       const current = this.database.connection.prepare(
-        `select 1 from channel_runtime_generations g join agent_channels_next c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
+        `select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
            and c.lifecycle_state='enabled' and c.requested_enabled=1`
       ).get(channelId, generation)
@@ -29,7 +29,7 @@ export class LarkRuntimeRepository {
   auditIfCurrent(channelId: string, generation: number, code: string, now = new Date()): boolean {
     return this.database.connection.prepare(
       `insert into channel_lark_runtime_audits(id,channel_id,code,created_at) select ?,?,?,?
-       where exists (select 1 from channel_runtime_generations g join agent_channels_next c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
+       where exists (select 1 from channel_runtime_generations g join agent_channels c on c.id=g.channel_id join agent_entities a on a.id=c.agent_id
          where g.channel_id=? and g.generation=? and g.lifecycle_state='active' and ${LARK_CHANNEL_C_SQL} and ${RUNTIME_CHANNEL_C_SQL}
            and c.lifecycle_state='enabled' and c.requested_enabled=1)`
     ).run(randomUUID(), channelId, code, now.toISOString(), channelId, generation).changes === 1

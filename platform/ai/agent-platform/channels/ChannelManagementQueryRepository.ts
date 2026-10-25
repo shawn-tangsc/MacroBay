@@ -33,8 +33,8 @@ export class ChannelManagementQueryRepository {
   get(id: string): ChannelManagementSafeView | null {
     const row = this.database.connection.prepare(
       `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, created_at, updated_at
-       from agent_channels_next where id = ? and ${MANAGED_CHANNEL_SQL} 
-         and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels_next.id)`
+       from agent_channels where id = ? and ${MANAGED_CHANNEL_SQL} 
+         and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)`
     ).get(id) as ChannelRow | undefined
     return row ? toSafeView(row) : null
   }
@@ -42,8 +42,8 @@ export class ChannelManagementQueryRepository {
   list(): ChannelManagementSafeView[] {
     return (this.database.connection.prepare(
       `select id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type, name, agent_id, credential_revision, credential_health, requested_enabled, lifecycle_state as migration_state, created_at, updated_at
-       from agent_channels_next where ${MANAGED_CHANNEL_SQL} 
-         and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels_next.id)
+       from agent_channels where ${MANAGED_CHANNEL_SQL} 
+         and not exists (select 1 from channel_management_tombstones where channel_id = agent_channels.id)
        order by updated_at desc, id asc`
     ).all() as ChannelRow[]).map(toSafeView)
   }
@@ -83,7 +83,7 @@ export class ChannelManagementQueryRepository {
     const rows = this.database.connection.prepare(
       `select c.id, case when c.adapter_key = 'lark' then 'feishu' else c.adapter_key end as type, c.agent_id, c.requested_enabled, c.lifecycle_state as migration_state,
               g.generation, g.lifecycle_state, v.agent_session_id
-       from agent_channels_next c
+       from agent_channels c
        left join channel_runtime_generations g on g.channel_id = c.id
        left join channel_conversations v on v.channel_id = c.id
        where ${MANAGED_CHANNEL_SQL}
@@ -115,7 +115,7 @@ export class ChannelManagementQueryRepository {
     return (this.database.connection.prepare(
       `select id, source_type, status, stable_error_code, created_at, updated_at, completed_at
        from channel_delivery_attempts where channel_id = ? and exists (
-         select 1 from agent_channels_next where id = channel_delivery_attempts.channel_id
+         select 1 from agent_channels where id = channel_delivery_attempts.channel_id
            and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by created_at desc, id desc limit ? offset ?`
     ).all(channelId, limit, offset) as Array<{
@@ -131,7 +131,7 @@ export class ChannelManagementQueryRepository {
     return (this.database.connection.prepare(
       `select id, attempt_id, code, created_at from channel_delivery_audits
        where channel_id = ? and exists (
-         select 1 from agent_channels_next where id = channel_delivery_audits.channel_id
+         select 1 from agent_channels where id = channel_delivery_audits.channel_id
            and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by created_at desc, id desc limit ? offset ?`
     ).all(channelId, limit, offset) as Array<{ id: string; attempt_id: string | null; code: string; created_at: string }>).map((row) => ({
@@ -144,7 +144,7 @@ export class ChannelManagementQueryRepository {
       `select c.id, c.conversation_kind, c.agent_session_id, c.created_at, coalesce(t.enabled, 0) as target_enabled
        from channel_conversations c left join channel_delivery_targets t on t.conversation_id = c.id and t.channel_id = c.channel_id
        where c.channel_id = ? and exists (
-         select 1 from agent_channels_next where id = c.channel_id and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
+         select 1 from agent_channels where id = c.channel_id and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by c.created_at desc, c.id desc limit ?`
     ).all(channelId, limit) as Array<{
       id: string; conversation_kind: ChannelConversationSafeView['kind']; agent_session_id: string | null; target_enabled: number; created_at: string
@@ -157,7 +157,7 @@ export class ChannelManagementQueryRepository {
     return (this.database.connection.prepare(
       `select id, subject_type, conversation_kind, created_at from channel_allow_policies
        where channel_id = ? and exists (
-         select 1 from agent_channels_next where id = channel_allow_policies.channel_id
+         select 1 from agent_channels where id = channel_allow_policies.channel_id
            and ${MANAGED_CHANNEL_SQL} and adapter_key <> 'wechat'
        ) order by created_at desc, id desc limit ?`
     ).all(channelId, limit) as Array<{

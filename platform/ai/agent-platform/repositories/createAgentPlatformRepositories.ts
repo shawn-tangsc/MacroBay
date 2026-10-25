@@ -1669,10 +1669,13 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
       return db
         .prepare(
           `select
-             id, type, name, agent_id, session_id, workspace_json, config_json, is_active, active_chat_ids_json,
-             permission_mode, created_at, updated_at
+             id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type,
+             name, agent_id, null as session_id, '{"type":"system"}' as workspace_json,
+             public_config_json as config_json,
+             case when lifecycle_state = 'enabled' then 1 else 0 end as is_active,
+             null as active_chat_ids_json, null as permission_mode, created_at, updated_at
            from agent_channels
-           where migration_state = 'runtime-ready'
+           where lifecycle_state = 'enabled'
            order by updated_at desc, id asc`
         )
         .all()
@@ -1686,16 +1689,19 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         params.push(query.agentId)
       }
       if (query.type !== undefined) {
-        where.push('type = ?')
-        params.push(query.type)
+        where.push('adapter_key = ?')
+        params.push(query.type === 'feishu' ? 'lark' : query.type)
       }
       return db
         .prepare(
           `select
-             id, type, name, agent_id, session_id, workspace_json, config_json, is_active, active_chat_ids_json,
-             permission_mode, created_at, updated_at
+             id, case when adapter_key = 'lark' then 'feishu' else adapter_key end as type,
+             name, agent_id, null as session_id, '{"type":"system"}' as workspace_json,
+             public_config_json as config_json,
+             case when lifecycle_state = 'enabled' then 1 else 0 end as is_active,
+             null as active_chat_ids_json, null as permission_mode, created_at, updated_at
            from agent_channels
-           ${where.length > 0 ? `where ${where.join(' and ')} and migration_state = 'runtime-ready'` : "where migration_state = 'runtime-ready'"}
+           ${where.length > 0 ? `where ${where.join(' and ')} and lifecycle_state = 'enabled'` : "where lifecycle_state = 'enabled'"}
            order by updated_at desc, id asc`
         )
         .all(...params)
@@ -1705,11 +1711,15 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
       const row = db
         .prepare(
           `select
-             id, type, name, agent_id, session_id, workspace_json, config_json, is_active, active_chat_ids_json,
-             permission_mode, created_at, updated_at
-           from agent_channels
-           where session_id = ? and migration_state = 'runtime-ready'
-           order by updated_at desc, id asc
+             c.id, case when c.adapter_key = 'lark' then 'feishu' else c.adapter_key end as type,
+             c.name, c.agent_id, null as session_id, '{"type":"system"}' as workspace_json,
+             c.public_config_json as config_json,
+             case when c.lifecycle_state = 'enabled' then 1 else 0 end as is_active,
+             null as active_chat_ids_json, null as permission_mode, c.created_at, c.updated_at
+           from agent_channels c
+           join channel_conversations v on v.channel_id = c.id
+           where v.agent_session_id = ? and c.lifecycle_state = 'enabled'
+           order by c.updated_at desc, c.id asc
            limit 1`
         )
         .get(sessionId) as ChannelRow | undefined

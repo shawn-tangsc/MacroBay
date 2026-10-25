@@ -60,6 +60,11 @@ export function wechatChannelSql(alias = ''): string {
 }
 
 /** Historic token_path and malformed WeChat rows are permanently isolated from the new QR carrier. */
+export function isolatedLarkSql(alias = ''): string {
+  const column = (name: string) => alias ? `${alias}.${name}` : name
+  return `(${column('adapter_key')}='lark' and ${column('public_config_json')} <> '${LARK_PUBLIC_CONFIG_JSON}')`
+}
+
 export function isolatedWechatSql(alias = ''): string {
   const column = (name: string) => alias ? `${alias}.${name}` : name
   return `(${column('adapter_key')}='wechat' and ${column('public_config_json')} is not '{}')`

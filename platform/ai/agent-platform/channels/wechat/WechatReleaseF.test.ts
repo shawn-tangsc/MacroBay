@@ -42,7 +42,7 @@ describe('WeChat Release F safety foundation', () => {
     expect(handoff.begin).not.toHaveBeenCalled(); expect(handoff.consume).not.toHaveBeenCalled()
     expect(cipher.encrypt).not.toHaveBeenCalled(); expect(cipher.keyedHash).not.toHaveBeenCalled()
     expect(vault.inspectSafe).not.toHaveBeenCalled(); expect(vault.prepareMigration).not.toHaveBeenCalled()
-    expect(database.connection.prepare("select requested_enabled,migration_state,credential_ref from agent_channels where id='wechat-a'").get()).toEqual({ requested_enabled: 0, migration_state: 'credential-missing', credential_ref: null })
+    expect(database.connection.prepare("select requested_enabled,lifecycle_state,credential_ref from agent_channels where id='wechat-a'").get()).toEqual({ requested_enabled: 0, lifecycle_state: 'credential-missing', credential_ref: null })
     expect(database.connection.prepare("select count(*) as count from channel_telegram_lifecycle_operations where channel_id='wechat-a'").get()).toEqual({ count: 0 })
     expect(database.connection.prepare("select count(*) as count from channel_allow_policies where channel_id='wechat-a'").get()).toEqual({ count: 0 })
     expect(repository.createPolicy({ channelId: 'wechat-a', subjectType: 'user', ciphertext: new Uint8Array([1]), keyRef: 'payload-ref', keyRevision: 1, keyHash: 'hash', conversationKind: null, now: 'now' })).toBe(false)
@@ -109,7 +109,7 @@ describe('WeChat Release F safety foundation', () => {
 
   it('keeps QR enrollment one-time, bounded, opaque, and terminal after expiry or cancellation', () => {
     const database = createDatabase(); new ChannelManagementRepository(database).create({ id: 'wechat-a', type: 'wechat', name: 'WeChat', agentId: 'agent-a', now: '2026-07-21T00:00:00.000Z' })
-    database.connection.prepare("update agent_channels set migration_state='configuration-ready' where id='wechat-a'").run()
+    database.connection.prepare("update agent_channels set lifecycle_state='ready' where id='wechat-a'").run()
     const enrollments = new WechatEnrollmentRepository(database)
     const first = enrollments.begin('wechat-a', 1_000, new Date('2026-07-21T00:00:00.000Z'))!
     const second = enrollments.begin('wechat-a', 1_000, new Date('2026-07-21T00:00:00.100Z'))!
@@ -166,10 +166,10 @@ describe('WeChat Release F safety foundation', () => {
   it.each(['{"token_path":"/legacy"}', '{"unexpected":true}'])('startup and quit fence isolated WeChat rows without touching files or Vault: %s', (publicConfig) => {
     const database = createDatabase()
     database.connection.exec(`
-      insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at)
-        values('legacy-wechat','wechat','Legacy','agent-a','${publicConfig}',1,'runtime-ready','configured','now','now'),
-        ('wechat-new','wechat','New','agent-a','{}',1,'runtime-ready','configured','now','now'),
-        ('telegram-a','telegram','Telegram','agent-a','{}',1,'runtime-ready','configured','now','now');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at)
+        values('legacy-wechat','wechat','Legacy','agent-a','${publicConfig}',1,'enabled','configured','now','now'),
+        ('wechat-new','wechat','New','agent-a','{}',1,'enabled','configured','now','now'),
+        ('telegram-a','telegram','Telegram','agent-a','{}',1,'enabled','configured','now','now');
       insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at)
         values('legacy-wechat',1,'active','now'),('wechat-new',1,'active','now'),('telegram-a',1,'active','now');
       insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at)
@@ -193,25 +193,25 @@ describe('WeChat Release F safety foundation', () => {
     ])
     expect(repository.activeRuntimeOwners('2026-07-21T00:00:00.000Z')).toEqual([{ channelId: 'telegram-a', generation: 1, token: 'telegram-owner' }])
     for (const channelId of ['legacy-wechat', 'wechat-new']) {
-      expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get(channelId)).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+      expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get(channelId)).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
       expect(database.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get(channelId)).toEqual({ generation: 2, lifecycle_state: 'inactive' })
       expect(database.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id=?').get(channelId)).toEqual({ count: 0 })
     }
     expect(repository.stopAllRuntimeAndFence('2026-07-21T00:01:00.000Z')).toContain('telegram-a')
-    expect(database.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get('telegram-a')).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(database.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('telegram-a')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
 
     const quitDatabase = createDatabase(); seedIsolatedWechat(quitDatabase, publicConfig)
     const quitRepository = new ChannelManagementRepository(quitDatabase)
     expect(quitRepository.stopAllRuntimeAndFence('2026-07-21T00:00:00.000Z')).toEqual(['legacy-wechat'])
-    expect(quitDatabase.connection.prepare('select requested_enabled,migration_state from agent_channels where id=?').get('legacy-wechat')).toEqual({ requested_enabled: 0, migration_state: 'disabled' })
+    expect(quitDatabase.connection.prepare('select requested_enabled,lifecycle_state from agent_channels where id=?').get('legacy-wechat')).toEqual({ requested_enabled: 0, lifecycle_state: 'disabled' })
     expect(quitDatabase.connection.prepare('select generation,lifecycle_state from channel_runtime_generations where channel_id=?').get('legacy-wechat')).toEqual({ generation: 2, lifecycle_state: 'inactive' })
     expect(quitDatabase.connection.prepare('select count(*) as count from channel_telegram_lifecycle_operations where channel_id=?').get('legacy-wechat')).toEqual({ count: 0 })
   })
 
-  it.each(['legacy', 'quarantined', 'deleting'])('does not expose or mutate strict carrier QR journals in %s state', (migrationState) => {
+  it.each(['disabled', 'deleting'])('does not expose or mutate strict carrier QR journals in %s state', (migrationState) => {
     const database = createDatabase()
     database.connection.exec(`
-      insert into agent_channels(id,type,name,agent_id,public_config_json,migration_state,created_at,updated_at)
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,lifecycle_state,created_at,updated_at)
         values('wechat-isolated','wechat','WeChat','agent-a','{}','${migrationState}','now','now');
       insert into channel_wechat_qr_enrollments(operation_id,channel_id,state,expires_at,updated_at) values
         ('pending','wechat-isolated','pending','2026-07-01','2026-07-01'),
@@ -232,8 +232,8 @@ describe('WeChat Release F safety foundation', () => {
     const database = createDatabase()
     database.connection.exec(`
       insert into channel_management_tombstones(channel_id,deleted_at) values('wechat-tombstone','now');
-      insert into agent_channels(id,type,name,agent_id,public_config_json,migration_state,created_at,updated_at)
-        values('wechat-tombstone','wechat','WeChat','agent-a','{}','configuration-ready','now','now');
+      insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,lifecycle_state,created_at,updated_at)
+        values('wechat-tombstone','wechat','WeChat','agent-a','{}','ready','now','now');
       insert into channel_wechat_qr_enrollments(operation_id,channel_id,state,expires_at,updated_at) values
         ('pending','wechat-tombstone','pending','2026-07-01','2026-07-01'),
         ('terminal','wechat-tombstone','cancelled','2026-07-01','2026-07-01');
@@ -250,7 +250,7 @@ describe('WeChat Release F safety foundation', () => {
     const database = createDatabase(); const repository = new ChannelManagementRepository(database)
     expect(repository.create({ id: 'wechat-delete', type: 'wechat', name: 'WeChat', agentId: 'agent-a', now: 'now' })).toBe(true)
     database.connection.exec(`
-      update agent_channels set credential_ref='forged-provider-ref',credential_revision=9,credential_health='configured',migration_state='configuration-ready' where id='wechat-delete';
+      update agent_channels set credential_ref='forged-provider-ref',credential_revision=9,credential_health='configured',lifecycle_state='ready' where id='wechat-delete';
       insert into channel_management_operations(id,channel_id,purpose,credential_ref,source_fingerprint,fingerprint_key_id,operation_permit,state,created_at,updated_at) values
         ('forged-provision','wechat-delete','provision','forged-reserved','fingerprint','key','permit','needs-recovery','now','now'),
         ('forged-rotate','wechat-delete','rotate','forged-provider-ref',null,null,null,'revoked-cleanup','now','now');
@@ -274,7 +274,7 @@ describe('WeChat Release F safety foundation', () => {
     const database = createDatabase(); const repository = new ChannelManagementRepository(database)
     expect(repository.create({ id: 'wechat-journal', type: 'wechat', name: 'WeChat', agentId: 'agent-a', now: 'now' })).toBe(true)
     database.connection.exec(`
-      update agent_channels set credential_ref='forged-provider-ref',credential_revision=9,credential_health='configured',migration_state='configuration-ready' where id='wechat-journal';
+      update agent_channels set credential_ref='forged-provider-ref',credential_revision=9,credential_health='configured',lifecycle_state='ready' where id='wechat-journal';
       insert into channel_management_operations(id,channel_id,purpose,credential_ref,source_fingerprint,fingerprint_key_id,operation_permit,state,created_at,updated_at)
         values('forged-provision','wechat-journal','provision','forged-reserved','fingerprint','key','permit','needs-recovery','now','now');
     `)
@@ -314,5 +314,5 @@ describe('WeChat Release F safety foundation', () => {
 
 function createDatabase() { const value = createAgentPlatformDatabase(':memory:'); value.connection.exec("insert into agent_entities(id,type,name,mcps_json,disabled_tools_json,order_key,created_at,updated_at) values('agent-a','custom','Agent','[]','[]','a','now','now')"); return value }
 function management(database: ReturnType<typeof createAgentPlatformDatabase>) { return new ChannelManagementService({ repository: new ChannelManagementRepository(database), vault: {} as never, cipher: {} as never, registry: new ChannelAdapterAcceptanceRegistry(), handoff: new ChannelSecureHandoff() }) }
-function seedActiveWechat(database: ReturnType<typeof createAgentPlatformDatabase>) { database.connection.exec("insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('wechat-a','wechat','WeChat','agent-a','{}',1,'runtime-ready','configured','now','now'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('wechat-a',1,'active','now')") }
-function seedIsolatedWechat(database: ReturnType<typeof createAgentPlatformDatabase>, publicConfig: string) { database.connection.exec(`insert into agent_channels(id,type,name,agent_id,public_config_json,requested_enabled,migration_state,credential_health,created_at,updated_at) values('legacy-wechat','wechat','Legacy','agent-a','${publicConfig}',1,'runtime-ready','configured','now','now'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('legacy-wechat',1,'active','now'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('legacy-wechat','legacy-owner','enable',1,'now','now')`) }
+function seedActiveWechat(database: ReturnType<typeof createAgentPlatformDatabase>) { database.connection.exec("insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('wechat-a','wechat','WeChat','agent-a','{}',1,'enabled','configured','now','now'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('wechat-a',1,'active','now')") }
+function seedIsolatedWechat(database: ReturnType<typeof createAgentPlatformDatabase>, publicConfig: string) { database.connection.exec(`insert into agent_channels(id,adapter_key,name,agent_id,public_config_json,requested_enabled,lifecycle_state,credential_health,created_at,updated_at) values('legacy-wechat','wechat','Legacy','agent-a','${publicConfig}',1,'enabled','configured','now','now'); insert into channel_runtime_generations(channel_id,generation,lifecycle_state,updated_at) values('legacy-wechat',1,'active','now'); insert into channel_telegram_lifecycle_operations(channel_id,owner_token,purpose,generation,created_at,updated_at) values('legacy-wechat','legacy-owner','enable',1,'now','now')`) }
