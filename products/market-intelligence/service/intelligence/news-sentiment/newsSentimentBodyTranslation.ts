@@ -13,7 +13,7 @@ const CHUNK_CHARS = 2_000
 const MIN_BODY_CHARS = 200
 
 export type BodyTranslationResult =
-  | { state: 'translated'; body: string; cached: boolean }
+  | { state: 'translated'; body: string; title?: string; cached: boolean }
   | { state: 'off' | 'unavailable' | 'failed'; errorCode?: string }
 
 export type NewsSentimentBodyTranslation = ReturnType<typeof createNewsSentimentBodyTranslationService>
@@ -24,6 +24,7 @@ export function createNewsSentimentBodyTranslationService(deps: {
   readSettings: () => Promise<{ settings: IntelligenceTranslationSettings; targetLocale: IntelligenceTranslationTargetLocale }>
   getProviderState?: () => Promise<ProviderState>
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
+  getTitle?: (itemId: string) => string | undefined
   now: () => string
 }) {
   function bodyHash(body: string): string {
@@ -64,7 +65,7 @@ export function createNewsSentimentBodyTranslationService(deps: {
       if (!body || body.length < MIN_BODY_CHARS) return { state: 'unavailable' }
       const hash = bodyHash(body)
       const existing = deps.store.getBodyTranslation(itemId)
-      if (!options.force && existing?.state === 'translated' && existing.bodyHash === hash && existing.targetLocale === targetLocale && existing.bodyText) {
+      if (!options.force && existing?.state === 'translated' && existing.bodyHash === hash && existing.targetLocale === targetLocale && existing.bodyText && existing.titleText) {
         return { state: 'translated', body: existing.bodyText, cached: true }
       }
 
@@ -78,6 +79,7 @@ export function createNewsSentimentBodyTranslationService(deps: {
         return { state: 'failed', errorCode: 'model-unavailable' }
       }
 
+      const title = await translateTitle(deps.invoke, model.providerId, model.modelId, itemId, deps.getTitle?.(itemId), targetLocale)
       const chunks = splitBody(body)
       const translated: string[] = []
       for (const [index, chunk] of chunks.entries()) {
@@ -102,12 +104,37 @@ export function createNewsSentimentBodyTranslationService(deps: {
       }
       const bodyText = translated.join('\n\n')
       deps.store.upsertBodyTranslation({
-        itemId, bodyHash: hash, targetLocale, state: 'translated', bodyText,
+        itemId, bodyHash: hash, targetLocale, state: 'translated', ...(title ? { titleText: title } : {}), bodyText,
         providerId: model.providerId, modelId: model.modelId, translatedAt: deps.now()
       })
-      return { state: 'translated', body: bodyText, cached: false }
+      return { state: 'translated', body: bodyText, ...(title ? { title } : {}), cached: false }
     }
   }
+}
+
+
+async function translateTitle(
+  invoke: StructuredModelInvocationService['invoke'],
+  providerId: string,
+  modelId: string,
+  itemId: string,
+  title: string | undefined,
+  targetLocale: string
+): Promise<string | undefined> {
+  if (!title) return undefined
+  const result = await invoke({
+    taskId: `market-intelligence.body-translation:${itemId}:title`,
+    providerId,
+    modelId,
+    messages: [
+      { role: 'system', content: `Translate this news headline into ${targetLocale}. Preserve names, tickers, numbers and dates. Return JSON only with key title.` },
+      { role: 'user', content: JSON.stringify({ title }) }
+    ],
+    parse: (value: unknown) => ({
+      title: typeof (value as Record<string, unknown>)?.title === 'string' ? String((value as Record<string, unknown>).title) : ''
+    })
+  })
+  return result.ok && result.output.title ? result.output.title : undefined
 }
 
 function splitBody(body: string): string[] {

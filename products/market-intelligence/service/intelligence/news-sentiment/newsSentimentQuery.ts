@@ -111,10 +111,14 @@ export function createNewsSentimentQuery(deps: {
 
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
-        const items = visible.map((row) => ({
-          ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
-          bodyTranslationState: deps.bodyTranslation?.status?.(row.itemId) ?? 'missing'
-        }))
+        const items = visible.map((row) => {
+          const translatedTitle = deps.bodyTranslation?.get(row.itemId)?.titleText
+          return {
+            ...toItemView(row, itemsById.get(row.itemId), translations[row.itemId]),
+            ...(translatedTitle ? { displayTitle: translatedTitle } : {}),
+            bodyTranslationState: deps.bodyTranslation?.status?.(row.itemId) ?? 'missing'
+          }
+        })
         const aggregate = aggregateView(visible, itemsById, input, asOf)
         const caveats = [...new Set(visible.flatMap((row) => row.caveats))]
 
@@ -155,8 +159,10 @@ export function createNewsSentimentQuery(deps: {
       const translations = await readTranslations(deps.translation, [input.itemId])
       const document = deps.store.getDocument(input.itemId)
       const translatedBody = deps.bodyTranslation?.get(input.itemId)?.bodyText
+      const bodyTitle = translatedBody ? deps.bodyTranslation?.get(input.itemId)?.titleText : undefined
       return {
         ...toItemView(row, item, translations[input.itemId]),
+        ...(bodyTitle ? { displayTitle: bodyTitle } : {}),
         ...(document?.state === 'available' && document.bodyText
           ? { bodyExcerpt: document.bodyText.slice(0, 8_000) }
           : {}),

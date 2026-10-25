@@ -485,6 +485,7 @@ export function getIntelligenceModule(
           },
           getProviderState: hooks?.getProviderState,
           getModelDefaults: hooks?.getModelDefaults,
+          getTitle: (itemId) => pipeline.listItems().find((item) => item.itemId === itemId)?.title,
           now: () => new Date().toISOString()
         })
       : undefined

@@ -67,6 +67,7 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       body_hash text not null,
       target_locale text not null,
       state text not null check (state in ('translated','failed')),
+      title_text text,
       body_text text,
       provider_id text,
       model_id text,
@@ -74,6 +75,7 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       translated_at text not null
     );
   `)
+  try { db.exec('alter table news_body_translation add column title_text text') } catch { /* already migrated */ }
   db.exec(`pragma user_version = ${newsSentimentStoragePolicy.schemaVersion}`)
 
   return {
@@ -110,13 +112,13 @@ export function createNewsSentimentSqliteStore(filePath: string) {
 
     upsertBodyTranslation(record: NewsBodyTranslationRecord): void {
       db.prepare(`
-        insert into news_body_translation (item_id, body_hash, target_locale, state, body_text, provider_id, model_id, error_code, translated_at)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        insert into news_body_translation (item_id, body_hash, target_locale, state, title_text, body_text, provider_id, model_id, error_code, translated_at)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(item_id) do update set
           body_hash=excluded.body_hash, target_locale=excluded.target_locale, state=excluded.state,
-          body_text=excluded.body_text, provider_id=excluded.provider_id, model_id=excluded.model_id,
+          title_text=excluded.title_text, body_text=excluded.body_text, provider_id=excluded.provider_id, model_id=excluded.model_id,
           error_code=excluded.error_code, translated_at=excluded.translated_at
-      `).run(record.itemId, record.bodyHash, record.targetLocale, record.state, record.bodyText ?? null, record.providerId ?? null, record.modelId ?? null, record.errorCode ?? null, record.translatedAt)
+      `).run(record.itemId, record.bodyHash, record.targetLocale, record.state, record.titleText ?? null, record.bodyText ?? null, record.providerId ?? null, record.modelId ?? null, record.errorCode ?? null, record.translatedAt)
     },
 
     getDocument(itemId: string): NewsDocumentRecord | undefined {
@@ -227,6 +229,7 @@ function toDocument(row: Record<string, unknown>): NewsDocumentRecord {
     sourceId: String(row.source_id),
     url: String(row.url),
     fetchedAt: String(row.fetched_at),
+    ...(row.title_text == null ? {} : { titleText: String(row.title_text) }),
     ...(row.body_text == null ? {} : { bodyText: String(row.body_text) }),
     bodyChars: Number(row.body_chars),
     state: String(row.state) as NewsDocumentRecord['state'],
@@ -240,6 +243,7 @@ function toBodyTranslation(row: Record<string, unknown>): NewsBodyTranslationRec
     bodyHash: String(row.body_hash),
     targetLocale: String(row.target_locale),
     state: String(row.state) as NewsBodyTranslationRecord['state'],
+    ...(row.title_text == null ? {} : { titleText: String(row.title_text) }),
     ...(row.body_text == null ? {} : { bodyText: String(row.body_text) }),
     ...(row.provider_id == null ? {} : { providerId: String(row.provider_id) }),
     ...(row.model_id == null ? {} : { modelId: String(row.model_id) }),

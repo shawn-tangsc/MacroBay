@@ -19,6 +19,7 @@ export type NewsBodyTranslationRecord = {
   bodyHash: string
   targetLocale: string
   state: NewsBodyTranslationState
+  titleText?: string
   bodyText?: string
   providerId?: string
   modelId?: string

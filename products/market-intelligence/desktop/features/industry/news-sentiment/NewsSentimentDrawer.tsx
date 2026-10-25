@@ -4,7 +4,6 @@ import { Drawer, Select } from 'antd'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
-import { intelligenceTranslationClient } from '../../../shared/ipc/intelligenceTranslationClient'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
@@ -43,6 +42,7 @@ export function NewsSentimentDrawer(props: {
   const [detailFailed, setDetailFailed] = useState(false)
   const [translationStates, setTranslationStates] = useState<Record<string, 'waiting' | 'translating' | 'translated' | 'failed'>>({})
   const [translatedBodies, setTranslatedBodies] = useState<Record<string, string>>({})
+  const [translatedTitles, setTranslatedTitles] = useState<Record<string, string>>({})
   const [translatingAll, setTranslatingAll] = useState(false)
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
@@ -63,7 +63,6 @@ export function NewsSentimentDrawer(props: {
     const row = (view?.items ?? []).find((entry) => entry.itemId === itemId)
     if (!force && (row?.bodyTranslationState === 'translated' || translatedBodies[itemId])) return
     setTranslationStates((current) => ({ ...current, [itemId]: 'translating' }))
-    if (!force) void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: [itemId] }).catch(() => undefined)
     const clientTranslate = typeof props.client.translateBody === 'function'
       ? props.client.translateBody
       : (id: string, retranslate?: boolean) => {
@@ -75,6 +74,7 @@ export function NewsSentimentDrawer(props: {
       const result = await clientTranslate(itemId, force)
       if (result.state === 'translated' && result.body) {
         setTranslatedBodies((current) => ({ ...current, [itemId]: result.body! }))
+        if (result.title) setTranslatedTitles((current) => ({ ...current, [itemId]: result.title! }))
         setTranslationStates((current) => ({ ...current, [itemId]: 'translated' }))
         window.setTimeout(() => props.onRefresh(), 800)
       } else {
@@ -90,7 +90,6 @@ export function NewsSentimentDrawer(props: {
     if (pending.length === 0) return
     const runId = runIdRef.current + 1
     runIdRef.current = runId
-    void intelligenceTranslationClient.queueMissing({ reason: 'manual-selection', itemIds: pending.map((row) => row.itemId) }).catch(() => undefined)
     setTranslatingAll(true)
     setTranslationStates((current) => {
       const next = { ...current }
@@ -342,7 +341,7 @@ export function NewsSentimentDrawer(props: {
                     {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
                   </span>
                 </span>
-                <span className="mi-news-drawer__title">{row.displayTitle ?? row.title}</span>
+                <span className="mi-news-drawer__title">{translatedTitles[row.itemId] ?? row.displayTitle ?? row.title}</span>
               </button>
               )
             })}
@@ -352,8 +351,8 @@ export function NewsSentimentDrawer(props: {
           <aside className="mi-news-drawer__detail" aria-label={text.drawer.title}>
             {active ? (
               <>
-                <h3>{active.displayTitle ?? active.title}</h3>
-                {active.displayTitle ? <p className="mi-news-drawer__original">{active.title}</p> : null}
+                <h3>{translatedTitles[active.itemId] ?? active.displayTitle ?? active.title}</h3>
+                {(translatedTitles[active.itemId] ?? active.displayTitle) ? <p className="mi-news-drawer__original">{active.title}</p> : null}
                 <div className="mi-news-drawer__meta">
                   <span>{active.sourceName}</span>
                   <time>{formatTime(active.publishedAt, 'minute')}</time>
