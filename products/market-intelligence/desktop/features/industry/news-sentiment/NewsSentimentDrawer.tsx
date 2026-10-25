@@ -6,6 +6,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import { intelligenceTranslationClient } from '../../../shared/ipc/intelligenceTranslationClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 
 function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
@@ -38,7 +39,7 @@ export function NewsSentimentDrawer(props: {
   const [selectedId, setSelectedId] = useState<string>()
   const [detail, setDetail] = useState<NewsSentimentItemDetail>()
   const [detailFailed, setDetailFailed] = useState(false)
-  const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
+  const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild' | 'translate'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
   const rows = useMemo(() => filterRows(view, props.filters), [view, props.filters])
@@ -110,6 +111,21 @@ export function NewsSentimentDrawer(props: {
             type="button"
           >
             {actionBusy === 'rescore' ? text.settingsModal.rescoring : text.settingsModal.rescore}
+          </button>
+          <button
+            className="mi-news-drawer__action"
+            disabled={Boolean(actionBusy)}
+            onClick={() => {
+              setActionBusy('translate')
+              setActionNotice(undefined)
+              void withTimeout(intelligenceTranslationClient.retryFailed({ reason: 'retry-failed', filters: { timeRange: '7d', limit: 100 } }))
+                .then(() => setActionNotice(text.settingsModal.translationQueued))
+                .catch(() => setActionNotice(text.settingsModal.translationRetryFailed))
+                .finally(() => setActionBusy(undefined))
+            }}
+            type="button"
+          >
+            {actionBusy === 'translate' ? text.settingsModal.translating : text.settingsModal.retryTranslation}
           </button>
           <button
             className="mi-news-drawer__action"
