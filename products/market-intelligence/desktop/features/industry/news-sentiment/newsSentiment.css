@@ -153,3 +153,14 @@
   padding: 16px;
 }
 .mi-news-sentiment__state p { margin: 0; color: var(--muted, #93a196); font-size: 11.5px; }
+
+.mi-news-drawer__source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0 1px;
+  color: var(--accent, #d9f67f);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+.mi-news-drawer__source-link:hover { text-decoration: underline; }

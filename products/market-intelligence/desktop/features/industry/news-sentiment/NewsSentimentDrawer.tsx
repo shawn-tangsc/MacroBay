@@ -188,6 +188,11 @@ export function NewsSentimentDrawer(props: {
                   <span>{text.drawer.detail.engine}: {active.engine === 'model' ? text.engine.model : text.engine.rules}</span>
                   {active.modelRef ? <span>{active.modelRef}</span> : null}
                 </div>
+                {active.url ? (
+                  <a className="mi-news-drawer__source-link" href={active.url} rel="noreferrer" target="_blank">
+                    {text.drawer.detail.openOriginal} ↗
+                  </a>
+                ) : null}
                 <div className="mi-news-drawer__badges">
                   <span className={`mi-news-sentiment__pill is-${active.polarity}`}>{labelText(text, active.polarity)}</span>
                   <span>{active.strength}/5</span>
