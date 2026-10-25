@@ -254,7 +254,7 @@ export function NewsSentimentDrawer(props: {
 
         {view?.state === 'available' && view.summary ? (
           <div className="mi-news-drawer__summary">
-            <span className={`mi-news-sentiment__pill is-${view.summary.label}`}>{labelText(text, view.summary.label)}</span>
+            <span className={`mi-news-sentiment__pill is-${view.summary.label}`} title={text.summaryHint}>{text.overall} · {labelText(text, view.summary.label)}</span>
             <strong>{text.counts.replace('{count}', String(view.summary.itemCount))}</strong>
             <span>{view.summary.score.toFixed(2)}</span>
             <small>

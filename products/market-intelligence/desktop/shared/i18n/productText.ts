@@ -151,7 +151,7 @@ export const productText = {
             counts: '{count} 条',
             breakdown: '多 {bull} · 空 {bear} · 中性 {flat}',
             engine: { model: '模型', rules: '规则' },
-            bodyLimited: '部分条目仅依据标题', neutralFilter: { label: '中性筛选', all: '带中性', exclude: '不带中性' },
+            bodyLimited: '部分条目仅依据标题', neutralFilter: { label: '中性筛选', all: '带中性', exclude: '不带中性' }, overall: '综合', summaryHint: '综合方向由当前窗口内所有条目聚合；右侧数字是多/空/中性的条数',
             openAll: '查看全部舆情',
             settings: '舆情设置',
             drawer: {

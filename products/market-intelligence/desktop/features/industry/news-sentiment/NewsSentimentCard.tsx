@@ -67,8 +67,8 @@ export function NewsSentimentCard(props: {
       ) : (
         <>
           <div className="mi-news-sentiment__summary">
-            <span className={`mi-news-sentiment__pill is-${summary.label}`} data-news-sentiment-label={summary.label}>
-              {labelText(text, summary.label)}
+            <span className={`mi-news-sentiment__pill is-${summary.label}`} data-news-sentiment-label={summary.label} title={text.summaryHint}>
+              {text.overall} · {labelText(text, summary.label)}
             </span>
             <strong>{text.counts.replace('{count}', String(filteredItems.length))}</strong>
             <span className="mi-news-sentiment__breakdown">
