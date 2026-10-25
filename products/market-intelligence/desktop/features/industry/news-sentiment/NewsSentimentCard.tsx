@@ -84,7 +84,7 @@ export function NewsSentimentCard(props: {
             {visibleDrivers.map((item) => (
               <button key={item.itemId} onClick={() => props.onSelectItem(item)} type="button">
                 <span className="mi-news-sentiment__driver-line">
-                  <i className={`is-${item.polarity}`} aria-hidden="true" />
+                  <span className={`mi-news-sentiment__pill is-${item.polarity}`}>{labelText(text, item.polarity)}</span>
                   <span className="mi-news-sentiment__title">{item.displayTitle ?? item.title}</span>
                 </span>
                 <small className="mi-news-sentiment__driver-meta">{item.sourceName} · {formatTime(item.publishedAt, 'minute')} <NewsSentimentStrength compact strength={item.strength} text={text} /></small>
