@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { GitCompareArrows, Minus, Newspaper, RefreshCw, Settings, TrendingDown, TrendingUp } from 'lucide-react'
 
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -20,11 +21,14 @@ export function NewsSentimentCard(props: {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
   const summary = view?.state === 'available' ? view.summary : undefined
+  const [visibleCount, setVisibleCount] = useState(8)
   const drivers = summary
     ? [...(view?.items ?? [])].sort(
         (a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.strength * b.confidence - a.strength * a.confidence
       )
     : []
+  useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items.length])
+  const visibleDrivers = drivers.slice(0, visibleCount)
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>
@@ -64,8 +68,16 @@ export function NewsSentimentCard(props: {
                 .replace('{flat}', String(summary.neutralCount))}
             </span>
           </div>
-          <div className="mi-news-sentiment__drivers">
-            {drivers.map((item) => (
+          <div
+            className="mi-news-sentiment__drivers"
+            onScroll={(event) => {
+              const node = event.currentTarget
+              if (node.scrollTop + node.clientHeight >= node.scrollHeight - 24 && visibleCount < drivers.length) {
+                setVisibleCount((count) => Math.min(count + 8, drivers.length))
+              }
+            }}
+          >
+            {visibleDrivers.map((item) => (
               <button key={item.itemId} onClick={() => props.onSelectItem(item)} type="button">
                 <span className="mi-news-sentiment__driver-line">
                   <i className={`is-${item.polarity}`} aria-hidden="true" />
@@ -75,6 +87,15 @@ export function NewsSentimentCard(props: {
               </button>
             ))}
           </div>
+          {drivers.length > visibleCount ? (
+            <button
+              className="mi-news-sentiment__loadmore"
+              onClick={() => setVisibleCount((count) => Math.min(count + 8, drivers.length))}
+              type="button"
+            >
+              {text.loadMore.replace('{shown}', String(visibleCount)).replace('{total}', String(drivers.length))}
+            </button>
+          ) : null}
           <footer className="mi-news-sentiment__footer">
             {summary.engineMix.rules > 0 ? <span className="mi-news-sentiment__badge">{text.engine.rules}</span> : null}
             {view?.caveats.includes('news-body-limited') ? <span>{text.bodyLimited}</span> : null}
