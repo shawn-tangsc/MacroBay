@@ -557,7 +557,7 @@ export function getIntelligenceModule(
       void enqueueIntelligencePipelineJobs(
         jobRuntime,
         [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB],
-        {}
+        { limit: 500 }
       ).catch(() => undefined)
     }
     const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore })

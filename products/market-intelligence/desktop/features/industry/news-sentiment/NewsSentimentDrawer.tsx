@@ -110,6 +110,11 @@ export function NewsSentimentDrawer(props: {
             onClick={() => {
               setActionBusy('rebuild')
               setActionNotice(undefined)
+              if (typeof props.client.rebuild !== 'function') {
+                setActionBusy(undefined)
+                setActionNotice(text.settingsModal.rebuildFailed)
+                return
+              }
               void props.client.rebuild()
                 .then(() => setActionNotice(text.settingsModal.rebuilt))
                 .catch(() => setActionNotice(text.settingsModal.rebuildFailed))
