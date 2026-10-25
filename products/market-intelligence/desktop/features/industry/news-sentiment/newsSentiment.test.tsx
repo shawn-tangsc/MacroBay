@@ -110,6 +110,22 @@ describe('NewsSentimentFeature', () => {
     expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent).toContain('body:item-b')
   })
 
+
+  it('does not snap back to the card focus target after a row click', async () => {
+    const getItem = vi.fn(async (input: { itemId: string }) => {
+      const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
+      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+    })
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const cardItems = [...container.querySelectorAll<HTMLButtonElement>('.mi-news-sentiment__drivers button')]
+    await act(async () => { cardItems[1]?.click() })
+    await act(async () => {})
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row')]
+    await act(async () => { rows[0]?.click() })
+    await act(async () => {})
+    expect(document.body.querySelector('.mi-news-drawer__detail h3')?.textContent).toContain('SEC Approves Spot Ethereum ETF Options')
+  })
+
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
