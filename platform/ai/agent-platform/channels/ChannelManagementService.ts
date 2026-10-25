@@ -393,13 +393,14 @@ export class ChannelManagementService {
     const prior = this.channelMutations.get(channelId) ?? Promise.resolve()
     let release!: () => void
     const current = new Promise<void>((resolve) => { release = resolve })
-    this.channelMutations.set(channelId, prior.then(() => current))
+    const queued = prior.then(() => current)
+    this.channelMutations.set(channelId, queued)
     await prior
     try {
       return await action()
     } finally {
       release()
-      if (this.channelMutations.get(channelId) === current) this.channelMutations.delete(channelId)
+      if (this.channelMutations.get(channelId) === queued) this.channelMutations.delete(channelId)
     }
   }
 
