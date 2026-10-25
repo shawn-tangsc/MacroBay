@@ -217,7 +217,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <Button disabled={!credentialDraft || ((current.type === 'slack' || current.type === 'feishu' || current.type === 'qq') && !appCredentialDraft)} onClick={() => void saveCredential()}>{labels.channelSaveCredential}</Button>
             </>}
             <p>{labels.channelState[current.state]}</p>
-            <p>{labels.channelRuntimeGeneration}: {runtimeStatus?.generation ?? 0} · {labels.channelRuntimeLifecycle}: {runtimeStatus?.lifecycle ?? 'missing'}</p>
+            <p>{labels.channelRuntimeGeneration}: {runtimeStatus?.generation ?? 0} · {labels.channelRuntimeLifecycle}: {runtimeStatus?.lifecycle ?? labels.channelRuntimeMissing}</p>
             <section>
               <strong>{labels.channelCandidates}</strong>
               {candidates.length === 0 ? <p>{labels.channelCandidatesEmpty}</p> : candidates.map((candidate) => (
