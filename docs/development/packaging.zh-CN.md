@@ -7,8 +7,9 @@
 ## 当前支持范围
 
 - **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染。
-- **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。由 `package-windows` CI job 构建并测试，
-  尚未在 Windows 真机上验证。
+- **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。`package-windows` CI job 在
+  `windows-latest` 上构建、跑测试并上传产物；构建也已在 Windows 11 x64 真机上跑通。安装后的运行态
+  尚未验收。
 - **Linux**：尚未配置打包。
 
 ## 构建应用 bundle
@@ -103,6 +104,9 @@ pnpm dist:win        # 先构建 bundle，再产出 release/MacroBay-<version>-x
 pnpm dist:win:dir    # 先构建 bundle，只产出 release/win-unpacked/
 ```
 
+前置条件：Windows 10/11 x64 主机、Node.js 22、pnpm 10。首次构建会下载 Electron 的 win32 发行包和
+NSIS 打包器，之后的构建命中本地缓存。
+
 请在 Windows 上执行，或交给 `package-windows` CI job。macOS 上通过 Wine 也能构建，但 pnpm 只在
 Windows 上安装 win32 的智能体 CLI，交叉构建出来的安装器缺少这个二进制，智能体无法启动。所以
 Windows 产物放在 `windows-latest` 上产出。
@@ -110,8 +114,11 @@ Windows 产物放在 `windows-latest` 上产出。
 安装器默认按当前用户安装，允许选择安装目录，并创建桌面和开始菜单快捷方式。签名需要 Authenticode
 证书（`CSC_LINK`、`CSC_KEY_PASSWORD`）；未签名的安装器会触发 SmartScreen 警告，需要用户自行放行。
 
-Windows 构建尚未在真机上跑过。首次验证的顺序：窗口与看板、模型服务设置、一次真实智能体对话、
-任务栏图标与分组、通知。
+`0.1.0` 在 Windows 11 x64 上的参考体积：安装器约 164 MB，解包目录约 613 MB，其中智能体原生 CLI
+`claude.exe` 约 247 MB（不压缩，见上文 `asar: false`）。
+
+构建本身已在 Windows 11 x64 真机上跑通并产出安装器，但**安装后的运行态**还没有验收。首次验证的
+顺序：窗口与看板、模型服务设置、一次真实智能体对话、任务栏图标与分组、通知。
 
 ## Linux
 

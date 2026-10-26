@@ -165,9 +165,9 @@ boundary it used.
 ## Status
 
 MacroBay is **alpha** (`0.1.0`). macOS is the verified platform. There is no demo dataset, and the
-macOS `.dmg` is unsigned; Windows installers are built by CI but not yet verified on Windows
-hardware, and Linux has no packaging — the dashboard needs real provider credentials. See
-[Status and limitations](./docs/reference/status-and-limitations.md).
+macOS `.dmg` is unsigned; Windows installers build in CI and on Windows 11 x64 hardware, but the
+installed app is not verified there yet, and Linux has no packaging — the dashboard needs real
+provider credentials. See [Status and limitations](./docs/reference/status-and-limitations.md).
 
 ## Roadmap
 

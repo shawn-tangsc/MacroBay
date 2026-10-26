@@ -8,8 +8,9 @@ This page describes how to produce a distributable desktop build from this check
 
 - **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
   dashboard.
-- **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. Built and tested by the
-  `package-windows` CI job; it has not been verified on Windows hardware yet.
+- **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The `package-windows` CI job builds
+  it, runs the test suite, and uploads the artifact on `windows-latest`; the build also runs through
+  on Windows 11 x64 hardware. The *installed* app is not accepted yet.
 - **Linux**: no packager configuration.
 
 ## Build the application bundles
@@ -107,6 +108,9 @@ pnpm dist:win        # build bundles, then release/MacroBay-<version>-x64-setup.
 pnpm dist:win:dir    # build bundles, then release/win-unpacked/ only
 ```
 
+Prerequisites: Windows 10/11 x64 host, Node.js 22, pnpm 10. The first build downloads the Windows
+Electron distribution and the NSIS packer; later builds hit the local cache.
+
 Run this on Windows, or let the `package-windows` CI job do it. Building on macOS also works through
 Wine, but pnpm only installs the win32 agent CLI on Windows, so a cross-built installer ships without
 that binary and the agent cannot start there. That is why the Windows artifact is produced on
@@ -116,8 +120,13 @@ The installer is per-user by default, lets the user pick the install directory, 
 and Start menu shortcuts. Signing needs an Authenticode certificate through `CSC_LINK` and
 `CSC_KEY_PASSWORD`; an unsigned installer triggers SmartScreen until the user chooses to keep it.
 
-The Windows build has not been exercised on Windows hardware yet. Verify first: window and dashboard,
-model-service settings, one real agent turn, taskbar icon and grouping, and notifications.
+Reference sizes for `0.1.0` on Windows 11 x64: about 164 MB for the installer, about 613 MB for the
+unpacked directory, of which the native agent CLI `claude.exe` is about 247 MB (it is not compressed,
+see `asar: false` above).
+
+The build itself now runs through on Windows 11 x64 hardware and produces the installer, but the
+**installed** app has not been accepted yet. Verify first: window and dashboard, model-service
+settings, one real agent turn, taskbar icon and grouping, and notifications.
 
 ## Linux
 
