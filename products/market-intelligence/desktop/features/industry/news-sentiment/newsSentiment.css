@@ -243,3 +243,16 @@
 
 .mi-news-drawer__time { width: 92px; }
 
+
+/*
+ * The drawer portals outside .mi-news-sentiment, where the sentiment color variables are defined.
+ * Without this scope the pill's var(--mi-news-negative) resolves to nothing and the bearish icon
+ * inherits the muted text color.
+ */
+.mi-news-drawer {
+  --mi-news-positive: var(--mi-conclusion-positive, #55d69b);
+  --mi-news-negative: var(--mi-conclusion-negative, #ff8a9b);
+  --mi-news-neutral: var(--muted, #93a196);
+}
+.mi-news-drawer .mi-news-sentiment__pill.is-bullish svg { color: var(--mi-news-positive); }
+.mi-news-drawer .mi-news-sentiment__pill.is-bearish svg { color: var(--mi-news-negative); }
