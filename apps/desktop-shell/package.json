@@ -6,8 +6,8 @@
   "type": "module",
   "main": "../../out/main/index.js",
   "scripts": {
-    "dev": "cd ../.. && env -u ELECTRON_RUN_AS_NODE electron-vite dev --config electron.vite.config.ts",
-    "start": "cd ../.. && env -u ELECTRON_RUN_AS_NODE electron-vite preview --config electron.vite.config.ts",
+    "dev": "node ../../scripts/run-electron-vite.mjs dev",
+    "start": "node ../../scripts/run-electron-vite.mjs preview",
     "build": "cd ../.. && electron-vite build --config electron.vite.config.ts",
     "typecheck": "tsc --noEmit -p ../../tsconfig.json",
     "lint": "tsc --noEmit -p ../../tsconfig.json",
