@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol, safeStorage, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { open, readFile, stat, writeFile } from 'node:fs/promises'
 import { release } from 'node:os'
@@ -178,6 +178,7 @@ import { MAIN_WINDOW_PRELOAD_PATH, createSecureWindowSecurity } from '../window/
 import { screen } from 'electron'
 import { pathToFileURL } from 'node:url'
 import { safeSendToMainWindow, wireRendererSendGuard } from '../window/safeRendererSend'
+import { wireWindowChromeState } from '../window/windowChrome'
 import { createAgentIpcHandlers } from './agentIpcHandlers'
 import { ExternalAppsService } from './externalApps/ExternalAppsService'
 import { validateLaunchExternalAppRequest } from './externalApps/externalAppLauncher'
@@ -1161,8 +1162,17 @@ function getMainWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
 }
 
-function broadcastMaximizedState(window: BrowserWindow): void {
-  window.webContents.send(IpcChannels.windowMaximizedChanged, window.isMaximized())
+/**
+ * **自绘标题栏**（`frame: false`，见 `window/windowChrome.ts`）下，窗口按钮的**唯一**目标：
+ * 发起调用的那个窗口。
+ *
+ * 之前的实现一律 `getMainWindow()`：主窗只有一层时等价，但独立页面窗/面板窗自己画出最小化/最大化/关闭后，
+ * 点「关闭」会去关主窗（用户可见的严重错乱）。身份不从渲染层参数来——`BrowserWindow.fromWebContents`
+ * 由 Main 用 `event.sender` 推导，参数里没有任何 webContentsId/窗口句柄。
+ */
+function resolveInvokingWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  return window && !window.isDestroyed() ? window : null
 }
 
 async function replaceAgentState(state: AgentStoreState, options?: ReplaceAgentStateOptions): Promise<AgentStoreState> {
@@ -1313,18 +1323,19 @@ function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.productSummaries, () => summarizeProductManifests(productManifests))
 
-  ipcMain.handle(IpcChannels.windowMinimize, () => getMainWindow()?.minimize())
-  ipcMain.handle(IpcChannels.windowMaximize, () => {
-    const window = getMainWindow()
+  // 自绘标题栏的窗口按钮：目标窗口一律由 `event.sender` 推导（主窗/独立窗同一套按钮，见 resolveInvokingWindow）
+  ipcMain.handle(IpcChannels.windowMinimize, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.minimize())
+  ipcMain.handle(IpcChannels.windowMaximize, (event: IpcMainInvokeEvent) => {
+    const window = resolveInvokingWindow(event)
     if (!window) return false
     if (window.isMaximized()) window.unmaximize()
     else window.maximize()
     return window.isMaximized()
   })
-  ipcMain.handle(IpcChannels.windowClose, () => getMainWindow()?.close())
-  ipcMain.handle(IpcChannels.windowIsMaximized, () => getMainWindow()?.isMaximized() ?? false)
-  ipcMain.handle(IpcChannels.windowSetMinimumSize, (_event: IpcMainInvokeEvent, width: number, height: number) => {
-    const window = getMainWindow()
+  ipcMain.handle(IpcChannels.windowClose, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.close())
+  ipcMain.handle(IpcChannels.windowIsMaximized, (event: IpcMainInvokeEvent) => resolveInvokingWindow(event)?.isMaximized() ?? false)
+  ipcMain.handle(IpcChannels.windowSetMinimumSize, (event: IpcMainInvokeEvent, width: number, height: number) => {
+    const window = resolveInvokingWindow(event)
     if (!window) return
     const minimumWidth = Number.isFinite(width) ? Math.max(0, Math.floor(width)) : DEFAULT_MIN_WINDOW_WIDTH
     const minimumHeight = Number.isFinite(height) ? Math.max(0, Math.floor(height)) : DEFAULT_MIN_WINDOW_HEIGHT
@@ -1337,8 +1348,8 @@ function registerIpcHandlers(
       window.setSize(nextWidth, nextHeight)
     }
   })
-  ipcMain.handle(IpcChannels.windowResetMinimumSize, () => {
-    const window = getMainWindow()
+  ipcMain.handle(IpcChannels.windowResetMinimumSize, (event: IpcMainInvokeEvent) => {
+    const window = resolveInvokingWindow(event)
     if (!window) return
     window.setMinimumSize(DEFAULT_MIN_WINDOW_WIDTH, DEFAULT_MIN_WINDOW_HEIGHT)
     const [nextWidth, nextHeight] = clampWindowSizeToMinimum(window.getSize() as [number, number], {
@@ -1348,6 +1359,42 @@ function registerIpcHandlers(
     if (nextWidth !== window.getSize()[0] || nextHeight !== window.getSize()[1]) {
       window.setSize(nextWidth, nextHeight)
     }
+  })
+  /**
+   * 自绘标题栏的**菜单条**（Windows 上 `frame: false` 之后，OS 不再绘制菜单栏，Alt 也唤不出）。
+   *
+   * 只暴露两件事：应用菜单的**顶层标签**（供渲染层排版），以及「按索引弹出既有子菜单」。
+   * 没有任意 channel/命令/role 字符串入口——菜单内容仍是 `buildAppMenu` 里那一份
+   * `Menu.setApplicationMenu`，点击行为与原生菜单逐字一致（不新增第二套命令表）。
+   */
+  ipcMain.handle(IpcChannels.windowMenuList, () => {
+    const menu = Menu.getApplicationMenu()
+    if (!menu) return []
+    return menu.items
+      .map((item, index) => ({ index, label: item.label, visible: item.visible }))
+      .filter((item) => item.visible && item.label.length > 0)
+  })
+  ipcMain.handle(IpcChannels.windowMenuPopup, (event: IpcMainInvokeEvent, index: number, x: number, y: number) => {
+    const window = resolveInvokingWindow(event)
+    const items = Menu.getApplicationMenu()?.items ?? []
+    const submenu = Number.isInteger(index) ? items[index]?.submenu : undefined
+    if (!window || !submenu) return false
+    // 坐标是渲染层给的「菜单按钮左下角」（窗口内容 CSS px = DIP）；非有限值一律夹到 0
+    const popupX = Math.max(0, Math.round(Number.isFinite(x) ? x : 0))
+    const popupY = Math.max(0, Math.round(Number.isFinite(y) ? y : 0))
+    return new Promise<boolean>((resolve) => {
+      try {
+        submenu.popup({
+          window,
+          x: popupX,
+          y: popupY,
+          // 关闭回调：渲染层据此撤掉按钮的「打开中」高亮（渲染层不自己猜关闭时机）
+          callback: () => resolve(true)
+        })
+      } catch {
+        resolve(false)
+      }
+    })
   })
   ipcMain.handle(IpcChannels.shellOpenExternal, (_event: IpcMainInvokeEvent, url: string) => {
     if (!url.startsWith('https://') && !url.startsWith('http://')) {
@@ -2239,8 +2286,8 @@ async function readHeartbeatFileFromWorkspace(workspacePath: string): Promise<st
 function wireWindowEvents(window: BrowserWindow): void {
   wireRendererSendGuard(window)
   wireRendererProcessDiagnostics(window, { logEvent: rendererProcessLog.write })
-  window.on('maximize', () => broadcastMaximizedState(window))
-  window.on('unmaximize', () => broadcastMaximizedState(window))
+  // 自绘标题栏：最大化/还原事实（主窗与独立窗共用同一条广播，见 `window/windowChrome.ts`）
+  wireWindowChromeState(window)
   window.on('closed', () => {
     mainWindow = null
   })

@@ -33,6 +33,8 @@ import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone }
 
 import brandMarkUrl from '../assets/brand/mark.svg'
 import { platformText } from '../i18n/platformText'
+import { AppMenuBar } from './window/AppMenuBar'
+import { WindowControls } from './window/WindowControls'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
@@ -323,10 +325,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const settingsNavGroups = useMemo(
     () => groupShellSettingsPanels(settings.language, productSettingsEntries),
     [settings.language]
-  )
-  const activeLabel = useMemo(
-    () => navItems.find((item) => item.key === activeNavKey)?.label ?? t.nav.workspace,
-    [activeNavKey, navItems, t]
   )
   /**
    * P2-02 挂载边缘抽取（只组合，不改业务）：内置一级菜单页的正文组合收敛到 `builtInPageAdapters`，
@@ -1706,10 +1704,14 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       <div className="app-shell">
       <header className="topbar">
         <div className="traffic-light-space" aria-hidden="true" />
-        <div className="titlebar-drag">
-          <span className="topbar-page-indicator" />
-          <span>{activeLabel}</span>
-        </div>
+        {/* Windows 常规做法：标题栏最左是应用图标，其后才是菜单（macOS 同位置是红绿灯，故默认不显示） */}
+        <span className="titlebar-brand" aria-hidden="true">
+          <img src={brandMarkUrl} alt="" />
+        </span>
+        {/* Windows：OS 不再绘制菜单栏，应用菜单画在自绘标题栏里（macOS 用屏幕顶部的原生菜单，这里不渲染） */}
+        <AppMenuBar />
+        {/* 拖动区：页面名不再重复显示（当前页由 Tab 条承载），这里是纯粹的窗口拖动留白 */}
+        <div className="titlebar-drag" aria-hidden="true" />
         <div className="topbar-actions">
           <button type="button" aria-label="Search" title="Search">
             <Search size={15} />
@@ -1718,6 +1720,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             <SlidersHorizontal size={15} />
           </button>
         </div>
+        {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
+        <WindowControls />
       </header>
 
       <InUseModelRetiredBanner
@@ -1730,9 +1734,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       />
 
       <aside className="global-sidebar">
-        <div className="sidebar-logo">
-          <img src={brandMarkUrl} alt="" aria-hidden="true" />
-        </div>
+        {/* 品牌图标已上移到自绘标题栏最左（Windows 常规做法），侧栏不再留一块只有 logo 的空白区 */}
         <nav className="nav-list" aria-label="Primary">
           {sidebarNavLayout.primaryItems.map((item) => {
             const Icon = item.icon

@@ -66,6 +66,7 @@ vi.mock('electron', () => {
 
 import { WorkspaceTransferPolicy } from '@platform/workspace/policies'
 import { SECURE_WINDOW_PREFERENCE_BASELINE, createSecureWindowSecurity } from '../../window/createMainWindow'
+import { resolveWindowChromeOptions } from '../../window/windowChrome'
 import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
 import { createPanelDetachedWindowHost, type DetachedHostEvent, type DetachedWindowFactoryInput } from './panelDetachedWindowHost'
 import { createWorkspaceWindowRegistry } from './workspaceWindowRegistry'
@@ -163,9 +164,8 @@ describe('独立面板窗口工厂', () => {
     // bounds 逐字采用（取整），外观默认不显示
     expect(window.options).toMatchObject({
       x: 10, y: 20, width: 480, height: 360, title: 'Inspector', show: false, autoHideMenuBar: true,
-      // PLAT-39 ①：装饰与主窗一致（darwin hiddenInset）+ 主题派生底色（不再是硬编码 #101114）
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-      trafficLightPosition: { x: 14, y: 14 },
+      // PLAT-39 ①：装饰与主窗同源（`windowChrome` 单源策略）+ 主题派生底色（不再是硬编码 #101114）
+      ...resolveWindowChromeOptions(),
       backgroundColor: expect.stringMatching(/^#(0b0d10|ffffff)$/)
     })
     const webPreferences = window.options.webPreferences as Record<string, unknown>

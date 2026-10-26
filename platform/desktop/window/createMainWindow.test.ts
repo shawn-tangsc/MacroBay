@@ -122,6 +122,19 @@ describe('shared secure window configuration', () => {
     }
   })
 
+  it('Windows 盘符/反斜杠路径按 win32 规则判定：合法 entry 不被误判成逃逸，越界仍拒绝', () => {
+    // 真机缺陷：把 `D:\app\renderer` 交给 posix.relative 会得到虚假的 `../D:\app\...` 前缀 ⇒
+    // Windows 上所有合法 entry 都被判成逃逸（独立窗工厂构造失败、app 起不来）。
+    const root = 'D:\\app\\renderer'
+    const policy = { appRoot: pathToFileURL(root).href }
+    expect(isAllowedAppWindowEntryUrl(pathToFileURL(`${root}\\index.html`).href, policy)).toBe(true)
+    expect(isAllowedAppWindowEntryUrl(pathToFileURL(`${root}\\assets\\main.js`).href, policy)).toBe(true)
+    // 越界：父目录逃逸、跨应用根、跨盘
+    expect(isAllowedAppWindowEntryUrl(pathToFileURL(`${root}\\..\\evil\\index.html`).href, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(pathToFileURL('D:\\app\\renderer-evil\\index.html').href, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(pathToFileURL('C:\\app\\renderer\\index.html').href, policy)).toBe(false)
+  })
+
   it('fails closed when a window security object is weakened at runtime', () => {
     const shared = createSecureWindowSecurity({ preload: '/preload/index.js', openExternal: () => undefined })
     expect(() => assertSecureWindowSecurity({ ...shared, webPreferences: { ...shared.webPreferences, contextIsolation: false } })).toThrow(/security/)
@@ -131,20 +144,23 @@ describe('shared secure window configuration', () => {
   })
 
   it('only allows app-static entries inside the injected app root, or explicitly injected dev origins', () => {
-    const policy = { appRoot: 'file:///app/renderer' }
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/index.html', policy)).toBe(true)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer', policy)).toBe(true)
+    // 应用根必须是**本平台**的合法绝对路径：POSIX 的 `/app/renderer` 在 Windows 上没有盘符，
+    // `fileURLToPath` 直接抛错 ⇒ 按平台取等价根，下面每条判据在两边逐字相同。
+    const rootUrl = process.platform === 'win32' ? 'file:///C:/app/renderer' : 'file:///app/renderer'
+    const policy = { appRoot: rootUrl }
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/index.html`, policy)).toBe(true)
+    expect(isAllowedAppWindowEntryUrl(rootUrl, policy)).toBe(true)
     // F4：file: 不再一律放行，必须落在应用根内
     expect(isAllowedAppWindowEntryUrl('file:///etc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/../../etc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer-evil/index.html', policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/../../etc/passwd`, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}-evil/index.html`, policy)).toBe(false)
     // F7：非空 host 的 file: 与百分号编码分隔符一律拒绝
     expect(isAllowedAppWindowEntryUrl('file://evilhost/app/renderer/index.html', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/..%2f..%2fetc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/..%2F..%2Fetc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/..%5c..%5cetc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/%2e%2e/etc/passwd', policy)).toBe(false)
-    expect(isAllowedAppWindowEntryUrl('file:///app/renderer/index.html', { appRoot: '' })).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/..%2f..%2fetc/passwd`, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/..%2F..%2Fetc/passwd`, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/..%5c..%5cetc/passwd`, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/%2e%2e/etc/passwd`, policy)).toBe(false)
+    expect(isAllowedAppWindowEntryUrl(`${rootUrl}/index.html`, { appRoot: '' })).toBe(false)
     expect(isAllowedAppWindowEntryUrl('https://evil.example/app', policy)).toBe(false)
     expect(isAllowedAppWindowEntryUrl('not a url', policy)).toBe(false)
     expect(isAllowedAppWindowEntryUrl('http://127.0.0.1:5173/', { ...policy, devOrigins: ['http://127.0.0.1:5173'] })).toBe(true)

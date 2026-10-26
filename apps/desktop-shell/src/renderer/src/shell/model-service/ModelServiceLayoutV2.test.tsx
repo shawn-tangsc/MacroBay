@@ -70,9 +70,10 @@ describe('R1 模型类型筛选 pill 行（看得见）', () => {
     // 智能体不是模型类型（它由协议表达）⇒ 类型行里没有它。
     expect(pills.map((pill) => pill.textContent ?? '').join('|')).not.toContain('智能体')
 
-    // 容器高度规则 ≥26（24px pill + 2px 滚动条余量），且 pill 自身 24px。
+    // 行高跟着内容走（macOS overlay 滚动条不占位，Windows 经典滚动条占 10px，定高会切胶囊），
+    // 只保证下限 26；pill 自身 24px。
     const row = rule('.model-service-type-pills')
-    expect(px(row, 'height')).toBeGreaterThanOrEqual(26)
+    expect(row).toMatch(/height:\s*auto/)
     expect(px(row, 'min-height')).toBeGreaterThanOrEqual(26)
     expect(px(rule('.model-service-type-pill'), 'height')).toBe(24)
     // 选中态是 accent 描边（不是 accent 实底）。

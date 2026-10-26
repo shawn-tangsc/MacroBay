@@ -5,6 +5,7 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { WorkspaceWindowChromePolicy } from '@platform/workspace/policies'
 import { productMenuEntries } from '@products/generated/shellRegistry'
 import { mergeShellNavItems } from '../navigation/mergeShellNavigation'
+import { WindowControls } from '../window/WindowControls'
 
 /**
  * Owner: apps/desktop-shell renderer / workspace（**PLAT-39 ①**：分离窗的**自绘顶栏**与原生标题）。
@@ -66,6 +67,8 @@ export function WorkspaceWindowTopBar(props: WorkspaceWindowTopBarProps): React.
       <span className="workspace-window-topbar-icon" aria-hidden="true"><Icon size={13} strokeWidth={1.8} /></span>
       <span className="workspace-window-topbar-title" title={props.title}>{props.title}</span>
       <span className="workspace-window-topbar-actions">{props.actions}</span>
+      {/* Windows：独立窗也是无原生标题条，窗口按钮画在本顶栏最右（macOS 由系统红绿灯承担） */}
+      <WindowControls />
     </header>
   )
 }

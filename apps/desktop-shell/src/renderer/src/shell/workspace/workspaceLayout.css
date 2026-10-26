@@ -692,6 +692,15 @@
   -webkit-app-region: no-drag;
 }
 
+/*
+ * Windows 自绘标题栏：没有 macOS 红绿灯，左侧让位归零；窗口按钮（`WindowControls`）贴住右上角，
+ * 所以右侧 padding 也归零 —— 否则按钮会离窗口边缘差 8px，看起来不像系统标题栏。
+ * 高度仍是 `--topbar-height`，与主窗 `.topbar` 同高（两窗逐字一致）。
+ */
+:root[data-platform="win32"] .workspace-window-topbar {
+  padding: 0 0 0 10px;
+}
+
 /* 顶栏里的回停靠入口：仍是既有 `PageWindowRedockControl`（内联绝对定位不变，P2-15 判据逐字保留），
    这里只把它钉在顶栏右侧并把整块设为 no-drag（否则拖拽区吞掉点击）。 */
 .workspace-window-topbar .workspace-page-redock-button,

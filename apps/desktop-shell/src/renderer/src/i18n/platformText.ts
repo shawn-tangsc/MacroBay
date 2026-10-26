@@ -22,6 +22,19 @@ export type PlatformText = {
     saved: string
     failed: string
   }
+  /**
+   * 自绘标题栏的窗口按钮（Windows 走 `WindowControls`；macOS 用系统红绿灯，不读这组文案）。
+   * 文案标签只作 `aria-label`/原生 tooltip，按钮图形由 SVG 画，不依赖系统图标字体。
+   */
+  windowChrome: {
+    controls: string
+    minimize: string
+    maximize: string
+    restore: string
+    close: string
+    /** 自绘菜单条的分组名（菜单项标签本身来自应用菜单，不在这里重复）。 */
+    menu: string
+  }
   workspace: {
     eyebrow: string
     title: string
@@ -1222,6 +1235,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       saved: '已保存',
       failed: '保存失败'
     },
+    windowChrome: {
+      controls: '窗口控制',
+      minimize: '最小化',
+      maximize: '最大化',
+      restore: '向下还原',
+      close: '关闭',
+      menu: '应用菜单'
+    },
     workspace: {
       eyebrow: 'Electron 壳已运行',
       title: 'Hello World',
@@ -2235,6 +2256,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       loading: 'Loading',
       saved: 'Saved',
       failed: 'Save failed'
+    },
+    windowChrome: {
+      controls: 'Window controls',
+      minimize: 'Minimize',
+      maximize: 'Maximize',
+      restore: 'Restore down',
+      close: 'Close',
+      menu: 'Application menu'
     },
     workspace: {
       eyebrow: 'Electron shell is alive',

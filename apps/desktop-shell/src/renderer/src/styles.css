@@ -22,6 +22,13 @@
   --sidebar-width: 52px;
   --topbar-height: 42px;
   --traffic-light-width: 78px;
+  /* 自绘标题栏（Windows）：按钮宽度走 Windows 惯例 46，占满整行顶栏；
+     hover/按下底色按深浅主题各一档，关闭键的红色是系统惯例（不随应用强调色变）。 */
+  --window-control-width: 46px;
+  --window-control-hover: rgba(255, 255, 255, 0.07);
+  --window-control-active: rgba(255, 255, 255, 0.12);
+  --window-close-hover: #c42b1c;
+  --window-close-active: #b0271a;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg);
@@ -44,10 +51,49 @@
   --danger: #c73238;
   --accent: #2f7d6a;
   --accent-contrast: #11130f;
+  --window-control-hover: rgba(0, 0, 0, 0.05);
+  --window-control-active: rgba(0, 0, 0, 0.09);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/*
+ * 滚动条：只接管 Windows。
+ *
+ * macOS 用系统的 overlay 滚动条——不滚动时看不见、也不占位，所以这里的布局余量都是按
+ * “没有滚动条”算的；Windows 是经典滚动条：常驻、带轨道、15~17px，既显眼（页面上一眼就是
+ * 两根灰条），又会把按 24px 高度算死的筛选胶囊行切掉。给 Windows 换一条 10px 的细滚动条，
+ * macOS 的规则一条都不命中，观感保持不变。
+ */
+:root[data-platform="win32"] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root[data-platform="win32"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root[data-platform="win32"] ::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  /* 兜底给不支持 color-mix 的旧内核；两套主题都用同一个中性灰，透明度低到不抢视线。 */
+  background-color: rgba(128, 136, 148, 0.42);
+  background-clip: padding-box;
+}
+
+:root[data-platform="win32"] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(128, 136, 148, 0.66);
+}
+
+:root[data-platform="win32"] ::-webkit-scrollbar-button {
+  display: none;
+}
+
+:root[data-platform="win32"] ::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 html,
@@ -89,6 +135,43 @@ button {
   min-width: 0;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 72%, var(--bg));
+  /* 整行都是拖动区（Windows 无原生标题条后这是主拖动区）：里面的按钮各自 no-drag。 */
+  -webkit-app-region: drag;
+}
+
+/*
+ * Windows 自绘标题栏的顶栏：没有红绿灯，左侧让位归零；最左是应用图标 + 应用菜单条，右侧多一列窗口按钮。
+ * 原有的搜索/布局按钮因此整体左移（用户可见的「右上角内容往左挪」就是这一列）。
+ * macOS 一条都不命中，红绿灯让位与布局逐字不变。
+ */
+:root[data-platform="win32"] .topbar {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+}
+
+/*
+ * 标题栏最左的应用图标（Windows 常规做法：图标 → 菜单 → …）。
+ * macOS 的同一位置是系统红绿灯，因此默认不显示；它只是一个标记，不拦截点击，跟着顶栏一起拖动。
+ */
+.titlebar-brand {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 2px 0 10px;
+}
+
+:root[data-platform="win32"] .titlebar-brand {
+  display: flex;
+}
+
+.titlebar-brand img {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+:root[data-platform="win32"] .traffic-light-space {
+  display: none;
 }
 
 .traffic-light-space {
@@ -104,19 +187,6 @@ button {
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 88%, var(--bg));
   -webkit-app-region: drag;
-}
-
-.sidebar-logo {
-  display: grid;
-  height: 54px;
-  place-items: center;
-  border-bottom: 1px solid var(--border);
-}
-
-.sidebar-logo img {
-  display: block;
-  width: 32px;
-  height: 32px;
 }
 
 .sidebar-footer span,
@@ -243,11 +313,48 @@ button {
   -webkit-app-region: drag;
 }
 
-.topbar-page-indicator {
-  width: 3px;
-  height: 16px;
-  border-radius: 999px;
-  background: var(--accent);
+/*
+ * 自绘标题栏里的**应用菜单条**（Windows，见 `shell/window/AppMenuBar.tsx`）。
+ *
+ * 只有顶层标签；点开后由 Main 弹出同一份原生子菜单（`menu.popup`）。因此这里只需要
+ * 「像系统菜单栏」的三件事：贴住窗口左缘、整行高、hover/打开态各一档底色。
+ * 顶栏是拖动区，菜单条整组 `no-drag`，否则点不开。
+ */
+.app-menu {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.app-menu-item {
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--muted-strong);
+  cursor: default;
+  font-size: 12px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.app-menu-item:hover {
+  background: var(--window-control-hover);
+  color: var(--text-strong);
+}
+
+.app-menu-item[data-open='true'] {
+  background: var(--window-control-active);
+  color: var(--text-strong);
+}
+
+.app-menu-item:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .topbar-actions {
@@ -269,6 +376,64 @@ button {
 .topbar-actions button:hover {
   background: var(--surface-soft);
   color: var(--text-strong);
+}
+
+/*
+ * 自绘窗口按钮（Windows 自绘标题栏，见 `shell/window/WindowControls.tsx`）。
+ *
+ * 尺寸/位置对齐 Windows 惯例：46 宽、占满顶栏整行高、贴住窗口右上角、无圆角、箭头光标。
+ * 底色/图形颜色只走 token；关闭键的红色是系统惯例（`--window-close-hover`），不跟随强调色。
+ * 整组 `no-drag`：顶栏是拖动区，按钮必须可点。
+ */
+.window-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.window-control {
+  display: grid;
+  width: var(--window-control-width);
+  height: 100%;
+  padding: 0;
+  place-items: center;
+  background: transparent;
+  color: var(--muted-strong);
+  cursor: default;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.window-control:hover {
+  background: var(--window-control-hover);
+  color: var(--text-strong);
+}
+
+.window-control:active {
+  background: var(--window-control-active);
+}
+
+.window-control:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.window-control[data-window-control='close']:hover {
+  background: var(--window-close-hover);
+  color: #ffffff;
+}
+
+.window-control[data-window-control='close']:active {
+  background: var(--window-close-active);
+  color: #ffffff;
+}
+
+.window-control-glyph {
+  display: block;
+  pointer-events: none;
 }
 
 .page-body {
@@ -11192,8 +11357,11 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--accent-contrast);
 }
 
-/* PLAT-81 / R1：筛选 pill 行。pill 高 24；行高 26（24 + 2px 横向滚动条余量，避免滚动条切到胶囊）；
-   行间距/与工具条与列表的间距一律由 `.model-service-filter-rows` 承担，行自身零 margin/padding。 */
+/*
+ * PLAT-81 / R1：筛选 pill 行。pill 高 24，行高**跟着内容走**：macOS 的 overlay 滚动条不占位，
+ * Windows 的经典滚动条要占 10px —— 固定 26px 会把胶囊切掉一截，所以这里只给下限、不给定高。
+ * 行间距/与工具条与列表的间距一律由 `.model-service-filter-rows` 承担，行自身零 margin/padding。
+ */
 .model-service-type-pills {
   display: flex;
   flex: none;
@@ -11201,7 +11369,7 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   align-items: center;
   gap: 6px;
   box-sizing: border-box;
-  height: 26px;
+  height: auto;
   min-height: 26px;
   margin: 0;
   padding: 0 0 2px;
@@ -11209,7 +11377,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
-  scrollbar-width: thin;
 }
 
 /* 两行 pill 的容器：距工具条 8、距列表 10、两行之间 6；自身无 padding/border/min-height，
