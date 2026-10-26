@@ -10,7 +10,7 @@ import { AgentSessionRuntimeService } from '../../ai/agent-platform/runtime/Agen
 import { createAgentRuntimeConsoleTraceRecorder } from '../../ai/agent-platform/runtime/AgentRuntimeOpenTelemetryTraceRecorder'
 import { AgentRuntimeCompositionService } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
 import { resolveEffectiveAgentModel } from '../../ai/agent-platform/runtime/effectiveAgentModel'
-import { APP_ACCEPTANCE_NAME, APP_INTERNAL_NAME } from '../appIdentity'
+import { APP_ACCEPTANCE_NAME, APP_BUNDLE_ID, APP_INTERNAL_NAME } from '../appIdentity'
 import {
   AgentTaskDispatchService,
   AgentTaskExecutionCoordinator,
@@ -241,6 +241,9 @@ let agentStateCoordinator: ReturnType<typeof createAgentStateCoordinator> | null
 // before the first path read so development runs do not fall back to a shared Chromium profile.
 // The acceptance profile may override both the name and the userData path afterwards.
 app.setName(APP_INTERNAL_NAME)
+// Windows derives notification identity and taskbar grouping from the AppUserModelID.
+// Without it the packaged app shows up as a generic Electron process.
+if (process.platform === 'win32') app.setAppUserModelId(APP_BUNDLE_ID)
 const productAcceptanceRequested = resolveProductAcceptanceProfileOptIn({
   environment: process.env,
   argv: process.argv
