@@ -99,18 +99,25 @@ function button(text: string): HTMLButtonElement {
 }
 
 describe('ProviderDetail proxy notice', () => {
-  it('explains a network-layer refusal and routes the reader to the proxy settings', async () => {
+  it('states the proxy requirement before any test, then sharpens it when the probe is refused', async () => {
     stubPlatform({ sourceId: '0xrouter-aggregate-provider', state: 'failed', failureCode: 'response-unavailable' })
     await render(routerProvider())
 
-    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
+    // The requirement is on screen before anyone presses 测试连接, above the provider heading.
+    const before = document.body.querySelector('[data-network-proxy-banner]')
+    expect(before).not.toBeNull()
+    expect(before?.getAttribute('data-tone')).toBe('requires')
+    expect(before?.textContent).toContain(settingsText.proxyNotice.title)
+    expect(before?.compareDocumentPosition(document.body.querySelector('h2')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
     const banner = document.body.querySelector('[data-network-proxy-banner]')
     expect(banner).not.toBeNull()
-    expect(banner?.textContent).toContain(settingsText.proxyNotice.title)
+    expect(banner?.getAttribute('data-tone')).toBe('failed')
+    expect(banner?.textContent).toContain(settingsText.proxyNotice.failedTitle)
+    expect(banner?.textContent).toContain(settingsText.proxyNotice.body)
 
     const navigation = vi.fn()
     window.addEventListener('app-shell:navigate', navigation)
@@ -128,7 +135,9 @@ describe('ProviderDetail proxy notice', () => {
     await act(async () => button(settingsText.testConnection).click())
     await flush()
 
-    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
+    // The standing requirement stays, but a rejected key never becomes a VPN verdict.
+    expect(document.body.querySelector('[data-network-proxy-banner]')?.getAttribute('data-tone')).toBe('requires')
+    expect(document.body.textContent).not.toContain(settingsText.proxyNotice.failedTitle)
   })
 
   it('still tags a proxy-required source even before any test runs', async () => {
@@ -139,11 +148,12 @@ describe('ProviderDetail proxy notice', () => {
     expect(tag?.textContent).toBe(settingsText.sourceBadges.proxy)
   })
 
-  it('leaves reachable sources untagged', async () => {
+  it('leaves reachable sources untagged and un-bannered', async () => {
     stubPlatform({ state: 'succeeded' })
     await render(routerProvider(false))
 
     expect(document.body.querySelector('.source-provider-detail__proxy')).toBeNull()
+    expect(document.body.querySelector('[data-network-proxy-banner]')).toBeNull()
   })
 
   it('tests the provider credential from a pane that only lists calendar capabilities', async () => {

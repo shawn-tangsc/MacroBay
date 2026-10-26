@@ -185,11 +185,14 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
   }
 
   const providerName = labels.providerNames[provider.providerId] ?? provider.displayName
+  const hasProxySource = provider.sources.some((source) => source.requiresProxy)
 
   return <section className="source-provider-detail">
-    {networkFailure && provider.sources.some((source) => source.requiresProxy) ? (
-      <NetworkProxyBanner onOpenProxySettings={openProxySettings} />
-    ) : null}
+    {/* The requirement is stated up front; a refused probe only sharpens the wording. */}
+    {hasProxySource ? <NetworkProxyBanner
+      tone={networkFailure ? 'failed' : 'requires'}
+      onOpenProxySettings={openProxySettings}
+    /> : null}
     <header className="source-provider-detail__header">
       <h2>{providerName}</h2>
       <p>{labels.capabilities.replace('{total}', String(sources.length)).replace('{enabled}', String(sources.filter((source) => source.enabled).length))}</p>

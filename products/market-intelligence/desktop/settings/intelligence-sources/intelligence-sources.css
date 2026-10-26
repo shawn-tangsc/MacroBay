@@ -1327,17 +1327,28 @@
 /* A source whose host is edge-blocked: the tag states the network requirement up front. */
 .source-provider-detail__proxy {
   padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  border: 1px solid rgba(196, 138, 26, 0.5);
   border-radius: 4px;
-  background: color-mix(in srgb, var(--warning) 10%, transparent);
-  color: var(--warning);
+  background: rgba(196, 138, 26, 0.14);
+  color: #e0b35a;
   font-size: 10px;
   font-style: normal;
   white-space: nowrap;
 }
 
+:root[data-theme="light"] .source-provider-detail__proxy {
+  border-color: rgba(176, 122, 18, 0.4);
+  background: rgba(196, 138, 26, 0.1);
+  color: #8a5a12;
+}
+
+/*
+ * The bar itself is an antd `Alert` (see NetworkProxyBanner.tsx): its colours come from the theme
+ * provider, so nothing here depends on `--warning` (a token this app never defines) or on
+ * `color-mix()` support. Only the spacing belongs to the product stylesheet.
+ */
 .mi-network-proxy-banner {
-  margin-bottom: 12px;
+  margin: 0 0 14px;
 }
 
 .mi-network-proxy-banner .ant-alert-description {
@@ -1472,8 +1483,10 @@
 }
 
 .source-provider-detail__health.is-degraded {
-  border-color: var(--warning);
-  color: var(--warning);
+  border-color: #c48a1a;
+  border-color: var(--warning, #c48a1a);
+  color: #c48a1a;
+  color: var(--warning, #c48a1a);
 }
 
 .source-provider-detail__health.is-failed {
