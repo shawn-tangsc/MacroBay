@@ -307,18 +307,21 @@ describe('Slack Socket Mode runtime', () => {
     ])
   })
 
-  it('cleans the 5,000 audit cap independently for each channel', () => {
+  it('cleans the 5,000 audit cap independently for each channel', { timeout: 30_000 }, () => {
     const database = createAgentPlatformDatabase(':memory:')
+    const insert = database.connection.prepare('insert into channel_slack_runtime_audits(id,channel_id,code,created_at) values(?,?,?,?)')
+    database.connection.exec('begin')
     for (let index = 0; index < 5_002; index += 1) {
-      database.connection.prepare('insert into channel_slack_runtime_audits(id,channel_id,code,created_at) values(?,?,?,?)').run(
+      insert.run(
         `audit-a-${String(index).padStart(5, '0')}`, 'channel-a', 'code', '2026-07-20T00:00:00.000Z'
       )
     }
     for (let index = 0; index < 10; index += 1) {
-      database.connection.prepare('insert into channel_slack_runtime_audits(id,channel_id,code,created_at) values(?,?,?,?)').run(
+      insert.run(
         `audit-b-${index}`, 'channel-b', 'code', '2026-07-20T00:00:00.000Z'
       )
     }
+    database.connection.exec('commit')
     expect(new SlackRuntimeRepository(database).cleanupAudits(new Date('2026-07-20T00:00:00.000Z'))).toBe(2)
     expect(database.connection.prepare("select count(*) as count from channel_slack_runtime_audits where channel_id='channel-a'").get()).toEqual({ count: 5_000 })
     expect(database.connection.prepare("select count(*) as count from channel_slack_runtime_audits where channel_id='channel-b'").get()).toEqual({ count: 10 })
