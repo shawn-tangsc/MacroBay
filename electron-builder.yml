@@ -3,6 +3,8 @@
 # The deprecation-free rule here: this file only describes what goes into the
 # installed application. Anything the app reads at runtime must either be
 # compiled into `out/` or copied through `extraResources`.
+# Keep in sync with APP_BUNDLE_ID in platform/desktop/appIdentity.ts. Windows also
+# uses this value at runtime for notifications and taskbar grouping.
 appId: com.macrobay.desktop
 productName: MacroBay
 copyright: Copyright © 2026 MacroBay contributors
@@ -60,3 +62,23 @@ dmg:
       y: 190
       type: link
       path: /Applications
+
+# Windows builds run natively on Windows (or the Windows CI runner), where pnpm
+# also installs the win32 agent CLI binary. Cross-building on macOS produces a
+# package without that binary.
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MacroBay
+
