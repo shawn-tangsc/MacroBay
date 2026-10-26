@@ -40,6 +40,8 @@ export function NewsSentimentFeature(props: {
         onOpenAll={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
         onRefresh={state.refresh}
+        includeNeutral={state.filters.includeNeutral}
+        onIncludeNeutralChange={(includeNeutral) => state.setFilters({ includeNeutral })}
         onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true); props.onSelectContext?.(item) }}
         text={props.text}
         view={state.view}
