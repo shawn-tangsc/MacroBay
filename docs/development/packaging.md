@@ -8,8 +8,9 @@ This page describes how to produce a distributable desktop build from this check
 
 - **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
   dashboard.
-- **Windows / Linux**: no packager configuration yet. The Electron code runs there in development,
-  but there is no validated installer.
+- **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. Built and tested by the
+  `package-windows` CI job; it has not been verified on Windows hardware yet.
+- **Linux**: no packager configuration.
 
 ## Build the application bundles
 
@@ -99,11 +100,36 @@ pnpm dist:mac
 4. Reference sizes for `0.1.0` on arm64: about 184 MB for the `.dmg`, about 550 MB for the installed
    bundle.
 
-## Windows and Linux
+## Build the Windows package
 
-Not configured. Each needs its own pass over the same list: icon assets (`.ico`), replacing the macOS
-`open -a` call used by "open with another app", a cross-platform `pnpm dev` script, and a CI job that
-builds on that OS.
+```bash
+pnpm dist:win        # build bundles, then release/MacroBay-<version>-x64-setup.exe
+pnpm dist:win:dir    # build bundles, then release/win-unpacked/ only
+```
+
+Run this on Windows, or let the `package-windows` CI job do it. Building on macOS also works through
+Wine, but pnpm only installs the win32 agent CLI on Windows, so a cross-built installer ships without
+that binary and the agent cannot start there. That is why the Windows artifact is produced on
+`windows-latest`.
+
+The installer is per-user by default, lets the user pick the install directory, and creates desktop
+and Start menu shortcuts. Signing needs an Authenticode certificate through `CSC_LINK` and
+`CSC_KEY_PASSWORD`; an unsigned installer triggers SmartScreen until the user chooses to keep it.
+
+The Windows build has not been exercised on Windows hardware yet. Verify first: window and dashboard,
+model-service settings, one real agent turn, taskbar icon and grouping, and notifications.
+
+## Linux
+
+Not configured. It needs its own pass over the same list: icon assets, a Linux target, and a CI job
+that builds on that OS.
+
+## Windows-only follow-ups
+
+- `openWithSystemApp` still shells out to the macOS `open -a`; the "open with" targets are macOS
+  names. On Windows those entries cannot work yet.
+- The tray icon is created empty, which is invisible on Windows. The app quits when the last window
+  closes there, so this is not blocking, but it is not a usable tray either.
 
 ## Versioning
 

@@ -7,8 +7,9 @@
 ## 当前支持范围
 
 - **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染。
-- **Windows / Linux**：尚未配置打包。Electron 代码能在这些平台以开发方式运行，但没有已验证的
-  安装包。
+- **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。由 `package-windows` CI job 构建并测试，
+  尚未在 Windows 真机上验证。
+- **Linux**：尚未配置打包。
 
 ## 构建应用 bundle
 
@@ -95,10 +96,33 @@ pnpm dist:mac
    启动。
 4. `0.1.0` 在 arm64 上的参考体积：`.dmg` 约 184 MB，安装后约 550 MB。
 
-## Windows 与 Linux
+## 打 Windows 包
 
-尚未配置。每个平台都要按同一份清单过一遍：图标资源（`.ico`）、替换「用其他应用打开」里的 macOS
-`open -a` 调用、跨平台的 `pnpm dev` 脚本，以及在该 OS 上构建的 CI job。
+```bash
+pnpm dist:win        # 先构建 bundle，再产出 release/MacroBay-<version>-x64-setup.exe
+pnpm dist:win:dir    # 先构建 bundle，只产出 release/win-unpacked/
+```
+
+请在 Windows 上执行，或交给 `package-windows` CI job。macOS 上通过 Wine 也能构建，但 pnpm 只在
+Windows 上安装 win32 的智能体 CLI，交叉构建出来的安装器缺少这个二进制，智能体无法启动。所以
+Windows 产物放在 `windows-latest` 上产出。
+
+安装器默认按当前用户安装，允许选择安装目录，并创建桌面和开始菜单快捷方式。签名需要 Authenticode
+证书（`CSC_LINK`、`CSC_KEY_PASSWORD`）；未签名的安装器会触发 SmartScreen 警告，需要用户自行放行。
+
+Windows 构建尚未在真机上跑过。首次验证的顺序：窗口与看板、模型服务设置、一次真实智能体对话、
+任务栏图标与分组、通知。
+
+## Linux
+
+尚未配置。需要按同一份清单过一遍：图标资源、Linux target，以及在该 OS 上构建的 CI job。
+
+## Windows 侧的遗留项
+
+- `openWithSystemApp` 仍然调用 macOS 的 `open -a`，「用其他应用打开」的候选也都是 macOS 名字，
+  Windows 上这些入口暂时不可用。
+- 托盘图标是空图，在 Windows 上不可见。好在 Windows 上关闭最后一个窗口就退出，所以不阻塞使用，
+  但也不算可用的托盘。
 
 ## 版本
 

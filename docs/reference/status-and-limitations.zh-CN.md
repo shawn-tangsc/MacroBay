@@ -24,8 +24,9 @@ Telegram、Slack、Lark、Discord、QQ、WeChat 的平台代码仍在，但设�
 ### 打包安装程序
 
 `pnpm build` 只生成 `out/` 下的 Electron bundle。macOS 的 `.dmg` 可以用 `pnpm dist:mac` 从源码
-构建，但未签名、未公证，从网络下载的副本会被 Gatekeeper 拦截，需要用户手动放行。Windows 和 Linux
-尚未配置打包，也没有自动更新通道。详见[打包](../development/packaging.zh-CN.md)。
+构建，但未签名、未公证，从网络下载的副本会被 Gatekeeper 拦截，需要用户手动放行。Windows 的打包
+已配置、安装器由 CI 构建，但尚未在 Windows 真机上验证；Linux 尚未配置打包。也没有自动更新通道。
+详见[打包](../development/packaging.zh-CN.md)。
 
 ### Demo 数据
 
