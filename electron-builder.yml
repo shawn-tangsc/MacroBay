@@ -81,4 +81,10 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: MacroBay
+  # Branded wizard chrome. Without these the assisted pages render as bare dialogs,
+  # which reads as "no guidance" next to installers that ship a header image.
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeader: resources/installerHeader.bmp
+  installerSidebar: resources/installerSidebar.bmp
 
