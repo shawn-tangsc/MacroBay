@@ -23,6 +23,7 @@ import { createMarketAnalysisSettingsService } from './application/marketAnalysi
 import { createDefaultTranslationSettings } from './application/intelligenceTranslationHelpers'
 import { createRawRecordStore } from './application/rawRecordStore'
 import { createProfileJsonStorage, createSourceProfileStore } from './application/sourceProfileStore'
+import { seedDefaultEnabledSources } from './application/defaultEnabledSources'
 import {
   createFocusSettingsJsonStorage,
   createIntelligenceFocusSettingsStore
@@ -56,7 +57,6 @@ import { createNewsSentimentScoringService } from './news-sentiment/newsSentimen
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
-import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
@@ -615,16 +615,11 @@ export function getIntelligenceModule(
       requestGovernanceQueue,
       ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
     })
-    // These four need no credential and feed the dashboard's sentiment card; a fresh install should
-    // not require toggling them on before the feature can do anything. An existing profile wins.
-    const ensureDefaultNewsSources = (async () => {
-      for (const sourceId of NEWS_SENTIMENT_SOURCE_IDS) {
-        if ((await profileStore.getProfile(sourceId)) === undefined) {
-          await profileStore.saveProfile({ sourceId, enabled: true })
-        }
-      }
-    })().catch(() => undefined)
-    void ensureDefaultNewsSources
+    // The dashboard's first screen (sentiment, fear & greed, stablecoin capital) is fed by sources
+    // that need no credential; a fresh install should not require toggling them on before the cards
+    // can do anything. An existing profile wins, so a reader's "off" is never overridden.
+    const ensureDefaultSources = seedDefaultEnabledSources(profileStore).catch(() => undefined)
+    void ensureDefaultSources
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
