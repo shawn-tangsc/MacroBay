@@ -143,6 +143,26 @@ describe('NewsSentimentFeature', () => {
     expect(query).toHaveBeenLastCalledWith(expect.objectContaining({ window: '24h' }))
   })
 
+
+  it('filters neutral items from the card header', async () => {
+    const neutral = {
+      ...VIEW.items[0]!,
+      itemId: 'item-c',
+      title: 'Exchange maintenance notice',
+      polarity: 'neutral' as const,
+      reasonCode: 'news.no-rule.v1'
+    }
+    const query = vi.fn(async () => ({ ...VIEW, items: [...VIEW.items, neutral] }))
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(3)
+    const exclude = [...container.querySelectorAll<HTMLButtonElement>('.mi-news-sentiment__neutral-filter button')]
+      .find((button) => button.textContent?.includes(text.neutralFilter.exclude))
+    await act(async () => { exclude?.click() })
+    await act(async () => {})
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(2)
+    expect(exclude?.getAttribute('aria-pressed')).toBe('true')
+  })
+
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
