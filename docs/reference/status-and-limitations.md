@@ -26,8 +26,10 @@ run. Treat channels as unavailable until they are deliberately re-enabled with t
 
 ### Packaged installers
 
-`pnpm build` produces Electron bundles under `out/`, not a signed installer. There is no `.dmg`,
-`.exe`, or `.AppImage` in this release, and no auto-update channel.
+`pnpm build` produces Electron bundles under `out/`. A macOS `.dmg` can be built from source with
+`pnpm dist:mac`; it is unsigned and not notarized, so Gatekeeper blocks a downloaded copy until the
+user allows it. Windows and Linux packaging is not configured, and there is no auto-update channel.
+See [Packaging](../development/packaging.md).
 
 ### Demo data
 

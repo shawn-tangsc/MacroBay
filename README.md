@@ -142,8 +142,8 @@ you have not enabled appears as an explicit gap — never as a neutral placehold
 
 ## Quick start
 
-Requires **Node.js 22+** and **pnpm 10**. The current release runs from source; there is no packaged
-installer yet.
+Requires **Node.js 22+** and **pnpm 10**. Run it from source with `pnpm dev`, or build the unsigned
+macOS package with `pnpm dist:mac` (see [Packaging](./docs/development/packaging.md)).
 
 ```bash
 pnpm install
@@ -165,8 +165,9 @@ boundary it used.
 ## Status
 
 MacroBay is **alpha** (`0.1.0`). macOS is the verified platform; Windows and Linux are expected to
-run but have not been validated. There is no demo dataset or installer yet — the dashboard needs
-real provider credentials. See [Status and limitations](./docs/reference/status-and-limitations.md).
+run but have not been validated. There is no demo dataset, and the macOS `.dmg` is unsigned;
+Windows and Linux packages are not built yet — the dashboard needs real provider credentials. See
+[Status and limitations](./docs/reference/status-and-limitations.md).
 
 ## Roadmap
 

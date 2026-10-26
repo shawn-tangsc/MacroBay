@@ -1,0 +1,62 @@
+# Desktop packaging contract for Electron Builder.
+#
+# The deprecation-free rule here: this file only describes what goes into the
+# installed application. Anything the app reads at runtime must either be
+# compiled into `out/` or copied through `extraResources`.
+appId: com.macrobay.desktop
+productName: MacroBay
+copyright: Copyright © 2026 MacroBay contributors
+
+directories:
+  output: release
+  buildResources: resources
+
+# `pnpm build` already produced everything under `out/`; the packaged app is the
+# Vite main/preload/renderer bundle plus production dependencies.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+
+# The agent runtime ships a platform-native CLI binary
+# (`@anthropic-ai/claude-agent-sdk-<platform>-<arch>/claude`) that is spawned as a
+# separate process. Archives cannot be executed, so the application directory is
+# left unpacked until the executable path is rewritten for asar.
+asar: false
+
+# Built-in skills are read from `process.resourcesPath/skills` at runtime and from
+# `resources/skills` in development.
+extraResources:
+  - from: resources/skills
+    to: skills
+
+# No native modules are rebuilt: the app uses Node built-ins only (node:sqlite).
+npmRebuild: false
+
+mac:
+  category: public.app-category.finance
+  icon: resources/icon.icns
+  darkModeSupport: true
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # Local builds are unsigned. Set CSC_LINK/CSC_KEY_PASSWORD (and the notarize
+  # block below) to produce a signed, notarized build.
+  identity: null
+  gatekeeperAssess: false
+  hardenedRuntime: false
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 140
+      y: 190
+      type: file
+    - x: 400
+      y: 190
+      type: link
+      path: /Applications

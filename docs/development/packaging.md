@@ -2,16 +2,22 @@
 
 # Packaging and release
 
-This page describes the current build output and what is still missing for a distributable desktop
-release.
+This page describes how to produce a distributable desktop build from this checkout.
 
-## Current build
+## Current support
+
+- **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
+  dashboard.
+- **Windows / Linux**: no packager configuration yet. The Electron code runs there in development,
+  but there is no validated installer.
+
+## Build the application bundles
 
 ```bash
 pnpm build
 ```
 
-The build writes:
+The build writes the unpackaged application:
 
 ```text
 out/main/       Electron main process
@@ -19,30 +25,85 @@ out/preload/    preload bridge
 out/renderer/   React renderer
 ```
 
-This is an unpackaged application. It is suitable for local development and verification, not for
-handing to an end user.
+This is the input to the packager. It is not a distributable artifact.
 
-## What is not included
+## Build the macOS package
 
-- `.dmg`, `.exe`, `.AppImage`, or `.deb` packaging;
-- application icons for all platforms;
-- code signing and notarization;
-- auto-update;
-- a release publishing workflow.
+Prerequisites: a macOS host, Node.js 22, pnpm 10, and the Xcode command line tools (`hdiutil`).
 
-Do not describe the project as having a downloadable installer until these are implemented and
-verified.
+```bash
+pnpm install
+pnpm dist:mac        # build bundles, then release/MacroBay-<version>-arm64.dmg
+pnpm dist:mac:dir    # build bundles, then release/mac-arm64/MacroBay.app only
+```
 
-## Adding a packager
+`dist:mac` runs `pnpm build` first, so the generated product registry and Vite bundles are always
+current. The output directory is `release/`, which is ignored by git.
 
-A future packaging change should:
+### What the package contains
 
-1. Add a packager such as `electron-builder` or Electron Forge.
-2. Declare application id, product name, icons, and target platforms.
-3. Keep the Vite output path aligned with the packager's `files` configuration.
-4. Exclude local data, tests, docs, and generated caches from the package.
-5. Add a CI job that builds the package on each target OS.
-6. Document signing identities as CI secrets, never as repository files.
+- the `out/` bundles and `package.json`;
+- production dependencies of the root `package.json` (no dev dependencies, no tests, no docs);
+- `resources/skills` copied to `Contents/Resources/skills` through `extraResources`, which is where
+  the main process reads built-in skills from a packaged app;
+- `resources/icon.icns` as the bundle icon;
+- the agent runtime: `@anthropic-ai/claude-agent-sdk` plus its platform-native CLI
+  (`@anthropic-ai/claude-agent-sdk-darwin-arm64/claude`, about 237 MB).
+
+### Why the application directory is not archived (`asar: false`)
+
+The agent runtime spawns that native CLI as a separate process, and the SDK resolves the binary from
+its own package directory. Node cannot execute a file that only exists inside an asar archive, so the
+first build ships an unpacked application directory. Turning asar on requires an `asarUnpack` entry
+for the SDK packages plus an explicit `pathToClaudeCodeExecutable` that points at
+`app.asar.unpacked`. That is a separate change, not a switch to flip.
+
+### Signing and notarization
+
+`mac.identity: null` in `electron-builder.yml` keeps local builds unsigned. An unsigned build that is
+downloaded from the internet is blocked by Gatekeeper until the user right-clicks → **Open**, or runs:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/MacroBay.app
+```
+
+To sign, set `CSC_LINK`/`CSC_KEY_PASSWORD` (or install the identity in the keychain), replace
+`identity: null` with that identity, and enable `hardenedRuntime`. Notarization additionally needs
+`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID`. Neither is part of this release.
+
+### Other architectures
+
+The configured target is arm64 because that is the verified machine. Building x64 or universal also
+requires the matching platform package for the agent CLI, which pnpm does not install for a different
+platform automatically. Install that optional package first, confirm
+`node_modules/@anthropic-ai/claude-agent-sdk-darwin-x64/claude` exists, then run
+`pnpm exec electron-builder --mac --x64`.
+
+### Download mirrors (optional)
+
+If Electron or packager tool downloads time out, point them at a mirror for one command:
+
+```bash
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ \
+ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ \
+pnpm dist:mac
+```
+
+## Verify a build
+
+1. `pnpm dist:mac:dir`, then `open release/mac-arm64/MacroBay.app`.
+2. The main window is titled `MacroBay 观潮` and renders the intelligence dashboard; local data is
+   written under `~/Library/Application Support/MacroBay`.
+3. `hdiutil verify release/MacroBay-<version>-arm64.dmg`, mount it, drag the app to Applications, and
+   launch it from there.
+4. Reference sizes for `0.1.0` on arm64: about 184 MB for the `.dmg`, about 550 MB for the installed
+   bundle.
+
+## Windows and Linux
+
+Not configured. Each needs its own pass over the same list: icon assets (`.ico`), replacing the macOS
+`open -a` call used by "open with another app", a cross-platform `pnpm dev` script, and a CI job that
+builds on that OS.
 
 ## Versioning
 
@@ -59,6 +120,7 @@ A future packaging change should:
 pnpm typecheck
 pnpm test
 pnpm build
+pnpm docs:check
 ```
 
 Then install the produced package on a clean machine and verify:
