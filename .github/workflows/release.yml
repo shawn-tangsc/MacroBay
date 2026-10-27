@@ -53,9 +53,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # 用 Actions 表达式而不是 `$BUILD_REF`：Windows runner 的默认 shell 是 PowerShell，
+      # `"$BUILD_REF"` 会展开成未定义的 PowerShell 变量（空串），版本校验因此收到空参数。
       - name: Check the tag matches the app version
         if: env.PUBLISH == 'true'
-        run: node scripts/check-release-version.mjs "$BUILD_REF"
+        run: node scripts/check-release-version.mjs "${{ env.BUILD_REF }}"
 
       # An x64 runner would pack a dmg without the arm64 agent CLI, and nothing downstream
       # would notice until the installed app failed to start.
@@ -110,7 +112,7 @@ jobs:
 
       - name: Check the tag matches the app version
         if: env.PUBLISH == 'true'
-        run: node scripts/check-release-version.mjs "$BUILD_REF"
+        run: node scripts/check-release-version.mjs "${{ env.BUILD_REF }}"
 
       - name: Install
         run: pnpm install --frozen-lockfile

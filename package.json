@@ -2,7 +2,7 @@
   "name": "macrobay",
   "productName": "MacroBay",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Local-first AI desktop workspace for traceable market intelligence.",
   "author": "MacroBay contributors",
   "license": "MIT",
