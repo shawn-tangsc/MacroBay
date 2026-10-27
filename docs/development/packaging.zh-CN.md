@@ -6,23 +6,17 @@
 
 ## 当前支持范围
 
-- **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染；
-  `package-macos` CI job 会在每次 push 和 PR 上重建它。
-- **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。`package-windows` CI job 在
-  `windows-latest` 上构建、跑测试并上传产物；构建也已在 Windows 11 x64 真机上跑通。安装后的运行态
-  尚未验收。
+- **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染。
+- **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。发布 workflow 在 `windows-latest` 上构建
+  它，构建也已在 Windows 11 x64 真机上跑通。安装后的运行态尚未验收。
 - **Linux**：尚未配置打包。
 
-## CI 打包与发布
+## CI 校验与发布
 
-产物由两个 workflow 负责，都不需要签名密钥，且各自在目标平台的原生 runner 上构建。
+`.github/workflows/ci.yml` 在每次 push 到 `main` 和每个 PR 上运行，只做校验：`pnpm docs:check`、
+typecheck、test、`pnpm build`。它不打包，所以日常 PR 不会为了一个 dmg 多等十分钟。
 
-- `.github/workflows/ci.yml` 在每次 push 到 `main` 和每个 PR 上运行。`package-macos` 在
-  `macos-latest` 上产出 `release/MacroBay-<version>-arm64.dmg`，`package-windows` 在
-  `windows-latest` 上产出安装器，两者都把文件上传到该次运行的 **Artifacts**。下载 artifact 需要
-  登录 GitHub，所以那是用来查看的，不是用来分发的。
-- `.github/workflows/release.yml` 在推送 `v*` tag 时运行，把 dmg、安装器、各自的 blockmap 和自动
-  更新元数据挂到同一个 GitHub Release：
+`.github/workflows/release.yml` 是唯一的打包入口，推送 `v*` tag 时运行：
 
 ```bash
 git switch main
@@ -31,15 +25,20 @@ git tag -a v0.1.1 -m "MacroBay 0.1.1"
 git push origin v0.1.1
 ```
 
-tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 job 在打包前就停下——electron-builder 是按
-manifest 而不是 tag 命名产物的。要给早于该 workflow 的 tag 补上安装器，用
-**Actions → Release → Run workflow** 填入那个 tag。已存在的 release 会保留原有说明，只替换 assets，
-所以重跑是安全的。
+它在 `macos-latest` 上产出 `release/MacroBay-<version>-arm64.dmg`、在 `windows-latest` 上产出 NSIS
+安装器，然后把这两个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都
+不需要签名密钥。
+
+- tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 job 在打包前就停下——electron-builder 是
+  按 manifest 而不是 tag 命名产物的。
+- 对已有 release 的 tag 重跑，只替换 assets、保留原有说明，所以 tag 不用移动也能补救失败的运行。
+- 产物未签名；Release 说明里写明 macOS 的 Gatekeeper 与 Windows 的 SmartScreen 放行方式。
+
+想在打 tag **之前**确认打包没问题，用 **Actions → Release → Run workflow**，ref 填分支（或某个
+commit），`publish` 不勾。两个安装包都会构建出来并留在该次运行的 artifacts 里，不动任何 Release。
 
 两个构建必须分平台运行，因为智能体运行时的原生 CLI 是可选依赖，pnpm 只为宿主平台安装。合到一个
 runner 上会让其中一个产物缺少可用的智能体。
-
-产物未签名。Release 说明里写明 macOS 的 Gatekeeper 与 Windows 的 SmartScreen 放行方式。
 
 ## 构建应用 bundle
 
@@ -136,7 +135,7 @@ pnpm dist:win:dir    # 先构建 bundle，只产出 release/win-unpacked/
 前置条件：Windows 10/11 x64 主机、Node.js 22、pnpm 10。首次构建会下载 Electron 的 win32 发行包和
 NSIS 打包器，之后的构建命中本地缓存。
 
-请在 Windows 上执行，或交给 `package-windows` CI job。macOS 上通过 Wine 也能构建，但 pnpm 只在
+请在 Windows 上执行，或交给发布 workflow 在打 tag 时完成。macOS 上通过 Wine 也能构建，但 pnpm 只在
 Windows 上安装 win32 的智能体 CLI，交叉构建出来的安装器缺少这个二进制，智能体无法启动。所以
 Windows 产物放在 `windows-latest` 上产出。
 

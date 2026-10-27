@@ -1,5 +1,7 @@
 name: CI
 
+# Verification only. Installers are built by `release.yml`, which runs on a `v*` tag (or on
+# demand), so a routine pull request never spends ten minutes packing a dmg nobody installs.
 on:
   push:
     branches: [main]
@@ -45,99 +47,3 @@ jobs:
 
       - name: Build
         run: pnpm build
-
-  package-macos:
-    # Builds the dmg on Apple silicon. The agent runtime's native CLI is an optional
-    # dependency pnpm installs for the host platform only, so an x64 runner would ship a
-    # dmg without the arm64 `claude` binary and the agent could not start.
-    runs-on: macos-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.20.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Assert an arm64 runner
-        run: test "$(uname -m)" = arm64
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Package macOS dmg
-        run: pnpm exec electron-builder --mac --arm64 --publish never
-
-      - name: Verify the disk image
-        run: hdiutil verify release/*.dmg
-
-      - name: Upload disk image
-        uses: actions/upload-artifact@v4
-        with:
-          name: macrobay-macos-arm64
-          path: |
-            release/*.dmg
-            release/*.dmg.blockmap
-            release/latest-mac.yml
-          if-no-files-found: error
-
-  package-windows:
-    # Produces the Windows installer on real Windows hardware so the win32 agent CLI
-    # binary is installed by pnpm. The artifact is what users download; tests run
-    # last so a platform-specific failure still leaves the installer inspectable.
-    runs-on: windows-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.20.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Check documentation
-        run: pnpm docs:check
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Build
-        run: pnpm build
-
-      - name: Package Windows installer
-        run: pnpm exec electron-builder --win --x64 --publish never
-
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: macrobay-windows-x64
-          path: |
-            release/*.exe
-            release/*.blockmap
-            release/latest.yml
-          if-no-files-found: error
-
-      - name: Test
-        run: pnpm test
-

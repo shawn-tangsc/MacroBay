@@ -1,17 +1,22 @@
 name: Release
 
-# Pushing a `v*` tag is the release switch. Both installers are built on their own platform
-# (the agent runtime ships a platform-native CLI binary that pnpm installs for the host
-# only), then attached to a single GitHub Release. Nothing is signed.
+# The only packaging lane. A `v*` tag builds both installers on their own platform (the agent
+# runtime ships a platform-native CLI binary that pnpm installs for the host only) and attaches
+# them to one GitHub Release. A manual run can build any ref without publishing, which is the way
+# to check packaging before cutting a tag.
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      tag:
-        description: Existing tag to package and publish (for example v0.1.1)
+      ref:
+        description: Ref to build — a `v*` tag to release, or a branch / sha for a dry run
         required: true
         type: string
+      publish:
+        description: Create or update the GitHub Release for that tag
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -21,7 +26,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+  # `github.event.inputs` keeps this readable on both triggers; `inputs` would be null on a tag
+  # push, while event inputs are simply absent there.
+  BUILD_REF: ${{ github.event.inputs.ref || github.ref_name }}
+  PUBLISH: ${{ github.event_name == 'push' || github.event.inputs.publish == 'true' }}
 
 jobs:
   macos:
@@ -32,7 +40,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.BUILD_REF }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -46,8 +54,11 @@ jobs:
           cache: pnpm
 
       - name: Check the tag matches the app version
-        run: node scripts/check-release-version.mjs "$RELEASE_TAG"
+        if: env.PUBLISH == 'true'
+        run: node scripts/check-release-version.mjs "$BUILD_REF"
 
+      # An x64 runner would pack a dmg without the arm64 agent CLI, and nothing downstream
+      # would notice until the installed app failed to start.
       - name: Assert an arm64 runner
         run: test "$(uname -m)" = arm64
 
@@ -84,7 +95,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ env.BUILD_REF }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -98,7 +109,8 @@ jobs:
           cache: pnpm
 
       - name: Check the tag matches the app version
-        run: node scripts/check-release-version.mjs "$RELEASE_TAG"
+        if: env.PUBLISH == 'true'
+        run: node scripts/check-release-version.mjs "$BUILD_REF"
 
       - name: Install
         run: pnpm install --frozen-lockfile
@@ -125,6 +137,7 @@ jobs:
   publish:
     name: Publish GitHub Release
     needs: [macos, windows]
+    if: github.event_name == 'push' || github.event.inputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -157,15 +170,15 @@ jobs:
 
           notes="Unsigned alpha build. **macOS**: right-click the app → Open, or \`xattr -dr com.apple.quarantine /Applications/MacroBay.app\`. **Windows**: SmartScreen → More info → Run anyway."
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          if gh release view "$BUILD_REF" >/dev/null 2>&1; then
             # Re-running a tag that already has a release only replaces the assets.
-            list_assets | xargs -0 gh release upload "$RELEASE_TAG" --clobber
+            list_assets | xargs -0 gh release upload "$BUILD_REF" --clobber
           else
-            list_assets | xargs -0 gh release create "$RELEASE_TAG" \
-              --title "MacroBay ${RELEASE_TAG#v}" \
+            list_assets | xargs -0 gh release create "$BUILD_REF" \
+              --title "MacroBay ${BUILD_REF#v}" \
               --generate-notes \
               --notes "$notes" \
               --verify-tag
           fi
 
-          gh release view "$RELEASE_TAG" --json url -q .url
+          gh release view "$BUILD_REF" --json url -q .url

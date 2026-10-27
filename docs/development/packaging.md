@@ -7,24 +7,19 @@ This page describes how to produce a distributable desktop build from this check
 ## Current support
 
 - **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
-  dashboard; the `package-macos` CI job rebuilds it on every push and pull request.
-- **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The `package-windows` CI job builds
-  it, runs the test suite, and uploads the artifact on `windows-latest`; the build also runs through
-  on Windows 11 x64 hardware. The *installed* app is not accepted yet.
+  dashboard.
+- **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The release workflow builds it on
+  `windows-latest`, and the build also runs through on Windows 11 x64 hardware. The *installed* app
+  is not accepted yet.
 - **Linux**: no packager configuration.
 
-## CI packaging and releases
+## CI verification and releases
 
-Two workflows produce the artifacts. Neither needs signing secrets, and each one builds on the
-platform its artifact targets.
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request and only verifies:
+`pnpm docs:check`, typecheck, test, `pnpm build`. It does not pack anything, so a routine pull
+request never waits for a dmg.
 
-- `.github/workflows/ci.yml` runs on every push to `main` and every pull request. `package-macos`
-  builds `release/MacroBay-<version>-arm64.dmg` on `macos-latest`, `package-windows` builds the
-  installer on `windows-latest`, and each uploads its files to the run's **Artifacts** section.
-  Downloading an artifact requires a GitHub sign-in, so those are for inspection rather than for
-  distribution.
-- `.github/workflows/release.yml` runs when a `v*` tag is pushed and publishes one GitHub Release with
-  the dmg, the installer, their blockmaps and the auto-update metadata attached:
+`.github/workflows/release.yml` is the only packaging lane. It runs when a `v*` tag is pushed:
 
 ```bash
 git switch main
@@ -33,16 +28,23 @@ git tag -a v0.1.1 -m "MacroBay 0.1.1"
 git push origin v0.1.1
 ```
 
-The tag must be `v` plus the `version` in `package.json`; the job stops before packaging otherwise,
-because electron-builder names artifacts from the manifest, not from the tag. To attach installers to
-a tag that predates the workflow, run **Actions → Release → Run workflow** and enter that tag. An
-existing release keeps its notes and only gets its assets replaced, so a re-run is safe.
+That builds `release/MacroBay-<version>-arm64.dmg` on `macos-latest` and the NSIS installer on
+`windows-latest`, then publishes one GitHub Release with both files, their blockmaps and the
+auto-update metadata attached. Neither lane needs signing secrets.
+
+- The tag must be `v` plus the `version` in `package.json`; the job stops before packaging otherwise,
+  because electron-builder names artifacts from the manifest, not from the tag.
+- Re-running a tag that already has a release replaces its assets and keeps its notes, so a failed
+  run is recoverable without moving the tag.
+- Nothing is signed; the release notes carry the Gatekeeper and SmartScreen bypass.
+
+To check packaging **before** cutting a tag, run **Actions → Release → Run workflow** with the branch
+(or commit) as the ref and `publish` unchecked. Both installers are built and left on the run page as
+artifacts, and no release is touched.
 
 The two builds stay on separate runners because the agent runtime's native CLI is an optional
 dependency that pnpm installs for the host platform only. A single runner would publish one artifact
 without a working agent.
-
-Nothing is signed. The release notes carry the Gatekeeper and SmartScreen bypass for each platform.
 
 ## Build the application bundles
 
@@ -142,7 +144,7 @@ pnpm dist:win:dir    # build bundles, then release/win-unpacked/ only
 Prerequisites: Windows 10/11 x64 host, Node.js 22, pnpm 10. The first build downloads the Windows
 Electron distribution and the NSIS packer; later builds hit the local cache.
 
-Run this on Windows, or let the `package-windows` CI job do it. Building on macOS also works through
+Run this on Windows, or let the release workflow do it on a tag. Building on macOS also works through
 Wine, but pnpm only installs the win32 agent CLI on Windows, so a cross-built installer ships without
 that binary and the agent cannot start there. That is why the Windows artifact is produced on
 `windows-latest`.
