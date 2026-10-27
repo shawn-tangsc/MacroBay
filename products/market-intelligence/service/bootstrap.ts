@@ -6,6 +6,7 @@ import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-pla
 import type { ProductCacheRegistrar } from '@platform/storage/cache-governance/productCacheRegistrar'
 import type { ProductServiceDisposerRegistrar } from '@platform/product-registry/productServiceDisposerRegistry'
 import type { SecretVault } from '@platform/secrets/secretVaultTypes'
+import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { app } from 'electron'
@@ -91,6 +92,21 @@ export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefi
  *
  * 这里对 `app` 做能力判断而不是直接调，因为测试会用一个只实现路径 API 的替身。
  */
+/**
+ * 开发期的场景目录：只有从源码运行时才走磁盘，打包后一律用构建期打平的 JSON。
+ *
+ * 这让「改一份示例 JSON」不再需要重启主进程——重新进入示例即可生效。
+ */
+function sampleModeScenarioDirectory(): string | undefined {
+  if (typeof app?.getAppPath !== 'function' || app.isPackaged) return undefined
+  const directory = join(app.getAppPath(), 'products/market-intelligence/demo/scenarios')
+  try {
+    return statSync(directory).isDirectory() ? directory : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function sampleModeRecorderDirectory(): string | undefined {
   if (process.env.MB_SAMPLE_RECORD !== '1') return undefined
   if (typeof app?.getAppPath !== 'function' || app.isPackaged) return undefined
@@ -105,12 +121,14 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
    */
   let resumeProductWork: () => Promise<void> = async () => undefined
   const recorderDirectory = sampleModeRecorderDirectory()
+  const scenarioDirectory = sampleModeScenarioDirectory()
   const sampleMode = createSampleModeRuntime({
     productId: 'market-intelligence',
     jobRuntime: deps.jobRuntime,
     getLanguage: deps.getAppLanguage ?? (async () => 'zh-CN' as const),
     resumeWork: () => resumeProductWork(),
-    ...(recorderDirectory ? { recorderDirectory } : {})
+    ...(recorderDirectory ? { recorderDirectory } : {}),
+    ...(scenarioDirectory ? { scenarioDirectory } : {})
   })
   const register: ProductIpcRegistrar = sampleMode.wrap(deps.register)
   sampleMode.registerIpc(register)

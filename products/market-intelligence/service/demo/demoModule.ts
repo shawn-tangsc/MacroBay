@@ -8,7 +8,8 @@
 import type { JobRuntime } from '@platform/jobs'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
-import { loadSampleModeCatalog } from './demoCatalog'
+import { buildSampleModeCatalog, loadSampleModeCatalog } from './demoCatalog'
+import { readSampleModeFilesFromDisk } from './demoCatalogDisk'
 import { registerSampleModeIpc } from './demoIpc'
 import { wrapProductRegistrar } from './demoOverlay'
 import { createSampleModeRecorder, type SampleModeRecorder } from './demoRecorder'
@@ -31,6 +32,8 @@ export type SampleModeRuntimeInput = Readonly<{
   suspendWork?: () => Promise<void>
   /** 录制目录；只在 `MB_SAMPLE_RECORD=1` 且给了目录时才录。 */
   recorderDirectory?: string
+  /** 开发期场景目录：给了就从磁盘读，改 JSON 不必重启主进程。 */
+  scenarioDirectory?: string
   env?: Readonly<Record<string, string | undefined>>
   now?: () => Date
 }>
@@ -45,9 +48,16 @@ export function createSampleModeRuntime(input: SampleModeRuntimeInput): SampleMo
         now: input.now ?? (() => new Date())
       })
     : undefined
+  // 开发期读磁盘（改数据只重进示例），打包后读构建期打平的 JSON。
+  const loadCatalog = input.scenarioDirectory
+    ? (locale: SampleModeLocale) => buildSampleModeCatalog({
+        ...readSampleModeFilesFromDisk(input.scenarioDirectory!),
+        locale
+      })
+    : loadSampleModeCatalog
   const session = createSampleModeSession({
     productId: input.productId,
-    loadCatalog: loadSampleModeCatalog,
+    loadCatalog,
     getLanguage: input.getLanguage,
     jobs: input.jobRuntime,
     ...(input.suspendWork ? { suspendWork: input.suspendWork } : {}),
