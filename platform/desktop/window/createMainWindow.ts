@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULT_MIN_WINDOW_HEIGHT, DEFAULT_MIN_WINDOW_WIDTH } from '../../ui/window/windowSizing'
 import { resolveWindowBackgroundColor } from '../../ui/theme/windowTheme'
 import { APP_DISPLAY_NAME } from '../appIdentity'
+import { resolveWindowChromeOptions } from './windowChrome'
 
 /**
  * Owner: platform/desktop/window。权威：技术设计 §4（安全、快照与 IPC）与 P1-04。
@@ -109,13 +110,24 @@ export function isAllowedAppWindowEntryUrl(url: string, policy: AppWindowEntryPo
 }
 
 /**
- * 是否逃出应用根：同时按 POSIX 与 Windows 规则判定（`%5c` 在 POSIX 上只是普通字符，但 Windows 视其为
- * 分隔符），`..` 逃逸与跨盘/跨根都算逃出；根内（含根自身）不算。
+ * 是否逃出应用根：`..` 逃逸与跨盘/跨根都算逃出；根内（含根自身）不算。
+ *
+ * 两条规则各有归属，不能对同一段路径同时套：
+ *  - 形如 Windows 的路径（盘符或反斜杠）只按 `win32` 规则判。把它交给 `posix.relative` 会把
+ *    `D:\app\renderer` 与 `D:\app\renderer\index.html` 当成两个**相对名字**，算出一个并不存在的
+ *    `../D:\app\...` —— 真机现象是 Windows 上**所有**合法 entry 都被判成逃逸
+ *    （`detached-window-entry-rejected`，独立窗工厂构造失败、app 起不来）；
+ *  - 其余路径只按 POSIX 规则判。POSIX 上 `%5c` 只是普通字符、Windows 视其为分隔符，所以
+ *    含反斜杠的候选一律落到上面的 `win32` 分支（越界仍由 `..\` 规则抓住，不放宽）。
  */
 function escapesAppRoot(root: string, candidate: string): boolean {
   const outside = (sub: string, separator: string, isAbsolute: (value: string) => boolean): boolean =>
     sub === '..' || sub.startsWith(`..${separator}`) || isAbsolute(sub)
-  return outside(posix.relative(root, candidate), '/', posix.isAbsolute) || outside(win32.relative(root, candidate), '\\', win32.isAbsolute)
+  const looksWindowsPath = (value: string): boolean => /^[a-zA-Z]:/.test(value) || value.includes('\\')
+  const posixEscapes = looksWindowsPath(root) || looksWindowsPath(candidate)
+    ? false
+    : outside(posix.relative(root, candidate), '/', posix.isAbsolute)
+  return posixEscapes || outside(win32.relative(root, candidate), '\\', win32.isAbsolute)
 }
 
 /** 应用根本身必须是一个合法的 file: URL 绝对路径；缺失/相对/根目录一律 fail closed。 */
@@ -208,8 +220,9 @@ export async function createMainWindow(options: MainWindowOptions = {}): Promise
     show: false,
     title: APP_DISPLAY_NAME,
     autoHideMenuBar: true,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 14, y: 14 },
+    // 装饰只走 `windowChrome` 的单源策略：macOS 红绿灯内嵌在页面上，Windows 无原生标题条、
+    // 由渲染层自绘并画出最小化/最大化/关闭（与独立面板窗同一份选项）。
+    ...resolveWindowChromeOptions(),
     // PLAT-42 ①：与分离窗**同源**派生（深 `#0b0d10` / 浅 `#ffffff` = `:root --bg` 两态），不再是 `#101114`
     backgroundColor: resolveWindowBackgroundColor(systemPrefersDark()),
     webPreferences: security.webPreferences

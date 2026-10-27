@@ -168,10 +168,10 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'binance-announcements', displayName: 'Binance announcements', panels: ['dashboard'], adapterRef: 'binance-announcements' }),
-      src({ sourceId: 'binance-api-updates', displayName: 'Binance API updates', adapterRef: 'binance-api-updates' }),
-      src({ sourceId: 'binance-spot-market', displayName: 'Binance spot market', adapterRef: 'binance-spot-market' }),
-      src({ sourceId: 'binance-futures-positioning', displayName: 'Binance futures positioning', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' }),
+      src({ sourceId: 'binance-announcements', displayName: 'Binance announcements', panels: ['dashboard'], requiresProxy: true, adapterRef: 'binance-announcements' }),
+      src({ sourceId: 'binance-api-updates', displayName: 'Binance API updates', requiresProxy: true, adapterRef: 'binance-api-updates' }),
+      src({ sourceId: 'binance-spot-market', displayName: 'Binance spot market', requiresProxy: true, adapterRef: 'binance-spot-market' }),
+      src({ sourceId: 'binance-futures-positioning', displayName: 'Binance futures positioning', panels: ['dashboard'], requiresProxy: true, capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'binance-futures-positioning' }),
       src({ sourceId: 'binance-asset-page', displayName: 'Binance asset page', visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'binance-asset-page' })
     ]
   }),
@@ -181,8 +181,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'okx-latest-announcements', displayName: 'OKX latest announcements', panels: ['dashboard'], adapterRef: 'okx-latest-announcements' }),
-      src({ sourceId: 'okx-api-announcements', displayName: 'OKX API announcements', adapterRef: 'okx-api-announcements' })
+      src({ sourceId: 'okx-latest-announcements', displayName: 'OKX latest announcements', panels: ['dashboard'], requiresProxy: true, adapterRef: 'okx-latest-announcements' }),
+      src({ sourceId: 'okx-api-announcements', displayName: 'OKX API announcements', requiresProxy: true, adapterRef: 'okx-api-announcements' })
     ]
   }),
   provider({
@@ -198,8 +198,8 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'crypto',
     credential: 'none',
     sources: [
-      src({ sourceId: 'defillama-stablecoins', displayName: 'DeFiLlama stablecoins', panels: ['dashboard'], adapterRef: 'defillama-stablecoins' }),
-      src({ sourceId: 'defillama-tvl', displayName: 'DeFiLlama TVL', adapterRef: 'defillama-tvl' })
+      src({ sourceId: 'defillama-stablecoins', displayName: 'DeFiLlama stablecoins', panels: ['dashboard'], requiresProxy: true, adapterRef: 'defillama-stablecoins' }),
+      src({ sourceId: 'defillama-tvl', displayName: 'DeFiLlama TVL', requiresProxy: true, adapterRef: 'defillama-tvl' })
     ]
   }),
   provider({
@@ -214,7 +214,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'CoinDesk',
     category: 'crypto',
     credential: 'none',
-    sources: [src({ sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', panels: ['dashboard'], adapterRef: 'coindesk-rss' })]
+    sources: [src({ sourceId: 'coindesk-rss', displayName: 'CoinDesk RSS', visibility: 'advanced', panels: ['dashboard'], requiresProxy: true, adapterRef: 'coindesk-rss' })]
   }),
   provider({
     providerId: 'ethereum-foundation',

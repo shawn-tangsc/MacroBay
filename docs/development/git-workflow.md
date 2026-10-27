@@ -132,8 +132,11 @@ git tag -a v0.1.1 -m "MacroBay 0.1.1"
 git push origin v0.1.1
 ```
 
-Then create a GitHub Release from that tag. Release assets are installers or archives; they are not
-committed to Git.
+Pushing the tag runs `.github/workflows/release.yml`, which builds the macOS dmg and the Windows
+installer and creates the GitHub Release from them. Release assets are installers or archives; they are
+not committed to Git. If that run fails after the tag exists, re-run it from
+**Actions → Release → Run workflow** with the same tag: an existing release keeps its notes and only
+gets its assets replaced.
 
 The existing `v0.1.0` tag points at `b99c952`. Do not move it. The next release is `v0.1.1` (or the
 next planned minor), built from current `main`.

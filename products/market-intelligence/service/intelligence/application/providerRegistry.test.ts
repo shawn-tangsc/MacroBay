@@ -134,7 +134,7 @@ describe('source projections', () => {
     ])
   })
 
-  it('marks every 0xRouter source as needing a proxy and leaves reachable sources unmarked', () => {
+  it('marks every proxy-only source as needing a proxy and leaves reachable sources unmarked', () => {
     const routers = getProvider('0xrouter')?.sources ?? []
     expect(routers).toHaveLength(4)
     for (const source of routers) expect(source.requiresProxy, source.sourceId).toBe(true)
@@ -143,10 +143,29 @@ describe('source projections', () => {
     const projected = panelView('dashboard')?.providers.find((provider) => provider.providerId === '0xrouter')
     expect(projected?.sources.every((source) => source.requiresProxy === true)).toBe(true)
 
-    for (const reachable of ['binance-spot-market', 'coingecko-market', 'fred-rates-liquidity']) {
+    // Mainland-blocked crypto venues and news: the bar and the 需要代理 tag must reach them too.
+    const blocked = [
+      'binance-announcements',
+      'binance-api-updates',
+      'binance-spot-market',
+      'binance-futures-positioning',
+      'okx-latest-announcements',
+      'okx-api-announcements',
+      'defillama-stablecoins',
+      'defillama-tvl',
+      'coindesk-rss'
+    ]
+    for (const sourceId of blocked) {
+      expect(allSources().find((source) => source.sourceId === sourceId)?.requiresProxy, sourceId).toBe(true)
+    }
+    expect(panelView('dashboard')?.providers.find((provider) => provider.providerId === 'binance')?.sources
+      .every((source) => source.requiresProxy === true)).toBe(true)
+
+    for (const reachable of ['coingecko-market', 'fred-rates-liquidity', 'alternative-fear-greed']) {
       expect(allSources().find((source) => source.sourceId === reachable)?.requiresProxy).toBeUndefined()
     }
-    expect(providerRegistry.filter((provider) => provider.sources.some((source) => source.requiresProxy)).map((provider) => provider.providerId)).toEqual(['0xrouter'])
+    expect(providerRegistry.filter((provider) => provider.sources.some((source) => source.requiresProxy)).map((provider) => provider.providerId))
+      .toEqual(['binance', 'okx', 'defillama', 'coindesk', '0xrouter'])
   })
 
   it('names the provider credential source even in a panel that does not list it', () => {

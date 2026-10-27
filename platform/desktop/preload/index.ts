@@ -424,6 +424,22 @@ const api = {
     isMaximized: () => ipcRenderer.invoke(IpcChannels.windowIsMaximized),
     setMinimumSize: (width: number, height: number) => ipcRenderer.invoke(IpcChannels.windowSetMinimumSize, width, height),
     resetMinimumSize: () => ipcRenderer.invoke(IpcChannels.windowResetMinimumSize),
+    /**
+     * 自绘标题栏的菜单条：`list` 只读应用菜单的顶层标签，`popup` 按索引弹出**既有**子菜单。
+     * 没有任意命令/role/channel 入口；菜单内容与行为仍由 Main 的 `buildAppMenu` 唯一决定。
+     */
+    menu: {
+      list: () => ipcRenderer.invoke(IpcChannels.windowMenuList),
+      popup: (index: number, x: number, y: number) => ipcRenderer.invoke(IpcChannels.windowMenuPopup, index, x, y),
+      /** 应用菜单被重建（新增/删除菜单）时重读顶层标签：渲染层不缓存、不自己维护菜单表。 */
+      onChanged: (callback: () => void) => {
+        const listener = (_event: Electron.IpcRendererEvent): void => callback()
+        ipcRenderer.on(IpcChannels.windowMenuChanged, listener)
+        return () => {
+          ipcRenderer.removeListener(IpcChannels.windowMenuChanged, listener)
+        }
+      }
+    },
     onMaximizedChange: (callback: (isMaximized: boolean) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) => callback(isMaximized)
       ipcRenderer.on(IpcChannels.windowMaximizedChanged, listener)

@@ -105,8 +105,12 @@ describe('intelligence module calendar evidence composition', () => {
       expect(module.pipeline.listMetricEvents()).toHaveLength(1)
     })
     const recoveryRuns = jobRuntime.listRuns({ handlerId: INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB })
-    expect(recoveryRuns).toHaveLength(1)
-    expect(recoveryRuns[0]).toMatchObject({ owner: 'product', productId: 'market-intelligence', payload: {} })
+    // 默认开启的源会让 source runtime 在启动时也排一轮 normalize，它可能还在排队/运行中，所以
+    // 既不能锁死「恰好一条」，也不能依赖某一时刻的 run 状态。要守的是：启动恢复那一轮确实被排过
+    // （owner/productId/payload 都对得上），并且同一条记录没有被处理两次（下面只断言一条指标）。
+    expect(recoveryRuns).toEqual(expect.arrayContaining([
+      expect.objectContaining({ owner: 'product', productId: 'market-intelligence', payload: {} })
+    ]))
     await expect(module.publicQueryService.queryFearGreedSnapshot({ asOf: '2024-06-29T12:00:00.000Z' })).resolves.toMatchObject({
       state: 'available', score: 22
     })

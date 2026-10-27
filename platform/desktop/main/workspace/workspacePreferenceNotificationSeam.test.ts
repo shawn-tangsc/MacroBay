@@ -278,8 +278,10 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
     expect(appSource).toContain(
       "nativeTheme.on('updated', () => { void panelWorkspaceForDisposal?.notifyPreferencesChanged() })"
     )
-    // 既有 import 风格：nativeTheme 来自 electron 的那一条 import（不新增依赖、不新增通道/preload 方法）
-    expect(appSource).toContain('import { app, BrowserWindow, dialog, ipcMain, nativeTheme,')
+    // 既有 import 风格：nativeTheme 来自 electron 的那一条 import（不新增依赖、不新增通道/preload
+    // 方法）。成员列表会随功能增减（例如 Windows 菜单条引入的 Menu），所以只断言这条 import 里有
+    // nativeTheme，而不是锁死整行文本。
+    expect(appSource).toMatch(/import \{[^}]*\bnativeTheme\b[^}]*\} from 'electron'/)
     // 恰两处显式通知：设置写入（settingsUpdate 成功路径）+ OS 外观变化；没有第三条对账链
     expect(appSource.split('notifyPreferencesChanged()').length - 1).toBe(2)
   })

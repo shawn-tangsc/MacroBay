@@ -1,5 +1,7 @@
 name: CI
 
+# Verification only. Installers are built by `release.yml`, which runs on a `v*` tag (or on
+# demand), so a routine pull request never spends ten minutes packing a dmg nobody installs.
 on:
   push:
     branches: [main]

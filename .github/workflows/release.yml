@@ -1,0 +1,184 @@
+name: Release
+
+# The only packaging lane. A `v*` tag builds both installers on their own platform (the agent
+# runtime ships a platform-native CLI binary that pnpm installs for the host only) and attaches
+# them to one GitHub Release. A manual run can build any ref without publishing, which is the way
+# to check packaging before cutting a tag.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Ref to build — a `v*` tag to release, or a branch / sha for a dry run
+        required: true
+        type: string
+      publish:
+        description: Create or update the GitHub Release for that tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # `github.event.inputs` keeps this readable on both triggers; `inputs` would be null on a tag
+  # push, while event inputs are simply absent there.
+  BUILD_REF: ${{ github.event.inputs.ref || github.ref_name }}
+  PUBLISH: ${{ github.event_name == 'push' || github.event.inputs.publish == 'true' }}
+
+jobs:
+  macos:
+    name: macOS arm64 dmg
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check the tag matches the app version
+        if: env.PUBLISH == 'true'
+        run: node scripts/check-release-version.mjs "$BUILD_REF"
+
+      # An x64 runner would pack a dmg without the arm64 agent CLI, and nothing downstream
+      # would notice until the installed app failed to start.
+      - name: Assert an arm64 runner
+        run: test "$(uname -m)" = arm64
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package macOS dmg
+        run: pnpm exec electron-builder --mac --arm64 --publish never
+
+      - name: Verify the disk image
+        run: hdiutil verify release/*.dmg
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: macrobay-macos-arm64
+          path: |
+            release/*.dmg
+            release/*.dmg.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check the tag matches the app version
+        if: env.PUBLISH == 'true'
+        run: node scripts/check-release-version.mjs "$BUILD_REF"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package Windows installer
+        run: pnpm exec electron-builder --win --x64 --publish never
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: macrobay-windows-x64
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [macos, windows]
+    if: github.event_name == 'push' || github.event.inputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macrobay-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # NUL-separated so no artifact name can be split into two arguments.
+          list_assets() {
+            find dist -type f \
+              \( -name '*.dmg' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print0
+          }
+
+          if [ ! -d dist ] || [ -z "$(list_assets | tr -d '\0')" ]; then
+            echo "no installer files were downloaded from the build jobs" >&2
+            exit 1
+          fi
+          echo 'attaching:'
+          list_assets | tr '\0' '\n'
+
+          notes="Unsigned alpha build. **macOS**: right-click the app → Open, or \`xattr -dr com.apple.quarantine /Applications/MacroBay.app\`. **Windows**: SmartScreen → More info → Run anyway."
+
+          if gh release view "$BUILD_REF" >/dev/null 2>&1; then
+            # Re-running a tag that already has a release only replaces the assets.
+            list_assets | xargs -0 gh release upload "$BUILD_REF" --clobber
+          else
+            list_assets | xargs -0 gh release create "$BUILD_REF" \
+              --title "MacroBay ${BUILD_REF#v}" \
+              --generate-notes \
+              --notes "$notes" \
+              --verify-tag
+          fi
+
+          gh release view "$BUILD_REF" --json url -q .url

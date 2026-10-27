@@ -130,7 +130,10 @@ git tag -a v0.1.1 -m "MacroBay 0.1.1"
 git push origin v0.1.1
 ```
 
-然后从该 tag 创建 GitHub Release。安装包或压缩包是 Release assets，不提交进 Git。
+推送该 tag 会触发 `.github/workflows/release.yml`，由它构建 macOS dmg 和 Windows 安装器并据此创建
+GitHub Release。安装包或压缩包是 Release assets，不提交进 Git。如果 tag 已存在但这次运行失败，用
+**Actions → Release → Run workflow** 填入同一个 tag 重跑：已存在的 release 保留原有说明，只替换
+assets。
 
 现有 `v0.1.0` 指向 `b99c952`，不要移动。下一个版本从当前 `main` 发 `v0.1.1`（或计划中的下一个
 minor）。

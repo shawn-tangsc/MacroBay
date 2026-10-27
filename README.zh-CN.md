@@ -130,7 +130,8 @@ Releases）、市场数据（Binance 现货与合约、CoinGecko、DeFiLlama 稳
 
 ## 快速开始
 
-需要 **Node.js 22+** 和 **pnpm 10**。当前版本以源码方式运行，还没有打包安装包。
+需要 **Node.js 22+** 和 **pnpm 10**。用 `pnpm dev` 从源码运行，或用 `pnpm dist:mac` 打出未签名的
+macOS 安装包（见[打包](./docs/development/packaging.zh-CN.md)）。
 
 ```bash
 pnpm install
@@ -148,8 +149,9 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.1.0`）。macOS 是已验证平台；Windows 和 Linux 预期可以运行，但
-尚未做过端到端验证。还没有 demo 数据集和安装包——看板需要真实的来源凭据。详见
+MacroBay 目前是 **alpha**（`0.1.0`）。macOS 是已验证平台。还没有 demo 数据集；macOS 安装包可从
+源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的运行态尚未验证，
+Linux 尚未配置打包——看板需要真实的来源凭据。详见
 [状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。
 
 ## 路线图

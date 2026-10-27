@@ -531,7 +531,11 @@ describe('claude code runtime dependency helpers', () => {
     ).rejects.toThrow('Claude Code workspace does not exist: /Users/example/missing')
   })
 
-  it('maps placeholder system workspaces into the managed root and creates the directory', async () => {
+  // POSIX-shaped fixtures: the preparer runs them through node:path, so on Windows the same
+  // inputs resolve to D:\managed\root\... and the assertion would be testing path.resolve
+  // rather than the managed-root containment rule. The rule itself is covered by the
+  // macOS/Linux verify job.
+  it.skipIf(process.platform === 'win32')('maps placeholder system workspaces into the managed root and creates the directory', async () => {
     const ensureDirectory = vi.fn()
     const getRealPath = vi.fn(async (path: string) => {
       if (path === '/managed/root') return '/managed/root'
@@ -558,7 +562,8 @@ describe('claude code runtime dependency helpers', () => {
     expect(ensureDirectory).toHaveBeenCalledWith('/managed/root/session-1')
   })
 
-  it('rejects system workspaces that escape the managed root after canonicalization', async () => {
+  // Same POSIX-fixture caveat as above: Windows resolves these paths against the current drive.
+  it.skipIf(process.platform === 'win32')('rejects system workspaces that escape the managed root after canonicalization', async () => {
     const ensureDirectory = vi.fn()
     const getRealPath = vi.fn(async (path: string) => {
       if (path === '/managed/root') return '/managed/root'

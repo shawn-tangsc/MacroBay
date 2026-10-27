@@ -1,0 +1,98 @@
+# Desktop packaging contract for Electron Builder.
+#
+# The deprecation-free rule here: this file only describes what goes into the
+# installed application. Anything the app reads at runtime must either be
+# compiled into `out/` or copied through `extraResources`.
+# Keep in sync with APP_BUNDLE_ID in platform/desktop/appIdentity.ts. Windows also
+# uses this value at runtime for notifications and taskbar grouping.
+appId: com.macrobay.desktop
+productName: MacroBay
+copyright: Copyright © 2026 MacroBay contributors
+
+directories:
+  output: release
+  buildResources: resources
+
+# `pnpm build` already produced everything under `out/`; the packaged app is the
+# Vite main/preload/renderer bundle plus production dependencies.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+
+# The agent runtime ships a platform-native CLI binary
+# (`@anthropic-ai/claude-agent-sdk-<platform>-<arch>/claude`) that is spawned as a
+# separate process. Archives cannot be executed, so the application directory is
+# left unpacked until the executable path is rewritten for asar.
+asar: false
+
+# Built-in skills are read from `process.resourcesPath/skills` at runtime and from
+# `resources/skills` in development.
+extraResources:
+  - from: resources/skills
+    to: skills
+
+# No native modules are rebuilt: the app uses Node built-ins only (node:sqlite).
+npmRebuild: false
+
+mac:
+  category: public.app-category.finance
+  icon: resources/icon.icns
+  darkModeSupport: true
+  target:
+    - target: dmg
+      arch:
+        - arm64
+  # Local builds are unsigned. Set CSC_LINK/CSC_KEY_PASSWORD (and the notarize
+  # block below) to produce a signed, notarized build.
+  identity: null
+  gatekeeperAssess: false
+  hardenedRuntime: false
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 140
+      y: 190
+      type: file
+    - x: 400
+      y: 190
+      type: link
+      path: /Applications
+
+# Windows builds run natively on Windows (or the Windows CI runner), where pnpm
+# also installs the win32 agent CLI binary. Cross-building on macOS produces a
+# package without that binary.
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: MacroBay
+  # Branded wizard chrome. Without these the assisted pages render as bare dialogs,
+  # which reads as "no guidance" next to installers that ship a header image.
+  installerIcon: resources/icon.ico
+  # Deliberately no `uninstallerIcon`: that setting makes the installer write
+  # $INSTDIR\uninstallerIcon.ico at install time, which dies with "cannot open file for
+  # writing" on hosts running aggressive endpoint agents (written up in
+  # docs-private/05-desktop/packaging-and-installers.md). The cost is only that the
+  # uninstaller entry in Apps & Features falls back to the default icon.
+  installerHeader: resources/installerHeader.bmp
+  installerSidebar: resources/installerSidebar.bmp
+  # The stock app-running probe shells out to PowerShell and kills every process whose
+  # path starts with $INSTDIR; with an unresolved $INSTDIR that false-positives and the
+  # installer blocks on 「无法关闭」. The override replaces it with a taskkill by image name.
+  include: resources/nsis/custom.nsh
+

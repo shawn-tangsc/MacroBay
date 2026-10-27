@@ -22,8 +22,28 @@ function workspace(): string {
   return join(directory, 'model-providers.sqlite')
 }
 
+/**
+ * Windows cannot unlink a SQLite file that is still open, so the teardown has to close the
+ * storage before deleting its directory; otherwise rmSync throws EBUSY/EPERM and an otherwise
+ * green test is reported as failed. The retry is only a backstop for the close file handle.
+ */
+const storages: Array<{ close: () => void }> = []
+
+function sqliteStorage(options: Parameters<typeof createProviderSqliteStorage>[0]) {
+  const storage = createProviderSqliteStorage(options)
+  storages.push(storage)
+  return storage
+}
+
 afterEach(() => {
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  for (const storage of storages.splice(0)) {
+    try {
+      storage.close()
+    } catch {
+      // The case already closed it; close() is idempotent.
+    }
+  }
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 /** 抽屉写入的实际载荷：整份端点清单（顺序即优先级）。 */
@@ -59,7 +79,7 @@ async function seed(store: ReturnType<typeof createProviderStore>): Promise<Mode
 describe('T4/T5 endpoint order is the default-endpoint source of truth', () => {
   it('moves the chosen endpoint to the front without dropping the others (memory and SQLite)', async () => {
     const path = workspace()
-    const storage = createProviderSqliteStorage({ path })
+    const storage = sqliteStorage({ path })
     const store = createProviderStore(storage)
     const configured = await seed(store)
 
@@ -81,7 +101,7 @@ describe('T4/T5 endpoint order is the default-endpoint source of truth', () => {
     storage.close()
 
     // 从磁盘读回来：四个端点仍在、顺序一致（防止只有内存态正确、落库时被冲掉）。
-    const reopened = createProviderStore(createProviderSqliteStorage({ path }))
+    const reopened = createProviderStore(sqliteStorage({ path }))
     const persisted = (await reopened.getState()).providers.find((provider) => provider.id === 'silicon')!
     expect(persisted.endpoints).toEqual([
       { protocol: 'messages', baseUrl: 'https://api.siliconflow.cn' },
@@ -93,7 +113,7 @@ describe('T4/T5 endpoint order is the default-endpoint source of truth', () => {
 
   it('persists a declared-but-unconfigured endpoint (empty base) across a restart', async () => {
     const path = workspace()
-    const storage = createProviderSqliteStorage({ path })
+    const storage = sqliteStorage({ path })
     const store = createProviderStore(storage)
     const configured = await seed(store)
 
@@ -104,7 +124,7 @@ describe('T4/T5 endpoint order is the default-endpoint source of truth', () => {
     ]))
     storage.close()
 
-    const reopened = createProviderStore(createProviderSqliteStorage({ path }))
+    const reopened = createProviderStore(sqliteStorage({ path }))
     const persisted = (await reopened.getState()).providers.find((provider) => provider.id === 'silicon')!
     expect(persisted.endpoints.find((endpoint) => endpoint.protocol === 'responses'))
       .toEqual({ protocol: 'responses', baseUrl: '' })
@@ -112,7 +132,7 @@ describe('T4/T5 endpoint order is the default-endpoint source of truth', () => {
 
   it('keeps the other endpoints when one of them is deleted', async () => {
     const path = workspace()
-    const storage = createProviderSqliteStorage({ path })
+    const storage = sqliteStorage({ path })
     const store = createProviderStore(storage)
     const configured = await seed(store)
 
@@ -127,7 +147,7 @@ describe('T4/T5 endpoint order is the default-endpoint source of truth', () => {
       .toEqual(['chat-completions', 'messages', 'gemini'])
     storage.close()
 
-    const reopened = createProviderStore(createProviderSqliteStorage({ path }))
+    const reopened = createProviderStore(sqliteStorage({ path }))
     const persisted = (await reopened.getState()).providers.find((provider) => provider.id === 'silicon')!
     expect(persisted.endpoints.map((endpoint) => endpoint.protocol))
       .toEqual(['chat-completions', 'messages', 'gemini'])

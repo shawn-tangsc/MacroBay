@@ -66,6 +66,7 @@ vi.mock('electron', () => {
 
 import type { WorkspaceBounds } from '@platform/workspace/contracts'
 import { SECURE_WINDOW_PREFERENCE_BASELINE, createSecureWindowSecurity } from '../../window/createMainWindow'
+import { resolveWindowChromeOptions } from '../../window/windowChrome'
 import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
 
 /**
@@ -174,9 +175,9 @@ describe('PLAT-04 工厂 bounds 端口：原样广播 + 零泄漏 + 零行为变
     expect(fake.options).toEqual({
       x: 11, y: 22, width: 1333, height: 777, title: 'Only',
       show: false, autoHideMenuBar: true,
-      // PLAT-39 ①：装饰对齐主窗（darwin hiddenInset）、红绿灯内嵌、底色由主题派生（深/浅两值之一）
-      titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-      trafficLightPosition: { x: 14, y: 14 },
+      // PLAT-39 ①：装饰与主窗同源（`windowChrome` 的单源策略：macOS hiddenInset、Windows 无原生标题条）、
+      // 底色由主题派生（深/浅两值之一）
+      ...resolveWindowChromeOptions(),
       backgroundColor: '#0b0d10',
       webPreferences: { ...SECURE_WINDOW_PREFERENCE_BASELINE, preload: PRELOAD }
     })

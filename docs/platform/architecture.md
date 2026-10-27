@@ -45,6 +45,11 @@ The desktop host. It owns the Electron main process, the preload bridge, the Rea
 window lifecycle, and the generic settings/agent/assistant pages. It loads products through a
 generated registry; it does not know product-specific data sources or business rules.
 
+Window chrome is part of the shell and is platform-specific: on Windows the app draws its own title
+bar (application icon, application menu, search/layout controls, window buttons), while macOS keeps
+the native title bar with traffic lights. Both platforms share one application-menu definition, so
+adding, removing, or implementing a menu item is a single change.
+
 ### `platform`
 
 Generic capabilities that any product can use:

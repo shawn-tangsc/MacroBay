@@ -1053,8 +1053,9 @@ export const productText = {
         sourceFilters: { all: '全部', calendar: '日历', dashboard: '看板', pending: '待接入', advanced: '高级' },
         sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
         proxyNotice: {
-          title: '需要可用的本地代理（VPN）',
-          body: '这个来源的服务器会拦截来自大陆网络的请求，所以「测试连接」和「刷新市场日历」在没走代理时会一直失败（与 API Key 是否正确无关）。请先打开能访问境外网络的 VPN 或本地代理（也就是常说的翻墙），再到「设置 → 基础设置 → 代理模式」选择「自定义代理」并填入同一个本地地址（例如 http://127.0.0.1:7888），保存后回来重试。浏览器能打开不代表应用能连——应用请求只走这里的代理。',
+          title: '这个来源需要连接 VPN（本地代理）才能采集。',
+          failedTitle: '连接失败：请先打开 VPN / 本地代理，再回来重试。',
+          body: '没走代理时「测试连接」和自动采集会一直失败，与 API Key 是否正确无关。请先打开能访问境外网络的 VPN 或本地代理（也就是常说的翻墙），再到「设置 → 基础设置 → 代理模式」选择「自定义代理」并填入同一个本地地址（例如 http://127.0.0.1:7888），保存后回来重试。浏览器能打开不代表应用能连——应用请求只走这里的代理。',
           action: '去设置代理'
         },
         agentNames: { crypto: '数字货币', stocks: '股票', futures: '期货' },
@@ -2314,8 +2315,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
         sourceFilters: { all: 'All', calendar: 'Calendar', dashboard: 'Dashboard', pending: 'Pending', advanced: 'Advanced' },
         sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
         proxyNotice: {
-          title: 'A working local proxy (VPN) is required',
-          body: 'This source blocks requests from mainland China networks, so “Test connection” and “Refresh market calendar” keep failing unless traffic goes through a proxy (the API key is not the problem). Open a VPN or local proxy that can reach overseas networks, then set “Proxy mode” to “Custom proxy” under Settings → Basic settings with the same local address (for example http://127.0.0.1:7888), and try again. A browser reaching the site does not mean this app can: app requests only use the proxy configured here.',
+          title: 'This source needs a VPN (local proxy) to collect.',
+          failedTitle: 'Connection failed: turn on your VPN / local proxy, then try again.',
+          body: 'Without a proxy, “Test connection” and automatic collection keep failing — the API key is not the problem. Open a VPN or local proxy that can reach overseas networks, then set “Proxy mode” to “Custom proxy” under Settings → Basic settings with the same local address (for example http://127.0.0.1:7888) and try again. A browser reaching the site does not mean this app can: app requests only use the proxy configured here.',
           action: 'Open proxy settings'
         },
         agentNames: { crypto: 'Crypto', stocks: 'Stocks', futures: 'Futures' },

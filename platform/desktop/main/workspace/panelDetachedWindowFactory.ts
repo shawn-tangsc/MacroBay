@@ -10,6 +10,7 @@ import {
   type AppWindowEntryPolicy,
   type WindowOpenHandlerTarget
 } from '../../window/createMainWindow'
+import { resolveWindowChromeOptions, wireWindowChromeState } from '../../window/windowChrome'
 import type { DetachedWindowFactory, DetachedWindowHandle } from './panelDetachedWindowHost'
 
 /**
@@ -87,17 +88,17 @@ const DETACHED_WINDOW_APPEARANCE = Object.freeze({
   show: false,
   autoHideMenuBar: true,
   /**
-   * PLAT-39 ①：**装饰做法与主窗一致**（`window/createMainWindow.ts:186`）。
+   * PLAT-39 ①：**装饰做法与主窗一致**（`window/createMainWindow.ts`）——两边都只消费
+   * `resolveWindowChromeOptions()`，不各写一套平台布尔值。
    *
    * 此前分离窗用的是 Electron 默认装饰（原生标题栏）：真机实测主窗 `bounds.height - contentBounds.height = 0`，
    * 分离窗 `= 28`（DIP）——浅色 OS 外观 + 深色应用主题时，那 28pt 就是由 OS 绘制的**白色标题条**
-   * （`capturePage()` 不含原生框，所以截图里看不见它）。改成 `hiddenInset` 后两窗装饰做法逐字一致，
-   * 原生标题文字不再显示（页面名由渲染侧**自绘顶栏**承载，见 `WorkspaceWindowTopBar`），
-   * 但窗口切换器/Dock/任务栏仍按渲染侧设置的 `document.title`（= 本地化页面名）显示。
+   * （`capturePage()` 不含原生框，所以截图里看不见它）。改成内嵌装饰后两窗做法逐字一致：
+   * macOS `hiddenInset`（红绿灯内嵌）、Windows 无原生标题条（自绘顶栏承载页面名，
+   * 最小化/最大化/关闭由 `WindowControls` 画在顶栏最右），
+   * 窗口切换器/Dock/任务栏仍按渲染侧设置的 `document.title`（= 本地化页面名）显示。
    */
-  titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' as const : 'default' as const,
-  /** 与主窗同一位置（红绿灯内嵌，留给自绘顶栏的左侧让位宽度见 `--traffic-light-width`）。 */
-  trafficLightPosition: { x: 14, y: 14 }
+  ...resolveWindowChromeOptions()
 } as const)
 
 /**
@@ -234,6 +235,11 @@ export function createDetachedWindowFactory(options: DetachedWindowFactoryOption
       }
       created.on('resize', notifyBounds)
       created.on('move', notifyBounds)
+      /**
+       * 自绘标题栏：最大化/还原事实只发给本窗口的渲染器（`WindowControls` 据此换图形）。
+       * 与主窗同一条广播（`wireWindowChromeState`），窗口 `closed` 后监听随窗口一起消失。
+       */
+      wireWindowChromeState(created)
       /** 移除本窗口的原生监听并丢弃订阅者（`closed` 唯一调用点；幂等）。 */
       const releaseBoundsListeners = (): void => {
         boundsListeners.clear()
