@@ -1,106 +1,4 @@
-/* 示例模式：入口、横幅、水印。只消费主题变量，不引入新的色值。 */
-
-.mi-sample-entry {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  background: var(--surface-2, var(--surface));
-}
-
-.mi-sample-entry__action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.mi-sample-entry__action:hover:not(:disabled) {
-  border-color: var(--accent, var(--text));
-}
-
-.mi-sample-entry__action:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.mi-sample-entry__hint {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.mi-sample-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  border: 1px solid var(--warning-border, var(--border));
-  border-radius: 8px;
-  background: var(--warning-surface, var(--surface-2, var(--surface)));
-  color: var(--text);
-  font-size: 12px;
-}
-
-.mi-sample-banner__icon {
-  color: var(--warning, var(--muted));
-  flex: 0 0 auto;
-}
-
-.mi-sample-banner__copy {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  min-width: 0;
-}
-
-.mi-sample-banner__title {
-  font-weight: 600;
-}
-
-.mi-sample-banner__meta {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.mi-sample-banner__actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-  flex: 0 0 auto;
-}
-
-.mi-sample-banner__button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.mi-sample-banner__button.is-primary {
-  border-color: var(--accent, var(--border));
-}
-
-.mi-sample-banner__button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
+/* 示例模式：水印。入口和开关在 crypto Agent 卡片，不在这里。只消费主题变量。 */
 
 .mi-sample-watermark {
   position: absolute;
@@ -142,10 +40,7 @@
   min-height: 0;
 }
 
-/* 示例横幅占一行，不参与高度分配。 */
-.mi-sample-surface > .mi-sample-banner {
-  flex: 0 0 auto;
-}
+/* 示例水印是覆盖层，不参与布局。 */
 
 /* 在自己内部滚动的页面（看板、日历）：拿剩余高度，滚动留给各自的 pane。 */
 .mi-sample-surface > .mi-analysis-dashboard-layout,

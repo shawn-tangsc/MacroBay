@@ -1,18 +1,12 @@
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
-import { NEWS_SENTIMENT_SOURCE_IDS } from '../schema/newsSentiment'
 
 /**
- * 干净安装时默认打开的源。
+ * 干净安装时默认不打开任何采集源。
  *
- * 只放「不需要凭据、并且直接决定看板首屏有没有内容」的源：恐惧贪婪卡（Alternative.me）、
- * 资金面卡（DeFiLlama 稳定币）和情绪卡（四个新闻源）。其余源保持关闭，由读者按需打开——
- * 首次启动不替读者做采集决定，但这几张卡片不该要求先手动打开才有数据。
+ * 示例模式已经提供完整的离线回放，首次启动不该替读者做真实采集决定；
+ * 需要的源由读者在「配置看板来源」里逐个开启。
  */
-export const DEFAULT_ENABLED_SOURCE_IDS = [
-  'alternative-fear-greed',
-  'defillama-stablecoins',
-  ...NEWS_SENTIMENT_SOURCE_IDS
-] as const
+export const DEFAULT_ENABLED_SOURCE_IDS = [] as const
 
 /** 播种只需要「读一条、写一条」；启动时注入真实的 profile store，单测注入内存实现。 */
 export type DefaultEnabledSourceStore = {

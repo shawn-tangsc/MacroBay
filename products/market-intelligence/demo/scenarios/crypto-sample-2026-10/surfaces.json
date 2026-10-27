@@ -3,6 +3,7 @@
   "intelligence.crossAsset.query",
   "intelligence.crossAsset.release",
   "intelligence.crossAsset.renew",
+  "intelligence.getNewsSentiment",
   "intelligence.macro.dashboardFeedStatus.query",
   "intelligence.macro.economicCalendar.queryMonth",
   "intelligence.macro.marketCalendar.queryMonth",

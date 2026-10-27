@@ -17,10 +17,6 @@ const portal = readFileSync(
   resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'),
   'utf8'
 )
-const drawer = readFileSync(
-  resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentActivationDrawer.tsx'),
-  'utf8'
-)
 const portalContentRule = portalStyles.match(/\.mi-agent-portal__content\s*\{([^}]*)}/)?.[1] ?? ''
 const portalGridRule = portalStyles.match(/\.mi-agent-portal__grid\s*\{([^}]*)}/)?.[1] ?? ''
 const narrowPortalGridRule = portalStyles.match(
@@ -48,15 +44,23 @@ function cssRule(styles: string, selector: string): string {
 
 import { productText } from '../../shared/i18n/productText'
 import { AgentPortal } from './AgentPortal'
+import { projectActivation } from './agentActivationPolicy'
 import { marketIntelligenceAgents } from './agentPortalModel'
+
+const activation = projectActivation(undefined)
+const sample = { active: false, available: true, busy: false }
 
 describe('market intelligence agent portal layout', () => {
   it('keeps the message-analysis history out of the intelligence overview', () => {
     const text = productText['zh-CN'].pages.intelligence.portal
     const markup = renderToStaticMarkup(
       createElement(AgentPortal, {
+        activation,
         agents: marketIntelligenceAgents,
-        onOpenCryptoDashboard: () => undefined,
+        onOpenSources: () => undefined,
+        onPrimary: () => undefined,
+        onToggleSample: () => undefined,
+        sample,
         text
       })
     )
@@ -69,8 +73,12 @@ describe('market intelligence agent portal layout', () => {
   it('renders a theme-following portal with fixed analyst images and dense card metadata', () => {
     const markup = renderToStaticMarkup(
       createElement(AgentPortal, {
+        activation,
         agents: marketIntelligenceAgents,
-        onOpenCryptoDashboard: () => undefined,
+        onOpenSources: () => undefined,
+        onPrimary: () => undefined,
+        onToggleSample: () => undefined,
+        sample,
         text: productText['zh-CN'].pages.intelligence.portal
       })
     )
@@ -80,15 +88,16 @@ describe('market intelligence agent portal layout', () => {
     expect(portal).toContain('mi-agent-card__lens')
     expect(portal).toContain('mi-agent-card__footer')
     expect(portal).toContain('mi-agent-card__entry')
+    expect(portal).toContain('mi-agent-card__switch')
     expect(portal).toContain('disabled={!isAvailable}')
-    expect(portal).toContain('onClick={isAvailable ? onOpenCryptoDashboard : undefined}')
-    expect(portal).not.toContain('onActivateCrypto')
+    expect(portal).toContain('onClick={isAvailable ? onPrimary : undefined}')
     expect(portalStyles).toContain('--mi-terminal-bg')
     expect(portalStyles).toContain('var(--mi-terminal-bg)')
     expect(portalStyles).toContain(":root[data-theme='light'] .mi-agent-portal")
     expect(portalStyles).toContain('object-fit: cover')
     expect((markup.match(/<img/g) ?? [])).toHaveLength(3)
     expect(markup).toContain('CRYPTO MARKET LENS')
+    expect(markup).toContain('示例模式')
     expect(markup).not.toContain('选择市场 Agent')
   })
 
@@ -160,62 +169,5 @@ describe('market intelligence agent portal layout', () => {
     expect(portalStyles).toContain('minmax(86px, 28%)')
     expect(portalStyles).toContain('--mi-page-inline: 24px')
     expect(portalStyles).toContain('--mi-page-inline: 20px')
-  })
-
-  it('keeps the activation drawer as a static two-column source inspector', () => {
-    expect(drawer).toContain("import '../../settings/intelligence-sources/intelligence-sources.css'")
-    expect(drawer).toContain('settings-workspace intelligence-sources-workspace mi-agent-drawer__workspace')
-    expect(drawer).toContain('intelligence-catalog-pane')
-    expect(drawer).toContain('intelligence-catalog-titlebar')
-    expect(drawer).toContain('intelligence-catalog-list')
-    expect(drawer).toContain('intelligence-catalog-item')
-    expect(drawer).toContain('intelligence-source-avatar')
-    expect(drawer).toContain('intelligence-detail-pane')
-    expect(drawer).toContain('intelligence-source-titlebar')
-    expect(drawer).toContain('intelligence-detail-scroll')
-    expect(drawer).toContain('intelligence-source-detail-content')
-    expect(drawer).toContain('intelligence-overview-panel')
-    expect(drawer).toContain('intelligence-source-header')
-    expect(drawer).toContain('intelligence-section')
-    expect(drawer).toContain('footer={')
-    expect(drawer).toContain('<Button disabled')
-    expect(drawer).not.toMatch(/(?:shared\/ipc|service\/|intelligenceSourcesClient)/)
-    expect(drawer).not.toMatch(/\b(?:fetch|WebSocket|axios|ipcRenderer)\b/)
-  })
-
-  it('keeps the static drawer readable as its available width narrows', () => {
-    const drawerSplitRule = cssRule(
-      portalStyles,
-      '.mi-agent-drawer .settings-workspace.intelligence-sources-workspace.mi-agent-drawer__split'
-    )
-    const drawerBodyRule = cssRule(portalStyles, '.mi-agent-drawer .ant-drawer-body')
-    const staticValueRule = cssRule(portalStyles, '.mi-agent-drawer__static-value')
-    const compactDrawerStyles = cssBlock(portalStyles, '@container (max-width: 960px)')
-    const stackedDrawerStyles = cssBlock(portalStyles, '@container (max-width: 680px)')
-    const compactSplitRule = cssRule(
-      compactDrawerStyles,
-      '.mi-agent-drawer .settings-workspace.intelligence-sources-workspace.mi-agent-drawer__split'
-    )
-    const compactSettingGridRule = cssRule(compactDrawerStyles, '.mi-agent-drawer .intelligence-setting-grid')
-    const stackedSplitRule = cssRule(
-      stackedDrawerStyles,
-      '.mi-agent-drawer .settings-workspace.intelligence-sources-workspace.mi-agent-drawer__split'
-    )
-    const stackedRowRule = cssRule(stackedDrawerStyles, '.mi-agent-drawer .intelligence-setting-row')
-
-    expect(drawer).toContain("const drawerWidth = 'min(1080px, max(360px, calc(100vw - 48px)), calc(100vw - 24px))'")
-    expect(drawer).toMatch(/<Drawer[\s\S]*width=\{drawerWidth\}/)
-    expect(drawer).toContain('mi-agent-drawer__workspace')
-    expect(drawer).toContain('mi-agent-drawer__split')
-    expect(drawer.match(/mi-agent-drawer__static-value/g)).toHaveLength(4)
-    expect(drawerBodyRule).toContain('container-type: inline-size')
-    expect(drawerSplitRule).toContain('grid-template-columns: minmax(240px, 29%) minmax(0, 1fr)')
-    expect(compactSplitRule).toContain('grid-template-columns: minmax(220px, 32%) minmax(0, 1fr)')
-    expect(compactSettingGridRule).toContain('grid-template-columns: 1fr')
-    expect(stackedSplitRule).toContain('grid-template-columns: minmax(0, 1fr)')
-    expect(stackedSplitRule).toContain('grid-template-rows: minmax(0, 240px) minmax(0, 1fr)')
-    expect(stackedRowRule).toContain('grid-template-columns: 1fr')
-    expect(staticValueRule).toContain('white-space: normal')
-    expect(staticValueRule).toContain('overflow-wrap: anywhere')
   })
 })

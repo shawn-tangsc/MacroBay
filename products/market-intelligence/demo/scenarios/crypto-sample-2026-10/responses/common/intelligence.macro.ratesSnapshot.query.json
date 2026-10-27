@@ -4,7 +4,7 @@
   "effect": "read",
   "payload": {
     "state": "available",
-    "asOf": "$asOf",
+    "asOf": "$scenarioNow",
     "readings": [
       {
         "seriesId": "DGS10",

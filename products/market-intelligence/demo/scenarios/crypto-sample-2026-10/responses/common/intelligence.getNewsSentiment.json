@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.getNewsSentiment",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$scenarioNow",
+    "generatedAt": "$scenarioNow",
+    "window": "24h",
+    "summary": {
+      "label": "bearish",
+      "score": -0.22,
+      "itemCount": 3,
+      "directionalCount": 3,
+      "neutralCount": 0,
+      "sourceBreakdown": { "mainstream-news": -0.18, "exchange-announcement": -0.31 },
+      "latestItemAt": "2026-10-27T08:30:00.000Z",
+      "engineMix": { "model": 2, "rules": 1 },
+      "lastScoredAt": "2026-10-27T08:35:00.000Z"
+    },
+    "items": [
+      {
+        "itemId": "item-demo-sentiment-1",
+        "title": "稳定币总供给连续收缩，ETF 资金转为净流出",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk",
+        "url": "https://www.coindesk.com/markets/2026/10/27/stablecoin-supply-contracts",
+        "publishedAt": "2026-10-27T08:30:00.000Z",
+        "scoredAt": "2026-10-27T08:35:00.000Z",
+        "polarity": "bearish",
+        "strength": 4,
+        "confidence": 82,
+        "symbols": ["BTC", "ETH"],
+        "reasonCode": "liquidity-contraction",
+        "evidenceQuote": "稳定币总供给连续第二周收缩",
+        "engine": "model",
+        "modelRef": "sample:sample",
+        "promptVersion": "news-polarity-v1",
+        "caveats": []
+      },
+      {
+        "itemId": "item-demo-sentiment-2",
+        "title": "Binance 调整部分永续合约保证金参数",
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements",
+        "url": "https://www.binance.com/en/support/announcement/demo",
+        "publishedAt": "2026-10-27T07:50:00.000Z",
+        "scoredAt": "2026-10-27T08:00:00.000Z",
+        "polarity": "neutral",
+        "strength": 2,
+        "confidence": 61,
+        "symbols": ["BTC"],
+        "reasonCode": "exchange-parameter-change",
+        "evidenceQuote": "margin parameters adjusted",
+        "engine": "rules",
+        "ruleId": "news.exchange-parameter.v1",
+        "caveats": []
+      },
+      {
+        "itemId": "item-demo-sentiment-3",
+        "title": "美债实际利率维持 2.66%，风险资产折现率仍高",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk",
+        "url": "https://www.coindesk.com/markets/2026/10/27/real-yields-stay-high",
+        "publishedAt": "2026-10-27T06:40:00.000Z",
+        "scoredAt": "2026-10-27T06:50:00.000Z",
+        "polarity": "bearish",
+        "strength": 3,
+        "confidence": 74,
+        "symbols": ["BTC"],
+        "reasonCode": "discount-rate-pressure",
+        "evidenceQuote": "10-year real yield remains restrictive",
+        "engine": "model",
+        "modelRef": "sample:sample",
+        "promptVersion": "news-polarity-v1",
+        "caveats": []
+      }
+    ],
+    "caveats": []
+  }
+}

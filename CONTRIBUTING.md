@@ -14,6 +14,11 @@ pnpm install
 pnpm dev
 ```
 
+`pnpm dev` keeps its Electron userData in the repository's ignored `.devdata/` directory, so local
+databases/settings never write into `%APPDATA%`. On Windows it also runs Electron with `--no-sandbox`
+by default because some administrator/restricted sessions cannot start Chromium's sandbox. Override
+with `MACROBAY_USER_DATA=<path>` or `NO_SANDBOX=0` if needed; neither default affects packaged builds.
+
 Read the [public documentation](./docs/README.md) first. The most useful pages for contributors are:
 
 - [Development setup](./docs/development/setup.md)

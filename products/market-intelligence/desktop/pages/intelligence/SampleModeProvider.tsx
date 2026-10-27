@@ -1,21 +1,26 @@
 /**
  * 示例模式的渲染层会话。
  *
- * 只做三件事：保存主进程的会话状态、把「现在」接到场景时钟、给面板一个切换时重挂载的 key。
+ * 状态不再由页面自己持有：它订阅 `sampleModeSessionStore`，与 crypto 卡片示例入口共享同一份快照。
+ * 「现在」接到场景时钟，切换时给面板一个重挂载 key。
  * 没有 Provider 时（大量既有单测直接渲染面板）所有 hook 都退化成真实时钟，不会抛错。
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from 'react'
 
 import { emptySampleModeState, sampleModeClient, type SampleModeClient, type SampleModeState } from '../../shared/ipc/sampleModeClient'
+import {
+  createSampleModeSessionStore,
+  sampleModeSessionStore
+} from '../../shared/sampleMode/sampleModeSessionStore'
 
 export type SampleModeContextValue = Readonly<{
   state: SampleModeState
   busy: boolean
   /** 示例激活时返回场景时钟，否则返回真实时间。不要用它生成观测时间。 */
   now: () => Date
-  enter: () => Promise<void>
-  exit: () => Promise<void>
+  enter: () => Promise<boolean>
+  exit: () => Promise<boolean>
   /** 切换时变化：面板以它作 key 即可在退出示例后重新读真实数据。 */
   sessionKey: string
 }>
@@ -24,8 +29,8 @@ const fallback: SampleModeContextValue = {
   state: emptySampleModeState,
   busy: false,
   now: () => new Date(),
-  enter: async () => undefined,
-  exit: async () => undefined,
+  enter: async () => false,
+  exit: async () => false,
   sessionKey: 'live'
 }
 
@@ -43,36 +48,24 @@ export function SampleModeProvider({ children, client = sampleModeClient }: {
   children: ReactNode
   client?: SampleModeClient
 }): React.ReactElement {
-  const [state, setState] = useState<SampleModeState>(emptySampleModeState)
-  const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    let mounted = true
-    void client.getState().then((next) => { if (mounted) setState(next) })
-    return () => { mounted = false }
-  }, [client])
+  /**
+   * 生产环境只有一份全局 store；测试注入 fake client 时退化成局部 store，
+   * 避免测试之间共享状态。两种路径的 Provider API 完全一致。
+   */
+  const store = useMemo(
+    () => (client === sampleModeClient ? sampleModeSessionStore : createSampleModeSessionStore(client)),
+    [client]
+  )
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+  const state = snapshot.view
+  const busy = snapshot.busy
 
   const now = useCallback(() => (
     state.active && state.scenarioNow ? new Date(state.scenarioNow) : new Date()
   ), [state.active, state.scenarioNow])
 
-  const enter = useCallback(async () => {
-    setBusy(true)
-    try {
-      setState(await client.setActive(true))
-    } finally {
-      setBusy(false)
-    }
-  }, [client])
-
-  const exit = useCallback(async () => {
-    setBusy(true)
-    try {
-      setState(await client.setActive(false))
-    } finally {
-      setBusy(false)
-    }
-  }, [client])
+  const enter = useCallback(async () => store.enter(), [store])
+  const exit = useCallback(async () => store.exit(), [store])
 
   const value = useMemo<SampleModeContextValue>(() => ({
     state,

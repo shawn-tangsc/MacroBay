@@ -264,7 +264,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'Twelve Data',
     category: 'aggregate',
     credential: 'api-key',
-    sources: [src({ sourceId: 'twelve-data-market', displayName: 'Twelve Data macro market', panels: ['dashboard'], visibility: 'pending', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'twelve-data-market' })]
+    sources: [src({ sourceId: 'twelve-data-market', displayName: 'Twelve Data macro market', panels: ['dashboard'], visibility: 'hidden', readiness: 'planned', collection: 'none', capabilities: { runNow: 'none', testConnection: false }, adapterRef: 'twelve-data-market' })]
   }),
   provider({
     providerId: 'coinbase',
@@ -311,7 +311,7 @@ export const agentRegistry: readonly AgentDefinition[] = [
     activation: 'available',
     groups: [
       { groupId: 'fear-greed', agentId: 'crypto', tier: 'required', sourceIds: ['alternative-fear-greed'] },
-      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', '0xrouter-aggregate-provider', 'realmarketapi-market', 'twelve-data-market', 'binance-asset-page'] },
+      { groupId: 'spot-momentum', agentId: 'crypto', tier: 'required', sourceIds: ['binance-spot-market', 'coingecko-market', '0xrouter-aggregate-provider', 'realmarketapi-market', 'binance-asset-page'] },
       { groupId: 'funding-rate', agentId: 'crypto', tier: 'required', sourceIds: ['binance-futures-positioning'] },
       {
         groupId: 'macro-calendar',

@@ -27,6 +27,8 @@ export type SampleModeView = Readonly<{
 
 export type SampleModeSession = Readonly<{
   view: () => SampleModeView
+  /** 读取一次场景目录，把 `scenarioCount` 提前暴露给控制面；不进入示例。 */
+  prepare: () => Promise<SampleModeView>
   enter: (scenarioId?: string) => Promise<SampleModeView>
   exit: () => Promise<SampleModeView>
   now: () => Date
@@ -55,6 +57,8 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
   let scenario: SampleModeScenario | undefined
   let locale: SampleModeLocale | undefined
   let scenarioCount = 0
+  let availabilityLoaded = false
+  let preparing: Promise<SampleModeView> | undefined
   let entering = false
   let lastReason: SampleModeUnavailableReason | undefined
 
@@ -65,6 +69,24 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
     scenarioCount,
     ...(!active && lastReason ? { unavailableReason: lastReason } : {})
   })
+
+  async function prepare(): Promise<SampleModeView> {
+    if (availabilityLoaded) return view()
+    if (preparing) return preparing
+    preparing = (async () => {
+      try {
+        const language = await input.getLanguage()
+        const catalog = input.loadCatalog(language)
+        scenarioCount = catalog.scenarios.length
+        if (scenarioCount === 0) lastReason = 'no-scenario'
+      } catch {
+        lastReason = 'no-scenario'
+      }
+      availabilityLoaded = true
+      return view()
+    })()
+    return preparing
+  }
 
   async function suspend(): Promise<void> {
     const schedules = input.jobs.listSchedules().filter((definition) => definition.productId === input.productId)
@@ -83,6 +105,7 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
 
   return Object.freeze({
     view,
+    prepare,
     scenario: () => scenario,
     now: () => (active && scenario ? new Date(scenario.meta.scenarioNow) : now()),
     async enter(scenarioId?: string) {
@@ -94,6 +117,7 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
         const language = await input.getLanguage()
         const catalog = input.loadCatalog(language)
         scenarioCount = catalog.scenarios.length
+        availabilityLoaded = true
         const picked = scenarioId
           ? catalog.scenarios.find((candidate) => candidate.meta.id === scenarioId)
           : catalog.scenarios[0]

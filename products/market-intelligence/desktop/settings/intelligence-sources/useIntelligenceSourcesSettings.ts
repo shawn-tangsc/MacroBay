@@ -8,6 +8,7 @@ import type { IntelligenceFocusMarket } from '../../../service/intelligence/sche
 import type { SafeIntelligenceSourceDetailView } from '../../../service/intelligence/schema/intelligenceSourcesContracts'
 import type { IntelligenceFocusMarketSettings } from '../../../service/intelligence/application/intelligenceFocusSettings'
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
+import { notifyIntelligenceSourcesChanged } from '../../shared/events/intelligenceSourcesChanged'
 import { isAcceptedCredentialSave } from '../../shared/intelligenceCredentialResultPolicy'
 import { buildSourceEnabledById } from './intelligenceSourceCatalogView'
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
@@ -149,6 +150,7 @@ export function useIntelligenceSourcesSettings(labels: {
               notice: resolveEnabledNotice(detail.profile, enabled, labels)
             }
           })
+          notifyIntelligenceSourcesChanged()
 
           if (enabled && detail.profile.collectionPreset !== 'manual') {
             void pollRunHealth(sourceId!)
@@ -225,6 +227,7 @@ export function useIntelligenceSourcesSettings(labels: {
               notice: labels.saved
             }
           })
+          notifyIntelligenceSourcesChanged()
         })
         .catch(() => {
           setState((current) => ({

@@ -68,6 +68,32 @@ describe('示例模式会话', () => {
     expect(session.view().active).toBe(false)
   })
 
+  it('counts scenarios before entering so the control surface can offer the entry', async () => {
+    const session = createSampleModeSession({
+      productId: 'market-intelligence',
+      loadCatalog: () => catalog(1),
+      getLanguage: async () => 'zh-CN',
+      jobs: jobs().runtime,
+      resumeWork: async () => undefined
+    })
+    expect(session.view().scenarioCount).toBe(0)
+    const view = await session.prepare()
+    expect(view).toMatchObject({ active: false, scenarioCount: 1 })
+    expect(view.unavailableReason).toBeUndefined()
+  })
+
+  it('reports no-scenario before entering when the catalog has no usable scenario', async () => {
+    const session = createSampleModeSession({
+      productId: 'market-intelligence',
+      loadCatalog: () => catalog(0),
+      getLanguage: async () => 'zh-CN',
+      jobs: jobs().runtime,
+      resumeWork: async () => undefined
+    })
+    const view = await session.prepare()
+    expect(view).toMatchObject({ active: false, scenarioCount: 0, unavailableReason: 'no-scenario' })
+  })
+
   it('pins “now” to the scenario clock only while active', async () => {
     const session = createSampleModeSession({
       productId: 'market-intelligence',

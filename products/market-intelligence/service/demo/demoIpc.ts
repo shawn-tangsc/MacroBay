@@ -23,7 +23,12 @@ export function readSampleModeSetActiveInput(payload: unknown): SampleModeSetAct
 }
 
 export function registerSampleModeIpc(register: ProductIpcRegistrar, productId: string, session: SampleModeSession): void {
-  register(productId, SAMPLE_MODE_METHODS.getState, async (): Promise<SampleModeView> => session.view())
+  register(productId, SAMPLE_MODE_METHODS.getState, async (): Promise<SampleModeView> => {
+    // 首次读状态时顺带数一次场景目录：UI 需要 scenarioCount 才能决定是否显示示例入口，
+    // 不能等到 enter() 成功后才填这个字段（否则入口永远不出现）。
+    await session.prepare()
+    return session.view()
+  })
   register(productId, SAMPLE_MODE_METHODS.setActive, async (payload): Promise<SampleModeView> => {
     const input = readSampleModeSetActiveInput(payload)
     if (!input) throw new Error('invalid-demo-set-active-input')

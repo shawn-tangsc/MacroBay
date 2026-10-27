@@ -4,9 +4,9 @@
   "effect": "read",
   "payload": {
     "state": "available",
-    "asOf": "$asOf",
+    "asOf": "$scenarioNow",
     "source": {
-      "enabled": false,
+      "enabled": true,
       "hasCredential": false
     },
     "readings": [
