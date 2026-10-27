@@ -3528,8 +3528,8 @@
             "value": 0.8203
           },
           "7d": {
-            "state": "unavailable",
-            "reason": "missing"
+            "state": "available",
+            "value": -0.3654
           }
         },
         "btc": {
@@ -3554,8 +3554,8 @@
             "value": -1.0974
           },
           "7d": {
-            "state": "unavailable",
-            "reason": "missing"
+            "state": "available",
+            "value": -2.1117
           }
         },
         "eth": {
@@ -3580,8 +3580,8 @@
             "value": -1.1836
           },
           "7d": {
-            "state": "unavailable",
-            "reason": "missing"
+            "state": "available",
+            "value": -2.9838
           }
         }
       },
