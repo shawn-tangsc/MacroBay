@@ -108,17 +108,16 @@ function IntelligencePageBody(): React.ReactElement {
 
   return (
     <div className="mi-sample-surface">
-      {sample.state.active ? (
-        <>
-          <SampleModeBanner
-            busy={sample.busy}
-            onConnect={() => { void sample.exit().then(() => setSourceDrawerOpen(true)) }}
-            onExit={() => { void sample.exit() }}
-            scenarioNow={sample.state.scenarioNow}
-            text={sampleText.banner as SampleModeBannerText}
-          />
-          <SampleWatermark text={sampleText.watermark} />
-        </>
+      {sample.state.active ? <SampleWatermark text={sampleText.watermark} /> : null}
+      {/* 横幅只属于看板：门户是入口页，不该挂一条状态条。 */}
+      {sample.state.active && activeView === 'dashboard' ? (
+        <SampleModeBanner
+          busy={sample.busy}
+          onConnect={() => { void sample.exit().then(() => setSourceDrawerOpen(true)) }}
+          onExit={() => { void sample.exit() }}
+          scenarioNow={sample.state.scenarioNow}
+          text={sampleText.banner as SampleModeBannerText}
+        />
       ) : null}
       {activeView === 'calendar' ? (
         <EconomicCalendar
