@@ -247,7 +247,25 @@
           "statement": "若 10 年期实际利率维持高位或继续上行，风险资产折现率上升，可能压制 BTC 与 ETH 估值。"
         }
       ],
-      "version": 1
+      "version": 1,
+      "evidenceRefs": [
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160",
+        "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+        "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+        "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+        "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+        "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127",
+        "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T08:00:00.001Z:213",
+        "query:binance-futures-positioning:funding:ETH:funding-rate-percent:2026-10-27T08:00:00.001Z:235",
+        "query:alternative-fear-greed:sentiment:market:fear-greed-index:2026-10-27T00:00:00.000Z:191",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield-change-1d:2026-10-23T00:00:00.000Z:121",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield-change-1d:2026-10-23T00:00:00.000Z:119",
+        "query:fred-rates-liquidity:macro:us-treasury:us-2y-yield:2026-10-23T00:00:00.000Z:122",
+        "query:fred-rates-liquidity:macro:us-treasury:us-2y-yield-change-1d:2026-10-23T00:00:00.000Z:123"
+      ]
     },
     "mi-as-4afd1bd2-f80b-47ee-b9c8-7b82b596a692": {
       "analysisRunId": "mi-ar-05cba4aa-25dd-42c4-8cf1-e2a5f419edd4",
@@ -488,7 +506,25 @@
           "statement": "若 ETH 现货 ETF 延续净流出（10月22日净流出 1.11 亿美元、10月26日净流出 8860 万美元），则机构需求疲弱使 ETH 相对 BTC 更易承压；若连续转为净流入，则该假设失效。"
         }
       ],
-      "version": 2
+      "version": 2,
+      "evidenceRefs": [
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-02dae57f604992a81e518d5f0255b407",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-2b0cfc4358a080f13aff6f8e1e405a35",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42c1f86c54d8498ce01c47d357855074",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-512e6069355ef1fb8b7811edf942866d",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-5ec6a79225e9074073cf806860bc8627",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-82baa36bb3b081f36d1835d9577b39ff",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-87eb695904ffbebde0133956ddc90003",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-a74d3e1739d53508a1bf25ae4ad23d12",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160",
+        "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-22T00:00:00.000Z:188",
+        "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+        "query:alternative-fear-greed:sentiment:market:fear-greed-index:2026-10-27T00:00:00.000Z:191",
+        "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-26T16:00:00.000Z:211",
+        "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T00:00:00.001Z:212",
+        "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T08:00:00.001Z:213"
+      ]
     },
     "mi-as-889f9f0f-ab80-4c45-8ec5-e38922dc6ece": {
       "analysisRunId": "mi-ar-ecd13131-c577-47d9-b697-4f23254e86d6",
@@ -785,7 +821,25 @@
           "statement": "若美债 10 年期实际利率在 2.66 基础上继续上行，持有无收益资产的机会成本抬升，风险资产估值分母端承压，对 BTC 与 ETH 偏空。"
         }
       ],
-      "version": 1
+      "version": 1,
+      "evidenceRefs": [
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-014164cf0a93125ec6b0ed4536147c27",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-02dae57f604992a81e518d5f0255b407",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-144baeb7be2c95c20bc045fc2f86020b",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-2b0cfc4358a080f13aff6f8e1e405a35",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42c1f86c54d8498ce01c47d357855074",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-512e6069355ef1fb8b7811edf942866d",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-5ec6a79225e9074073cf806860bc8627",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-82baa36bb3b081f36d1835d9577b39ff",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-87eb695904ffbebde0133956ddc90003",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-9c680f93d953338e16d4d7e0deecb4a5",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-a74d3e1739d53508a1bf25ae4ad23d12",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-19T00:00:00.000Z:155",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-20T00:00:00.000Z:156",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-21T00:00:00.000Z:157",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+      ]
     }
   }
 }

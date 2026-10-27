@@ -11,6 +11,7 @@ function source(sourceId: string, overrides: Partial<SourceView> = {}): SourceVi
     enabled: false,
     visibility: 'visible',
     readiness: 'live',
+    panels: ['dashboard'],
     ...overrides
   } as SourceView
 }
@@ -24,6 +25,16 @@ function group(groupId: string, sources: SourceView[], tier: 'required' | 'recom
 }
 
 describe('projectActivation', () => {
+  it('ignores providers the dashboard drawer does not list', () => {
+    const projection = projectActivation(view([
+      group('regulation-exchange', [
+        source('coingecko-market', { enabled: true }),
+        source('solana-status', { enabled: false, panels: [] })
+      ])
+    ]))
+    expect(projection).toEqual({ enabledSourceCount: 1, totalSourceCount: 1 })
+  })
+
   it('reports zero providers before the agent view is loaded', () => {
     expect(projectActivation(undefined)).toEqual({ enabledSourceCount: 0, totalSourceCount: 0 })
   })

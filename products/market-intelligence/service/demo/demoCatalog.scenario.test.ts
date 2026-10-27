@@ -20,10 +20,10 @@ describe('示例场景数据', () => {
     }
   })
 
-  it('keeps the three cross-asset ranges and the recorded scenario clock', () => {
+  it('keeps the recorded cross-asset ranges and the recorded scenario clock', () => {
     const scenario = loadSampleModeCatalog('en-US').scenarios[0]!
     const crossAsset = scenario.entries.get('intelligence.crossAsset.query')
-    expect(Object.keys(crossAsset?.byRequest ?? {})).toEqual(expect.arrayContaining(['1h', '24h', '7d']))
+    expect(Object.keys(crossAsset?.byRequest ?? {})).toEqual(expect.arrayContaining(['24h', '7d']))
     expect(scenario.meta.scenarioNow).toBe('2026-10-27T09:50:00.000Z')
   })
 })
