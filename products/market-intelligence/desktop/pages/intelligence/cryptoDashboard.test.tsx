@@ -418,37 +418,35 @@ describe('crypto intelligence dashboard', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
-    const sentimentRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(rowRule).not.toContain('overflow-x: hidden')
     expect(dashboardRootRule).toContain('container-type: inline-size')
     expect(rowRule).toContain('border-top: 1px solid var(--mi-dashboard-line)')
     expect(rowRule).toContain('border-bottom: 1px solid var(--mi-dashboard-line)')
+    // 资金面带只有一块：它自己不再是两列，并排发生在面板内部的 content-row。
+    expect(rowRule).not.toContain('grid-template-columns')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
-    expect(wideStyles).toContain('.mi-crypto-dashboard__capital-positioning-row { grid-template-columns: minmax(0, 1fr); }')
-    expect(wideStyles).not.toContain('46fr')
-    expect(wideStyles).not.toContain('gap: 16px')
-    expect(narrowStyles).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }')
     expect(capitalRule).not.toContain('border-radius')
     expect(capitalRule).not.toContain('border-top')
     expect(capitalRule).not.toContain('border-bottom')
-    expect(wideStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
-    expect(wideStyles).toContain('border-left: 1px solid var(--mi-dashboard-line)')
+    const fundingRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {')
+    expect(fundingRule).toContain('padding-left: var(--mi-dashboard-band-zone-inline)')
+    expect(fundingRule).toContain('border-left: 1px solid var(--mi-dashboard-line)')
     expect(styles).not.toContain('mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__state-card')
     expect(styles).toContain('mi-capital-conditions__etf-summary')
   })
 
   it('keeps the sentiment zone compact and stacks the funding-history panel at narrow widths', () => {
     const sentimentRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment {')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__sentiment,')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__sentiment,')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
   })
 
   it('uses named compact rhythm inside the real data bands', () => {
@@ -468,42 +466,39 @@ describe('crypto intelligence dashboard', () => {
     expect(gaugeRule).toContain('padding: var(--mi-dashboard-gauge-block-padding)')
   })
 
-  it('keeps capital facts top-aligned with a compact two-column summary at wide widths', () => {
+  it('keeps capital facts top-aligned with a two-column summary in the first band', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
     const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
+    const contentRowRule = cssBlock(styles, '.mi-capital-conditions__content-row {')
 
     expect(capitalRule).toContain('align-content: start')
     expect(capitalRule).toContain('row-gap: var(--mi-dashboard-capital-content-row-gap)')
-    expect(wideStyles).toContain('.mi-capital-conditions__content-row')
+    expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
-    expect(wideStyles).toContain('grid-template-columns: minmax(0, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
-    expect(wideStyles).toContain('.mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
+    expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(trendsRule).toContain('justify-content: start')
     expect(headerBandRule).toContain('min-width: 0')
   })
 
-  it('keeps the unified three-series flow chart in the first row at the existing wide and narrow boundaries', () => {
+  it('keeps the unified three-series flow chart beside the summary instead of below it', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const etfRule = cssBlock(styles, '.mi-capital-conditions__etf-flow {')
-    const rowRule = cssBlock(styles, '.mi-capital-conditions__etf-flow {')
     const barsRule = cssBlock(styles, '.mi-capital-conditions__chart {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(dashboardRootRule).toContain('--mi-dashboard-etf-flow')
     expect(etfRule).toContain('align-self: start')
+    expect(etfRule).toContain('margin-right: var(--mi-dashboard-band-zone-inline)')
     expect(barsRule).toContain('linear-gradient')
-    expect(wideStyles).toContain('.mi-capital-conditions__etf-flow')
-    expect(narrowStyles).toContain('.mi-capital-conditions__content-row')
+    expect(stackStyles).toContain('.mi-capital-conditions__etf-flow { margin-right: 0; }')
+    expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('uses chart-dominant wide workspaces and a horizontal source status bar', () => {
+  it('uses chart-dominant workspaces and a horizontal source status bar', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
     const sourceRule = cssBlock(styles, '.mi-crypto-dashboard__source-region {')
     const sourceRowRule = cssBlock(styles, '.mi-crypto-dashboard__source-row {')
 
@@ -536,24 +531,30 @@ describe('crypto intelligence dashboard', () => {
     }
   })
 
-  it('keeps capital facts in two columns on narrow layouts while allowing charts to shrink', () => {
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+  it('keeps capital facts in two columns down to the stack point while allowing charts to shrink', () => {
+    const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
     const chartRule = cssBlock(styles, '.mi-capital-conditions__chart {')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
-    expect(narrowStyles).toContain('.mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
+    expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(chartRule).toContain('min-width: 0')
-    expect(narrowStyles).toContain('.mi-capital-conditions__content-row')
+    // 堆叠分支只把两列并成一列，不再重排事实表：事实本来就一直是两列。
+    expect(stackStyles).not.toContain('.mi-capital-conditions dl')
+    expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('keeps capital/ETF in the first row and sentiment/funding in the second at 1920, 1176, and 1175 widths', () => {
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+  it('lays the two data bands out side by side by ratio, and stacks only where they cannot fit', () => {
+    const contentRowRule = cssBlock(styles, '.mi-capital-conditions__content-row {')
     const positioningRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row {')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
-    expect(wideStyles).toContain('.mi-crypto-dashboard__capital-positioning-row { grid-template-columns: minmax(0, 1fr); }')
-    expect(positioningRule).toContain('grid-template-columns: minmax(0, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__positioning-row')
-    expect(narrowStyles).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
+    expect(positioningRule).toContain('grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
+    // 并排不再挂在"内容宽 ≥ 1176px"的闸门上：那道闸门在 16 寸全屏上差 4px 就整块塌掉。
+    expect(styles).not.toContain('@container (min-width: 1176px)')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }')
+    expect(stackStyles).toContain('.mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }')
   })
 
   it('renders capital in the first data band and sentiment/funding in the second', async () => {

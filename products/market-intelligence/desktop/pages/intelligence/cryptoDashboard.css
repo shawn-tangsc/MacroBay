@@ -129,9 +129,9 @@
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__capital-positioning-row { display: grid; min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
-.mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; }
+.mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -139,14 +139,14 @@
 .mi-capital-conditions__primary-label { color: var(--mi-dashboard-muted); font-size: 12px; min-width: 0; }
 .mi-capital-conditions__primary-value { color: var(--mi-dashboard-caution); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .mi-capital-conditions__observed-at { color: var(--mi-dashboard-muted); font-size: 10px; }
-.mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: start; }
+.mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: start; }
 .mi-capital-conditions__summary { display: grid; align-content: start; gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 /* A grid item stretches to its column by default, which would give the refresh control the
    width of the panel; the terminal buttons in this workspace are content-sized. */
 .mi-capital-conditions__refresh { justify-self: start; }
 .mi-capital-conditions__refresh-error { color: var(--mi-dashboard-negative); font-size: 12px; }
 .mi-capital-conditions__facts { min-width: 0; }
-.mi-capital-conditions dl { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: start; gap: var(--mi-dashboard-capital-fact-row-gap); margin-top: 0; }
+.mi-capital-conditions dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: start; gap: var(--mi-dashboard-capital-fact-row-gap); margin-top: 0; }
 .mi-capital-conditions dl > div { display: grid; gap: 4px; min-width: 0; }
 .mi-capital-conditions dt { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions dd { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-align: left; white-space: nowrap; }
@@ -161,7 +161,7 @@
 .mi-capital-conditions__etf-summary strong i[data-series='btc'] { background: var(--mi-dashboard-etf-btc); }
 .mi-capital-conditions__etf-summary strong i[data-series='eth'] { background: var(--mi-dashboard-etf-eth); }
 .mi-capital-conditions__etf-summary span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-align: right; white-space: nowrap; }
-.mi-capital-conditions__etf-flow { display: grid; align-self: start; align-content: start; gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; }
+.mi-capital-conditions__etf-flow { display: grid; align-self: start; align-content: start; gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
 .mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: var(--mi-dashboard-etf-flow-block-gap); }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -224,23 +224,16 @@
 .mi-crypto-dashboard__sentiment-gauge > span { margin-top: 5px; font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge small,
 .mi-crypto-dashboard__sentiment-gauge p { margin: 5px 0 0; color: var(--mi-dashboard-muted); font-size: 10px; }
-@container (min-width: 1176px) {
-  .mi-crypto-dashboard__capital-positioning-row { grid-template-columns: minmax(0, 1fr); }
-  .mi-capital-conditions__content-row { grid-template-columns: minmax(0, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); }
-  .mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
-  .mi-crypto-dashboard__sentiment { padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
-  .mi-capital-conditions__etf-flow { margin-right: var(--mi-dashboard-band-zone-inline); }
-}
-
-@container (max-width: 1175px) {
-  .mi-crypto-dashboard__capital-positioning-row,
-  .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .mi-crypto-dashboard__sentiment,
-  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-top: 16px; border-top: 1px solid var(--mi-dashboard-line); }
-  .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
-  .mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+/*
+ * 两条数据带**默认就是并排**，宽度按 fr 分配；断点只负责"真的放不下"时的堆叠。
+ *
+ * 之前这里是一道 1176px 的闸门，按内容盒计算。而看板 pane 在 16 寸全屏上只有 1236px
+ * （窗口 1728 − 侧栏 52 − Agent 列 440），减去左右各 32px 的页边距正好 1172 —— 差 4px，
+ * 整块塌成单列，于是"全屏也换行"（读者 2026-10-27）。长在内容宽上的数字，一旦有人挪动侧栏、
+ * Agent 列或页边距就会再次错位；让列自己按比例收放，这种错位就不存在了。
+ */
+/* 并排形态的装饰（区内边距、列间分隔线）写在基础规则里，堆叠分支再把它们撤掉。 */
+.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
 
 .mi-crypto-dashboard__source-region { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__source-region > header { grid-column: 1 / -1; }
@@ -269,7 +262,20 @@
 .mi-crypto-dashboard__source-anomaly-mark { display: inline-flex; flex: 0 0 auto; align-items: center; color: var(--mi-dashboard-caution); }
 .mi-crypto-dashboard__source-row > div { display: flex; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--mi-dashboard-source-row-gap); justify-content: flex-start; white-space: nowrap; }
 
-@container (max-width: 1175px) {
+/*
+ * 唯一的堆叠分支：900px 内容宽以下才是真的放不下 —— 情绪条要让位给资金费率，摘要要让位给资金流，
+ * 来源状态从三列变一列。放在所有基础规则之后，覆盖才不会被后面的基础规则赢回去。
+ */
+@container (max-width: 899px) {
+  .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
+  .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .mi-crypto-dashboard__sentiment,
+  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--mi-dashboard-line);
+    border-left: 0;
+  }
+  .mi-capital-conditions__etf-flow { margin-right: 0; }
   .mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }
   .mi-crypto-dashboard__source-region > header { grid-column: auto; }
 }
