@@ -2,7 +2,8 @@
 
 # Installation
 
-This guide builds MacroBay from source. There is no packaged installer in the first public release.
+This guide builds MacroBay from source. To turn a build into a distributable `.dmg` or Windows
+installer, see [Packaging](../development/packaging.md).
 
 ## Requirements
 
@@ -70,9 +71,9 @@ out/preload/    preload bridge
 out/renderer/   React renderer
 ```
 
-This is an unpackaged build. Creating a distributable `.dmg`, `.exe`, or `.AppImage` requires a
-packaging step that is not included in this release. See
-[Status and limitations](../reference/status-and-limitations.md).
+This is an unpackaged build. `pnpm dist:mac` wraps it into a `.dmg` and `pnpm dist:win` into an NSIS
+installer; prerequisites, signing and the installer's own behaviour are covered in
+[Packaging](../development/packaging.md).
 
 ## Verify the checkout
 

@@ -2,7 +2,8 @@
 
 # 安装
 
-本文说明如何从源码构建 MacroBay。首个公开版本没有提供打包好的安装程序。
+本文说明如何从源码构建 MacroBay。要把构建结果变成可分发的 `.dmg` 或 Windows 安装器，见
+[打包](../development/packaging.zh-CN.md)。
 
 ## 环境要求
 
@@ -65,8 +66,8 @@ out/preload/    preload 桥
 out/renderer/   React 渲染层
 ```
 
-这是未打包的构建结果。生成 `.dmg`、`.exe` 或 `.AppImage` 还需要单独的打包步骤，本版本尚未包含。
-参见[状态与限制](../reference/status-and-limitations.zh-CN.md)。
+这是未打包的构建结果。`pnpm dist:mac` 会把它封成 `.dmg`，`pnpm dist:win` 会封成 NSIS 安装器；前置
+条件、签名与安装器自身的行为见[打包](../development/packaging.zh-CN.md)。
 
 ## 验证 checkout
 

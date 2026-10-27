@@ -120,13 +120,35 @@ The installer is per-user by default, lets the user pick the install directory, 
 and Start menu shortcuts. Signing needs an Authenticode certificate through `CSC_LINK` and
 `CSC_KEY_PASSWORD`; an unsigned installer triggers SmartScreen until the user chooses to keep it.
 
+### What the installer does
+
+`pnpm dist:win` produces an NSIS **assisted** installer (`oneClick: false`), not a one-click silent
+install. Double-clicking walks through install options → install location → progress → finish, where
+the options page offers "for anyone who uses this computer" or "only for me" (`perMachine: false`).
+The installer creates desktop and Start menu shortcuts and registers an uninstall entry in Apps &
+Features.
+
+The wizard header and sidebar come from `resources/installerHeader.bmp` (150×57) and
+`resources/installerSidebar.bmp` (164×314), wired through `nsis.installerHeader` /
+`nsis.installerSidebar`. Without them the MUI header renders blank and the wizard looks like it has
+no guidance at all.
+
 Reference sizes for `0.1.0` on Windows 11 x64: about 164 MB for the installer, about 613 MB for the
 unpacked directory, of which the native agent CLI `claude.exe` is about 247 MB (it is not compressed,
 see `asar: false` above).
 
+### Verifying a Windows build
+
+1. `pnpm dist:win:dir`, then run `release\win-unpacked\MacroBay.exe`: the window is titled
+   `MacroBay 观潮` and renders the dashboard.
+2. Local data is written under `%APPDATA%\MacroBay`; closing the last window quits the process.
+3. Double-click `release\MacroBay-<version>-x64-setup.exe` and confirm all four wizard pages appear,
+   the shortcuts work, and Apps & Features lists the uninstall entry.
+4. Launch the installed build from the Start menu, check the taskbar icon and grouping plus
+   notifications; uninstalling should leave `%APPDATA%\MacroBay` in place.
+
 The build itself now runs through on Windows 11 x64 hardware and produces the installer, but the
-**installed** app has not been accepted yet. Verify first: window and dashboard, model-service
-settings, one real agent turn, taskbar icon and grouping, and notifications.
+**installed** app has not been accepted end to end yet.
 
 ## Linux
 

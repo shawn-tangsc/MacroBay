@@ -114,11 +114,30 @@ Windows 产物放在 `windows-latest` 上产出。
 安装器默认按当前用户安装，允许选择安装目录，并创建桌面和开始菜单快捷方式。签名需要 Authenticode
 证书（`CSC_LINK`、`CSC_KEY_PASSWORD`）；未签名的安装器会触发 SmartScreen 警告，需要用户自行放行。
 
+### 安装器行为
+
+`pnpm dist:win` 产出的是 NSIS **引导式**安装器（`oneClick: false`），不是一键静默安装。双击后依次是
+「安装选项」→「安装位置」→「安装进度」→「完成」；安装选项可以在「为使用这台电脑的任何人安装」和
+「仅为我安装」之间选择（`perMachine: false`）。安装器会创建桌面与开始菜单快捷方式，并在「应用和功能」
+里注册卸载入口。
+
+页头与侧栏图由 `resources/installerHeader.bmp`（150×57）和 `resources/installerSidebar.bmp`（164×314）
+提供，对应 `nsis.installerHeader` / `nsis.installerSidebar`。这两个资源缺失时 MUI 页头是空白的，装出来
+的界面会像「没有引导」。
+
 `0.1.0` 在 Windows 11 x64 上的参考体积：安装器约 164 MB，解包目录约 613 MB，其中智能体原生 CLI
 `claude.exe` 约 247 MB（不压缩，见上文 `asar: false`）。
 
-构建本身已在 Windows 11 x64 真机上跑通并产出安装器，但**安装后的运行态**还没有验收。首次验证的
-顺序：窗口与看板、模型服务设置、一次真实智能体对话、任务栏图标与分组、通知。
+### 验证一个 Windows 构建
+
+1. `pnpm dist:win:dir`，运行 `release\win-unpacked\MacroBay.exe`：主窗口标题是 `MacroBay 观潮` 并能
+   渲染看板。
+2. 本地数据写入 `%APPDATA%\MacroBay`；关掉最后一个窗口进程即退出。
+3. 双击 `release\MacroBay-<version>-x64-setup.exe`，确认四步引导都在、桌面与开始菜单快捷方式可用、
+   「应用和功能」里有卸载入口。
+4. 从开始菜单启动已安装版本，核对任务栏图标与分组、通知；卸载后 `%APPDATA%\MacroBay` 应当保留。
+
+构建本身已在 Windows 11 x64 真机上跑通并产出安装器，但**安装后的运行态**还没有完成端到端验收。
 
 ## Linux
 
