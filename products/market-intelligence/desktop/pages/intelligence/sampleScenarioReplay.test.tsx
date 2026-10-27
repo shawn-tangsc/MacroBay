@@ -82,7 +82,7 @@ describe('示例场景回放', () => {
     const client = createCrossAssetObservationClient()
     const lease = await client.acquire()
     expect(lease).toMatchObject({ state: 'active' })
-    for (const range of ['24h', '7d'] as const) {
+    for (const range of ['1h', '24h', '7d'] as const) {
       const snapshot = await client.query({ range })
       expect(snapshot, `cross asset ${range}`).toMatchObject({ schemaVersion: 1, range })
     }

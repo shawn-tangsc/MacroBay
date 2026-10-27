@@ -9562,6 +9562,345 @@
         "reason": "window-not-judged",
         "refuted": []
       }
+    },
+    "1h": {
+      "schemaVersion": 1,
+      "mode": "current",
+      "servedAt": "2026-10-27T09:45:00.000Z",
+      "asOf": "2026-10-27T09:45:00.000Z",
+      "range": "1h",
+      "analysisEnd": "2026-10-27T09:45:00.000Z",
+      "windowStart": "2026-10-27T08:45:00.000Z",
+      "historyCoverage": {
+        "index": {
+          "count": 13,
+          "expectedCount": 13,
+          "complete": true
+        },
+        "btc": {
+          "count": 13,
+          "expectedCount": 13,
+          "complete": true
+        },
+        "eth": {
+          "count": 13,
+          "expectedCount": 13,
+          "complete": true
+        }
+      },
+      "curves": {
+        "index": [
+          {
+            "at": "2026-10-27T08:45:00.000Z",
+            "returnPercent": 0
+          },
+          {
+            "at": "2026-10-27T08:50:00.000Z",
+            "returnPercent": 0.0112
+          },
+          {
+            "at": "2026-10-27T08:55:00.000Z",
+            "returnPercent": 0.1516
+          },
+          {
+            "at": "2026-10-27T09:00:00.000Z",
+            "returnPercent": 0.198
+          },
+          {
+            "at": "2026-10-27T09:05:00.000Z",
+            "returnPercent": 0.2738
+          },
+          {
+            "at": "2026-10-27T09:10:00.000Z",
+            "returnPercent": 0.1699
+          },
+          {
+            "at": "2026-10-27T09:15:00.000Z",
+            "returnPercent": 0.2288
+          },
+          {
+            "at": "2026-10-27T09:20:00.000Z",
+            "returnPercent": 0.2808
+          },
+          {
+            "at": "2026-10-27T09:25:00.000Z",
+            "returnPercent": 0.2345
+          },
+          {
+            "at": "2026-10-27T09:30:00.000Z",
+            "returnPercent": 0.2317
+          },
+          {
+            "at": "2026-10-27T09:35:00.000Z",
+            "returnPercent": 0.2106
+          },
+          {
+            "at": "2026-10-27T09:40:00.000Z",
+            "returnPercent": 0.2387
+          },
+          {
+            "at": "2026-10-27T09:45:00.000Z",
+            "returnPercent": 0.2499
+          }
+        ],
+        "btc": [
+          {
+            "at": "2026-10-27T08:45:00.000Z",
+            "returnPercent": 0
+          },
+          {
+            "at": "2026-10-27T08:50:00.000Z",
+            "returnPercent": -0.0587
+          },
+          {
+            "at": "2026-10-27T08:55:00.000Z",
+            "returnPercent": 0.0365
+          },
+          {
+            "at": "2026-10-27T09:00:00.000Z",
+            "returnPercent": -0.0351
+          },
+          {
+            "at": "2026-10-27T09:05:00.000Z",
+            "returnPercent": 0.0078
+          },
+          {
+            "at": "2026-10-27T09:10:00.000Z",
+            "returnPercent": -0.1127
+          },
+          {
+            "at": "2026-10-27T09:15:00.000Z",
+            "returnPercent": -0.0503
+          },
+          {
+            "at": "2026-10-27T09:20:00.000Z",
+            "returnPercent": -0.1277
+          },
+          {
+            "at": "2026-10-27T09:25:00.000Z",
+            "returnPercent": -0.1709
+          },
+          {
+            "at": "2026-10-27T09:30:00.000Z",
+            "returnPercent": -0.14
+          },
+          {
+            "at": "2026-10-27T09:35:00.000Z",
+            "returnPercent": -0.1779
+          },
+          {
+            "at": "2026-10-27T09:40:00.000Z",
+            "returnPercent": -0.1752
+          },
+          {
+            "at": "2026-10-27T09:45:00.000Z",
+            "returnPercent": -0.2154
+          }
+        ],
+        "eth": [
+          {
+            "at": "2026-10-27T08:45:00.000Z",
+            "returnPercent": 0
+          },
+          {
+            "at": "2026-10-27T08:50:00.000Z",
+            "returnPercent": -0.0955
+          },
+          {
+            "at": "2026-10-27T08:55:00.000Z",
+            "returnPercent": 0.0324
+          },
+          {
+            "at": "2026-10-27T09:00:00.000Z",
+            "returnPercent": -0.0156
+          },
+          {
+            "at": "2026-10-27T09:05:00.000Z",
+            "returnPercent": 0.1012
+          },
+          {
+            "at": "2026-10-27T09:10:00.000Z",
+            "returnPercent": -0.1159
+          },
+          {
+            "at": "2026-10-27T09:15:00.000Z",
+            "returnPercent": 0.0402
+          },
+          {
+            "at": "2026-10-27T09:20:00.000Z",
+            "returnPercent": -0.019
+          },
+          {
+            "at": "2026-10-27T09:25:00.000Z",
+            "returnPercent": -0.0865
+          },
+          {
+            "at": "2026-10-27T09:30:00.000Z",
+            "returnPercent": -0.0687
+          },
+          {
+            "at": "2026-10-27T09:35:00.000Z",
+            "returnPercent": -0.1189
+          },
+          {
+            "at": "2026-10-27T09:40:00.000Z",
+            "returnPercent": -0.1565
+          },
+          {
+            "at": "2026-10-27T09:45:00.000Z",
+            "returnPercent": -0.2369
+          }
+        ]
+      },
+      "closedReturns": {
+        "index": {
+          "5m": {
+            "state": "available",
+            "value": 0.0112
+          },
+          "15m": {
+            "state": "available",
+            "value": 0.0182
+          },
+          "1h": {
+            "state": "available",
+            "value": 0.2499
+          },
+          "4h": {
+            "state": "available",
+            "value": 0.2978
+          },
+          "24h": {
+            "state": "unavailable",
+            "reason": "insufficient"
+          },
+          "7d": {
+            "state": "unavailable",
+            "reason": "insufficient"
+          }
+        },
+        "btc": {
+          "5m": {
+            "state": "available",
+            "value": -0.0402
+          },
+          "15m": {
+            "state": "available",
+            "value": -0.0755
+          },
+          "1h": {
+            "state": "available",
+            "value": -0.2154
+          },
+          "4h": {
+            "state": "available",
+            "value": -0.4076
+          },
+          "24h": {
+            "state": "unavailable",
+            "reason": "insufficient"
+          },
+          "7d": {
+            "state": "unavailable",
+            "reason": "insufficient"
+          }
+        },
+        "eth": {
+          "5m": {
+            "state": "available",
+            "value": -0.0805
+          },
+          "15m": {
+            "state": "available",
+            "value": -0.1683
+          },
+          "1h": {
+            "state": "available",
+            "value": -0.2369
+          },
+          "4h": {
+            "state": "available",
+            "value": -0.422
+          },
+          "24h": {
+            "state": "unavailable",
+            "reason": "insufficient"
+          },
+          "7d": {
+            "state": "unavailable",
+            "reason": "insufficient"
+          }
+        }
+      },
+      "correlations": {
+        "indexBtc": {
+          "state": "unavailable",
+          "reason": "insufficient",
+          "sampleCount": 0,
+          "expectedCount": 288
+        },
+        "indexEth": {
+          "state": "unavailable",
+          "reason": "insufficient",
+          "sampleCount": 0,
+          "expectedCount": 288
+        }
+      },
+      "relativeReturns": {
+        "btcMinusIndex": {
+          "state": "unavailable",
+          "reason": "insufficient"
+        },
+        "ethMinusBtc": {
+          "state": "unavailable",
+          "reason": "insufficient"
+        }
+      },
+      "indexSource": "proxy",
+      "observationKey": {
+        "indexBtc": "unavailable",
+        "ethBtc": "unavailable"
+      },
+      "macroCurves": {
+        "dxy": [],
+        "gold": []
+      },
+      "marketState": {
+        "index": "open",
+        "btc": "open",
+        "eth": "open"
+      },
+      "lastClosed": {
+        "index": {
+          "at": "2026-10-27T09:45:00.000Z",
+          "close": "714.05"
+        },
+        "btc": {
+          "at": "2026-10-27T09:45:00.000Z",
+          "close": "79670.01"
+        },
+        "eth": {
+          "at": "2026-10-27T09:45:00.000Z",
+          "close": "2307.61"
+        }
+      },
+      "sourceState": "stale",
+      "quotes": {
+        "index": {
+          "state": "missing"
+        },
+        "btc": {
+          "state": "missing"
+        },
+        "eth": {
+          "state": "missing"
+        }
+      },
+      "forming": {
+        "index": null,
+        "btc": null,
+        "eth": null
+      }
     }
   }
 }
