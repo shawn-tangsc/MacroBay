@@ -238,3 +238,36 @@ fb2e7dc Pin test timezone for CI
 - [ ] 没有暂存凭据、本地数据、生成注册表或私有笔记。
 - [ ] PR 标题符合提交规范。
 - [ ] 分支已 rebase 到 `main`。
+
+## 发布清单
+
+一次发布 = 一次版本号变更、一次全绿门禁、一个从 `main` 推出去的附注标签。之后不删除、不移动。
+
+**1. 版本号在六处，`pnpm release:bump <version>` 一次写完：**
+
+| 文件 | 它声明什么 |
+| --- | --- |
+| `package.json` | 应用版本，`check-release-version.mjs` 拿标签和它比对 |
+| `products/market-intelligence/product.manifest.ts` | 产品自己的版本 |
+| `README.md` / `README.zh-CN.md` | 首页展示的 alpha 版本 |
+| `docs/reference/status-and-limitations.md`（含中文） | “MacroBay is at …” 与稳定性段落 |
+
+任何一处没匹配上，脚本直接失败——句子被改动会在改版本时暴露，而不是打标签之后。
+
+**2. 门禁**（`main` 上、干净工作区）：`pnpm docs:check`、`pnpm typecheck`、`pnpm test`、`pnpm build`。
+
+**3. 打标签并推送：**
+
+```bash
+git tag -a v0.2.1 -m "MacroBay 0.2.1 (alpha)"
+git push origin v0.2.1
+```
+
+`v*` 标签是唯一的打包入口（`release.yml`）：macOS arm64 与 Windows x64 各自在自己的 runner 上构建，
+挂到同一个 GitHub Release。标签与 `package.json` 不一致时会被 `check-release-version.mjs` 拒绝。
+
+**4. 某个 job 失败：** 从 *Actions → Release → Run workflow* 用同一个标签重跑（ref 填标签名）。
+不要删除或移动标签——仓库规则会拒绝，重跑只替换附件、不动发布说明。要修就发下一个补丁版本。
+
+**Windows 注意：** release 的步骤跑在 PowerShell 下，`"$VAR"` 是 PowerShell 变量而不是环境变量。
+要用 Actions 表达式（`${{ env.BUILD_REF }}`）传值——两处版本校验就是这么写的。

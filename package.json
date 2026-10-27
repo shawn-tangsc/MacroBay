@@ -27,6 +27,7 @@
     "lint": "pnpm --filter @macrobay/desktop-shell lint",
     "docs:check": "node scripts/check-docs.mjs",
     "demo:verify": "tsx scripts/demo/verify-sample.mts",
+    "release:bump": "tsx scripts/release/bump-version.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
     "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts"
