@@ -1,5 +1,6 @@
 import type { AssistantEntity } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import type { AssistantTopicEntity } from '@platform/ai/assistant-platform/schemas/topicSchemas'
+import { LoadingState } from '@platform/ui/components/loading'
 import type { PlatformText } from '../../i18n/platformText'
 import { Button, Dropdown, Modal } from 'antd'
 import type { MenuProps } from 'antd'
@@ -12,6 +13,11 @@ type AssistantSidePanelProps = {
   labels: PlatformText['assistants']
   assistants: AssistantEntity[]
   topics: AssistantTopicEntity[]
+  /** First read of each list; later refreshes keep the current rows on screen. */
+  assistantsLoading?: boolean
+  topicsLoading?: boolean
+  /** Copy for those first reads, when they are still in flight. */
+  loadingLabel?: string
   activeTab: AssistantSidePanelTab
   activeAssistantId: string | null
   activeTopicId: string | null
@@ -27,6 +33,9 @@ export function AssistantSidePanel({
   labels,
   assistants,
   topics,
+  assistantsLoading = false,
+  topicsLoading = false,
+  loadingLabel,
   activeTab,
   activeAssistantId,
   activeTopicId,
@@ -97,7 +106,8 @@ export function AssistantSidePanel({
       <div className="agent-side-panel-content">
         {showingAssistants ? (
           <div className="assistant-side-panel-list">
-            {assistants.map((assistant) => (
+            {assistantsLoading && loadingLabel ? <LoadingState label={loadingLabel} minHeight={120} /> : null}
+            {!assistantsLoading ? assistants.map((assistant) => (
               <button
                 key={assistant.id}
                 type="button"
@@ -109,12 +119,13 @@ export function AssistantSidePanel({
                   <small>{assistant.description || labels.defaultAssistant}</small>
                 </span>
               </button>
-            ))}
+            )) : null}
           </div>
         ) : (
           <div className="assistant-side-panel-list">
-            {topics.length === 0 ? <p className="empty-state">{labels.noTopics}</p> : null}
-            {topics.map((topic) => {
+            {topicsLoading && loadingLabel ? <LoadingState label={loadingLabel} minHeight={120} /> : null}
+            {!topicsLoading && topics.length === 0 ? <p className="empty-state">{labels.noTopics}</p> : null}
+            {!topicsLoading && topics.map((topic) => {
               const menuItems: MenuProps['items'] = [
                 {
                   key: 'delete',

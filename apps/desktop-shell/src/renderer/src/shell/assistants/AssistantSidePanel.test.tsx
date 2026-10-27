@@ -103,6 +103,33 @@ describe('AssistantSidePanel', () => {
     expect(markup).not.toContain('BTC 复盘')
   })
 
+  it('shows the standard ring instead of an empty list while the first read is in flight', () => {
+    const labels = platformText['en-US'].assistants
+    const markup = renderToStaticMarkup(
+      <AssistantSidePanel
+        labels={labels}
+        assistants={[]}
+        topics={[]}
+        assistantsLoading
+        topicsLoading
+        loadingLabel={platformText['en-US'].status.loading}
+        activeAssistantId={null}
+        activeTopicId={null}
+        activeTab="topics"
+        onSelectAssistant={() => undefined}
+        onSelectTopic={() => undefined}
+        onCreateAssistant={() => undefined}
+        onCreateTopic={() => undefined}
+        onTabChange={() => undefined}
+      />
+    )
+
+    expect(markup).toContain('data-loading-state')
+    expect(markup).toContain(platformText['en-US'].status.loading)
+    // The empty copy is a settled state, so it must not appear while the read is still running.
+    expect(markup).not.toContain(labels.noTopics)
+  })
+
   it('exposes the delete-conversation context menu and keyboard alternative only on the topics tab', () => {
     const labels = platformText['en-US'].assistants
     const topicsMarkup = renderToStaticMarkup(

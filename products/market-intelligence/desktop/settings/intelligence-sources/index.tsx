@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { LoadingState } from '@platform/ui/components/loading'
+
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { productText } from '../../shared/i18n/productText'
@@ -49,6 +51,14 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     const first = settingsView.groups.flatMap((group) => group.providers)[0]
     if (first) setSelectedProviderId(first.providerId)
   }, [settingsView, selectedProviderId])
+
+  if (loading && !settingsView) {
+    return (
+      <section className="settings-workspace intelligence-sources-workspace" aria-busy="true">
+        <LoadingState label={t.loading} fill />
+      </section>
+    )
+  }
 
   return (
     <section className="settings-workspace intelligence-sources-workspace">

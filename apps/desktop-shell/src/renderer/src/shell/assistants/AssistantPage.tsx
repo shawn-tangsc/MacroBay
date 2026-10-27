@@ -129,6 +129,9 @@ export function AssistantPage({
   const t = platformText[language].assistants
   const [assistants, setAssistants] = useState<AssistantEntity[]>([])
   const [topics, setTopics] = useState<AssistantTopicEntity[]>([])
+  /** First reads of the side panel lists; a later refresh must not blank the visible rows. */
+  const [assistantsLoading, setAssistantsLoading] = useState(true)
+  const [topicsLoading, setTopicsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<AssistantSidePanelTab>('assistants')
   const [activeAssistantId, setActiveAssistantId] = useState<string | null>(null)
   const [activeTopicId, setActiveTopicId] = useState<string | null>(null)
@@ -212,23 +215,31 @@ export function AssistantPage({
   const composerEnabled = Boolean(activeAssistant && modelReady)
 
   const refreshAssistants = useCallback(async () => {
-    const next = (await window.platform.assistants.list()) as AssistantEntity[]
-    setAssistants(next)
-    setActiveAssistantId((current) =>
-      current && next.some((assistant) => assistant.id === current) ? current : next[0]?.id ?? null
-    )
+    try {
+      const next = (await window.platform.assistants.list()) as AssistantEntity[]
+      setAssistants(next)
+      setActiveAssistantId((current) =>
+        current && next.some((assistant) => assistant.id === current) ? current : next[0]?.id ?? null
+      )
+    } finally {
+      setAssistantsLoading(false)
+    }
   }, [])
 
   const refreshTopics = useCallback(async (assistantId: string) => {
-    const result = (await window.platform.assistants.listTopics({ assistantId })) as {
-      topics: AssistantTopicEntity[]
+    try {
+      const result = (await window.platform.assistants.listTopics({ assistantId })) as {
+        topics: AssistantTopicEntity[]
+      }
+      setTopics(result.topics)
+      setActiveTopicId((current) => {
+        const next = current && result.topics.some((item) => item.id === current) ? current : result.topics[0]?.id ?? null
+        activeTopicIdRef.current = next
+        return next
+      })
+    } finally {
+      setTopicsLoading(false)
     }
-    setTopics(result.topics)
-    setActiveTopicId((current) => {
-      const next = current && result.topics.some((item) => item.id === current) ? current : result.topics[0]?.id ?? null
-      activeTopicIdRef.current = next
-      return next
-    })
   }, [])
 
   const refreshMessages = useCallback(async (topicId: string, nodeId?: string | null) => {
@@ -255,7 +266,11 @@ export function AssistantPage({
   }, [openRequest, setCurrentTopicId])
 
   useEffect(() => {
-    if (!activeAssistantId) return
+    // With no assistant there is nothing to read: settle the list instead of leaving the ring up.
+    if (!activeAssistantId) {
+      setTopicsLoading(false)
+      return
+    }
     void refreshTopics(activeAssistantId)
   }, [activeAssistantId, refreshTopics])
 
@@ -620,6 +635,9 @@ export function AssistantPage({
             labels={t}
             assistants={assistants}
             topics={topics}
+            assistantsLoading={assistantsLoading}
+            topicsLoading={topicsLoading}
+            loadingLabel={platformText[language].status.loading}
             activeTab={activeTab}
             activeAssistantId={activeAssistantId}
             activeTopicId={activeTopicId}

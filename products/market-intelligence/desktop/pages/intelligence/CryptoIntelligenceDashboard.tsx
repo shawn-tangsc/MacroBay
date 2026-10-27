@@ -26,6 +26,7 @@ import type { DashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedSt
 import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import type { productText } from '../../shared/i18n/productText'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type CryptoDashboardText = {
@@ -229,7 +230,9 @@ function PositioningPanel({ fearGreedState, text }: { fearGreedState: DashboardF
       {fearGreedState.state === 'available' ? <>
         <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<path className="mi-crypto-dashboard__gauge-needle" d={FearGreedGaugePresentationPolicy.trackPath} data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]} style={{ transform: `rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)}deg)` }} /></svg>
         <strong>{fearGreedState.score}</strong><span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.positioning.gaugeMarkers.fear} · {text.positioning.gaugeMarkers.neutral} · {text.positioning.gaugeMarkers.greed}</p>
-      </> : <span>{text.fearGreed[fearGreedState.state]}</span>}
+      </> : fearGreedState.state === 'loading'
+        ? <LoadingState label={text.fearGreed.loading} minHeight={120} />
+        : <span>{text.fearGreed[fearGreedState.state]}</span>}
       </div>
     </section>
   </>
