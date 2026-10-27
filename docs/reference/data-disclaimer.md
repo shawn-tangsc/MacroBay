@@ -12,6 +12,13 @@ news articles, exchange announcements, calendar entries, or other content retrie
 
 Data remains subject to the terms of the service that produced it.
 
+## Sample data
+
+The sample scenario contains aggregate values observed from public sources and from licensed providers you
+configure (for example ETF flows and index levels). It ships so the product can be evaluated offline: it is
+not a feed, it is not updated, and it must not be resold or treated as a substitute for a provider licence.
+See [Sample data](./status-and-limitations.md#sample-data).
+
 ## What the project does not do
 
 - It does not bundle a market-data database, provider accounts, or API keys.

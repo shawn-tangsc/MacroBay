@@ -68,6 +68,13 @@ cutoff time it used.
 - The agent answer names the evidence and the cutoff time.
 - A later revision does not silently rewrite an earlier answer.
 
+## No key yet? Open the sample first
+
+With no API key and no network you can still see the whole desk. On the intelligence portal, switch on
+**Sample mode** (or press *Open sample dashboard*): the dashboard and three published analyses replay a
+recorded week of real observations. It is labelled, it never updates, and it writes nothing — switching it
+off returns you to your own (empty) data. See [Sample data](../reference/status-and-limitations.md#sample-data).
+
 ## Next
 
 - [Model service](./model-service.md)

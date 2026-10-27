@@ -49,8 +49,9 @@ concrete failures.
 
 ## Can I use it without a dashboard or live data?
 
-You can start the app and use the agent UI, but market-intelligence panels need configured source
-credentials and data. No demo database is bundled.
+Yes, for a look: **sample mode** shows the full dashboard and three published analyses from a recorded real
+week, with no key and no network. Doing your own analysis still needs configured source credentials and
+data — sample mode never collects and never writes to your database.
 
 ## Is the analysis investment advice?
 
