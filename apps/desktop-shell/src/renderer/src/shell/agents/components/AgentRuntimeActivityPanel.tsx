@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 
 import { Button, Input } from 'antd'
-import { AlertTriangle, Brain, Check, ChevronDown, Loader2, ShieldQuestion, TerminalSquare, X, Zap } from 'lucide-react'
+import { AlertTriangle, Brain, Check, ChevronDown, ShieldQuestion, TerminalSquare, X, Zap } from 'lucide-react'
 
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { AgentRuntimeActivityCard } from '../agentRuntimeActivityViewModel'
 import { resolveApprovalInputDraft } from '../agentRuntimeApprovalInput'
@@ -299,7 +300,7 @@ function renderCardIcon(card: AgentRuntimeActivityCard): React.ReactElement {
   if (card.kind === 'approval') return <ShieldQuestion size={14} />
   if (card.kind === 'reasoning') return <Brain size={14} />
   if (card.kind === 'control') return <Zap size={14} />
-  if (card.kind === 'assistant-text') return <Loader2 size={14} />
+  if (card.kind === 'assistant-text') return <LoadingSpinner size="sm" />
   return <TerminalSquare size={14} />
 }
 

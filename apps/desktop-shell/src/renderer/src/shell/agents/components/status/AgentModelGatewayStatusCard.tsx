@@ -1,4 +1,6 @@
-import { LoaderCircle, Network, Play, Square } from 'lucide-react'
+import { Network, Play, Square } from 'lucide-react'
+
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import { useAgentText } from '../../agentTextProvider'
 import {
@@ -63,7 +65,7 @@ export default function AgentModelGatewayStatusCard({
             className="primary-button compact"
             disabled={busy || starting}
             onClick={onStart}>
-            {busy || starting ? <LoaderCircle size={14} className="spin" /> : <Play size={14} />}
+            {busy || starting ? <LoadingSpinner size="sm" /> : <Play size={14} />}
             {starting ? labels.startingButton : labels.enableAndStart}
           </button>
         )}

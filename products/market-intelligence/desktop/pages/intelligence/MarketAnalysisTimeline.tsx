@@ -2,7 +2,7 @@ import { Button } from 'antd'
 import { ArrowLeft, RefreshCw, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
-import { LoadingState } from '@platform/ui/components/loading'
+import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { toReadableConclusionText } from '../../../contracts/marketAnalysisReadableText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -144,7 +144,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
               it was an action that could not change anything a reader cares about. */}
           {state.entries.length > 0 ? <Button className="mi-analysis-timeline__reanalyse" aria-busy={analysisInFlight || undefined}
             disabled={analysisInFlight} onClick={() => void timeline.requestRefreshAnalysis()}
-            icon={<RefreshCw aria-hidden="true" size={14} className={analysisInFlight ? 'mi-analysis-timeline__reanalyse-icon-spin' : undefined} />}>{text.refreshAnalysis}</Button> : null}
+            icon={analysisInFlight ? <LoadingSpinner size="sm" /> : <RefreshCw aria-hidden="true" size={14} />}>{text.refreshAnalysis}</Button> : null}
         </div>
       </header>
       <div className="mi-analysis-timeline__workspace-wrap">

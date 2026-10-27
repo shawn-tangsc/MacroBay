@@ -207,15 +207,15 @@ describe('MarketAnalysisTimeline', () => {
     await act(async () => root?.render(createElement(Timeline, { text })))
     const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
     expect(refresh).toBeDefined()
-    expect(refresh?.querySelector('svg')?.getAttribute('class')).not.toContain('mi-analysis-timeline__reanalyse-icon-spin')
+    expect(refresh?.querySelector('.loading-spinner')).toBeNull()
     await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.requestInitialAnalysis', { mode: 'refresh' })
     // The button keeps its label while the run is queued (the label is the action, not a status)
-    // and stops accepting clicks until the run settles. The glyph spins for the whole run, not only
-    // for the short request call.
+    // and stops accepting clicks until the run settles. The standard ring shows for the whole run,
+    // not only for the short request call.
     const queuedButton = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
     expect(queuedButton?.disabled).toBe(true)
-    expect(queuedButton?.querySelector('svg')?.getAttribute('class')).toContain('mi-analysis-timeline__reanalyse-icon-spin')
+    expect(queuedButton?.querySelector('.loading-spinner')).not.toBeNull()
   })
 
   it('replaces the queued refresh state when the new correction timeline node is published', async () => {
