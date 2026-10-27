@@ -557,6 +557,37 @@ describe('crypto intelligence dashboard', () => {
     expect(stackStyles).toContain('.mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }')
   })
 
+  it('reaches its side-by-side bands in a full-screen laptop pane', () => {
+    // 2026-10-27「全屏仍换行」的回归守卫。四段宽度各有 owner：侧栏在 shell 的 styles.css、Agent 栏在
+    // marketAnalysisWorkspace.css、页边距与堆叠闸门在 cryptoDashboard.css。这里把它们读出来现算，
+    // 而不是抄一个"应该够了"的结论 —— 任何人挪动其中任何一个，这条会先响。
+    const shellStyles = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
+    const workspaceStyles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css'), 'utf8')
+    const sidebar = Number(/--sidebar-width:\s*(\d+)px/.exec(shellStyles)?.[1])
+    const paneLimit = /--mi-agent-pane-width:\s*clamp\(\s*(\d+)px,\s*([\d.]+)cqw,\s*(\d+)px\s*\)/.exec(workspaceStyles)
+    const pageInline = Number(/--mi-dashboard-page-inline:\s*(\d+)px/.exec(cssBlock(styles, '.mi-crypto-dashboard {'))?.[1])
+    const stackBelow = Number(/@container \(max-width: (\d+)px\)/.exec(styles)?.[1])
+
+    expect(paneLimit, 'Agent 栏宽度必须是有上下限的比例值').not.toBeNull()
+    expect(sidebar).toBeGreaterThan(0)
+    expect(pageInline).toBeGreaterThan(0)
+    expect(stackBelow).toBeGreaterThan(0)
+
+    const paneMin = Number(paneLimit![1])
+    const paneShare = Number(paneLimit![2])
+    const paneMax = Number(paneLimit![3])
+    const contentWidth = (windowWidth: number): number => {
+      const page = windowWidth - sidebar
+      const agent = Math.min(Math.max(paneMin, (page * paneShare) / 100), paneMax)
+      return page - agent - pageInline * 2
+    }
+
+    // 14 英寸 (1512) 与 16 英寸 (1728) 的 Mac 全屏，两种都必须能并排。
+    for (const windowWidth of [1512, 1728]) {
+      expect(contentWidth(windowWidth), `${windowWidth}px 窗口的看板内容盒`).toBeGreaterThan(stackBelow + 1)
+    }
+  })
+
   it('renders capital in the first data band and sentiment/funding in the second', async () => {
     const container = document.createElement('div')
     document.body.append(container)
