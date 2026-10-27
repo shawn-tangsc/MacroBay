@@ -68,6 +68,7 @@ describe('示例场景回放', () => {
 
       const marketCalendar = await marketCalendarClient.queryMonth({ month: '2026-10', locale: locale === 'en-US' ? 'en' : 'zh', asOf: '2026-10-27T09:50:00.000Z' })
       expect(marketCalendar, `${locale} market calendar`).toMatchObject({ state: 'available' })
+      if ('events' in marketCalendar) expect(marketCalendar.events.length, `${locale} market events`).toBeGreaterThan(0)
 
       const sentiment = await newsSentimentClient.query({ asOf: '2026-10-27T09:50:00.000Z', window: 'all', limit: 20 } as never)
       expect(sentiment, `${locale} news sentiment`).toBeDefined()

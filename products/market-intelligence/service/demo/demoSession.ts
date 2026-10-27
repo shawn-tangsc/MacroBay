@@ -193,16 +193,30 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
         ? entry.byRequest[readByRequestKey(entry.byRequestKey, request)]
         : entry.payload
       if (payload === undefined) return undefined
-      const materialized = materializeSampleModePayload(payload, {
+      const materialized = echoRequestLocale(method, request, materializeSampleModePayload(payload, {
         ...(readRequestAsOf(request) ? { asOf: readRequestAsOf(request) } : {}),
         scenarioNow: scenario.meta.scenarioNow,
         wallNow: now()
-      })
+      }))
       return method === 'intelligence.crossAsset.query'
         ? tickSampleQuotes(materialized, random)
         : materialized
     }
   })
+}
+
+/**
+ * 市场日历页把自己的 `locale` 当作查询条件回显；示例里只有一份英文内容，
+ * 所以这个字段跟随请求——否则中文界面会因为 `page.locale !== query.locale` 整页被丢弃。
+ * 只改回显字段，事件内容一个字节都不动。
+ */
+function echoRequestLocale(method: string, request: unknown, payload: unknown): unknown {
+  if (!method.endsWith('marketCalendar.queryMonth')) return payload
+  if (!payload || typeof payload !== 'object') return payload
+  if (!request || typeof request !== 'object') return payload
+  const locale = (request as Record<string, unknown>).locale
+  if (typeof locale !== 'string' || locale.length === 0) return payload
+  return { ...(payload as Record<string, unknown>), locale }
 }
 
 function readByRequestKey(key: string | undefined, request: unknown): string {
