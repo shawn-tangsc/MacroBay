@@ -39,7 +39,15 @@ export const productText = {
         empty: '暂无相关事件。事件采集接入后会在此显示。',
         portal: {
           sampleMode: {
-            watermark: '示例数据'
+            watermark: '示例数据',
+            banner: {
+              title: '示例模式',
+              replay: '真实历史数据 · 离线回放',
+              scenario: '场景时间 {time}（不是当前时间）',
+              noUpdate: '不会自动更新',
+              exit: '退出示例',
+              connect: '接入真实数据'
+            }
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
@@ -1347,7 +1355,15 @@ export const productText = {
         empty: 'No relevant events yet. They will appear here once source collection is connected.',
         portal: {
           sampleMode: {
-            watermark: 'SAMPLE DATA'
+            watermark: 'SAMPLE DATA',
+            banner: {
+              title: 'Sample mode',
+              replay: 'Real historical data · replayed offline',
+              scenario: 'Scenario time {time} (not now)',
+              noUpdate: 'Does not update',
+              exit: 'Exit sample',
+              connect: 'Connect real data'
+            }
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {

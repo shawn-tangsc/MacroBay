@@ -18,6 +18,7 @@ import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
 import { SampleModeProvider, useSampleMode } from './SampleModeProvider'
+import { SampleModeBanner, type SampleModeBannerText } from './SampleModeBanner'
 import { SampleWatermark } from './SampleWatermark'
 
 import './intelligence.css'
@@ -107,7 +108,18 @@ function IntelligencePageBody(): React.ReactElement {
 
   return (
     <div className="mi-sample-surface">
-      {sample.state.active ? <SampleWatermark text={sampleText.watermark} /> : null}
+      {sample.state.active ? (
+        <>
+          <SampleModeBanner
+            busy={sample.busy}
+            onConnect={() => { void sample.exit().then(() => setSourceDrawerOpen(true)) }}
+            onExit={() => { void sample.exit() }}
+            scenarioNow={sample.state.scenarioNow}
+            text={sampleText.banner as SampleModeBannerText}
+          />
+          <SampleWatermark text={sampleText.watermark} />
+        </>
+      ) : null}
       {activeView === 'calendar' ? (
         <EconomicCalendar
           client={macroEconomicCalendarClient}
