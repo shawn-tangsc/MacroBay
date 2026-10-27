@@ -55,6 +55,10 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.ratesSnapshot.query': exposed('get_macro_rates_snapshot'),
   'intelligence.provenance.explainFigure': exposed('explain_figure'),
 
+  // 示例模式的控制面：只服务面板开关，agent 没有理由去切读者的示例会话。
+  'intelligence.demo.getState': excluded('internal-view'),
+  'intelligence.demo.setActive': excluded('internal-view'),
+
   'intelligence.getDetail': excluded('raw-payload'),
   'intelligence.getEvidenceExcerpt': exposed('get_evidence_excerpt'),
   'intelligence.getMonitoringScope': excluded('user-private-data'),

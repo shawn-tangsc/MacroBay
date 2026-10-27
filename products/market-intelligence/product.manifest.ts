@@ -33,6 +33,9 @@ export const marketIntelligenceProductManifest = {
   navigation: [],
   settingsSections: [],
   serviceRoutes: [
+    // 示例模式的控制面：读状态与开关。数据面不登记新方法——示例数据按既有读取接口回放。
+    { method: 'intelligence.demo.getState' },
+    { method: 'intelligence.demo.setActive' },
     ...Object.values(MARKET_ANALYSIS_IPC_METHODS).map(method => ({ method })),
     { method: 'intelligence.crossAsset.acquire' },
     { method: 'intelligence.crossAsset.renew' },
