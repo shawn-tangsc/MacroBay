@@ -11,6 +11,7 @@ import type { SampleModeRecorder } from './demoRecorder'
 import {
   SAMPLE_MODE_ERRORS,
   isSampleModeControlMethod,
+  isSampleModeReadMethod,
   isSampleModeWriteMethod
 } from './demoScenario'
 import type { SampleModeSession } from './demoSession'
@@ -28,7 +29,8 @@ export function withSampleMode(input: SampleModeHandlerInput): ProductIpcHandler
     if (isSampleModeControlMethod(input.method)) return input.handler(payload)
     if (!input.session.view().active) {
       const result = await input.handler(payload)
-      input.recorder?.record(input.method, payload, result)
+      // 只录读：写接口的返回可能带凭据（revealCredential 之类），录制文件是会落盘的。
+      if (isSampleModeReadMethod(input.method)) input.recorder?.record(input.method, payload, result)
       return result
     }
     if (isSampleModeWriteMethod(input.method)) throw new Error(`${SAMPLE_MODE_ERRORS.readOnly}:${input.method}`)

@@ -43,6 +43,8 @@ export function createSampleModeRecorder(input: SampleModeRecorderInput): Sample
   return Object.freeze({
     directory,
     record(method: string, request: unknown, payload: unknown) {
+      // 第二道闸：即使调用方漏了判断，凭据类方法也不会被写进录制目录。
+      if (/credential|secret|apikey|api-key/iu.test(method)) return
       const recordedAt = input.now().toISOString()
       const body = {
         method,

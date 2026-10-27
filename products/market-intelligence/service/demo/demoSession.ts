@@ -155,9 +155,16 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
       scenario = undefined
       locale = undefined
       lastReason = undefined
-      await input.resumeWork().catch((error) => {
-        log({ marker: 'MI_SAMPLE_MODE_RESUME_FAILED', message: String(error).slice(0, 160) })
-      })
+      // 恢复失败意味着真实采集不会自己回来：重试一次，仍失败则留下明确的日志，而不是静默半停。
+      let resumed = false
+      for (let attempt = 0; attempt < 2 && !resumed; attempt += 1) {
+        try {
+          await input.resumeWork()
+          resumed = true
+        } catch (error) {
+          if (attempt === 1) log({ marker: 'MI_SAMPLE_MODE_RESUME_FAILED', message: String(error).slice(0, 160) })
+        }
+      }
       log({ marker: 'MI_SAMPLE_MODE_EXITED', scenarioId: previous ?? null })
       return view()
     },
