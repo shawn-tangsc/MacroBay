@@ -1,3 +1,5 @@
+import { LoadingState } from '@platform/ui/components/loading'
+
 export function BlockError(props: {
   label: string
   retryLabel: string
@@ -14,7 +16,7 @@ export function BlockError(props: {
 }
 
 export function BlockLoading(props: { label: string }): React.ReactElement {
-  return <p className="task-automation-block-state task-automation-muted">{props.label}</p>
+  return <LoadingState label={props.label} minHeight={120} />
 }
 
 export function BlockEmpty(props: {

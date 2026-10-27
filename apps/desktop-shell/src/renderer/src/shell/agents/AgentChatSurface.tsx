@@ -1,5 +1,8 @@
 import { useMemo } from 'react'
 
+import { LoadingState } from '@platform/ui/components/loading'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { platformText } from '../../i18n/platformText'
 import { AgentTextProvider } from './agentTextProvider'
 import type { AgentContextRendererRegistry } from './agentContextRenderers'
 import type { AgentComposedMessage } from './agentMessageSendFlow'
@@ -35,6 +38,7 @@ export type AgentChatSurfaceProps = {
  */
 export function AgentChatSurface({ agentId, sessionId, className, composeText, contextRenderers, disabled = false, emptyState }: AgentChatSurfaceProps): React.ReactElement | null {
   const data = useAgentChatSurfaceData()
+  const language = useShellLanguage()
   const agent = useMemo(() => data.state?.agents.find((candidate) => candidate.id === agentId) ?? null, [agentId, data.state])
   const session = useMemo(() => data.state?.sessions.find((candidate) => candidate.id === sessionId) ?? null, [data.state, sessionId])
   const messages = data.state?.messagesBySessionId[sessionId] ?? []
@@ -42,7 +46,13 @@ export function AgentChatSurface({ agentId, sessionId, className, composeText, c
     data.runtime.sessions[sessionId]?.turnState === 'running' || data.runtime.sessions[sessionId]?.turnState === 'queued'
 
   if (data.status === 'loading' && !agent) {
-    return <div className={joinClassNames('agent-chat-surface', 'is-loading', className)} aria-busy="true" />
+    return (
+      <LoadingState
+        className={joinClassNames('agent-chat-surface', 'is-loading', className)}
+        label={platformText[language].status.loading}
+        fill
+      />
+    )
   }
   if (!agent || !session) return null
 

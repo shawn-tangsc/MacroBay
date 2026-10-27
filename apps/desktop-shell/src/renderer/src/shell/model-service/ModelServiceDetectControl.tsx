@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
 
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { PlatformText } from '../../i18n/platformText'
 
@@ -38,7 +38,7 @@ export function ModelServiceDetectControl({
         data-models-detect
         data-models-detect-running={detection.running ? 'true' : 'false'}
         onClick={() => setOpen(true)}>
-        {detection.running ? <Loader2 size={12} className="spin" aria-hidden="true" /> : null}
+        {detection.running ? <LoadingSpinner size="sm" /> : null}
         {detection.running ? `${labels.detectModels} ${done}/${total}` : labels.detectModels}
       </button>
 

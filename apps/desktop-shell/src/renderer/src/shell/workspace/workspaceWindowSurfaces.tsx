@@ -9,6 +9,7 @@ import type {
   WorkspaceSnapshot
 } from '@platform/workspace/contracts'
 import { WorkspaceRegistrationPolicy } from '@platform/workspace/policies'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 import { platformText } from '../../i18n/platformText'
 import { FileText } from 'lucide-react'
 import { useWindowDocumentTitle, WorkspaceWindowTopBar } from './workspaceWindowTopBar'
@@ -223,7 +224,7 @@ export function WorkspacePreparingShell({ language, title, transfer }: {
     >
       <h1>{title}</h1>
       <p>{text.workspace.windowPreparingDetail}</p>
-      <p className="workspace-window-shell-hint">{text.status.loading}</p>
+      <p className="workspace-window-shell-hint"><LoadingSpinner size="sm" />{text.status.loading}</p>
     </section>
   )
 }

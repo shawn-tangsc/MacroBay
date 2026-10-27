@@ -237,6 +237,10 @@
 }
 
 .workspace-window-shell .workspace-window-shell-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   color: var(--muted);
   font-size: 11px;
 }
@@ -744,4 +748,15 @@
   min-height: 0;
   overflow: auto;
   background: var(--surface);
+}
+
+/*
+ * 页面正文的等待/失败壳与产品贡献的等待壳：正文层已有 100% 高度，这里把它交给
+ * `LoadingState fill`（转圈居中），而不是让一段 `loading…` 文本贴在左上角。
+ */
+.workspace-page-body-status,
+.contribution-loading {
+  display: flex;
+  height: 100%;
+  min-height: 240px;
 }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Button, Empty, Spin } from 'antd'
+import { Button, Empty } from 'antd'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { WebSearchProviderId, WebSearchSettings } from '@platform/ai/web-search/contracts/webSearchContracts'
+import { LoadingState } from '@platform/ui/components/loading'
 import { platformText } from '../../../i18n/platformText'
 import { WebSearchPolicyPage } from './WebSearchPolicyPage'
 import { WebSearchProvidersPage } from './WebSearchProvidersPage'
@@ -35,7 +36,7 @@ export function WebSearchSettingsPage({ language }: WebSearchSettingsPageProps):
     return (
       <section className="settings-workspace web-search-settings">
         <div className="web-search-loading">
-          <Spin />
+          <LoadingState label={platformText[language].status.loading} />
         </div>
       </section>
     )

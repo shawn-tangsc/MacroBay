@@ -32,7 +32,8 @@
 .loading-state--fill {
   flex: 1 1 auto;
   height: 100%;
-  min-height: 0;
+  /* The floor keeps the ring visible in an auto-height parent; a bounded parent still wins. */
+  min-height: 120px;
 }
 
 .loading-state__label {

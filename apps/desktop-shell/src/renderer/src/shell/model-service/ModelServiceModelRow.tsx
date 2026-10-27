@@ -6,7 +6,6 @@ import {
   Image as ImageIcon,
   Lightbulb,
   ListOrdered,
-  Loader2,
   Mic,
   Minus,
   ScanText,
@@ -18,6 +17,7 @@ import { Tag } from 'antd'
 
 import type { ModelDetectionResult } from '@platform/ai/providers/modelDetection/types'
 import type { ModelDefinition } from '@platform/ai/providers/modelProviderTypes'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { PlatformText } from '../../i18n/platformText'
 import { resolveModelCapabilities } from '@platform/ai/providers/modelCapabilityInference'
@@ -234,7 +234,7 @@ export function ModelServiceModelRow({
             aria-label={labels.testModel}
             disabled={testDisabled}
             onClick={() => onTestModel(model.id)}>
-            {detectionStatus === 'testing' ? <Loader2 size={13} className="spin" /> : <FlaskConical size={13} />}
+            {detectionStatus === 'testing' ? <LoadingSpinner size="sm" /> : <FlaskConical size={13} />}
           </button>
         ) : null}
         <button

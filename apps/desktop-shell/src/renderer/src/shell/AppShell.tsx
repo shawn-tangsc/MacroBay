@@ -26,6 +26,7 @@ import type { LocalizedText } from '@platform/product-manifest'
 import type { WorkspaceTabState } from '@platform/workspace/contracts'
 import type { AppLanguage, AppSettings, AppSettingsPatch, NetworkSettings, NotificationSettings, ProxyMode, ThemeMode } from '@platform/settings/schema/appSettings'
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
+import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -1472,7 +1473,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           </div>
           <div className="runtime-badge">
             <Activity size={18} />
-            <span>{appInfo ? `${appInfo.platform} / Electron ${appInfo.electron}` : t.status.loading}</span>
+            <span>{appInfo
+              ? `${appInfo.platform} / Electron ${appInfo.electron}`
+              : <LoadingState layout="inline" size="sm" label={t.status.loading} />}</span>
           </div>
         </div>
 
