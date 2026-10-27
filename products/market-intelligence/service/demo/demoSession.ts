@@ -11,6 +11,7 @@ import type { JobRuntime } from '@platform/jobs'
 
 import type { SampleModeCatalog, SampleModeScenario } from './demoCatalog'
 import { materializeSampleModePayload, readRequestAsOf } from './demoPayload'
+import { tickSampleQuotes } from './demoTick'
 import type { SampleModeLocale } from './demoScenario'
 
 export type SampleModeUnavailableReason = 'no-scenario' | 'suspend-failed'
@@ -47,11 +48,14 @@ export type SampleModeSessionInput = Readonly<{
   /** 退出时按既有 profile 重新注册调度——复用启动编排，不新增调度逻辑。 */
   resumeWork: () => Promise<void>
   now?: () => Date
+  /** 仅供测试：让「行情微动」可复现。 */
+  random?: () => number
   log?: (line: Readonly<Record<string, unknown>>) => void
 }>
 
 export function createSampleModeSession(input: SampleModeSessionInput): SampleModeSession {
   const now = input.now ?? (() => new Date())
+  const random = input.random ?? Math.random
   const log = input.log ?? (() => undefined)
   let active = false
   let scenario: SampleModeScenario | undefined
@@ -165,11 +169,14 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
         ? entry.byRequest[readByRequestKey(entry.byRequestKey, request)]
         : entry.payload
       if (payload === undefined) return undefined
-      return materializeSampleModePayload(payload, {
+      const materialized = materializeSampleModePayload(payload, {
         ...(readRequestAsOf(request) ? { asOf: readRequestAsOf(request) } : {}),
         scenarioNow: scenario.meta.scenarioNow,
         wallNow: now()
       })
+      return method === 'intelligence.crossAsset.query'
+        ? tickSampleQuotes(materialized, random)
+        : materialized
     }
   })
 }

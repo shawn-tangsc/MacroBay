@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.getNewsSentiment",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$asOf",
+    "generatedAt": "$asOf",
+    "window": "all",
+    "items": [
+      {
+        "itemId": "item-binance:5b6849270abd4e41a98d94abbf7b28f0",
+        "title": "Update on the Collateral Ratio Under Cross Margin and Portfolio Margin (2026-10-30)",
+        "displayTitle": "关于 Cross Margin 和 Portfolio Margin 下抵押率更新的公告（2026-10-30）",
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements",
+        "publishedAt": "2026-10-27T09:00:07.580Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 90,
+        "symbols": []
+      },
+      {
+        "itemId": "item-binance:de45689cbd7b4e1fa87055cdf5a85997",
+        "title": "Notice of Removal of Spot Trading Pairs - 2026-10-30",
+        "displayTitle": "现货交易对下架通知 - 2026-10-30",
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements",
+        "publishedAt": "2026-10-27T08:30:00.000Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 85,
+        "symbols": [
+          "BTC"
+        ]
+      },
+      {
+        "itemId": "item-rss:guid:5503c920-1f09-4074-b09b-54da4a4dc9fd",
+        "title": "An AI label alone no longer wins lenders, JPMorgan says",
+        "displayTitle": "仅凭AI标签已不再能赢得贷款方，JPMorgan表示",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-27T08:24:39.000Z",
+        "polarity": "bearish",
+        "strength": 3,
+        "confidence": 78,
+        "symbols": [
+          "BTC"
+        ]
+      },
+      {
+        "itemId": "item-binance:b4015154ce33445ebf7b98d1bc12c072",
+        "title": "Notice of Removal of Margin Trading Pairs - 2026-10-30",
+        "displayTitle": "移除杠杆交易对通知 - 2026-10-30",
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements",
+        "publishedAt": "2026-10-27T08:00:09.176Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 88,
+        "symbols": [
+          "BTC",
+          "ETH"
+        ]
+      },
+      {
+        "itemId": "item-rss:guid:33ddcbbb-3862-4ccd-bf03-eb82f856e1c6",
+        "title": "Solana bug reports now cost 1 SOL as AI floods security teams with spam",
+        "displayTitle": "Solana 漏洞报告现在需花费 1 SOL，因 AI 用垃圾信息淹没安全团队",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-27T07:44:04.000Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 92,
+        "symbols": []
+      },
+      {
+        "itemId": "item-rss:guid:1da31ccb-169c-4993-afa5-8ad0670f2055",
+        "title": "Ethereum fixes Glamsterdam bug that could have sent staking deposits to builders",
+        "displayTitle": "以太坊修复 Glamsterdam 漏洞，该漏洞本可能将质押存款发送给构建者",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-27T07:09:56.000Z",
+        "polarity": "neutral",
+        "strength": 2,
+        "confidence": 78,
+        "symbols": [
+          "ETH"
+        ]
+      },
+      {
+        "itemId": "item-binance:98f858ce2402474a88369532d54494ef",
+        "title": "Binance to Adjust Leverage on Select Isolated Margin Trading Pairs",
+        "displayTitle": "Binance 将调整部分逐仓杠杆交易对的杠杆",
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements",
+        "publishedAt": "2026-10-27T07:00:14.462Z",
+        "polarity": "neutral",
+        "strength": 2,
+        "confidence": 78,
+        "symbols": []
+      },
+      {
+        "itemId": "item-rss:guid:2c31469e-6f3c-4a18-9636-82f16a625fad",
+        "title": "Zcash co-founder proposes ending grants funding, citing $125 million treasury",
+        "displayTitle": "Zcash co-founder proposes ending grants funding, citing $125 million treasury",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-27T06:14:41.000Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 95,
+        "symbols": []
+      },
+      {
+        "itemId": "item-rss:guid:7539c5a8-0d1d-4359-b986-a96c22af6610",
+        "title": "Ripple gets a final go-ahead to launch its own U.S. national trust bank",
+        "displayTitle": "Ripple 获得最终批准，将推出自己的美国国家信托银行",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-27T04:28:49.000Z",
+        "polarity": "bullish",
+        "strength": 3,
+        "confidence": 85,
+        "symbols": []
+      },
+      {
+        "itemId": "item-binance:4688df6f250848478383acf772a7424c",
+        "title": "Updates on Tick Size for Multiple USDⓈ-M Perpetual Futures Contracts (2026-10-28)",
+        "displayTitle": "关于多个 USDⓈ-M 永续期货合约最小变动单位的更新（2026-10-28）",
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements",
+        "publishedAt": "2026-10-27T03:00:07.235Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 92,
+        "symbols": []
+      },
+      {
+        "itemId": "item-rss:guid:ab48f700-3ebb-46de-910e-20ac938718c5",
+        "title": "Tom Lee's Bitmine favors share buybacks to ether purchases as crypto declines",
+        "displayTitle": "Tom Lee 的 Bitmine 在加密货币下跌之际更倾向于股票回购而非购买 ether",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-26T16:05:12.000Z",
+        "polarity": "mixed",
+        "strength": 2,
+        "confidence": 78,
+        "symbols": [
+          "ETH"
+        ]
+      },
+      {
+        "itemId": "item-rss:guid:3ee3ec04-031d-41ce-bb81-249e93ec02fb",
+        "title": "NBA joins pro sports leagues on CFTC prediction markets bandwagon while NFL balks",
+        "displayTitle": "NBA加入职业体育联盟，一同登上CFTC预测市场的潮流，而NFL却犹豫不前",
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS",
+        "publishedAt": "2026-10-26T15:59:55.000Z",
+        "polarity": "neutral",
+        "strength": 1,
+        "confidence": 95,
+        "symbols": []
+      }
+    ],
+    "availableSources": [
+      {
+        "sourceId": "binance-announcements",
+        "sourceName": "Binance Announcements"
+      },
+      {
+        "sourceId": "coindesk-rss",
+        "sourceName": "CoinDesk RSS"
+      },
+      {
+        "sourceId": "okx-latest-announcements",
+        "sourceName": "OKX Latest Announcements"
+      },
+      {
+        "sourceId": "sec-rss",
+        "sourceName": "SEC RSS"
+      }
+    ],
+    "caveats": []
+  }
+}

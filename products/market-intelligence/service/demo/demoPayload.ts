@@ -31,8 +31,9 @@ function resolvePlaceholder(value: string, context: SampleModePayloadContext): u
   if (value === WALL_NOW_MS) return context.wallNow.getTime()
   const offset = WALL_NOW_OFFSET.exec(value)
   if (offset) return context.wallNow.getTime() + Number(offset[1])
-  // `$asOf` 没有请求值时保留原样：宁可让契约校验失败，也不拿场景时钟去冒充请求上下文。
-  return context.asOf === undefined ? value : context.asOf
+  // 请求没带 asOf 时（例如跨资产面板只按窗口查询），回落到场景时钟：它是一个真实的过去瞬时，
+  // 比保留字面量 `$asOf` 更安全——后者会让整份返回过不了契约校验。
+  return context.asOf ?? context.scenarioNow
 }
 
 /**

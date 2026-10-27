@@ -6422,13 +6422,22 @@
       "sourceState": "stale",
       "quotes": {
         "index": {
-          "state": "missing"
+          "state": "stale",
+          "price": "713.97000",
+          "tradedAtMs": 1793094300000.0,
+          "receivedAtMs": 1793094300000.0
         },
         "btc": {
-          "state": "missing"
+          "state": "stale",
+          "price": "79667.00",
+          "tradedAtMs": 1793094300000.0,
+          "receivedAtMs": 1793094300000.0
         },
         "eth": {
-          "state": "missing"
+          "state": "stale",
+          "price": "2308.49",
+          "tradedAtMs": 1793094300000.0,
+          "receivedAtMs": 1793094300000.0
         }
       },
       "forming": {
@@ -9993,7 +10002,10 @@
       "sourceState": "live",
       "quotes": {
         "index": {
-          "state": "missing"
+          "state": "stale",
+          "price": "714.05000",
+          "tradedAtMs": 1793094600000.0,
+          "receivedAtMs": 1793094600000.0
         },
         "btc": {
           "state": "live",
