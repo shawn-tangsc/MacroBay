@@ -2,8 +2,9 @@
 
 # Installation
 
-This guide builds MacroBay from source. To turn a build into a distributable `.dmg` or Windows
-installer, see [Packaging](../development/packaging.md).
+Prebuilt alpha installers for macOS (Apple silicon) and Windows (x64) are on the
+[releases page](https://github.com/shawn-tangsc/MacroBay/releases). This guide builds MacroBay from source; to turn a build into a distributable
+`.dmg` or Windows installer, see [Packaging](../development/packaging.md).
 
 ## Requirements
 

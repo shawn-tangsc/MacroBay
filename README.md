@@ -49,6 +49,20 @@ That is the whole product: **not a paragraph you have to take on faith.**
   <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
 </p>
 
+## Download
+
+**[macOS · Apple Silicon (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/download/v0.2.1/MacroBay-0.2.1-arm64.dmg)** ·
+**[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/download/v0.2.1/MacroBay-0.2.1-x64-setup.exe)** ·
+[All releases](https://github.com/shawn-tangsc/MacroBay/releases)
+
+The build is unsigned. On macOS, right-click the app → **Open**, or run
+`xattr -dr com.apple.quarantine /Applications/MacroBay.app`. On Windows, choose
+**More info → Run anyway** in the SmartScreen prompt.
+
+**No API key?** Open the app and choose **Sample mode → Open sample dashboard**. It replays one
+recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar months and three
+published analyses — labelled *Sample data*, and writes nothing into your database.
+
 Built for people whose read has to survive a follow-up question — whether that is your first cycle or your fourth.
 
 ## Who it is for
@@ -142,8 +156,9 @@ you have not enabled appears as an explicit gap — never as a neutral placehold
 
 ## Quick start
 
-Requires **Node.js 22+** and **pnpm 10**. Run it from source with `pnpm dev`, or build the unsigned
-macOS package with `pnpm dist:mac` (see [Packaging](./docs/development/packaging.md)).
+Prefer a build? Grab a [release](https://github.com/shawn-tangsc/MacroBay/releases). To run from
+source you need **Node.js 22+** and **pnpm 10**; to build the package yourself, use `pnpm dist:mac`
+(see [Packaging](./docs/development/packaging.md)).
 
 ```bash
 pnpm install

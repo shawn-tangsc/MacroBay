@@ -2,8 +2,9 @@
 
 # 安装
 
-本文说明如何从源码构建 MacroBay。要把构建结果变成可分发的 `.dmg` 或 Windows 安装器，见
-[打包](../development/packaging.zh-CN.md)。
+预编译的 alpha 安装包（macOS Apple Silicon、Windows x64）在
+[Releases 页面](https://github.com/shawn-tangsc/MacroBay/releases)。本文说明如何从源码构建；要把构建结果变成可分发的 `.dmg` 或 Windows
+安装器，见[打包](../development/packaging.zh-CN.md)。
 
 ## 环境要求
 
