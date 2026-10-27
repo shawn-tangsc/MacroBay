@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.crossAsset.renew",
+  "effect": "read",
+  "payload": {
+    "state": "active",
+    "leaseId": "sample-lease",
+    "expiresAt": "$wallNowMs+120000"
+  }
+}

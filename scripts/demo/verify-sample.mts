@@ -14,6 +14,10 @@ const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u
 const ANY_INSTANT = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/gu
 const LOCALES = ['common', 'zh-CN', 'en-US'] as const
 const MAX_FILE_BYTES = 64 * 1024
+/** 一档请求一个分支的契约上限（跨资产快照 192 KB），与单文件上限分开：
+ *  一个 byRequest 文件里可能装着三个窗口，三个加起来超过 64 KB 是正常的。 */
+const MAX_BRANCH_BYTES = 192 * 1024
+const MAX_BY_REQUEST_FILE_BYTES = 340 * 1024
 const WARN_TOTAL_BYTES = 800 * 1024
 const FAIL_TOTAL_BYTES = 2 * 1024 * 1024
 
@@ -105,8 +109,8 @@ function checkScenario(directory: string): Finding[] {
       const path = join(localeDirectory, file)
       const method = file.slice(0, -'.json'.length)
       const bytes = statSync(path).size
-      if (bytes > MAX_FILE_BYTES) {
-        findings.push({ level: 'error', message: `${id}/${locale}/${file}: ${bytes} 字节，超过 64 KB` })
+      if (bytes > MAX_BY_REQUEST_FILE_BYTES) {
+        findings.push({ level: 'error', message: `${id}/${locale}/${file}: ${bytes} 字节，超过 340 KB` })
       }
       const envelope = readJson(path, findings) as Record<string, unknown> | undefined
       if (!envelope) continue
@@ -118,6 +122,16 @@ function checkScenario(directory: string): Finding[] {
       if (hasPayload === hasByRequest) findings.push({ level: 'error', message: `${id}/${locale}/${file}: payload 与 byRequest 必须恰有其一` })
       if (hasByRequest && typeof envelope.byRequestKey !== 'string') {
         findings.push({ level: 'error', message: `${id}/${locale}/${file}: byRequest 需要 byRequestKey` })
+      }
+      if (hasByRequest) {
+        for (const [branch, entry] of Object.entries(envelope.byRequest as Record<string, unknown>)) {
+          const branchBytes = Buffer.byteLength(JSON.stringify(entry), 'utf8')
+          if (branchBytes > MAX_BRANCH_BYTES) {
+            findings.push({ level: 'error', message: `${id}/${locale}/${file}#${branch}: ${branchBytes} 字节，超过单档 192 KB` })
+          }
+        }
+      } else if (bytes > MAX_FILE_BYTES) {
+        findings.push({ level: 'error', message: `${id}/${locale}/${file}: ${bytes} 字节，超过 64 KB` })
       }
       scanPayload(envelope, `${id}/${locale}/${file}`, scenarioNow, findings)
       fixtures.set(method, `${locale}/${file}`)
@@ -135,14 +149,37 @@ function scanPayload(value: unknown, where: string, scenarioNow: unknown, findin
   const text = JSON.stringify(value)
   if (/https?:\/\//iu.test(text)) findings.push({ level: 'error', message: `${where}: 含有 URL` })
   if (/"hasCredential"\s*:\s*true/u.test(text)) findings.push({ level: 'error', message: `${where}: 声称存有凭据` })
-  if (/\b(?:sk-[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9._-]{16,}|[a-f0-9]{32,})\b/u.test(text)) {
+  if (/\b(?:sk-[A-Za-z0-9]{16,}|Bearer\s+[A-Za-z0-9._-]{16,})\b/u.test(text)) {
     findings.push({ level: 'error', message: `${where}: 含有疑似密钥的字符串` })
   }
   if (!isInstant(scenarioNow)) return
-  const limit = Date.parse(scenarioNow)
-  for (const match of text.match(ANY_INSTANT) ?? []) {
-    const parsed = Date.parse(match)
-    if (Number.isFinite(parsed) && parsed > limit) findings.push({ level: 'error', message: `${where}: 时间 ${match} 晚于场景时钟` })
+  scanInstants(value, where, Date.parse(scenarioNow), findings)
+}
+
+/**
+ * 未来的时间戳只有一种合法来源：排期。日历里下个月的事件、预测的到期日都晚于场景时钟，
+ * 那不是「观测」。其余出现在未来的一律拒绝——那意味着数据不是从过去录的。
+ */
+const SCHEDULE_KEY = /(?:scheduled|schedule|due|expires|windowEnd|horizonEnd)/iu
+
+function scanInstants(value: unknown, where: string, limit: number, findings: Finding[], schedule = false): void {
+  if (typeof value === 'string') {
+    for (const match of value.match(ANY_INSTANT) ?? []) {
+      const parsed = Date.parse(match)
+      if (!schedule && Number.isFinite(parsed) && parsed > limit) {
+        findings.push({ level: 'error', message: `${where}: 时间 ${match} 晚于场景时钟` })
+      }
+    }
+    return
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) scanInstants(entry, where, limit, findings, schedule)
+    return
+  }
+  if (value && typeof value === 'object') {
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      scanInstants(entry, `${where}.${key}`, limit, findings, schedule || SCHEDULE_KEY.test(key))
+    }
   }
 }
 

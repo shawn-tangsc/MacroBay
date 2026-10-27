@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.macro.ratesSnapshot.query",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$asOf",
+    "readings": [
+      {
+        "seriesId": "DGS10",
+        "metricKey": "US_10Y_YIELD",
+        "actual": 5,
+        "period": "2026-10-23",
+        "previous": 4.96
+      },
+      {
+        "seriesId": "DFII10",
+        "metricKey": "US_REAL_YIELD_10Y",
+        "actual": 2.66,
+        "period": "2026-10-23",
+        "previous": 2.64
+      },
+      {
+        "seriesId": "DGS2",
+        "metricKey": "US_2Y_YIELD",
+        "actual": 4.69,
+        "period": "2026-10-23",
+        "previous": 4.65
+      },
+      {
+        "seriesId": "T10YIE",
+        "metricKey": "US_10Y_BREAKEVEN_INFLATION",
+        "actual": 2.34,
+        "period": "2026-10-26",
+        "previous": 2.34
+      }
+    ],
+    "caveats": [
+      "official-daily-close"
+    ]
+  }
+}

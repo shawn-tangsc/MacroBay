@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "method": "marketAnalysis.getAnalysisRun",
+  "effect": "read",
+  "byRequestKey": "id",
+  "byRequest": {
+    "mi-ar-a7fb3530-839f-403e-b546-99ed0019cc2e": {
+      "id": "mi-ar-a7fb3530-839f-403e-b546-99ed0019cc2e",
+      "eventGroupId": "mi-eg-48d7bd7e-505b-4028-907a-710e9c2c243b",
+      "analysisPhase": "initial",
+      "status": "succeeded",
+      "failureCode": null,
+      "queuedAt": "2026-10-27T08:28:51.422Z",
+      "startedAt": "2026-10-27T08:28:51.423Z",
+      "completedAt": "2026-10-27T08:31:17.982Z",
+      "asOf": "$asOf",
+      "dataCutoff": "2026-10-27T08:28:51.086Z",
+      "evidenceCount": 140,
+      "change": {
+        "facts": [],
+        "missingDomainsAdded": [],
+        "missingDomainsRemoved": [],
+        "caveatsAdded": 0,
+        "caveatsRemoved": 0,
+        "evidenceRefsAdded": 0,
+        "evidenceRefsRemoved": 0
+      }
+    }
+  }
+}

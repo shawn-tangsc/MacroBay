@@ -1,0 +1,189 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.queryFundingRateHistory",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$asOf",
+    "btc": [
+      {
+        "observedAt": "2026-10-20T08:00:00.005Z",
+        "ratePercent": 0.007102
+      },
+      {
+        "observedAt": "2026-10-20T16:00:00.006Z",
+        "ratePercent": 0.007856
+      },
+      {
+        "observedAt": "2026-10-21T00:00:00.000Z",
+        "ratePercent": 0.006541999999999999
+      },
+      {
+        "observedAt": "2026-10-21T08:00:00.000Z",
+        "ratePercent": 0.00854
+      },
+      {
+        "observedAt": "2026-10-21T16:00:00.001Z",
+        "ratePercent": 0.004896
+      },
+      {
+        "observedAt": "2026-10-22T00:00:00.007Z",
+        "ratePercent": 0.000507
+      },
+      {
+        "observedAt": "2026-10-22T08:00:00.003Z",
+        "ratePercent": -0.001401
+      },
+      {
+        "observedAt": "2026-10-22T16:00:00.001Z",
+        "ratePercent": 0.0012649999999999998
+      },
+      {
+        "observedAt": "2026-10-23T00:00:00.006Z",
+        "ratePercent": 0.0053690000000000005
+      },
+      {
+        "observedAt": "2026-10-23T08:00:00.004Z",
+        "ratePercent": 0.007075
+      },
+      {
+        "observedAt": "2026-10-23T16:00:00.005Z",
+        "ratePercent": 0.01
+      },
+      {
+        "observedAt": "2026-10-24T00:00:00.003Z",
+        "ratePercent": 0.003939
+      },
+      {
+        "observedAt": "2026-10-24T08:00:00.000Z",
+        "ratePercent": 0.003431
+      },
+      {
+        "observedAt": "2026-10-24T16:00:00.000Z",
+        "ratePercent": 0.0009599999999999999
+      },
+      {
+        "observedAt": "2026-10-25T00:00:00.000Z",
+        "ratePercent": 0.009409
+      },
+      {
+        "observedAt": "2026-10-25T08:00:00.000Z",
+        "ratePercent": 0.006005
+      },
+      {
+        "observedAt": "2026-10-25T16:00:00.000Z",
+        "ratePercent": 0.008027
+      },
+      {
+        "observedAt": "2026-10-26T00:00:00.000Z",
+        "ratePercent": 0.0017130000000000001
+      },
+      {
+        "observedAt": "2026-10-26T08:00:00.000Z",
+        "ratePercent": 0.007945
+      },
+      {
+        "observedAt": "2026-10-26T16:00:00.000Z",
+        "ratePercent": 0.01
+      },
+      {
+        "observedAt": "2026-10-27T00:00:00.001Z",
+        "ratePercent": 0.01
+      },
+      {
+        "observedAt": "2026-10-27T08:00:00.001Z",
+        "ratePercent": 0.008695999999999999
+      }
+    ],
+    "eth": [
+      {
+        "observedAt": "2026-10-20T08:00:00.005Z",
+        "ratePercent": 0.003039
+      },
+      {
+        "observedAt": "2026-10-20T16:00:00.006Z",
+        "ratePercent": 0.007381
+      },
+      {
+        "observedAt": "2026-10-21T00:00:00.000Z",
+        "ratePercent": 0.004599
+      },
+      {
+        "observedAt": "2026-10-21T08:00:00.000Z",
+        "ratePercent": 0.005314
+      },
+      {
+        "observedAt": "2026-10-21T16:00:00.001Z",
+        "ratePercent": 0.008498
+      },
+      {
+        "observedAt": "2026-10-22T00:00:00.007Z",
+        "ratePercent": 0.001426
+      },
+      {
+        "observedAt": "2026-10-22T08:00:00.003Z",
+        "ratePercent": 0.0022099999999999997
+      },
+      {
+        "observedAt": "2026-10-22T16:00:00.001Z",
+        "ratePercent": 0.0052380000000000005
+      },
+      {
+        "observedAt": "2026-10-23T00:00:00.006Z",
+        "ratePercent": 0.005563
+      },
+      {
+        "observedAt": "2026-10-23T08:00:00.004Z",
+        "ratePercent": 0.005847
+      },
+      {
+        "observedAt": "2026-10-23T16:00:00.005Z",
+        "ratePercent": 0.007399
+      },
+      {
+        "observedAt": "2026-10-24T00:00:00.003Z",
+        "ratePercent": 0.001569
+      },
+      {
+        "observedAt": "2026-10-24T08:00:00.000Z",
+        "ratePercent": 0.003433
+      },
+      {
+        "observedAt": "2026-10-24T16:00:00.000Z",
+        "ratePercent": -0.000339
+      },
+      {
+        "observedAt": "2026-10-25T00:00:00.000Z",
+        "ratePercent": 0.0037459999999999998
+      },
+      {
+        "observedAt": "2026-10-25T08:00:00.000Z",
+        "ratePercent": 0.0078
+      },
+      {
+        "observedAt": "2026-10-25T16:00:00.000Z",
+        "ratePercent": 0.005601
+      },
+      {
+        "observedAt": "2026-10-26T00:00:00.000Z",
+        "ratePercent": 0.007279999999999999
+      },
+      {
+        "observedAt": "2026-10-26T08:00:00.000Z",
+        "ratePercent": 0.0049110000000000004
+      },
+      {
+        "observedAt": "2026-10-26T16:00:00.000Z",
+        "ratePercent": 0.00624
+      },
+      {
+        "observedAt": "2026-10-27T00:00:00.001Z",
+        "ratePercent": 0.008957
+      },
+      {
+        "observedAt": "2026-10-27T08:00:00.001Z",
+        "ratePercent": 0.005932
+      }
+    ]
+  }
+}

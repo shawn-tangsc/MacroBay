@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.macro.dashboardFeedStatus.query",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "sources": [
+      {
+        "sourceId": "realmarketapi-market",
+        "enabled": true,
+        "hasCredential": false
+      },
+      {
+        "sourceId": "twelve-data-market",
+        "enabled": true,
+        "hasCredential": false
+      },
+      {
+        "sourceId": "fred-rates-liquidity",
+        "enabled": true,
+        "hasCredential": false
+      }
+    ]
+  }
+}

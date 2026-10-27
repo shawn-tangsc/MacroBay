@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "method": "marketAnalysis.getSummary",
+  "effect": "read",
+  "byRequestKey": "id",
+  "byRequest": {
+    "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287": {
+      "analysisRunId": "mi-ar-a7fb3530-839f-403e-b546-99ed0019cc2e",
+      "conclusion": {
+        "causalChain": "起因事件是稳定币总供给 30 日减少 58.9 亿美元、BTC 与 ETH 现货 ETF 近期以净流出为主 → 中间变量是市场可用流动性下降、现货边际买盘减弱，同时 10 年期实际利率 2.66% 抬高折现率 → 对 BTC 与 ETH 形成下行压力 → 因此本判断成立的条件是稳定币继续收缩或 ETF 不出现持续净流入；若资金流转为持续净流入，该机制失效。",
+        "change": "本次数据变化为无变化，没有新增的可比变化；最近观测值为稳定币 1 日变化 -8.57 亿美元、7 日变化 -20.88 亿美元、30 日变化 -58.9 亿美元，BTC ETF 10 月 26 日净流入 +1.1 亿美元，ETH ETF 10 月 26 日净流入 -8860 万美元。",
+        "conditions": [
+          "稳定币总供给继续收缩或至少不回升。",
+          "BTC 与 ETH 现货 ETF 未出现连续多日净流入。",
+          "10 年期实际利率维持 2.66% 或更高。",
+          "资金费率保持温和正值，未出现极端负费率引发的空头挤压。"
+        ],
+        "dataGaps": [
+          "缺少跨资产与价格行情：无法验证资金流对 BTC 与 ETH 价格的即期传导，短周期方向置信度因此降低。",
+          "缺少市场预期值：无法计算已公布宏观数据相对预期的意外幅度，只能参考实际值与前值。",
+          "情绪条目为陈旧且不可比：不能作为当前风险偏好证据，降低情绪面判断置信度。",
+          "部分宏观事件待公布：美联储利率、GDP 与 PCE 结果未知，可能改变利率与流动性机制。",
+          "官方日频收盘可能滞后数个交易日：利率与 ETF 数据存在时滞，长周期判断需打折。"
+        ],
+        "direction": "bearish",
+        "evidenceStrength": "看空侧更强：稳定币 1 日、7 日、30 日分别减少 8.57 亿美元、20.88 亿美元、58.9 亿美元，ETH ETF 10 月 26 日仍净流出 8860 万美元；看多侧仅有 BTC ETF 10 月 26 日净流入 1.1 亿美元与温和正资金费率，力度不足。",
+        "macro": "10 年期美债收益率 5%、实际利率 2.66%，利率端偏紧；已公布的 IFO 与 CBI 景气数据改善但缺少预期值，宏观信号对加密资产偏负面。",
+        "summary": "当前机制是稳定币供给收缩与 BTC、ETH 现货 ETF 赎回共同抽走边际买盘，叠加 10 年期实际利率 2.66% 的限制性利率环境，对 BTC 与 ETH 构成下行压力。"
+      },
+      "counterEvidence": [
+        {
+          "evidenceRefId": "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160",
+          "statement": "BTC 现货 ETF 10 月 26 日净流入 1.1 亿美元，显示最新一日出现回流。"
+        },
+        {
+          "evidenceRefId": "query:alternative-fear-greed:sentiment:market:fear-greed-index:2026-10-27T00:00:00.000Z:191",
+          "statement": "恐惧贪婪指数为 48，处于中性区间，未确认恐慌性抛售。"
+        }
+      ],
+      "createdAt": "2026-10-27T08:31:17.982Z",
+      "dataCaveats": [
+        "缺少跨资产数据：无法验证美元与风险资产的联动，降低传导判断置信度。",
+        "缺少市场预期值：无法计算宏观数据意外幅度，只能参考实际值与前值。",
+        "情绪条目为陈旧且不可比：AI 相关保险成本报道不能作为当前风险偏好证据。",
+        "官方日频收盘可能滞后数个交易日：利率与 ETF 数据存在时滞，短周期判断置信度受限。"
+      ],
+      "directions": [
+        {
+          "confidence": "low",
+          "direction": "bearish",
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+          ],
+          "horizon": "short",
+          "rationale": "稳定币 1 日减少 8.57 亿美元、ETH 现货 ETF 10 月 26 日净流出 8860 万美元，而 BTC 现货 ETF 仅单日净流入 1.1 亿美元，短周期资金面仍偏空。"
+        },
+        {
+          "confidence": "medium",
+          "direction": "bearish",
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190"
+          ],
+          "horizon": "medium",
+          "rationale": "稳定币 7 日与 30 日分别减少 20.88 亿美元和 58.9 亿美元，BTC 与 ETH 现货 ETF 近期多为净流出，中期流动性收缩压制价格。"
+        },
+        {
+          "confidence": "medium",
+          "direction": "bearish",
+          "evidenceRefIds": [
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130"
+          ],
+          "horizon": "long",
+          "rationale": "10 年期实际利率 2.66%、10 年期收益率 5%，高实际利率叠加稳定币 30 日减少 58.9 亿美元，长周期估值承压。"
+        }
+      ],
+      "eventGroupId": "mi-eg-48d7bd7e-505b-4028-907a-710e9c2c243b",
+      "evidenceRefs": [
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160",
+        "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+        "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+        "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+        "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+        "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127",
+        "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T08:00:00.001Z:213",
+        "query:binance-futures-positioning:funding:ETH:funding-rate-percent:2026-10-27T08:00:00.001Z:235",
+        "query:alternative-fear-greed:sentiment:market:fear-greed-index:2026-10-27T00:00:00.000Z:191",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield-change-1d:2026-10-23T00:00:00.000Z:121",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield-change-1d:2026-10-23T00:00:00.000Z:119",
+        "query:fred-rates-liquidity:macro:us-treasury:us-2y-yield:2026-10-23T00:00:00.000Z:122",
+        "query:fred-rates-liquidity:macro:us-treasury:us-2y-yield-change-1d:2026-10-23T00:00:00.000Z:123",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-2y-term-spread:2026-10-23T00:00:00.000Z:126",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-87eb695904ffbebde0133956ddc90003",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-512e6069355ef1fb8b7811edf942866d",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-82baa36bb3b081f36d1835d9577b39ff",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-2b0cfc4358a080f13aff6f8e1e405a35",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-02dae57f604992a81e518d5f0255b407",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42c1f86c54d8498ce01c47d357855074",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42a31f24b76ef945ec03af312969b1bc",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-a74d3e1739d53508a1bf25ae4ad23d12",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-5ec6a79225e9074073cf806860bc8627",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-144baeb7be2c95c20bc045fc2f86020b"
+      ],
+      "id": "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287",
+      "knownFacts": [
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158"
+          ],
+          "factId": "mi-fact-capital-BTC-etf-net-flow-usd-2026-10-22T00-00-00-000Z-2026-10-22",
+          "statement": "BTC 现货 ETF 在 2026 年 10 月 22 日净流入为 -6.36 亿美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+          ],
+          "factId": "mi-fact-capital-BTC-etf-net-flow-usd-2026-10-26T00-00-00-000Z-2026-10-26",
+          "statement": "BTC 现货 ETF 在 2026 年 10 月 26 日净流入为 +1.1 亿美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190"
+          ],
+          "factId": "mi-fact-capital-ETH-etf-net-flow-usd-2026-10-26T00-00-00-000Z-2026-10-26",
+          "statement": "ETH 现货 ETF 在 2026 年 10 月 26 日净流入为 -8860 万美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128"
+          ],
+          "factId": "mi-fact-capital-stablecoins-change-1d-usd-2026-10-27T08-22-36-216Z",
+          "statement": "稳定币总供给 1 日变化为 -8.57 亿美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130"
+          ],
+          "factId": "mi-fact-capital-stablecoins-change-30d-usd-2026-10-27T08-22-36-216Z",
+          "statement": "稳定币总供给 30 日变化为 -58.9 亿美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129"
+          ],
+          "factId": "mi-fact-capital-stablecoins-change-7d-usd-2026-10-27T08-22-36-216Z",
+          "statement": "稳定币总供给 7 日变化为 -20.88 亿美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127"
+          ],
+          "factId": "mi-fact-capital-stablecoins-current-usd-2026-10-27T08-22-36-216Z",
+          "statement": "稳定币总供给当前值为 2530.31 亿美元。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T08:00:00.001Z:213"
+          ],
+          "factId": "mi-fact-funding-BTC-funding-rate-percent-2026-10-27T08-00-00-001Z-point-21",
+          "statement": "BTC 资金费率在 2026 年 10 月 27 日 08:00 为 0.008696。"
+        }
+      ],
+      "marketReaction": [],
+      "nextCatalysts": [
+        {
+          "evidenceRefIds": [
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-2b0cfc4358a080f13aff6f8e1e405a35",
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-02dae57f604992a81e518d5f0255b407",
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42c1f86c54d8498ce01c47d357855074"
+          ],
+          "statement": "10 月 27 日 12:30 公布 9 月耐用品订单初值，14:00 公布 9 月新屋销售与 10 月谘商会消费者信心指数，均待公布。"
+        },
+        {
+          "evidenceRefIds": [
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42a31f24b76ef945ec03af312969b1bc",
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-87eb695904ffbebde0133956ddc90003"
+          ],
+          "statement": "10 月 28 日 13:45 公布隔夜目标利率事件，市场预期区间为 3.75% - 4.00%，与前值相同。"
+        }
+      ],
+      "scenarios": [
+        {
+          "asset": "BTC",
+          "baseCase": "若稳定币 1 日变化维持负值且 BTC 现货 ETF 未连续净流入，BTC 在 2 小时至 24 小时内偏向下行。",
+          "conditions": [
+            "稳定币 1 日变化继续为负",
+            "BTC 现货 ETF 未出现连续两日净流入"
+          ],
+          "horizon": "2h-24h",
+          "invalidation": "稳定币 1 日变化转正且 BTC 现货 ETF 连续净流入。",
+          "status": "pending"
+        }
+      ],
+      "schemaVersion": 1,
+      "supportingEvidence": [
+        {
+          "evidenceRefId": "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+          "statement": "稳定币总供给 30 日减少 58.9 亿美元，是流动性收缩的中期证据。"
+        },
+        {
+          "evidenceRefId": "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+          "statement": "稳定币总供给 7 日减少 20.88 亿美元，短中期流动性同步下降。"
+        },
+        {
+          "evidenceRefId": "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+          "statement": "稳定币总供给 1 日减少 8.57 亿美元，最新一日仍在收缩。"
+        }
+      ],
+      "transmissionHypotheses": [
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+            "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+            "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127"
+          ],
+          "statement": "若稳定币总供给继续下降，市场可用于买入加密资产的现金减少，可能压低 BTC 与 ETH 的边际需求。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+          ],
+          "statement": "若 BTC 与 ETH 现货 ETF 持续净流出，发行方需减少现货敞口，可能对现货价格形成压力。"
+        },
+        {
+          "evidenceRefIds": [
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield-change-1d:2026-10-23T00:00:00.000Z:121",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield-change-1d:2026-10-23T00:00:00.000Z:119"
+          ],
+          "statement": "若 10 年期实际利率维持高位或继续上行，风险资产折现率上升，可能压制 BTC 与 ETH 估值。"
+        }
+      ],
+      "version": 1
+    }
+  }
+}

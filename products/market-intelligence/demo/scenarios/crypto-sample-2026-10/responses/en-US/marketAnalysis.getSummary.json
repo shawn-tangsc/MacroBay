@@ -1,0 +1,249 @@
+{
+  "schemaVersion": 1,
+  "method": "marketAnalysis.getSummary",
+  "effect": "read",
+  "byRequestKey": "id",
+  "byRequest": {
+    "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287": {
+      "analysisRunId": "mi-ar-a7fb3530-839f-403e-b546-99ed0019cc2e",
+      "conclusion": {
+        "causalChain": "Cause: total stablecoin supply fell $5.89B over thirty days and spot BTC and ETH ETFs have mostly redeemed. Intermediate: usable market liquidity falls and spot marginal bids thin, while the 10-year real yield at 2.66% raises the discount rate. Effect: downside pressure on BTC and ETH. Condition: the read holds while stablecoins keep contracting or ETFs fail to turn into sustained inflows; sustained inflows would break the mechanism.",
+        "change": "No new comparable change this round. The latest readings are stablecoin supply -$857M over one day, -$2.088B over seven days and -$5.89B over thirty days; BTC spot ETFs +$110M and ETH spot ETFs -$88.6M on 26 October.",
+        "conditions": [
+          "Total stablecoin supply keeps contracting, or at least does not recover.",
+          "Spot BTC and ETH ETFs do not show multi-day net inflows.",
+          "The 10-year real yield stays at 2.66% or higher.",
+          "Funding stays mildly positive, with no short squeeze from extreme negative funding."
+        ],
+        "dataGaps": [
+          "No cross-asset or price data: the immediate transmission from flows to BTC and ETH prices cannot be verified, so short-horizon confidence is lower.",
+          "No market consensus: the surprise in published macro data cannot be sized, so only actuals and priors are comparable.",
+          "Sentiment items are stale and not comparable: they are not evidence of current risk appetite.",
+          "Some macro events are still pending: the policy rate, GDP and PCE are unknown and could change the rate and liquidity mechanism.",
+          "Official daily closes can lag several trading days: rate and ETF data carry a delay, so long-horizon reads deserve a discount."
+        ],
+        "direction": "bearish",
+        "evidenceStrength": "The bearish side is stronger: stablecoin supply fell $857M, $2.088B and $5.89B over one, seven and thirty days, and ETH ETFs still redeemed $88.6M on 26 October. The bullish side is only $110M of BTC ETF inflows on 26 October plus mildly positive funding, which is not enough to offset the liquidity contraction.",
+        "macro": "The 10-year Treasury yield is 5% and the real yield 2.66%, so the rate side is tight. Published IFO and CBI readings improved but carry no consensus, so the macro signal is negative for crypto risk assets.",
+        "summary": "Downside pressure dominates: stablecoin supply is contracting and spot BTC and ETH ETFs are redeeming, which pulls marginal bids away, while a 2.66% 10-year real yield keeps the discount rate restrictive. Both weigh on BTC and ETH."
+      },
+      "counterEvidence": [
+        {
+          "evidenceRefId": "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160",
+          "statement": "BTC spot ETFs took in $110M on 26 October, so the latest day saw a return flow."
+        },
+        {
+          "evidenceRefId": "query:alternative-fear-greed:sentiment:market:fear-greed-index:2026-10-27T00:00:00.000Z:191",
+          "statement": "The Fear and Greed index reads 48, a neutral band, which does not confirm panic selling."
+        }
+      ],
+      "createdAt": "2026-10-27T08:31:17.982Z",
+      "dataCaveats": [
+        "No cross-asset data: the link between the dollar and risk assets cannot be verified, which lowers confidence in the transmission read.",
+        "No market consensus: the surprise in macro data cannot be sized, so only actuals and priors are comparable.",
+        "Sentiment items are stale and not comparable: an insurance-cost story is not evidence of current risk appetite.",
+        "Official daily closes can lag several trading days: rate and ETF data carry a delay, which limits short-horizon confidence."
+      ],
+      "directions": [
+        {
+          "confidence": "low",
+          "direction": "bearish",
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+          ],
+          "horizon": "short",
+          "rationale": "Stablecoin supply fell $857M over one day and ETH ETFs redeemed $88.6M on 26 October, while BTC ETFs only took in $110M on a single day, so short-horizon flows stay negative."
+        },
+        {
+          "confidence": "medium",
+          "direction": "bearish",
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190"
+          ],
+          "horizon": "medium",
+          "rationale": "Stablecoin supply fell $2.088B over seven days and $5.89B over thirty days, and spot BTC and ETH ETFs have mostly redeemed, so mid-term liquidity contraction weighs on prices."
+        },
+        {
+          "confidence": "medium",
+          "direction": "bearish",
+          "evidenceRefIds": [
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130"
+          ],
+          "horizon": "long",
+          "rationale": "A 2.66% 10-year real yield and a 5% 10-year yield, together with a $5.89B thirty-day stablecoin decline, keep long-horizon valuations under pressure."
+        }
+      ],
+      "eventGroupId": "mi-eg-48d7bd7e-505b-4028-907a-710e9c2c243b",
+      "evidenceRefs": [
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+        "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160",
+        "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+        "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+        "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+        "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+        "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127",
+        "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T08:00:00.001Z:213",
+        "query:binance-futures-positioning:funding:ETH:funding-rate-percent:2026-10-27T08:00:00.001Z:235",
+        "query:alternative-fear-greed:sentiment:market:fear-greed-index:2026-10-27T00:00:00.000Z:191",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield-change-1d:2026-10-23T00:00:00.000Z:121",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield-change-1d:2026-10-23T00:00:00.000Z:119",
+        "query:fred-rates-liquidity:macro:us-treasury:us-2y-yield:2026-10-23T00:00:00.000Z:122",
+        "query:fred-rates-liquidity:macro:us-treasury:us-2y-yield-change-1d:2026-10-23T00:00:00.000Z:123",
+        "query:fred-rates-liquidity:macro:us-treasury:us-10y-2y-term-spread:2026-10-23T00:00:00.000Z:126",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-87eb695904ffbebde0133956ddc90003",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-512e6069355ef1fb8b7811edf942866d",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-82baa36bb3b081f36d1835d9577b39ff",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-2b0cfc4358a080f13aff6f8e1e405a35",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-02dae57f604992a81e518d5f0255b407",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42c1f86c54d8498ce01c47d357855074",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42a31f24b76ef945ec03af312969b1bc",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-a74d3e1739d53508a1bf25ae4ad23d12",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-5ec6a79225e9074073cf806860bc8627",
+        "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-144baeb7be2c95c20bc045fc2f86020b"
+      ],
+      "id": "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287",
+      "knownFacts": [
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158"
+          ],
+          "factId": "mi-fact-capital-BTC-etf-net-flow-usd-2026-10-22T00-00-00-000Z-2026-10-22",
+          "statement": "BTC spot ETFs recorded a net flow of -$636M on 22 October 2026."
+        },
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+          ],
+          "factId": "mi-fact-capital-BTC-etf-net-flow-usd-2026-10-26T00-00-00-000Z-2026-10-26",
+          "statement": "BTC spot ETFs recorded a net flow of +$110M on 26 October 2026."
+        },
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190"
+          ],
+          "factId": "mi-fact-capital-ETH-etf-net-flow-usd-2026-10-26T00-00-00-000Z-2026-10-26",
+          "statement": "ETH spot ETFs recorded a net flow of -$88.6M on 26 October 2026."
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128"
+          ],
+          "factId": "mi-fact-capital-stablecoins-change-1d-usd-2026-10-27T08-22-36-216Z",
+          "statement": "Total stablecoin supply changed by -$857M over one day."
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130"
+          ],
+          "factId": "mi-fact-capital-stablecoins-change-30d-usd-2026-10-27T08-22-36-216Z",
+          "statement": "Total stablecoin supply changed by -$5.89B over thirty days."
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129"
+          ],
+          "factId": "mi-fact-capital-stablecoins-change-7d-usd-2026-10-27T08-22-36-216Z",
+          "statement": "Total stablecoin supply changed by -$2.088B over seven days."
+        },
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127"
+          ],
+          "factId": "mi-fact-capital-stablecoins-current-usd-2026-10-27T08-22-36-216Z",
+          "statement": "Total stablecoin supply currently stands at $253.03B."
+        },
+        {
+          "evidenceRefIds": [
+            "query:binance-futures-positioning:funding:BTC:funding-rate-percent:2026-10-27T08:00:00.001Z:213"
+          ],
+          "factId": "mi-fact-funding-BTC-funding-rate-percent-2026-10-27T08-00-00-001Z-point-21",
+          "statement": "BTC funding was 0.008696% at 08:00 on 27 October 2026."
+        }
+      ],
+      "marketReaction": [],
+      "nextCatalysts": [
+        {
+          "evidenceRefIds": [
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-2b0cfc4358a080f13aff6f8e1e405a35",
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-02dae57f604992a81e518d5f0255b407",
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42c1f86c54d8498ce01c47d357855074"
+          ],
+          "statement": "US durable goods orders for September are due at 12:30 on 27 October, prior -0.1%."
+        },
+        {
+          "evidenceRefIds": [
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-42a31f24b76ef945ec03af312969b1bc",
+            "macro-calendar:macro-calendar-0xrouter-economic-data:market-observation-87eb695904ffbebde0133956ddc90003"
+          ],
+          "statement": "The overnight policy rate decision is due at 13:45 on 28 October, with a market-implied range of 3.75%-4.00%."
+        }
+      ],
+      "scenarios": [
+        {
+          "asset": "BTC",
+          "baseCase": "If the one-day stablecoin change stays negative and BTC spot ETFs do not show consecutive inflows, BTC leans lower over the next 2 to 24 hours.",
+          "conditions": [
+            "The one-day stablecoin change stays negative",
+            "BTC spot ETFs do not post two consecutive days of inflows"
+          ],
+          "horizon": "2h-24h",
+          "invalidation": "The one-day stablecoin change turns positive and BTC spot ETFs take in consecutive inflows.",
+          "status": "pending"
+        }
+      ],
+      "schemaVersion": 1,
+      "supportingEvidence": [
+        {
+          "evidenceRefId": "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+          "statement": "Total stablecoin supply fell $5.89B over thirty days, mid-term evidence of liquidity contraction."
+        },
+        {
+          "evidenceRefId": "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+          "statement": "Total stablecoin supply fell $2.088B over seven days, so short- and mid-term liquidity fell together."
+        },
+        {
+          "evidenceRefId": "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+          "statement": "Total stablecoin supply fell $857M in the latest day, so the contraction is still running."
+        }
+      ],
+      "transmissionHypotheses": [
+        {
+          "evidenceRefIds": [
+            "query:defillama-stablecoins:capital:stablecoins:change-1d-usd:2026-10-27T08:22:36.216Z:128",
+            "query:defillama-stablecoins:capital:stablecoins:change-30d-usd:2026-10-27T08:22:36.216Z:130",
+            "query:defillama-stablecoins:capital:stablecoins:change-7d-usd:2026-10-27T08:22:36.216Z:129",
+            "query:defillama-stablecoins:capital:stablecoins:current-usd:2026-10-27T08:22:36.216Z:127"
+          ],
+          "statement": "If total stablecoin supply keeps contracting on the 1-, 7- and 30-day horizons (-$857M, -$2.088B and -$5.89B), usable liquidity tightens and marginal bids thin, pressuring BTC and ETH; a reversal to inflows would break the transmission."
+        },
+        {
+          "evidenceRefIds": [
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-22T00:00:00.000Z:158",
+            "query:0xrouter:capital:ETH:etf-net-flow-usd:2026-10-26T00:00:00.000Z:190",
+            "query:0xrouter:capital:BTC:etf-net-flow-usd:2026-10-26T00:00:00.000Z:160"
+          ],
+          "statement": "If spot BTC and ETH ETFs keep redeeming, issuers must cut spot exposure, which weakens spot demand and pushes BTC and ETH lower; sustained inflows would invalidate the hypothesis."
+        },
+        {
+          "evidenceRefIds": [
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield:2026-10-23T00:00:00.000Z:120",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-real-yield-change-1d:2026-10-23T00:00:00.000Z:121",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield:2026-10-23T00:00:00.000Z:118",
+            "query:fred-rates-liquidity:macro:us-treasury:us-10y-yield-change-1d:2026-10-23T00:00:00.000Z:119"
+          ],
+          "statement": "If the 10-year real yield stays at or above 2.66%, the opportunity cost of holding a non-yielding asset rises and compresses crypto valuations; a clear fall in real yields would ease the pressure."
+        }
+      ],
+      "version": 1
+    }
+  }
+}

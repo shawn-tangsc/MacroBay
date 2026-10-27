@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.macro.economicCalendar.queryMonth",
+  "effect": "read",
+  "byRequestKey": "month",
+  "byRequest": {
+    "2026-10": {
+      "state": "available",
+      "asOf": "$asOf",
+      "events": [
+        {
+          "eventKey": "US.AVERAGE_HOURLY_EARNINGS.RELEASE.2026-M09",
+          "releaseGroupKey": "US.EMPLOYMENT_SITUATION.RELEASE.2026-M09",
+          "eventFamily": "employment-situation",
+          "titleKey": "average-hourly-earnings",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M09",
+          "lifecycleState": "released",
+          "coverage": "available",
+          "scheduledDate": "2026-10-02",
+          "scheduledAt": "2026-10-02T12:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-10-02T12:30:00.000Z",
+          "officialReleaseDate": "2026-10-02",
+          "detectedAt": "2026-10-22T07:29:41.159Z",
+          "actual": {
+            "numericValue": 0.13241525423730582,
+            "displayValue": "0.1%",
+            "unit": "percent"
+          },
+          "previous": {
+            "numericValue": 0.31880977683313994,
+            "displayValue": "0.3%",
+            "unit": "percent"
+          },
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.CORE_CPI.RELEASE.2026-M09",
+          "releaseGroupKey": "US.CPI.RELEASE.2026-M09",
+          "eventFamily": "consumer-price-index",
+          "titleKey": "core-cpi",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M09",
+          "lifecycleState": "released",
+          "coverage": "available",
+          "scheduledDate": "2026-10-14",
+          "scheduledAt": "2026-10-14T12:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-10-14T12:30:00.000Z",
+          "officialReleaseDate": "2026-10-14",
+          "detectedAt": "2026-10-22T07:29:41.159Z",
+          "actual": {
+            "numericValue": 2.5643583511686607,
+            "displayValue": "2.6%",
+            "unit": "percent"
+          },
+          "previous": {
+            "numericValue": 2.4459799375700753,
+            "displayValue": "2.4%",
+            "unit": "percent"
+          },
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.CPI.RELEASE.2026-M09",
+          "releaseGroupKey": "US.CPI.RELEASE.2026-M09",
+          "eventFamily": "consumer-price-index",
+          "titleKey": "cpi",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M09",
+          "lifecycleState": "released",
+          "coverage": "available",
+          "scheduledDate": "2026-10-14",
+          "scheduledAt": "2026-10-14T12:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-10-14T12:30:00.000Z",
+          "officialReleaseDate": "2026-10-14",
+          "detectedAt": "2026-10-22T07:29:41.159Z",
+          "actual": {
+            "numericValue": 3.737684729064039,
+            "displayValue": "3.7%",
+            "unit": "percent"
+          },
+          "previous": {
+            "numericValue": 3.3965478924364856,
+            "displayValue": "3.4%",
+            "unit": "percent"
+          },
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.NONFARM_PAYROLLS.RELEASE.2026-M09",
+          "releaseGroupKey": "US.EMPLOYMENT_SITUATION.RELEASE.2026-M09",
+          "eventFamily": "employment-situation",
+          "titleKey": "nonfarm-payrolls",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M09",
+          "lifecycleState": "released",
+          "coverage": "available",
+          "scheduledDate": "2026-10-02",
+          "scheduledAt": "2026-10-02T12:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-10-02T12:30:00.000Z",
+          "officialReleaseDate": "2026-10-02",
+          "detectedAt": "2026-10-22T07:29:41.159Z",
+          "actual": {
+            "numericValue": 29,
+            "displayValue": "+29K",
+            "unit": "thousands"
+          },
+          "previous": {
+            "numericValue": 133,
+            "displayValue": "+133K",
+            "unit": "thousands"
+          },
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.UNEMPLOYMENT.RELEASE.2026-M09",
+          "releaseGroupKey": "US.EMPLOYMENT_SITUATION.RELEASE.2026-M09",
+          "eventFamily": "employment-situation",
+          "titleKey": "unemployment",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M09",
+          "lifecycleState": "released",
+          "coverage": "available",
+          "scheduledDate": "2026-10-02",
+          "scheduledAt": "2026-10-02T12:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-10-02T12:30:00.000Z",
+          "officialReleaseDate": "2026-10-02",
+          "detectedAt": "2026-10-22T07:29:41.159Z",
+          "actual": {
+            "numericValue": 4.2,
+            "displayValue": "4.2%",
+            "unit": "percent"
+          },
+          "previous": {
+            "numericValue": 4.1,
+            "displayValue": "4.1%",
+            "unit": "percent"
+          },
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        }
+      ]
+    },
+    "2026-11": {
+      "state": "available",
+      "asOf": "$asOf",
+      "events": [
+        {
+          "eventKey": "US.AVERAGE_HOURLY_EARNINGS.RELEASE.2026-M10",
+          "releaseGroupKey": "US.EMPLOYMENT_SITUATION.RELEASE.2026-M10",
+          "eventFamily": "employment-situation",
+          "titleKey": "average-hourly-earnings",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M10",
+          "lifecycleState": "scheduled",
+          "coverage": "available",
+          "scheduledDate": "2026-11-06",
+          "scheduledAt": "2026-11-06T13:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-11-06T13:30:00.000Z",
+          "detectedAt": "2026-10-22T07:29:39.670Z",
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.CORE_CPI.RELEASE.2026-M10",
+          "releaseGroupKey": "US.CPI.RELEASE.2026-M10",
+          "eventFamily": "consumer-price-index",
+          "titleKey": "core-cpi",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M10",
+          "lifecycleState": "scheduled",
+          "coverage": "available",
+          "scheduledDate": "2026-11-10",
+          "scheduledAt": "2026-11-10T13:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-11-10T13:30:00.000Z",
+          "detectedAt": "2026-10-22T07:29:39.670Z",
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.CPI.RELEASE.2026-M10",
+          "releaseGroupKey": "US.CPI.RELEASE.2026-M10",
+          "eventFamily": "consumer-price-index",
+          "titleKey": "cpi",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M10",
+          "lifecycleState": "scheduled",
+          "coverage": "available",
+          "scheduledDate": "2026-11-10",
+          "scheduledAt": "2026-11-10T13:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-11-10T13:30:00.000Z",
+          "detectedAt": "2026-10-22T07:29:39.670Z",
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.NONFARM_PAYROLLS.RELEASE.2026-M10",
+          "releaseGroupKey": "US.EMPLOYMENT_SITUATION.RELEASE.2026-M10",
+          "eventFamily": "employment-situation",
+          "titleKey": "nonfarm-payrolls",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M10",
+          "lifecycleState": "scheduled",
+          "coverage": "available",
+          "scheduledDate": "2026-11-06",
+          "scheduledAt": "2026-11-06T13:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-11-06T13:30:00.000Z",
+          "detectedAt": "2026-10-22T07:29:39.670Z",
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        },
+        {
+          "eventKey": "US.UNEMPLOYMENT.RELEASE.2026-M10",
+          "releaseGroupKey": "US.EMPLOYMENT_SITUATION.RELEASE.2026-M10",
+          "eventFamily": "employment-situation",
+          "titleKey": "unemployment",
+          "countryCode": "US",
+          "importance": "high",
+          "periodKey": "2026-M10",
+          "lifecycleState": "scheduled",
+          "coverage": "available",
+          "scheduledDate": "2026-11-06",
+          "scheduledAt": "2026-11-06T13:30:00.000Z",
+          "releaseTimeSource": "convention-default",
+          "conventionScheduledAt": "2026-11-06T13:30:00.000Z",
+          "detectedAt": "2026-10-22T07:29:39.670Z",
+          "consensus": null,
+          "consensusState": "unavailable",
+          "surprise": "consensus-unavailable",
+          "providerIds": [
+            "macro-calendar-bls"
+          ],
+          "caveats": [
+            "official-time-not-published",
+            "official-timezone-not-published",
+            "bls-python-schedule"
+          ]
+        }
+      ]
+    }
+  }
+}

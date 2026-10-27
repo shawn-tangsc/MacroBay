@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "method": "marketAnalysis.listTimeline",
+  "effect": "read",
+  "payload": {
+    "schemaVersion": 1,
+    "items": [
+      {
+        "id": "mi-tl-8ac38ee5-ef28-4cb8-a43c-efd63feeff51",
+        "eventGroupId": "mi-eg-48d7bd7e-505b-4028-907a-710e9c2c243b",
+        "analysisRunId": "mi-ar-a7fb3530-839f-403e-b546-99ed0019cc2e",
+        "kind": "analysis",
+        "status": "published",
+        "occurredAt": "2026-10-27T08:31:17.982Z",
+        "summaryRef": "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287",
+        "safeTitle": "Market analysis published",
+        "safeExcerpt": "Downside pressure dominates: stablecoin supply is contracting and spot BTC and ETH ETFs are redeeming, which pulls marginal bids away, while a 2.66% 10-year real yield keeps the discount rate restrictive. Both weigh on BTC and ETH.",
+        "direction": "bearish",
+        "version": 1,
+        "triggerStatus": {
+          "triggerKey": "macro.actual.first-confirmed",
+          "reasonCode": "severity-confirmed",
+          "decidedAt": "2026-10-27T08:28:51.086Z"
+        }
+      }
+    ],
+    "nextCursor": null
+  }
+}
