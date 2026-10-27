@@ -38,6 +38,23 @@ export const productText = {
         evaluatingAlerts: '评估中…',
         empty: '暂无相关事件。事件采集接入后会在此显示。',
         portal: {
+          sampleMode: {
+            entry: {
+              cta: '先看示例看板',
+              hint: '断网可用，无需 API Key，不会写入你的数据',
+              missing: '示例数据尚未安装',
+              busy: '正在载入示例…'
+            },
+            banner: {
+              title: '示例数据',
+              replay: '真实历史数据 · 离线回放',
+              scenario: '场景时间 {time}（不是当前时间）',
+              noUpdate: '示例数据不会自动更新',
+              exit: '退出示例',
+              connect: '接入真实数据'
+            },
+            watermark: '示例数据'
+          },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
             crypto: { name: '数字货币市场解读员', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 个静态情报源' },
@@ -1323,6 +1340,23 @@ export const productText = {
         evaluatingAlerts: 'Evaluating…',
         empty: 'No relevant events yet. They will appear here once source collection is connected.',
         portal: {
+          sampleMode: {
+            entry: {
+              cta: 'See the sample dashboard',
+              hint: 'Works offline, needs no API key, writes nothing to your data',
+              missing: 'Sample data is not installed',
+              busy: 'Loading the sample…'
+            },
+            banner: {
+              title: 'Sample data',
+              replay: 'Real historical data · replayed offline',
+              scenario: 'Scenario time {time} (not now)',
+              noUpdate: 'Sample data does not update',
+              exit: 'Exit sample',
+              connect: 'Connect real data'
+            },
+            watermark: 'SAMPLE DATA'
+          },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
             crypto: { name: 'Crypto Market Analyst', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 static intelligence sources' },

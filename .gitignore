@@ -194,3 +194,6 @@ Desktop.ini
 
 # Local AI development instructions; not part of the public repository.
 /AGENTS.md
+
+# 示例模式的本地录制产物：只提交人工筛选后的 scenarios/，raw/ 不入库。
+products/market-intelligence/demo/raw/

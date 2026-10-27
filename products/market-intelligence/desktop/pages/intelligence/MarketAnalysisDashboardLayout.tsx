@@ -14,6 +14,7 @@ import { MarketAnalysisSettingsDialog } from './MarketAnalysisSettingsDialog'
 import { LatestAnalysisConclusionCard } from './LatestAnalysisConclusionCard'
 import type { AnalysisSelectionState } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisTimeline } from './useMarketAnalysisTimeline'
+import { useSampleNow } from './SampleModeProvider'
 import type { CrossAssetEventLine } from '../../features/industry/cross-asset/crossAssetEventLines'
 import { chartEventSelection, openEventDetailThenRecord, type SelectedCalendarEvent } from './selectedCalendarEvent'
 import './marketAnalysisWorkspace.css'
@@ -92,7 +93,8 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   const [selectedContext, setSelectedContext] = useState<{ key: string; label: string; eventKey: string; month: string }>()
   /** The chart line the reader opened, whose detail the page draws. Independent of the record below. */
   const [eventDetail, setEventDetail] = useState<SelectedCalendarEvent>()
-  const [cardAsOf] = useState(() => new Date().toISOString())
+  const sampleNow = useSampleNow()
+  const [cardAsOf] = useState(() => sampleNow().toISOString())
   const cardData = useCalendarCardData({ asOf: cardAsOf, locale: locale === 'en-US' ? 'en' : 'zh', ...(readCalendarReaction ? { readReaction: readCalendarReaction } : {}) })
   const timeline = useMarketAnalysisTimeline({
     text: {

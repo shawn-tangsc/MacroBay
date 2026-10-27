@@ -18,7 +18,12 @@ import { DashboardPanelDrawer } from './DashboardPanelDrawer'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { createCalendarCardReactionReader } from './calendarCardReaction'
 
+import { SampleModeBanner, SampleModeEntry, type SampleModeText } from './SampleModeBanner'
+import { SampleModeProvider, useSampleMode } from './SampleModeProvider'
+import { SampleWatermark } from './SampleWatermark'
+
 import './intelligence.css'
+import './sampleMode.css'
 import { createCrossAssetObservationClient } from '../../shared/ipc/crossAssetObservationClient'
 import { createDashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedStatusClient'
 import { createMacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
@@ -34,9 +39,24 @@ const macroMarketClient = createMacroMarketSnapshotClient()
 const macroRatesClient = createMacroRatesSnapshotClient()
 const dashboardFeedStatusClient = createDashboardFeedStatusClient()
 
+/**
+ * 示例模式的 Provider 必须在页面最外层：横幅、水印、入口和「现在」都从它来，
+ * 面板本身不知道自己正在回放——它们只是照常调用既有客户端。
+ */
 export default function IntelligencePage(): React.ReactElement {
+  return (
+    <SampleModeProvider>
+      <IntelligencePageBody />
+    </SampleModeProvider>
+  )
+}
+
+function IntelligencePageBody(): React.ReactElement {
   const language = useShellLanguage()
   const text = productText[language].pages.intelligence.portal
+  const sample = useSampleMode()
+  const sampleText: SampleModeText = text.sampleMode
+  const sampleNow = sample.now
   const [drawerOpen, setDrawerOpen] = useState(false)
   const { agentView, enableRequired: enableRequiredSources, sourceCounts } = useAgentActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
@@ -66,17 +86,30 @@ export default function IntelligencePage(): React.ReactElement {
   )
 
   return (
-    <>
+    <div className="mi-sample-surface">
+      {sample.state.active ? (
+        <>
+          <SampleModeBanner
+            busy={sample.busy}
+            onConnect={() => { void sample.exit().then(() => setSourceDrawerOpen(true)) }}
+            onExit={() => { void sample.exit() }}
+            scenarioNow={sample.state.scenarioNow}
+            text={sampleText}
+          />
+          <SampleWatermark text={sampleText.watermark} />
+        </>
+      ) : null}
       {activeView === 'calendar' ? (
         <EconomicCalendar
           client={macroEconomicCalendarClient}
-          now={() => new Date()}
+          now={sampleNow}
           onBack={() => setActiveView('dashboard')}
           openTarget={calendarTarget}
           text={text.calendar}
         />
       ) : activeView === 'dashboard' ? (
         <MarketAnalysisDashboardLayout
+          key={sample.sessionKey}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
           text={text}
           locale={language}
@@ -92,7 +125,7 @@ export default function IntelligencePage(): React.ReactElement {
           renderEventDetailDrawer={(selection, onClose) => <SelectedCalendarEventDrawer
             client={macroEconomicCalendarClient}
             key={selection.eventKey}
-            now={() => new Date()}
+            now={sampleNow}
             onClose={onClose}
             readMarketMonth={readMarketMonth}
             selection={selection}
@@ -101,6 +134,7 @@ export default function IntelligencePage(): React.ReactElement {
         >
         <CryptoIntelligenceDashboard
           calendarText={text.calendar}
+          key={sample.sessionKey}
           client={macroEconomicCalendarClient}
           fearGreedClient={intelligenceFearGreedClient}
           fundingRateClient={intelligenceFundingRateHistoryClient}
@@ -110,7 +144,7 @@ export default function IntelligencePage(): React.ReactElement {
           macroMarketClient={macroMarketClient}
           macroRatesClient={macroRatesClient}
           dashboardFeedStatusClient={dashboardFeedStatusClient}
-          now={() => new Date()}
+          now={sampleNow}
           onBack={() => {
             setDrawerOpen(false)
             setSourceDrawerOpen(false)
@@ -123,6 +157,14 @@ export default function IntelligencePage(): React.ReactElement {
         />
         </MarketAnalysisDashboardLayout>
       ) : <AgentPortal agents={marketIntelligenceAgents} sourceCounts={sourceCounts} onOpenCryptoDashboard={() => setActiveView('dashboard')} text={text} />}
+      {activeView === 'portal' ? (
+        <SampleModeEntry
+          busy={sample.busy}
+          missing={sample.state.unavailableReason === 'no-scenario'}
+          onEnter={() => { void sample.enter() }}
+          text={sampleText}
+        />
+      ) : null}
       {sourceDrawerOpen ? <DashboardPanelDrawer
         onClose={() => setSourceDrawerOpen(false)}
         open
@@ -135,6 +177,6 @@ export default function IntelligencePage(): React.ReactElement {
         sources={marketIntelligenceActivationSources}
         text={text.drawer}
       />
-    </>
+    </div>
   )
 }
