@@ -8048,80 +8048,80 @@
       "closedReturns": {
         "index": {
           "5m": {
-            "state": "available",
-            "value": 0.011204952589038975
+            "state": "unavailable",
+            "reason": "insufficient"
           },
           "15m": {
-            "state": "available",
-            "value": 0.018209323173468128
+            "state": "unavailable",
+            "reason": "insufficient"
           },
           "1h": {
             "state": "available",
-            "value": 0.24990523256629427
+            "value": 0.2499
           },
           "4h": {
             "state": "available",
-            "value": 0.2977820853173663
+            "value": 0.2978
           },
           "24h": {
             "state": "available",
-            "value": 0.8203433864226728
+            "value": 0.8203
           },
           "7d": {
             "state": "available",
-            "value": -0.316897475988398
+            "value": -0.2863
           }
         },
         "btc": {
           "5m": {
-            "state": "available",
-            "value": -0.04330525813699415
+            "state": "unavailable",
+            "reason": "insufficient"
           },
           "15m": {
-            "state": "available",
-            "value": -0.06914501126901174
+            "state": "unavailable",
+            "reason": "insufficient"
           },
           "1h": {
             "state": "available",
-            "value": -0.20602304099531787
+            "value": -0.206
           },
           "4h": {
             "state": "available",
-            "value": -0.410451634365383
+            "value": -0.4105
           },
           "24h": {
             "state": "available",
-            "value": -1.0998769220833648
+            "value": -1.0999
           },
           "7d": {
             "state": "available",
-            "value": -2.142162832393446
+            "value": -2.0886
           }
         },
         "eth": {
           "5m": {
-            "state": "available",
-            "value": -0.08533716845209316
+            "state": "unavailable",
+            "reason": "insufficient"
           },
           "15m": {
-            "state": "available",
-            "value": -0.16880047783520702
+            "state": "unavailable",
+            "reason": "insufficient"
           },
           "1h": {
             "state": "available",
-            "value": -0.23098284498196398
+            "value": -0.231
           },
           "4h": {
             "state": "available",
-            "value": -0.41491626117705627
+            "value": -0.4149
           },
           "24h": {
             "state": "available",
-            "value": -1.1896550985524446
+            "value": -1.1897
           },
           "7d": {
             "state": "available",
-            "value": -3.1268768611112163
+            "value": -3.0169
           }
         }
       },

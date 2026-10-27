@@ -31,9 +31,9 @@ export function withSampleMode(input: SampleModeHandlerInput): ProductIpcHandler
       input.recorder?.record(input.method, payload, result)
       return result
     }
-    if (isSampleModeWriteMethod(input.method)) throw new Error(SAMPLE_MODE_ERRORS.readOnly)
+    if (isSampleModeWriteMethod(input.method)) throw new Error(`${SAMPLE_MODE_ERRORS.readOnly}:${input.method}`)
     const served = input.session.lookup(input.method, payload)
-    if (served === undefined) throw new Error(SAMPLE_MODE_ERRORS.surfaceMissing)
+    if (served === undefined) throw new Error(`${SAMPLE_MODE_ERRORS.surfaceMissing}:${input.method}`)
     return served
   }
 }
@@ -51,5 +51,5 @@ export function wrapProductRegistrar(
 /** IPC 边界只回结构化错误码：界面据此显示「示例模式下不可用」，不打印堆栈。 */
 export function isSampleModeError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  return message === SAMPLE_MODE_ERRORS.readOnly || message === SAMPLE_MODE_ERRORS.surfaceMissing
+  return message.startsWith(SAMPLE_MODE_ERRORS.readOnly) || message.startsWith(SAMPLE_MODE_ERRORS.surfaceMissing)
 }

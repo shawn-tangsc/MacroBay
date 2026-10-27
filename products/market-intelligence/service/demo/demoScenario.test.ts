@@ -61,7 +61,8 @@ describe(' demoScenario 信封', () => {
   it('classifies write verbs as writes and query verbs as reads', () => {
     expect(isSampleModeWriteMethod('marketAnalysis.saveSettings')).toBe(true)
     expect(isSampleModeWriteMethod('intelligenceSources.setEnabled')).toBe(true)
-    expect(isSampleModeWriteMethod('intelligence.crossAsset.acquire')).toBe(true)
+    // 租约不是写数据：它必须先被示例数据回答，面板才拿得到快照。
+    expect(isSampleModeWriteMethod('intelligence.crossAsset.acquire')).toBe(false)
     expect(isSampleModeWriteMethod('intelligence.queryFearGreedSnapshot')).toBe(false)
     expect(isSampleModeWriteMethod('intelligence.demo.setActive')).toBe(false)
     expect(isSampleModeReadMethod('intelligence.queryFearGreedSnapshot')).toBe(true)

@@ -37,6 +37,17 @@ const SAMPLE_MODE_WRITE_VERBS = Object.freeze([
   'acquire', 'renew', 'release', 'test'
 ])
 
+/**
+ * 租约控制不是写数据：跨资产面板必须先 acquire 再 query。它们由示例数据回答，
+ * 否则面板每秒重试、永远拿不到快照。四个方法只在有 fixture 时放行。
+ */
+export const SAMPLE_MODE_LEASE_METHODS = Object.freeze([
+  'intelligence.crossAsset.acquire',
+  'intelligence.crossAsset.renew',
+  'intelligence.crossAsset.release',
+  'intelligence.crossAsset.refresh'
+] as const)
+
 /** 读接口的动词白名单：只有这些词开头的接口才可能被示例数据服务。 */
 const SAMPLE_MODE_READ_VERBS = Object.freeze([
   'get', 'list', 'query', 'read', 'explain', 'preview', 'calendarEventContext'
@@ -49,6 +60,7 @@ export function sampleModeLeaf(method: string): string {
 
 export function isSampleModeWriteMethod(method: string): boolean {
   if ((Object.values(SAMPLE_MODE_METHODS) as readonly string[]).includes(method)) return false
+  if ((SAMPLE_MODE_LEASE_METHODS as readonly string[]).includes(method)) return false
   const leaf = sampleModeLeaf(method)
   return SAMPLE_MODE_WRITE_VERBS.some((verb) => leaf.startsWith(verb))
 }
