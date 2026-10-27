@@ -1,0 +1,873 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligenceSources.getAgentView",
+  "effect": "read",
+  "payload": {
+    "agent": {
+      "agentId": "crypto",
+      "displayName": "Crypto Market Analyst",
+      "activation": "available",
+      "groups": [
+        {
+          "groupId": "fear-greed",
+          "agentId": "crypto",
+          "tier": "required",
+          "sourceIds": [
+            "alternative-fear-greed"
+          ]
+        },
+        {
+          "groupId": "spot-momentum",
+          "agentId": "crypto",
+          "tier": "required",
+          "sourceIds": [
+            "binance-spot-market",
+            "coingecko-market",
+            "0xrouter-aggregate-provider",
+            "realmarketapi-market",
+            "twelve-data-market",
+            "binance-asset-page"
+          ]
+        },
+        {
+          "groupId": "funding-rate",
+          "agentId": "crypto",
+          "tier": "required",
+          "sourceIds": [
+            "binance-futures-positioning"
+          ]
+        },
+        {
+          "groupId": "macro-calendar",
+          "agentId": "crypto",
+          "tier": "recommended",
+          "sourceIds": [
+            "macro-calendar-fed",
+            "macro-calendar-bea",
+            "macro-calendar-bls",
+            "macro-calendar-0xrouter-economic-data",
+            "macro-calendar-0xrouter-financial-events",
+            "macro-calendar-0xrouter-central-bank-activities",
+            "macro-calendar-coinmarketcal",
+            "federal-reserve-rss",
+            "fred-rates-liquidity",
+            "treasury-fiscal-data"
+          ]
+        },
+        {
+          "groupId": "stablecoin-defi",
+          "agentId": "crypto",
+          "tier": "recommended",
+          "sourceIds": [
+            "defillama-stablecoins",
+            "defillama-tvl"
+          ]
+        },
+        {
+          "groupId": "regulation-exchange",
+          "agentId": "crypto",
+          "tier": "recommended",
+          "sourceIds": [
+            "sec-rss",
+            "cftc-rss",
+            "binance-announcements",
+            "binance-api-updates",
+            "okx-latest-announcements",
+            "okx-api-announcements",
+            "coinbase-status",
+            "kraken-status",
+            "kraken-system-status",
+            "solana-status"
+          ]
+        },
+        {
+          "groupId": "industry-news",
+          "agentId": "crypto",
+          "tier": "optional",
+          "sourceIds": [
+            "coindesk-rss",
+            "ethereum-foundation-blog",
+            "cryptopanic",
+            "github-releases"
+          ]
+        }
+      ]
+    },
+    "groups": [
+      {
+        "groupId": "fear-greed",
+        "tier": "required",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "alternative-fear-greed",
+            "displayName": "Fear & Greed Index",
+            "adapterRef": "alternative-fear-greed",
+            "providerId": "alternative-me",
+            "enabled": true,
+            "jobRegistered": true
+          }
+        ]
+      },
+      {
+        "groupId": "spot-momentum",
+        "tier": "required",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "binance-spot-market",
+            "displayName": "Binance spot market",
+            "requiresProxy": true,
+            "adapterRef": "binance-spot-market",
+            "providerId": "binance",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "coingecko-market",
+            "displayName": "CoinGecko market",
+            "adapterRef": "coingecko-market",
+            "providerId": "coingecko",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "0xrouter-aggregate-provider",
+            "displayName": "0xRouter aggregate market",
+            "adapterRef": "0xrouter-aggregate-provider",
+            "requiresProxy": true,
+            "providerId": "0xrouter",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "realmarketapi-market",
+            "displayName": "RealMarketAPI DXY",
+            "adapterRef": "realmarketapi-market",
+            "providerId": "realmarketapi",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "pending",
+            "collection": "none",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "none",
+              "testConnection": false
+            },
+            "readiness": "planned",
+            "sourceId": "twelve-data-market",
+            "displayName": "Twelve Data macro market",
+            "adapterRef": "twelve-data-market",
+            "providerId": "twelve-data",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "pending",
+            "collection": "none",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "none",
+              "testConnection": false
+            },
+            "readiness": "planned",
+            "sourceId": "binance-asset-page",
+            "displayName": "Binance asset page",
+            "adapterRef": "binance-asset-page",
+            "providerId": "binance",
+            "enabled": true,
+            "jobRegistered": false
+          }
+        ]
+      },
+      {
+        "groupId": "funding-rate",
+        "tier": "required",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "binance-futures-positioning",
+            "displayName": "Binance futures positioning",
+            "requiresProxy": true,
+            "adapterRef": "binance-futures-positioning",
+            "providerId": "binance",
+            "enabled": true,
+            "jobRegistered": true
+          }
+        ]
+      },
+      {
+        "groupId": "macro-calendar",
+        "tier": "recommended",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard",
+              "economic-calendar"
+            ],
+            "visibility": "visible",
+            "collection": "provider",
+            "kind": "official-calendar",
+            "capabilities": {
+              "runNow": "provider",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "macro-calendar-fed",
+            "displayName": "Fed official schedule",
+            "providerId": "fed",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard",
+              "economic-calendar"
+            ],
+            "visibility": "visible",
+            "collection": "provider",
+            "kind": "official-calendar",
+            "capabilities": {
+              "runNow": "provider",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "macro-calendar-bea",
+            "displayName": "BEA official releases",
+            "providerId": "bea",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard",
+              "economic-calendar"
+            ],
+            "visibility": "visible",
+            "collection": "provider",
+            "kind": "official-calendar",
+            "capabilities": {
+              "runNow": "provider",
+              "testConnection": true,
+              "blsSync": true
+            },
+            "readiness": "live",
+            "sourceId": "macro-calendar-bls",
+            "displayName": "BLS official schedule",
+            "providerId": "bls",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard",
+              "economic-calendar"
+            ],
+            "visibility": "visible",
+            "collection": "job",
+            "kind": "market-calendar",
+            "capabilities": {
+              "runNow": "job",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "macro-calendar-0xrouter-economic-data",
+            "displayName": "0xRouter economic data",
+            "requiresProxy": true,
+            "providerId": "0xrouter",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard",
+              "economic-calendar"
+            ],
+            "visibility": "visible",
+            "collection": "job",
+            "kind": "market-calendar",
+            "capabilities": {
+              "runNow": "job",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "macro-calendar-0xrouter-financial-events",
+            "displayName": "0xRouter financial events",
+            "requiresProxy": true,
+            "providerId": "0xrouter",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard",
+              "economic-calendar"
+            ],
+            "visibility": "visible",
+            "collection": "job",
+            "kind": "market-calendar",
+            "capabilities": {
+              "runNow": "job",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "macro-calendar-0xrouter-central-bank-activities",
+            "displayName": "0xRouter central bank activities",
+            "requiresProxy": true,
+            "providerId": "0xrouter",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "pending",
+            "collection": "none",
+            "kind": "market-calendar",
+            "capabilities": {
+              "runNow": "none",
+              "testConnection": false
+            },
+            "readiness": "planned",
+            "sourceId": "macro-calendar-coinmarketcal",
+            "displayName": "CoinMarketCal events",
+            "providerId": "coinmarketcal",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "federal-reserve-rss",
+            "displayName": "Fed RSS",
+            "adapterRef": "federal-reserve-rss",
+            "providerId": "fed",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": true
+            },
+            "readiness": "live",
+            "sourceId": "fred-rates-liquidity",
+            "displayName": "FRED rates & liquidity",
+            "adapterRef": "fred-rates-liquidity",
+            "providerId": "fred",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "pending",
+            "collection": "none",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "none",
+              "testConnection": false
+            },
+            "readiness": "planned",
+            "sourceId": "treasury-fiscal-data",
+            "displayName": "Treasury fiscal data",
+            "adapterRef": "treasury-fiscal-data",
+            "providerId": "treasury",
+            "enabled": true,
+            "jobRegistered": false
+          }
+        ]
+      },
+      {
+        "groupId": "stablecoin-defi",
+        "tier": "recommended",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "defillama-stablecoins",
+            "displayName": "DeFiLlama stablecoins",
+            "requiresProxy": true,
+            "adapterRef": "defillama-stablecoins",
+            "providerId": "defillama",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "defillama-tvl",
+            "displayName": "DeFiLlama TVL",
+            "requiresProxy": true,
+            "adapterRef": "defillama-tvl",
+            "providerId": "defillama",
+            "enabled": true,
+            "jobRegistered": false
+          }
+        ]
+      },
+      {
+        "groupId": "regulation-exchange",
+        "tier": "recommended",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "sec-rss",
+            "displayName": "SEC press releases",
+            "adapterRef": "sec-rss",
+            "providerId": "sec",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "cftc-rss",
+            "displayName": "CFTC press releases",
+            "adapterRef": "cftc-rss",
+            "providerId": "cftc",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "binance-announcements",
+            "displayName": "Binance announcements",
+            "requiresProxy": true,
+            "adapterRef": "binance-announcements",
+            "providerId": "binance",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "binance-api-updates",
+            "displayName": "Binance API updates",
+            "requiresProxy": true,
+            "adapterRef": "binance-api-updates",
+            "providerId": "binance",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "okx-latest-announcements",
+            "displayName": "OKX latest announcements",
+            "requiresProxy": true,
+            "adapterRef": "okx-latest-announcements",
+            "providerId": "okx",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "visible",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "okx-api-announcements",
+            "displayName": "OKX API announcements",
+            "requiresProxy": true,
+            "adapterRef": "okx-api-announcements",
+            "providerId": "okx",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "status",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "coinbase-status",
+            "displayName": "Coinbase status",
+            "adapterRef": "coinbase-status",
+            "providerId": "coinbase",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "status",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "kraken-status",
+            "displayName": "Kraken status",
+            "adapterRef": "kraken-status",
+            "providerId": "kraken",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "status",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "kraken-system-status",
+            "displayName": "Kraken system status",
+            "adapterRef": "kraken-system-status",
+            "providerId": "kraken",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "status",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "solana-status",
+            "displayName": "Solana status",
+            "adapterRef": "solana-status",
+            "providerId": "solana",
+            "enabled": true,
+            "jobRegistered": false
+          }
+        ]
+      },
+      {
+        "groupId": "industry-news",
+        "tier": "optional",
+        "sources": [
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [
+              "dashboard"
+            ],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "coindesk-rss",
+            "displayName": "CoinDesk RSS",
+            "requiresProxy": true,
+            "adapterRef": "coindesk-rss",
+            "providerId": "coindesk",
+            "enabled": true,
+            "jobRegistered": true
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "ethereum-foundation-blog",
+            "displayName": "Ethereum Foundation blog",
+            "adapterRef": "ethereum-foundation-blog",
+            "providerId": "ethereum-foundation",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "pending",
+            "collection": "none",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "none",
+              "testConnection": false
+            },
+            "readiness": "planned",
+            "sourceId": "cryptopanic",
+            "displayName": "CryptoPanic news",
+            "adapterRef": "cryptopanic",
+            "providerId": "cryptopanic",
+            "enabled": true,
+            "jobRegistered": false
+          },
+          {
+            "agents": [
+              "crypto"
+            ],
+            "panels": [],
+            "visibility": "advanced",
+            "collection": "adapter",
+            "kind": "feed",
+            "capabilities": {
+              "runNow": "adapter",
+              "testConnection": false
+            },
+            "readiness": "live",
+            "sourceId": "github-releases",
+            "displayName": "GitHub releases",
+            "adapterRef": "github-releases",
+            "providerId": "github",
+            "enabled": true,
+            "jobRegistered": false
+          }
+        ]
+      }
+    ],
+    "counts": {
+      "groups": 7,
+      "sources": 34,
+      "enabled": true
+    }
+  }
+}

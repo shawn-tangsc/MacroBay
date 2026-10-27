@@ -12,6 +12,7 @@
   "intelligence.queryCapitalConditionsSnapshot",
   "intelligence.queryFearGreedSnapshot",
   "intelligence.queryFundingRateHistory",
+  "intelligenceSources.getAgentView",
   "marketAnalysis.getAnalysisRun",
   "marketAnalysis.getSettings",
   "marketAnalysis.getSummary",
