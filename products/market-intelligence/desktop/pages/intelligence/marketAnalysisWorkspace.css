@@ -96,8 +96,17 @@
 .mi-analysis-agent-workspace .mi-analysis-timeline__list > h2 { display: none; }
 .mi-analysis-agent-workspace .mi-analysis-timeline__detail { padding: 8px 0; }
 .mi-analysis-agent-workspace .mi-analysis-timeline__detail-content dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-/* 低于 1100px 内容宽度时保留一块可读工作面；切换不卸载会话。 */
-@container mi-analysis-dashboard (max-width: 1100px) {
+/*
+ * 单栏切换点跟着看板数据带的需求走，而不是一个独立常数。
+ *
+ * 切换点两侧必须是同一种数据带形态，否则一跨过去版面会同时跳两次（Agent 栏出现 + 数据带塌成单列）。
+ * 看板并排要 900px 内容宽，加上两侧页边距各 32px、Agent 栏下限 340px，窗口内容宽到 1304px 才同时成立；
+ * 所以这里在 1303px 以下切成单栏：此时看板拿到整行（1303 − 64 = 1239，仍是并排），再往上两栏都在
+ * 各自可用的宽度里。原来的 1100px 是按旧的 1176px 闸门定的，两栏并存量下看板只有 760px，只能堆叠。
+ *
+ * 切换不卸载会话：Segmented 只是换显示的那一栏。
+ */
+@container mi-analysis-dashboard (max-width: 1303px) {
   .mi-analysis-dashboard-layout__switch { display: block; }
   .mi-analysis-dashboard-layout__panes { grid-template-columns: minmax(0, 1fr); }
   .mi-analysis-dashboard-layout[data-compact-view="dashboard"] .mi-analysis-agent-workspace,

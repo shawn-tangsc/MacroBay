@@ -576,16 +576,23 @@ describe('crypto intelligence dashboard', () => {
     const paneMin = Number(paneLimit![1])
     const paneShare = Number(paneLimit![2])
     const paneMax = Number(paneLimit![3])
-    const contentWidth = (windowWidth: number): number => {
-      const page = windowWidth - sidebar
-      const agent = Math.min(Math.max(paneMin, (page * paneShare) / 100), paneMax)
-      return page - agent - pageInline * 2
-    }
+    const agentFor = (page: number): number => Math.min(Math.max(paneMin, (page * paneShare) / 100), paneMax)
+    // 页边距阶梯：窗口 ≤1279 时是 24px，否则是基础值。
+    const gutterFor = (page: number): number => (page + sidebar <= 1279 ? 24 : pageInline)
+    const contentWidth = (page: number, panes: 'single' | 'split'): number =>
+      page - (panes === 'split' ? agentFor(page) : 0) - gutterFor(page) * 2
 
     // 14 英寸 (1512) 与 16 英寸 (1728) 的 Mac 全屏，两种都必须能并排。
     for (const windowWidth of [1512, 1728]) {
-      expect(contentWidth(windowWidth), `${windowWidth}px 窗口的看板内容盒`).toBeGreaterThan(stackBelow + 1)
+      expect(contentWidth(windowWidth - sidebar, 'split'), `${windowWidth}px 窗口的看板内容盒`).toBeGreaterThan(stackBelow)
     }
+
+    // 单栏切换点两侧必须是同一种数据带形态：否则跨过切换点，Agent 栏出现的同时数据带也塌成单列，
+    // 版面一次跳两下。切换点取"看板并排还成立"的最小内容宽：900 + 边距 64 + Agent 下限 340。
+    const compactAt = Number(/@container mi-analysis-dashboard \(max-width: (\d+)px\)/.exec(workspaceStyles)?.[1])
+    expect(compactAt).toBeGreaterThan(0)
+    expect(contentWidth(compactAt, 'single'), '切换点以下（单栏）').toBeGreaterThanOrEqual(stackBelow)
+    expect(contentWidth(compactAt + 1, 'split'), '切换点以上（双栏）').toBeGreaterThanOrEqual(stackBelow)
   })
 
   it('renders capital in the first data band and sentiment/funding in the second', async () => {
