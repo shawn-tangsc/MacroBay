@@ -12,21 +12,12 @@ export type CredentialFreeCalendarProvider = typeof credentialFreeCalendarProvid
 /**
  * Automatic provider enrollment policy.
  *
- * The product owner decision is that every source updates without a manual step,
- * so a provider is enabled on boot when it is genuinely usable. The gate is
- * deliberately narrow:
- *
- * - only credential-free providers are auto-enabled, because enabling a provider
- *   that still needs a key would only produce failing requests;
- * - a provider whose runtime dependency is missing at composition time (for
- *   example no evidence archive for BLS, or no BEA release refresh) is never
- *   enabled, so auto-enrollment can never advertise a capability that cannot run;
- * - an already-enabled provider is left untouched, including its `updatedAt`, so
- *   this is not a settings migration and cannot undo a user's explicit choice to
- *   disable something that is still listed as ready by the caller.
+ * Demo mode supplies the first screen, so a fresh install starts with every
+ * real collection source disabled. The policy intentionally auto-enables no
+ * provider; readers opt in from the source drawer.
  */
 export const macroCalendarProviderAutoEnrollmentPolicy = Object.freeze({
-  autoEnabledProviders: credentialFreeCalendarProviders,
+  autoEnabledProviders: [] as readonly CredentialFreeCalendarProvider[],
   /** The policy is idempotent: it only flips `enabled` from false to true. */
   enableOnlyWhenDisabled: true
 })
