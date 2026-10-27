@@ -1,15 +1,26 @@
+/*
+ * 看板的壳、页面节奏与色板：**这一份是唯一 owner**。
+ *
+ * `intelligence.css` 曾重复定义同一组 token（页边距、行色、静音色、警示色、背景），只靠加载顺序覆盖——
+ * 而那个文件后加载，于是这里的 38px 与它自己的 `@media (max-width: 1279px)` 24px 全部失效，实际永远是
+ * 32px。断点算术因此和读代码时的直觉对不上（读者 2026-10-27 的全屏换行就卡在 4px 上）。现在只留一处：
+ * 下面这些值就是当时实际生效的值，渲染结果不变。
+ */
 .mi-crypto-dashboard {
-  --mi-dashboard-page-inline: 38px;
-  --mi-dashboard-page-block: 26px;
+  --mi-dashboard-page-inline: 32px;
+  --mi-dashboard-page-block: 32px;
+  --mi-dashboard-gap: 16px;
+  --mi-dashboard-compact-gap: 10px;
+  --mi-dashboard-context-width: 260px;
   --mi-dashboard-card-radius: 12px;
-  --mi-dashboard-line: #293035;
+  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
   --mi-dashboard-surface: #15191d;
   --mi-dashboard-surface-muted: #101416;
   --mi-dashboard-text: #edf0ed;
-  --mi-dashboard-muted: #8c949c;
+  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
   --mi-dashboard-lime: #d4ff58;
   --mi-dashboard-positive: #55d69b;
-  --mi-dashboard-caution: #f4ba4b;
+  --mi-dashboard-caution: #e5ae43;
   --mi-dashboard-negative: #f16d73;
   --mi-dashboard-release-strip-min-height: 42px;
   --mi-dashboard-release-strip-title-width: 106px;
@@ -56,9 +67,11 @@
   overflow-x: hidden;
   overflow-y: auto;
   container-type: inline-size;
-  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline) 22px;
-  background: #0d1011;
-  color: var(--mi-dashboard-text);
+  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
+    var(--bg);
+  color: var(--text);
 }
 
 .mi-crypto-dashboard *,
@@ -261,12 +274,17 @@
   .mi-crypto-dashboard__source-region > header { grid-column: auto; }
 }
 
+/*
+ * Gutter ladder. The page margin shrinks with the window instead of staying at one width: at a
+ * 1200px page the 32px gutters are 5% of the reading area, and the two-column bands below need
+ * every pixel they can get. Inline and block move together so the band rhythm stays square.
+ */
 @media (max-width: 1279px) {
-  .mi-crypto-dashboard { --mi-dashboard-page-inline: 24px; }
+  .mi-crypto-dashboard { --mi-dashboard-page-inline: 24px; --mi-dashboard-page-block: 24px; }
 }
 
 @media (max-width: 1023px) {
-  .mi-crypto-dashboard { --mi-dashboard-page-inline: 20px; }
+  .mi-crypto-dashboard { --mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px; }
   .mi-crypto-dashboard__release-dynamics-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .mi-crypto-dashboard__release-dynamics-groups { grid-column: 1 / -1; display: grid; align-items: start; gap: 7px; }
   .mi-crypto-dashboard__release-dynamics-group { min-height: 24px; }
@@ -276,7 +294,7 @@
 }
 
 @media (max-width: 620px) {
-  .mi-crypto-dashboard { --mi-dashboard-page-inline: 18px; }
+  .mi-crypto-dashboard { --mi-dashboard-page-inline: 18px; --mi-dashboard-page-block: 18px; }
   .mi-crypto-dashboard__header { display: grid; }
   .mi-crypto-dashboard__tools { justify-content: flex-start; }
 }
@@ -447,11 +465,10 @@
 }
 
 /*
- * Light theme: the dashboard shell and its palette follow the platform tokens. The terminal
- * values on `.mi-crypto-dashboard` above stay the dark default; this block only remaps them.
- * The selector is more specific than the later token-based `.mi-crypto-dashboard` block in
- * `intelligence.css`, so the light mapping holds whichever stylesheet loads last. Lime
- * `--accent` is unreadable as text on white, so the accent is mixed toward `--text-strong`.
+ * Light theme: the dashboard shell and its palette follow the platform tokens. The base block
+ * above stays the dark default; this block only remaps it, and it is the single owner of those
+ * tokens — there is no second `.mi-crypto-dashboard` definition to outbid. Lime `--accent` is
+ * unreadable as text on white, so the accent is mixed toward `--text-strong`.
  */
 :root[data-theme='light'] .mi-crypto-dashboard {
   --mi-dashboard-line: var(--border);

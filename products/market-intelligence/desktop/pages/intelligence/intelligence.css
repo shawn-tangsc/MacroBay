@@ -505,22 +505,11 @@
   .mi-dashboard-source-catalog__list { max-height: 240px; }
 }
 
-.mi-crypto-dashboard {
-  --mi-dashboard-page-inline: 32px;
-  --mi-dashboard-page-block: 32px;
-  --mi-dashboard-gap: 16px;
-  --mi-dashboard-compact-gap: 10px;
-  --mi-dashboard-context-width: 260px;
-  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
-  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
-  --mi-dashboard-caution: #e5ae43;
-  min-height: 100%;
-  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
-    var(--bg);
-  color: var(--text);
-}
+/*
+ * `.mi-crypto-dashboard` 的壳、页边距与色板 token 不在这里定义：唯一 owner 是 `cryptoDashboard.css`。
+ * 两个文件各写一份时，后加载的那份会静默覆盖前一份的 token，连前一份自己的 `@media` 阶梯也一起失效，
+ * 于是"读代码算出来的断点"和"浏览器里真正的宽度"永远对不上。这里只留这个页面其它部件需要的规则。
+ */
 
 .mi-crypto-dashboard__header {
   display: flex;
@@ -1017,22 +1006,12 @@
     --mi-page-inline: 24px;
     --mi-page-block: 24px;
   }
-
-  .mi-crypto-dashboard {
-    --mi-dashboard-page-inline: 24px;
-    --mi-dashboard-page-block: 24px;
-  }
 }
 
 @media (max-width: 1023px) {
   .mi-agent-portal {
     --mi-page-inline: 20px;
     --mi-page-block: 20px;
-  }
-
-  .mi-crypto-dashboard {
-    --mi-dashboard-page-inline: 20px;
-    --mi-dashboard-page-block: 20px;
   }
 
   .mi-crypto-dashboard__workspace {

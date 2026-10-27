@@ -19,6 +19,8 @@ const page = readFileSync(resolve(process.cwd(), 'products/market-intelligence/d
 const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
 const dashboard = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/CryptoIntelligenceDashboard.tsx'), 'utf8')
 const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
+/** The page stylesheet: it must not own the dashboard shell a second time. */
+const pageStyles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
 const asOf = '2026-08-05T00:00:00.000Z'
 let root: Root | undefined
 
@@ -391,6 +393,25 @@ describe('crypto intelligence dashboard', () => {
     expect(narrowStyles).toContain('.mi-crypto-dashboard__release-dynamics-strip')
     expect(narrowStyles).toContain('.mi-crypto-dashboard__release-dynamics-group')
     expect([dashboard, styles].join('\n')).not.toContain('release-dynamics-row')
+  })
+
+  it('keeps the dashboard shell and its gutter ladder in one stylesheet', () => {
+    // 壳、页边距与色板 token 只能有一个 owner。两份 `.mi-crypto-dashboard` 靠加载顺序决胜负时，被压住
+    // 的那份连自己的 @media 阶梯一起失效 —— 2026-10-27 全屏仍换行，就是按失效值算出来的断点卡偏了 4px。
+    expect(pageStyles).not.toMatch(/^\.mi-crypto-dashboard \{/m)
+    expect(pageStyles).not.toContain('--mi-dashboard-page-inline')
+    expect(pageStyles).not.toContain('--mi-dashboard-page-block')
+
+    const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
+    expect(dashboardRootRule).toContain('--mi-dashboard-page-inline: 32px')
+    expect(dashboardRootRule).toContain('--mi-dashboard-page-block: 32px')
+    expect(dashboardRootRule).toContain('padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline)')
+    expect(dashboardRootRule).toContain('container-type: inline-size')
+
+    // 阶梯两端成对移动：只缩 inline 会让数据带一头 32 一头 24。
+    const ladder = styles.slice(styles.indexOf('@media (max-width: 1279px)'))
+    expect(ladder).toContain('--mi-dashboard-page-inline: 24px; --mi-dashboard-page-block: 24px;')
+    expect(ladder).toContain('--mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px;')
   })
 
   it('uses one capital data band and a second sentiment/funding row without unequal panel borders', () => {
