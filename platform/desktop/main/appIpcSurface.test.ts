@@ -5,11 +5,20 @@ import { describe, expect, it } from 'vitest'
 
 import { IpcChannels } from '../ipc/channels'
 
-const appSource = readFileSync(resolve(__dirname, 'app.ts'), 'utf8')
-const preloadSource = readFileSync(resolve(__dirname, '../preload/index.ts'), 'utf8')
-const taskIpcHelperSource = readFileSync(resolve(__dirname, 'registerAgentTaskIpcHandlers.ts'), 'utf8')
-const generatedProductManifestsSource = readFileSync(resolve(__dirname, '../../../products/generated/productManifests.ts'), 'utf8')
-const generatedProductServicesSource = readFileSync(resolve(__dirname, '../../../products/generated/productServices.ts'), 'utf8')
+/**
+ * Source-text assertions below spell out multi-line snippets with `\n`. A Windows checkout
+ * (core.autocrlf) hands us `\r\n`, which would fail every one of them for a reason that has
+ * nothing to do with the code under test, so normalize line endings at the read.
+ */
+function readSource(relativePath: string): string {
+  return readFileSync(resolve(__dirname, relativePath), 'utf8').replace(/\r\n/g, '\n')
+}
+
+const appSource = readSource('app.ts')
+const preloadSource = readSource('../preload/index.ts')
+const taskIpcHelperSource = readSource('registerAgentTaskIpcHandlers.ts')
+const generatedProductManifestsSource = readSource('../../../products/generated/productManifests.ts')
+const generatedProductServicesSource = readSource('../../../products/generated/productServices.ts')
 /** Agent / 产品 / Job 三个受保护面必须在同一次注册调用里接线。 */
 const registerIpcHandlersCall = [
   'registerIpcHandlers(',

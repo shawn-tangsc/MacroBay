@@ -25,8 +25,28 @@ function workspace(): string {
   return join(directory, 'model-providers.sqlite')
 }
 
+/**
+ * Windows cannot unlink a SQLite file that is still open, so the teardown has to close the
+ * storage before deleting its directory; otherwise rmSync throws EBUSY/EPERM and an otherwise
+ * green test is reported as failed. The retry is only a backstop for the close file handle.
+ */
+const storages: Array<{ close: () => void }> = []
+
+function sqliteStorage(options: Parameters<typeof createProviderSqliteStorage>[0]) {
+  const storage = createProviderSqliteStorage(options)
+  storages.push(storage)
+  return storage
+}
+
 afterEach(() => {
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  for (const storage of storages.splice(0)) {
+    try {
+      storage.close()
+    } catch {
+      // The case already closed it; close() is idempotent.
+    }
+  }
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 })
 
 function chatModel(id: string) {
@@ -47,7 +67,7 @@ function draftInput(provider: ModelProvider, endpoints: ModelProvider['endpoints
 describe('T4/T5 models keep their own chat protocol', () => {
   it('does not change existing models when the provider default endpoint changes', async () => {
     const path = workspace()
-    const storage = createProviderSqliteStorage({ path })
+    const storage = sqliteStorage({ path })
     const store = createProviderStore(storage)
     await store.getState()
 
@@ -77,7 +97,7 @@ describe('T4/T5 models keep their own chat protocol', () => {
     expect(after.models.find((model) => model.id === 'acme-chat')?.chatProtocol).toBe('chat-completions')
     storage.close()
 
-    const reopened = createProviderStore(createProviderSqliteStorage({ path }))
+    const reopened = createProviderStore(sqliteStorage({ path }))
     const persisted = (await reopened.getState()).providers.find((provider) => provider.id === 'silicon')!
     expect(persisted.models.find((model) => model.id === 'acme-chat')?.chatProtocol).toBe('chat-completions')
   })
@@ -109,7 +129,7 @@ describe('T4/T5 models keep their own chat protocol', () => {
     const path = workspace()
 
     // 模拟旧库：模型只有 id/name/capabilities，没有 chatProtocol。
-    const legacyStorage = createProviderSqliteStorage({ path })
+    const legacyStorage = sqliteStorage({ path })
     await legacyStorage.write({
       providers: [{
         id: 'gemini',
@@ -126,18 +146,18 @@ describe('T4/T5 models keep their own chat protocol', () => {
     legacyStorage.close()
 
     // 加载 ⇒ 回填成当时的默认端点（gemini），并写回库。
-    const storage = createProviderSqliteStorage({ path })
+    const storage = sqliteStorage({ path })
     const store = createProviderStore(storage)
     const loaded = (await store.getState()).providers.find((provider) => provider.id === 'gemini')!
     expect(loaded.models.find((model) => model.id === 'gemini-3.5-flash')?.chatProtocol).toBe('gemini')
     storage.close()
 
-    const persisted = createProviderStore(createProviderSqliteStorage({ path }))
+    const persisted = createProviderStore(sqliteStorage({ path }))
     const reread = (await persisted.getState()).providers.find((provider) => provider.id === 'gemini')!
     expect(reread.models.find((model) => model.id === 'gemini-3.5-flash')?.chatProtocol).toBe('gemini')
 
     // 之后改默认端点：回填过的模型**不再跟随**。
-    const changing = createProviderStore(createProviderSqliteStorage({ path }))
+    const changing = createProviderStore(sqliteStorage({ path }))
     const current = (await changing.getState()).providers.find((provider) => provider.id === 'gemini')!
     await changing.upsert(draftInput(current, [
       { protocol: 'chat-completions', baseUrl: 'https://generativelanguage.googleapis.com' },
