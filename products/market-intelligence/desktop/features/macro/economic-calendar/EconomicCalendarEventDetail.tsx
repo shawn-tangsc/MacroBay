@@ -4,6 +4,7 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
@@ -260,7 +261,7 @@ function confirmRefresh(message: string): boolean {
 
 /** The detail surface with nothing to show: its state, never a blank pane. */
 export function EconomicCalendarEventDetailState({ text }: { text: string }): ReactElement {
-  return <aside className="mi-economic-calendar__inspector" aria-live="polite"><p className="mi-economic-calendar__more">{text}</p></aside>
+  return <aside className="mi-economic-calendar__inspector" aria-live="polite"><LoadingState label={text} minHeight={220} /></aside>
 }
 
 function Meta({ label, value }: { label: string; value: string }): ReactElement {

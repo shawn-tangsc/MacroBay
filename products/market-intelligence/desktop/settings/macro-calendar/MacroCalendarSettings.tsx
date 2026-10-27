@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 import { macroCalendarProviderSettingsPolicy, type DashboardSourceConnectionResult, type MacroCalendarProviderPageState, type MacroCalendarSettingsProviderId } from '../../../contracts/macro/economicCalendarQueryContracts'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import { MarketCalendarPanel } from '../../features/macro-calendar/MarketCalendarPanel'
@@ -136,7 +137,7 @@ export function MacroCalendarSettings({ providerId, sourceDrawerMode = false, ac
   return (
     <section className="macro-calendar-settings">
       {providerId === undefined ? <header className="macro-calendar-settings__header"><h2>{text.title}</h2><p>{text.description}</p></header> : null}
-      {state.loading ? <p className="empty-state">{text.loading}</p> : null}
+      {state.loading ? <LoadingState label={text.loading} minHeight={160} /> : null}
       {state.error ? <p className="macro-calendar-settings__error">{text.unavailable}</p> : null}
       <div className="macro-calendar-settings__cards">
         {state.providers.filter((provider) => providerId === undefined || provider.providerId === providerId).map((provider) => {

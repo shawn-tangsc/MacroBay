@@ -5,6 +5,7 @@ import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysi
 import { localizeAnalysisMagnitudeUnits } from '../../../contracts/marketAnalysisReadableText'
 import type { AnalysisConclusionDetail, AnalysisDetailText } from './AnalysisConclusionDetail'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { LoadingState } from '@platform/ui/components/loading'
 import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
 import { analysisConclusionDirectionPolicy } from './analysisConclusionDirectionPolicy'
 import { AnalysisDirectionsBlock } from './AnalysisDirectionsBlock'
@@ -87,9 +88,9 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
         {latest && detail ? <Button size="small" onClick={() => onOpenDetail(latest)}>{workspaceText.openDetail}</Button> : null}
       </div>
     </header>
-    {!latest && state.loading ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionLoading}</p> : null}
+    {!latest && state.loading ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
     {!latest && !state.loading ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionEmpty}</p> : null}
-    {latest && pending === 'loading' ? <p className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionLoading}</p> : null}
+    {latest && pending === 'loading' ? <LoadingState label={workspaceText.latestConclusionLoading} minHeight={110} /> : null}
     {latest && pending === 'unavailable' ? <p role="alert" className="mi-analysis-conclusion-card__state">{workspaceText.latestConclusionUnavailable}</p> : null}
     {latest && detail ? <div className="mi-analysis-conclusion-card__body" data-direction={direction ?? 'none'}
       style={direction ? { '--mi-conclusion-direction': `var(${analysisConclusionDirectionPolicy.colorTokens[direction]})` } as React.CSSProperties : undefined}>

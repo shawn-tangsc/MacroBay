@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { Button } from 'antd'
 
 import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState } from './capitalConditionsModel'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = {
@@ -40,7 +41,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state}>
     <div className="mi-capital-conditions__summary">
       <h2>{text.title}</h2>
-      <p>{text[state.state]}</p>
+      {state.state === 'loading'
+        ? <LoadingState label={text.loading} minHeight={140} />
+        : <p>{text[state.state]}</p>}
       {/* The state above is what the last read returned. Re-reading it changes nothing, so the
           only useful action here is to ask the sources to be collected again. */}
       {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}

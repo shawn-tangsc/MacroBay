@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Button, Segmented, Tooltip } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
+import { LoadingState } from '@platform/ui/components/loading'
 import type { productText } from '../../../shared/i18n/productText'
 import type { createCrossAssetObservationClient } from '../../../shared/ipc/crossAssetObservationClient'
 import { crossAssetContractPolicy } from '../../../../contracts/crossAssetObservationContracts'
@@ -330,7 +331,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           text={{ ...text, assets: { ...text.assets, index: indexRowName(snapshot, text) },
             // The macro lines carry the very names the 市场状态 rows beside them carry: one instrument,
             // one name per figure, so the legend and the table can never disagree.
-            macroAssets: { dxy: text.assetLabels.dxy, gold: text.assetLabels.gold } }} /> : <p className="mi-cross-asset__empty">{view.state === 'loading' ? text.loading : text.unavailable}</p>}
+            macroAssets: { dxy: text.assetLabels.dxy, gold: text.assetLabels.gold } }} />
+          : view.state === 'loading'
+            ? <LoadingState label={text.loading} fill />
+            : <p className="mi-cross-asset__empty">{text.unavailable}</p>}
       </div>
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
           It is the product's own statement about the chart, kept apart from the model's conclusion — a

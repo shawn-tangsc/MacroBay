@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { productText } from '../../../shared/i18n/productText'
@@ -63,7 +64,7 @@ export function NewsSentimentCard(props: {
           <button onClick={props.onRefresh} type="button">{text.retry}</button>
         </div>
       ) : loading && !view ? (
-        <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><p>{text.loading}</p></div>
+        <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><LoadingState label={text.loading} minHeight={140} /></div>
       ) : !available ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
           <p>{text.empty}</p>

@@ -21,6 +21,7 @@ import {
   type EconomicCalendarEventView,
   type EconomicCalendarProjection
 } from './economicCalendarModel'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
@@ -387,7 +388,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
         <span>{text.unifiedDay.coverage.replace('{month}', selectedMonth)}</span>
         {market.pending ? <span>{text.market.pending}</span> : market.feedback ? <span>{text.market[market.feedback.state]}</span> : null}
         {market.feedback?.failureCode === 'storage-unavailable' || market.feedback?.failureCode === 'storage-pressure' ? <span>{text.unifiedDay.storageUnavailable}</span> : null}
-        {market.loading ? <span>{text.market.loading}</span> : null}
+        {market.loading ? <LoadingState layout="inline" size="sm" label={text.market.loading} /> : null}
         {market.failure ? <span>{text.market.queryUnavailable}</span> : null}
         {market.sources.map(source => <MarketCalendarSourceStatus key={source.eventType} source={source} text={text} />)}
         {market.feedback?.failureCode === 'disabled' || market.feedback?.failureCode === 'credential-not-configured' ?
@@ -473,13 +474,15 @@ function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onO
   text: EconomicCalendarText
 }): ReactElement {
   const status = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
-  if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} />
+  if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{status ? <p role="status">{status}</p> : null}<CalendarMonth statusNow={statusNow} today={today} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
 }
 
-function CalendarState({ month, text }: { month: string; text: string }): ReactElement {
-  return <section className="mi-economic-calendar__month" aria-live="polite" data-month-key={month}><p className="mi-economic-calendar__more">{text}</p></section>
+function CalendarState({ month, text, loading }: { month: string; text: string; loading: boolean }): ReactElement {
+  return <section className="mi-economic-calendar__month" aria-live="polite" data-month-key={month}>
+    {loading ? <LoadingState label={text} minHeight={220} /> : <p className="mi-economic-calendar__more">{text}</p>}
+  </section>
 }
 
 function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {

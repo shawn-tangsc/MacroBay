@@ -2,6 +2,7 @@ import { Button } from 'antd'
 import { ArrowLeft, RefreshCw, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
+import { LoadingState } from '@platform/ui/components/loading'
 import { toReadableConclusionText } from '../../../contracts/marketAnalysisReadableText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -150,7 +151,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
       <div className="mi-analysis-timeline__workspace" aria-hidden={masked || undefined}>
         <aside className="mi-analysis-timeline__list" aria-label={text.timeline}>
           <h2>{text.timeline}</h2>
-          {state.loading ? <p className="mi-analysis-timeline__state">{text.loading}</p> : null}
+          {state.loading ? <LoadingState label={text.loading} minHeight={160} /> : null}
           {state.failed ? <p role="alert" className="mi-analysis-timeline__state">{text.unavailable}</p> : null}
           {state.lastRead && text.readTrace ? <p className="mi-analysis-timeline__state" data-timeline-read={state.lastRead}>{text.readTrace}：{state.lastRead}</p> : null}
           {!state.loading && !state.failed && state.entries.length === 0 ? <>

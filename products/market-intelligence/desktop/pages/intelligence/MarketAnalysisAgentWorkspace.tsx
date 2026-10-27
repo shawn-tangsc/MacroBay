@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Button } from 'antd'
 import { Bot } from 'lucide-react'
 import { AgentChatSurface } from '@renderer/shell/agents/AgentChatSurface'
+import { LoadingState } from '@platform/ui/components/loading'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -170,7 +171,9 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
               disabled={selectionBlocked}
               emptyState={<p className="mi-analysis-chat__empty">{t.empty}</p>}
             />
-          : <p className="mi-analysis-chat__pending" role="status">{chat.failed ? t.failed : selectionBlocked ? (selectionState === 'loading' ? text.analysisTimeline.loading : text.analysisTimeline.unavailable) : t.loading}</p>}
+          : chat.failed || selectionState === 'unavailable'
+            ? <p className="mi-analysis-chat__pending" role="status">{chat.failed ? t.failed : text.analysisTimeline.unavailable}</p>
+            : <LoadingState label={selectionState === 'loading' ? text.analysisTimeline.loading : t.loading} fill />}
       </section>
 
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title} style={{ '--mi-chat-percent': `${chatPercent}%` } as CSSProperties}>
