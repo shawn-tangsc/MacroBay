@@ -53,9 +53,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # No `"$BUILD_REF"` here: the script reads the exported BUILD_REF itself. On
+      # `windows-latest` the default shell is PowerShell, where `"$BUILD_REF"` expands an
+      # undefined PowerShell variable to an empty string and the guard rejects the empty tag.
       - name: Check the tag matches the app version
         if: env.PUBLISH == 'true'
-        run: node scripts/check-release-version.mjs "$BUILD_REF"
+        run: node scripts/check-release-version.mjs
 
       # An x64 runner would pack a dmg without the arm64 agent CLI, and nothing downstream
       # would notice until the installed app failed to start.
@@ -110,7 +113,7 @@ jobs:
 
       - name: Check the tag matches the app version
         if: env.PUBLISH == 'true'
-        run: node scripts/check-release-version.mjs "$BUILD_REF"
+        run: node scripts/check-release-version.mjs
 
       - name: Install
         run: pnpm install --frozen-lockfile
