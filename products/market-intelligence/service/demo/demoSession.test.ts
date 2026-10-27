@@ -94,6 +94,38 @@ describe('示例模式会话', () => {
     expect(view).toMatchObject({ active: false, scenarioCount: 0, unavailableReason: 'no-scenario' })
   })
 
+  it('re-resolves the scenario when the language changes while active', async () => {
+    let language: 'zh-CN' | 'en-US' = 'zh-CN'
+    const harness = jobs()
+    const session = createSampleModeSession({
+      productId: 'market-intelligence',
+      getLanguage: async () => language,
+      loadCatalog: (locale) => ({
+        locale,
+        problems: [],
+        scenarios: [{
+          meta,
+          surfaces: [],
+          problems: [],
+          entries: new Map([['intelligence.queryFearGreedSnapshot', {
+            schemaVersion: 1, method: 'intelligence.queryFearGreedSnapshot', effect: 'read',
+            payload: { score: 42, locale }
+          }]])
+        }]
+      }),
+      jobs: harness.runtime,
+      resumeWork: async () => undefined
+    })
+    await session.enter()
+    expect(session.lookup('intelligence.queryFearGreedSnapshot', {})).toMatchObject({ locale: 'zh-CN' })
+
+    language = 'en-US'
+    await session.enter()
+    expect(session.lookup('intelligence.queryFearGreedSnapshot', {})).toMatchObject({ locale: 'en-US' })
+    // 语言切换不该把调度再暂停一遍。
+    expect(harness.removed).toEqual(['job-a'])
+  })
+
   it('pins “now” to the scenario clock only while active', async () => {
     const session = createSampleModeSession({
       productId: 'market-intelligence',
