@@ -73,6 +73,10 @@ products/generated/
 /tmp/
 /temp/
 .cache/
+# 运行时/工具产物：V8 编译缓存与沙箱探针目录都以 `*.blob` 命名（例如仓库根下那个
+# 名字是 base64 的空目录），只在本地存在，不是源码也不是文档。
+*.blob
+*.blob/
 products/*/data/**
 !products/*/data/
 !products/*/data/*/
