@@ -21,6 +21,8 @@ export type SampleModeContextValue = Readonly<{
   now: () => Date
   enter: () => Promise<boolean>
   exit: () => Promise<boolean>
+  /** 示例激活时按当前语言重新解析场景。 */
+  refresh: () => Promise<boolean>
   /** 切换时变化：面板以它作 key 即可在退出示例后重新读真实数据。 */
   sessionKey: string
 }>
@@ -31,6 +33,7 @@ const fallback: SampleModeContextValue = {
   now: () => new Date(),
   enter: async () => false,
   exit: async () => false,
+  refresh: async () => false,
   sessionKey: 'live'
 }
 
@@ -66,6 +69,7 @@ export function SampleModeProvider({ children, client = sampleModeClient }: {
 
   const enter = useCallback(async () => store.enter(), [store])
   const exit = useCallback(async () => store.exit(), [store])
+  const refresh = useCallback(async () => store.refresh(), [store])
 
   const value = useMemo<SampleModeContextValue>(() => ({
     state,
@@ -73,9 +77,10 @@ export function SampleModeProvider({ children, client = sampleModeClient }: {
     now,
     enter,
     exit,
+    refresh,
     // locale 也进 key：切语言后整块看板重挂载，卡片会用新语言重新查询（日历页的 locale 是查询条件）。
     sessionKey: state.active ? `${state.scenarioId ?? 'sample'}:${state.scenarioNow ?? ''}:${state.locale ?? ''}` : 'live'
-  }), [state, busy, now, enter, exit])
+  }), [state, busy, now, enter, exit, refresh])
 
   return <SampleModeContext.Provider value={value}>{children}</SampleModeContext.Provider>
 }
