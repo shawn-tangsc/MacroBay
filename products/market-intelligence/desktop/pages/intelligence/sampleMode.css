@@ -128,4 +128,33 @@
 
 .mi-sample-surface {
   position: relative;
+  /*
+   * 页面根必须把宿主给出的确定高度继续往下传。
+   *
+   * 约束链（见 `workspaceLayout.css`）：`.workspace-page-body (100%)` → `.settings-contribution-host (100%)`
+   * → 页面根。看板与日历的根都写着 `height: 100%`，只有父级高度确定时它才等于"窗口内容高度"；父级一旦
+   * 是 auto，百分比退化成 auto，`.mi-analysis-dashboard-layout` 就长成内容高度，于是整页（看板 + 右栏）
+   * 被外层宿主一起滚，而不是两个 pane 各自滚 —— 读者 2026-10-27：「滚动会带着右边一起滚动」。
+   */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* 示例横幅占一行，不参与高度分配。 */
+.mi-sample-surface > .mi-sample-banner {
+  flex: 0 0 auto;
+}
+
+/* 在自己内部滚动的页面（看板、日历）：拿剩余高度，滚动留给各自的 pane。 */
+.mi-sample-surface > .mi-analysis-dashboard-layout,
+.mi-sample-surface > .mi-economic-calendar {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Agent 入口是文档式页面（`min-height: 100%`、由宿主滚动）：不许被压缩，滚动手感保持原样。 */
+.mi-sample-surface > .mi-agent-portal {
+  flex: 0 0 auto;
 }
