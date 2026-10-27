@@ -9,6 +9,8 @@ export type SampleModeSessionStore = Readonly<{
   getSnapshot: () => SampleModeSessionSnapshot
   subscribe: (onChange: () => void) => () => void
   setActive: (active: boolean) => Promise<boolean>
+  /** 已激活时按当前语言重新解析场景：语言的查询条件变了，只重载不重进。 */
+  refresh: () => Promise<boolean>
   enter: () => Promise<boolean>
   exit: () => Promise<boolean>
 }>
@@ -72,6 +74,24 @@ export function createSampleModeSessionStore(client: SampleModeClient = sampleMo
     }
   }
 
+  /**
+   * 与 `setActive` 分开，是因为 `setActive` 幂等短路：已激活时它直接返回，根本不会发 IPC。
+   * 语言切换需要的正是「再解析一次」这个动作。
+   */
+  async function refresh(): Promise<boolean> {
+    ensureStarted()
+    if (!snapshot.view.active || snapshot.busy) return false
+    publish(snapshot.view, true)
+    try {
+      const view = await client.setActive(true)
+      publish(view, false)
+      return view.active
+    } catch {
+      publish(snapshot.view, false)
+      return false
+    }
+  }
+
   return Object.freeze({
     getSnapshot: () => snapshot,
     subscribe: (onChange: () => void) => {
@@ -80,6 +100,7 @@ export function createSampleModeSessionStore(client: SampleModeClient = sampleMo
       return () => { listeners.delete(onChange) }
     },
     setActive,
+    refresh,
     enter: () => setActive(true),
     exit: () => setActive(false)
   })

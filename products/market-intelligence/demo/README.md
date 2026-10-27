@@ -15,7 +15,7 @@ demo/
     surfaces.json          # 这版数据承诺覆盖的接口名
     responses/
       common/<method>.json # 语言无关：数值、时间、枚举
-      zh-CN/<method>.json  # 中文叙述（结论、事件标题）
+      zh-CN/<method>.json  # 仅为满足 locale 回显的副本（内容仍是英文）
       en-US/<method>.json  # 英文同构
   raw/                     # 录制产物，已被 .gitignore 排除
 ```
