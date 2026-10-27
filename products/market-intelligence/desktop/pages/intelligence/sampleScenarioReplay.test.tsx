@@ -8,6 +8,7 @@ import { intelligenceCapitalConditionsClient } from '../../shared/ipc/intelligen
 import { intelligenceFearGreedClient } from '../../shared/ipc/intelligenceFearGreedClient'
 import { intelligenceFundingRateHistoryClient } from '../../shared/ipc/intelligenceFundingRateHistoryClient'
 import { macroEconomicCalendarClient } from '../../shared/ipc/macroEconomicCalendarClient'
+import { marketCalendarClient } from '../../shared/ipc/marketCalendarClient'
 import { createMacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import { createMacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import { marketAnalysisTimelineClient } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -64,6 +65,9 @@ describe('示例场景回放', () => {
 
       const calendar = await macroEconomicCalendarClient.queryMonth({ month: '2026-10', asOf: '2026-10-27T09:50:00.000Z' } as never)
       expect(calendar, `${locale} calendar`).toMatchObject({ state: 'available' })
+
+      const marketCalendar = await marketCalendarClient.queryMonth({ month: '2026-10', locale: locale === 'en-US' ? 'en' : 'zh', asOf: '2026-10-27T09:50:00.000Z' })
+      expect(marketCalendar, `${locale} market calendar`).toMatchObject({ state: 'available' })
 
       const sentiment = await newsSentimentClient.query({ asOf: '2026-10-27T09:50:00.000Z', window: 'all', limit: 20 } as never)
       expect(sentiment, `${locale} news sentiment`).toBeDefined()
