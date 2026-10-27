@@ -113,6 +113,23 @@ export function createSampleModeSession(input: SampleModeSessionInput): SampleMo
     scenario: () => scenario,
     now: () => (active && scenario ? new Date(scenario.meta.scenarioNow) : now()),
     async enter(scenarioId?: string) {
+      // 已在示例中：语言可能刚被切换，重新解析一次场景（不重复暂停调度，也不重进）。
+      if (active && scenario) {
+        try {
+          const language = await input.getLanguage()
+          const reloaded = input.loadCatalog(language)
+          const picked = reloaded.scenarios.find((candidate) => candidate.meta.id === scenario?.meta.id)
+            ?? reloaded.scenarios[0]
+          if (picked && picked.entries.size > 0) {
+            scenario = picked
+            locale = language
+            scenarioCount = reloaded.scenarios.length
+          }
+        } catch {
+          // 重新加载失败就继续用旧语言，不值得把读者踢出示例。
+        }
+        return view()
+      }
       if (active) return view()
       if (entering) return view()
       entering = true
