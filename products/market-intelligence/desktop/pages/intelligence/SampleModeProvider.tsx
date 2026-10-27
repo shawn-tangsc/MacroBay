@@ -73,7 +73,8 @@ export function SampleModeProvider({ children, client = sampleModeClient }: {
     now,
     enter,
     exit,
-    sessionKey: state.active ? `${state.scenarioId ?? 'sample'}:${state.scenarioNow ?? ''}` : 'live'
+    // locale 也进 key：切语言后整块看板重挂载，卡片会用新语言重新查询（日历页的 locale 是查询条件）。
+    sessionKey: state.active ? `${state.scenarioId ?? 'sample'}:${state.scenarioNow ?? ''}:${state.locale ?? ''}` : 'live'
   }), [state, busy, now, enter, exit])
 
   return <SampleModeContext.Provider value={value}>{children}</SampleModeContext.Provider>

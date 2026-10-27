@@ -67,7 +67,7 @@ describe('SampleModeProvider', () => {
     expect(fake.calls).toEqual([true])
     expect(probe.read().state.active).toBe(true)
     expect(probe.read().now().toISOString()).toBe(sample.scenarioNow)
-    expect(probe.read().sessionKey).toBe(`s1:${sample.scenarioNow}`)
+    expect(probe.read().sessionKey).toBe(`s1:${sample.scenarioNow}:${sample.locale}`)
   })
 
   it('returns to the real clock after exiting', async () => {
