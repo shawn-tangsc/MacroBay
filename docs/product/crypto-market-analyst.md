@@ -15,6 +15,10 @@ Analyst. Both are marked **coming soon** and cannot be configured yet.
 
 ![The agent portal with three analyst cards](../assets/screenshots/portal-en.png)
 
+No key yet? **Sample mode** replays a recorded week of real observations — the full desk and three
+published analyses — offline and without writing anything; switch it off and you are back to your own
+empty data. For your own analysis, start at step 1 below.
+
 ## What ships now, and what comes next
 
 Crypto intelligence is the current focus, and it keeps getting deeper: more venues and derivatives
@@ -260,8 +264,6 @@ the cutoff the query used. A later revision is not folded back into the earlier 
 - Analysis quality tracks source coverage. A source you leave off shows up as a gap, not as a
   neutral reading.
 - The agent needs a tool-capable, agent-compatible model route; an ordinary chat model is not enough.
-- Sample mode ships with this release, so a fresh install with no keys can still show the whole desk and
-  three published analyses; live panels stay empty until you configure a source.
 - Data and credentials stay on your machine. There is no hosted account to recover.
 
 ## Next
