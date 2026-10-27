@@ -41,7 +41,9 @@ afterEach(async () => {
 })
 
 describe('intelligence module calendar evidence composition', () => {
-  it('arms the market-analysis runtime and its startup work only once the capability is enabled', async () => {
+  // 全量并发跑时这个用例会超过 vitest 默认的 5s（它要初始化整个模块并读真实文件），
+  // 单独跑却是毫秒级；给足时间，避免把 CI 变成随机红。
+  it('arms the market-analysis runtime and its startup work only once the capability is enabled', { timeout: 20_000 }, async () => {
     const jobRuntime = createJobRuntime()
     const module = getIntelligenceModule(jobRuntime)
 
