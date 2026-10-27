@@ -14,7 +14,7 @@ export const marketIntelligenceProductManifest = {
       {
         id: 'intelligence',
         title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
-        icon: 'message-square-text',
+        icon: 'radar',
         order: 10,
         module: './desktop/pages/intelligence'
       }

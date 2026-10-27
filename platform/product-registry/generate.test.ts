@@ -21,7 +21,7 @@ describe('product registry generator', () => {
     const intelligenceEntry = registry.menuEntries.find((entry) => entry.id === 'market-intelligence.intelligence')
     expect(intelligenceEntry).toMatchObject({
       routePath: '/market-intelligence/intelligence',
-      icon: 'message-square-text'
+      icon: 'radar'
     })
 
     const intelligenceSourcesEntry = registry.settingsEntries.find(

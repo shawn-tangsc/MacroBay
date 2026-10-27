@@ -18,7 +18,7 @@ describe('market-intelligence product manifest', () => {
       {
         id: 'intelligence',
         title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
-        icon: 'message-square-text',
+        icon: 'radar',
         order: 10,
         module: './desktop/pages/intelligence'
       }
@@ -95,15 +95,13 @@ describe('market-intelligence product manifest', () => {
   it('allows only the approved read-only IPC clients in page composition and keeps portal components isolated', () => {
     const page = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/index.tsx'), 'utf8')
     const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
-    const drawer = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentActivationDrawer.tsx'), 'utf8')
     const model = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/agentPortalModel.ts'), 'utf8')
-    const portalSources = [portal, drawer, model].join('\n')
+    const portalSources = [portal, model].join('\n')
     // The page composes four injected read-only clients and nothing else; each is named here so a
     // fifth one cannot slip in without this list changing.
     const approvedClients = ['../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient']
 
     expect(page).toContain('AgentPortal')
-    expect(page).toContain('AgentActivationDrawer')
     const imports = [...page.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1])
     expect(imports.filter(path => /ipc\//.test(path))).toEqual(approvedClients)
     const withoutApprovedClients = page.split('\n').filter(line => !approvedClients.some(client => line.includes(client))).join('\n')

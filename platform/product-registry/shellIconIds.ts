@@ -8,6 +8,7 @@ export const SHELL_ICON_IDS = [
   'key-round',
   'languages',
   'message-square-text',
+  'radar',
   'scroll-text',
   'settings',
   'shield'
