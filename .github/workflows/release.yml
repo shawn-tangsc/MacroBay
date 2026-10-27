@@ -1,0 +1,171 @@
+name: Release
+
+# Pushing a `v*` tag is the release switch. Both installers are built on their own platform
+# (the agent runtime ships a platform-native CLI binary that pnpm installs for the host
+# only), then attached to a single GitHub Release. Nothing is signed.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to package and publish (for example v0.1.1)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  macos:
+    name: macOS arm64 dmg
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check the tag matches the app version
+        run: node scripts/check-release-version.mjs "$RELEASE_TAG"
+
+      - name: Assert an arm64 runner
+        run: test "$(uname -m)" = arm64
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package macOS dmg
+        run: pnpm exec electron-builder --mac --arm64 --publish never
+
+      - name: Verify the disk image
+        run: hdiutil verify release/*.dmg
+
+      - name: Upload disk image
+        uses: actions/upload-artifact@v4
+        with:
+          name: macrobay-macos-arm64
+          path: |
+            release/*.dmg
+            release/*.dmg.blockmap
+            release/latest-mac.yml
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64 installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Check the tag matches the app version
+        run: node scripts/check-release-version.mjs "$RELEASE_TAG"
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Package Windows installer
+        run: pnpm exec electron-builder --win --x64 --publish never
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: macrobay-windows-x64
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: macrobay-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # NUL-separated so no artifact name can be split into two arguments.
+          list_assets() {
+            find dist -type f \
+              \( -name '*.dmg' -o -name '*.exe' -o -name '*.blockmap' -o -name 'latest*.yml' \) -print0
+          }
+
+          if [ ! -d dist ] || [ -z "$(list_assets | tr -d '\0')" ]; then
+            echo "no installer files were downloaded from the build jobs" >&2
+            exit 1
+          fi
+          echo 'attaching:'
+          list_assets | tr '\0' '\n'
+
+          notes="Unsigned alpha build. **macOS**: right-click the app → Open, or \`xattr -dr com.apple.quarantine /Applications/MacroBay.app\`. **Windows**: SmartScreen → More info → Run anyway."
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            # Re-running a tag that already has a release only replaces the assets.
+            list_assets | xargs -0 gh release upload "$RELEASE_TAG" --clobber
+          else
+            list_assets | xargs -0 gh release create "$RELEASE_TAG" \
+              --title "MacroBay ${RELEASE_TAG#v}" \
+              --generate-notes \
+              --notes "$notes" \
+              --verify-tag
+          fi
+
+          gh release view "$RELEASE_TAG" --json url -q .url

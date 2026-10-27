@@ -7,11 +7,42 @@ This page describes how to produce a distributable desktop build from this check
 ## Current support
 
 - **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
-  dashboard.
+  dashboard; the `package-macos` CI job rebuilds it on every push and pull request.
 - **Windows (x64)**: `pnpm dist:win` produces an NSIS installer. The `package-windows` CI job builds
   it, runs the test suite, and uploads the artifact on `windows-latest`; the build also runs through
   on Windows 11 x64 hardware. The *installed* app is not accepted yet.
 - **Linux**: no packager configuration.
+
+## CI packaging and releases
+
+Two workflows produce the artifacts. Neither needs signing secrets, and each one builds on the
+platform its artifact targets.
+
+- `.github/workflows/ci.yml` runs on every push to `main` and every pull request. `package-macos`
+  builds `release/MacroBay-<version>-arm64.dmg` on `macos-latest`, `package-windows` builds the
+  installer on `windows-latest`, and each uploads its files to the run's **Artifacts** section.
+  Downloading an artifact requires a GitHub sign-in, so those are for inspection rather than for
+  distribution.
+- `.github/workflows/release.yml` runs when a `v*` tag is pushed and publishes one GitHub Release with
+  the dmg, the installer, their blockmaps and the auto-update metadata attached:
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.1.1 -m "MacroBay 0.1.1"
+git push origin v0.1.1
+```
+
+The tag must be `v` plus the `version` in `package.json`; the job stops before packaging otherwise,
+because electron-builder names artifacts from the manifest, not from the tag. To attach installers to
+a tag that predates the workflow, run **Actions → Release → Run workflow** and enter that tag. An
+existing release keeps its notes and only gets its assets replaced, so a re-run is safe.
+
+The two builds stay on separate runners because the agent runtime's native CLI is an optional
+dependency that pnpm installs for the host platform only. A single runner would publish one artifact
+without a working agent.
+
+Nothing is signed. The release notes carry the Gatekeeper and SmartScreen bypass for each platform.
 
 ## Build the application bundles
 

@@ -6,11 +6,40 @@
 
 ## 当前支持范围
 
-- **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染。
+- **macOS（arm64）**：`pnpm dist:mac` 产出未签名的 `.dmg`，已验证从挂载到看板正常渲染；
+  `package-macos` CI job 会在每次 push 和 PR 上重建它。
 - **Windows（x64）**：`pnpm dist:win` 产出 NSIS 安装器。`package-windows` CI job 在
   `windows-latest` 上构建、跑测试并上传产物；构建也已在 Windows 11 x64 真机上跑通。安装后的运行态
   尚未验收。
 - **Linux**：尚未配置打包。
+
+## CI 打包与发布
+
+产物由两个 workflow 负责，都不需要签名密钥，且各自在目标平台的原生 runner 上构建。
+
+- `.github/workflows/ci.yml` 在每次 push 到 `main` 和每个 PR 上运行。`package-macos` 在
+  `macos-latest` 上产出 `release/MacroBay-<version>-arm64.dmg`，`package-windows` 在
+  `windows-latest` 上产出安装器，两者都把文件上传到该次运行的 **Artifacts**。下载 artifact 需要
+  登录 GitHub，所以那是用来查看的，不是用来分发的。
+- `.github/workflows/release.yml` 在推送 `v*` tag 时运行，把 dmg、安装器、各自的 blockmap 和自动
+  更新元数据挂到同一个 GitHub Release：
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.1.1 -m "MacroBay 0.1.1"
+git push origin v0.1.1
+```
+
+tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 job 在打包前就停下——electron-builder 是按
+manifest 而不是 tag 命名产物的。要给早于该 workflow 的 tag 补上安装器，用
+**Actions → Release → Run workflow** 填入那个 tag。已存在的 release 会保留原有说明，只替换 assets，
+所以重跑是安全的。
+
+两个构建必须分平台运行，因为智能体运行时的原生 CLI 是可选依赖，pnpm 只为宿主平台安装。合到一个
+runner 上会让其中一个产物缺少可用的智能体。
+
+产物未签名。Release 说明里写明 macOS 的 Gatekeeper 与 Windows 的 SmartScreen 放行方式。
 
 ## 构建应用 bundle
 
