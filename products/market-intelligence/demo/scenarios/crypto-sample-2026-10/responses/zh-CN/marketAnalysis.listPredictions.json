@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "method": "marketAnalysis.listPredictions",
+  "effect": "read",
+  "byRequestKey": "summaryId",
+  "byRequest": {
+    "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287": [
+      {
+        "asset": "BTC",
+        "baseCase": "若稳定币 1 日变化维持负值且 BTC 现货 ETF 未连续净流入，BTC 在 2 小时至 24 小时内偏向下行。",
+        "conditions": [
+          "稳定币 1 日变化继续为负",
+          "BTC 现货 ETF 未出现连续两日净流入"
+        ],
+        "createdAt": "2026-10-27T08:31:17.982Z",
+        "horizonEnd": "2026-10-28T08:31:17.982Z",
+        "horizonStart": "2026-10-27T08:31:17.982Z",
+        "id": "mi-pr-d15a1fce-e9f6-440d-975f-44a217aa4e46",
+        "invalidation": "稳定币 1 日变化转正且 BTC 现货 ETF 连续净流入。",
+        "nextCatalyst": "10 月 27 日 12:30 公布 9 月耐用品订单初值，14:00 公布 9 月新屋销售与 10 月谘商会消费者信心指数，均待公布。",
+        "status": "pending",
+        "summaryId": "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287",
+        "verificationDueAt": "2026-10-28T08:31:17.982Z"
+      },
+      {
+        "asset": "ETH",
+        "baseCase": "若 ETH 现货 ETF 继续净流出且稳定币总量下降，ETH 在 2 小时至 24 小时内相对 BTC 更弱。",
+        "conditions": [
+          "ETH 现货 ETF 继续净流出",
+          "稳定币总量继续下降"
+        ],
+        "createdAt": "2026-10-27T08:31:17.982Z",
+        "horizonEnd": "2026-10-28T08:31:17.982Z",
+        "horizonStart": "2026-10-27T08:31:17.982Z",
+        "id": "mi-pr-47f5ef17-9eb3-4765-8e6e-54f4ece5e7e4",
+        "invalidation": "ETH 现货 ETF 转为连续净流入且稳定币总量回升。",
+        "nextCatalyst": "10 月 27 日 12:30 公布 9 月耐用品订单初值，14:00 公布 9 月新屋销售与 10 月谘商会消费者信心指数，均待公布。",
+        "status": "pending",
+        "summaryId": "mi-as-eea28a5b-de95-4dc5-8395-93acaff17287",
+        "verificationDueAt": "2026-10-28T08:31:17.982Z"
+      }
+    ],
+    "mi-as-4afd1bd2-f80b-47ee-b9c8-7b82b596a692": [
+      {
+        "asset": "BTC",
+        "baseCase": "欧洲盘开盘后的补跑阶段，若亚洲盘形成的区间未被放量突破且资金费率继续低于 0.01，BTC 以区间震荡为主、反弹力度受限。",
+        "conditions": [
+          "无新增美国宏观数据意外",
+          "美元与实际利率不出现快速回落",
+          "BTC 资金费率不升破 0.01"
+        ],
+        "createdAt": "2026-10-27T08:14:18.696Z",
+        "horizonEnd": "2026-10-27T08:29:18.696Z",
+        "horizonStart": "2026-10-27T08:14:18.696Z",
+        "id": "mi-pr-c1807678-c6b9-40ff-bfdc-f20b767b5468",
+        "invalidation": "放量突破亚洲盘区间高点并伴随资金费率上升至 0.01 以上",
+        "nextCatalyst": "9 月耐用品订单初值计划于 10月27日12:30 公布，前值 -0.1%。",
+        "status": "insufficient-data",
+        "summaryId": "mi-as-4afd1bd2-f80b-47ee-b9c8-7b82b596a692",
+        "verificationDueAt": "2026-10-27T08:29:18.696Z"
+      },
+      {
+        "asset": "BTC",
+        "baseCase": "若今日稍晚公布的美国耐用品订单与消费者信心未显著弱于预期，实际利率维持高位，BTC 反弹后仍偏弱震荡。",
+        "conditions": [
+          "美国数据未显著弱于预期",
+          "10 年期实际利率不跌破 2.66%",
+          "BTC 现货 ETF 当日流向未显示大额净流入"
+        ],
+        "createdAt": "2026-10-27T08:14:18.696Z",
+        "horizonEnd": "2026-10-27T10:14:18.696Z",
+        "horizonStart": "2026-10-27T08:14:18.696Z",
+        "id": "mi-pr-b4c6d5f5-760b-4583-871b-807f7b82972d",
+        "invalidation": "数据显著弱于预期推动实际利率快速回落且 BTC 现货 ETF 出现大额净流入",
+        "nextCatalyst": "9 月耐用品订单初值计划于 10月27日12:30 公布，前值 -0.1%。",
+        "status": "insufficient-data",
+        "summaryId": "mi-as-4afd1bd2-f80b-47ee-b9c8-7b82b596a692",
+        "verificationDueAt": "2026-10-27T10:14:18.696Z"
+      }
+    ],
+    "mi-as-889f9f0f-ab80-4c45-8ec5-e38922dc6ece": [
+      {
+        "asset": "BTC",
+        "baseCase": "若稳定币总量未止跌且 BTC ETF 无新增大额流入，开盘后偏弱势整理，反弹力度受限。",
+        "conditions": [
+          "稳定币 1 日与 7 日变化继续为负",
+          "BTC ETF 最新单日净流入低于 2 亿美元"
+        ],
+        "createdAt": "2026-10-27T08:13:37.412Z",
+        "horizonEnd": "2026-10-27T08:28:37.412Z",
+        "horizonStart": "2026-10-27T08:13:37.412Z",
+        "id": "mi-pr-f9edd609-dae1-4a4b-8998-ffecca7f5f21",
+        "invalidation": "BTC ETF 单日净流入超过 3 亿美元，同时稳定币总量转为净增。",
+        "nextCatalyst": "9 月新屋销售与 10 月谘商会消费者信心指数计划于 10 月 27 日公布，属于当日可验证的宏观数据窗口。",
+        "status": "insufficient-data",
+        "summaryId": "mi-as-889f9f0f-ab80-4c45-8ec5-e38922dc6ece",
+        "verificationDueAt": "2026-10-27T08:28:37.412Z"
+      },
+      {
+        "asset": "BTC",
+        "baseCase": "若 10 月 27 日公布的新屋销售与消费者信心指数好于前值，实际利率进一步上行，BTC 承压概率上升。",
+        "conditions": [
+          "公布值强于前值 6.4% 与 81.9",
+          "实际利率不回落"
+        ],
+        "createdAt": "2026-10-27T08:13:37.412Z",
+        "horizonEnd": "2026-10-27T10:13:37.412Z",
+        "horizonStart": "2026-10-27T08:13:37.412Z",
+        "id": "mi-pr-f7442122-c3c6-47b7-b481-03a2ca52255a",
+        "invalidation": "数据弱于前值并带动实际利率回落，或 BTC ETF 盘中出现大额净流入。",
+        "nextCatalyst": "9 月新屋销售与 10 月谘商会消费者信心指数计划于 10 月 27 日公布，属于当日可验证的宏观数据窗口。",
+        "status": "insufficient-data",
+        "summaryId": "mi-as-889f9f0f-ab80-4c45-8ec5-e38922dc6ece",
+        "verificationDueAt": "2026-10-27T10:13:37.412Z"
+      }
+    ]
+  }
+}

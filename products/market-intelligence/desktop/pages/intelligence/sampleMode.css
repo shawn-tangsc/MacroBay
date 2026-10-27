@@ -1,0 +1,136 @@
+/* 示例模式：水印。入口和开关在 crypto Agent 卡片，不在这里。只消费主题变量。 */
+
+.mi-sample-watermark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  place-items: center;
+  pointer-events: none;
+  user-select: none;
+  z-index: 3;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.mi-sample-watermark__cell {
+  transform: rotate(-18deg);
+  color: var(--text);
+  opacity: 0.05;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.mi-sample-surface {
+  position: relative;
+  /*
+   * 页面根必须把宿主给出的确定高度继续往下传。
+   *
+   * 约束链（见 `workspaceLayout.css`）：`.workspace-page-body (100%)` → `.settings-contribution-host (100%)`
+   * → 页面根。看板与日历的根都写着 `height: 100%`，只有父级高度确定时它才等于"窗口内容高度"；父级一旦
+   * 是 auto，百分比退化成 auto，`.mi-analysis-dashboard-layout` 就长成内容高度，于是整页（看板 + 右栏）
+   * 被外层宿主一起滚，而不是两个 pane 各自滚 —— 读者 2026-10-27：「滚动会带着右边一起滚动」。
+   */
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* 示例水印是覆盖层，不参与布局。 */
+
+/* 在自己内部滚动的页面（看板、日历）：拿剩余高度，滚动留给各自的 pane。 */
+.mi-sample-surface > .mi-analysis-dashboard-layout,
+.mi-sample-surface > .mi-economic-calendar {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+/* Agent 入口是文档式页面（`min-height: 100%`、由宿主滚动）：不许被压缩，滚动手感保持原样。 */
+.mi-sample-surface > .mi-agent-portal {
+  flex: 0 0 auto;
+}
+
+/*
+ * 示例横幅：页面内的一条状态条，不是窗口级通知。
+ *
+ * 它跟着页面内容走（左内边距与页面标题对齐），有卡片底色与边框，退出/接入在右端；
+ * 不吸顶、不横跨窗口，避免被读成"应用级提示"。
+ */
+.mi-sample-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 24px 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning, #c48a2a) 55%, var(--border));
+  border-radius: 8px;
+  /* 醒目的黄色：示例模式是「别把它当实时数据」的提醒，不是普通状态。 */
+  background: color-mix(in srgb, var(--warning, #c48a2a) 14%, var(--surface));
+  box-shadow: inset 3px 0 0 var(--warning, #c48a2a);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mi-sample-banner__icon {
+  flex: 0 0 auto;
+  color: var(--warning, #c48a2a);
+}
+
+.mi-sample-banner__copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.mi-sample-banner__title {
+  font-weight: 700;
+  color: var(--warning, #c48a2a);
+}
+
+.mi-sample-banner__meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mi-sample-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.mi-sample-banner__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mi-sample-banner__button:hover:not(:disabled) {
+  border-color: var(--warning, #c48a2a);
+}
+
+.mi-sample-banner__button.is-primary {
+  border-color: color-mix(in srgb, var(--warning, #c48a2a) 70%, var(--border));
+  color: var(--warning, #c48a2a);
+}
+
+.mi-sample-banner__button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

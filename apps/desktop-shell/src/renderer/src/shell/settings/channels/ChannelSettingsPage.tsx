@@ -2,6 +2,7 @@ import { Button, Input, Popconfirm, Select, Switch, Tag } from 'antd'
 import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { LoadingState } from '@platform/ui/components/loading'
 import { platformText } from '../../../i18n/platformText'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
@@ -41,6 +42,8 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [candidateTargets, setCandidateTargets] = useState<Record<string, boolean>>({})
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /** First read of the rail (channels, catalog, agents); later refreshes keep the list on screen. */
+  const [initialLoading, setInitialLoading] = useState(true)
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
   const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
@@ -48,15 +51,19 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const currentImplemented = currentCatalog?.implemented === true
 
   const reload = async (): Promise<void> => {
-    const [nextCatalog, nextChannels, agentState] = await Promise.all([
-      window.platform.channels.catalog(),
-      window.platform.channels.list(),
-      window.platform.agents.listAgents({})
-    ])
-    setCatalog(nextCatalog as Catalog[])
-    setChannels(nextChannels as Channel[])
-    setAgents((agentState as { agents?: Agent[] }).agents ?? [])
-    setSelected((previous) => previous ?? (nextChannels as Channel[])[0]?.id ?? null)
+    try {
+      const [nextCatalog, nextChannels, agentState] = await Promise.all([
+        window.platform.channels.catalog(),
+        window.platform.channels.list(),
+        window.platform.agents.listAgents({})
+      ])
+      setCatalog(nextCatalog as Catalog[])
+      setChannels(nextChannels as Channel[])
+      setAgents((agentState as { agents?: Agent[] }).agents ?? [])
+      setSelected((previous) => previous ?? (nextChannels as Channel[])[0]?.id ?? null)
+    } finally {
+      setInitialLoading(false)
+    }
   }
 
   const reloadDetails = async (channelId: string): Promise<void> => {
@@ -157,7 +164,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }
 
   return (
-    <section className="settings-workspace channel-settings">
+    <section className="settings-workspace channel-settings" aria-busy={initialLoading || undefined}>
       <aside className="channel-settings-rail">
         <header>
           <strong>{labels.channels}</strong>
@@ -165,18 +172,24 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             {labels.channelRefresh}
           </Button>
         </header>
-        {channels.length === 0 ? <p>{labels.channelNoInstances}</p> : null}
-        {channels.map((channel) => (
-          <button
-            key={channel.id}
-            type="button"
-            className={channel.id === selected ? 'active' : ''}
-            onClick={() => setSelected(channel.id)}
-          >
-            <strong>{channel.name}</strong>
-            <small>{labels.channelState[channel.state]}</small>
-          </button>
-        ))}
+        {initialLoading ? (
+          <LoadingState label={platformText[language].status.loading} minHeight={120} />
+        ) : (
+          <>
+            {channels.length === 0 ? <p>{labels.channelNoInstances}</p> : null}
+            {channels.map((channel) => (
+              <button
+                key={channel.id}
+                type="button"
+                className={channel.id === selected ? 'active' : ''}
+                onClick={() => setSelected(channel.id)}
+              >
+                <strong>{channel.name}</strong>
+                <small>{labels.channelState[channel.state]}</small>
+              </button>
+            ))}
+          </>
+        )}
         <section>
           <Select
             aria-label={labels.channels}
@@ -205,7 +218,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       </aside>
       <main className="channel-settings-detail">
         {error ? <p role="alert">{error}</p> : null}
-        {current ? (
+        {initialLoading ? <LoadingState label={platformText[language].status.loading} fill /> : current ? (
           <>
             <header>
               <strong>{current.name}</strong>

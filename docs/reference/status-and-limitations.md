@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.1.0`. This page describes what is usable today and what is intentionally outside
+MacroBay is at `0.2.0`. This page describes what is usable today and what is intentionally outside
 the first public release.
 
 ## Usable from source
@@ -34,9 +34,17 @@ no auto-update channel. See [Packaging](../development/packaging.md).
 
 ### Demo data
 
-No demo database or sample market data is bundled. The dashboard needs real provider credentials
-and real source data to show live panels. Screenshots are captured from a sanitized local profile, not a
-data feed.
+A sample scenario ships with the app: one recorded week (October 2026) of real observations — market
+status, cross-asset returns, funding, stablecoins and ETF flows, two calendar months, news sentiment, and
+three published analyses with their evidence.
+
+- **No database is bundled.** The scenario is JSON; the running app reads it in memory and never writes it
+  into your database, analysis history, sentiment aggregates or source-health counters.
+- **It is a recording, not a feed.** The scenario clock is pinned to the recorded close, the banner says so,
+  and nothing updates. Leaving sample mode leaves no trace: the switch is session-scoped.
+- **Live panels still need credentials.** Sample mode answers the dashboard's reads instead of calling
+  providers; it never makes a network request.
+- Screenshots are captured from sample mode, not from a live provider feed.
 
 ## Platform support
 
@@ -76,7 +84,7 @@ hiding it.
 
 ## API and configuration stability
 
-The `0.1.0` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.2.0` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 

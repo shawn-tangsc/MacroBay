@@ -7,14 +7,14 @@ import { toManifestRegistrations } from './service/intelligence/agent-capabiliti
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.1.0',
+  version: '0.2.0',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
       {
         id: 'intelligence',
         title: { 'zh-CN': '情报', 'en-US': 'Intelligence' },
-        icon: 'message-square-text',
+        icon: 'radar',
         order: 10,
         module: './desktop/pages/intelligence'
       }
@@ -33,6 +33,9 @@ export const marketIntelligenceProductManifest = {
   navigation: [],
   settingsSections: [],
   serviceRoutes: [
+    // 示例模式的控制面：读状态与开关。数据面不登记新方法——示例数据按既有读取接口回放。
+    { method: 'intelligence.demo.getState' },
+    { method: 'intelligence.demo.setActive' },
     ...Object.values(MARKET_ANALYSIS_IPC_METHODS).map(method => ({ method })),
     { method: 'intelligence.crossAsset.acquire' },
     { method: 'intelligence.crossAsset.renew' },

@@ -1,0 +1,461 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.queryCapitalConditionsSnapshot",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$asOf",
+    "etf": {
+      "state": "available",
+      "schemaVersion": 1,
+      "sourceId": "0xrouter",
+      "windowEnd": "2026-10-26",
+      "verifiedAt": "2026-10-27T09:41:37.673Z",
+      "btc": {
+        "asset": "BTC",
+        "rows": [
+          {
+            "tradingDate": "2026-09-15",
+            "netFlowUsd": -450400000,
+            "observedAt": "2026-09-15T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-16",
+            "netFlowUsd": -295900000,
+            "observedAt": "2026-09-16T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-17",
+            "netFlowUsd": 159500000,
+            "observedAt": "2026-09-17T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-18",
+            "netFlowUsd": 433000000,
+            "observedAt": "2026-09-18T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-21",
+            "netFlowUsd": 999000000,
+            "observedAt": "2026-09-21T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-22",
+            "netFlowUsd": 714700000,
+            "observedAt": "2026-09-22T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-23",
+            "netFlowUsd": 346900000,
+            "observedAt": "2026-09-23T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-24",
+            "netFlowUsd": 190700000,
+            "observedAt": "2026-09-24T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-25",
+            "netFlowUsd": 134500000,
+            "observedAt": "2026-09-25T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-28",
+            "netFlowUsd": 31000000,
+            "observedAt": "2026-09-28T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-29",
+            "netFlowUsd": 66200000,
+            "observedAt": "2026-09-29T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-30",
+            "netFlowUsd": -148700000,
+            "observedAt": "2026-09-30T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-01",
+            "netFlowUsd": 102700000,
+            "observedAt": "2026-10-01T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-02",
+            "netFlowUsd": 189900000,
+            "observedAt": "2026-10-02T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-05",
+            "netFlowUsd": -89800000,
+            "observedAt": "2026-10-05T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-06",
+            "netFlowUsd": 118800000,
+            "observedAt": "2026-10-06T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-07",
+            "netFlowUsd": -484900000,
+            "observedAt": "2026-10-07T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-08",
+            "netFlowUsd": -244100000,
+            "observedAt": "2026-10-08T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-09",
+            "netFlowUsd": 21100000,
+            "observedAt": "2026-10-09T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-12",
+            "netFlowUsd": -65400000,
+            "observedAt": "2026-10-12T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-13",
+            "netFlowUsd": 175700000,
+            "observedAt": "2026-10-13T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-14",
+            "netFlowUsd": -261400000,
+            "observedAt": "2026-10-14T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-15",
+            "netFlowUsd": 5100000,
+            "observedAt": "2026-10-15T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-16",
+            "netFlowUsd": -82400000,
+            "observedAt": "2026-10-16T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-19",
+            "netFlowUsd": 526700000,
+            "observedAt": "2026-10-19T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-20",
+            "netFlowUsd": 23200000,
+            "observedAt": "2026-10-20T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-21",
+            "netFlowUsd": 524800000,
+            "observedAt": "2026-10-21T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-22",
+            "netFlowUsd": -635600000,
+            "observedAt": "2026-10-22T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-23",
+            "netFlowUsd": -137900000,
+            "observedAt": "2026-10-23T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-26",
+            "netFlowUsd": 110300000,
+            "observedAt": "2026-10-26T00:00:00.000Z"
+          }
+        ]
+      },
+      "eth": {
+        "asset": "ETH",
+        "rows": [
+          {
+            "tradingDate": "2026-09-15",
+            "netFlowUsd": -142300000,
+            "observedAt": "2026-09-15T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-16",
+            "netFlowUsd": -224100000,
+            "observedAt": "2026-09-16T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-17",
+            "netFlowUsd": -39300000,
+            "observedAt": "2026-09-17T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-18",
+            "netFlowUsd": 143700000,
+            "observedAt": "2026-09-18T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-21",
+            "netFlowUsd": 270000000,
+            "observedAt": "2026-09-21T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-22",
+            "netFlowUsd": 162200000,
+            "observedAt": "2026-09-22T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-23",
+            "netFlowUsd": 104500000,
+            "observedAt": "2026-09-23T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-24",
+            "netFlowUsd": 66100000,
+            "observedAt": "2026-09-24T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-25",
+            "netFlowUsd": 87000000,
+            "observedAt": "2026-09-25T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-28",
+            "netFlowUsd": 17100000,
+            "observedAt": "2026-09-28T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-29",
+            "netFlowUsd": -2800000,
+            "observedAt": "2026-09-29T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-09-30",
+            "netFlowUsd": -59600000,
+            "observedAt": "2026-09-30T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-01",
+            "netFlowUsd": -55400000,
+            "observedAt": "2026-10-01T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-02",
+            "netFlowUsd": -37400000,
+            "observedAt": "2026-10-02T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-05",
+            "netFlowUsd": -50800000,
+            "observedAt": "2026-10-05T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-06",
+            "netFlowUsd": -201900000,
+            "observedAt": "2026-10-06T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-07",
+            "netFlowUsd": -160900000,
+            "observedAt": "2026-10-07T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-08",
+            "netFlowUsd": -72500000,
+            "observedAt": "2026-10-08T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-09",
+            "netFlowUsd": -56100000,
+            "observedAt": "2026-10-09T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-12",
+            "netFlowUsd": -85400000,
+            "observedAt": "2026-10-12T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-13",
+            "netFlowUsd": 24800000,
+            "observedAt": "2026-10-13T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-14",
+            "netFlowUsd": -129500000,
+            "observedAt": "2026-10-14T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-15",
+            "netFlowUsd": -60300000,
+            "observedAt": "2026-10-15T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-16",
+            "netFlowUsd": -69700000,
+            "observedAt": "2026-10-16T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-19",
+            "netFlowUsd": -103300000,
+            "observedAt": "2026-10-19T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-20",
+            "netFlowUsd": -26100000,
+            "observedAt": "2026-10-20T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-21",
+            "netFlowUsd": 14900000,
+            "observedAt": "2026-10-21T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-22",
+            "netFlowUsd": -110600000,
+            "observedAt": "2026-10-22T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-23",
+            "netFlowUsd": 4400000,
+            "observedAt": "2026-10-23T00:00:00.000Z"
+          },
+          {
+            "tradingDate": "2026-10-26",
+            "netFlowUsd": -88600000,
+            "observedAt": "2026-10-26T00:00:00.000Z"
+          }
+        ]
+      }
+    },
+    "coreStablecoins": {
+      "observedAt": "2026-10-27T09:24:59.689Z",
+      "verifiedAt": "2026-10-27T09:41:37.501Z",
+      "currentUsd": 253033903673.40137,
+      "change1dUsd": -843904300.6185608,
+      "change1dPercent": -0.3324056983763307,
+      "change7dUsd": -2075176969.677063,
+      "change7dPercent": -0.8134469241337711,
+      "change30dUsd": -5877104441.189636,
+      "change30dPercent": -2.269932238102637,
+      "dailyFlows": [
+        {
+          "tradingDate": "2026-09-27",
+          "netFlowUsd": 93593149
+        },
+        {
+          "tradingDate": "2026-09-28",
+          "netFlowUsd": 1380422238
+        },
+        {
+          "tradingDate": "2026-09-29",
+          "netFlowUsd": -209514974
+        },
+        {
+          "tradingDate": "2026-09-30",
+          "netFlowUsd": -59816622
+        },
+        {
+          "tradingDate": "2026-10-01",
+          "netFlowUsd": -491374603
+        },
+        {
+          "tradingDate": "2026-10-02",
+          "netFlowUsd": 796084831
+        },
+        {
+          "tradingDate": "2026-10-03",
+          "netFlowUsd": 371681240
+        },
+        {
+          "tradingDate": "2026-10-04",
+          "netFlowUsd": 86578310
+        },
+        {
+          "tradingDate": "2026-10-05",
+          "netFlowUsd": 234929831
+        },
+        {
+          "tradingDate": "2026-10-06",
+          "netFlowUsd": 455112279
+        },
+        {
+          "tradingDate": "2026-10-07",
+          "netFlowUsd": 136469678
+        },
+        {
+          "tradingDate": "2026-10-08",
+          "netFlowUsd": -572541398
+        },
+        {
+          "tradingDate": "2026-10-09",
+          "netFlowUsd": -736919175
+        },
+        {
+          "tradingDate": "2026-10-10",
+          "netFlowUsd": -617305353
+        },
+        {
+          "tradingDate": "2026-10-11",
+          "netFlowUsd": 94348917
+        },
+        {
+          "tradingDate": "2026-10-12",
+          "netFlowUsd": 219529578
+        },
+        {
+          "tradingDate": "2026-10-13",
+          "netFlowUsd": -186070982
+        },
+        {
+          "tradingDate": "2026-10-14",
+          "netFlowUsd": -4573351
+        },
+        {
+          "tradingDate": "2026-10-15",
+          "netFlowUsd": -585762579
+        },
+        {
+          "tradingDate": "2026-10-16",
+          "netFlowUsd": -314506762
+        },
+        {
+          "tradingDate": "2026-10-17",
+          "netFlowUsd": -333676087
+        },
+        {
+          "tradingDate": "2026-10-18",
+          "netFlowUsd": -214386336
+        },
+        {
+          "tradingDate": "2026-10-19",
+          "netFlowUsd": -31185720
+        },
+        {
+          "tradingDate": "2026-10-20",
+          "netFlowUsd": -883737752
+        },
+        {
+          "tradingDate": "2026-10-21",
+          "netFlowUsd": -199503830
+        },
+        {
+          "tradingDate": "2026-10-22",
+          "netFlowUsd": 149144116
+        },
+        {
+          "tradingDate": "2026-10-23",
+          "netFlowUsd": -438724039
+        },
+        {
+          "tradingDate": "2026-10-24",
+          "netFlowUsd": -446544321
+        },
+        {
+          "tradingDate": "2026-10-25",
+          "netFlowUsd": -203291087
+        },
+        {
+          "tradingDate": "2026-10-26",
+          "netFlowUsd": -317435607
+        }
+      ]
+    },
+    "usdStablecoinSupplyUsd": 303365280504.74646,
+    "conclusion": "partial"
+  }
+}

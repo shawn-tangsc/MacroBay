@@ -149,9 +149,10 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.1.0`）。macOS 是已验证平台。还没有 demo 数据集；macOS 安装包可从
-源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的运行态尚未验证，
-Linux 尚未配置打包——看板需要真实的来源凭据。详见
+MacroBay 目前是 **alpha**（`0.2.0`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
+打开完整看板并读到三条已发布结论，数据来自真实录制的一周。实时面板仍需你自己的供应商凭据。
+macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
+运行态尚未验证，Linux 尚未配置打包。详见
 [状态与限制](./docs/reference/status-and-limitations.zh-CN.md)。
 
 ## 路线图

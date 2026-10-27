@@ -19,6 +19,8 @@ const page = readFileSync(resolve(process.cwd(), 'products/market-intelligence/d
 const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
 const dashboard = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/CryptoIntelligenceDashboard.tsx'), 'utf8')
 const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'), 'utf8')
+/** The page stylesheet: it must not own the dashboard shell a second time. */
+const pageStyles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
 const asOf = '2026-08-05T00:00:00.000Z'
 let root: Root | undefined
 
@@ -393,41 +395,58 @@ describe('crypto intelligence dashboard', () => {
     expect([dashboard, styles].join('\n')).not.toContain('release-dynamics-row')
   })
 
+  it('keeps the dashboard shell and its gutter ladder in one stylesheet', () => {
+    // 壳、页边距与色板 token 只能有一个 owner。两份 `.mi-crypto-dashboard` 靠加载顺序决胜负时，被压住
+    // 的那份连自己的 @media 阶梯一起失效 —— 2026-10-27 全屏仍换行，就是按失效值算出来的断点卡偏了 4px。
+    expect(pageStyles).not.toMatch(/^\.mi-crypto-dashboard \{/m)
+    expect(pageStyles).not.toContain('--mi-dashboard-page-inline')
+    expect(pageStyles).not.toContain('--mi-dashboard-page-block')
+
+    const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
+    expect(dashboardRootRule).toContain('--mi-dashboard-page-inline: 32px')
+    expect(dashboardRootRule).toContain('--mi-dashboard-page-block: 32px')
+    expect(dashboardRootRule).toContain('padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline)')
+    expect(dashboardRootRule).toContain('container-type: inline-size')
+
+    // 阶梯两端成对移动：只缩 inline 会让数据带一头 32 一头 24。
+    const ladder = styles.slice(styles.indexOf('@media (max-width: 1279px)'))
+    expect(ladder).toContain('--mi-dashboard-page-inline: 24px; --mi-dashboard-page-block: 24px;')
+    expect(ladder).toContain('--mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px;')
+  })
+
   it('uses one capital data band and a second sentiment/funding row without unequal panel borders', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
-    const sentimentRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(rowRule).not.toContain('overflow-x: hidden')
     expect(dashboardRootRule).toContain('container-type: inline-size')
     expect(rowRule).toContain('border-top: 1px solid var(--mi-dashboard-line)')
     expect(rowRule).toContain('border-bottom: 1px solid var(--mi-dashboard-line)')
+    // 资金面带只有一块：它自己不再是两列，并排发生在面板内部的 content-row。
+    expect(rowRule).not.toContain('grid-template-columns')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
-    expect(wideStyles).toContain('.mi-crypto-dashboard__capital-positioning-row { grid-template-columns: minmax(0, 1fr); }')
-    expect(wideStyles).not.toContain('46fr')
-    expect(wideStyles).not.toContain('gap: 16px')
-    expect(narrowStyles).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }')
     expect(capitalRule).not.toContain('border-radius')
     expect(capitalRule).not.toContain('border-top')
     expect(capitalRule).not.toContain('border-bottom')
-    expect(wideStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
-    expect(wideStyles).toContain('border-left: 1px solid var(--mi-dashboard-line)')
+    const fundingRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {')
+    expect(fundingRule).toContain('padding-left: var(--mi-dashboard-band-zone-inline)')
+    expect(fundingRule).toContain('border-left: 1px solid var(--mi-dashboard-line)')
     expect(styles).not.toContain('mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__state-card')
     expect(styles).toContain('mi-capital-conditions__etf-summary')
   })
 
   it('keeps the sentiment zone compact and stacks the funding-history panel at narrow widths', () => {
     const sentimentRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment {')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__sentiment,')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__sentiment,')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
   })
 
   it('uses named compact rhythm inside the real data bands', () => {
@@ -447,42 +466,39 @@ describe('crypto intelligence dashboard', () => {
     expect(gaugeRule).toContain('padding: var(--mi-dashboard-gauge-block-padding)')
   })
 
-  it('keeps capital facts top-aligned with a compact two-column summary at wide widths', () => {
+  it('keeps capital facts top-aligned with a two-column summary in the first band', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
     const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
+    const contentRowRule = cssBlock(styles, '.mi-capital-conditions__content-row {')
 
     expect(capitalRule).toContain('align-content: start')
     expect(capitalRule).toContain('row-gap: var(--mi-dashboard-capital-content-row-gap)')
-    expect(wideStyles).toContain('.mi-capital-conditions__content-row')
+    expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
-    expect(wideStyles).toContain('grid-template-columns: minmax(0, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
-    expect(wideStyles).toContain('.mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
+    expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(trendsRule).toContain('justify-content: start')
     expect(headerBandRule).toContain('min-width: 0')
   })
 
-  it('keeps the unified three-series flow chart in the first row at the existing wide and narrow boundaries', () => {
+  it('keeps the unified three-series flow chart beside the summary instead of below it', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const etfRule = cssBlock(styles, '.mi-capital-conditions__etf-flow {')
-    const rowRule = cssBlock(styles, '.mi-capital-conditions__etf-flow {')
     const barsRule = cssBlock(styles, '.mi-capital-conditions__chart {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(dashboardRootRule).toContain('--mi-dashboard-etf-flow')
     expect(etfRule).toContain('align-self: start')
+    expect(etfRule).toContain('margin-right: var(--mi-dashboard-band-zone-inline)')
     expect(barsRule).toContain('linear-gradient')
-    expect(wideStyles).toContain('.mi-capital-conditions__etf-flow')
-    expect(narrowStyles).toContain('.mi-capital-conditions__content-row')
+    expect(stackStyles).toContain('.mi-capital-conditions__etf-flow { margin-right: 0; }')
+    expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('uses chart-dominant wide workspaces and a horizontal source status bar', () => {
+  it('uses chart-dominant workspaces and a horizontal source status bar', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
     const sourceRule = cssBlock(styles, '.mi-crypto-dashboard__source-region {')
     const sourceRowRule = cssBlock(styles, '.mi-crypto-dashboard__source-row {')
 
@@ -515,24 +531,68 @@ describe('crypto intelligence dashboard', () => {
     }
   })
 
-  it('keeps capital facts in two columns on narrow layouts while allowing charts to shrink', () => {
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+  it('keeps capital facts in two columns down to the stack point while allowing charts to shrink', () => {
+    const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
     const chartRule = cssBlock(styles, '.mi-capital-conditions__chart {')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
-    expect(narrowStyles).toContain('.mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }')
+    expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(chartRule).toContain('min-width: 0')
-    expect(narrowStyles).toContain('.mi-capital-conditions__content-row')
+    // 堆叠分支只把两列并成一列，不再重排事实表：事实本来就一直是两列。
+    expect(stackStyles).not.toContain('.mi-capital-conditions dl')
+    expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('keeps capital/ETF in the first row and sentiment/funding in the second at 1920, 1176, and 1175 widths', () => {
-    const wideStyles = cssBlock(styles, '@container (min-width: 1176px)')
-    const narrowStyles = cssBlock(styles, '@container (max-width: 1175px)')
+  it('lays the two data bands out side by side by ratio, and stacks only where they cannot fit', () => {
+    const contentRowRule = cssBlock(styles, '.mi-capital-conditions__content-row {')
     const positioningRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row {')
+    const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
-    expect(wideStyles).toContain('.mi-crypto-dashboard__capital-positioning-row { grid-template-columns: minmax(0, 1fr); }')
-    expect(positioningRule).toContain('grid-template-columns: minmax(0, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__positioning-row')
-    expect(narrowStyles).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
+    expect(positioningRule).toContain('grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
+    // 并排不再挂在"内容宽 ≥ 1176px"的闸门上：那道闸门在 16 寸全屏上差 4px 就整块塌掉。
+    expect(styles).not.toContain('@container (min-width: 1176px)')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }')
+    expect(stackStyles).toContain('.mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }')
+  })
+
+  it('reaches its side-by-side bands in a full-screen laptop pane', () => {
+    // 2026-10-27「全屏仍换行」的回归守卫。四段宽度各有 owner：侧栏在 shell 的 styles.css、Agent 栏在
+    // marketAnalysisWorkspace.css、页边距与堆叠闸门在 cryptoDashboard.css。这里把它们读出来现算，
+    // 而不是抄一个"应该够了"的结论 —— 任何人挪动其中任何一个，这条会先响。
+    const shellStyles = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
+    const workspaceStyles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/marketAnalysisWorkspace.css'), 'utf8')
+    const sidebar = Number(/--sidebar-width:\s*(\d+)px/.exec(shellStyles)?.[1])
+    const paneLimit = /--mi-agent-pane-width:\s*clamp\(\s*(\d+)px,\s*([\d.]+)cqw,\s*(\d+)px\s*\)/.exec(workspaceStyles)
+    const pageInline = Number(/--mi-dashboard-page-inline:\s*(\d+)px/.exec(cssBlock(styles, '.mi-crypto-dashboard {'))?.[1])
+    const stackBelow = Number(/@container \(max-width: (\d+)px\)/.exec(styles)?.[1])
+
+    expect(paneLimit, 'Agent 栏宽度必须是有上下限的比例值').not.toBeNull()
+    expect(sidebar).toBeGreaterThan(0)
+    expect(pageInline).toBeGreaterThan(0)
+    expect(stackBelow).toBeGreaterThan(0)
+
+    const paneMin = Number(paneLimit![1])
+    const paneShare = Number(paneLimit![2])
+    const paneMax = Number(paneLimit![3])
+    const agentFor = (page: number): number => Math.min(Math.max(paneMin, (page * paneShare) / 100), paneMax)
+    // 页边距阶梯：窗口 ≤1279 时是 24px，否则是基础值。
+    const gutterFor = (page: number): number => (page + sidebar <= 1279 ? 24 : pageInline)
+    const contentWidth = (page: number, panes: 'single' | 'split'): number =>
+      page - (panes === 'split' ? agentFor(page) : 0) - gutterFor(page) * 2
+
+    // 14 英寸 (1512) 与 16 英寸 (1728) 的 Mac 全屏，两种都必须能并排。
+    for (const windowWidth of [1512, 1728]) {
+      expect(contentWidth(windowWidth - sidebar, 'split'), `${windowWidth}px 窗口的看板内容盒`).toBeGreaterThan(stackBelow)
+    }
+
+    // 单栏切换点两侧必须是同一种数据带形态：否则跨过切换点，Agent 栏出现的同时数据带也塌成单列，
+    // 版面一次跳两下。切换点取"看板并排还成立"的最小内容宽：900 + 边距 64 + Agent 下限 340。
+    const compactAt = Number(/@container mi-analysis-dashboard \(max-width: (\d+)px\)/.exec(workspaceStyles)?.[1])
+    expect(compactAt).toBeGreaterThan(0)
+    expect(contentWidth(compactAt, 'single'), '切换点以下（单栏）').toBeGreaterThanOrEqual(stackBelow)
+    expect(contentWidth(compactAt + 1, 'split'), '切换点以上（双栏）').toBeGreaterThanOrEqual(stackBelow)
   })
 
   it('renders capital in the first data band and sentiment/funding in the second', async () => {

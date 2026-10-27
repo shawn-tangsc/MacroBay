@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import type { GeneratedProductMenuEntry, GeneratedProductSettingsEntry } from '@platform/product-registry/types'
+import { productMenuEntries } from '@products/generated/shellRegistry'
 
 import { createBuiltInSettingsPanels } from './builtInNavEntries'
-import { groupShellSettingsPanels, mergeShellNavItems, splitShellSidebarNavItems } from './mergeShellNavigation'
+import {
+  groupShellSettingsPanels,
+  mergeShellNavItems,
+  splitShellSidebarNavItems,
+  type ShellNavItem
+} from './mergeShellNavigation'
 
 describe('mergeShellNavigation', () => {
   it('keeps demo-only built-in pages out of the primary menu while preserving product pages', () => {
@@ -154,5 +160,21 @@ describe('mergeShellNavigation', () => {
     expect(items.filter((item) => item.key === 'settings')).toHaveLength(1)
     // 二级面板仍只出现在 Settings 分组里，能力并未丢失
     expect(groupShellSettingsPanels('zh-CN', [])[0]?.panels.map((panel) => panel.key)).toEqual(settingsPanelIds)
+  })
+
+  // 侧栏是纯图标导航（`.nav-item span` 不可见），一级菜单共用图标即无法辨认；
+  // 用真实生成产物覆盖「内置页 + 产品页」的合并结果，新增页面撞图标会在 CI 直接失败。
+  it('gives every top-level menu its own icon in the real shell navigation', () => {
+    const items = mergeShellNavItems('zh-CN', productMenuEntries)
+    const ownerByIcon = new Map<ShellNavItem['icon'], string>()
+    const collisions: string[] = []
+
+    for (const item of items) {
+      const owner = ownerByIcon.get(item.icon)
+      if (owner !== undefined) collisions.push(`${owner} 与 ${item.label}`)
+      else ownerByIcon.set(item.icon, item.label)
+    }
+
+    expect(collisions).toEqual([])
   })
 })

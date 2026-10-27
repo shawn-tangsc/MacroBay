@@ -170,21 +170,48 @@
   min-width: 0;
 }
 
+.mi-agent-card__top {
+  display: flex;
+  min-height: 18px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .mi-agent-card__status {
   display: inline-flex;
   width: fit-content;
+  max-width: 62%;
   align-items: center;
   gap: 5px;
   padding: 4px 6px;
+  overflow: hidden;
   border: 1px solid #756021;
+  background: transparent;
   color: #f0b642;
+  font: inherit;
   font-size: 9px;
   letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mi-agent-card__status.is-available {
   border-color: var(--mi-terminal-lime-line);
   color: var(--mi-terminal-lime);
+}
+
+button.mi-agent-card__status {
+  cursor: pointer;
+}
+
+button.mi-agent-card__status:hover {
+  background: rgb(212 255 88 / 8%);
+}
+
+button.mi-agent-card__status:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .mi-agent-card__identity {
@@ -235,6 +262,95 @@
 
 .mi-agent-card.is-disabled .mi-agent-card__footer strong {
   color: var(--mi-terminal-dim);
+}
+
+.mi-agent-card__switch {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mi-terminal-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.mi-agent-card__switch-track {
+  position: relative;
+  display: inline-block;
+  width: 30px;
+  height: 16px;
+  border: 1px solid var(--mi-terminal-border-strong);
+  border-radius: 999px;
+  background: var(--mi-terminal-surface-strong);
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.mi-agent-card__switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mi-terminal-muted);
+  transition: transform 140ms ease, background 140ms ease;
+}
+
+.mi-agent-card__switch.is-on {
+  color: var(--mi-terminal-lime);
+}
+
+.mi-agent-card__switch.is-on .mi-agent-card__switch-track {
+  border-color: var(--mi-terminal-lime-line);
+  background: var(--mi-terminal-lime);
+}
+
+.mi-agent-card__switch.is-on .mi-agent-card__switch-thumb {
+  transform: translateX(14px);
+  background: var(--mi-terminal-bg);
+}
+
+.mi-agent-card__switch:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mi-agent-card__switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.mi-agent-card__progress {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mi-terminal-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+
+.mi-agent-card__progress:hover {
+  color: var(--mi-terminal-lime);
+}
+
+.mi-agent-card__progress:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .mi-agent-card__entry,
@@ -310,7 +426,85 @@
 
 .mi-agent-drawer__footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 12px;
+}
+
+.mi-agent-drawer__footer > span {
+  color: var(--danger, #d95c5c);
+  font-size: 11px;
+}
+
+.mi-agent-drawer__intro {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mi-agent-drawer__intro p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.mi-agent-drawer__section {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.mi-agent-drawer__section h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.mi-agent-drawer__capabilities {
+  display: grid;
+  gap: 6px;
+}
+
+.mi-agent-drawer__capability {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.mi-agent-drawer__capability-icon {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.mi-agent-drawer__capability[data-state='ready'] .mi-agent-drawer__capability-icon {
+  color: var(--accent);
+}
+
+.mi-agent-drawer__capability-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mi-agent-drawer__capability-copy strong {
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mi-agent-drawer__capability-copy small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mi-agent-drawer__capability-count {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
 }
 
 /*
@@ -505,22 +699,11 @@
   .mi-dashboard-source-catalog__list { max-height: 240px; }
 }
 
-.mi-crypto-dashboard {
-  --mi-dashboard-page-inline: 32px;
-  --mi-dashboard-page-block: 32px;
-  --mi-dashboard-gap: 16px;
-  --mi-dashboard-compact-gap: 10px;
-  --mi-dashboard-context-width: 260px;
-  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
-  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
-  --mi-dashboard-caution: #e5ae43;
-  min-height: 100%;
-  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
-    var(--bg);
-  color: var(--text);
-}
+/*
+ * `.mi-crypto-dashboard` 的壳、页边距与色板 token 不在这里定义：唯一 owner 是 `cryptoDashboard.css`。
+ * 两个文件各写一份时，后加载的那份会静默覆盖前一份的 token，连前一份自己的 `@media` 阶梯也一起失效，
+ * 于是"读代码算出来的断点"和"浏览器里真正的宽度"永远对不上。这里只留这个页面其它部件需要的规则。
+ */
 
 .mi-crypto-dashboard__header {
   display: flex;
@@ -1017,22 +1200,12 @@
     --mi-page-inline: 24px;
     --mi-page-block: 24px;
   }
-
-  .mi-crypto-dashboard {
-    --mi-dashboard-page-inline: 24px;
-    --mi-dashboard-page-block: 24px;
-  }
 }
 
 @media (max-width: 1023px) {
   .mi-agent-portal {
     --mi-page-inline: 20px;
     --mi-page-block: 20px;
-  }
-
-  .mi-crypto-dashboard {
-    --mi-dashboard-page-inline: 20px;
-    --mi-dashboard-page-block: 20px;
   }
 
   .mi-crypto-dashboard__workspace {

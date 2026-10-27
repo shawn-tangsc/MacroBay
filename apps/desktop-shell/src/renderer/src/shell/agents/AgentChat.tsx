@@ -8,7 +8,7 @@ import type { AgentRuntimeCompatibilityResult } from '@platform/ai/agent-platfor
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
-import { Bot, Link2Off, Loader2 } from 'lucide-react'
+import { Bot, Link2Off } from 'lucide-react'
 import { Button } from 'antd'
 import { useEffect, useState, type ReactNode } from 'react'
 
@@ -137,7 +137,7 @@ export default function AgentChat({
       <main className={blockedPaneClass}>
         {navbar}
         <AgentStatusScreen
-          icon={Loader2}
+          spinner
           title={t.chat.loadingModelServiceTitle}
           description={t.chat.loadingModelServiceDescription}
         />

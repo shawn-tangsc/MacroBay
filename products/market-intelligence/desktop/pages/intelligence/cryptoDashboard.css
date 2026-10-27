@@ -1,15 +1,26 @@
+/*
+ * 看板的壳、页面节奏与色板：**这一份是唯一 owner**。
+ *
+ * `intelligence.css` 曾重复定义同一组 token（页边距、行色、静音色、警示色、背景），只靠加载顺序覆盖——
+ * 而那个文件后加载，于是这里的 38px 与它自己的 `@media (max-width: 1279px)` 24px 全部失效，实际永远是
+ * 32px。断点算术因此和读代码时的直觉对不上（读者 2026-10-27 的全屏换行就卡在 4px 上）。现在只留一处：
+ * 下面这些值就是当时实际生效的值，渲染结果不变。
+ */
 .mi-crypto-dashboard {
-  --mi-dashboard-page-inline: 38px;
-  --mi-dashboard-page-block: 26px;
+  --mi-dashboard-page-inline: 32px;
+  --mi-dashboard-page-block: 32px;
+  --mi-dashboard-gap: 16px;
+  --mi-dashboard-compact-gap: 10px;
+  --mi-dashboard-context-width: 260px;
   --mi-dashboard-card-radius: 12px;
-  --mi-dashboard-line: #293035;
+  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
   --mi-dashboard-surface: #15191d;
   --mi-dashboard-surface-muted: #101416;
   --mi-dashboard-text: #edf0ed;
-  --mi-dashboard-muted: #8c949c;
+  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
   --mi-dashboard-lime: #d4ff58;
   --mi-dashboard-positive: #55d69b;
-  --mi-dashboard-caution: #f4ba4b;
+  --mi-dashboard-caution: #e5ae43;
   --mi-dashboard-negative: #f16d73;
   --mi-dashboard-release-strip-min-height: 42px;
   --mi-dashboard-release-strip-title-width: 106px;
@@ -56,9 +67,11 @@
   overflow-x: hidden;
   overflow-y: auto;
   container-type: inline-size;
-  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline) 22px;
-  background: #0d1011;
-  color: var(--mi-dashboard-text);
+  padding: var(--mi-dashboard-page-block) var(--mi-dashboard-page-inline);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
+    var(--bg);
+  color: var(--text);
 }
 
 .mi-crypto-dashboard *,
@@ -116,9 +129,9 @@
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__capital-positioning-row { display: grid; min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
-.mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; }
+.mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -126,14 +139,14 @@
 .mi-capital-conditions__primary-label { color: var(--mi-dashboard-muted); font-size: 12px; min-width: 0; }
 .mi-capital-conditions__primary-value { color: var(--mi-dashboard-caution); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .mi-capital-conditions__observed-at { color: var(--mi-dashboard-muted); font-size: 10px; }
-.mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: start; }
+.mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: start; }
 .mi-capital-conditions__summary { display: grid; align-content: start; gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 /* A grid item stretches to its column by default, which would give the refresh control the
    width of the panel; the terminal buttons in this workspace are content-sized. */
 .mi-capital-conditions__refresh { justify-self: start; }
 .mi-capital-conditions__refresh-error { color: var(--mi-dashboard-negative); font-size: 12px; }
 .mi-capital-conditions__facts { min-width: 0; }
-.mi-capital-conditions dl { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: start; gap: var(--mi-dashboard-capital-fact-row-gap); margin-top: 0; }
+.mi-capital-conditions dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: start; gap: var(--mi-dashboard-capital-fact-row-gap); margin-top: 0; }
 .mi-capital-conditions dl > div { display: grid; gap: 4px; min-width: 0; }
 .mi-capital-conditions dt { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions dd { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-align: left; white-space: nowrap; }
@@ -148,7 +161,7 @@
 .mi-capital-conditions__etf-summary strong i[data-series='btc'] { background: var(--mi-dashboard-etf-btc); }
 .mi-capital-conditions__etf-summary strong i[data-series='eth'] { background: var(--mi-dashboard-etf-eth); }
 .mi-capital-conditions__etf-summary span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-align: right; white-space: nowrap; }
-.mi-capital-conditions__etf-flow { display: grid; align-self: start; align-content: start; gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; }
+.mi-capital-conditions__etf-flow { display: grid; align-self: start; align-content: start; gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
 .mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: var(--mi-dashboard-etf-flow-block-gap); }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -211,23 +224,16 @@
 .mi-crypto-dashboard__sentiment-gauge > span { margin-top: 5px; font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge small,
 .mi-crypto-dashboard__sentiment-gauge p { margin: 5px 0 0; color: var(--mi-dashboard-muted); font-size: 10px; }
-@container (min-width: 1176px) {
-  .mi-crypto-dashboard__capital-positioning-row { grid-template-columns: minmax(0, 1fr); }
-  .mi-capital-conditions__content-row { grid-template-columns: minmax(0, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); }
-  .mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
-  .mi-crypto-dashboard__sentiment { padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
-  .mi-capital-conditions__etf-flow { margin-right: var(--mi-dashboard-band-zone-inline); }
-}
-
-@container (max-width: 1175px) {
-  .mi-crypto-dashboard__capital-positioning-row,
-  .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .mi-crypto-dashboard__sentiment,
-  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-top: 16px; border-top: 1px solid var(--mi-dashboard-line); }
-  .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
-  .mi-capital-conditions dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+/*
+ * 两条数据带**默认就是并排**，宽度按 fr 分配；断点只负责"真的放不下"时的堆叠。
+ *
+ * 之前这里是一道 1176px 的闸门，按内容盒计算。而看板 pane 在 16 寸全屏上只有 1236px
+ * （窗口 1728 − 侧栏 52 − Agent 列 440），减去左右各 32px 的页边距正好 1172 —— 差 4px，
+ * 整块塌成单列，于是"全屏也换行"（读者 2026-10-27）。长在内容宽上的数字，一旦有人挪动侧栏、
+ * Agent 列或页边距就会再次错位；让列自己按比例收放，这种错位就不存在了。
+ */
+/* 并排形态的装饰（区内边距、列间分隔线）写在基础规则里，堆叠分支再把它们撤掉。 */
+.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
 
 .mi-crypto-dashboard__source-region { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__source-region > header { grid-column: 1 / -1; }
@@ -256,17 +262,35 @@
 .mi-crypto-dashboard__source-anomaly-mark { display: inline-flex; flex: 0 0 auto; align-items: center; color: var(--mi-dashboard-caution); }
 .mi-crypto-dashboard__source-row > div { display: flex; flex: 0 0 auto; flex-wrap: nowrap; gap: var(--mi-dashboard-source-row-gap); justify-content: flex-start; white-space: nowrap; }
 
-@container (max-width: 1175px) {
+/*
+ * 唯一的堆叠分支：900px 内容宽以下才是真的放不下 —— 情绪条要让位给资金费率，摘要要让位给资金流，
+ * 来源状态从三列变一列。放在所有基础规则之后，覆盖才不会被后面的基础规则赢回去。
+ */
+@container (max-width: 899px) {
+  .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
+  .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .mi-crypto-dashboard__sentiment,
+  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--mi-dashboard-line);
+    border-left: 0;
+  }
+  .mi-capital-conditions__etf-flow { margin-right: 0; }
   .mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }
   .mi-crypto-dashboard__source-region > header { grid-column: auto; }
 }
 
+/*
+ * Gutter ladder. The page margin shrinks with the window instead of staying at one width: at a
+ * 1200px page the 32px gutters are 5% of the reading area, and the two-column bands below need
+ * every pixel they can get. Inline and block move together so the band rhythm stays square.
+ */
 @media (max-width: 1279px) {
-  .mi-crypto-dashboard { --mi-dashboard-page-inline: 24px; }
+  .mi-crypto-dashboard { --mi-dashboard-page-inline: 24px; --mi-dashboard-page-block: 24px; }
 }
 
 @media (max-width: 1023px) {
-  .mi-crypto-dashboard { --mi-dashboard-page-inline: 20px; }
+  .mi-crypto-dashboard { --mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px; }
   .mi-crypto-dashboard__release-dynamics-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
   .mi-crypto-dashboard__release-dynamics-groups { grid-column: 1 / -1; display: grid; align-items: start; gap: 7px; }
   .mi-crypto-dashboard__release-dynamics-group { min-height: 24px; }
@@ -276,7 +300,7 @@
 }
 
 @media (max-width: 620px) {
-  .mi-crypto-dashboard { --mi-dashboard-page-inline: 18px; }
+  .mi-crypto-dashboard { --mi-dashboard-page-inline: 18px; --mi-dashboard-page-block: 18px; }
   .mi-crypto-dashboard__header { display: grid; }
   .mi-crypto-dashboard__tools { justify-content: flex-start; }
 }
@@ -447,11 +471,10 @@
 }
 
 /*
- * Light theme: the dashboard shell and its palette follow the platform tokens. The terminal
- * values on `.mi-crypto-dashboard` above stay the dark default; this block only remaps them.
- * The selector is more specific than the later token-based `.mi-crypto-dashboard` block in
- * `intelligence.css`, so the light mapping holds whichever stylesheet loads last. Lime
- * `--accent` is unreadable as text on white, so the accent is mixed toward `--text-strong`.
+ * Light theme: the dashboard shell and its palette follow the platform tokens. The base block
+ * above stays the dark default; this block only remaps it, and it is the single owner of those
+ * tokens — there is no second `.mi-crypto-dashboard` definition to outbid. Lime `--accent` is
+ * unreadable as text on white, so the accent is mixed toward `--text-strong`.
  */
 :root[data-theme='light'] .mi-crypto-dashboard {
   --mi-dashboard-line: var(--border);

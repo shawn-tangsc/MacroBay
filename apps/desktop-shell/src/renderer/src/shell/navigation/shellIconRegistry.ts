@@ -10,6 +10,7 @@ import {
   KeyRound,
   Languages,
   MessageSquareText,
+  Radar,
   ScrollText,
   Settings,
   Shield
@@ -27,6 +28,7 @@ const shellIconComponents: Record<ShellIconId, LucideIcon> = {
   'key-round': KeyRound,
   languages: Languages,
   'message-square-text': MessageSquareText,
+  radar: Radar,
   'scroll-text': ScrollText,
   settings: Settings,
   shield: Shield

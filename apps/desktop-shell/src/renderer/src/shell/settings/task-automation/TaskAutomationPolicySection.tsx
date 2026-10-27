@@ -2,6 +2,7 @@ import { Button, Select } from 'antd'
 
 import type { TaskAutomationPolicyPreset } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { LoadingState } from '@platform/ui/components/loading'
 
 import { buildPolicyFacts, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockError } from './TaskAutomationBlockParts'
@@ -72,7 +73,7 @@ export function TaskAutomationPolicySection(props: {
           </dl>
         ) : null}
         {controller.policyLoading ? (
-          <p className="task-automation-block-state task-automation-muted">{labels.policyLoading}</p>
+          <LoadingState label={labels.policyLoading} minHeight={96} />
         ) : null}
         {props.emptyTasks ? <p className="task-automation-note">{labels.policyEmptyNote}</p> : null}
       </div>

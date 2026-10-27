@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.macro.marketSnapshot.query",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$scenarioNow",
+    "source": {
+      "enabled": true,
+      "hasCredential": false
+    },
+    "readings": [
+      {
+        "seriesId": "dxy-real",
+        "level": 102.266,
+        "atMs": 1793094300000,
+        "returns": {
+          "15m": 0.003911521386257277,
+          "1h": 0.10277894695627232,
+          "4h": 0.18024725220902038,
+          "24h": 0.43013709392307753,
+          "7d": 0.3641002993277409
+        }
+      },
+      {
+        "seriesId": "xau-usd",
+        "level": 3996.706,
+        "atMs": 1793094300000,
+        "returns": {
+          "15m": 0.014413945492264268,
+          "1h": 0.08835068208830066,
+          "4h": -0.2241315091255358,
+          "24h": -0.543603901008094,
+          "7d": -2.822772120508632
+        }
+      }
+    ],
+    "caveats": [
+      "provider-time-series"
+    ]
+  }
+}

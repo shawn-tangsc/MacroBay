@@ -1,8 +1,10 @@
-import { AlertTriangle, Check, ChevronDown, Circle, Loader2, Wrench } from 'lucide-react'
+import { AlertTriangle, Check, ChevronDown, Circle, Wrench } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentSessionEntity, AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { AgentText } from '../agentText'
 import { useAgentText } from '../agentTextProvider'
@@ -40,7 +42,7 @@ export default function AgentTodoListPanel({
   return (
     <section className={narrow ? 'agent-todo-panel narrow' : 'agent-todo-panel'}>
       <button type="button" className="agent-todo-header" onClick={() => setExpanded((current) => !current)}>
-        <span className="agent-todo-icon">{inProgress ? <Loader2 size={14} /> : <Wrench size={14} />}</span>
+        <span className="agent-todo-icon">{inProgress ? <LoadingSpinner size="sm" /> : <Wrench size={14} />}</span>
         <strong>{t.todos.title}</strong>
         <small>{completed}/{items.length}</small>
         <ChevronDown size={14} className={expanded ? 'expanded' : ''} />
@@ -50,7 +52,7 @@ export default function AgentTodoListPanel({
           {items.map((item) => (
             <div key={item.id} className={`agent-todo-item ${item.status}`}>
               {item.status === 'completed' ? <Check size={14} /> : null}
-              {item.status === 'in_progress' ? <Loader2 size={14} /> : null}
+              {item.status === 'in_progress' ? <LoadingSpinner size="sm" /> : null}
               {item.status === 'pending' ? <Circle size={14} /> : null}
               {item.status === 'error' ? <AlertTriangle size={14} /> : null}
               <span>{item.label}</span>

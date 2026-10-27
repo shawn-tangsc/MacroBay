@@ -4,6 +4,7 @@ import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import type { AgentSkillRuntimeCatalogEntry } from '@platform/ai/agent-platform/skills/skillRuntimeSchemas'
+import { LoadingState } from '@platform/ui/components/loading'
 
 import type { useAgentText } from '../agentTextProvider'
 import { buildAgentSkillRuntimeViewModel } from './agentSkillRuntimeViewModel'
@@ -168,7 +169,7 @@ export default function SkillDetailModal({
             <aside className="agent-skill-file-tree">
               <div className="agent-tool-list-heading">{text.editor.tools.skillFiles}</div>
               {loadingTree ? (
-                <p className="agent-empty-copy">{text.editor.tools.loadingSkillFiles}</p>
+                <LoadingState layout="inline" size="sm" label={text.editor.tools.loadingSkillFiles} />
               ) : flatFiles.length === 0 ? (
                 <p className="agent-empty-copy">{text.editor.tools.noSkillFiles}</p>
               ) : (
@@ -196,7 +197,7 @@ export default function SkillDetailModal({
                 {selectedFile ? <Tag className="agent-tool-approval">{guessSkillFileLanguage(selectedFile)}</Tag> : null}
               </div>
               {loadingContent ? (
-                <p className="agent-empty-copy">{text.editor.tools.loadingSkillFile}</p>
+                <LoadingState layout="inline" size="sm" label={text.editor.tools.loadingSkillFile} />
               ) : fileContent ? (
                 isSkillMarkdownFile(selectedFile ?? '') ? (
                   <pre className="agent-skill-markdown-preview">{fileContent}</pre>

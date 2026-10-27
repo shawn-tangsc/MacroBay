@@ -2,6 +2,7 @@ import { Alert, Button, Drawer, Input, Switch } from 'antd'
 import { ChevronRight, Play } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
@@ -78,7 +79,7 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
   return <Drawer className="mi-dashboard-source-drawer" open={open} onClose={onClose} title={title ?? text.title} width={860} footer={
     <Button onClick={openIntelligenceSourcesSettings}>{text.configure}</Button>
   }>
-    {!view ? <p>{text.loading}</p> : <div className="mi-dashboard-source-drawer__layout">
+    {!view ? <LoadingState label={text.loading} fill /> : <div className="mi-dashboard-source-drawer__layout">
       <aside className="intelligence-catalog-pane">
         <div className="intelligence-catalog-list">
           {view.providers.map((provider) => {

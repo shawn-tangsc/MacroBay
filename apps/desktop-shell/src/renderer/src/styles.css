@@ -4955,10 +4955,6 @@ h1 {
   font-size: 10.5px;
 }
 
-.agent-message-status.pending svg {
-  animation: spin 800ms linear infinite;
-}
-
 .agent-message-status.error {
   color: var(--danger);
 }
@@ -5152,11 +5148,6 @@ h1 {
   border-radius: 8px;
   color: var(--muted-strong);
   background: var(--surface);
-}
-
-.agent-runtime-activity-card.assistant-text .agent-runtime-activity-icon svg,
-.agent-runtime-activity-card.running .agent-runtime-activity-icon svg {
-  animation: spin 900ms linear infinite;
 }
 
 .agent-runtime-activity-card.done .agent-runtime-activity-icon svg,
@@ -5566,11 +5557,6 @@ h1 {
   border-radius: 7px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
-}
-
-.agent-todo-icon svg,
-.agent-todo-item.in_progress svg {
-  animation: spin 900ms linear infinite;
 }
 
 .agent-todo-header > span:nth-child(2) {
@@ -6616,11 +6602,6 @@ h1 {
   color: var(--accent);
 }
 
-.agent-task-run-status.queued svg,
-.agent-task-run-status.running svg {
-  animation: spin 900ms linear infinite;
-}
-
 .agent-task-run-status.failed {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
@@ -6860,10 +6841,6 @@ h1 {
   gap: 6px;
 }
 
-.agent-gateway-route__actions .spin {
-  animation: spin 900ms linear infinite;
-}
-
 .agent-gateway-status-card {
   display: grid;
   gap: 10px;
@@ -6926,10 +6903,6 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.agent-gateway-status-actions .spin {
-  animation: spin 900ms linear infinite;
 }
 
 .agent-message-empty {
@@ -7507,12 +7480,6 @@ h1 {
   .agent-skill-runtime-grid,
   .agent-skill-detail-body {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
   }
 }
 
@@ -11053,10 +11020,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   display: grid;
 }
 
-.model-service-pill .spin {
-  animation: spin 900ms linear infinite;
-}
-
 /* PLAT-82：检测项卡片的版式跟着组件走（行内样式）——旧的 `.detect-row` 两列缩进网格
    （`.model-detect-rows` / `.detect-label` / `.detect-control`）已随卡片式改版删除。 */
 
@@ -11570,11 +11533,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .model-service-row-icon:hover:not(:disabled) {
   background: var(--surface-soft);
   color: var(--text);
-}
-
-/* 单模型测试进行中：图标转圈（按钮本身已被禁用）。 */
-.model-service-row-icon .spin {
-  animation: spin 800ms linear infinite;
 }
 
 .model-service-row-icon:disabled {

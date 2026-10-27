@@ -1,8 +1,9 @@
 import { Button, Tag } from 'antd'
-import { Check, Loader2, Play, SkipForward, Square, Trash2, X } from 'lucide-react'
+import { Check, Play, SkipForward, Square, Trash2, X } from 'lucide-react'
 
 import type { TaskDeliveryAttemptEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { JobRunRecord } from '@platform/jobs'
+import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { AgentText } from '../agentText'
 import type { AgentTaskCenterItem } from '../agentTaskCenterViewModel'
@@ -148,7 +149,7 @@ export default function AgentTaskRunSection({
 }
 
 function statusIcon(status: TaskRunLogEntity['status']): React.ReactNode {
-  if (status === 'queued' || status === 'running') return <Loader2 size={13} />
+  if (status === 'queued' || status === 'running') return <LoadingSpinner size="sm" />
   if (status === 'completed') return <Check size={13} />
   if (status === 'cancelled') return <Square size={13} />
   if (status === 'skipped') return <SkipForward size={13} />

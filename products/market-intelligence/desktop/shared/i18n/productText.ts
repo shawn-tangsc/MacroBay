@@ -38,6 +38,17 @@ export const productText = {
         evaluatingAlerts: '评估中…',
         empty: '暂无相关事件。事件采集接入后会在此显示。',
         portal: {
+          sampleMode: {
+            watermark: '示例数据',
+            banner: {
+              title: '示例模式',
+              replay: '真实历史数据 · 离线回放',
+              scenario: '场景时间 {time}（不是当前时间）',
+              noUpdate: '不会自动更新',
+              exit: '退出示例',
+              connect: '接入真实数据'
+            }
+          },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
             crypto: { name: '数字货币市场解读员', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 个静态情报源' },
@@ -47,6 +58,26 @@ export const productText = {
           states: { available: '配置激活', comingSoon: '准备中' },
           sourceSummary: { count: '{count} 个静态情报源', pending: '数据源待接入' },
           actions: { activate: '配置并激活', openDashboard: '打开看板', unavailable: '—' },
+          activation: {
+            states: { unactivated: '未激活', 'waiting-data': '数据准备中', active: '已激活', sample: '示例中' },
+            progress: '已启用 {enabled}/{total}',
+            actions: { configure: '配置激活', progress: '查看激活进度', open: '打开看板', openSample: '打开示例看板', sampleSwitch: '示例模式' },
+            previewHint: '用真实历史数据离线回放；进入后可随时退出，不写入你的数据。',
+            drawer: {
+              title: '激活数字货币解读 Agent',
+              subtitle: '启用下列全部来源；配齐后示例模式仍可随时开关。',
+              capabilitiesTitle: '必需能力',
+              capabilities: { market: '市场行情', sentiment: '市场情绪', funding: '资金费率' },
+              capabilityStates: { missing: '未启用', enabled: '等待数据', ready: '已就绪' },
+              groupsTitle: '来源',
+              tiers: { required: '必需', recommended: '推荐', optional: '可选' },
+              pending: '待接入',
+              enableRecommended: '启用全部来源',
+              enabling: '正在启用…',
+              failed: '启用失败，请重试。',
+              close: '关闭'
+            }
+          },
           analysisWorkspace: {
             openAgent: '完整 Agent 面板', stop: '停止', approvalRequired: '等待工具审批，请打开完整 Agent 面板处理；也可停止本次运行。',
             title: '数字货币解读 Agent', chat: '分析对话', dashboard: '市场看板', view: '切换工作区', selectedAnalysis: '已绑定选中分析', selectedEvent: '选中事件', selectedNews: '选中舆情', contextAnalysis: '引用分析',
@@ -1323,6 +1354,17 @@ export const productText = {
         evaluatingAlerts: 'Evaluating…',
         empty: 'No relevant events yet. They will appear here once source collection is connected.',
         portal: {
+          sampleMode: {
+            watermark: 'SAMPLE DATA',
+            banner: {
+              title: 'Sample mode',
+              replay: 'Real historical data · replayed offline',
+              scenario: 'Scenario time {time} (not now)',
+              noUpdate: 'Does not update',
+              exit: 'Exit sample',
+              connect: 'Connect real data'
+            }
+          },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
             crypto: { name: 'Crypto Market Analyst', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 static intelligence sources' },
@@ -1332,6 +1374,26 @@ export const productText = {
           states: { available: 'Configure activation', comingSoon: 'Coming soon' },
           sourceSummary: { count: '{count} static sources', pending: 'Sources pending' },
           actions: { activate: 'Configure and activate', openDashboard: 'Open dashboard', unavailable: '—' },
+          activation: {
+            states: { unactivated: 'Not activated', 'waiting-data': 'Preparing data', active: 'Active', sample: 'Sample' },
+            progress: 'Enabled {enabled}/{total}',
+            actions: { configure: 'Configure activation', progress: 'View activation', open: 'Open dashboard', openSample: 'Open sample dashboard', sampleSwitch: 'Sample mode' },
+            previewHint: 'Real historical data replayed offline; exit anytime, writes nothing.',
+            drawer: {
+              title: 'Activate the crypto analyst',
+              subtitle: 'Enable every source below; sample mode stays available after activation.',
+              capabilitiesTitle: 'Required capabilities',
+              capabilities: { market: 'Market data', sentiment: 'Market sentiment', funding: 'Funding rates' },
+              capabilityStates: { missing: 'Not enabled', enabled: 'Waiting for data', ready: 'Ready' },
+              groupsTitle: 'Sources',
+              tiers: { required: 'Required', recommended: 'Recommended', optional: 'Optional' },
+              pending: 'Pending',
+              enableRecommended: 'Enable all sources',
+              enabling: 'Enabling…',
+              failed: 'Enabling failed. Try again.',
+              close: 'Close'
+            }
+          },
           analysisWorkspace: {
             openAgent: 'Full Agent panel', stop: 'Stop', approvalRequired: 'Waiting for tool approval. Open the full Agent panel to review, or stop this run.',
             title: 'Crypto analysis Agent', chat: 'Analysis conversation', dashboard: 'Market dashboard', view: 'Switch workspace', selectedAnalysis: 'Selected analysis is bound', selectedEvent: 'Selected event', selectedNews: 'Selected news', contextAnalysis: 'Quoted analysis',

@@ -26,6 +26,7 @@ import type { LocalizedText } from '@platform/product-manifest'
 import type { WorkspaceTabState } from '@platform/workspace/contracts'
 import type { AppLanguage, AppSettings, AppSettingsPatch, NetworkSettings, NotificationSettings, ProxyMode, ThemeMode } from '@platform/settings/schema/appSettings'
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
+import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -1133,6 +1134,15 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
    * 本函数**只保留接线**：状态来自本组件，写入仍是既有 IPC 包装，抽屉/宿主仍在这里挂载。
    */
   function renderModelService(): React.ReactElement {
+    // The provider list is boot data: until `settings.get()` and `listProviders` settle the page
+    // would claim "no providers" and paint an empty rail. Show the wait instead of a false empty.
+    if (!bootDataReady) {
+      return (
+        <section className="settings-workspace model-service-page" aria-busy="true">
+          <LoadingState label={t.status.loading} fill />
+        </section>
+      )
+    }
     return (
       <ModelServiceProviderPage
         labels={t.models}
@@ -1472,7 +1482,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           </div>
           <div className="runtime-badge">
             <Activity size={18} />
-            <span>{appInfo ? `${appInfo.platform} / Electron ${appInfo.electron}` : t.status.loading}</span>
+            <span>{appInfo
+              ? `${appInfo.platform} / Electron ${appInfo.electron}`
+              : <LoadingState layout="inline" size="sm" label={t.status.loading} />}</span>
           </div>
         </div>
 

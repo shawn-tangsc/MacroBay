@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.crossAsset.release",
+  "effect": "read",
+  "payload": {
+    "state": "released"
+  }
+}

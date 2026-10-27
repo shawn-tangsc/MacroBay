@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "method": "intelligence.queryFearGreedSnapshot",
+  "effect": "read",
+  "payload": {
+    "state": "available",
+    "asOf": "$asOf",
+    "score": 48,
+    "bucket": "fear",
+    "observedAt": "2026-10-27T00:00:00.000Z"
+  }
+}

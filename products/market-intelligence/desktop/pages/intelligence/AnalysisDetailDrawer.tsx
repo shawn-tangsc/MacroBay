@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { LoadingState } from '@platform/ui/components/loading'
 import { Button } from 'antd'
-import { RefreshCw, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { AnalysisConclusionDetail, type AnalysisDetailText } from './AnalysisConclusionDetail'
 import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
@@ -51,7 +52,7 @@ export function AnalysisDetailDrawer({ text, workspaceText, timeline, openEntry,
       <Button type="text" size="small" icon={<X aria-hidden="true" size={15} />} aria-label={workspaceText.closeDetail} onClick={() => onOpenChange(undefined)} />
     </header>
     <div className="mi-analysis-drawer__body">
-      {!detail && pending !== 'unavailable' ? <p className="mi-analysis-timeline__state"><RefreshCw aria-hidden="true" size={13} /> {text.loading}</p> : null}
+      {!detail && pending !== 'unavailable' ? <LoadingState label={text.loading} minHeight={200} /> : null}
       {!detail && pending === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{workspaceText.detailUnavailable}</p> : null}
       {detail ? <AnalysisConclusionDetail detail={detail} text={text} /> : null}
     </div>

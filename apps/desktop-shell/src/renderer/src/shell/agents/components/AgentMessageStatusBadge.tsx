@@ -1,6 +1,7 @@
 import type { AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
-import { AlertTriangle, Loader2, PauseCircle } from 'lucide-react'
+import { AlertTriangle, PauseCircle } from 'lucide-react'
 
+import { LoadingSpinner } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
 
 export default function AgentMessageStatusBadge({
@@ -14,7 +15,7 @@ export default function AgentMessageStatusBadge({
   if (status === 'pending') {
     return (
       <span className="agent-message-status pending">
-        <Loader2 size={12} />
+        <LoadingSpinner size="sm" />
         {t.messages.status.pending}
       </span>
     )

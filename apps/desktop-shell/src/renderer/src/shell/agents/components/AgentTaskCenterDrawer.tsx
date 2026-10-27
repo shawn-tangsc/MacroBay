@@ -6,6 +6,7 @@ import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-p
 import type { AgentSessionWorkspaceSource } from '@platform/ai/agent-platform/schemas/workspaceSchemas'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { JobRunRecord } from '@platform/jobs'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
 import {
   buildAgentTaskCenterState,
@@ -278,7 +279,7 @@ export default function AgentTaskCenterDrawer({
             <strong>{t.taskCenter.taskList}</strong>
             <small>{t.taskCenter.taskCount(centerState.items.length)}</small>
           </header>
-          {loading && centerState.items.length === 0 ? <div className="agent-task-empty">{t.taskCenter.loading}</div> : null}
+          {loading && centerState.items.length === 0 ? <LoadingState label={t.taskCenter.loading} minHeight={120} /> : null}
           {!loading && centerState.items.length === 0 ? <div className="agent-task-empty">{t.taskCenter.empty}</div> : null}
           <div className="agent-task-list">
             {centerState.items.map((item) => (

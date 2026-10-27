@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Drawer, Select } from 'antd'
 
+import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
@@ -279,7 +280,7 @@ export function NewsSentimentDrawer(props: {
                   ) : null}
                   {translationEnabled && rowState === 'translating' ? (
                     <span className="mi-news-drawer__row-loading" role="status" aria-label={text.drawer.translationStatus?.translating}>
-                      <i aria-hidden="true" />
+                      <LoadingSpinner size="sm" />
                     </span>
                   ) : null}
                   {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed ?? 'failed'}</span> : null}
@@ -358,8 +359,10 @@ export function NewsSentimentDrawer(props: {
                   {active.url ? <a href={active.url} rel="noreferrer" target="_blank">{text.drawer.detail.openOriginal} ↗</a> : null}
                 </footer>
               </>
+            ) : props.loading ? (
+              <LoadingState label={text.loading} minHeight={160} />
             ) : (
-              <p className="mi-news-drawer__empty">{props.loading ? text.loading : text.drawer.emptyFiltered}</p>
+              <p className="mi-news-drawer__empty">{text.drawer.emptyFiltered}</p>
             )}
           </aside>
         </div>

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "method": "marketAnalysis.getSettings",
+  "effect": "read",
+  "payload": {
+    "enabled": true,
+    "providerId": "sample",
+    "modelId": "sample",
+    "updatedAt": "2026-10-24T00:00:00.000Z"
+  }
+}

@@ -242,6 +242,14 @@ let agentStateCoordinator: ReturnType<typeof createAgentStateCoordinator> | null
 // before the first path read so development runs do not fall back to a shared Chromium profile.
 // The acceptance profile may override both the name and the userData path afterwards.
 app.setName(APP_INTERNAL_NAME)
+// 本地 dev 的 userData 默认放在仓库 `.devdata/`（launcher 注入）；打包产物不受影响。
+// 这是为了绕开 Windows 受限会话里 Electron 低完整性进程写不了 %APPDATA% 的问题。
+const devUserDataOverride = process.env.MACROBAY_USER_DATA?.trim()
+if (!app.isPackaged && devUserDataOverride) {
+  const resolvedUserData = resolve(devUserDataOverride)
+  mkdirSync(resolvedUserData, { recursive: true })
+  app.setPath('userData', resolvedUserData)
+}
 // Windows derives notification identity and taskbar grouping from the AppUserModelID.
 // Without it the packaged app shows up as a generic Electron process.
 if (process.platform === 'win32') app.setAppUserModelId(APP_BUNDLE_ID)

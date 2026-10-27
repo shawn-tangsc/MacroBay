@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { dashboardFundingRateHistoryPresentationPolicy, formatDashboardFundingRateHistoryValue, type DashboardFundingRateHistoryPoint, type DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 
 import './FundingRateHistoryPanel.css'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = { title: string; pairTitle: string; loading: string; empty: string; unavailable: string; observedAt: string; assets: { btc: string; eth: string }; paymentDirections: Record<'long-pays-short' | 'short-pays-long' | 'neutral', string> }
@@ -16,7 +17,9 @@ const fundingRateHistoryTooltipPlacementPolicy = {
 } as const
 
 export function FundingRateHistoryPanel({ state, text }: { state: DashboardFundingRateHistoryState; text: Text }): React.ReactElement {
-  if (state.state !== 'available') return <section className="mi-funding-rate-history" data-state={state.state}><h2>{text.pairTitle}</h2><p>{text[state.state]}</p></section>
+  if (state.state !== 'available') return <section className="mi-funding-rate-history" data-state={state.state}><h2>{text.pairTitle}</h2>
+    {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={140} /> : <p>{text[state.state]}</p>}
+  </section>
   const rows = chartRows(state.btc, state.eth)
   return <section className="mi-funding-rate-history" data-state="available"><h2>{text.pairTitle}</h2><div className="mi-funding-rate-history__content"><div className="mi-funding-rate-history__latest"><Latest asset="btc" point={state.btc.at(-1)} text={text} /><Latest asset="eth" point={state.eth.at(-1)} text={text} /></div><FundingChart rows={rows} text={text} /></div></section>
 }

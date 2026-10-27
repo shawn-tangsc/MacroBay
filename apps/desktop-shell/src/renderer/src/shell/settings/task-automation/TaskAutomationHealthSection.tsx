@@ -1,4 +1,5 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { LoadingState } from '@platform/ui/components/loading'
 
 import { formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockError } from './TaskAutomationBlockParts'
@@ -44,7 +45,7 @@ export function TaskAutomationHealthSection(props: {
                 <HealthItem label={labels.skipped} value={health.skipped} />
                 <HealthItem label={labels.unknown} value={health.unknown} />
               </dl>
-              {props.loading ? <p className="task-automation-note">{labels.tasksLoading}</p> : null}
+              {props.loading ? <LoadingState layout="inline" size="sm" label={labels.tasksLoading} /> : null}
               {!props.loading && isEmpty ? <p className="task-automation-note">{labels.healthEmpty}</p> : null}
             </>
           )}
@@ -57,7 +58,7 @@ export function TaskAutomationHealthSection(props: {
             </span>
           </div>
           {props.resourceLoading ? (
-            <p className="task-automation-note">{labels.resourceLoading}</p>
+            <LoadingState layout="inline" size="sm" label={labels.resourceLoading} />
           ) : props.resourceRuns.total === 0 ? (
             <p className="task-automation-note">{labels.resourceJobRunsEmpty}</p>
           ) : (

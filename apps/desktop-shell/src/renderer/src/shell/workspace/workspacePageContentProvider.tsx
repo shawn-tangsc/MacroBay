@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { GeneratedProductMenuEntry, GeneratedProductSettingsEntry } from '@platform/product-registry/types'
 import type { AppLanguage, AppSettings, AppSettingsPatch } from '@platform/settings/schema/appSettings'
+import { LoadingState } from '@platform/ui/components/loading'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { platformText } from '../../i18n/platformText'
 import { AgentPage } from '../agents/AgentPage'
@@ -134,8 +135,10 @@ function useDetachedPageData() {
 function DetachedPageStatus({ language, status }: { language: AppLanguage; status: 'loading' | 'failed' }): React.ReactElement {
   const text = platformText[language]
   return (
-    <section className="workspace-page-body-status" data-page-body-status={status} role="status">
-      <p>{status === 'loading' ? text.status.loading : text.status.failed}</p>
+    <section className="workspace-page-body-status" data-page-body-status={status}>
+      {status === 'loading'
+        ? <LoadingState label={text.status.loading} fill />
+        : <p role="status">{text.status.failed}</p>}
     </section>
   )
 }

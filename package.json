@@ -2,7 +2,7 @@
   "name": "macrobay",
   "productName": "MacroBay",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local-first AI desktop workspace for traceable market intelligence.",
   "author": "MacroBay contributors",
   "license": "MIT",
@@ -26,6 +26,7 @@
     "pretypecheck": "pnpm generate:products && pnpm generate:agent-capabilities",
     "lint": "pnpm --filter @macrobay/desktop-shell lint",
     "docs:check": "node scripts/check-docs.mjs",
+    "demo:verify": "tsx scripts/demo/verify-sample.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
     "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts"

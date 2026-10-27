@@ -1,9 +1,10 @@
-import { Button, Empty, Spin, Switch, message } from 'antd'
+import { Button, Empty, Switch, message } from 'antd'
 import { ChevronRight, RotateCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
+import { LoadingState } from '@platform/ui/components/loading'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
 import { StorageCacheTable } from './StorageCacheTable'
@@ -140,8 +141,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
 
         {state.loading ? (
           <div className="storage-cache-placeholder">
-            <Spin />
-            <span>{labels.loading}</span>
+            <LoadingState label={labels.loading} />
           </div>
         ) : state.caches.length === 0 ? (
           <div className="storage-cache-placeholder">

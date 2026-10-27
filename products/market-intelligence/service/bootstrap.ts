@@ -6,7 +6,10 @@ import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-pla
 import type { ProductCacheRegistrar } from '@platform/storage/cache-governance/productCacheRegistrar'
 import type { ProductServiceDisposerRegistrar } from '@platform/product-registry/productServiceDisposerRegistry'
 import type { SecretVault } from '@platform/secrets/secretVaultTypes'
+import { statSync } from 'node:fs'
 import { join } from 'node:path'
+
+import { app } from 'electron'
 import { createPlatformWebSocketFactory } from '@platform/network/platformWebSocket'
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
 import { createCrossAssetStore, crossAssetStoragePolicy } from './intelligence/cross-asset/crossAssetStore'
@@ -59,6 +62,7 @@ import { createBlsScheduleAndLatestValuesSyncWorkflow } from './intelligence/mac
 import { createBlsScheduleAndValuesScheduler } from './intelligence/macro-calendar/bls-schedule-catch-up/blsScheduleAndValuesScheduler'
 import { autoEnrollCalendarProviders } from './intelligence/macro-calendar/macroCalendarProviderAutoEnrollment'
 import { createStoredManualCalendar } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarManualRuntime'
+import { createSampleModeRuntime } from './demo/demoModule'
 
 const blsApiCompatibilityHost = createBlsApiCompatibilityHost()
 const blsPythonRequestsBridge = createBlsPythonRequestsBridge({})
@@ -83,8 +87,51 @@ export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefi
   return blsApiCompatibilityHost.getProbe()
 }
 
+/**
+ * 录制目录（仅开发）：`MB_SAMPLE_RECORD=1` 且不是打包运行时才有。
+ *
+ * 这里对 `app` 做能力判断而不是直接调，因为测试会用一个只实现路径 API 的替身。
+ */
+/**
+ * 开发期的场景目录：只有从源码运行时才走磁盘，打包后一律用构建期打平的 JSON。
+ *
+ * 这让「改一份示例 JSON」不再需要重启主进程——重新进入示例即可生效。
+ */
+function sampleModeScenarioDirectory(): string | undefined {
+  if (typeof app?.getAppPath !== 'function' || app.isPackaged) return undefined
+  const directory = join(app.getAppPath(), 'products/market-intelligence/demo/scenarios')
+  try {
+    return statSync(directory).isDirectory() ? directory : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function sampleModeRecorderDirectory(): string | undefined {
+  if (process.env.MB_SAMPLE_RECORD !== '1') return undefined
+  if (typeof app?.getAppPath !== 'function' || app.isPackaged) return undefined
+  return join(app.getAppPath(), 'products/market-intelligence/demo/raw')
+}
+
 export function registerServices(deps: ProductBootstrapDependencies): void {
   blsApiCompatibilityHost.initialize(Object.freeze({ platformFetch: deps.platformFetch }))
+  /**
+   * 示例模式（设计 155/156）。整份产品只有这一个拦截点：包装注册表，方法集合不变，只换执行。
+   * 暂停/恢复复用启动编排，示例模式自己不排任何班。
+   */
+  let resumeProductWork: () => Promise<void> = async () => undefined
+  const recorderDirectory = sampleModeRecorderDirectory()
+  const scenarioDirectory = sampleModeScenarioDirectory()
+  const sampleMode = createSampleModeRuntime({
+    productId: 'market-intelligence',
+    jobRuntime: deps.jobRuntime,
+    getLanguage: deps.getAppLanguage ?? (async () => 'zh-CN' as const),
+    resumeWork: () => resumeProductWork(),
+    ...(recorderDirectory ? { recorderDirectory } : {}),
+    ...(scenarioDirectory ? { scenarioDirectory } : {})
+  })
+  const register: ProductIpcRegistrar = sampleMode.wrap(deps.register)
+  sampleMode.registerIpc(register)
   let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
     getProviderState: deps.getProviderState,
@@ -99,6 +146,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       : {}),
     onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.()
   })
+  // 退出示例后按既有 profile 重新注册调度：与启动走同一条编排，不复制一份调度逻辑。
+  resumeProductWork = async () => {
+    await intelligenceModule.sourcesService.initializeRuntime()
+    await intelligenceModule.marketAnalysisRuntime.startRecovery()
+  }
   const macroCalendarBackend = createMacroCalendarScheduleBackend({
     dataDir: getIntelligenceProductDataDir(),
     rawRecords: intelligenceModule.rawRecordStore,
@@ -154,7 +206,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // rather than cached with the analysis — it is another database on another cadence.
     macroSeries: (seriesId, fromMs, toMs) => intelligenceModule.macroMarket.store.series(seriesId, fromMs, toMs)
   }) : undefined
-  registerCrossAssetIpc(deps.register, { now: Date.now, runtime: crossAssetRuntime, query: crossAssetQuery, configuration: crossAssetConfiguration })
+  registerCrossAssetIpc(register, { now: Date.now, runtime: crossAssetRuntime, query: crossAssetQuery, configuration: crossAssetConfiguration })
   // Both market stores answer one retention policy, by one daily job and one look at startup: a store
   // that has been kept since the product shipped has months of folding to do, and waiting for the first
   // midnight would leave the reader's disk exactly as it was for a day.
@@ -383,12 +435,12 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     }
   })
 
-  registerIntelligenceIpc(deps.register, deps.jobRuntime)
-  registerIntelligencePublicQueryIpc(deps.register, deps.jobRuntime)
-  registerIntelligenceSourcesIpc(deps.register, deps.jobRuntime)
-  registerDashboardSourceConnectionIpc(deps.register, createDashboardSourceConnectionService())
-  registerIntelligenceTranslationIpc(deps.register, deps.jobRuntime)
-  registerMarketAnalysisIpc(deps.register, intelligenceModule.marketAnalysisRuntime.repository, {
+  registerIntelligenceIpc(register, deps.jobRuntime)
+  registerIntelligencePublicQueryIpc(register, deps.jobRuntime)
+  registerIntelligenceSourcesIpc(register, deps.jobRuntime)
+  registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
+  registerIntelligenceTranslationIpc(register, deps.jobRuntime)
+  registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
     // The same two queries the analysis macro route reads, so an event's context matches it.
     queryMacroEconomicCalendarMonth: macroEconomicCalendarQueryService.queryMonth,
     queryMarketCalendarMonth: marketCalendar.queryMonth
@@ -413,7 +465,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   } catch (error) {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
-  registerMacroEconomicCalendarIpc(deps.register, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
+  registerMacroEconomicCalendarIpc(register, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
     releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
@@ -424,17 +476,17 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const macroMarketSnapshot = createMacroMarketSnapshotQuery({
     store: intelligenceModule.macroMarket.store, now: Date.now, live: intelligenceModule.macroMarketLive.snapshot
   })
-  registerMacroMarketIpc(deps.register, { snapshot: macroMarketSnapshot.snapshot, readiness: intelligenceModule.macroMarketReadiness })
+  registerMacroMarketIpc(register, { snapshot: macroMarketSnapshot.snapshot, readiness: intelligenceModule.macroMarketReadiness })
   // The 来源状态 strip names each feed separately, so it needs each source's own switch, credential and
   // last outcome rather than the one line the snapshot carries. Read-only, and it re-parses its own
   // answer through the public boundary.
-  registerDashboardFeedStatusIpc(deps.register, intelligenceModule.dashboardFeedStatus)
+  registerDashboardFeedStatusIpc(register, intelligenceModule.dashboardFeedStatus)
   // The same block's two rate rows read the FRED metric events the generic collector stored: official
   // daily closes, so every reading carries its observation date and the `official-daily-close` caveat.
   const macroRatesSnapshot = createMacroRatesSnapshotQuery({ listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents() })
-  registerMacroRatesIpc(deps.register, { snapshot: macroRatesSnapshot.snapshot })
+  registerMacroRatesIpc(register, { snapshot: macroRatesSnapshot.snapshot })
   // 口径查询：只读、无依赖（内核是纯函数），agent 侧按需问"这个数从哪来"用。
-  registerProvenanceIpc(deps.register)
+  registerProvenanceIpc(register)
   // The analysis reads the same two snapshots the panel reads, through the public query service rather
   // than through the IPC handlers: one producer, one shape, and no second read path that could drift
   // from the table the reader is looking at.

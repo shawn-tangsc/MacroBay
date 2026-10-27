@@ -4,6 +4,7 @@ import type { CrossAssetId } from '../../../contracts/crossAssetObservationContr
 import { readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
 import { crossAssetSignedValue } from '../../features/industry/cross-asset/crossAssetFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useSampleNow } from './SampleModeProvider'
 import type { MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
@@ -46,6 +47,8 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
   selectedEventKey?: string
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  // 示例模式下月份兜底走场景时钟，否则卡片会去查一个没有示例数据的月份。
+  const sampleNow = useSampleNow()
   // `formatShellInstant` returns `YYYY-MM-DD HH:mm GMT±n`; the card column is narrow, so it
   // shows the day and the clock and leaves the zone to the settings that produced it.
   const stamp = (entry: CalendarCardRow): string => {
@@ -53,7 +56,7 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     const formatted = formatTime(entry.at, 'minute')
     return `${formatted.slice(5, 10)} ${formatted.slice(11, 16)}`
   }
-  const month = projection.upcoming[0]?.month ?? projection.today[0]?.month ?? new Date().toISOString().slice(0, 7)
+  const month = projection.upcoming[0]?.month ?? projection.today[0]?.month ?? sampleNow().toISOString().slice(0, 7)
   /** What a reader gets on the clipboard: the same line they are looking at. */
   const rowText = (entry: CalendarCardRow): string => [
     stamp(entry),

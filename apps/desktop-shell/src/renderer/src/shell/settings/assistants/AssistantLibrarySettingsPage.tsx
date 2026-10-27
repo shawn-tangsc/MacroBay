@@ -89,6 +89,7 @@ export function AssistantLibrarySettingsPage({
             labels={labels}
             items={library.items}
             loading={library.loading}
+            loadingLabel={platformText[language].status.loading}
             onInstall={(templateId) => void installTemplate(templateId)}
             onOpen={(templateId) => void openTemplateDetail(templateId)}
           />

@@ -20,20 +20,19 @@ function store(initial: readonly MacroCalendarProviderProfile[]) {
 }
 
 describe('calendar provider auto enrollment', () => {
-  it('enables every ready credential-free provider that is still disabled', async () => {
+  it('does not auto-enable any credential-free provider on a fresh install', async () => {
     const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
     const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: [...credentialFreeCalendarProviders] })
-    expect(enabled).toEqual([...credentialFreeCalendarProviders])
-    expect(s.profiles.every(candidate => candidate.enabled)).toBe(true)
+    expect(enabled).toEqual([])
+    expect(s.profiles.every(candidate => !candidate.enabled)).toBe(true)
+    expect(s.save).not.toHaveBeenCalled()
   })
 
-  it('never enables a provider whose runtime dependency was not composed', async () => {
+  it('keeps a provider disabled even when its runtime dependency was composed', async () => {
     const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false), profile('macro-calendar-bls', false)])
-    // No BEA release refresh and no BLS bridge this boot.
     const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed'] })
-    expect(enabled).toEqual(['macro-calendar-fed'])
-    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bea')?.enabled).toBe(false)
-    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-bls')?.enabled).toBe(false)
+    expect(enabled).toEqual([])
+    expect(s.profiles.find(candidate => candidate.providerId === 'macro-calendar-fed')?.enabled).toBe(false)
   })
 
   it('leaves an already enabled provider untouched, including its timestamp', async () => {
@@ -44,11 +43,12 @@ describe('calendar provider auto enrollment', () => {
     expect(s.profiles[0]?.updatedAt).toBe('2026-08-01T00:00:00.000Z')
   })
 
-  it('does not block other providers when one write fails', async () => {
+  it('does not write any provider even when a write would fail', async () => {
     const s = store([profile('macro-calendar-fed', false), profile('macro-calendar-bea', false)])
     s.save.mockImplementationOnce(async () => { throw new Error('disk full') })
     const enabled = await autoEnrollCalendarProviders({ profiles: s, readyProviderIds: ['macro-calendar-fed', 'macro-calendar-bea'] })
-    expect(enabled).toEqual(['macro-calendar-bea'])
+    expect(enabled).toEqual([])
+    expect(s.save).not.toHaveBeenCalled()
   })
 
   it('fails closed when the profile list cannot be read', async () => {

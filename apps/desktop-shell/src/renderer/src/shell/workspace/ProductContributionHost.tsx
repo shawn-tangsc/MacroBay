@@ -1,6 +1,7 @@
 import { type ComponentType, useEffect, useState } from 'react'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { LoadingState } from '@platform/ui/components/loading'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { platformText } from '../../i18n/platformText'
 
@@ -55,7 +56,11 @@ export function ProductContributionHost(props: ProductContributionHostProps): Re
   }
 
   if (!Component) {
-    return <section className="contribution-loading">{t.status.loading}</section>
+    return (
+      <section className="contribution-loading">
+        <LoadingState label={t.status.loading} fill />
+      </section>
+    )
   }
 
   const LoadedComponent = Component

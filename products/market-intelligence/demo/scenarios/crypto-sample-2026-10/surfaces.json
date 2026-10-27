@@ -1,0 +1,21 @@
+[
+  "intelligence.crossAsset.acquire",
+  "intelligence.crossAsset.query",
+  "intelligence.crossAsset.release",
+  "intelligence.crossAsset.renew",
+  "intelligence.getNewsSentiment",
+  "intelligence.macro.dashboardFeedStatus.query",
+  "intelligence.macro.economicCalendar.queryMonth",
+  "intelligence.macro.marketCalendar.queryMonth",
+  "intelligence.macro.marketSnapshot.query",
+  "intelligence.macro.ratesSnapshot.query",
+  "intelligence.queryCapitalConditionsSnapshot",
+  "intelligence.queryFearGreedSnapshot",
+  "intelligence.queryFundingRateHistory",
+  "intelligenceSources.getAgentView",
+  "marketAnalysis.getAnalysisRun",
+  "marketAnalysis.getSettings",
+  "marketAnalysis.getSummary",
+  "marketAnalysis.listPredictions",
+  "marketAnalysis.listTimeline"
+]
