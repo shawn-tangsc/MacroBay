@@ -49,9 +49,8 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 
 ## 下载
 
-**[macOS · Apple Silicon（.dmg）](https://github.com/shawn-tangsc/MacroBay/releases/download/v0.2.1/MacroBay-0.2.1-arm64.dmg)** ·
-**[Windows · x64（.exe）](https://github.com/shawn-tangsc/MacroBay/releases/download/v0.2.1/MacroBay-0.2.1-x64-setup.exe)** ·
-[全部版本](https://github.com/shawn-tangsc/MacroBay/releases)
+**[获取最新版本](https://github.com/shawn-tangsc/MacroBay/releases/latest)** ——
+每个版本都附带 macOS（Apple Silicon）`.dmg` 和 Windows（x64）`.exe`。
 
 安装包未签名。macOS 上右键 App → **打开**，或执行
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`；Windows 上在 SmartScreen 里点
