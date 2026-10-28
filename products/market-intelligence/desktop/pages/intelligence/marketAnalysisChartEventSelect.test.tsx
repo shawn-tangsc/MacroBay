@@ -62,8 +62,7 @@ const calendar = { queryMonth: vi.fn(async () => monthPage([calendarEvent])) }
 const never = async () => ({ state: 'unavailable' })
 const dashboardProps = {
   text: portal.dashboard,
-  calendarText: portal.calendar,
-  client: calendar,
+    client: calendar,
   fearGreedClient: { querySnapshot: never } as never,
   fundingRateClient: { query: never } as never,
   now: () => new Date(asOf),

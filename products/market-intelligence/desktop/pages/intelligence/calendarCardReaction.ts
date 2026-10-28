@@ -2,9 +2,9 @@ import { crossAssetContractPolicy, crossAssetCurveStrideMs, type CrossAssetId, t
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
 /**
- * 「这次发布前后各 30 分钟，三条线各自走了多少」（原型 ④：已公布行下面的那一行）。
+ * 「这次发布前后各 30 分钟，四条线各自走了多少」（原型 ④：已公布行下面的那一行）。
  *
- * 原型里那一行长这样：`±30分： QQQ −0.12%  BTC −0.18%  ETH −0.21%`。它是**行情事实**，不是判断：
+ * 原型里那一行长这样：`QQQ −0.12%  BTC −0.18%  ETH −0.21%  美元 +0.04%`。它是**行情事实**，不是判断：
  * 谁都没说这 0.12% 是这次发布造成的，只是把窗口两端的读数摆在一起，让读者自己看那次发布前后市场
  * 有没有动。判断留给判读与分析结论，两者不合流。
  *
@@ -93,9 +93,12 @@ export function reactionReturns(input: Readonly<{
   const returns: Partial<Record<CalendarCardReactionId, number | null>> = {}
   for (const asset of crossAssetContractPolicy.assets) returns[asset] = seriesReturn(input.curves[asset] ?? [], instantMs, windowMs)
   returns.dxy = seriesReturn(input.macroCurves?.dxy ?? [], instantMs, windowMs)
-  // 四条线都答不出来时，卡片就没有这一行可画。
-  return calendarCardReactionPolicy.displayOrder.some(asset => returns[asset] !== null)
-    ? Object.freeze(returns as CalendarCardReaction) : undefined
+  // 四条线都答不出来、或全都平（0.00%）时，卡片就没有这一行可画：印一行 0 不是反应。
+  const hasSignal = calendarCardReactionPolicy.displayOrder.some(asset => {
+    const value = returns[asset]
+    return typeof value === 'number' && value !== 0
+  })
+  return hasSignal ? Object.freeze(returns as CalendarCardReaction) : undefined
 }
 
 /** One series' return across the window, or `null` when either end or the sampling is missing. */

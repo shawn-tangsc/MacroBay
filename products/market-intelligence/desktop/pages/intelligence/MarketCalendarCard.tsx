@@ -1,5 +1,5 @@
 import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
-import { Button } from 'antd'
+import { Button, Tooltip } from 'antd'
 import type { CrossAssetId } from '../../../contracts/crossAssetObservationContracts'
 import { formatReadableAnalysisValue, readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
 import { crossAssetSignedValue } from '../../features/industry/cross-asset/crossAssetFormat'
@@ -21,8 +21,8 @@ import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingC
 export type MarketCalendarCardText = Readonly<{
   title: string; todaySection: string; upcomingSection: string; empty: string; unavailable: string; refresh: string
   awaitingData: string
-  /** 「±30 分」反应那一行的标签（原型 ④）。 */
-  reactionWindow: string
+  /** 反应行的悬停说明；窗口长度不再作为一个可见标签占位。 */
+  reactionHint: string
   openCalendar: string; importanceHigh: string; timePending: string; copyEvent: string; openEventInCalendar: string
   /**
    * 预期差的四种语态。`unavailable` 是「没有一致预期」，`notComparable` 是「有预期但算不出量」；
@@ -66,6 +66,29 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     return `${formatted.slice(5, 10)} ${formatted.slice(11, 16)}`
   }
   const month = projection.upcoming[0]?.month ?? projection.today[0]?.month ?? sampleNow().toISOString().slice(0, 7)
+  const locale = useShellLanguage()
+  const valuesOf = (entry: CalendarCardRow): string => [
+    entry.kind === 'released-changed' && entry.actual ? `${readableAnalysisName(text.readableNames, 'metric', 'actual')} ${entry.actual}` : null,
+    entry.consensus ? `${readableAnalysisName(text.readableNames, 'metric', 'consensus')} ${entry.consensus}` : null,
+    entry.previous ? `${readableAnalysisName(text.readableNames, 'metric', 'previous')} ${entry.previous}` : null
+  ].filter(Boolean).join(' · ')
+  /**
+   * The row's surprise sentence. It never prints a number when there is no comparable magnitude:
+   * "无一致预期" and "预期差不可比" are statements about missing data, not a difference of zero.
+   */
+  const surpriseText = (entry: CalendarCardRow): string => {
+    const surprise = entry.surprise
+    if (surprise.direction === 'consensus-unavailable') {
+      return surprise.reason === 'missing-consensus' ? text.surprise.unavailable : text.surprise.notComparable
+    }
+    if (surprise.direction === 'inline') return text.surprise.inline
+    const number = surprise.value !== null && surprise.unit !== null
+      ? formatReadableAnalysisValue(surprise.value, surprise.unit, locale)
+      : null
+    return number === null ? text.surprise[surprise.direction] : `${text.surprise[surprise.direction]} ${number}`
+  }
+  const surpriseState = (entry: CalendarCardRow): 'beat' | 'miss' | 'inline' | 'unavailable' =>
+    entry.surprise.direction === 'consensus-unavailable' ? 'unavailable' : entry.surprise.direction
   /**
    * When the row can state a concrete surprise, the verdict replaces the three readings.
    *
@@ -84,6 +107,12 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
   const showsSurpriseBadge = (entry: CalendarCardRow): boolean =>
     entry.actual !== null &&
     !(entry.surprise.direction === 'consensus-unavailable' && entry.surprise.reason === 'missing-consensus')
+  /** A reaction row is only worth drawing when at least one line actually moved. */
+  const hasReactionSignal = (entry: CalendarCardRow): boolean =>
+    entry.reaction !== undefined && calendarCardReactionPolicy.displayOrder.some(asset => {
+      const value = entry.reaction?.[asset]
+      return value !== null && value !== undefined && value !== 0
+    })
   /** What a reader gets on the clipboard: the same line they are looking at, plus the verdict. */
   const rowText = (entry: CalendarCardRow): string => [
     stamp(entry),
@@ -94,29 +123,6 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     // says whether the print surprised the market.
     showsSurpriseBadge(entry) ? surpriseText(entry) : null
   ].filter(Boolean).join(' ')
-  const locale = useShellLanguage()
-  /**
-   * The row's surprise sentence. It never prints a number when there is no comparable magnitude:
-   * "无一致预期" and "预期差不可比" are statements about missing data, not a difference of zero.
-   */
-  const surpriseText = (entry: CalendarCardRow): string => {
-    const surprise = entry.surprise
-    if (surprise.direction === 'consensus-unavailable') {
-      return surprise.reason === 'missing-consensus' ? text.surprise.unavailable : text.surprise.notComparable
-    }
-    if (surprise.direction === 'inline') return text.surprise.inline
-    const number = surprise.value !== null && surprise.unit !== null
-      ? formatReadableAnalysisValue(surprise.value, surprise.unit, locale)
-      : null
-    return number === null ? text.surprise[surprise.direction] : `${text.surprise[surprise.direction]} ${number}`
-  }
-  const surpriseState = (entry: CalendarCardRow): 'beat' | 'miss' | 'inline' | 'unavailable' =>
-    entry.surprise.direction === 'consensus-unavailable' ? 'unavailable' : entry.surprise.direction
-  const valuesOf = (entry: CalendarCardRow): string => [
-    entry.kind === 'released-changed' && entry.actual ? `${readableAnalysisName(text.readableNames, 'metric', 'actual')} ${entry.actual}` : null,
-    entry.consensus ? `${readableAnalysisName(text.readableNames, 'metric', 'consensus')} ${entry.consensus}` : null,
-    entry.previous ? `${readableAnalysisName(text.readableNames, 'metric', 'previous')} ${entry.previous}` : null
-  ].filter(Boolean).join(' · ')
   const row = (entry: CalendarCardRow) => (
     <li key={entry.eventKey}>
       {/* A row is selectable as the agent's context, and its text is also copyable; the copy
@@ -151,18 +157,6 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
           {showsSurpriseBadge(entry) ? <em className="mi-calendar-card__row-surprise" data-calendar-surprise={surpriseState(entry)}>
             {surpriseText(entry)}
           </em> : null}
-          {/* 「±30 分」反应：这次发布前后各 30 分钟，四条线各自走了多少（原型 ④）。它是行情事实，
-              不是判断——只报窗口两端的读数，谁都没说这 0.12% 是这次发布造成的。答不出来的线连名字
-              都不印（印名字配「—」会被读成 0），四条都答不出来时整行不画。 */}
-          {entry.kind === 'released-changed' && entry.reaction ? <small className="mi-calendar-card__row-reaction" data-calendar-card-reaction>
-            <em>{text.reactionWindow}</em>
-            {calendarCardReactionPolicy.displayOrder.map(asset => {
-              const value = entry.reaction?.[asset]
-              if (value === null || value === undefined) return null
-              const label = asset === 'dxy' ? text.dxy : text.assets[asset]
-              return <span key={asset} data-reaction-asset={asset}>{label} {crossAssetSignedValue(value, '%')}</span>
-            })}
-          </small> : null}
           {/* 计划时刻已过、值还没到：说在等，而且就写在这一行上——读者要的是「哪一个在等」。 */}
           {entry.awaitingData ? <small className="mi-calendar-card__row-waiting" data-calendar-card-waiting>{text.awaitingData}</small> : null}
         </span>
@@ -192,6 +186,18 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
           <em aria-hidden={entry.importance !== 'high'} aria-label={entry.importance === 'high' ? text.importanceHigh : undefined}
             className="mi-calendar-card__importance" data-importance={entry.importance} />
         </span>
+        {/* 反应行从内容列起、跨到卡片右缘：与标题/读数同一条左基线，又借用工具列那一点宽度，
+            四条线才不会被拆成孤行；真的不够时才允许换行。零值不印，整行都平就不画。 */}
+        {entry.kind === 'released-changed' && hasReactionSignal(entry) ? <Tooltip mouseEnterDelay={0.05} placement="top" title={text.reactionHint}>
+          <small className="mi-calendar-card__row-reaction" data-calendar-card-reaction>
+            {calendarCardReactionPolicy.displayOrder.map(asset => {
+              const value = entry.reaction?.[asset]
+              if (value === null || value === undefined || value === 0) return null
+              const label = asset === 'dxy' ? text.dxy : text.assets[asset]
+              return <span key={asset} data-reaction-asset={asset}>{label} {crossAssetSignedValue(value, '%')}</span>
+            })}
+          </small>
+        </Tooltip> : null}
       </div>
     </li>
   )

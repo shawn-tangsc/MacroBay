@@ -207,7 +207,14 @@ it('shows the ±30 minute reaction of the four lines on a released row', async (
   const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', actual: '0.3%', previous: '0.1%', reaction: { index: -0.12, btc: -0.18, eth: -0.21, dxy: 0.14 } })], upcoming: [], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   const line = host.querySelector('[data-calendar-card-reaction]')
-  expect(line?.textContent).toContain(text.reactionWindow)
+  // The reaction starts on the content column and may run to the card's right edge.
+  expect(line?.closest('.mi-calendar-card__row')).not.toBeNull()
+  expect(line?.textContent).not.toContain('±30')
+  // The window is explained on hover by the same styled tooltip the agent controls use, not a
+  // native title (which is slow and brings the question-mark cursor).
+  await act(async () => { line?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 300)) })
+  expect(document.body.textContent).toContain(text.reactionHint)
   expect(line?.textContent).toContain('QQQ')
   expect(line?.textContent).toContain('−0.12%')
   expect(line?.textContent).toContain('BTC')
@@ -222,12 +229,12 @@ it('shows the ±30 minute reaction of the four lines on a released row', async (
 })
 
 it('prints only the lines that answered, and nothing at all when none did', async () => {
-  const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28, dxy: 0.05 } })], upcoming: [], state: 'available' }}
+  const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28, dxy: 0 } })], upcoming: [], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   const line = partial.querySelector('[data-calendar-card-reaction]')
   expect(line?.textContent).toContain('+0.31%')
   expect(line?.textContent).toContain('+0.28%')
-  expect(line?.textContent).toContain('+0.05%')
+  expect(line?.textContent).not.toContain(text.dxy)
   // 那一条没答出来的线连名字都不印：印个名字配「—」只会让读者以为它是 0。
   expect(line?.textContent).not.toContain('BTC')
 
@@ -316,8 +323,12 @@ it('styles the verdict as a coloured badge, with the direction distinguishable',
   expect(beat).toContain('var(--accent)')
   expect(miss).toContain('var(--danger)')
   expect(styles).toContain('font-weight: 650')
+  expect(styles).toContain('.mi-calendar-card__row-reaction { display: flex; grid-column: 2 / -1; flex-wrap: wrap;')
   // The row keeps the metadata rail; the gutter is deliberate, not an empty time column.
   expect(styles).toContain('.mi-calendar-card__row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto;')
-  expect(styles).toContain('.mi-calendar-card__row-when { display: flex; flex-direction: column; align-items: flex-end;')
+  expect(styles).toContain('.mi-calendar-card__row-when { display: flex; grid-row: 1 / span 2; flex-direction: column; align-items: flex-end;')
   expect(styles).toContain('border-right: 1px solid color-mix')
+  // The rail covers the reaction row too; the reaction sits 5px under the event stack, not a full gap below.
+  expect(styles).toContain('gap: 0 10px')
+  expect(styles).toContain('margin-top: 5px')
 })

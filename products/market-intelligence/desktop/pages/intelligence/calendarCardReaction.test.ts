@@ -12,7 +12,7 @@ import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingC
  * - 两侧都有点 → 逐资产给出窗口内的相对收益（与 `crossAssetWindowReturns` 同一套算法：两个锚定收益的比值）；
  * - 事件之前没有点、或事件之后还没到（发布不足 30 分钟）→ **不给数字**，而不是给半个窗口；
  * - 某个资产那一端是空洞（`returnPercent === null`）→ 那个资产没有数字，别的资产照给；
- * - 三个资产都没有数字 → `undefined`（卡片不画这一行）；
+ * - 三条采集线和美元都没有数字 → `undefined`（卡片不画这一行）；
  * - 读反应的行：只有「最近已公布（有变化）」且**有确切时刻**的行（没有时刻就没有窗口）；
  * - `attachReactions`：只给这些行加上反应，其它行一个字都不动。
  *
@@ -83,12 +83,25 @@ describe('the ±30 minute reaction around a release', () => {
     expect(reactionReturns({ curves: curves([[-60, 0], [0, 4], [60, 7]]), instant: iso(0), windowMs: 60_000 })).toBeUndefined()
   })
 
-  it('normalises a negative zero, like every other return in this product', () => {
-    const flat = reactionReturns({ curves: curves([[-30, 3], [0, 3], [30, 3]]), instant: iso(0) })
+  it('normalises a negative zero while another line keeps the row', () => {
+    const flat = reactionReturns({
+      curves: curves([[-30, 3], [0, 3], [30, 3]]),
+      macroCurves: { dxy: curve([[-30, 0], [0, 0], [30, 1]]) },
+      instant: iso(0)
+    })
     for (const asset of ['index', 'btc', 'eth'] as const) {
       expect(flat?.[asset], asset).toBe(0)
       expect(Object.is(flat?.[asset], -0), asset).toBe(false)
     }
+    expect(flat?.dxy).toBeGreaterThan(0)
+  })
+
+  it('hides the row when every line is flat', () => {
+    expect(reactionReturns({
+      curves: curves([[-30, 3], [0, 3], [30, 3]]),
+      macroCurves: { dxy: curve([[-30, 1], [0, 1], [30, 1]]) },
+      instant: iso(0)
+    })).toBeUndefined()
   })
 })
 

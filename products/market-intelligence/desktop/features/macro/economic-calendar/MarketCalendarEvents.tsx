@@ -18,6 +18,7 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
   const language = useShellLanguage()
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, language)
   const formatTime = useShellTimeFormat()
+  const surprise = assessMarketCalendarSurprise(event.providerActual, event.consensus)
   // CalendarObservedDataTimePolicy: a paged read may advance a source past the observation the reader
   // selected, so the live source and the observation legitimately disagree. The observation is still
   // shown — with **its own** values and the time it belongs to — and the disagreement is reported by
@@ -42,8 +43,8 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
         <span>{text.market[key]}</span><strong>{event[key]?.displayValue ?? text.market.missingValue}</strong>
       </div>)}
       {/* 预期差读契约同一函数：三种语态与看板卡片逐字一致，缺少预期时不出现任何数字。 */}
-      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surpriseAssessment(event))}>
-        <span>{text.market.surprise}</span><strong>{surpriseText(surpriseAssessment(event), text, language)}</strong>
+      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surprise)}>
+        <span>{text.market.surprise}</span><strong>{surpriseText(surprise, text, language)}</strong>
       </div> : null}
     </div> : null}
     {event.officialLink ? <div data-linked-official-values>
@@ -53,10 +54,6 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
     </div> : null}
     <p className="mi-economic-calendar__comparison-rule">{text.market.comparison}</p>
   </aside>
-}
-
-function surpriseAssessment(event: MarketCalendarEvent): MarketCalendarSurpriseAssessment {
-  return assessMarketCalendarSurprise(event.providerActual, event.consensus)
 }
 
 /** The drawer's sentence for one assessment; no number is printed without a presentation. */

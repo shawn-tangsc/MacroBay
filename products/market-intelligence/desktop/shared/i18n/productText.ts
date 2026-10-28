@@ -150,7 +150,7 @@ export const productText = {
             empty: '未来 7 天无高重要性事件', unavailable: '日历数据暂不可用', refresh: '刷新',
             awaitingData: '已到发布时刻，等待实际值',
             // 「±30 分」反应那一行的标签（原型 ④）。三条线的名字用跨资产那份词表。
-            reactionWindow: '±30分',
+            reactionHint: '这次发布前后各 30 分钟的相对变化（不是因果判断）',
             dxy: '美元',
             openCalendar: '打开经济日历', switchToAgent: '切换到市场解读 Agent', switchToCalendar: '切换到日历卡片',
             openEventInCalendar: '在日历中打开该事件',
@@ -1452,7 +1452,7 @@ export const productText = {
             title: 'What to watch', todaySection: 'Recently released, value moved', upcomingSection: 'Upcoming',
             empty: 'No high-importance events in the next 7 days', unavailable: 'Calendar data is unavailable', refresh: 'Refresh',
             awaitingData: 'Scheduled time has passed; waiting for the value',
-            reactionWindow: '±30 min',
+            reactionHint: 'Relative change in the 30 minutes around the release (not a causal claim)',
             dxy: 'DXY',
             openCalendar: 'Open the economic calendar', switchToAgent: 'Switch to the market agent', switchToCalendar: 'Switch to the calendar card',
             openEventInCalendar: 'Open this event in the calendar',
