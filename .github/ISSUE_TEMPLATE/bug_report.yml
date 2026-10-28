@@ -1,0 +1,76 @@
+name: Bug report
+description: Something is broken in the app, the installer or the docs.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the app starts but a panel stays empty, that is usually a setup question — please ask in
+        [Q&A](https://github.com/shawn-tangsc/MacroBay/discussions/new?category=q-a) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag you installed, or the commit if you run from source.
+      placeholder: "0.2.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows x64
+        - Linux
+        - I run it from source
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Paste the exact error text shown in the interface when there is one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Remove API keys, tokens and personal paths before pasting.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed API keys, tokens and personal paths from anything I pasted.
+          required: true
+        - label: This is not a setup question (those go to Q&A).
+          required: true

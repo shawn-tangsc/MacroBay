@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Setup help and questions
+    url: https://github.com/shawn-tangsc/MacroBay/discussions/new?category=q-a
+    about: Install, data sources, proxies — ask in Q&A instead of opening an issue.
+  - name: Feature ideas
+    url: https://github.com/shawn-tangsc/MacroBay/discussions/new?category=ideas
+    about: Suggest a direction or discuss a trade-off before it becomes a task.
