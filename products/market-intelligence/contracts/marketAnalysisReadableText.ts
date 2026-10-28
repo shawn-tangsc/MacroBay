@@ -34,7 +34,13 @@ export const marketAnalysisReadableTextPolicy = Object.freeze({
    * Metrics that are flows: their sign is the message ("+3.14 亿" inflow versus "-2.02 亿"
    * outflow). Levels such as a stablecoin total must not show a sign.
    */
-  signedMetrics: ['etf-net-flow-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'funding-rate-percent'],
+  signedMetrics: ['etf-net-flow-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'funding-rate-percent', 'surprise'],
+  /**
+   * Decimals kept for a derived deviation. The raw value is floating-point arithmetic on two
+   * display strings (`3.4 − 3.1 = 0.2999999999999998`); the reading projection rounds it, the
+   * stored value stays exact.
+   */
+  deviationFractionDigits: 2,
   /**
    * Identifiers a conclusion may contain as an ordinary English word. Everything else that is
    * substituted carries a hyphen or an underscore, so an ordinary word such as `all` or
@@ -80,7 +86,23 @@ export function formatReadableAnalysisValue(value: string | number, unit: string
   }
   if (unit === 'USD') return formatReadableUsdAmount(value, locale, signed)
   if (unit === 'percent') return signed && value > 0 ? `+${value}%` : `${value}%`
+  if (unit === 'pp') {
+    const number = formatDeviation(value)
+    return locale === 'zh-CN' ? `${signedPrefix(value, signed)}${number} 个百分点` : `${signedPrefix(value, signed)}${number}pp`
+  }
+  if (unit === 'relative-percent') return `${signedPrefix(value, signed)}${formatDeviation(value)}%`
   return String(value)
+}
+
+/** A deviation rounded to the reading policy, without a trailing `+0.00`. */
+function formatDeviation(value: number): string {
+  const scale = 10 ** marketAnalysisReadableTextPolicy.deviationFractionDigits
+  return String(Math.round(value * scale) / scale)
+}
+
+/** Only a positive value carries an explicit `+`; zero and negatives do not. */
+function signedPrefix(value: number, signed: boolean): string {
+  return signed && value > 0 ? '+' : ''
 }
 
 /** Formats a USD amount with a magnitude prefix; English uses the currency symbol, not a suffix. */

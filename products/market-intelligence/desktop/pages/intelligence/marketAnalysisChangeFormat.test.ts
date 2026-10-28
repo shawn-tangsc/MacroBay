@@ -66,6 +66,17 @@ describe('market analysis change formatting', () => {
     expect(formatChangeValue(71, null, 'zh-CN')).toBe('71')
   })
 
+  it('formats a derived surprise with its recorded unit and sign', () => {
+    const entries = formatChangeEntries(view([
+      { domain: 'macro', subject: 'consumer-price-index', metric: 'surprise', unit: 'pp', kind: 'added', previousValue: null, value: 0.30000000000000004 },
+      { domain: 'macro', subject: 'consumer-price-index', metric: 'surprise', unit: 'relative-percent', kind: 'added', previousValue: null, value: 10.000000000000002 }
+    ]), names)
+
+    expect(entries.map(entry => entry.current)).toEqual(['+0.3 个百分点', '+10%'])
+    expect(entries[0]?.label).toBe('消费者物价指数 · 预期差（实际−预期）')
+    expect(entries[1]?.label).toBe(entries[0]?.label)
+  })
+
   it('does not sign a level such as a stablecoin total, but does sign a flow', () => {
     const entries = formatChangeEntries(view([
       { domain: 'capital', subject: null, metric: 'current-usd', unit: 'USD', kind: 'changed', previousValue: 258_458_620_000, value: 258_458_629_557.07956 },

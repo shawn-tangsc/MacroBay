@@ -35,10 +35,22 @@ describe('readable analysis text', () => {
   it('signs flows, leaves levels unsigned and shortens a long text value', () => {
     expect(isSignedAnalysisMetric('change-1d-usd')).toBe(true)
     expect(isSignedAnalysisMetric('current-usd')).toBe(false)
+    expect(isSignedAnalysisMetric('surprise')).toBe(true)
     expect(formatReadableAnalysisValue(-0.003657, 'percent')).toBe('-0.003657%')
     expect(formatReadableAnalysisValue(0.5, 'percent')).toBe('+0.5%')
     expect(formatReadableAnalysisValue(71, 'score')).toBe('71')
     expect(formatReadableAnalysisValue('x'.repeat(200), null)).toBe(`${'x'.repeat(72)}…`)
+  })
+
+  it('formats a surprise in percentage points or a relative percentage, in both languages', () => {
+    // The stored value is floating-point arithmetic on display strings; the reading rounds it.
+    expect(formatReadableAnalysisValue(0.2999999999999998, 'pp', 'zh-CN')).toBe('+0.3 个百分点')
+    expect(formatReadableAnalysisValue(0.2999999999999998, 'pp', 'en-US')).toBe('+0.3pp')
+    expect(formatReadableAnalysisValue(-0.1, 'pp', 'zh-CN')).toBe('-0.1 个百分点')
+    expect(formatReadableAnalysisValue(10.000000000000002, 'relative-percent', 'zh-CN')).toBe('+10%')
+    expect(formatReadableAnalysisValue(1.5, 'relative-percent', 'en-US')).toBe('+1.5%')
+    expect(formatReadableAnalysisValue(-1.5, 'relative-percent', 'en-US')).toBe('-1.5%')
+    expect(formatReadableAnalysisValue(0, 'pp', 'zh-CN')).toBe('0 个百分点')
   })
 
   it('names a fact value from the injected vocabulary and falls back to the raw value', () => {
