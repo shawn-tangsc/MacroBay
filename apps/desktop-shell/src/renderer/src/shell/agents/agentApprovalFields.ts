@@ -15,8 +15,8 @@ const APPROVAL_VALUE_LIMIT = 160
 
 /**
  * Known product write capability -> its input as field/value rows. The values are what the model
- * asked for, never what the write produced; an unknown field keeps its raw key rather than
- * disappearing, and an unknown capability returns null so the card keeps its existing summary.
+ * asked for, never what the write produced. An unknown capability or an unlabelled field returns
+ * null so the card keeps its existing summary rather than inventing a name or dropping a field.
  */
 export function structuredApprovalInput(
   toolName: string,
@@ -29,10 +29,15 @@ export function structuredApprovalInput(
     ([, value]) => value !== undefined
   )
   if (entries.length === 0) return null
-  return entries.map(([field, value]) => ({
-    label: text.approvalFieldLabels[field] ?? field,
-    value: approvalValue(value)
-  }))
+  const fields: AgentApprovalField[] = []
+  for (const [field, value] of entries) {
+    const label = text.approvalFieldLabels[field]
+    // An unlabelled field means this card cannot be explained field by field; falling back to
+    // the existing JSON summary is safer than inventing a label or dropping the field.
+    if (!label) return null
+    fields.push({ label, value: approvalValue(value) })
+  }
+  return fields
 }
 
 function approvalValue(value: unknown): string {
