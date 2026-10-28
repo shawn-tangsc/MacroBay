@@ -125,8 +125,8 @@
 .mi-capital-conditions dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); justify-content: start; gap: var(--mi-dashboard-capital-fact-row-gap); margin-top: 0; }
 .mi-capital-conditions dl > div { display: grid; gap: 4px; min-width: 0; }
 .mi-capital-conditions dl > div.mi-capital-conditions__cumulative { grid-column: 1 / -1; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 4px 12px; }
-.mi-capital-conditions__cumulative dd { display: flex; flex-wrap: wrap; align-items: baseline; row-gap: 4px; white-space: normal; }
-.mi-capital-conditions__cumulative-window { display: inline-flex; align-items: baseline; white-space: nowrap; }
+.mi-capital-conditions__cumulative dd { white-space: normal; }
+.mi-capital-conditions__cumulative-window { white-space: nowrap; }
 .mi-capital-conditions__cumulative-days,
 .mi-capital-conditions__cumulative-caveat { color: var(--mi-dashboard-muted); }
 .mi-capital-conditions dt { color: var(--mi-dashboard-muted); font-size: 12px; }
