@@ -623,6 +623,8 @@ export function getIntelligenceModule(
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
+    // Best-effort seed: `readSettings` already falls back to defaults when the file is absent, so
+    // a failed write during shutdown must not surface as an unhandled rejection.
     void (async () => {
       const settingsPath = join(dataDir, 'intelligence-translation-settings.json')
       try {
@@ -630,7 +632,7 @@ export function getIntelligenceModule(
       } catch {
         await translationStorage.writeSettings(createDefaultTranslationSettings(await getAppLanguage()))
       }
-    })()
+    })().catch(() => undefined)
     intelligenceModule = {
       pipeline,
       workerRuntime,
