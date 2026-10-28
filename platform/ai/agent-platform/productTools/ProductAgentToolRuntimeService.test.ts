@@ -160,4 +160,134 @@ describe('ProductAgentToolRuntimeService', () => {
     expect(trace?.status).toBe('failed')
     expect(trace?.errorCode).toBe('invalid-output-schema')
   })
+
+  it('delivers handler log entries to the injected logger', async () => {
+    const entries: Array<{ level: string; message: string; details?: Record<string, unknown> }> = []
+    const registry = new ProductAgentToolRegistry()
+    const runtime = new ProductAgentToolRuntimeService({
+      registry,
+      traceRepository: createInMemoryProductAgentToolTraceRepository(),
+      installedProductIds: () => ['market-intelligence'],
+      log: (entry) => entries.push(entry)
+    })
+
+    registry.registerToolMetadata({
+      toolName: 'configure_intelligence_source',
+      productId: 'market-intelligence',
+      handlerId: 'market-intelligence.configure-intelligence-source',
+      inputSchema: { type: 'object', properties: {} },
+      outputSchema: { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' } } },
+      schemaVersion: 1,
+      description: 'write',
+      readOnly: false,
+      requiresTemporalBoundary: false,
+      requiresApproval: 'always',
+      timeoutMs: 10_000
+    })
+    registry.registerHandler({
+      productId: 'market-intelligence',
+      handlerId: 'market-intelligence.configure-intelligence-source',
+      handle: async (_input, context) => {
+        await context.log({
+          level: 'warn',
+          message: 'Configuration change could not be recorded in the audit log.',
+          details: {
+            capabilityId: 'configure_intelligence_source',
+            action: 'set-enabled',
+            traceId: 'trace-log-1'
+          }
+        })
+        return { ok: true }
+      }
+    })
+
+    const state = {
+      ...createAgentStoreState(),
+      agentProductToolPackages: [
+        {
+          agentId: 'agent-1',
+          productId: 'market-intelligence',
+          permissionMode: 'allow-read-only' as const,
+          updatedAt: '2026-01-01T00:00:00.000Z'
+        }
+      ]
+    }
+
+    await runtime.invokeTool(state, {
+      agentId: 'agent-1',
+      sessionId: 'session-1',
+      productId: 'market-intelligence',
+      toolName: 'configure_intelligence_source',
+      input: {},
+      toolCallId: 'trace-log-1'
+    })
+
+    expect(entries).toEqual([
+      {
+        level: 'warn',
+        message: 'Configuration change could not be recorded in the audit log.',
+        details: {
+          capabilityId: 'configure_intelligence_source',
+          action: 'set-enabled',
+          traceId: 'trace-log-1'
+        }
+      }
+    ])
+  })
+
+  it('keeps a completed call when the injected logger throws', async () => {
+    const registry = new ProductAgentToolRegistry()
+    const runtime = new ProductAgentToolRuntimeService({
+      registry,
+      traceRepository: createInMemoryProductAgentToolTraceRepository(),
+      installedProductIds: () => ['market-intelligence'],
+      log: () => {
+        throw new Error('log sink unavailable')
+      }
+    })
+
+    registry.registerToolMetadata({
+      toolName: 'get_source_health',
+      productId: 'market-intelligence',
+      handlerId: 'market-intelligence.get-source-health',
+      inputSchema: { type: 'object', properties: {} },
+      outputSchema: { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' } } },
+      schemaVersion: 1,
+      description: 'health',
+      readOnly: true,
+      requiresTemporalBoundary: false,
+      requiresApproval: 'never'
+    })
+    registry.registerHandler({
+      productId: 'market-intelligence',
+      handlerId: 'market-intelligence.get-source-health',
+      handle: async (_input, context) => {
+        await context.log({ level: 'warn', message: 'audit failed' })
+        return { ok: true }
+      }
+    })
+
+    const state = {
+      ...createAgentStoreState(),
+      agentProductToolPackages: [
+        {
+          agentId: 'agent-1',
+          productId: 'market-intelligence',
+          permissionMode: 'allow-read-only' as const,
+          updatedAt: '2026-01-01T00:00:00.000Z'
+        }
+      ]
+    }
+
+    await expect(
+      runtime.invokeTool(state, {
+        agentId: 'agent-1',
+        sessionId: 'session-1',
+        productId: 'market-intelligence',
+        toolName: 'get_source_health',
+        input: {},
+        toolCallId: 'trace-log-raise-1'
+      })
+    ).resolves.toMatchObject({ output: { ok: true } })
+  })
 })

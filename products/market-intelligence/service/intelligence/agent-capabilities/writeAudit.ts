@@ -133,7 +133,17 @@ async function record(input: {
     return true
   } catch {
     try {
-      await input.context.log({ level: 'warn', message: AUDIT_WARNING })
+      await input.context.log({
+        level: 'warn',
+        message: AUDIT_WARNING,
+        // Capability, action, trace id: enough to find the call, and nothing that could carry
+        // a configuration value, a credential, a URL, or an endpoint into the process log.
+        details: {
+          capabilityId: input.capability.id,
+          action: input.action,
+          traceId: input.context.toolCallId
+        }
+      })
     } catch {
       // A logging failure must not hide the business result either.
     }

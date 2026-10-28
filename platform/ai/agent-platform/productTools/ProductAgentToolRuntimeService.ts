@@ -17,6 +17,7 @@ import type {
   ProductAgentToolInvokeResult,
   ProductAgentToolsRuntimeSnapshot
 } from './productAgentToolSchemas'
+import type { ProductAgentToolLogEntry } from './productAgentToolBootstrapContracts'
 import { mapProductToolApproval, resolvePackagePermissionMode } from './productAgentToolViewModel'
 import { validateTemporalBoundary } from './productAgentToolTemporalBoundary'
 import { validateProductAgentToolJsonSchema } from './productAgentToolSchemaValidation'
@@ -32,6 +33,12 @@ type ProductAgentToolRuntimeServiceDependencies = {
   traceRepository?: ProductAgentToolTraceRepository
   installedProductIds: () => readonly string[]
   now?: () => string
+  /**
+   * Process-level sink for handler log entries. Handlers reach it through
+   * `context.log`; when omitted the entry goes to the main-process console.
+   * Logging never changes a tool result, so a throwing sink is swallowed.
+   */
+  log?: (entry: ProductAgentToolLogEntry) => void
 }
 
 export class ProductAgentToolRuntimeService {
@@ -212,7 +219,9 @@ export class ProductAgentToolRuntimeService {
         agentId: input.agentId,
         agentSessionId: input.sessionId,
         signal,
-        log: async () => undefined
+        log: async (entry) => {
+          this.writeLog(entry)
+        }
       })
 
       const outputSchemaResult = validateProductAgentToolJsonSchema(output, resolved.outputSchema)
@@ -356,6 +365,20 @@ export class ProductAgentToolRuntimeService {
 
   private timestamp(): string {
     return this.deps.now?.() ?? new Date().toISOString()
+  }
+
+  private writeLog(entry: ProductAgentToolLogEntry): void {
+    try {
+      if (this.deps.log) {
+        this.deps.log(entry)
+        return
+      }
+      const details = entry.details ? ` ${JSON.stringify(entry.details)}` : ''
+      // The process log is the last resort; a product may inject a durable sink instead.
+      console.warn(`[product-tool] ${entry.level} ${entry.message}${details}`)
+    } catch {
+      // A failed log write must not turn a completed tool call into handler-error.
+    }
   }
 }
 

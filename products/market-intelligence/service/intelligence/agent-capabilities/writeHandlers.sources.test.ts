@@ -274,7 +274,11 @@ describe('source configuration write handlers', () => {
     expect(logEntries).toHaveLength(1)
     expect(logEntries[0]!.level).toBe('warn')
     expect(logEntries[0]!.message).not.toContain('coingecko-trending')
-    expect(logEntries[0]!.details).toBeUndefined()
+    expect(logEntries[0]!.details).toEqual({
+      capabilityId: 'configure_intelligence_source',
+      action: 'set-enabled',
+      traceId: 'tool-call-1'
+    })
   })
 })
 
