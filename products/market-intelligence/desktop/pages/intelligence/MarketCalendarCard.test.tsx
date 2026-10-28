@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
@@ -6,6 +8,8 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { MarketCalendarCard } from './MarketCalendarCard'
+
+const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 function calendarText(language: 'zh-CN' | 'en-US') {
@@ -278,4 +282,13 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
   expect(written[0]).toContain('超预期 +10%')
   // Only the released row carries a verdict; a scheduled event has nothing to compare yet.
   expect(host.querySelectorAll('[data-calendar-surprise]')).toHaveLength(1)
+})
+
+it('styles the verdict as a coloured badge, with the direction distinguishable', () => {
+  const beat = styles.slice(styles.indexOf(".mi-calendar-card__row-surprise[data-calendar-surprise='beat']"))
+  const miss = styles.slice(styles.indexOf(".mi-calendar-card__row-surprise[data-calendar-surprise='miss']"))
+  expect(beat).toContain('background: color-mix')
+  expect(beat).toContain('var(--accent)')
+  expect(miss).toContain('var(--danger)')
+  expect(styles).toContain('font-weight: 650')
 })

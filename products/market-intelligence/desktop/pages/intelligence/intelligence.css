@@ -1430,11 +1430,12 @@ button.mi-agent-card__status:focus-visible {
 .mi-calendar-card__row-kind[data-kind='financial-event'] { color: var(--mi-calendar-kind-financial); }
 .mi-calendar-card__row-kind[data-kind='central-bank-activity'] { color: var(--mi-calendar-kind-central-bank); }
 .mi-calendar-card__row-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
-/* 预期差：一行自己的话。方向只用既有颜色 token；「无一致预期 / 不可比」与「符合预期」保持安静。 */
-.mi-calendar-card__row-surprise { display: block; margin-top: 2px; overflow: hidden; font-size: 10px; font-style: normal; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.mi-calendar-card__row-surprise[data-calendar-surprise='beat'] { color: var(--accent); }
-.mi-calendar-card__row-surprise[data-calendar-surprise='miss'] { color: var(--danger); }
-.mi-calendar-card__row-surprise[data-calendar-surprise='inline'],
+/* 预期差：一行自己的话，但必须比读数更醒目。方向用既有颜色 token，并给底色与描边，
+   「无一致预期 / 不可比」保持安静，不出现数字。 */
+.mi-calendar-card__row-surprise { display: inline-flex; align-items: center; width: fit-content; margin-top: 4px; padding: 1px 6px; border: 1px solid color-mix(in srgb, var(--muted) 32%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--surface-strong) 72%, transparent); font-size: 11px; font-style: normal; font-variant-numeric: tabular-nums; font-weight: 650; line-height: 16px; white-space: nowrap; }
+.mi-calendar-card__row-surprise[data-calendar-surprise='beat'] { border-color: color-mix(in srgb, var(--accent) 52%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.mi-calendar-card__row-surprise[data-calendar-surprise='miss'] { border-color: color-mix(in srgb, var(--danger) 52%, transparent); background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
+.mi-calendar-card__row-surprise[data-calendar-surprise='inline'] { color: var(--muted-strong); }
 .mi-calendar-card__row-surprise[data-calendar-surprise='unavailable'] { color: var(--muted); }
 .mi-calendar-card__row time { padding-top: 1px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-calendar-card__row-tools { display: flex; align-items: center; gap: 6px; }

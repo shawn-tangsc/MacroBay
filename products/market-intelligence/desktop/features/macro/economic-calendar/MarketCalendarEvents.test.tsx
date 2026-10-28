@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
+
+const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 /** 显示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
@@ -140,4 +144,12 @@ it('shows a refused automatic collection with its verdict, origin and time in th
     expect(host.textContent).toContain('Refresh failed')
     expect(host.textContent).not.toContain('Storage limited')
   } finally { await act(async () => root.unmount()) }
+})
+
+it('gives the surprise row a coloured badge instead of plain value text', () => {
+  expect(styles).toContain(".mi-economic-calendar__values [data-market-value='surprise'][data-surprise='beat'] strong")
+  expect(styles).toContain(".mi-economic-calendar__values [data-market-value='surprise'][data-surprise='miss'] strong")
+  expect(styles).toContain('var(--mi-economic-lime)')
+  expect(styles).toContain('var(--danger)')
+  expect(styles).toContain('font-weight: 700')
 })

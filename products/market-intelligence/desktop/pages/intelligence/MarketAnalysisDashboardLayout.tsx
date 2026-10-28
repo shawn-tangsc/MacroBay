@@ -210,8 +210,11 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
             // in-flight node detail read, so the panel and the next message carry one context.
             timeline.clearSelection()
             setOpenEntry(undefined)
-            setEventDetail(undefined)
-            setSelectedContext({ key: `calendar-event:${eventKey}`, label, eventKey, month })
+            // A row click asks "what was that print": open the same left, unmasked drawer the chart
+            // line opens. Recording the Agent context is additive and must not replace the detail.
+            openEventDetailThenRecord({ eventKey, label, month }, setEventDetail, recorded => setSelectedContext({
+              key: `calendar-event:${recorded.eventKey}`, label: recorded.label, eventKey: recorded.eventKey, month: recorded.month
+            }))
           }}
           selectedEventKey={selectedContext?.key.startsWith('calendar-event:') ? selectedContext.key.slice('calendar-event:'.length) : undefined}
           onRefresh={cardData.reload}
