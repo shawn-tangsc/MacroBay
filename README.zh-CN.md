@@ -47,6 +47,19 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
   <sub>一屏看完——AI 结论、市场状态、跨资产收益、资金面、情绪与资金费率。 <a href="./docs/assets/screenshots/demo-en.gif">看 38 秒演示</a>。</sub>
 </p>
 
+## 下载
+
+**[获取最新版本](https://github.com/shawn-tangsc/MacroBay/releases/latest)** ——
+每个版本都附带 macOS（Apple Silicon）`.dmg` 和 Windows（x64）`.exe`。
+
+安装包未签名。macOS 上右键 App → **打开**，或执行
+`xattr -dr com.apple.quarantine /Applications/MacroBay.app`；Windows 上在 SmartScreen 里点
+**更多信息 → 仍要运行**。
+
+**没有 API Key？** 打开应用，选择 **示例模式 → 打开示例看板**。它会回放真实录制的一周数据——
+看板、资金费率、稳定币、ETF 流向、两个月的日历和三条已发布分析——界面上标注「示例数据」，并且不会写入
+你的数据库。
+
 给那些"说完一句话还得接得住追问"的人——不管这是你的第一轮周期，还是第四轮。
 
 ## 这套东西适合谁
@@ -130,8 +143,9 @@ Releases）、市场数据（Binance 现货与合约、CoinGecko、DeFiLlama 稳
 
 ## 快速开始
 
-需要 **Node.js 22+** 和 **pnpm 10**。用 `pnpm dev` 从源码运行，或用 `pnpm dist:mac` 打出未签名的
-macOS 安装包（见[打包](./docs/development/packaging.zh-CN.md)）。
+想直接用？到 [Releases](https://github.com/shawn-tangsc/MacroBay/releases) 下载。要从源码运行需要
+**Node.js 22+** 和 **pnpm 10**；要自己打安装包用 `pnpm dist:mac`（见
+[打包](./docs/development/packaging.zh-CN.md)）。
 
 ```bash
 pnpm install
