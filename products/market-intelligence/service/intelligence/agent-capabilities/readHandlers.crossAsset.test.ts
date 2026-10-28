@@ -17,6 +17,7 @@ function deps(input: {
   return {
     jobRuntime: {} as JobRuntime,
     getAppLanguage: async () => 'zh-CN' as const,
+    macroCalendarOps: {} as never,
     crossAssetOps: {
       readConfiguration: async () => input.configuration,
       readLeaseState: async () => input.lease

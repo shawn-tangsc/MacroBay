@@ -346,6 +346,45 @@ export const translationStatusOutputSchema = {
   }
 } as const
 
+export const calendarStateInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {}
+} as const
+
+export const calendarStateOutputSchema = {
+  type: 'object',
+  required: ['state', 'providers', 'releaseTimes', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'unavailable'] },
+    providers: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['providerId', 'enabled', 'configured'],
+        properties: {
+          providerId: { type: 'string' },
+          enabled: { type: ['boolean', 'null'] },
+          configured: { type: 'boolean' }
+        }
+      }
+    },
+    releaseTimes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['eventKey', 'scheduledAt', 'scheduledDate'],
+        properties: {
+          eventKey: { type: 'string' },
+          scheduledAt: { type: 'string' },
+          scheduledDate: { type: 'string' }
+        }
+      }
+    },
+    caveats: caveatsSchema
+  }
+} as const
+
 export const crossAssetSnapshotInputSchema = {
   type: 'object',
   required: ['range'],

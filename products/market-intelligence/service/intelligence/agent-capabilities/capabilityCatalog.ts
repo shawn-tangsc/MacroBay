@@ -12,6 +12,8 @@ import {
   provenanceExplainOutputSchema
 } from './capabilitySchemas'
 import {
+  calendarStateInputSchema,
+  calendarStateOutputSchema,
   crossAssetSnapshotInputSchema,
   crossAssetSnapshotOutputSchema,
   dashboardFeedStatusInputSchema,
@@ -254,6 +256,19 @@ export const intelligenceAgentCapabilities = [
     outputSchema: macroCalendarMonthOutputSchema,
     handlerId: 'market-intelligence.query-macro-calendar',
     timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_calendar_state',
+    domain: 'calendar',
+    kind: 'read',
+    title: { 'zh-CN': '日历供应商状态', 'en-US': 'Calendar provider state' },
+    description:
+      '读取宏观日历供应商的开关与读者自己改过的发布时间覆盖。providers 里 configured=false 且 enabled=null 表示该供应商从未保存过设置，不是「已停用」；releaseTimes 逐条给出被读者覆盖的 eventKey、发布时间与发布日，没有覆盖时为空数组，不编造约定默认时间。限制：只回答供应商设置与发布时间覆盖，事件、发布值与预期差由 query_macro_calendar 回答；不返回任何凭据、URL、原始 HTTP 响应或调度内部结构。',
+    inputSchema: calendarStateInputSchema,
+    outputSchema: calendarStateOutputSchema,
+    handlerId: 'market-intelligence.get-calendar-state',
+    timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {

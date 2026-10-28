@@ -12,11 +12,13 @@ import { computeConfigurationRevision } from './configurationRevision'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import type { CapabilityDomain } from './capabilityTypes'
 import { projectSourceDetail, projectSourceSummary, projectTimelineRow } from './projections'
-import type { CrossAssetOps } from './operationFacades'
+import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
+import { macroCalendarProviderSettingsPolicy } from '../../../contracts/macro/economicCalendarQueryContracts'
 
 export type ReadHandlerDeps = {
   jobRuntime: JobRuntime
   getAppLanguage: () => Promise<AppLanguage>
+  macroCalendarOps: MacroCalendarOps
   crossAssetOps: CrossAssetOps
 }
 
@@ -457,6 +459,54 @@ export async function handleGetTranslationStatus(
     queue,
     caveats: []
   }
+}
+
+/**
+ * The calendar provider switches and the reader's own release-time edits.
+ *
+ * The events themselves are `query_macro_calendar`; this answers "is the provider on,
+ * and did the reader move a release?". A provider that never stored a profile is
+ * reported as configured=false with enabled=null — not as disabled.
+ */
+export async function handleGetCalendarState(
+  _input: unknown,
+  deps: ReadHandlerDeps
+): Promise<unknown> {
+  let configuration: Awaited<ReturnType<MacroCalendarOps['readConfiguration']>>
+  try {
+    configuration = await deps.macroCalendarOps.readConfiguration()
+  } catch {
+    return {
+      state: 'unavailable',
+      providers: [],
+      releaseTimes: [],
+      caveats: ['calendar-state-unavailable']
+    }
+  }
+
+  const providerIds = [
+    ...new Set([
+      ...macroCalendarProviderSettingsPolicy.providerIds,
+      ...Object.keys(configuration.providers)
+    ])
+  ].sort()
+  const providers = providerIds.map((providerId) => {
+    const configured = Object.hasOwn(configuration.providers, providerId)
+    return {
+      providerId,
+      enabled: configured ? configuration.providers[providerId] === true : null,
+      configured
+    }
+  })
+  const releaseTimes = Object.entries(configuration.releaseTimes)
+    .map(([eventKey, value]) => ({
+      eventKey,
+      scheduledAt: value.scheduledAt,
+      scheduledDate: value.scheduledDate
+    }))
+    .sort((left, right) => left.eventKey.localeCompare(right.eventKey))
+
+  return { state: 'available', providers, releaseTimes, caveats: [] }
 }
 
 /**

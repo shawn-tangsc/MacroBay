@@ -15,6 +15,7 @@ import {
 const deps = {
   jobRuntime: {} as JobRuntime,
   getAppLanguage: async () => 'zh-CN' as const,
+  macroCalendarOps: {} as never,
   crossAssetOps: {} as never
 }
 

@@ -30,6 +30,7 @@ import type { WriteHandlerDeps } from './writeAudit'
 import { intelligenceWriteActionRules } from './writeCapabilitySchemas'
 import {
   handleDescribeIntelligenceCapabilities,
+  handleGetCalendarState,
   handleGetCrossAssetSnapshot,
   handleGetDashboardFeedStatus,
   handleGetIntelligenceTimeline,
@@ -87,6 +88,7 @@ const handlerFactories: Record<CapabilityId, HandlerFactory> = {
   get_source_detail: read(handleGetSourceDetail),
   get_intelligence_timeline: read(handleGetIntelligenceTimeline),
   query_macro_calendar: read(handleQueryMacroCalendar),
+  get_calendar_state: read(handleGetCalendarState),
   query_news_sentiment: read(handleQueryNewsSentiment),
   get_news_sentiment_item: read(handleGetNewsSentimentItem),
   get_translation_status: read(handleGetTranslationStatus),
@@ -179,6 +181,7 @@ function read(handle: (input: unknown, deps: ReadHandlerDeps) => Promise<unknown
     handle(input, {
       jobRuntime: deps.jobRuntime,
       getAppLanguage: deps.getAppLanguage,
+      macroCalendarOps: deps.writeDeps.macroCalendarOps,
       crossAssetOps: deps.writeDeps.crossAssetOps
     })
 }
