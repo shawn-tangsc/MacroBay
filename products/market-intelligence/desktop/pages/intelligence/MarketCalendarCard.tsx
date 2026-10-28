@@ -107,12 +107,14 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
         aria-pressed={onSelectEvent ? selectedEventKey === entry.eventKey : undefined}
         onClick={onSelectEvent ? () => onSelectEvent(entry.eventKey, rowText(entry), entry.month) : undefined}
         onKeyDown={onSelectEvent ? event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelectEvent(entry.eventKey, rowText(entry), entry.month) } } : undefined}>
-        {/* Date and clock when the source published a time; day plus an explicit "pending" when
-            it did not, rather than a fabricated hour. */}
-        {/* Left: when it is. Right: the event on the first line, its numbers on the second. */}
-        <time>{stamp(entry)}</time>
+        {/* The time rides the title line instead of owning a mostly-empty column: the row keeps
+            the full width for the event name and its numbers, and the clock stays on the first line
+            where the reader looks for it. */}
         <span className="mi-calendar-card__row-main">
           <span className="mi-calendar-card__row-title">
+            {/* Date and clock when the source published a time; day plus an explicit "pending" when
+                it did not, rather than a fabricated hour. */}
+            <time>{stamp(entry)}</time>
             {/* The category is colour-coded so indicators, financial events and central-bank
                 activity are told apart at a glance. */}
             <em className="mi-calendar-card__row-kind" data-kind={entry.category}>{text.categories[entry.category]}</em>

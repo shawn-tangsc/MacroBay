@@ -66,9 +66,9 @@ it('shows both sections with the event name, time and importance', async () => {
   expect(host.textContent).toContain('10-13 12:30')
   expect(host.querySelectorAll('[data-calendar-card-row]')).toHaveLength(2)
   // A released row has to say what was published, next to what it is compared with.
-  // Name and numbers are separate lines, so a long event name cannot squeeze the values out.
+  // The clock rides the title line, so the row has no half-empty time column.
   const firstRow = host.querySelector('.mi-calendar-card__row')!
-  expect(firstRow.querySelector('time')?.textContent).toContain('10-11 06:00')
+  expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-title time')?.textContent).toContain('10-11 06:00')
   expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-title')?.textContent).toBeTruthy()
   expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-value')?.textContent).toContain('实际值 0.3%')
   expect(host.textContent).toContain('实际值 0.3%')
@@ -291,4 +291,7 @@ it('styles the verdict as a coloured badge, with the direction distinguishable',
   expect(beat).toContain('var(--accent)')
   expect(miss).toContain('var(--danger)')
   expect(styles).toContain('font-weight: 650')
+  // The row is one content column; the clock is no longer a separate 84px column.
+  expect(styles).toContain('.mi-calendar-card__row { display: grid; grid-template-columns: minmax(0, 1fr) auto;')
+  expect(styles).not.toContain('grid-template-columns: 84px minmax(0, 1fr) auto')
 })
