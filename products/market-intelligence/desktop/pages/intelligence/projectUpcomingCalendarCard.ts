@@ -149,7 +149,11 @@ function toRow(event: CalendarCardEvent, kind: CalendarCardRow['kind'], asOf: st
     previous: event.previous?.displayValue ?? null,
     consensus: event.consensus?.displayValue ?? null,
     surprise: cardSurprise(assessMarketCalendarSurprise(event.actual, event.consensus)),
-    awaitingData: providerAwaitingData({ scheduledAt: event.scheduledAt ?? null, actual: event.actual ?? null }, asOf)
+    // Only an economic indicator publishes a value. A financial event or a central-bank activity is
+    // something that happens at its time, so "waiting for the actual value" would be a promise the
+    // source never makes: those rows simply carry no value, before or after the instant.
+    awaitingData: event.category === 'economic-indicator' &&
+      providerAwaitingData({ scheduledAt: event.scheduledAt ?? null, actual: event.actual ?? null }, asOf)
   }
 }
 

@@ -171,3 +171,19 @@ it('marks the row that is past its time without a value, and only that row', () 
   expect(all.find(row => row.eventKey === 'ahead')?.awaitingData).toBe(false)
   expect(all.find(row => row.eventKey === 'published')?.awaitingData).toBe(false)
 })
+
+it('never says an event that publishes no value is waiting for one', () => {
+  // 财经事件与央行活动在计划时刻「发生」，不公布数值；它们的行没有「等待实际值」这个状态。
+  const indicator = event({ eventKey: 'indicator', category: 'economic-indicator',
+    scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
+  const financial = event({ eventKey: 'financial', category: 'financial-event',
+    scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
+  const centralBank = event({ eventKey: 'central-bank', category: 'central-bank-activity',
+    scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
+
+  const rows = projectUpcomingCalendarCard([indicator, financial, centralBank], asOf)
+  const all = [...rows.today, ...rows.upcoming]
+  expect(all.find(row => row.eventKey === 'indicator')?.awaitingData).toBe(true)
+  expect(all.find(row => row.eventKey === 'financial')?.awaitingData).toBe(false)
+  expect(all.find(row => row.eventKey === 'central-bank')?.awaitingData).toBe(false)
+})
