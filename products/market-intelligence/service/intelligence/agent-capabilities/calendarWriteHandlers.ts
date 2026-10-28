@@ -96,7 +96,7 @@ function readCalendarActionSnapshot(
     case 'clear-release-time':
       return readCalendarReleaseTimeSnapshot(deps, requireString(value.eventKey, 'eventKey'))
     case 'import-manual-ics':
-      return readCalendarImportSnapshot(deps, imported)
+      return readCalendarImportSnapshot(deps, value, imported)
     default:
       return readCalendarRevisionSnapshot(deps)
   }
@@ -104,10 +104,36 @@ function readCalendarActionSnapshot(
 
 async function readCalendarImportSnapshot(
   deps: WriteHandlerDeps,
+  value: CalendarInput,
   imported: Record<string, unknown> | null
 ): Promise<WriteSnapshot> {
   const snapshot = await readCalendarRevisionSnapshot(deps)
-  return { revision: snapshot.revision, value: { import: imported } }
+  if (imported) return { revision: snapshot.revision, value: { import: imported } }
+
+  // Before the import runs, the same read-only preview answers what the calendar holds now.
+  // It is a real observation, not a placeholder; when it cannot answer, say so rather than
+  // pretending the calendar was empty.
+  const preview = await readImportPreview(deps, value)
+  return {
+    revision: snapshot.revision,
+    value: preview ? { import: preview } : { import: null, reason: 'before-not-observable' }
+  }
+}
+
+async function readImportPreview(
+  deps: WriteHandlerDeps,
+  value: CalendarInput
+): Promise<Record<string, unknown> | null> {
+  if (typeof value.body !== 'string' || value.body.trim().length === 0) return null
+  try {
+    const preview = await deps.macroCalendarOps.previewManualIcs({
+      body: value.body,
+      truncated: value.truncated === true
+    })
+    return preview.state === 'ready' ? importSnapshot({ ...preview }) : null
+  } catch {
+    return null
+  }
 }
 
 function importSnapshot(result: Record<string, unknown>): Record<string, unknown> {
