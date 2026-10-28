@@ -294,7 +294,10 @@ export const macroCalendarMonthOutputSchema = {
           actual: { type: 'string' },
           previous: { type: 'string' },
           consensus: { type: 'string' },
-          surprise: { type: 'string' }
+          surprise: { type: 'string', enum: ['beat', 'miss', 'inline', 'consensus-unavailable'] },
+          surpriseValue: { type: 'number' },
+          surpriseUnit: { type: 'string', enum: ['pp', 'relative-percent'] },
+          surpriseReason: { type: 'string', enum: ['missing-actual', 'missing-consensus', 'unit-mismatch', 'non-numeric'] }
         }
       }
     },

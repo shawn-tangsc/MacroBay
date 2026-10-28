@@ -73,6 +73,44 @@ describe('handleQueryMacroCalendar', () => {
     expect(() => guardProductToolOutput(result)).not.toThrow()
   })
 
+  it('gives the agent the same surprise verdict and magnitude the surfaces use', async () => {
+    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+      official: {
+        state: 'available',
+        events: [{
+          eventKey: 'official-cpi', title: 'CPI', scheduledAt: '2026-10-14T12:30:00.000Z', scheduledDate: '2026-10-14',
+          actual: { displayValue: '3.4%' }, consensus: null
+        }]
+      },
+      market: {
+        state: 'available',
+        events: [{
+          eventKey: 'market-payrolls', title: 'Nonfarm payrolls', scheduledAt: '2026-10-14T13:30:00.000Z',
+          providerActual: { displayValue: '165' }, providerPrevious: { displayValue: '150' }, consensus: { displayValue: '150' }
+        }]
+      }
+    }) as never)
+
+    const result = await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-14T14:00:00.000Z' }, deps) as never as {
+      events: Array<Record<string, unknown>>
+    }
+    const official = result.events.find(event => event.eventKey === 'official-cpi')!
+    const market = result.events.find(event => event.eventKey === 'market-payrolls')!
+
+    // The official route never carries a consensus; the reason says which side is missing.
+    expect(official).toMatchObject({ actual: '3.4%', surprise: 'consensus-unavailable', surpriseReason: 'missing-consensus' })
+    expect(official.surpriseValue).toBeUndefined()
+
+    // The market route used to drop providerActual/providerPrevious entirely; now the same contract
+    // the card and facts read answers with a direction and a displayable magnitude.
+    expect(market).toMatchObject({
+      actual: '165', previous: '150', consensus: '150', surprise: 'beat',
+      surpriseUnit: 'relative-percent'
+    })
+    expect(market.surpriseReason).toBeUndefined()
+    expect(Number(market.surpriseValue)).toBeCloseTo(10, 10)
+  })
+
   it('keeps the official calendar when the market side is unavailable', async () => {
     vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
       official: { state: 'available', events: [{ eventKey: 'official-cpi', title: 'CPI', scheduledAt: '2026-10-14T12:30:00.000Z' }] },

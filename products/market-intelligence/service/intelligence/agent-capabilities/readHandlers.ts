@@ -4,6 +4,10 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { getIntelligenceModule } from '../intelligenceModule'
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
 import { analysisModelVocabulary } from '../analysis/analysisModelVocabulary'
+import {
+  assessMarketCalendarSurprise,
+  toCalendarSurpriseView
+} from '../../../contracts/macro/marketCalendarSurprise'
 import { computeConfigurationRevision } from './configurationRevision'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import type { CapabilityDomain } from './capabilityTypes'
@@ -351,7 +355,10 @@ function summarizeCalendarEvent(
   actual?: string
   previous?: string
   consensus?: string
-  surprise?: string
+  surprise: string
+  surpriseValue?: number
+  surpriseUnit?: 'pp' | 'relative-percent'
+  surpriseReason?: string
 } {
   const text = (value: unknown): string | undefined =>
     typeof value === 'string' && value.length > 0 ? value : undefined
@@ -361,6 +368,17 @@ function summarizeCalendarEvent(
   }
   const titleKey = text(event.titleKey)
   const title = text(event.title) ?? text(event.name) ?? (titleKey ? analysisModelVocabulary.eventName[titleKey] ?? titleKey : '')
+  // The two calendar routes name the same three values differently: the official view calls them
+  // `actual` / `previous`, the market view `providerActual` / `providerPrevious`. Reading only the
+  // official names silently dropped every market release value from this tool.
+  const actual = displayValue(event.actual) ?? displayValue(event.providerActual)
+  const previous = displayValue(event.previous) ?? displayValue(event.providerPrevious)
+  const consensus = displayValue(event.consensus)
+  const assessment = assessMarketCalendarSurprise(
+    actual ? { displayValue: actual } : undefined,
+    consensus ? { displayValue: consensus } : undefined
+  )
+  const presentation = assessment.presentation
   return {
     source,
     eventKey: text(event.eventKey) ?? '',
@@ -370,10 +388,14 @@ function summarizeCalendarEvent(
     ...(text(event.countryName) ? { countryName: text(event.countryName) } : {}),
     ...(text(event.importance) ? { importance: text(event.importance) } : {}),
     ...(text(event.lifecycleState) ? { lifecycleState: text(event.lifecycleState) } : {}),
-    ...(displayValue(event.actual) ? { actual: displayValue(event.actual) } : {}),
-    ...(displayValue(event.previous) ? { previous: displayValue(event.previous) } : {}),
-    ...(displayValue(event.consensus) ? { consensus: displayValue(event.consensus) } : {}),
-    ...(text(event.surprise) ? { surprise: text(event.surprise) } : {})
+    ...(actual ? { actual } : {}),
+    ...(previous ? { previous } : {}),
+    ...(consensus ? { consensus } : {}),
+    // The same contract the card, drawer and analysis facts read: direction always, magnitude and
+    // unit only when the pair is comparable, and a reason when it is not.
+    surprise: toCalendarSurpriseView(assessment),
+    ...(presentation ? { surpriseValue: presentation.value, surpriseUnit: presentation.unit } : {}),
+    ...(assessment.reason ? { surpriseReason: assessment.reason } : {})
   }
 }
 
