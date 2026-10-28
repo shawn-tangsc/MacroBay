@@ -56,15 +56,9 @@ type CryptoDashboardText = {
   context: { sourceStatus: { title: string } }
 }
 
-type CalendarText = {
-  events: Record<string, string>
-  abbreviations: Record<string, string>
-  moreEvents: string
-}
+type Props = { text: CryptoDashboardText; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-type Props = { text: CryptoDashboardText; calendarText: CalendarText; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
-
-export function CryptoIntelligenceDashboard({ text, calendarText, client, fearGreedClient, fundingRateClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
+export function CryptoIntelligenceDashboard({ text, client, fearGreedClient, fundingRateClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one

@@ -80,8 +80,7 @@ describe('crypto intelligence dashboard', () => {
         onConfigureSources: () => undefined,
         onManageSource: () => undefined,
         onOpenCalendar: () => undefined,
-        calendarText: text.calendar,
-        client: dashboardClient(),
+                client: dashboardClient(),
         fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
         now: () => new Date(asOf),
         text: text.dashboard,
@@ -112,7 +111,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient({
+      client: dashboardClient(), fearGreedClient: fearGreedClient({
         state: 'available', asOf, score: 22, bucket: 'extreme-fear', observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient({
         state: 'available', asOf,
@@ -147,7 +146,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(),
       fundingRateClient: { querySnapshot: () => Promise.resolve({ state: 'empty' }) }, now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined,
       onOpenCalendar: () => undefined, text: text.dashboard
@@ -167,7 +166,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
     await flush()
@@ -190,7 +189,7 @@ describe('crypto intelligence dashboard', () => {
     const manageSource = vi.fn()
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), now: () => new Date(asOf),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: manageSource, onOpenCalendar: () => undefined,
       text: text.dashboard
     })))
@@ -220,7 +219,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => macro }, now: () => new Date(asOf), onBack: () => undefined,
       onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -247,7 +246,7 @@ describe('crypto intelligence dashboard', () => {
     const manageSource = vi.fn()
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: manageSource, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -266,7 +265,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
       macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
@@ -295,7 +294,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-real', level: 98.21, atMs: Date.parse(asOf), returns: {} }, { seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }) },
       macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
@@ -324,7 +323,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -342,7 +341,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
       // The boundary already refuses such a payload, so this is the strip's own second lock: the code
@@ -592,7 +591,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       capitalConditionsClient: capitalConditionsClient(), now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: productText['en-US'].pages.intelligence.portal.dashboard
     } as never)))
