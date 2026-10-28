@@ -198,8 +198,10 @@ MacroBay 是你所配置供应商的客户端。MIT 许可证覆盖代码，不�
 
 ## 反馈
 
-欢迎提交 Bug、数据源需求和功能想法——开一个 issue 就行。早期的反馈会直接改变路线图：加什么，
-以及砍什么。
+安装、数据源、代理这类问题请发到 **Q&A**：[去提问](https://github.com/shawn-tangsc/MacroBay/discussions/new?category=q-a)，
+不要开 issue。Bug 和具体的功能需求走 issue 模板。
+
+早期的反馈会直接改变路线图：加什么，以及砍什么。
 
 ## 参与贡献
 

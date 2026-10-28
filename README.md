@@ -216,8 +216,11 @@ limits, and any commercial use.
 
 ## Feedback
 
-Bug reports, data-source requests, and feature ideas are welcome — open an issue. Early feedback
-shapes the roadmap directly: what gets added, and what gets dropped.
+Questions about setup, data sources or proxies belong in **Q&A**:
+[ask there](https://github.com/shawn-tangsc/MacroBay/discussions/new?category=q-a) rather than in an
+issue. Bugs and concrete feature requests go through the issue templates.
+
+Early feedback shapes the roadmap directly: what gets added, and what gets dropped.
 
 ## Contributing
 
