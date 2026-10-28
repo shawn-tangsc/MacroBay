@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 
 import type { MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
-import { shiftEconomicCalendarMonth } from '../../features/macro/economic-calendar'
 import {
-  dashboardMacroReleaseDynamicsPolicy,
-  selectDashboardMacroReleaseDynamicsMonth,
-  type DashboardMacroReleaseDynamicsState
+  dashboardEconomicCalendarPolicy,
+  selectDashboardEconomicCalendarMonth,
+  type DashboardEconomicCalendarState
 } from './dashboardEconomicCalendarModel'
 
 type Input = {
@@ -13,8 +12,14 @@ type Input = {
   now: () => Date
 }
 
-export function useDashboardEconomicCalendar({ client, now }: Input): DashboardMacroReleaseDynamicsState {
-  const [state, setState] = useState<DashboardMacroReleaseDynamicsState>({ state: 'loading' })
+/**
+ * The calendar source row's state.
+ *
+ * One current-month read is enough now that the row only reports whether the month is readable;
+ * the previous/next fallbacks existed to fill release groups the dashboard no longer renders.
+ */
+export function useDashboardEconomicCalendar({ client, now }: Input): DashboardEconomicCalendarState {
+  const [state, setState] = useState<DashboardEconomicCalendarState>({ state: 'loading' })
   const [mountInput] = useState(() => ({ client, now }))
 
   useEffect(() => {
@@ -25,44 +30,16 @@ export function useDashboardEconomicCalendar({ client, now }: Input): DashboardM
       return () => { active = false }
     }
 
-    const currentMonth = asOf.slice(0, 7)
-    const query = async (): Promise<void> => {
-      const current = selectDashboardMacroReleaseDynamicsMonth(await mountInput.client.queryMonth({ month: currentMonth, asOf }), { month: currentMonth, asOf })
-      if (!active) return
-      if (current.state === 'unavailable') {
-        setState({ state: 'unavailable' })
-        return
-      }
-
-      let upcoming = current.upcoming
-      let released = current.released
-      if (!released) {
-        const previousMonth = shiftEconomicCalendarMonth(currentMonth, -1)
-        const previous = selectDashboardMacroReleaseDynamicsMonth(await mountInput.client.queryMonth({ month: previousMonth, asOf }), { month: previousMonth, asOf })
+    const month = asOf.slice(0, 7)
+    void Promise.resolve()
+      .then(() => mountInput.client.queryMonth({ month, asOf }))
+      .then(reply => {
         if (!active) return
-        if (previous.state === 'unavailable') {
-          setState({ state: 'unavailable' })
-          return
-        }
-        released = previous.released
-      }
-
-      if (!upcoming) {
-        const nextMonth = shiftEconomicCalendarMonth(currentMonth, 1)
-        const next = selectDashboardMacroReleaseDynamicsMonth(await mountInput.client.queryMonth({ month: nextMonth, asOf }), { month: nextMonth, asOf })
-        if (!active) return
-        if (next.state === 'unavailable') {
-          setState({ state: 'unavailable' })
-          return
-        }
-        upcoming = next.upcoming
-      }
-
-      setState(upcoming || released ? { state: 'available', ...(upcoming ? { upcoming } : {}), ...(released ? { released } : {}) } : { state: 'empty' })
-    }
-    void query().catch(() => {
-      if (active) setState({ state: 'unavailable' })
-    })
+        setState({ state: selectDashboardEconomicCalendarMonth(reply, { month, asOf }) })
+      })
+      .catch(() => {
+        if (active) setState({ state: 'unavailable' })
+      })
 
     return () => { active = false }
   }, [mountInput])
@@ -71,7 +48,7 @@ export function useDashboardEconomicCalendar({ client, now }: Input): DashboardM
 }
 
 function isCanonicalUtcMillis(value: string): boolean {
-  if (!dashboardMacroReleaseDynamicsPolicy.canonicalUtcMillisPattern.test(value)) return false
+  if (!dashboardEconomicCalendarPolicy.canonicalUtcMillisPattern.test(value)) return false
   const timestamp = Date.parse(value)
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value
 }

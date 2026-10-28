@@ -22,8 +22,6 @@
   --mi-dashboard-positive: #55d69b;
   --mi-dashboard-caution: #e5ae43;
   --mi-dashboard-negative: #f16d73;
-  --mi-dashboard-release-strip-min-height: 42px;
-  --mi-dashboard-release-strip-title-width: 106px;
   --mi-dashboard-band-block-padding: 20px;
   --mi-dashboard-capital-content-column-gap: 32px;
   --mi-dashboard-capital-header-row-gap: 8px;
@@ -86,8 +84,7 @@
 .mi-crypto-dashboard dd { margin: 0; }
 
 .mi-crypto-dashboard__header,
-.mi-crypto-dashboard__tools,
-.mi-crypto-dashboard__release-dynamics { min-width: 0; }
+.mi-crypto-dashboard__tools { min-width: 0; }
 
 .mi-crypto-dashboard__header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
 .mi-crypto-dashboard__heading { min-width: 0; }
@@ -104,28 +101,7 @@
 .mi-crypto-dashboard__configure:focus-visible,
 .mi-crypto-dashboard__back:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-.mi-crypto-dashboard__release-dynamics { overflow: hidden; border: 1px solid var(--mi-dashboard-line); border-radius: var(--mi-dashboard-card-radius); background: var(--mi-dashboard-surface); }
-.mi-crypto-dashboard__release-dynamics-strip { display: flex; min-height: var(--mi-dashboard-release-strip-min-height); align-items: center; gap: 10px; padding: 7px 12px; }
-.mi-crypto-dashboard__release-dynamics-strip > strong { flex: 0 0 var(--mi-dashboard-release-strip-title-width); color: var(--mi-dashboard-text); font-size: 13px; font-weight: 650; }
-.mi-crypto-dashboard__release-dynamics-state > span { flex: 1 1 auto; color: var(--mi-dashboard-muted); font-size: 12px; }
-.mi-crypto-dashboard__release-dynamics-groups { display: flex; flex: 1 1 auto; min-width: 0; align-items: center; gap: 10px; }
-.mi-crypto-dashboard__release-dynamics-group { display: inline-flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 5px 9px; }
-.mi-crypto-dashboard__release-dynamics-group[data-release-dynamics-group='upcoming'] { flex: 1 1 260px; }
-.mi-crypto-dashboard__release-dynamics-group[data-release-dynamics-group='released'] { flex: 0 1 auto; }
-.mi-crypto-dashboard__release-dynamics-group > strong { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; white-space: nowrap; }
-.mi-crypto-dashboard__release-dynamics-date { color: var(--mi-dashboard-muted); font-size: 11px; white-space: nowrap; }
-.mi-crypto-dashboard__release-dynamics-divider { flex: 0 0 1px; align-self: stretch; background: var(--mi-dashboard-line); }
-.mi-crypto-dashboard__release-dynamics-countdown { flex: 0 0 auto; color: var(--mi-dashboard-lime); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; white-space: nowrap; }
-.mi-crypto-dashboard__release-dynamics-events { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; gap: 5px 16px; min-width: 0; }
-.mi-crypto-dashboard__release-dynamics-entry { display: inline-flex; min-width: 0; gap: 5px; align-items: baseline; color: var(--mi-dashboard-text); font-size: 12px; overflow-wrap: anywhere; }
-.mi-crypto-dashboard__release-dynamics-entry > i { flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%; background: var(--mi-dashboard-caution); }
-.mi-crypto-dashboard__release-dynamics-entry strong { color: var(--mi-dashboard-positive); font-weight: 650; }
-.mi-crypto-dashboard__release-dynamics-entry small { color: var(--mi-dashboard-muted); font-size: 10px; }
-.mi-crypto-dashboard__release-dynamics-overflow { color: var(--mi-dashboard-lime); font-size: 11px; font-weight: 600; }
-.mi-crypto-dashboard__visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
-.mi-crypto-dashboard__release-dynamics-calendar-action,
 .mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
-.mi-crypto-dashboard__release-dynamics-calendar-action:focus-visible,
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
 .mi-crypto-dashboard__capital-positioning-row { display: grid; min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
@@ -291,12 +267,6 @@
 
 @media (max-width: 1023px) {
   .mi-crypto-dashboard { --mi-dashboard-page-inline: 20px; --mi-dashboard-page-block: 20px; }
-  .mi-crypto-dashboard__release-dynamics-strip { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
-  .mi-crypto-dashboard__release-dynamics-groups { grid-column: 1 / -1; display: grid; align-items: start; gap: 7px; }
-  .mi-crypto-dashboard__release-dynamics-group { min-height: 24px; }
-  .mi-crypto-dashboard__release-dynamics-group[data-release-dynamics-group='upcoming'],
-  .mi-crypto-dashboard__release-dynamics-group[data-release-dynamics-group='released'] { flex: none; }
-  .mi-crypto-dashboard__release-dynamics-divider { display: none; }
 }
 
 @media (max-width: 620px) {

@@ -18,11 +18,6 @@ export const macroCalendarHealthHistoryPolicy = {
   providerHealthSafeSummaryMaxChars: 240
 } as const
 
-export const macroCalendarProjectionPolicy = {
-  invalidAsOfCaveat: 'invalid-visible-timestamp',
-  consensusUnavailableCaveat: 'market-consensus-source-not-configured'
-} as const
-
 /**
  * What the official calendar can say about market consensus.
  *

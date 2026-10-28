@@ -6,7 +6,7 @@ import type { IntelligenceFearGreedClient } from '../../features/industry/fear-g
 import { FundingRateHistoryPanel } from '../../features/industry/funding-rates/FundingRateHistoryPanel'
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 
-import { type DashboardMacroReleaseDynamicsState } from './dashboardEconomicCalendarModel'
+import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
 import { dashboardRealSourcePolicy, FearGreedGaugePresentationPolicy, type DashboardFearGreedState } from './dashboardFearGreedModel'
 import type { DashboardFundingRateHistoryState } from './dashboardFundingRateHistoryModel'
 import { projectDashboardFeedRows } from './dashboardFeedStatusModel'
@@ -37,23 +37,9 @@ type CryptoDashboardText = {
   configureSources: string
   crossAsset: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
   macroReleaseDynamics: {
-    title: string
-    loading: string
-    unavailable: string
-    upcoming: string
-    released: string
-    noUpcoming: string
-    noReleased: string
-    today: string
-    inDays: string
-    inDaysHours: string
-    lessThanOneHour: string
-    prior: string
-    eventCount: string
-    overflowAnnouncement: string
     calendarAction: string
     sourceName: string
-    sourceStates: Record<DashboardMacroReleaseDynamicsState['state'], string>
+    sourceStates: Record<DashboardEconomicCalendarState['state'], string>
     manageSettings: string
   }
   fearGreed: { title: string; loading: string; empty: string; unavailable: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
@@ -69,10 +55,6 @@ type CryptoDashboardText = {
   feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
   context: { sourceStatus: { title: string } }
 }
-
-const dashboardMacroReleaseTerminalStripPolicy = {
-  layout: 'terminal-strip'
-} as const
 
 type CalendarText = {
   events: Record<string, string>
@@ -189,39 +171,6 @@ export function CryptoIntelligenceDashboard({ text, calendarText, client, fearGr
   )
 }
 
-function DynamicsGroup({ label, empty, meta, kind, children }: { label: string; empty: string; meta?: string; kind: 'upcoming' | 'released'; children?: React.ReactNode }): React.ReactElement {
-  return <div className="mi-crypto-dashboard__release-dynamics-group" data-release-dynamics-group={kind}>
-    <strong>{label}</strong><span className="mi-crypto-dashboard__release-dynamics-date">{meta ?? empty}</span>{children}
-  </div>
-}
-
-function DynamicsEventEntry({ calendarText, event, kind, text }: {
-  calendarText: CalendarText
-  event: { labelKey: string; actual?: string; previous?: string }
-  kind: 'upcoming' | 'released'
-  text?: CryptoDashboardText['macroReleaseDynamics']
-}): React.ReactElement {
-  return <span className="mi-crypto-dashboard__release-dynamics-entry" data-release-dynamics-entry={kind}>
-    <i aria-hidden="true" />
-    <span aria-hidden="true" data-release-dynamics-abbreviation>{calendarText.abbreviations[event.labelKey]}</span>
-    <span className="mi-crypto-dashboard__visually-hidden">{calendarText.events[event.labelKey]}</span>
-    {event.actual ? <strong data-release-dynamics-actual>{event.actual}</strong> : null}
-    {event.previous && text ? <small data-release-dynamics-previous>{text.prior} {event.previous}</small> : null}
-  </span>
-}
-
-function DynamicsOverflow({ count, text, visualTemplate }: { count: number; text: CryptoDashboardText['macroReleaseDynamics']; visualTemplate: string }): React.ReactElement | null {
-  if (count < 1) return null
-  return <span className="mi-crypto-dashboard__release-dynamics-overflow" data-release-dynamics-overflow><span aria-hidden="true">{format(visualTemplate, { count })}</span><span className="mi-crypto-dashboard__visually-hidden">{format(text.overflowAnnouncement, { count })}</span></span>
-}
-
-function formatCountdown(countdown: NonNullable<Extract<DashboardMacroReleaseDynamicsState, { state: 'available' }>['upcoming']>['countdown'], text: CryptoDashboardText['macroReleaseDynamics']): string {
-  if (countdown.state === 'less-than-one-hour') return text.lessThanOneHour
-  if (countdown.state === 'today') return text.today
-  if (countdown.state === 'date-only') return format(text.inDays, { days: countdown.days })
-  return format(text.inDaysHours, { days: countdown.days, hours: countdown.hours })
-}
-
 function PositioningPanel({ fearGreedState, text }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText }): React.ReactElement {
   const formatTime = useShellTimeFormat()
   return <>
@@ -243,7 +192,7 @@ function PositioningPanel({ fearGreedState, text }: { fearGreedState: DashboardF
  * the 市场状态 / 跨市场 table are printed by `FeedStatusStrip` below them — 异常优先, so a fallback is
  * stated where the figure it explains is described without making a healthy board cost a line per feed.
  */
-function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardMacroReleaseDynamicsState; fearGreedState: DashboardFearGreedState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
+function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, feedRows, nowMs, text, onManageSource, onOpenCalendar }: { calendarState: DashboardEconomicCalendarState; fearGreedState: DashboardFearGreedState; fundingRateState: DashboardFundingRateHistoryState; feedRows: ReturnType<typeof projectDashboardFeedRows>; nowMs: number; text: CryptoDashboardText; onManageSource: () => void; onOpenCalendar: () => void }): React.ReactElement {
   const tags = { synthetic: text.crossAsset.syntheticTag, proxy: text.crossAsset.proxyTag, realIndex: text.crossAsset.indexNames.real }
   return <section className="mi-crypto-dashboard__source-region"><header><h2>{text.context.sourceStatus.title}</h2></header>{dashboardRealSourcePolicy.map((source) => source.sourceId === 'economic-calendar'
     ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><button onClick={onOpenCalendar} type="button">{text.macroReleaseDynamics.calendarAction}</button><button onClick={() => onManageSource()} type="button">{text.macroReleaseDynamics.manageSettings}</button></div></div>
@@ -256,8 +205,4 @@ function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, fee
 
 function formatTime(value: string): string {
   return `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`
-}
-
-function format(template: string, values: Record<string, string | number>): string {
-  return Object.entries(values).reduce((result, [key, value]) => result.replace(`{${key}}`, String(value)), template)
 }
