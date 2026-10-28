@@ -1,3 +1,10 @@
+import {
+  assessMarketCalendarSurprise,
+  exceedsSurpriseTrigger,
+  toCalendarSurpriseView,
+  type MarketCalendarSurpriseAssessment,
+  type MarketCalendarSurpriseReason
+} from '../../../contracts/macro/marketCalendarSurprise'
 import { providerAwaitingData } from '../../shared/marketCalendarEventLifecycle'
 import type { CalendarCardReaction } from './calendarCardReaction'
 import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
@@ -51,6 +58,14 @@ export type CalendarCardRow = Readonly<{
   previous: string | null
   consensus: string | null
   /**
+   * The expected difference, judged once by the contract module.
+   *
+   * `direction` is the calendar view enum (four values); `reason` separates "no expectation" from
+   * "cannot compare", which is what the two sentences on the card depend on. `value`/`unit` are the
+   * presentation the contract chose, so the card never picks a different number than a fact does.
+   */
+  surprise: CalendarCardSurprise
+  /**
    * 「这次发布前后各 30 分钟，三条线各自走了多少」（原型 ④）。
    *
    * 不在投影里算：它要一次跨资产读，投影是纯的。`useCalendarCardData` 读回来之后用
@@ -60,6 +75,12 @@ export type CalendarCardRow = Readonly<{
 }>
 
 export type CalendarCardState = 'available' | 'empty' | 'unavailable'
+export type CalendarCardSurprise = Readonly<{
+  direction: 'beat' | 'miss' | 'inline' | 'consensus-unavailable'
+  value: number | null
+  unit: 'pp' | 'relative-percent' | null
+  reason: MarketCalendarSurpriseReason | null
+}>
 export type CalendarCardProjection = Readonly<{ today: readonly CalendarCardRow[]; upcoming: readonly CalendarCardRow[]; state: CalendarCardState }>
 
 /** The instant an event happens at, for ordering and for the window test. */
@@ -101,9 +122,21 @@ function releasedRecently(event: CalendarCardEvent, asOf: string, windowDays: nu
 function moved(event: CalendarCardEvent): boolean {
   const actual = event.actual?.displayValue ?? null
   if (actual === null) return false
+  // A release that landed far enough from the expectation is news even when the printed value
+  // equals its previous value: the headline is the surprise, not the revision.
+  if (exceedsSurpriseTrigger(assessMarketCalendarSurprise(event.actual, event.consensus))) return true
   const previous = event.previous?.displayValue ?? null
   const consensus = event.consensus?.displayValue ?? null
   return (previous !== null && previous !== actual) || (consensus !== null && consensus !== actual)
+}
+
+function cardSurprise(assessment: MarketCalendarSurpriseAssessment): CalendarCardSurprise {
+  return {
+    direction: toCalendarSurpriseView(assessment),
+    value: assessment.presentation?.value ?? null,
+    unit: assessment.presentation?.unit ?? null,
+    reason: assessment.reason
+  }
 }
 
 function toRow(event: CalendarCardEvent, kind: CalendarCardRow['kind'], asOf: string): CalendarCardRow {
@@ -115,7 +148,12 @@ function toRow(event: CalendarCardEvent, kind: CalendarCardRow['kind'], asOf: st
     actual: event.actual?.displayValue ?? null,
     previous: event.previous?.displayValue ?? null,
     consensus: event.consensus?.displayValue ?? null,
-    awaitingData: providerAwaitingData({ scheduledAt: event.scheduledAt ?? null, actual: event.actual ?? null }, asOf)
+    surprise: cardSurprise(assessMarketCalendarSurprise(event.actual, event.consensus)),
+    // Only an economic indicator publishes a value. A financial event or a central-bank activity is
+    // something that happens at its time, so "waiting for the actual value" would be a promise the
+    // source never makes: those rows simply carry no value, before or after the instant.
+    awaitingData: event.category === 'economic-indicator' &&
+      providerAwaitingData({ scheduledAt: event.scheduledAt ?? null, actual: event.actual ?? null }, asOf)
   }
 }
 

@@ -41,6 +41,8 @@ export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
   macroCalendarUnavailable: 'macro-calendar-unavailable',
   macroCalendarEmpty: 'macro-calendar-empty',
   macroCalendarConsensusUnavailable: 'macro-calendar-consensus-unavailable',
+  /** Both values exist but no displayable difference can be computed (unit form or zero denominator). */
+  providerSurpriseNotComparable: 'provider-surprise-not-comparable',
   macroCalendarQueryNotWired: 'macro-calendar-query-not-wired',
   /**
    * The Nasdaq 100 row's preferred instrument is a cash index: it prints only inside the US cash
@@ -71,7 +73,11 @@ export const MARKET_ANALYSIS_MACRO_CALENDAR_POLICY = Object.freeze({
     scheduledAt: 'scheduled-at', officialReleaseDate: 'official-release-date', actual: 'actual', previous: 'previous',
     // Market expectation. The official route has no consensus source; the 0xRouter route does,
     // and a change in expectation moves a conclusion without any released value changing.
-    consensus: 'consensus'
+    consensus: 'consensus',
+    // Derived: actual − market expectation. The unit of this fact is the presentation unit
+    // (`pp` or `relative-percent`), so a conclusion can cite the surprise instead of subtracting
+    // two display strings it cannot compare.
+    surprise: 'surprise'
   })
 } as const)
 

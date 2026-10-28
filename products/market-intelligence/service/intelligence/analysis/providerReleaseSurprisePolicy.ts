@@ -1,4 +1,9 @@
-import { marketCalendarSurpriseMagnitude, type MacroCalendarProviderObservation } from '../macro-calendar/marketCalendarObservationNormalization'
+import {
+  assessMarketCalendarSurprise,
+  exceedsSurpriseTrigger,
+  marketCalendarSurprisePolicy
+} from '../../../contracts/macro/marketCalendarSurprise'
+import type { MacroCalendarProviderObservation } from '../macro-calendar/marketCalendarObservationNormalization'
 import { firstSeenReleaseWindowMs, semanticKeyOf, type PreviousFactKey } from './significanceChangeMatcher'
 
 /**
@@ -15,9 +20,9 @@ import { firstSeenReleaseWindowMs, semanticKeyOf, type PreviousFactKey } from '.
  * 2. **只在这次才看到的实际值**（`freshOnly`）：同一条发布不产生第二次运行。判据与"数据变化"共用
  *    同一份基线（上一个快照的事实），所以一条发布的意外只花掉一次分析，之后基线里已经有它了。
  * 3. **阈值按单位分类**，不是每个指标一张表：provider 的 `displayValue` 没有单位准入
- *    （见 `marketCalendarObservationPolicy.surprise`），分不出"千人"与"万人"。百分数（带 `%`）按
+ *    （见 `marketCalendarSurprisePolicy`），分不出"千人"与"万人"。百分数（带 `%`）按
  *    **百分点**，其余裸数字按**相对预期的偏离比例**。实测：核心 PPI 年率 5.0% vs 4.4%（+0.6pp）过线，
- *    初请 199 vs 200（相对 0.5%）不过线。
+ *    初请 199 vs 200（相对 0.5%）不过线。阈值与计算都在契约模块，这里不再自带一份。
  *
  * 这个模块只做判断，不做决定：它把"哪几条发布算意外"算出来，由 `analysisSignificancePolicy` 与
  * 宏观序列的变化放在同一张桌前决定——**同一条发布因此不会既触发 provider 线又触发官方线**。
@@ -28,12 +33,6 @@ export const providerReleaseSurprisePolicy = Object.freeze({
   qualifyingImportance: 'high' as const,
   /** 与 `marketCalendarObservationPolicy` 的 provider 家族映射同名：经济指标才是数据发布。 */
   qualifyingEventFamily: 'economic-indicator' as const,
-  thresholds: Object.freeze({
-    /** 带 `%` 的值：偏离的**百分点**。0.2pp 高于例行修订，低于真正的意外。 */
-    percentPoints: 0.2,
-    /** 其余裸数字：相对预期的偏离比例。 */
-    relativeFraction: 0.05
-  }),
   /** 只判"这次才看到的实际值"，否则同一条发布会一次次进同一条流。 */
   freshOnly: true,
   /** 这个原因码只在**仅由 provider 意外**驱动的那次分析上写进账本；与官方线共用时仍是既有码。 */
@@ -55,11 +54,6 @@ export type ProviderReleaseSurprise = Readonly<{
 /** 与"数据变化"共用同一条事实身份：`domain|subject|metric|eventKey`。 */
 export function providerSurpriseBaselineKey(observation: MacroCalendarProviderObservation): PreviousFactKey {
   return semanticKeyOf('macro', observation.eventFamily, 'actual', observation.eventKey)
-}
-
-function exceedsThreshold(magnitude: Readonly<{ difference: number; suffix: string; relative: number | undefined }>, thresholds: typeof providerReleaseSurprisePolicy.thresholds): boolean {
-  if (magnitude.suffix === '%') return Math.abs(magnitude.difference) >= thresholds.percentPoints
-  return magnitude.relative !== undefined && Math.abs(magnitude.relative) >= thresholds.relativeFraction
 }
 
 /**
@@ -85,12 +79,15 @@ export function providerReleaseSurprises(input: Readonly<{
     const actual = observation.actual?.displayValue
     const consensus = observation.consensus?.displayValue
     if (!actual || !consensus) continue
-    const magnitude = marketCalendarSurpriseMagnitude(observation.actual, observation.consensus)
-    if (!magnitude || !exceedsThreshold(magnitude, policy.thresholds)) continue
+    const assessment = assessMarketCalendarSurprise(observation.actual, observation.consensus)
+    if (!exceedsSurpriseTrigger(assessment)) continue
+    if (assessment.absoluteDifference === null) continue
     if (policy.freshOnly && !isFresh(observation, actual, input)) continue
     surprises.push(Object.freeze({
       eventKey: observation.eventKey, titleKey: observation.titleKey, title: observation.titleKey,
-      actual, consensus, difference: magnitude.difference, suffix: magnitude.suffix, relative: magnitude.relative
+      actual, consensus, difference: assessment.absoluteDifference,
+      suffix: assessment.presentation?.unit === 'pp' ? marketCalendarSurprisePolicy.percentSuffix : '',
+      relative: assessment.relativeDifferencePercent === null ? undefined : assessment.relativeDifferencePercent / 100
     }))
   }
   return Object.freeze(surprises)

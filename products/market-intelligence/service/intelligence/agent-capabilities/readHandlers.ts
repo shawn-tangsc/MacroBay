@@ -4,14 +4,22 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { getIntelligenceModule } from '../intelligenceModule'
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
 import { analysisModelVocabulary } from '../analysis/analysisModelVocabulary'
+import {
+  assessMarketCalendarSurprise,
+  toCalendarSurpriseView
+} from '../../../contracts/macro/marketCalendarSurprise'
 import { computeConfigurationRevision } from './configurationRevision'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import type { CapabilityDomain } from './capabilityTypes'
 import { projectSourceDetail, projectSourceSummary, projectTimelineRow } from './projections'
+import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
+import { macroCalendarProviderSettingsPolicy } from '../../../contracts/macro/economicCalendarQueryContracts'
 
 export type ReadHandlerDeps = {
   jobRuntime: JobRuntime
   getAppLanguage: () => Promise<AppLanguage>
+  macroCalendarOps: MacroCalendarOps
+  crossAssetOps: CrossAssetOps
 }
 
 const DOMAIN_ORDER: readonly CapabilityDomain[] = [
@@ -351,7 +359,10 @@ function summarizeCalendarEvent(
   actual?: string
   previous?: string
   consensus?: string
-  surprise?: string
+  surprise: string
+  surpriseValue?: number
+  surpriseUnit?: 'pp' | 'relative-percent'
+  surpriseReason?: string
 } {
   const text = (value: unknown): string | undefined =>
     typeof value === 'string' && value.length > 0 ? value : undefined
@@ -361,6 +372,17 @@ function summarizeCalendarEvent(
   }
   const titleKey = text(event.titleKey)
   const title = text(event.title) ?? text(event.name) ?? (titleKey ? analysisModelVocabulary.eventName[titleKey] ?? titleKey : '')
+  // The two calendar routes name the same three values differently: the official view calls them
+  // `actual` / `previous`, the market view `providerActual` / `providerPrevious`. Reading only the
+  // official names silently dropped every market release value from this tool.
+  const actual = displayValue(event.actual) ?? displayValue(event.providerActual)
+  const previous = displayValue(event.previous) ?? displayValue(event.providerPrevious)
+  const consensus = displayValue(event.consensus)
+  const assessment = assessMarketCalendarSurprise(
+    actual ? { displayValue: actual } : undefined,
+    consensus ? { displayValue: consensus } : undefined
+  )
+  const presentation = assessment.presentation
   return {
     source,
     eventKey: text(event.eventKey) ?? '',
@@ -370,10 +392,14 @@ function summarizeCalendarEvent(
     ...(text(event.countryName) ? { countryName: text(event.countryName) } : {}),
     ...(text(event.importance) ? { importance: text(event.importance) } : {}),
     ...(text(event.lifecycleState) ? { lifecycleState: text(event.lifecycleState) } : {}),
-    ...(displayValue(event.actual) ? { actual: displayValue(event.actual) } : {}),
-    ...(displayValue(event.previous) ? { previous: displayValue(event.previous) } : {}),
-    ...(displayValue(event.consensus) ? { consensus: displayValue(event.consensus) } : {}),
-    ...(text(event.surprise) ? { surprise: text(event.surprise) } : {})
+    ...(actual ? { actual } : {}),
+    ...(previous ? { previous } : {}),
+    ...(consensus ? { consensus } : {}),
+    // The same contract the card, drawer and analysis facts read: direction always, magnitude and
+    // unit only when the pair is comparable, and a reason when it is not.
+    surprise: toCalendarSurpriseView(assessment),
+    ...(presentation ? { surpriseValue: presentation.value, surpriseUnit: presentation.unit } : {}),
+    ...(assessment.reason ? { surpriseReason: assessment.reason } : {})
   }
 }
 
@@ -435,17 +461,101 @@ export async function handleGetTranslationStatus(
   }
 }
 
+/**
+ * The calendar provider switches and the reader's own release-time edits.
+ *
+ * The events themselves are `query_macro_calendar`; this answers "is the provider on,
+ * and did the reader move a release?". A provider that never stored a profile is
+ * reported as configured=false with enabled=null — not as disabled.
+ */
+export async function handleGetCalendarState(
+  _input: unknown,
+  deps: ReadHandlerDeps
+): Promise<unknown> {
+  let configuration: Awaited<ReturnType<MacroCalendarOps['readConfiguration']>>
+  try {
+    configuration = await deps.macroCalendarOps.readConfiguration()
+  } catch {
+    return {
+      state: 'unavailable',
+      providers: [],
+      releaseTimes: [],
+      caveats: ['calendar-state-unavailable']
+    }
+  }
+
+  const providerIds = [
+    ...new Set([
+      ...macroCalendarProviderSettingsPolicy.providerIds,
+      ...Object.keys(configuration.providers)
+    ])
+  ].sort()
+  const providers = providerIds.map((providerId) => {
+    const configured = Object.hasOwn(configuration.providers, providerId)
+    return {
+      providerId,
+      enabled: configured ? configuration.providers[providerId] === true : null,
+      configured
+    }
+  })
+  const releaseTimes = Object.entries(configuration.releaseTimes)
+    .map(([eventKey, value]) => ({
+      eventKey,
+      scheduledAt: value.scheduledAt,
+      scheduledDate: value.scheduledDate
+    }))
+    .sort((left, right) => left.eventKey.localeCompare(right.eventKey))
+
+  return { state: 'available', providers, releaseTimes, caveats: [] }
+}
+
+/**
+ * Whether the channel is even open: configuration state, enabled flag, and the
+ * lease. It is deliberately separate from the reading's quality — a closed channel
+ * and a bad reading are different answers, and conflating them makes the model
+ * blame the market for an interface that is not running.
+ */
+type CrossAssetInterfaceStatus = {
+  state: 'configured' | 'default' | 'unknown'
+  enabled: boolean | null
+  lease: 'none' | 'active' | 'expired' | 'unknown'
+}
+
+async function readCrossAssetInterface(deps: ReadHandlerDeps): Promise<CrossAssetInterfaceStatus> {
+  let state: CrossAssetInterfaceStatus['state'] = 'unknown'
+  let enabled: boolean | null = null
+  try {
+    const configuration = await deps.crossAssetOps.readConfiguration()
+    if (configuration.state !== 'unknown') {
+      state = configuration.state
+      enabled = configuration.enabled
+    }
+  } catch {
+    // Unknown stays unknown: the reader must not be told the channel is closed.
+  }
+  let lease: CrossAssetInterfaceStatus['lease'] = 'unknown'
+  try {
+    lease = await deps.crossAssetOps.readLeaseState()
+  } catch {
+    // Same rule: an unreadable lease is not "no lease".
+  }
+  return { state, enabled, lease }
+}
+
 export async function handleGetCrossAssetSnapshot(
   input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { range, asOf } = (input ?? {}) as CrossAssetInput
+  const interfaceStatus = await readCrossAssetInterface(deps)
   const snapshot = await getIntelligenceModule(deps.jobRuntime).publicQueryService.queryCrossAssetSnapshot({
     range,
     asOf: asOf ?? new Date().toISOString()
   })
-  if (!snapshot) return { state: 'unavailable' }
-  return { state: 'available', snapshot, caveats: [] }
+  // Even an unavailable snapshot carries the channel state; otherwise the model can only guess
+  // whether there is no data or the interface never ran.
+  if (!snapshot) return { state: 'unavailable', interface: interfaceStatus, caveats: [] }
+  return { state: 'available', snapshot, interface: interfaceStatus, caveats: [] }
 }
 
 export async function handleGetDashboardFeedStatus(

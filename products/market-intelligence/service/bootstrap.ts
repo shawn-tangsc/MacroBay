@@ -560,7 +560,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     testInterface: async () => (crossAssetRuntime ? crossAssetRuntime.testInterface() : { state: 'unavailable' as const }),
     cancelInterfaceTest: async () =>
       crossAssetRuntime ? crossAssetRuntime.cancelInterfaceTest() : ({ state: 'unavailable' as const }),
-    readConfiguration: () => crossAssetConfiguration.read()
+    readConfiguration: () => crossAssetConfiguration.read(),
+    readLeaseState: async () => crossAssetRuntime?.leaseState() ?? 'unknown'
   }
   registerIntelligenceAgentToolHandlers(deps.registerProductAgentToolHandler, {
     jobRuntime: deps.jobRuntime,

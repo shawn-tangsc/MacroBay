@@ -279,7 +279,8 @@ const crossAssetOps = {
     fixture.crossAsset.cancelInterfaceTest.push({})
     return { state: 'cancelled' }
   },
-  readConfiguration: async () => ({ ...fixture.crossAssetConfiguration })
+  readConfiguration: async () => ({ ...fixture.crossAssetConfiguration }),
+  readLeaseState: async () => 'none' as const
 }
 
 function registrations(): Map<string, ProductAgentToolHandlerRegistration> {
@@ -324,7 +325,9 @@ describe('macro calendar write handlers', () => {
       action: 'save-provider-profile',
       sourceId: 'macro-calendar-fed',
       before: { enabled: false },
-      after: { enabled: true }
+      after: { enabled: true },
+      outcome: 'applied',
+      configurationChanged: true
     })
     expect(rows[0]!.changeSummary).toContain('enabled false -> true')
   })
@@ -378,7 +381,7 @@ describe('macro calendar write handlers', () => {
     expect(clearResult.revisionAfter).toBe(setResult.revisionBefore)
   })
 
-  it('records the manual ICS import counts instead of an empty diff', async () => {
+  it('records the real pre-import counts from the preview instead of an empty diff', async () => {
     const result = (await handler('operate-macro-calendar')(
       { action: 'import-manual-ics', body: 'BEGIN:VCALENDAR', truncated: true },
       context
@@ -386,7 +389,16 @@ describe('macro calendar write handlers', () => {
 
     expect(result.changed).toEqual({
       import: {
-        before: null,
+        before: {
+          state: 'ready',
+          totalEvents: 1,
+          supportedReleaseGroups: 1,
+          generatedEvents: 1,
+          unsupportedEvents: 0,
+          insertedCount: 1,
+          rescheduledCount: 0,
+          unchangedCount: 0
+        },
         after: {
           state: 'imported',
           totalEvents: 1,
@@ -400,9 +412,59 @@ describe('macro calendar write handlers', () => {
       }
     })
     const rows = changeLog!.listRecent({})
-    expect(rows[0]!.before).toEqual({ import: null })
+    expect(rows[0]!.before).toMatchObject({ import: { state: 'ready', totalEvents: 1 } })
     expect(rows[0]!.after).toMatchObject({ import: { state: 'imported', insertedCount: 1 } })
     expect(rows[0]!.changeSummary).not.toContain('no configuration change')
+  })
+
+  it('records before-not-observable when the pre-import read cannot answer', async () => {
+    const originalPreview = macroCalendarOps.previewManualIcs
+    macroCalendarOps.previewManualIcs = async () => {
+      throw new Error('preview unavailable')
+    }
+
+    try {
+      await handler('operate-macro-calendar')(
+        { action: 'import-manual-ics', body: 'BEGIN:VCALENDAR', truncated: true },
+        context
+      )
+    } finally {
+      macroCalendarOps.previewManualIcs = originalPreview
+    }
+
+    expect(fixture.calendar.importManualIcs).toHaveLength(1)
+    const [row] = changeLog!.listRecent({})
+    expect(row!.before).toEqual({ import: null, reason: 'before-not-observable' })
+    expect(row!.after).toMatchObject({ import: { state: 'imported', insertedCount: 1 } })
+    expect(row!.changeSummary).toContain('before-not-observable')
+  })
+
+  it('distinguishes an observed empty calendar from an unrecorded before-state', async () => {
+    const originalPreview = macroCalendarOps.previewManualIcs
+    macroCalendarOps.previewManualIcs = async () => ({
+      state: 'ready',
+      totalEvents: 0,
+      supportedReleaseGroups: 0,
+      generatedEvents: 0,
+      unsupportedEvents: 0,
+      insertedCount: 0,
+      rescheduledCount: 0,
+      unchangedCount: 0
+    })
+
+    try {
+      await handler('operate-macro-calendar')(
+        { action: 'import-manual-ics', body: 'BEGIN:VCALENDAR', truncated: true },
+        context
+      )
+    } finally {
+      macroCalendarOps.previewManualIcs = originalPreview
+    }
+
+    const [row] = changeLog!.listRecent({})
+    expect(row!.before).toMatchObject({ import: { state: 'ready', totalEvents: 0 } })
+    expect(row!.changeSummary).toContain('totalEvents=0')
+    expect(row!.changeSummary).not.toContain('before-not-observable')
   })
 
   it('keeps the successful business result and audits a failed post-state read', async () => {
@@ -453,6 +515,66 @@ describe('macro calendar write handlers', () => {
     const rows = changeLog!.listRecent({})
     expect(rows).toHaveLength(2)
     expect(rows[0]!.changeSummary).toContain('no configuration change')
+    expect(rows.map((row) => [row.action, row.outcome, row.configurationChanged])).toEqual([
+      ['test-provider-connection', 'unchanged', false],
+      ['run-provider-now', 'unchanged', false]
+    ])
+  })
+
+  it('records a rejected write as rejected instead of a no-op', async () => {
+    const original = macroCalendarOps.setReleaseTime
+    macroCalendarOps.setReleaseTime = async () => ({ state: 'rejected' })
+
+    try {
+      const result = (await handler('operate-macro-calendar')(
+        {
+          action: 'set-release-time',
+          eventKey: 'US.CPI.RELEASE.2026-M09',
+          scheduledAt: '2026-09-10T12:30:00.000Z',
+          scheduledDate: '2026-09-10'
+        },
+        context
+      )) as { state: string; changed: Record<string, unknown> }
+
+      expect(result.state).toBe('rejected')
+      expect(result.changed).toEqual({})
+      const [row] = changeLog!.listRecent({})
+      expect(row).toMatchObject({
+        action: 'set-release-time',
+        outcome: 'rejected',
+        configurationChanged: false,
+        before: { releaseTime: null, releaseDate: null }
+      })
+      expect(row!.changeSummary).toContain('rejected')
+    } finally {
+      macroCalendarOps.setReleaseTime = original
+    }
+  })
+
+  it('records a failed provider action as failed', async () => {
+    const original = macroCalendarOps.testProviderConnection
+    macroCalendarOps.testProviderConnection = async () => ({
+      state: 'failed',
+      failureCode: 'transport-unavailable'
+    })
+
+    try {
+      const result = (await handler('operate-macro-calendar')(
+        { action: 'test-provider-connection', providerId: 'macro-calendar-fed' },
+        context
+      )) as { state: string }
+
+      expect(result.state).toBe('failed')
+      const [row] = changeLog!.listRecent({})
+      expect(row).toMatchObject({
+        action: 'test-provider-connection',
+        outcome: 'failed',
+        configurationChanged: false
+      })
+      expect(row!.changeSummary).toContain('failed')
+    } finally {
+      macroCalendarOps.testProviderConnection = original
+    }
   })
 
   it('injects confirmed for the refresh actions after the overwrite acknowledgement', async () => {
@@ -520,7 +642,11 @@ describe('macro calendar write handlers', () => {
     )
 
     expect(fixture.calendar.syncBlsSchedule).toEqual([{ year: '2026' }])
-    expect(fixture.calendar.previewManualIcs).toEqual([{ body: 'BEGIN:VCALENDAR', truncated: false }])
+    expect(fixture.calendar.previewManualIcs).toEqual([
+      { body: 'BEGIN:VCALENDAR', truncated: false },
+      // The import reads its own before-state through the same preview.
+      { body: 'BEGIN:VCALENDAR', truncated: true }
+    ])
     expect(fixture.calendar.importManualIcs).toEqual([{ body: 'BEGIN:VCALENDAR', truncated: true }])
   })
 })

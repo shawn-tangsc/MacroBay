@@ -6,13 +6,13 @@ import { attachReactions, createCalendarCardReactionReader, reactionAnchors, rea
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
 /**
- * 日历卡片上的「±30 分」反应（原型 ④：已公布行下面那一行 QQQ/BTC/ETH）。
+ * 日历卡片上的「±30 分」反应（原型 ④：已公布行下面那一行 QQQ/BTC/ETH/美元）。
  *
  * 测试清单：
  * - 两侧都有点 → 逐资产给出窗口内的相对收益（与 `crossAssetWindowReturns` 同一套算法：两个锚定收益的比值）；
  * - 事件之前没有点、或事件之后还没到（发布不足 30 分钟）→ **不给数字**，而不是给半个窗口；
  * - 某个资产那一端是空洞（`returnPercent === null`）→ 那个资产没有数字，别的资产照给；
- * - 三个资产都没有数字 → `undefined`（卡片不画这一行）；
+ * - 三条采集线和美元都没有数字 → `undefined`（卡片不画这一行）；
  * - 读反应的行：只有「最近已公布（有变化）」且**有确切时刻**的行（没有时刻就没有窗口）；
  * - `attachReactions`：只给这些行加上反应，其它行一个字都不动。
  *
@@ -34,7 +34,8 @@ const fullWindow = [[-60, 0], [-35, 1], [-30, 2], [-5, 3], [0, 4], [25, 5], [30,
 const row = (overrides: Partial<CalendarCardRow> = {}): CalendarCardRow => ({
   eventKey: 'US.CPI.RELEASE.2026-M10', titleKey: 'cpi', month: '2026-10', date: '2026-10-14', at: iso(0),
   importance: 'high', category: 'economic-indicator', kind: 'released-changed', awaitingData: false,
-  actual: '3.2%', previous: '3.1%', consensus: '3.0%', ...overrides
+  actual: '3.2%', previous: '3.1%', consensus: '3.0%',
+  surprise: { direction: 'beat', value: 0.2, unit: 'pp', reason: null }, ...overrides
 })
 const projection = (today: readonly CalendarCardRow[], upcoming: readonly CalendarCardRow[] = []): CalendarCardProjection =>
   ({ today, upcoming, state: today.length + upcoming.length > 0 ? 'available' : 'empty' })
@@ -46,6 +47,17 @@ describe('the ±30 minute reaction around a release', () => {
     const expected = ((1 + 6 / 100) / (1 + 2 / 100) - 1) * 100
     for (const asset of ['index', 'btc', 'eth'] as const) expect(reaction?.[asset]).toBeCloseTo(expected, 12)
     expect(calendarCardReactionPolicy.windowMs).toBe(30 * 60 * 1_000)
+  })
+
+  it('reads the dollar on the same window as the three collected lines', () => {
+    const reaction = reactionReturns({
+      curves: curves(fullWindow),
+      macroCurves: { dxy: curve([[-60, 0], [-30, 1], [30, 3], [60, 4]]) },
+      instant: iso(0)
+    })
+    expect(reaction?.dxy).toBeCloseTo(((1 + 3 / 100) / (1 + 1 / 100) - 1) * 100, 12)
+    // The dollar is a macro-proxy curve, not one of the collected symbols; it still rides the line.
+    expect(calendarCardReactionPolicy.displayOrder).toEqual(['index', 'btc', 'eth', 'dxy'])
   })
 
   it('refuses to state half a window, in either direction', () => {
@@ -71,12 +83,25 @@ describe('the ±30 minute reaction around a release', () => {
     expect(reactionReturns({ curves: curves([[-60, 0], [0, 4], [60, 7]]), instant: iso(0), windowMs: 60_000 })).toBeUndefined()
   })
 
-  it('normalises a negative zero, like every other return in this product', () => {
-    const flat = reactionReturns({ curves: curves([[-30, 3], [0, 3], [30, 3]]), instant: iso(0) })
+  it('normalises a negative zero while another line keeps the row', () => {
+    const flat = reactionReturns({
+      curves: curves([[-30, 3], [0, 3], [30, 3]]),
+      macroCurves: { dxy: curve([[-30, 0], [0, 0], [30, 1]]) },
+      instant: iso(0)
+    })
     for (const asset of ['index', 'btc', 'eth'] as const) {
       expect(flat?.[asset], asset).toBe(0)
       expect(Object.is(flat?.[asset], -0), asset).toBe(false)
     }
+    expect(flat?.dxy).toBeGreaterThan(0)
+  })
+
+  it('hides the row when every line is flat', () => {
+    expect(reactionReturns({
+      curves: curves([[-30, 3], [0, 3], [30, 3]]),
+      macroCurves: { dxy: curve([[-30, 1], [0, 1], [30, 1]]) },
+      instant: iso(0)
+    })).toBeUndefined()
   })
 })
 

@@ -153,7 +153,6 @@ function IntelligencePageBody(): React.ReactElement {
           />}
         >
         <CryptoIntelligenceDashboard
-          calendarText={text.calendar}
           key={sample.sessionKey}
           client={macroEconomicCalendarClient}
           fearGreedClient={intelligenceFearGreedClient}

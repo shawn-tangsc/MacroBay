@@ -4,7 +4,6 @@ export type MacroCalendarEventFamily = 'fomc' | 'cpi' | 'core-cpi' | 'consumer-p
 export type MacroCalendarRevisionKind = 'schedule' | 'official-release' | 'schedule-correction' | 'official-revision' | 'cancellation'
 export type MacroCalendarLifecycleState = 'scheduled' | 'released' | 'cancelled'
 export type MacroCalendarCoverageState = 'available' | 'partial' | 'unavailable'
-export type MacroCalendarSurprise = 'above-consensus' | 'below-consensus' | 'in-line' | 'consensus-unavailable'
 export type MacroCalendarProviderId = 'macro-calendar-fed' | 'macro-calendar-bls' | 'macro-calendar-bea'
 
 export type MacroCalendarValue = {

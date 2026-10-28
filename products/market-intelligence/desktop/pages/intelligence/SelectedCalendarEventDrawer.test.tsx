@@ -88,6 +88,10 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     // The figures the reader came for, in the same rows the calendar page prints them in.
     expect(body.querySelector('.mi-economic-calendar__values')?.textContent).toContain('0.3%')
     expect(body.querySelector('.mi-economic-calendar__values')?.textContent).toContain('0.2%')
+    // Official sources carry no consensus: the row says what is absent instead of printing 0 or —.
+    const officialConsensus = body.querySelector('[data-official-consensus="unavailable"]')
+    expect(officialConsensus?.textContent).toBe(`${text.market.consensus}${text.details.consensusUnavailable}`)
+    expect(officialConsensus?.textContent).not.toMatch(/[\d—−]/)
   })
 
   it('carries the drawer\'s one visible way out', async () => {

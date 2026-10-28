@@ -9,6 +9,7 @@ import {
   summarizeRuntimeValue
 } from './agentRuntimeActivityFormat'
 import { resolveToolDisplayName, summarizeToolCallInput } from './agentToolCallSummary'
+import { attachApprovalInputs } from './agentApprovalFields'
 
 export type AgentRuntimeActivityStatus = 'pending' | 'running' | 'done' | 'error' | 'denied'
 
@@ -22,6 +23,10 @@ export type AgentRuntimeActivityCard = {
   approvalId: string | null
   toolCallId: string | null
   approvalInputText?: string | null
+  /** The product write being approved, rendered as field labels and values. */
+  approvalFields?: ReadonlyArray<Readonly<{ label: string; value: string }>>
+  /** Says these are request parameters, not the values that will take effect. */
+  approvalNotice?: string
   /** Full request payload behind the row summary, shown in its own fold. */
   requestDetail?: string | null
 }
@@ -39,14 +44,14 @@ type ToolCardDraft = AgentRuntimeActivityCard & { inputText: string; toolSummary
 export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityCardsInput): AgentRuntimeActivityCard[] {
   const chunks = input.chunksBySessionId[input.sessionId] ?? []
   const cards = new Map<string, AgentRuntimeActivityCard | ToolCardDraft>()
-  const approvalInputByToolCallId = new Map<string, string>()
+  const approvalInputByToolCallId = new Map<string, { text: string; input: unknown }>()
 
   for (const chunk of chunks) {
     if (chunk.sessionId !== input.sessionId) continue
     if (chunk.type === 'tool-input-available') {
       const approvalInput = serializeApprovalInput(chunk.input)
       if (approvalInput) {
-        approvalInputByToolCallId.set(chunk.toolCallId, approvalInput)
+        approvalInputByToolCallId.set(chunk.toolCallId, { text: approvalInput, input: chunk.input })
       }
     }
     applyChunk(cards, chunk, input.text)
@@ -56,7 +61,11 @@ export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityC
     if (approval.sessionId !== input.sessionId) continue
     cards.set(
       `approval:${approval.approvalId}`,
-      createApprovalCard(approval, input.text, approvalInputByToolCallId.get(approval.toolCallId) ?? null)
+      createApprovalCard(
+        approval,
+        input.text,
+        approvalInputByToolCallId.get(approval.toolCallId)?.text ?? null
+      )
     )
   }
 
@@ -79,7 +88,7 @@ export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityC
     })
   }
 
-  attachApprovalInputs(cards, approvalInputByToolCallId)
+  attachApprovalInputs(cards, approvalInputByToolCallId, input.text)
   return [...cards.values()].map(stripDraftFields)
 }
 
@@ -336,15 +345,8 @@ function stripDraftFields(card: AgentRuntimeActivityCard | ToolCardDraft): Agent
     approvalId: card.approvalId,
     toolCallId: card.toolCallId,
     ...(card.approvalInputText ? { approvalInputText: card.approvalInputText } : {}),
+    ...(card.approvalNotice ? { approvalNotice: card.approvalNotice } : {}),
+    ...(card.approvalFields?.length ? { approvalFields: card.approvalFields } : {}),
     ...(card.requestDetail ? { requestDetail: card.requestDetail } : {})
-  }
-}
-
-function attachApprovalInputs(cards: Map<string, AgentRuntimeActivityCard | ToolCardDraft>, approvalInputByToolCallId: Map<string, string>): void {
-  for (const [key, card] of cards.entries()) {
-    if (card.kind !== 'approval' || !card.toolCallId || card.approvalInputText) continue
-    const approvalInputText = approvalInputByToolCallId.get(card.toolCallId)
-    if (!approvalInputText) continue
-    cards.set(key, { ...card, approvalInputText })
   }
 }

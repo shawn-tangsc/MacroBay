@@ -99,6 +99,46 @@ describe('MacroCalendarSettings', () => {
     expect(target.textContent).toContain('运行请求已排队')
     expect(card(container, providers['macro-calendar-fed']).textContent).not.toContain('运行请求已排队')
   })
+  it('applies a saved provider switch to the card', async () => {
+    const container = await render()
+    const target = card(container, providers['macro-calendar-fed'])
+    const control = target.querySelector<HTMLButtonElement>('button[role="switch"]')
+    expect(control?.getAttribute('aria-checked')).toBe('false')
+
+    await act(async () => control!.click())
+    await flush()
+
+    expect(macroCalendarProviderClient.saveProfile).toHaveBeenCalledWith({
+      providerId: 'macro-calendar-fed',
+      enabled: true
+    })
+    expect(
+      card(container, providers['macro-calendar-fed'])
+        .querySelector('button[role="switch"]')
+        ?.getAttribute('aria-checked')
+    ).toBe('true')
+    expect(container.textContent).not.toContain('设置暂不可用，请重试。')
+  })
+
+  it('keeps the switch off and shows the error when the save is rejected', async () => {
+    vi.mocked(macroCalendarProviderClient.saveProfile).mockResolvedValueOnce({
+      state: 'failed',
+      failureCode: 'provider-settings-unavailable'
+    } as never)
+    const container = await render()
+    const target = card(container, providers['macro-calendar-fed'])
+
+    await act(async () => target.querySelector<HTMLButtonElement>('button[role="switch"]')!.click())
+    await flush()
+
+    expect(
+      card(container, providers['macro-calendar-fed'])
+        .querySelector('button[role="switch"]')
+        ?.getAttribute('aria-checked')
+    ).toBe('false')
+    expect(container.textContent).toContain('设置暂不可用，请重试。')
+  })
+
 })
 
 async function render(props: Partial<React.ComponentProps<typeof MacroCalendarSettings>> = {}): Promise<HTMLElement> {

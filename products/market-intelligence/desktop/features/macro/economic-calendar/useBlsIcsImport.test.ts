@@ -91,6 +91,27 @@ describe('useBlsIcsImport', () => {
     expect(page.state()).toEqual({ phase: 'result', pending: 'false', filename: 'bls.ics', result: 'unchanged' })
   })
 
+  it('shows the failed import result and does not refresh the calendar', async () => {
+    installFileBridge({ selectedPaths: ['/private/bls.ics'] })
+    const onImported = vi.fn(async () => undefined)
+    const client = importClient({
+      imported: async () => ({ state: 'failed' as const, failureCode: 'persistence-failed' as const })
+    })
+    const page = await renderHook(client, onImported)
+
+    await click(page.container, 'select')
+    await click(page.container, 'confirm')
+
+    expect(onImported).not.toHaveBeenCalled()
+    expect(page.state()).toEqual({
+      phase: 'failed',
+      pending: 'false',
+      filename: 'bls.ics',
+      failure: 'persistence-failed'
+    })
+    expect(page.container.textContent).not.toMatch(/BEGIN:VCALENDAR|private/i)
+  })
+
   it('clears the raw body when the user closes a valid preview', async () => {
     installFileBridge({ selectedPaths: ['/private/bls.ics'] })
     const client = importClient()
@@ -171,7 +192,9 @@ function installFileBridge(input: { selectedPaths: string[]; readError?: Error; 
 
 function importClient(input: {
   preview?: () => Promise<ReturnType<typeof readyPreview> | { state: 'failed'; failureCode: 'unsupported-calendar' }>
-  imported?: () => Promise<ReturnType<typeof imported> | ReturnType<typeof unchanged>>
+  imported?: () => Promise<
+    ReturnType<typeof imported> | ReturnType<typeof unchanged> | { state: 'failed'; failureCode: 'persistence-failed' }
+  >
 } = {}) {
   return {
     previewManualBlsIcs: vi.fn(input.preview ?? (async () => readyPreview())),

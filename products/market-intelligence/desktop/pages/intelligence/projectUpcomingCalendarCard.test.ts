@@ -82,6 +82,40 @@ it('reports a consensus surprise as a move too', () => {
   expect(projectUpcomingCalendarCard([surprised], asOf).today.map(row => row.eventKey)).toEqual(['surprised'])
 })
 
+it('keeps a release whose value did not change but whose surprise crossed the trigger', () => {
+  const surprised = event({ eventKey: 'surprised', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T06:00:00.000Z', actual: { displayValue: '3.4%' },
+    previous: { displayValue: '3.4%' }, consensus: { displayValue: '3.1%' } })
+  const routine = event({ eventKey: 'routine', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T05:00:00.000Z', actual: { displayValue: '3.2%' },
+    previous: { displayValue: '3.2%' }, consensus: { displayValue: '3.2%' } })
+
+  const rows = projectUpcomingCalendarCard([surprised, routine], asOf)
+  expect(rows.today.map(row => row.eventKey)).toEqual(['surprised'])
+  expect(rows.today[0]?.surprise).toMatchObject({ direction: 'beat', unit: 'pp', reason: null })
+  expect(rows.today[0]?.surprise.value).toBeCloseTo(0.3, 10)
+})
+
+it('carries the contract verdict on every row, including missing and incomparable expectations', () => {
+  const missing = event({ eventKey: 'missing', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T06:00:00.000Z', actual: { displayValue: '3.4%' }, previous: { displayValue: '3.1%' } })
+  const incomparable = event({ eventKey: 'incomparable', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T05:00:00.000Z', actual: { displayValue: '250K' },
+    previous: { displayValue: '240K' }, consensus: { displayValue: '240K' } })
+  const bare = event({ eventKey: 'bare', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T04:00:00.000Z', actual: { displayValue: '165' },
+    previous: { displayValue: '165' }, consensus: { displayValue: '150' } })
+
+  const rows = projectUpcomingCalendarCard([missing, incomparable, bare], asOf)
+  expect(rows.today.find(row => row.eventKey === 'missing')?.surprise)
+    .toEqual({ direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' })
+  expect(rows.today.find(row => row.eventKey === 'incomparable')?.surprise)
+    .toEqual({ direction: 'consensus-unavailable', value: null, unit: null, reason: 'non-numeric' })
+  const bareSurprise = rows.today.find(row => row.eventKey === 'bare')!.surprise
+  expect(bareSurprise).toMatchObject({ direction: 'beat', unit: 'relative-percent', reason: null })
+  expect(bareSurprise.value).toBeCloseTo(10, 10)
+})
+
 it('never exceeds the policy row limits, and keeps the earliest rows', () => {
   const events = Array.from({ length: 9 }, (_, index) => event({
     eventKey: `e-${index}`, scheduledDate: `2026-10-1${index + 1}`, scheduledAt: `2026-10-1${index + 1}T00:00:00.000Z`
@@ -136,4 +170,20 @@ it('marks the row that is past its time without a value, and only that row', () 
   expect(all.find(row => row.eventKey === 'waiting')?.awaitingData).toBe(true)
   expect(all.find(row => row.eventKey === 'ahead')?.awaitingData).toBe(false)
   expect(all.find(row => row.eventKey === 'published')?.awaitingData).toBe(false)
+})
+
+it('never says an event that publishes no value is waiting for one', () => {
+  // 财经事件与央行活动在计划时刻「发生」，不公布数值；它们的行没有「等待实际值」这个状态。
+  const indicator = event({ eventKey: 'indicator', category: 'economic-indicator',
+    scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
+  const financial = event({ eventKey: 'financial', category: 'financial-event',
+    scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
+  const centralBank = event({ eventKey: 'central-bank', category: 'central-bank-activity',
+    scheduledDate: '2026-10-11', scheduledAt: '2026-10-11T07:30:00.000Z' })
+
+  const rows = projectUpcomingCalendarCard([indicator, financial, centralBank], asOf)
+  const all = [...rows.today, ...rows.upcoming]
+  expect(all.find(row => row.eventKey === 'indicator')?.awaitingData).toBe(true)
+  expect(all.find(row => row.eventKey === 'financial')?.awaitingData).toBe(false)
+  expect(all.find(row => row.eventKey === 'central-bank')?.awaitingData).toBe(false)
 })

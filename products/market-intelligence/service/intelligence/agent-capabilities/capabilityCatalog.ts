@@ -12,6 +12,8 @@ import {
   provenanceExplainOutputSchema
 } from './capabilitySchemas'
 import {
+  calendarStateInputSchema,
+  calendarStateOutputSchema,
   crossAssetSnapshotInputSchema,
   crossAssetSnapshotOutputSchema,
   dashboardFeedStatusInputSchema,
@@ -249,11 +251,24 @@ export const intelligenceAgentCapabilities = [
     kind: 'read',
     title: { 'zh-CN': '宏观日历月查询', 'en-US': 'Macro calendar month' },
     description:
-      '按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；市场日历是分页读取的，工具会翻完所有页，但 events 默认只保留前 120 条，截断时 truncated=true 且 totalEvents 给出总数，问某一天时请用 from/to 收窄（ISO 时间，含时区）；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 最大 300。',
+      '按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。每个事件带 surprise（beat/miss/inline/consensus-unavailable）；可比时另有 surpriseValue 与 surpriseUnit（pp=百分点，relative-percent=相对预期偏离百分比），不可比或缺少一侧时给 surpriseReason，不要自己再做减法或换算单位。官方源不提供 consensus，所以官方事件恒为 consensus-unavailable。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；市场日历是分页读取的，工具会翻完所有页，但 events 默认只保留前 120 条，截断时 truncated=true 且 totalEvents 给出总数，问某一天时请用 from/to 收窄（ISO 时间，含时区）；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 最大 300。',
     inputSchema: macroCalendarMonthInputSchema,
     outputSchema: macroCalendarMonthOutputSchema,
     handlerId: 'market-intelligence.query-macro-calendar',
     timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_calendar_state',
+    domain: 'calendar',
+    kind: 'read',
+    title: { 'zh-CN': '日历供应商状态', 'en-US': 'Calendar provider state' },
+    description:
+      '读取宏观日历供应商的开关与读者自己改过的发布时间覆盖。providers 里 configured=false 且 enabled=null 表示该供应商从未保存过设置，不是「已停用」；releaseTimes 逐条给出被读者覆盖的 eventKey、发布时间与发布日，没有覆盖时为空数组，不编造约定默认时间。限制：只回答供应商设置与发布时间覆盖，事件、发布值与预期差由 query_macro_calendar 回答；不返回任何凭据、URL、原始 HTTP 响应或调度内部结构。',
+    inputSchema: calendarStateInputSchema,
+    outputSchema: calendarStateOutputSchema,
+    handlerId: 'market-intelligence.get-calendar-state',
+    timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {
@@ -301,7 +316,7 @@ export const intelligenceAgentCapabilities = [
     kind: 'read',
     title: { 'zh-CN': '跨资产快照', 'en-US': 'Cross-asset snapshot' },
     description:
-      '读取跨资产观察快照：给定 range（1h/24h/7d）的收益曲线、已收盘窗口收益、相关性、相对收益与读数口径。限制：asOf 可省略，省略时取现在；没有可用快照时只返回 state=unavailable，不编造读数；不返回任何端点、URL 或接口凭据。',
+      '读取跨资产观察快照：给定 range（1h/24h/7d）的收益曲线、已收盘窗口收益、相关性、相对收益与读数口径，并同时返回 interface（配置 state、enabled 与租约 lease）。interface 不表示数据好坏，只表示通道状态：state=unknown 或 lease=unknown 是「判定不了」，不是「确定没有」；lease=none 才是确定没有租约，expired 表示租约曾存在但已过期。限制：asOf 可省略，省略时取现在；没有可用快照时 state=unavailable，但仍带 interface，不编造读数；不返回 leaseId、端点、URL 或接口凭据。',
     inputSchema: crossAssetSnapshotInputSchema,
     outputSchema: crossAssetSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-cross-asset-snapshot',

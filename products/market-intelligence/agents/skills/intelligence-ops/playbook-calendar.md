@@ -1,10 +1,12 @@
 # 宏观日历
 
-工具：`query_macro_calendar`、`get_source_health`、`operate_macro_calendar`。
+工具：`query_macro_calendar`、`get_calendar_state`、`get_source_health`、`operate_macro_calendar`。
 
 ## 先读
 
 - `query_macro_calendar({ month: 'YYYY-MM', asOf })` 看这个月有哪些事件、官方值是否已发布。
+- `get_calendar_state()` 看供应商开关与读者自己的发布时间覆盖；`configured=false` 且
+  `enabled=null` 是“从未配置”，不是“已停用”。
 - `get_source_health` 看日历供应商的健康与最近刷新。
 - 需要单个事件的细节时，用 `query_macro_calendar` 返回里的 `eventKey` 再查（工具会把详情一并带回）。
 

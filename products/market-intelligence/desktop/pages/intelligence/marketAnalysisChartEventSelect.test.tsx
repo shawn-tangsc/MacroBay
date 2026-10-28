@@ -62,8 +62,7 @@ const calendar = { queryMonth: vi.fn(async () => monthPage([calendarEvent])) }
 const never = async () => ({ state: 'unavailable' })
 const dashboardProps = {
   text: portal.dashboard,
-  calendarText: portal.calendar,
-  client: calendar,
+    client: calendar,
   fearGreedClient: { querySnapshot: never } as never,
   fundingRateClient: { query: never } as never,
   now: () => new Date(asOf),
@@ -78,8 +77,13 @@ const dashboardProps = {
   }
 }
 
-async function renderSurface(extra: Record<string, unknown> = {}, monthEvents?: readonly unknown[]): Promise<HTMLDivElement> {
-  const invoke = vi.fn(async (_product: string, method: string) => {
+async function renderSurface(extra: Record<string, unknown> = {}, monthEvents?: readonly unknown[], cardEvents?: readonly Record<string, unknown>[]): Promise<HTMLDivElement> {
+  const invoke = vi.fn(async (_product: string, method: string, payload?: unknown) => {
+    if (method === 'intelligence.macro.economicCalendar.queryMonth') {
+      const request = payload as { month?: string; asOf?: string }
+      return { state: 'available' as const, asOf: request.asOf,
+        events: (cardEvents ?? []).filter(event => String(event.scheduledDate ?? '').startsWith(request.month ?? '')) }
+    }
     if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, nextCursor: null, items: [] }
     if (method === 'marketAnalysis.getLatestAttempt') return null
     return []
@@ -173,6 +177,36 @@ describe('a chart line selects a calendar event without opening the conversation
     // The recorded context travels with it too, so the conversation is bound to what was clicked.
     await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
     expect(host.querySelector('.mi-analysis-chat__binding')?.textContent).toContain('9月零售销售(月率)')
+  })
+
+  it('opens the same left, unmasked drawer when a calendar-card row is clicked', async () => {
+    // The card reads the live clock (no SampleMode provider in this test), so the fixture has to be
+    // released an hour ago rather than on a fixed date.
+    const now = new Date()
+    const scheduledAt = new Date(now.getTime() - 60 * 60 * 1_000).toISOString()
+    const detectedAt = new Date(now.getTime() - 2 * 60 * 1_000).toISOString()
+    const cardEvent = {
+      eventKey: 'US.CPI.CARD.2026-M10', releaseGroupKey: 'US.BLS.CPI.CARD', eventFamily: 'consumer-price-index',
+      titleKey: 'cpi', countryCode: 'US', importance: 'high', periodKey: '2026-10',
+      lifecycleState: 'released', coverage: 'available', scheduledDate: scheduledAt.slice(0, 10), scheduledAt,
+      releaseTimeSource: 'official', officialReleaseDate: scheduledAt.slice(0, 10), publishedAt: scheduledAt,
+      detectedAt, actual: { displayValue: '3.4%' }, previous: { displayValue: '3.1%' }, consensus: null,
+      consensusState: 'unavailable', surprise: 'consensus-unavailable', providerIds: ['macro-calendar-bls'], caveats: []
+    }
+    const host = await renderSurface({}, undefined, [cardEvent])
+    const row = host.querySelector<HTMLElement>('[data-calendar-card-row]')
+    expect(row, 'the released value is in the card\'s today section').not.toBeNull()
+    // No consensus is not a verdict: the row keeps its readings and does not add a badge for it.
+    expect(row?.querySelector('[data-calendar-surprise]')).toBeNull()
+    expect(row?.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 3.4%')
+
+    await act(async () => row!.click())
+
+    // The page's own detail drawer — the chart line and the card row lead to one surface.
+    expect(host.querySelector('[data-test-event-drawer]')?.getAttribute('data-test-event-drawer')).toBe(cardEvent.eventKey)
+    // …and the Agent context was recorded as an additive side effect.
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-agent-floating-button]')!.click())
+    expect(host.querySelector('.mi-analysis-chat__binding')?.textContent).toContain(portal.analysisWorkspace.readableNames.eventName.cpi)
   })
 })
 

@@ -294,7 +294,10 @@ export const macroCalendarMonthOutputSchema = {
           actual: { type: 'string' },
           previous: { type: 'string' },
           consensus: { type: 'string' },
-          surprise: { type: 'string' }
+          surprise: { type: 'string', enum: ['beat', 'miss', 'inline', 'consensus-unavailable'] },
+          surpriseValue: { type: 'number' },
+          surpriseUnit: { type: 'string', enum: ['pp', 'relative-percent'] },
+          surpriseReason: { type: 'string', enum: ['missing-actual', 'missing-consensus', 'unit-mismatch', 'non-numeric'] }
         }
       }
     },
@@ -343,6 +346,45 @@ export const translationStatusOutputSchema = {
   }
 } as const
 
+export const calendarStateInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {}
+} as const
+
+export const calendarStateOutputSchema = {
+  type: 'object',
+  required: ['state', 'providers', 'releaseTimes', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'unavailable'] },
+    providers: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['providerId', 'enabled', 'configured'],
+        properties: {
+          providerId: { type: 'string' },
+          enabled: { type: ['boolean', 'null'] },
+          configured: { type: 'boolean' }
+        }
+      }
+    },
+    releaseTimes: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['eventKey', 'scheduledAt', 'scheduledDate'],
+        properties: {
+          eventKey: { type: 'string' },
+          scheduledAt: { type: 'string' },
+          scheduledDate: { type: 'string' }
+        }
+      }
+    },
+    caveats: caveatsSchema
+  }
+} as const
+
 export const crossAssetSnapshotInputSchema = {
   type: 'object',
   required: ['range'],
@@ -355,10 +397,19 @@ export const crossAssetSnapshotInputSchema = {
 
 export const crossAssetSnapshotOutputSchema = {
   type: 'object',
-  required: ['state'],
+  required: ['state', 'interface'],
   properties: {
     state: { type: 'string', enum: ['available', 'unavailable'] },
     snapshot: { type: 'object' },
+    interface: {
+      type: 'object',
+      required: ['state', 'enabled', 'lease'],
+      properties: {
+        state: { type: 'string', enum: ['configured', 'default', 'unknown'] },
+        enabled: { type: ['boolean', 'null'] },
+        lease: { type: 'string', enum: ['none', 'active', 'expired', 'unknown'] }
+      }
+    },
     caveats: caveatsSchema
   }
 } as const

@@ -209,6 +209,13 @@
 .mi-economic-calendar__values div:last-child { border-bottom: 0; }
 .mi-economic-calendar__values span { color: var(--mi-economic-muted); font-size: 11px; }
 .mi-economic-calendar__values strong { color: var(--mi-economic-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; text-align: right; }
+/* 预期差是这一屏的判断，不是又一条读数：给它底色、描边和更大字号；方向用既有颜色 token。 */
+.mi-economic-calendar__values [data-market-value='surprise'] { align-items: center; }
+.mi-economic-calendar__values [data-market-value='surprise'] span { color: var(--mi-economic-text); font-weight: 650; }
+.mi-economic-calendar__values [data-market-value='surprise'] strong { display: inline-flex; width: fit-content; margin-left: auto; padding: 3px 9px; border: 1px solid color-mix(in srgb, var(--mi-economic-muted) 34%, transparent); border-radius: 5px; background: color-mix(in srgb, var(--mi-economic-surface-strong) 78%, transparent); color: var(--mi-economic-muted); font-family: inherit; font-size: 13px; font-weight: 700; line-height: 18px; }
+.mi-economic-calendar__values [data-market-value='surprise'][data-surprise='beat'] strong { border-color: color-mix(in srgb, var(--mi-economic-lime) 54%, transparent); background: color-mix(in srgb, var(--mi-economic-lime) 15%, transparent); color: var(--mi-economic-lime); }
+.mi-economic-calendar__values [data-market-value='surprise'][data-surprise='miss'] strong { border-color: color-mix(in srgb, var(--danger) 54%, transparent); background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); }
+.mi-economic-calendar__values [data-market-value='surprise'][data-surprise='inline'] strong { color: var(--mi-economic-text); }
 .mi-economic-calendar__comparison-rule { padding-left: 12px; border-left: 3px solid var(--mi-economic-lime); color: var(--mi-economic-muted); font-size: 11px; line-height: 1.55; }
 .mi-economic-calendar__provenance { border-top: 1px solid var(--mi-economic-line); padding-top: 12px; }
 .mi-bls-ics-dialog .ant-modal-content { background: var(--mi-economic-surface); color: var(--mi-economic-text); }

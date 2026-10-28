@@ -26,8 +26,7 @@ const never = async () => ({ state: 'unavailable' })
 /** The dashboard needs every panel client; only the timeline IPC matters here. */
 const dashboardProps = {
   text: portal.dashboard,
-  calendarText: portal.calendar,
-  client: { queryMonth: never } as never,
+    client: { queryMonth: never } as never,
   fearGreedClient: { querySnapshot: never } as never,
   fundingRateClient: { query: never } as never,
   now: () => new Date(asOf),

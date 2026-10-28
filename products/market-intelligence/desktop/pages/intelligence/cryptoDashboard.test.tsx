@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { lstatSync, readFileSync, readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -80,8 +80,7 @@ describe('crypto intelligence dashboard', () => {
         onConfigureSources: () => undefined,
         onManageSource: () => undefined,
         onOpenCalendar: () => undefined,
-        calendarText: text.calendar,
-        client: dashboardClient(),
+                client: dashboardClient(),
         fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
         now: () => new Date(asOf),
         text: text.dashboard,
@@ -112,7 +111,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient({
+      client: dashboardClient(), fearGreedClient: fearGreedClient({
         state: 'available', asOf, score: 22, bucket: 'extreme-fear', observedAt: '2026-08-04T10:00:00.000Z'
       }), fundingRateClient: fundingRateClient({
         state: 'available', asOf,
@@ -147,7 +146,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(),
       fundingRateClient: { querySnapshot: () => Promise.resolve({ state: 'empty' }) }, now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined,
       onOpenCalendar: () => undefined, text: text.dashboard
@@ -167,7 +166,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
     await flush()
@@ -190,7 +189,7 @@ describe('crypto intelligence dashboard', () => {
     const manageSource = vi.fn()
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), now: () => new Date(asOf),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: manageSource, onOpenCalendar: () => undefined,
       text: text.dashboard
     })))
@@ -220,7 +219,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => macro }, now: () => new Date(asOf), onBack: () => undefined,
       onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -247,7 +246,7 @@ describe('crypto intelligence dashboard', () => {
     const manageSource = vi.fn()
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: manageSource, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -266,7 +265,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
       macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
@@ -295,7 +294,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-real', level: 98.21, atMs: Date.parse(asOf), returns: {} }, { seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }) },
       macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
@@ -324,7 +323,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -342,7 +341,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
       // The boundary already refuses such a payload, so this is the strip's own second lock: the code
@@ -375,24 +374,16 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboard).not.toMatch(/(?:lightweight-charts|series)/i)
   })
 
-  it('uses one compact terminal release strip and stacks only its real groups at the existing narrow breakpoint', () => {
-    const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
-    const dynamicsRule = cssBlock(styles, '.mi-crypto-dashboard__release-dynamics {')
-    const stripRule = cssBlock(styles, '.mi-crypto-dashboard__release-dynamics-strip {')
-    const groupRule = cssBlock(styles, '.mi-crypto-dashboard__release-dynamics-group {')
-    const narrowStyles = cssBlock(styles, '@media (max-width: 1023px)')
-
-    expect(styles).toContain('.mi-crypto-dashboard__release-dynamics { overflow: hidden; border: 1px solid var(--mi-dashboard-line); border-radius: var(--mi-dashboard-card-radius); background: var(--mi-dashboard-surface); }')
-    expect(dashboardRootRule).toContain('--mi-dashboard-release-strip-min-height: 42px')
-    expect(dashboardRootRule).toContain('--mi-dashboard-release-strip-title-width: 106px')
-    expect(stripRule).toContain('min-height: var(--mi-dashboard-release-strip-min-height)')
-    expect(stripRule).toContain('display: flex')
-    expect(stripRule).not.toContain('grid-template-columns')
-    expect(groupRule).not.toContain('grid-template-columns: 112px minmax(0, 1fr)')
-    expect(styles).not.toContain('grid-template-columns: minmax(0, 11fr) minmax(0, 9fr)')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__release-dynamics-strip')
-    expect(narrowStyles).toContain('.mi-crypto-dashboard__release-dynamics-group')
-    expect([dashboard, styles].join('\n')).not.toContain('release-dynamics-row')
+  it('no longer ships the dead macro release strip anywhere in the repository', () => {
+    // The strip had no call site; only its CSS was asserted. A source-level scan is the guard that
+    // stops it being reintroduced as a second interpretation of the same calendar rows.
+    const dataAttribute = 'data-release-' + 'dynamics'
+    const className = 'mi-crypto-dashboard__' + 'release-dynamics'
+    const offenders = repositorySourceFiles(process.cwd()).filter(file => {
+      const source = readFileSync(file, 'utf8')
+      return source.includes(dataAttribute) || source.includes(className)
+    })
+    expect(offenders).toEqual([])
   })
 
   it('keeps the dashboard shell and its gutter ladder in one stylesheet', () => {
@@ -600,7 +591,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      calendarText: text.calendar, client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       capitalConditionsClient: capitalConditionsClient(), now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: productText['en-US'].pages.intelligence.portal.dashboard
     } as never)))
@@ -645,6 +636,27 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboardRootRule).not.toContain('min-height: 100%')
   })
 })
+
+/**
+ * Every text source file in the checkout, excluding build output and the private docs.
+ *
+ * The check is deliberately repository-wide: the strip was once a design-mandated surface, so a
+ * future reintroduction would most likely start in a page or stylesheet outside this folder.
+ */
+function repositorySourceFiles(root: string, directory = root): string[] {
+  const skippedDirectories = new Set(['node_modules', '.git', 'out', 'dist', 'build', 'coverage', 'release', 'docs-private'])
+  const sourceExtensions = new Set(['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.css', '.json', '.md', '.html'])
+  const files: string[] = []
+  for (const entry of readdirSync(directory)) {
+    if (entry.startsWith('.') || skippedDirectories.has(entry)) continue
+    const path = join(directory, entry)
+    const stats = lstatSync(path)
+    if (stats.isSymbolicLink()) continue
+    if (stats.isDirectory()) files.push(...repositorySourceFiles(root, path))
+    else if (sourceExtensions.has(entry.slice(entry.lastIndexOf('.'))) && stats.size < 2_000_000) files.push(path)
+  }
+  return files
+}
 
 function dashboardClient(events: unknown[] = []) {
   return { queryMonth: async () => ({ state: 'available' as const, asOf, events }) }

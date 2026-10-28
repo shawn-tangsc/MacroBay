@@ -3,14 +3,22 @@ import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
+import {
+  assessMarketCalendarSurprise,
+  toCalendarSurpriseView,
+  type MarketCalendarSurpriseAssessment
+} from '../../../../contracts/macro/marketCalendarSurprise'
+import { formatReadableAnalysisValue } from '../../../../contracts/marketAnalysisReadableText'
 import type { EconomicCalendarText } from './EconomicCalendar'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 
 export function MarketCalendarInspector({ event, source, text }: { event: MarketCalendarEvent; source?: MarketCalendarSource; text: EconomicCalendarText }) {
   const timeZone = useShellTimeZone()
-  const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
+  const language = useShellLanguage()
+  const timeZoneLabel = formatShellTimeZoneLabel(timeZone, language)
   const formatTime = useShellTimeFormat()
+  const surprise = assessMarketCalendarSurprise(event.providerActual, event.consensus)
   // CalendarObservedDataTimePolicy: a paged read may advance a source past the observation the reader
   // selected, so the live source and the observation legitimately disagree. The observation is still
   // shown — with **its own** values and the time it belongs to — and the disagreement is reported by
@@ -34,6 +42,10 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
       {(['consensus', 'providerActual', 'providerPrevious'] as const).map(key => <div key={key} data-market-value={key}>
         <span>{text.market[key]}</span><strong>{event[key]?.displayValue ?? text.market.missingValue}</strong>
       </div>)}
+      {/* 预期差读契约同一函数：三种语态与看板卡片逐字一致，缺少预期时不出现任何数字。 */}
+      {event.providerActual ? <div data-market-value="surprise" data-surprise={toCalendarSurpriseView(surprise)}>
+        <span>{text.market.surprise}</span><strong>{surpriseText(surprise, text, language)}</strong>
+      </div> : null}
     </div> : null}
     {event.officialLink ? <div data-linked-official-values>
       <div data-linked-value="officialActual"><span>{text.market.officialActual}</span><strong>{event.officialLink.officialActual?.displayValue ?? text.market.missingValue}</strong></div>
@@ -42,4 +54,20 @@ export function MarketCalendarInspector({ event, source, text }: { event: Market
     </div> : null}
     <p className="mi-economic-calendar__comparison-rule">{text.market.comparison}</p>
   </aside>
+}
+
+/** The drawer's sentence for one assessment; no number is printed without a presentation. */
+function surpriseText(
+  assessment: MarketCalendarSurpriseAssessment,
+  text: EconomicCalendarText,
+  locale: 'zh-CN' | 'en-US'
+): string {
+  const direction = toCalendarSurpriseView(assessment)
+  if (direction === 'consensus-unavailable') {
+    return assessment.reason === 'missing-consensus' ? text.market.surpriseUnavailable : text.market.surpriseNotComparable
+  }
+  const label = direction === 'beat' ? text.market.surpriseBeat
+    : direction === 'miss' ? text.market.surpriseMiss : text.market.surpriseInline
+  if (direction === 'inline' || assessment.presentation === null) return label
+  return `${label} ${formatReadableAnalysisValue(assessment.presentation.value, assessment.presentation.unit, locale)}`
 }

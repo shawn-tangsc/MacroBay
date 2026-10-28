@@ -2,7 +2,10 @@ import { Drawer } from 'antd'
 import { useEffect, type ReactNode } from 'react'
 
 // Design 122 §2.1: one owner for the detail surface of an official or a market event.
-export const CalendarDetailDrawerPolicy = Object.freeze({ width: 320 })
+// 480, not 320: the drawer now opens from the dashboard's calendar card as well, and at 320 the
+// release title and the source/period rows wrapped on the very first line. Both entry points share
+// this policy, so the card and the calendar page cannot drift to two widths.
+export const CalendarDetailDrawerPolicy = Object.freeze({ width: 480 })
 
 /**
  * The detail is a drawer from the left, and it carries no mask.

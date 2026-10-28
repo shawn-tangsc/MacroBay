@@ -4,8 +4,9 @@
 
 ## 先读
 
-`get_cross_asset_snapshot({ range })` 返回读数、口径与接口状态（是否启用、租约是否有效、
-到期时间）。读数不可比时它会说明原因，不要用别的窗口凑数。
+`get_cross_asset_snapshot({ range })` 返回读数、口径与接口状态（`interface.state`、`enabled`、
+`lease`）。`lease` 只有 `none` / `active` / `expired` / `unknown`：`unknown` 是判定不了，不是
+“确定没有”；读数不可比时它会说明原因，不要用别的窗口凑数。
 
 ## 接口动作
 

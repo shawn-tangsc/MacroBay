@@ -1,9 +1,13 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it } from 'vitest'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../../shared/i18n/productText'
+
+const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 /** 显示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
@@ -31,6 +35,37 @@ it('renders provider-only economic values and unknown country without numerical 
     expect(host.querySelector('[data-market-value]')).toBeNull()
   } finally { await act(async () => root.unmount()) }
   })
+it('states the market surprise in the inspector, and prints no number when there is none to compare', async () => {
+  const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
+  const host = document.createElement('div'); const root = createRoot(host)
+  const text = productText['zh-CN'].pages.intelligence.portal.calendar
+  const base = { eventKey: '00000000-0000-4000-8000-000000000009', title: 'Surprise event', countryCode: 'US',
+    eventType: 'economic-indicator' as const, importance: 'high' as const, scheduledAt: '2026-10-15T12:30:00.000Z',
+    source: '0xRouter' as const, sourceObservedAt: '2026-10-15T12:31:00.000Z', coverage: 'observed-unverified' as const }
+  const surpriseRow = () => host.querySelector('[data-market-value="surprise"]')
+  try {
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base,
+      consensus: { displayValue: '3.1%' }, providerPrevious: { displayValue: '3.1%' }, providerActual: { displayValue: '3.4%' } }} text={text} />)))
+    expect(surpriseRow()?.getAttribute('data-surprise')).toBe('beat')
+    expect(surpriseRow()?.querySelector('strong')?.textContent).toBe('超预期 +0.3 个百分点')
+
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base,
+      consensus: null, providerPrevious: { displayValue: '3.1%' }, providerActual: { displayValue: '3.4%' } }} text={text} />)))
+    expect(surpriseRow()?.getAttribute('data-surprise')).toBe('consensus-unavailable')
+    expect(surpriseRow()?.querySelector('strong')?.textContent).toBe('无一致预期')
+    expect(surpriseRow()?.querySelector('strong')?.textContent).not.toMatch(/[\d—−]/)
+
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base,
+      consensus: { displayValue: '240K' }, providerPrevious: { displayValue: '240K' }, providerActual: { displayValue: '250K' } }} text={text} />)))
+    expect(surpriseRow()?.getAttribute('data-surprise')).toBe('consensus-unavailable')
+    expect(surpriseRow()?.querySelector('strong')?.textContent).toBe('预期差不可比')
+
+    // A scheduled event has no actual, so it has no surprise row at all.
+    await act(async () => root.render(scoped(<MarketCalendarInspector event={{ ...base,
+      consensus: { displayValue: '3.1%' }, providerPrevious: null, providerActual: null }} text={text} />)))
+    expect(surpriseRow()).toBeNull()
+  } finally { await act(async () => root.unmount()) }
+})
 it('prefers safe countryName, then code, then the localized unknown fallback', async () => {
   const { MarketCalendarInspector } = await import('./MarketCalendarEvents')
   const host = document.createElement('div'); const root = createRoot(host)
@@ -109,4 +144,12 @@ it('shows a refused automatic collection with its verdict, origin and time in th
     expect(host.textContent).toContain('Refresh failed')
     expect(host.textContent).not.toContain('Storage limited')
   } finally { await act(async () => root.unmount()) }
+})
+
+it('gives the surprise row a coloured badge instead of plain value text', () => {
+  expect(styles).toContain(".mi-economic-calendar__values [data-market-value='surprise'][data-surprise='beat'] strong")
+  expect(styles).toContain(".mi-economic-calendar__values [data-market-value='surprise'][data-surprise='miss'] strong")
+  expect(styles).toContain('var(--mi-economic-lime)')
+  expect(styles).toContain('var(--danger)')
+  expect(styles).toContain('font-weight: 700')
 })

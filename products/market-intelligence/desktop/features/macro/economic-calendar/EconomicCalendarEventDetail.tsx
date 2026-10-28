@@ -108,6 +108,8 @@ export function EconomicCalendarEventDetail({ event, now, onRefresh, onReleaseTi
     </dl>
     <div className="mi-economic-calendar__values">
       {valueRows.map((row) => <div key={row.id}><span>{row.label}</span><strong>{event[row.id]?.displayValue ?? text.details.unavailable}</strong></div>)}
+      {/* 官方三源（Fed/BLS/BEA）不提供市场预期；这里说明字段缺失，不计算、不显示任何差值。 */}
+      <div data-official-consensus="unavailable"><span>{text.market.consensus}</span><strong>{text.details.consensusUnavailable}</strong></div>
     </div>
     {isBlsRefreshEligible(event, now()) ? <BlsRefreshAction disabled={blsRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={blsRefreshAction.pending} text={text} /> : null}
     {isFedFomcRefreshEligible(event, now()) ? <FedFomcRefreshAction disabled={fomcRefreshAction.disabled} eventKey={event.eventKey} onRefresh={onRefresh} pending={fomcRefreshAction.pending} text={text} /> : null}

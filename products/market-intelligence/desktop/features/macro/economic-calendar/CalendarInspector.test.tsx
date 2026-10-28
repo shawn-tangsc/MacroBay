@@ -17,6 +17,9 @@ it('opens one detail drawer on the left, without a mask, with its close control 
     expect(host.querySelector('.ant-drawer-left')).not.toBeNull()
     expect(host.querySelector('.ant-drawer-mask')).toBeNull()
     expect(host.querySelector('[role="dialog"]')).not.toBeNull()
+    // One width for both entry points (calendar page and dashboard card), wide enough that the
+    // release title and the source/period rows do not wrap on their first line.
+    expect(host.querySelector<HTMLElement>('.ant-drawer-content-wrapper')?.style.width).toBe('480px')
     // One visible way out, in the header's own corner rather than in front of the title.
     const closeControl = host.querySelector<HTMLButtonElement>('.ant-drawer-close')!
     expect(closeControl).not.toBeNull()

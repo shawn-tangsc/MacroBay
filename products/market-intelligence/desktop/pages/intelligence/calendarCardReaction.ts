@@ -1,10 +1,10 @@
-import { crossAssetContractPolicy, crossAssetCurveStrideMs, type CrossAssetId } from '../../../contracts/crossAssetObservationContracts'
+import { crossAssetContractPolicy, crossAssetCurveStrideMs, type CrossAssetId, type CrossAssetMacroProxyId } from '../../../contracts/crossAssetObservationContracts'
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
 /**
- * 「这次发布前后各 30 分钟，三条线各自走了多少」（原型 ④：已公布行下面的那一行）。
+ * 「这次发布前后各 30 分钟，四条线各自走了多少」（原型 ④：已公布行下面的那一行）。
  *
- * 原型里那一行长这样：`±30分： QQQ −0.12%  BTC −0.18%  ETH −0.21%`。它是**行情事实**，不是判断：
+ * 原型里那一行长这样：`QQQ −0.12%  BTC −0.18%  ETH −0.21%  美元 +0.04%`。它是**行情事实**，不是判断：
  * 谁都没说这 0.12% 是这次发布造成的，只是把窗口两端的读数摆在一起，让读者自己看那次发布前后市场
  * 有没有动。判断留给判读与分析结论，两者不合流。
  *
@@ -24,11 +24,18 @@ import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingC
 export const calendarCardReactionPolicy = Object.freeze({
   version: 'marketIntelligenceCalendarCardReactionPolicy.v1',
   /** 事件两侧各取这么长：原型写的是「±30分」。 */
-  windowMs: 30 * 60 * 1_000
+  windowMs: 30 * 60 * 1_000,
+  /**
+   * The line order. The dollar is a macro-proxy curve on the same grid, not a collected symbol, but
+   * it is the first thing a macro release moves — a rate surprise priced without it is half a move.
+   */
+  displayOrder: Object.freeze(['index', 'btc', 'eth', 'dxy'] as const)
 })
 
+export type CalendarCardReactionId = CrossAssetId | 'dxy'
+
 /** 每条线在这段窗口里的收益（%）。`null` = 这条线在这一段答不出来，卡片就不印它。 */
-export type CalendarCardReaction = Readonly<Record<CrossAssetId, number | null>>
+export type CalendarCardReaction = Readonly<Record<CalendarCardReactionId, number | null>>
 
 type CurvePoint = Readonly<{ at: string; returnPercent: number | null }>
 type Bound = Readonly<{ atMs: number; returnPercent: number | null }>
@@ -74,6 +81,8 @@ function curveStrideMs(points: readonly CurvePoint[]): number | undefined {
 
 export function reactionReturns(input: Readonly<{
   curves: Readonly<Partial<Record<CrossAssetId, readonly CurvePoint[]>>>
+  /** The dollar/gold curves the cross-asset snapshot carries beside the collected symbols. */
+  macroCurves?: Readonly<Partial<Record<CrossAssetMacroProxyId, readonly CurvePoint[]>>>
   /** 这一行显示的时刻（ISO）。 */
   instant: string
   windowMs?: number
@@ -81,23 +90,27 @@ export function reactionReturns(input: Readonly<{
   const instantMs = Date.parse(input.instant)
   if (!Number.isFinite(instantMs)) return undefined
   const windowMs = input.windowMs ?? calendarCardReactionPolicy.windowMs
-  const returns: Partial<Record<CrossAssetId, number | null>> = {}
-  for (const asset of crossAssetContractPolicy.assets) {
-    const points = input.curves[asset] ?? []
-    const from = lastAtOrBefore(points, instantMs - windowMs)
-    const to = firstAtOrAfter(points, instantMs + windowMs)
-    const stride = curveStrideMs(points)
-    // 两端缺一不可；比窗口还稀的曲线读不出这个窗口（用小时级的点标「±30分」是假话）。
-    if (!from || !to || from.returnPercent === null || to.returnPercent === null ||
-      (stride !== undefined && stride > windowMs)) {
-      returns[asset] = null
-      continue
-    }
-    const value = ((1 + to.returnPercent / 100) / (1 + from.returnPercent / 100) - 1) * 100
-    returns[asset] = Number.isFinite(value) ? (Object.is(value, -0) ? 0 : value) : null
-  }
-  // 三条线都答不出来时，卡片就没有这一行可画。
-  return crossAssetContractPolicy.assets.some(asset => returns[asset] !== null) ? Object.freeze(returns as CalendarCardReaction) : undefined
+  const returns: Partial<Record<CalendarCardReactionId, number | null>> = {}
+  for (const asset of crossAssetContractPolicy.assets) returns[asset] = seriesReturn(input.curves[asset] ?? [], instantMs, windowMs)
+  returns.dxy = seriesReturn(input.macroCurves?.dxy ?? [], instantMs, windowMs)
+  // 四条线都答不出来、或全都平（0.00%）时，卡片就没有这一行可画：印一行 0 不是反应。
+  const hasSignal = calendarCardReactionPolicy.displayOrder.some(asset => {
+    const value = returns[asset]
+    return typeof value === 'number' && value !== 0
+  })
+  return hasSignal ? Object.freeze(returns as CalendarCardReaction) : undefined
+}
+
+/** One series' return across the window, or `null` when either end or the sampling is missing. */
+function seriesReturn(points: readonly CurvePoint[], instantMs: number, windowMs: number): number | null {
+  const from = lastAtOrBefore(points, instantMs - windowMs)
+  const to = firstAtOrAfter(points, instantMs + windowMs)
+  const stride = curveStrideMs(points)
+  // 两端缺一不可；比窗口还稀的曲线读不出这个窗口（用小时级的点标「±30分」是假话）。
+  if (!from || !to || from.returnPercent === null || to.returnPercent === null ||
+    (stride !== undefined && stride > windowMs)) return null
+  const value = ((1 + to.returnPercent / 100) / (1 + from.returnPercent / 100) - 1) * 100
+  return Number.isFinite(value) ? (Object.is(value, -0) ? 0 : value) : null
 }
 
 /**
@@ -141,7 +154,10 @@ export const calendarCardReactionReaderPolicy = Object.freeze({ range: '24h' as 
  * 页面因此可以把 `crossAssetClient.query` 直接交给读取器，不必在页面入口再包一层适配。
  */
 export type CalendarCardReactionQuery = (input: Readonly<{ range: '24h'; asOf: string }>) =>
-  Promise<Readonly<{ state: 'unavailable' }> | Readonly<{ curves: Readonly<Partial<Record<CrossAssetId, readonly CurvePoint[]>>> }>>
+  Promise<Readonly<{ state: 'unavailable' }> | Readonly<{
+    curves: Readonly<Partial<Record<CrossAssetId, readonly CurvePoint[]>>>
+    macroCurves?: Readonly<Partial<Record<CrossAssetMacroProxyId, readonly CurvePoint[]>>>
+  }>>
 
 /**
  * 把跨资产那条已有查询包成"给我这一行的 ±30 分反应"。
@@ -166,7 +182,7 @@ export function createCalendarCardReactionReader(query: CalendarCardReactionQuer
       const result = await query({ range: calendarCardReactionReaderPolicy.range, asOf })
       // 客户端的"不可用"是它自己的形状（`{state:'unavailable'}`）；快照本身没有 `state`。
       if ('state' in result) return undefined
-      return reactionReturns({ curves: result.curves, instant })
+      return reactionReturns({ curves: result.curves, macroCurves: result.macroCurves, instant })
     } catch {
       return undefined
     }

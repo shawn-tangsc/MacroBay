@@ -41,6 +41,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     actual: '实际值',
     previous: '前值',
     consensus: '市场预期',
+    surprise: '预期差（实际−预期）',
     'event-excerpt': '事件摘要',
     'dollar-index-level': '美元指数', 'dollar-index-return-15m': '美元指数 15 分钟变化',
     'dollar-index-return-1h': '美元指数 1 小时变化', 'dollar-index-return-4h': '美元指数 4 小时变化',

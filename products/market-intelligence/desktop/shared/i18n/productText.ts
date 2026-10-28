@@ -111,7 +111,7 @@ export const productText = {
                 'us-2y-yield': '美债 2 年期收益率', 'us-2y-yield-change-1d': '美债 2 年期 1 日变化',
                 'us-10y-breakeven-inflation': '美债 10 年期盈亏平衡通胀', 'us-10y-2y-term-spread': '10Y−2Y 期限利差',
                 'event-name': '事件', 'lifecycle-state': '生命周期', 'scheduled-date': '计划日期', 'scheduled-at': '计划时间',
-                'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', 'event-excerpt': '事件摘要'
+                'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', surprise: '预期差（实际−预期）', 'event-excerpt': '事件摘要'
               },
               subject: {
                 stablecoins: '稳定币', BTC: 'BTC', ETH: 'ETH', market: '市场', all: '全部', 'btc-vs-eth': 'BTC 相对 ETH',
@@ -150,10 +150,12 @@ export const productText = {
             empty: '未来 7 天无高重要性事件', unavailable: '日历数据暂不可用', refresh: '刷新',
             awaitingData: '已到发布时刻，等待实际值',
             // 「±30 分」反应那一行的标签（原型 ④）。三条线的名字用跨资产那份词表。
-            reactionWindow: '±30分',
+            reactionHint: '这次发布前后各 30 分钟的相对变化（不是因果判断）',
+            dxy: '美元',
             openCalendar: '打开经济日历', switchToAgent: '切换到市场解读 Agent', switchToCalendar: '切换到日历卡片',
             openEventInCalendar: '在日历中打开该事件',
-            collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定'
+            collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定',
+            surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', unavailable: '无一致预期', notComparable: '预期差不可比' }
           },
           analysisTimeline: {
             retryAnalysis: '重试分析', attemptFailed: '上次分析未发布',
@@ -349,20 +351,6 @@ export const productText = {
               }
             },
             macroReleaseDynamics: {
-              title: '宏观发布动态',
-              loading: '正在加载宏观发布动态…',
-              unavailable: '宏观发布动态暂时不可用。',
-              upcoming: '待发布',
-              released: '已发布',
-              noUpcoming: '暂无待发布官方日程',
-              noReleased: '暂无已发布官方值',
-              today: '今天',
-              inDays: '{days} 天后',
-              inDaysHours: '{days} 天 {hours} 小时后',
-              lessThanOneHour: '不足 1 小时',
-              prior: '前值',
-              eventCount: '{count} 项',
-              overflowAnnouncement: '还有 {count} 项事件；打开日历查看完整分组',
               calendarAction: '打开日历',
               sourceName: '经济日历',
               sourceStates: { loading: '加载中', available: '日程可用', empty: '暂无官方日程', unavailable: '日程不可用' },
@@ -455,7 +443,7 @@ export const productText = {
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '当前查询：UTC {month}；官方最多 200 条；跨月事件覆盖可能不完整' },
             calendarSettings: '配置日历',
             calendarPanel: { title: '日历源', configure: '在数据源中配置', loading: '正在加载日历源…', unavailable: '当前面板没有可配置的日历源。', pending: '待接入', enabled: '已启用', disabled: '未启用' },
-            market: { refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：0xRouter', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低' }, locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理 0xRouter 来源', unknownCountry: '未标明国家', consensus: '市场预期', providerPrevious: '前值（0xRouter）', providerActual: '公布值（0xRouter）', comparison: '暂不可比较', source: '0xRouter', observed: '来源观测时间', time: '发布时间', more: '更多市场事件', kinds: { 'economic-indicator': '经济指标', 'financial-event': '财经事件', 'central-bank-activity': '央行活动' }, statuses: { success: '已采集', 'success-empty': '本次无事件', 'all-skipped': '解析受限', partial: '部分事件可用', unavailable: '尚无可用批次' } },
+            market: { refreshOutcome: { succeeded: '刷新成功', failed: '刷新失败', unattempted: '本次尚未刷新' }, refreshTrigger: { manual: '手动', automatic: '自动' }, attemptFailure: { 'input-invalid': '请求无效', 'credential-not-configured': '未配置凭据', 'response-unavailable': '来源未响应', 'archive-unavailable': '证据归档不可用', 'parse-unavailable': '解析受限', 'storage-unavailable': '存储不可用', 'storage-pressure': '存储受限' }, collectedAt: '数据采集于', retainedData: '显示上次数据', automaticRefresh: '每 {interval} 分钟自动更新', officialActual: '官方公布值', officialPrevious: '官方前值', sourceAdvanced: '该来源此后已更新；以下数值与时间属于上方那条观测。', linkedTimeOfficial: '日历时间：官方', linkedTimeProvider: '日历时间：0xRouter', linkedTimePending: '日历时间：待定', missingValue: '暂无', importance: { high: '高', medium: '中', low: '低' }, locale: 'zh' as const, refresh: '刷新市场日历', loading: '正在读取市场事件…', pending: '正在刷新市场日历…', completed: '市场日历已更新', partial: '部分来源失败，保留已有数据', unavailable: '刷新未完成，已有数据可能过期', queryUnavailable: '市场事件读取受限', settings: '管理 0xRouter 来源', unknownCountry: '未标明国家', consensus: '市场预期', surprise: '预期差', surpriseBeat: '超预期', surpriseMiss: '低于预期', surpriseInline: '符合预期', surpriseUnavailable: '无一致预期', surpriseNotComparable: '预期差不可比', providerPrevious: '前值（0xRouter）', providerActual: '公布值（0xRouter）', comparison: '暂不可比较', source: '0xRouter', observed: '来源观测时间', time: '发布时间', more: '更多市场事件', kinds: { 'economic-indicator': '经济指标', 'financial-event': '财经事件', 'central-bank-activity': '央行活动' }, statuses: { success: '已采集', 'success-empty': '本次无事件', 'all-skipped': '解析受限', partial: '部分事件可用', unavailable: '尚无可用批次' } },
             eventStatus: { label: '发布进度', 'data-received': '数据已获取', upcoming: '未到发布时间', 'awaiting-data': '待发布', 'storage-limited': '存储受限', 'time-pending': '时间待定', 'elapsed-unconfirmed': '计划时间已过', cancelled: '已取消' },
             workspaceLabel: '— MACRO / ECONOMIC CALENDAR',
             title: '经济日历',
@@ -477,7 +465,7 @@ export const productText = {
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': '非农', unemployment: '失业率',
               'average-hourly-earnings': '时薪', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: '宏观'
             },
-            details: { title: '事件详情', category: '类别', period: '统计周期', source: '来源', time: '发布时间', importance: '重要性', state: '状态', actual: '实际值', previous: '前值', unavailable: '暂无官方值', scheduledDateOnly: '官方未公布具体时间', conventionTime: '惯例默认', editedTime: '已编辑',
+            details: { title: '事件详情', category: '类别', period: '统计周期', source: '来源', time: '发布时间', importance: '重要性', state: '状态', actual: '实际值', previous: '前值', unavailable: '暂无官方值', consensusUnavailable: '官方源未提供', scheduledDateOnly: '官方未公布具体时间', conventionTime: '惯例默认', editedTime: '已编辑',
               editTime: { label: '发布时间（可编辑）', save: '保存', cancel: '取消', restore: '恢复官方/惯例', saved: '已保存你的时间。', rejected: '保存失败：时间或日期不合法。', ambiguous: '该时刻在本地时区出现两次（夏令时切换），请换一个时间。', hint: '编辑会保存你的日期与时间，并覆盖官方与惯例值。' } },
             sources: { federalReserve: 'Federal Reserve Board (Fed)', bea: '美国经济分析局（BEA）', blsManualIcs: '美国劳工统计局（BLS，手动 ICS）', blsAutomaticSchedule: '美国劳工统计局（BLS，自动年度日程）' },
             sourceMarkers: { federalReserve: 'Fed', bea: 'BEA', blsManualIcs: 'BLS', blsAutomaticSchedule: 'BLS' },
@@ -1426,7 +1414,7 @@ export const productText = {
                 'us-2y-yield': 'US 2-year yield', 'us-2y-yield-change-1d': 'US 2-year 1-day change',
                 'us-10y-breakeven-inflation': 'US 10-year breakeven inflation', 'us-10y-2y-term-spread': '10Y-2Y term spread',
                 'event-name': 'Event', 'lifecycle-state': 'Lifecycle', 'scheduled-date': 'Scheduled date', 'scheduled-at': 'Scheduled time',
-                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', 'event-excerpt': 'Event excerpt'
+                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt'
               },
               subject: {
                 stablecoins: 'Stablecoins', BTC: 'BTC', ETH: 'ETH', market: 'Market', all: 'All', 'btc-vs-eth': 'BTC vs ETH',
@@ -1464,10 +1452,12 @@ export const productText = {
             title: 'What to watch', todaySection: 'Recently released, value moved', upcomingSection: 'Upcoming',
             empty: 'No high-importance events in the next 7 days', unavailable: 'Calendar data is unavailable', refresh: 'Refresh',
             awaitingData: 'Scheduled time has passed; waiting for the value',
-            reactionWindow: '±30 min',
+            reactionHint: 'Relative change in the 30 minutes around the release (not a causal claim)',
+            dxy: 'DXY',
             openCalendar: 'Open the economic calendar', switchToAgent: 'Switch to the market agent', switchToCalendar: 'Switch to the calendar card',
             openEventInCalendar: 'Open this event in the calendar',
-            collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD'
+            collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD',
+            surprise: { beat: 'Above expectation', miss: 'Below expectation', inline: 'In line', unavailable: 'No consensus', notComparable: 'Surprise not comparable' }
           },
           analysisTimeline: {
             retryAnalysis: 'Retry analysis', attemptFailed: 'Last analysis was not published',
@@ -1656,20 +1646,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               }
             },
             macroReleaseDynamics: {
-              title: 'Macro Release Dynamics',
-              loading: 'Loading macro release dynamics…',
-              unavailable: 'Macro release dynamics are unavailable.',
-              upcoming: 'Upcoming',
-              released: 'Last released',
-              noUpcoming: 'No upcoming official schedule',
-              noReleased: 'No released official value',
-              today: 'Today',
-              inDays: 'In {days} days',
-              inDaysHours: 'In {days} days {hours} hours',
-              lessThanOneHour: 'Less than one hour',
-              prior: 'Prior',
-              eventCount: '{count} events',
-              overflowAnnouncement: '{count} additional events; open calendar for the full group',
               calendarAction: 'Open calendar',
               sourceName: 'Economic Calendar',
               sourceStates: { loading: 'Loading', available: 'Schedule available', empty: 'No official schedule', unavailable: 'Schedule unavailable' },
@@ -1762,7 +1738,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Query: UTC {month}; up to 200 official events; adjacent-month coverage may be incomplete' },
             calendarSettings: 'Configure calendar',
             calendarPanel: { title: 'Calendar sources', configure: 'Configure in data sources', loading: 'Loading calendar sources…', unavailable: 'No calendar sources are available for this panel.', pending: 'Pending', enabled: 'Enabled', disabled: 'Disabled' },
-            market: { refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: 0xRouter', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low' }, locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage 0xRouter source', unknownCountry: 'Country not specified', consensus: 'Market consensus', providerPrevious: 'Previous (0xRouter)', providerActual: 'Actual (0xRouter)', comparison: 'Not comparable yet', source: '0xRouter', observed: 'Source observed', time: 'Published', more: 'More market events', kinds: { 'economic-indicator': 'Economic indicators', 'financial-event': 'Financial events', 'central-bank-activity': 'Central bank activities' }, statuses: { success: 'Collected', 'success-empty': 'No events this time', 'all-skipped': 'Parsing limited', partial: 'Partially available', unavailable: 'No available collection' } },
+            market: { refreshOutcome: { succeeded: 'Refresh succeeded', failed: 'Refresh failed', unattempted: 'Not refreshed this session' }, refreshTrigger: { manual: 'Manual', automatic: 'Automatic' }, attemptFailure: { 'input-invalid': 'Invalid request', 'credential-not-configured': 'No credential configured', 'response-unavailable': 'Source did not respond', 'archive-unavailable': 'Evidence archive unavailable', 'parse-unavailable': 'Parsing limited', 'storage-unavailable': 'Storage unavailable', 'storage-pressure': 'Storage limited' }, collectedAt: 'Data collected', retainedData: 'Showing previous data', automaticRefresh: 'Updates automatically every {interval} min', officialActual: 'Official actual', officialPrevious: 'Official previous', sourceAdvanced: 'This source has updated since; the figures and time below belong to the observation above.', linkedTimeOfficial: 'Calendar time: official', linkedTimeProvider: 'Calendar time: 0xRouter', linkedTimePending: 'Calendar time: pending', missingValue: 'Unavailable', importance: { high: 'High', medium: 'Medium', low: 'Low' }, locale: 'en' as const, refresh: 'Refresh market calendar', loading: 'Loading market events…', pending: 'Refreshing market calendar…', completed: 'Market calendar updated', partial: 'Some sources failed; existing data retained', unavailable: 'Refresh incomplete; existing data may be stale', queryUnavailable: 'Market events unavailable', settings: 'Manage 0xRouter source', unknownCountry: 'Country not specified', consensus: 'Market consensus', surprise: 'Surprise', surpriseBeat: 'Above expectation', surpriseMiss: 'Below expectation', surpriseInline: 'In line', surpriseUnavailable: 'No consensus', surpriseNotComparable: 'Surprise not comparable', providerPrevious: 'Previous (0xRouter)', providerActual: 'Actual (0xRouter)', comparison: 'Not comparable yet', source: '0xRouter', observed: 'Source observed', time: 'Published', more: 'More market events', kinds: { 'economic-indicator': 'Economic indicators', 'financial-event': 'Financial events', 'central-bank-activity': 'Central bank activities' }, statuses: { success: 'Collected', 'success-empty': 'No events this time', 'all-skipped': 'Parsing limited', partial: 'Partially available', unavailable: 'No available collection' } },
             eventStatus: { label: 'Release status', 'data-received': 'Data received', upcoming: 'Not yet scheduled time', 'awaiting-data': 'Not yet published', 'storage-limited': 'Storage limited', 'time-pending': 'Time pending', 'elapsed-unconfirmed': 'Scheduled time elapsed', cancelled: 'Cancelled' },
             workspaceLabel: '— MACRO / ECONOMIC CALENDAR',
             title: 'Economic calendar',
@@ -1782,7 +1758,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               fomc: 'FOMC', cpi: 'CPI', 'core-cpi': 'Core CPI', 'nonfarm-payrolls': 'NFP', unemployment: 'Unemployment',
               'average-hourly-earnings': 'Wages', pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP', unknown: 'Macro'
             },
-            details: { title: 'Event detail', category: 'Category', period: 'Period', source: 'Source', time: 'Release time', importance: 'Importance', state: 'State', actual: 'Actual', previous: 'Previous', unavailable: 'No official value', scheduledDateOnly: 'Official time not published', conventionTime: 'Convention default', editedTime: 'Edited',
+            details: { title: 'Event detail', category: 'Category', period: 'Period', source: 'Source', time: 'Release time', importance: 'Importance', state: 'State', actual: 'Actual', previous: 'Previous', unavailable: 'No official value', consensusUnavailable: 'Not provided by official sources', scheduledDateOnly: 'Official time not published', conventionTime: 'Convention default', editedTime: 'Edited',
               editTime: { label: 'Release time (editable)', save: 'Save', cancel: 'Cancel', restore: 'Restore published/convention', saved: 'Your time has been saved.', rejected: 'Not saved: the time or date is not valid.', ambiguous: 'That instant occurs twice in this timezone (daylight saving). Pick another.', hint: 'An edit stores your date and time and overrides the published and convention values.' } },
             sources: { federalReserve: 'Federal Reserve Board (Fed)', bea: 'Bureau of Economic Analysis (BEA)', blsManualIcs: 'Bureau of Labor Statistics (BLS, manual ICS)', blsAutomaticSchedule: 'Bureau of Labor Statistics (BLS, automatic annual schedule)' },
             sourceMarkers: { federalReserve: 'Fed', bea: 'BEA', blsManualIcs: 'BLS', blsAutomaticSchedule: 'BLS' },

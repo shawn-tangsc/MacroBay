@@ -76,6 +76,10 @@ async function click(host: HTMLElement, label: string): Promise<void> {
   })
 }
 
+async function flush(): Promise<void> {
+  for (let attempt = 0; attempt < 8; attempt += 1) await act(async () => { await Promise.resolve() })
+}
+
 describe('the release time is edited where it is shown', () => {
   it('shows the displayed instant as the row value and only reveals the picker when asked', async () => {
     const { host } = await renderInspector(event())
@@ -100,6 +104,37 @@ describe('the release time is edited where it is shown', () => {
     expect(edited.host.querySelector('[data-release-time-row]')?.textContent).toContain(text.details.editedTime)
     await click(edited.host, text.details.editTime.restore)
     expect(edited.input.clearReleaseTime).toHaveBeenCalledWith({ eventKey: 'US.CORE_CPI.RELEASE.2026-M09' })
+    // The panel follows the write: a cleared override re-reads the detail and says it saved.
+    await flush()
+    expect(edited.input.getEventDetail.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('re-reads the detail after a saved release time', async () => {
+    const { host, input } = await renderInspector(event())
+    await click(host, text.details.time)
+    await click(host, text.details.editTime.save)
+    await flush()
+
+    expect(input.setReleaseTime).toHaveBeenCalledWith({
+      eventKey: 'US.CORE_CPI.RELEASE.2026-M09',
+      scheduledAt: '2026-10-14T12:30:00.000Z',
+      scheduledDate: '2026-10-14'
+    })
+    expect(input.getEventDetail.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('keeps the row and reports the rejection when the write is refused', async () => {
+    const { host, input } = await renderInspector(event())
+    input.setReleaseTime = vi.fn(async () => ({ state: 'rejected' as const }))
+    const readsBefore = input.getEventDetail.mock.calls.length
+
+    await click(host, text.details.time)
+    await click(host, text.details.editTime.save)
+    await flush()
+
+    expect(host.textContent).toContain(text.details.editTime.rejected)
+    expect(input.getEventDetail.mock.calls.length).toBe(readsBefore)
+    expect(host.querySelector('[data-release-time-row]')?.getAttribute('data-release-time-row')).toBe('convention-default')
   })
 })
 

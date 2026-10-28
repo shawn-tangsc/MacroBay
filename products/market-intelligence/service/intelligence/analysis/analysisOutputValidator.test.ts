@@ -21,6 +21,23 @@ describe('analysisOutputValidator', () => {
     const output = { ...validOutput(), marketReaction: [], scenarios: [] }
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
   })
+  it('accepts a conclusion that cites a derived surprise fact', () => {
+    const snapshot = frozenSnapshot()
+    const surprise = {
+      ...snapshot.facts[0]!, factId: 'mi-fact-macro-surprise', domain: 'macro' as const,
+      subject: 'consumer-price-index', metric: 'surprise', value: 0.3, unit: 'pp'
+    }
+    snapshot.facts = [surprise]
+    const output = {
+      ...validOutput(),
+      knownFacts: [{ factId: surprise.factId, statement: 'CPI 年率超预期 +0.3 个百分点。', evidenceRefIds: ['mi-ev-market-move'] }],
+      marketReaction: []
+    }
+
+    const result = validateAnalysisModelOutput(JSON.stringify(output), snapshot)
+    expect(result.ok).toBe(true)
+    expect(result.ok ? result.value.knownFacts[0]?.factId : undefined).toBe('mi-fact-macro-surprise')
+  })
   it('rejects citing a different frozen event for a metric fact', () => {
     const output = validOutput()
     const snapshot = { facts: [{ ...frozenSnapshot().facts[0]!, evidenceRefId: null }], evidenceRefs: [{ evidenceRefId: 'mi-ev-market-move' }] }

@@ -7,8 +7,11 @@ import { guardProductToolOutput } from './sensitiveDataGuard'
 
 export const agentChangeLogStoragePolicy = Object.freeze({
   fileName: 'agent-change-log.sqlite',
-  schemaVersion: 1
+  schemaVersion: 2
 })
+
+/** What the business result says happened, not what the model asked for. */
+export type AgentChangeLogOutcome = 'applied' | 'unchanged' | 'rejected' | 'failed'
 
 export type AgentChangeLogEntry = Readonly<{
   traceId: string
@@ -20,6 +23,8 @@ export type AgentChangeLogEntry = Readonly<{
   before?: unknown
   after?: unknown
   changeSummary: string
+  outcome: AgentChangeLogOutcome
+  configurationChanged: boolean
   revisionBefore: string
   revisionAfter: string
   createdAt: string
@@ -52,6 +57,8 @@ export function createAgentChangeLog(filePath: string) {
       before_json text,
       after_json text,
       change_summary text not null,
+      outcome text not null default 'applied',
+      configuration_changed integer not null default 1,
       revision_before text not null,
       revision_after text not null,
       created_at text not null
@@ -59,6 +66,26 @@ export function createAgentChangeLog(filePath: string) {
     create index if not exists idx_agent_change_log_trace on intelligence_agent_change_log(trace_id);
     create index if not exists idx_agent_change_log_source on intelligence_agent_change_log(source_id, created_at);
   `)
+  // A store created before schema 2 has neither column. `create table if not exists` leaves it
+  // untouched, so add the columns in place; the defaults backfill every old row. Old rows were
+  // written as mutations (the pre-outcome schema had no other meaning), so they read back as
+  // `applied`/`configuration_changed = 1` until someone can prove otherwise. That is a backfill,
+  // not an observation: no v1 row ever carried an outcome.
+  const columns = new Set(
+    (database.prepare('pragma table_info(intelligence_agent_change_log)').all() as Array<{ name?: unknown }>)
+      .map((column) => String(column.name))
+  )
+  if (!columns.has('outcome')) {
+    database.exec(
+      "alter table intelligence_agent_change_log add column outcome text not null default 'applied'"
+    )
+  }
+  if (!columns.has('configuration_changed')) {
+    database.exec(
+      'alter table intelligence_agent_change_log add column configuration_changed integer not null default 1'
+    )
+  }
+  database.exec('pragma user_version = 2;')
 
   return {
     /** Throws when the entry cannot be stored; the caller reports `auditFailed` instead of hiding it. */
@@ -69,8 +96,9 @@ export function createAgentChangeLog(filePath: string) {
       database.prepare(
         `insert into intelligence_agent_change_log (
           id, trace_id, agent_id, agent_session_id, domain, action, source_id,
-          before_json, after_json, change_summary, revision_before, revision_after, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          before_json, after_json, change_summary, outcome, configuration_changed,
+          revision_before, revision_after, created_at
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         id,
         entry.traceId,
@@ -82,6 +110,8 @@ export function createAgentChangeLog(filePath: string) {
         beforeJson,
         afterJson,
         entry.changeSummary,
+        entry.outcome,
+        entry.configurationChanged ? 1 : 0,
         entry.revisionBefore,
         entry.revisionAfter,
         entry.createdAt
@@ -141,8 +171,14 @@ function toRow(row: Record<string, unknown>): AgentChangeLogRow {
     ...(parse(row.before_json) !== undefined ? { before: parse(row.before_json) } : {}),
     ...(parse(row.after_json) !== undefined ? { after: parse(row.after_json) } : {}),
     changeSummary: String(row.change_summary),
+    outcome: normalizeOutcome(row.outcome),
+    configurationChanged: Number(row.configuration_changed) === 1,
     revisionBefore: String(row.revision_before),
     revisionAfter: String(row.revision_after),
     createdAt: String(row.created_at)
   })
+}
+
+function normalizeOutcome(value: unknown): AgentChangeLogOutcome {
+  return value === 'unchanged' || value === 'rejected' || value === 'failed' ? value : 'applied'
 }

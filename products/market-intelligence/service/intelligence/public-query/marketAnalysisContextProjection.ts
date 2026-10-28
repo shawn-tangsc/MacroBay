@@ -24,6 +24,7 @@ import type {
   SourceHealthData
 } from './queryContracts'
 import { marketCalendarPublicPolicy } from '../../../contracts/macro/marketCalendarQueryContracts'
+import { assessMarketCalendarSurprise } from '../../../contracts/macro/marketCalendarSurprise'
 import { analysisModelVocabulary } from '../analysis/analysisModelVocabulary'
 import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type {
@@ -330,6 +331,14 @@ export function projectMacroCalendar(
     if (event.actual) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.actual, event.actual.displayValue, event.actual.unit ?? null)
     if (event.previous) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.previous, event.previous.displayValue, event.previous.unit ?? null)
     if (event.consensus) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.consensus, event.consensus.displayValue, event.consensus.unit ?? null)
+    const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
+    if (surprise.presentation) {
+      add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.surprise, surprise.presentation.value, surprise.presentation.unit)
+    } else if (event.actual && event.consensus) {
+      // Both sides exist but no displayable difference can be computed (unit form or a zero
+      // denominator). A scheduled event with an expectation is not this case: it has no actual yet.
+      caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.providerSurpriseNotComparable)
+    }
     if (event.consensusState === 'unavailable') caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarConsensusUnavailable)
     for (const eventCaveat of event.caveats) caveats.add(eventCaveat)
   }
