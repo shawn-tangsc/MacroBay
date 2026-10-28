@@ -79,6 +79,12 @@ jobs:
       - name: Verify the disk image
         run: hdiutil verify release/*.dmg
 
+      - name: Assert stable artifact names
+        run: |
+          set -euo pipefail
+          test -f release/MacroBay-arm64.dmg
+          grep -q 'MacroBay-arm64.dmg' release/latest-mac.yml
+
       - name: Upload disk image
         uses: actions/upload-artifact@v4
         with:
@@ -125,6 +131,12 @@ jobs:
 
       - name: Package Windows installer
         run: pnpm exec electron-builder --win --x64 --publish never
+
+      - name: Assert stable artifact names
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'release/MacroBay-x64-setup.exe')) { throw 'missing MacroBay-x64-setup.exe' }
+          if (-not (Select-String -Path 'release/latest.yml' -Pattern 'MacroBay-x64-setup.exe' -Quiet)) { throw 'latest.yml does not reference the stable installer name' }
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
