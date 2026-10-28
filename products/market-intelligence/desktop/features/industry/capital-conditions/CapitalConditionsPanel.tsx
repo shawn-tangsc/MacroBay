@@ -1,8 +1,8 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from 'antd'
 
-import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState } from './capitalConditionsModel'
+import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfCumulativeWindow, type DashboardEtfFlowAsset } from './capitalConditionsModel'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -15,6 +15,11 @@ type Text = {
   change7d: string
   btcEtfLatest: string
   ethEtfLatest: string
+  btcEtfCumulative: string
+  ethEtfCumulative: string
+  cumulativeWindow: string
+  cumulativeWindowPartial: string
+  cumulativeUnavailable: string
   observedAt: string
   etfFlow: string
   etfUnavailable: string
@@ -64,6 +69,10 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
           <Fact kind="change" label={text.change7d} value={`${state.change7dUsd} · ${state.change7dPercent}`} direction={flowDirection(state.change7dUsd)} />
           <Fact kind="etf" label={text.btcEtfLatest} value={state.etf === 'unavailable' ? text.valueUnavailable : state.etf.btc.latestNetFlowUsd} direction={state.etf === 'unavailable' ? 'zero' : flowDirection(state.etf.btc.latestNetFlowUsd)} />
           <Fact kind="etf" label={text.ethEtfLatest} value={state.etf === 'unavailable' ? text.valueUnavailable : state.etf.eth.latestNetFlowUsd} direction={state.etf === 'unavailable' ? 'zero' : flowDirection(state.etf.eth.latestNetFlowUsd)} />
+          {/* Cumulative rows read the same validated ETF window as the chart. A window the source
+              cannot cover keeps its real day count instead of being shown as a full 20 days. */}
+          <CumulativeFact label={text.btcEtfCumulative} asset={state.etf === 'unavailable' ? 'unavailable' : state.etf.btc} text={text} />
+          <CumulativeFact label={text.ethEtfCumulative} asset={state.etf === 'unavailable' ? 'unavailable' : state.etf.eth} text={text} />
         </dl></div>
         {state.etf !== 'unavailable' ? <EtfFlowSummary etf={state.etf} text={text} /> : null}
       </div>
@@ -72,7 +81,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   </section>
 }
 
-function EtfFlowSummary({ etf, text }: { etf: Exclude<Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf'], 'unavailable'>; text: Text }): React.ReactElement {
+type DashboardEtfFlow = Extract<Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf'], { state: 'available' }>
+
+function EtfFlowSummary({ etf, text }: { etf: DashboardEtfFlow; text: Text }): React.ReactElement {
   return <div className="mi-capital-conditions__etf-summary">
     <EtfFlowConclusion asset={etf.btc} label={text.btc} text={text} />
     <EtfFlowConclusion asset={etf.eth} label={text.eth} text={text} />
@@ -80,6 +91,34 @@ function EtfFlowSummary({ etf, text }: { etf: Exclude<Extract<DashboardCapitalCo
 }
 
 type EtfFlowConclusionAsset = { asset: 'BTC' | 'ETH'; rows: readonly { direction: 'inflow' | 'outflow' | 'zero' }[] }
+
+function CumulativeFact({ label, asset, text }: { label: string; asset: DashboardEtfFlowAsset | 'unavailable'; text: Text }): React.ReactElement {
+  return <div className="mi-capital-conditions__cumulative" data-capital-fact="etf-cumulative">
+    <dt>{label}</dt>
+    <dd>{asset === 'unavailable' ? text.cumulativeUnavailable : asset.cumulative.map((window, index) => (
+      <Fragment key={window.windowDays}>
+        {index === 0 ? null : <span aria-hidden="true"> · </span>}
+        <CumulativeWindow window={window} text={text} />
+      </Fragment>
+    ))}</dd>
+  </div>
+}
+
+/**
+ * The day label and the covered-day caveat stay muted; only the formatted amount carries the
+ * direction color. Splitting on `{amount}` keeps translator word order intact when the number is
+ * not at the end of the sentence.
+ */
+function CumulativeWindow({ window, text }: { window: DashboardEtfCumulativeWindow; text: Text }): React.ReactElement {
+  const template = window.complete ? text.cumulativeWindow : text.cumulativeWindowPartial
+  const [before = '', after = ''] = template.split('{amount}')
+  const values = { days: window.windowDays, coveredDays: window.coveredDays }
+  return <span className="mi-capital-conditions__cumulative-window">
+    <span className="mi-capital-conditions__cumulative-days">{format(before, values)}</span>
+    <span data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</span>
+    {after ? <span className="mi-capital-conditions__cumulative-caveat">{format(after, values)}</span> : null}
+  </span>
+}
 
 function EtfFlowConclusion({ asset, label, text }: { asset: EtfFlowConclusionAsset; label: string; text: Text }): React.ReactElement | null {
   const latest = asset.rows.at(-1)

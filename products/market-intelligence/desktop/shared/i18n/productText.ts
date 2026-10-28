@@ -383,7 +383,10 @@ export const productText = {
             },
             capitalConditions: {
               title: '资金面', loading: '正在加载资金面…', empty: '暂无已验证的资金面快照。', unavailable: '资金面暂时不可用。',
-              stablecoinSupply: '稳定币总供给', change7d: '7D 净变化', btcEtfLatest: 'BTC ETF 最新', ethEtfLatest: 'ETH ETF 最新', observedAt: '观测时间', etfFlow: '市场资金流', etfUnavailable: '市场资金流暂时不可用。', funds: '资金面', btc: 'BTC ETF', eth: 'ETH ETF',
+              stablecoinSupply: '稳定币总供给', change7d: '7D 净变化', btcEtfLatest: 'BTC ETF 最新', ethEtfLatest: 'ETH ETF 最新',
+              btcEtfCumulative: 'BTC ETF 累计', ethEtfCumulative: 'ETH ETF 累计',
+              cumulativeWindow: '{days} 日 {amount}', cumulativeWindowPartial: '{days} 日 {amount}（仅 {coveredDays} 天）', cumulativeUnavailable: '不可用',
+              observedAt: '观测时间', etfFlow: '市场资金流', etfUnavailable: '市场资金流暂时不可用。', funds: '资金面', btc: 'BTC ETF', eth: 'ETH ETF',
               flowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' }, singleDay: '1 日', consecutiveDays: '{count} 日连续', valueUnavailable: '—',
               refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。'
             },
@@ -1678,7 +1681,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             capitalConditions: {
               title: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'No verified capital-conditions snapshot.', unavailable: 'Capital conditions are unavailable.',
-              stablecoinSupply: 'Stablecoin supply', change7d: '7D net change', btcEtfLatest: 'Latest BTC ETF', ethEtfLatest: 'Latest ETH ETF', observedAt: 'Observed at', etfFlow: 'Market flows', etfUnavailable: 'Market flows are unavailable.', funds: 'Capital', btc: 'BTC ETF', eth: 'ETH ETF',
+              stablecoinSupply: 'Stablecoin supply', change7d: '7D net change', btcEtfLatest: 'Latest BTC ETF', ethEtfLatest: 'Latest ETH ETF',
+              btcEtfCumulative: 'BTC ETF cumulative', ethEtfCumulative: 'ETH ETF cumulative',
+              cumulativeWindow: '{days}-day {amount}', cumulativeWindowPartial: '{days}-day {amount} ({coveredDays} days only)', cumulativeUnavailable: 'Unavailable',
+              observedAt: 'Observed at', etfFlow: 'Market flows', etfUnavailable: 'Market flows are unavailable.', funds: 'Capital', btc: 'BTC ETF', eth: 'ETH ETF',
               flowDirections: { inflow: 'Net inflow', outflow: 'Net outflow', zero: 'Flat' }, singleDay: '1 day', consecutiveDays: '{count} consecutive days', valueUnavailable: '—',
               refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.'
             },

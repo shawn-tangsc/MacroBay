@@ -44,10 +44,13 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toMatch(new RegExp(`<div class="mi-capital-conditions__header-band"><h2>${text.title}</h2><small class="mi-capital-conditions__observed-at">`))
     expect(markup).toContain('class="mi-capital-conditions__observed-at"')
     expect(markup.indexOf('mi-capital-conditions__header-band')).toBeLessThan(markup.indexOf('<dl'))
-    expect(markup.match(/<dt>/g)).toHaveLength(4)
+    expect(markup.match(/<dt>/g)).toHaveLength(6)
     expect(markup).toContain(text.stablecoinSupply)
     expect(markup).toContain(text.btcEtfLatest)
     expect(markup).toContain(text.ethEtfLatest)
+    expect(markup).toContain(text.btcEtfCumulative)
+    expect(markup).toContain(text.ethEtfCumulative)
+    expect(markup).toContain(text.cumulativeUnavailable)
     expect(markup).toContain('$254.9B')
     expect(markup).toContain(text.observedAt)
     expect(markup).toContain('2026-08-18 07:00 GMT')
@@ -65,7 +68,7 @@ describe('CapitalConditionsPanel', () => {
       state: { state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
     }))
     expect(markup).toMatch(/<section[^>]*>\s*<div class="mi-capital-conditions__content-row"><div class="mi-capital-conditions__summary"><div class="mi-capital-conditions__header-band"><h2>.*<\/h2><small class="mi-capital-conditions__observed-at">/)
-    expect(markup).toMatch(/<dl><div data-capital-fact="supply">.*<\/div><div data-capital-fact="change">.*<\/div><div data-capital-fact="etf">.*<\/div><div data-capital-fact="etf">.*<\/div><\/dl>/)
+    expect(markup).toMatch(/<dl><div data-capital-fact="supply">.*<\/div><div data-capital-fact="change">.*<\/div><div data-capital-fact="etf">.*<\/div><div data-capital-fact="etf">.*<\/div><div class="mi-capital-conditions__cumulative" data-capital-fact="etf-cumulative">.*<\/div><div class="mi-capital-conditions__cumulative" data-capital-fact="etf-cumulative">.*<\/div><\/dl>/)
     expect(markup.indexOf('mi-capital-conditions__summary')).toBeLessThan(markup.indexOf('mi-capital-conditions__etf-flow'))
   })
 
@@ -83,6 +86,65 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('data-flow-direction="outflow"')
   })
 
+  it.each(['zh-CN', 'en-US'] as const)('renders %s cumulative ETF windows with per-window direction and amounts', (locale) => {
+    const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
+    const state = fullState()
+    state.etf.btc.cumulative = [
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '-$1.24B', complete: true },
+      { windowDays: 20, coveredDays: 20, netFlowUsd: '+$3.41B', complete: true }
+    ]
+    state.etf.eth.cumulative = [
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '+$220M', complete: true },
+      { windowDays: 20, coveredDays: 20, netFlowUsd: '+$1.1B', complete: true }
+    ]
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
+    const rows = cumulativeRows(markup)
+
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toContain(windowText(text.cumulativeWindow, 5, '-$1.24B'))
+    expect(rows[0]).toContain(windowText(text.cumulativeWindow, 20, '+$3.41B'))
+    expect(rows[1]).toContain(windowText(text.cumulativeWindow, 5, '+$220M'))
+    expect(rows[1]).toContain(windowText(text.cumulativeWindow, 20, '+$1.1B'))
+    expect(markup).toContain('data-flow-direction="outflow"')
+    expect(markup).toContain('data-flow-direction="inflow"')
+    expect(rows.join(' ')).not.toContain(windowText(text.cumulativeWindowPartial, 5, '-$1.24B', 5))
+  })
+
+  it.each(['zh-CN', 'en-US'] as const)('shows the real covered day count for a short %s 20-day window instead of calling it 20 days', (locale) => {
+    const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
+    const state = fullState()
+    state.etf.btc.cumulative = [
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '+$50', complete: true },
+      { windowDays: 20, coveredDays: 12, netFlowUsd: '+$78', complete: false }
+    ]
+    state.etf.eth.cumulative = [
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '-$50', complete: true },
+      { windowDays: 20, coveredDays: 12, netFlowUsd: '-$78', complete: false }
+    ]
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
+    const rows = cumulativeRows(markup)
+
+    expect(rows[0]).toContain(windowText(text.cumulativeWindow, 5, '+$50'))
+    expect(rows[0]).toContain(windowText(text.cumulativeWindowPartial, 20, '+$78', 12))
+    expect(rows[0].trim().endsWith(locale === 'zh-CN' ? '（仅 12 天）' : '(12 days only)')).toBe(true)
+    expect(rows.join(' ')).toContain(locale === 'zh-CN' ? '仅 12 天' : '12 days only')
+  })
+
+  it.each(['zh-CN', 'en-US'] as const)('shows %s cumulative rows as unavailable without inventing a number', (locale) => {
+    const text = productText[locale].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
+      text,
+      state: { state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%' }
+    }))
+    const rows = cumulativeRows(markup)
+
+    expect(rows).toHaveLength(2)
+    for (const row of rows) {
+      expect(row).toContain(text.cumulativeUnavailable)
+      expect(row).not.toMatch(/\d/)
+    }
+  })
+
   it('renders one shared zero-axis chart with exactly three series per day', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, {
@@ -92,8 +154,8 @@ describe('CapitalConditionsPanel', () => {
           flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1, btc: 2, eth: -3 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
         etf: {
           state: 'available',
-          btc: { asset: 'BTC', latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', rows: [{ tradingDate: '2026-08-17', direction: 'inflow', magnitudePercent: 100 }, { tradingDate: '2026-08-18', direction: 'zero', magnitudePercent: 0 }] },
-          eth: { asset: 'ETH', latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', rows: [{ tradingDate: '2026-08-18', direction: 'outflow', magnitudePercent: 100 }] }
+          btc: { asset: 'BTC', latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [{ tradingDate: '2026-08-17', direction: 'inflow', magnitudePercent: 100 }, { tradingDate: '2026-08-18', direction: 'zero', magnitudePercent: 0 }] },
+          eth: { asset: 'ETH', latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [{ tradingDate: '2026-08-18', direction: 'outflow', magnitudePercent: 100 }] }
         }
       } as never
     }))
@@ -325,8 +387,8 @@ function flowState(rows: readonly { tradingDate: string; funds: number; btc: num
     flowHistory: { state: 'available' as const, rows },
     etf: {
       state: 'available' as const,
-      btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', rows: [] },
-      eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', rows: [] }
+      btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows: [] },
+      eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: [] }
     }
   }
 }
@@ -338,8 +400,8 @@ function fullState() {
     flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: index - 10, btc: index + 1, eth: -(index + 1) })) },
     etf: {
       state: 'available' as const,
-      btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', rows },
-      eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', rows: rows.map((row) => ({ ...row, direction: row.direction === 'zero' ? 'zero' as const : 'outflow' as const })) }
+      btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows },
+      eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: rows.map((row) => ({ ...row, direction: row.direction === 'zero' ? 'zero' as const : 'outflow' as const })) }
     }
   }
 }
@@ -354,8 +416,27 @@ function summaryState() {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
     etf: {
       state: 'available' as const,
-      btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', rows },
-      eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', rows: rows.map((row) => ({ ...row, direction: 'outflow' as const })) }
+      btc: { asset: 'BTC' as const, latestNetFlowUsd: '+$3', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('+$3'), rows },
+      eth: { asset: 'ETH' as const, latestNetFlowUsd: '-$2', observedAt: '2026-08-18T07:00:00.000Z', cumulative: cumulativeWindows('-$2'), rows: rows.map((row) => ({ ...row, direction: 'outflow' as const })) }
     }
   }
+}
+
+function cumulativeWindows(amount: string) {
+  return [
+    { windowDays: 5, coveredDays: 5, netFlowUsd: amount, complete: true },
+    { windowDays: 20, coveredDays: 20, netFlowUsd: amount, complete: true }
+  ]
+}
+
+function cumulativeRows(markup: string): string[] {
+  return (markup.match(/<div class="mi-capital-conditions__cumulative".*?<\/div>/g) ?? [])
+    .map((row) => row.replace(/<[^>]*>/g, ''))
+}
+
+function windowText(template: string, days: number, amount: string, coveredDays = days): string {
+  return template
+    .replace('{days}', String(days))
+    .replace('{amount}', amount)
+    .replace('{coveredDays}', String(coveredDays))
 }

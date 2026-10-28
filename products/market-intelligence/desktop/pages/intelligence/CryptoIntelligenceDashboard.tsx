@@ -44,13 +44,7 @@ type CryptoDashboardText = {
   }
   fearGreed: { title: string; loading: string; empty: string; unavailable: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
   fundingRate: { title: string; pairTitle: string; loading: string; empty: string; unavailable: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFundingRateHistoryState['state'], string>; manageSettings: string; assets: { btc: string; eth: string }; paymentDirections: Record<'long-pays-short' | 'short-pays-long' | 'neutral', string> }
-  capitalConditions: {
-    title: string; loading: string; empty: string; unavailable: string
-    stablecoinSupply: string; change7d: string; btcEtfLatest: string; ethEtfLatest: string; observedAt: string
-    etfFlow: string; etfUnavailable: string; funds: string; btc: string; eth: string
-    flowDirections: Record<'inflow' | 'outflow' | 'zero', string>; singleDay: string; consecutiveDays: string; valueUnavailable: string
-    refresh: string; refreshFailed: string
-  }
+  capitalConditions: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['capitalConditions']
   positioning: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
   feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
   context: { sourceStatus: { title: string } }
