@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.2.1`. This page describes what is usable today and what is intentionally outside
+MacroBay is at `0.2.2`. This page describes what is usable today and what is intentionally outside
 the first public release.
 
 ## Usable from source
@@ -84,7 +84,7 @@ hiding it.
 
 ## API and configuration stability
 
-The `0.2.1` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.2.2` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 
