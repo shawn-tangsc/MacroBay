@@ -439,4 +439,87 @@ describe('agent runtime activity view model', () => {
       }
     ])
   })
+
+  it('renders a known product write as labelled request parameters', () => {
+    const card = buildAgentRuntimeActivityCards({
+      sessionId: 'session-1',
+      chunksBySessionId: {
+        'session-1': [
+          {
+            type: 'tool-input-available',
+            sessionId: 'session-1',
+            toolCallId: 'tool-1',
+            toolName: 'mcp__market-intelligence__configure_intelligence_source',
+            input: {
+              action: 'set-enabled',
+              sourceId: 'coingecko-trending',
+              enabled: true,
+              mysteryField: 'kept'
+            }
+          },
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval-1',
+            sessionId: 'session-1',
+            toolCallId: 'tool-1',
+            providerMetadata: {
+              claudeAgent: {
+                transport: 'claude-agent',
+                toolName: 'mcp__market-intelligence__configure_intelligence_source'
+              }
+            }
+          }
+        ]
+      },
+      toolApprovals: [],
+      text: t
+    }).find((entry) => entry.kind === 'approval')
+
+    expect(card).toMatchObject({
+      approvalId: 'approval-1',
+      approvalNotice: t.approvalRequestParamsNotice,
+      approvalFields: [
+        { label: 'Action', value: 'set-enabled' },
+        { label: 'Source', value: 'coingecko-trending' },
+        { label: 'Enabled', value: 'true' },
+        { label: 'mysteryField', value: 'kept' }
+      ]
+    })
+    expect(card?.approvalInputText).toContain('"sourceId": "coingecko-trending"')
+  })
+
+  it('falls back to the existing summary for an unknown capability', () => {
+    const card = buildAgentRuntimeActivityCards({
+      sessionId: 'session-1',
+      chunksBySessionId: {
+        'session-1': [
+          {
+            type: 'tool-input-available',
+            sessionId: 'session-1',
+            toolCallId: 'tool-1',
+            toolName: 'Bash',
+            input: { command: 'ls' }
+          },
+          {
+            type: 'tool-approval-request',
+            approvalId: 'approval-1',
+            sessionId: 'session-1',
+            toolCallId: 'tool-1',
+            providerMetadata: {
+              claudeAgent: {
+                transport: 'claude-agent',
+                toolName: 'Bash'
+              }
+            }
+          }
+        ]
+      },
+      toolApprovals: [],
+      text: t
+    }).find((entry) => entry.kind === 'approval')
+
+    expect(card?.approvalFields).toBeUndefined()
+    expect(card?.approvalNotice).toBeUndefined()
+    expect(card?.approvalInputText).toContain('"command": "ls"')
+  })
 })

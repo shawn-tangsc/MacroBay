@@ -223,6 +223,10 @@ export type AgentText = {
     approvalDenied: string
     resolvedAt: (resolvedAt: string) => string
     toolCall: (toolCallId: string) => string
+    /** Shown above the approval card's field list. */
+    approvalRequestParamsNotice: string
+    /** Field names for the product write capabilities; unknown fields keep their raw key. */
+    approvalFieldLabels: Record<string, string>
     toolInputStarted: string
     toolInputStreaming: string
     toolInputAvailable: string

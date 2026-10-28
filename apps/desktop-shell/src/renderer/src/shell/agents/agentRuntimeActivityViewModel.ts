@@ -22,6 +22,10 @@ export type AgentRuntimeActivityCard = {
   approvalId: string | null
   toolCallId: string | null
   approvalInputText?: string | null
+  /** The product write being approved, rendered as field labels and values. */
+  approvalFields?: ReadonlyArray<Readonly<{ label: string; value: string }>>
+  /** Says these are request parameters, not the values that will take effect. */
+  approvalNotice?: string
   /** Full request payload behind the row summary, shown in its own fold. */
   requestDetail?: string | null
 }
@@ -36,17 +40,27 @@ type BuildAgentRuntimeActivityCardsInput = {
 
 type ToolCardDraft = AgentRuntimeActivityCard & { inputText: string; toolSummary: string | null }
 
+/** The product write tools whose request parameters the approval card can label. */
+const LABELLED_APPROVAL_CAPABILITIES = new Set([
+  'configure_intelligence_source',
+  'operate_intelligence_source',
+  'operate_macro_calendar',
+  'configure_translation',
+  'configure_cross_asset_interface'
+])
+const APPROVAL_VALUE_LIMIT = 160
+
 export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityCardsInput): AgentRuntimeActivityCard[] {
   const chunks = input.chunksBySessionId[input.sessionId] ?? []
   const cards = new Map<string, AgentRuntimeActivityCard | ToolCardDraft>()
-  const approvalInputByToolCallId = new Map<string, string>()
+  const approvalInputByToolCallId = new Map<string, { text: string; input: unknown }>()
 
   for (const chunk of chunks) {
     if (chunk.sessionId !== input.sessionId) continue
     if (chunk.type === 'tool-input-available') {
       const approvalInput = serializeApprovalInput(chunk.input)
       if (approvalInput) {
-        approvalInputByToolCallId.set(chunk.toolCallId, approvalInput)
+        approvalInputByToolCallId.set(chunk.toolCallId, { text: approvalInput, input: chunk.input })
       }
     }
     applyChunk(cards, chunk, input.text)
@@ -56,7 +70,11 @@ export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityC
     if (approval.sessionId !== input.sessionId) continue
     cards.set(
       `approval:${approval.approvalId}`,
-      createApprovalCard(approval, input.text, approvalInputByToolCallId.get(approval.toolCallId) ?? null)
+      createApprovalCard(
+        approval,
+        input.text,
+        approvalInputByToolCallId.get(approval.toolCallId)?.text ?? null
+      )
     )
   }
 
@@ -79,7 +97,7 @@ export function buildAgentRuntimeActivityCards(input: BuildAgentRuntimeActivityC
     })
   }
 
-  attachApprovalInputs(cards, approvalInputByToolCallId)
+  attachApprovalInputs(cards, approvalInputByToolCallId, input.text)
   return [...cards.values()].map(stripDraftFields)
 }
 
@@ -336,15 +354,71 @@ function stripDraftFields(card: AgentRuntimeActivityCard | ToolCardDraft): Agent
     approvalId: card.approvalId,
     toolCallId: card.toolCallId,
     ...(card.approvalInputText ? { approvalInputText: card.approvalInputText } : {}),
+    ...(card.approvalNotice ? { approvalNotice: card.approvalNotice } : {}),
+    ...(card.approvalFields?.length ? { approvalFields: card.approvalFields } : {}),
     ...(card.requestDetail ? { requestDetail: card.requestDetail } : {})
   }
 }
 
-function attachApprovalInputs(cards: Map<string, AgentRuntimeActivityCard | ToolCardDraft>, approvalInputByToolCallId: Map<string, string>): void {
+function attachApprovalInputs(
+  cards: Map<string, AgentRuntimeActivityCard | ToolCardDraft>,
+  approvalInputByToolCallId: Map<string, { text: string; input: unknown }>,
+  text: AgentText['runtimeActivity']
+): void {
   for (const [key, card] of cards.entries()) {
-    if (card.kind !== 'approval' || !card.toolCallId || card.approvalInputText) continue
-    const approvalInputText = approvalInputByToolCallId.get(card.toolCallId)
-    if (!approvalInputText) continue
-    cards.set(key, { ...card, approvalInputText })
+    if (card.kind !== 'approval' || !card.toolCallId) continue
+    const approvalInput = approvalInputByToolCallId.get(card.toolCallId)
+    if (!approvalInput) continue
+    const structured = structuredApprovalInput(card.title, approvalInput.input, text)
+    cards.set(key, {
+      ...card,
+      ...(card.approvalInputText ? {} : { approvalInputText: approvalInput.text }),
+      ...(structured
+        ? { approvalNotice: text.approvalRequestParamsNotice, approvalFields: structured }
+        : {})
+    })
   }
+}
+
+/**
+ * Known product write capability -> its input as field/value rows. The values are what the model
+ * asked for, never what the write produced; an unknown field keeps its raw key rather than
+ * disappearing, and an unknown capability falls back to the existing summary.
+ */
+function structuredApprovalInput(
+  toolName: string,
+  input: unknown,
+  text: AgentText['runtimeActivity']
+): ReadonlyArray<Readonly<{ label: string; value: string }>> | null {
+  if (!LABELLED_APPROVAL_CAPABILITIES.has(resolveToolDisplayName(toolName))) return null
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null
+  const entries = Object.entries(input as Record<string, unknown>).filter(
+    ([, value]) => value !== undefined
+  )
+  if (entries.length === 0) return null
+  return entries.map(([field, value]) => ({
+    label: text.approvalFieldLabels[field] ?? field,
+    value: approvalValue(value)
+  }))
+}
+
+function approvalValue(value: unknown): string {
+  if (value === null) return 'null'
+  if (typeof value === 'string') return truncateApprovalValue(value)
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    return truncateApprovalValue(value.map((item) => (typeof item === 'string' ? item : JSON.stringify(item))).join(', '))
+  }
+  try {
+    return truncateApprovalValue(JSON.stringify(value))
+  } catch {
+    return '—'
+  }
+}
+
+function truncateApprovalValue(value: string): string {
+  const oneLine = value.replace(/\s+/g, ' ').trim()
+  return oneLine.length > APPROVAL_VALUE_LIMIT
+    ? `${oneLine.slice(0, APPROVAL_VALUE_LIMIT).trimEnd()}…`
+    : oneLine
 }

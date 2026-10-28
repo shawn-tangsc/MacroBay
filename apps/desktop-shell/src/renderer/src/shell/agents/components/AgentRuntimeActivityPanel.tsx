@@ -131,6 +131,19 @@ function ActivityItem({
         {errorPreview ? <span className="agent-runtime-activity-error">{errorPreview}</span> : null}
       </summary>
       {isTool ? null : <small>{card.subtitle}</small>}
+      {card.kind === 'approval' && card.approvalNotice ? (
+        <p className="agent-runtime-activity-approval-notice">{card.approvalNotice}</p>
+      ) : null}
+      {card.kind === 'approval' && card.approvalFields?.length ? (
+        <dl className="agent-runtime-activity-approval-fields">
+          {card.approvalFields.map((field, index) => (
+            <div key={`${field.label}:${index}`}>
+              <dt>{field.label}</dt>
+              <dd>{field.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
       {card.requestDetail ? (
         <details className="agent-runtime-activity-detail-fold">
           <summary>{t.runtimeActivity.input}</summary>
