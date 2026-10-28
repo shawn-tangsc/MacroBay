@@ -2,8 +2,8 @@
 
 # Status and limitations
 
-MacroBay is at `0.2.2`. This page describes what is usable today and what is intentionally outside
-the first public release.
+MacroBay is at `0.2.2`. This page describes what is usable today and what is intentionally not
+supported yet.
 
 ## Usable from source
 

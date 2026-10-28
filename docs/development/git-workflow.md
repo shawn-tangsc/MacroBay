@@ -128,8 +128,8 @@ Release from `main` with an annotated tag:
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.1.1 -m "MacroBay 0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
+git push origin v0.2.2
 ```
 
 Pushing the tag runs `.github/workflows/release.yml`, which builds the macOS dmg and the Windows
@@ -138,8 +138,8 @@ not committed to Git. If that run fails after the tag exists, re-run it from
 **Actions → Release → Run workflow** with the same tag: an existing release keeps its notes and only
 gets its assets replaced.
 
-The existing `v0.1.0` tag points at `b99c952`. Do not move it. The next release is `v0.1.1` (or the
-next planned minor), built from current `main`.
+Published tags are immutable. Do not move them; ship the next release as a new tag from current
+`main`.
 
 ## Hotfixes
 
@@ -150,8 +150,8 @@ git switch main
 git pull --ff-only
 git switch -c fix/short-description
 # fix, verify, PR, squash merge
-git tag -a v0.1.2 -m "MacroBay 0.1.2"
-git push origin v0.1.2
+git tag -a v0.2.3 -m "MacroBay 0.2.3"
+git push origin v0.2.3
 ```
 
 For an older supported line, only after a `release/<minor>` branch exists:

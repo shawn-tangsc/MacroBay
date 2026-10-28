@@ -24,8 +24,8 @@ request never waits for a dmg.
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.1.1 -m "MacroBay 0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
+git push origin v0.2.2
 ```
 
 That builds `release/MacroBay-arm64.dmg` on `macos-latest` and the NSIS installer on
@@ -36,8 +36,8 @@ The dmg and installer file names carry no version, so the README links
 `releases/latest/download/MacroBay-arm64.dmg` and `.../MacroBay-x64-setup.exe` permanently; the
 packaging job fails if either name changes.
 
-- The tag must be `v` plus the `version` in `package.json`; the job stops before packaging otherwise,
-  because electron-builder names artifacts from the manifest, not from the tag.
+- The tag must be `v` plus the `version` in `package.json`; `check-release-version.mjs` stops the
+  job before packaging otherwise. The app version comes from the manifest, not from the tag.
 - Re-running a tag that already has a release replaces its assets and keeps its notes, so a failed
   run is recoverable without moving the tag.
 - Nothing is signed; the release notes carry the Gatekeeper and SmartScreen bypass.
@@ -201,12 +201,12 @@ that builds on that OS.
 
 ## Versioning
 
-`package.json` currently uses `0.1.0`. The first public release should define:
+`package.json` is the single source of truth for the app version. `pnpm release:bump <version>`
+rewrites the app manifest and every version string the public docs show, and fails if a pattern no
+longer matches.
 
-- a versioning policy for the app and product manifests;
-- a changelog;
-- an upgrade note for local `userData` and database migrations;
-- a support matrix for macOS, Windows, and Linux.
+Tag a release from `main` after the gates pass. The release checklist itself is maintainer material
+and lives outside this guide.
 
 ## Verification before a release
 
