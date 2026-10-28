@@ -51,8 +51,9 @@ That is the whole product: **not a paragraph you have to take on faith.**
 
 ## Download
 
-**[Get the latest release](https://github.com/shawn-tangsc/MacroBay/releases/latest)** —
-macOS (Apple Silicon) `.dmg` and Windows (x64) `.exe` are attached to every version.
+**[macOS · Apple Silicon (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
+[All releases](https://github.com/shawn-tangsc/MacroBay/releases)
 
 The build is unsigned. On macOS, right-click the app → **Open**, or run
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`. On Windows, choose

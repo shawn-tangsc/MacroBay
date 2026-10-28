@@ -32,6 +32,10 @@ That builds `release/MacroBay-arm64.dmg` on `macos-latest` and the NSIS installe
 `windows-latest`, then publishes one GitHub Release with both files, their blockmaps and the
 auto-update metadata attached. Neither lane needs signing secrets.
 
+The dmg and installer file names carry no version, so the README links
+`releases/latest/download/MacroBay-arm64.dmg` and `.../MacroBay-x64-setup.exe` permanently; the
+packaging job fails if either name changes.
+
 - The tag must be `v` plus the `version` in `package.json`; the job stops before packaging otherwise,
   because electron-builder names artifacts from the manifest, not from the tag.
 - Re-running a tag that already has a release replaces its assets and keeps its notes, so a failed

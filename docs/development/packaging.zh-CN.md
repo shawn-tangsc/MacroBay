@@ -29,6 +29,10 @@ git push origin v0.1.1
 安装器，然后把这两个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都
 不需要签名密钥。
 
+dmg 与安装器的文件名不含版本号，所以 README 可以长期链接
+`releases/latest/download/MacroBay-arm64.dmg` 和 `.../MacroBay-x64-setup.exe`；任一名字变化，
+打包 job 会直接失败。
+
 - tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 job 在打包前就停下——electron-builder 是
   按 manifest 而不是 tag 命名产物的。
 - 对已有 release 的 tag 重跑，只替换 assets、保留原有说明，所以 tag 不用移动也能补救失败的运行。
