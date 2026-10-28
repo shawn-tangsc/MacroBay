@@ -176,7 +176,11 @@ function adapter(handlerId: string): HandlerFactory {
 
 function read(handle: (input: unknown, deps: ReadHandlerDeps) => Promise<unknown>): HandlerFactory {
   return (deps) => (input) =>
-    handle(input, { jobRuntime: deps.jobRuntime, getAppLanguage: deps.getAppLanguage })
+    handle(input, {
+      jobRuntime: deps.jobRuntime,
+      getAppLanguage: deps.getAppLanguage,
+      crossAssetOps: deps.writeDeps.crossAssetOps
+    })
 }
 
 function write(

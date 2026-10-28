@@ -358,10 +358,19 @@ export const crossAssetSnapshotInputSchema = {
 
 export const crossAssetSnapshotOutputSchema = {
   type: 'object',
-  required: ['state'],
+  required: ['state', 'interface'],
   properties: {
     state: { type: 'string', enum: ['available', 'unavailable'] },
     snapshot: { type: 'object' },
+    interface: {
+      type: 'object',
+      required: ['state', 'enabled', 'lease'],
+      properties: {
+        state: { type: 'string', enum: ['configured', 'default', 'unknown'] },
+        enabled: { type: ['boolean', 'null'] },
+        lease: { type: 'string', enum: ['none', 'active', 'expired', 'unknown'] }
+      }
+    },
     caveats: caveatsSchema
   }
 } as const

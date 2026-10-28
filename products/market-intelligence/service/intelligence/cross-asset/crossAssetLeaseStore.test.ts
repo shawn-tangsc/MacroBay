@@ -14,6 +14,22 @@ describe('cross-asset visible leases', () => {
     expect(leases.acquire().state).toBe('active')
   })
 
+  it('distinguishes never leased, active, expired, and explicitly released', () => {
+    let now = 0
+    const leases = createCrossAssetLeaseStore({ now: () => now })
+    expect(leases.state()).toBe('none')
+    const lease = leases.acquire()
+    if (lease.state !== 'active') throw new Error('fixture admission')
+    expect(leases.state()).toBe('active')
+    now += 30_000
+    expect(leases.state()).toBe('expired')
+    const renewed = leases.acquire()
+    if (renewed.state !== 'active') throw new Error('fixture admission')
+    expect(leases.state()).toBe('active')
+    expect(leases.release(renewed.leaseId)).toEqual({ state: 'released' })
+    expect(leases.state()).toBe('none')
+  })
+
   it('renews a known live lease, rejects expired/unknown ids and releases idempotently', () => {
     let now = 0
     const leases = createCrossAssetLeaseStore({ now: () => now })

@@ -301,7 +301,7 @@ export const intelligenceAgentCapabilities = [
     kind: 'read',
     title: { 'zh-CN': '跨资产快照', 'en-US': 'Cross-asset snapshot' },
     description:
-      '读取跨资产观察快照：给定 range（1h/24h/7d）的收益曲线、已收盘窗口收益、相关性、相对收益与读数口径。限制：asOf 可省略，省略时取现在；没有可用快照时只返回 state=unavailable，不编造读数；不返回任何端点、URL 或接口凭据。',
+      '读取跨资产观察快照：给定 range（1h/24h/7d）的收益曲线、已收盘窗口收益、相关性、相对收益与读数口径，并同时返回 interface（配置 state、enabled 与租约 lease）。interface 不表示数据好坏，只表示通道状态：state=unknown 或 lease=unknown 是「判定不了」，不是「确定没有」；lease=none 才是确定没有租约，expired 表示租约曾存在但已过期。限制：asOf 可省略，省略时取现在；没有可用快照时 state=unavailable，但仍带 interface，不编造读数；不返回 leaseId、端点、URL 或接口凭据。',
     inputSchema: crossAssetSnapshotInputSchema,
     outputSchema: crossAssetSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-cross-asset-snapshot',

@@ -279,7 +279,8 @@ const crossAssetOps = {
     fixture.crossAsset.cancelInterfaceTest.push({})
     return { state: 'cancelled' }
   },
-  readConfiguration: async () => ({ ...fixture.crossAssetConfiguration })
+  readConfiguration: async () => ({ ...fixture.crossAssetConfiguration }),
+  readLeaseState: async () => 'none' as const
 }
 
 function registrations(): Map<string, ProductAgentToolHandlerRegistration> {

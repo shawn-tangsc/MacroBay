@@ -9,6 +9,7 @@ import type {
   RefreshFedFomcDecisionResult,
   SyncBlsScheduleAndValuesResult
 } from '../../../contracts/macro/economicCalendarQueryContracts'
+import type { CrossAssetLeaseState } from '../cross-asset/crossAssetLeaseStore'
 
 export type MacroCalendarReleaseTimeValue = Readonly<{
   scheduledAt: string
@@ -90,4 +91,6 @@ export type CrossAssetOps = {
   testInterface: () => Promise<CrossAssetCommand>
   cancelInterfaceTest: () => Promise<CrossAssetCommand>
   readConfiguration: () => Promise<CrossAssetConfiguration>
+  /** The channel's lease state, without a lease id or an expiry timestamp. */
+  readLeaseState: () => Promise<CrossAssetLeaseState | 'unknown'>
 }

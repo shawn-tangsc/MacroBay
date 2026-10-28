@@ -14,7 +14,8 @@ import {
 
 const deps = {
   jobRuntime: {} as JobRuntime,
-  getAppLanguage: async () => 'zh-CN' as const
+  getAppLanguage: async () => 'zh-CN' as const,
+  crossAssetOps: {} as never
 }
 
 function moduleWith(parts: {

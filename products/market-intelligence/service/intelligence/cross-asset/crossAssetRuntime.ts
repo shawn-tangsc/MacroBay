@@ -265,6 +265,8 @@ export function createCrossAssetRuntime(deps: {
       return { state, quotes, priceDecimals: decimals }
     },
     async whenIdle() { await pending },
+    /** The channel state only: never a lease id or an endpoint. */
+    leaseState() { return disposed ? 'unknown' as const : leases.state() },
     diagnostics() {
       const current = stream?.snapshot()
       return { activeLeases: disposed ? 0 : leases.count(), physicalSockets: Number(!!stream) + Number(!!testSocket),

@@ -12,10 +12,12 @@ import { computeConfigurationRevision } from './configurationRevision'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import type { CapabilityDomain } from './capabilityTypes'
 import { projectSourceDetail, projectSourceSummary, projectTimelineRow } from './projections'
+import type { CrossAssetOps } from './operationFacades'
 
 export type ReadHandlerDeps = {
   jobRuntime: JobRuntime
   getAppLanguage: () => Promise<AppLanguage>
+  crossAssetOps: CrossAssetOps
 }
 
 const DOMAIN_ORDER: readonly CapabilityDomain[] = [
@@ -457,17 +459,53 @@ export async function handleGetTranslationStatus(
   }
 }
 
+/**
+ * Whether the channel is even open: configuration state, enabled flag, and the
+ * lease. It is deliberately separate from the reading's quality — a closed channel
+ * and a bad reading are different answers, and conflating them makes the model
+ * blame the market for an interface that is not running.
+ */
+type CrossAssetInterfaceStatus = {
+  state: 'configured' | 'default' | 'unknown'
+  enabled: boolean | null
+  lease: 'none' | 'active' | 'expired' | 'unknown'
+}
+
+async function readCrossAssetInterface(deps: ReadHandlerDeps): Promise<CrossAssetInterfaceStatus> {
+  let state: CrossAssetInterfaceStatus['state'] = 'unknown'
+  let enabled: boolean | null = null
+  try {
+    const configuration = await deps.crossAssetOps.readConfiguration()
+    if (configuration.state !== 'unknown') {
+      state = configuration.state
+      enabled = configuration.enabled
+    }
+  } catch {
+    // Unknown stays unknown: the reader must not be told the channel is closed.
+  }
+  let lease: CrossAssetInterfaceStatus['lease'] = 'unknown'
+  try {
+    lease = await deps.crossAssetOps.readLeaseState()
+  } catch {
+    // Same rule: an unreadable lease is not "no lease".
+  }
+  return { state, enabled, lease }
+}
+
 export async function handleGetCrossAssetSnapshot(
   input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { range, asOf } = (input ?? {}) as CrossAssetInput
+  const interfaceStatus = await readCrossAssetInterface(deps)
   const snapshot = await getIntelligenceModule(deps.jobRuntime).publicQueryService.queryCrossAssetSnapshot({
     range,
     asOf: asOf ?? new Date().toISOString()
   })
-  if (!snapshot) return { state: 'unavailable' }
-  return { state: 'available', snapshot, caveats: [] }
+  // Even an unavailable snapshot carries the channel state; otherwise the model can only guess
+  // whether there is no data or the interface never ran.
+  if (!snapshot) return { state: 'unavailable', interface: interfaceStatus, caveats: [] }
+  return { state: 'available', snapshot, interface: interfaceStatus, caveats: [] }
 }
 
 export async function handleGetDashboardFeedStatus(
