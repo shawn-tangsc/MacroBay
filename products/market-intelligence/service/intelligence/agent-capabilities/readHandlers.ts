@@ -33,6 +33,15 @@ type TimelineInput = {
   filters?: Record<string, unknown>
 }
 type MacroCalendarInput = { month: string; asOf: string; maxEvents?: number }
+type NewsSentimentInput = {
+  asOf: string
+  window: '1h' | '4h' | '24h' | '7d' | 'all'
+  scope?: 'market' | 'BTC' | 'ETH'
+  direction?: 'all' | 'bullish' | 'bearish' | 'neutral' | 'mixed'
+  sourceId?: string
+  limit?: number
+}
+type NewsSentimentItemInput = { itemId: string; asOf: string }
 type CrossAssetInput = { range: '1h' | '24h' | '7d'; asOf?: string }
 type DescribeCapabilitiesInput = {
   domain?: 'all' | CapabilityDomain
@@ -163,16 +172,118 @@ export async function handleGetIntelligenceTimeline(
   }
 }
 
+/**
+ * One month, two calendars.
+ *
+ * The month view has always drawn official releases (BLS/Fed/BEA) and the market calendar (0xRouter)
+ * side by side. The agent tool must answer from both: a month whose only scheduled events come from
+ * the market provider must not read as "nothing planned". Each side keeps its own envelope under
+ * `official` / `market`, and `events` is the merged, source-tagged view.
+ */
 export async function handleQueryMacroCalendar(
   input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { month, asOf, maxEvents } = (input ?? {}) as MacroCalendarInput
-  return getIntelligenceModule(deps.jobRuntime).publicQueryService.queryMacroEconomicCalendarMonth({
+  const queryService = getIntelligenceModule(deps.jobRuntime).publicQueryService
+  const locale = (await deps.getAppLanguage()) === 'en-US' ? 'en' : 'zh'
+  const caveats: string[] = []
+
+  const official = queryService.queryMacroEconomicCalendarMonth({
     month,
     asOf,
     ...(maxEvents === undefined ? {} : { maxEvents })
   })
+
+  let market: unknown
+  try {
+    market = queryService.queryMarketCalendarMonth({ month, asOf, locale })
+  } catch {
+    market = { state: 'unavailable' }
+    caveats.push('market-calendar-unavailable')
+  }
+
+  const officialEvents = readCalendarEvents(official)
+  const marketEvents = readCalendarEvents(market)
+  if (officialEvents.length === 0) caveats.push('official-calendar-empty')
+  if (marketEvents.length === 0) caveats.push('market-calendar-empty')
+
+  const events = [
+    ...officialEvents.map((event) => normalizeCalendarEvent(event, 'official')),
+    ...marketEvents.map((event) => normalizeCalendarEvent(event, 'market'))
+  ]
+    .sort((left, right) => (left.scheduledAt ?? '').localeCompare(right.scheduledAt ?? ''))
+    .slice(0, maxEvents ?? 200)
+
+  return {
+    state: events.length > 0 ? 'available' : 'empty',
+    month,
+    asOf,
+    official,
+    market,
+    events,
+    caveats
+  }
+}
+
+function readCalendarEvents(page: unknown): Array<Record<string, unknown>> {
+  if (!page || typeof page !== 'object') return []
+  const events = (page as { events?: unknown }).events
+  if (!Array.isArray(events)) return []
+  return events.filter((event): event is Record<string, unknown> => Boolean(event) && typeof event === 'object')
+}
+
+function normalizeCalendarEvent(
+  event: Record<string, unknown>,
+  source: 'official' | 'market'
+): {
+  source: 'official' | 'market'
+  eventKey: string
+  title: string
+  scheduledAt: string | null
+  scheduledDate?: string
+  countryName?: string
+  importance?: string
+} {
+  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.length > 0 ? value : undefined)
+  return {
+    source,
+    eventKey: text(event.eventKey) ?? '',
+    title: text(event.title) ?? text(event.name) ?? '',
+    scheduledAt: text(event.scheduledAt) ?? null,
+    ...(text(event.scheduledDate) ? { scheduledDate: text(event.scheduledDate) } : {}),
+    ...(text(event.countryName) ? { countryName: text(event.countryName) } : {}),
+    ...(text(event.importance) ? { importance: text(event.importance) } : {})
+  }
+}
+
+export async function handleQueryNewsSentiment(
+  input: unknown,
+  deps: ReadHandlerDeps
+): Promise<unknown> {
+  const parsed = (input ?? {}) as NewsSentimentInput
+  const query = getIntelligenceModule(deps.jobRuntime).newsSentiment.query
+  if (!query) {
+    return {
+      state: 'unavailable',
+      asOf: parsed.asOf,
+      window: parsed.window,
+      items: [],
+      caveats: ['news-sentiment-unavailable']
+    }
+  }
+  return query.query(parsed as never)
+}
+
+export async function handleGetNewsSentimentItem(
+  input: unknown,
+  deps: ReadHandlerDeps
+): Promise<unknown> {
+  const { itemId, asOf } = (input ?? {}) as NewsSentimentItemInput
+  const query = getIntelligenceModule(deps.jobRuntime).newsSentiment.query
+  if (!query) return { state: 'unavailable', itemId }
+  const item = await query.getItem({ itemId, asOf })
+  return item ? { state: 'available', item } : { state: 'unavailable', itemId }
 }
 
 export async function handleGetTranslationStatus(

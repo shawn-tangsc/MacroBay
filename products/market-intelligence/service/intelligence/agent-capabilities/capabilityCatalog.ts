@@ -21,6 +21,10 @@ import {
   listSourcesInputSchema,
   listSourcesOutputSchema,
   macroCalendarMonthInputSchema,
+  newsSentimentInputSchema,
+  newsSentimentItemInputSchema,
+  newsSentimentItemOutputSchema,
+  newsSentimentOutputSchema,
   macroCalendarMonthOutputSchema,
   operationsHealthInputSchema,
   operationsHealthOutputSchema,
@@ -245,10 +249,36 @@ export const intelligenceAgentCapabilities = [
     kind: 'read',
     title: { 'zh-CN': '宏观日历月查询', 'en-US': 'Macro calendar month' },
     description:
-      '按 YYYY-MM 查询某个月的宏观日历事件，并用 asOf 冻结查询时点。限制：asOf 之后才发生的事件修订不会出现；月查询不可用时返回 state=unavailable 与 failureCode，不返回空月份来假装没有事件；maxEvents 有上限，超过时只返回上限内的条目。',
+      '按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 有上限。',
     inputSchema: macroCalendarMonthInputSchema,
     outputSchema: macroCalendarMonthOutputSchema,
     handlerId: 'market-intelligence.query-macro-calendar',
+    timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'query_news_sentiment',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': '重点舆情', 'en-US': 'Key news sentiment' },
+    description:
+      '读取面板「重点舆情」同一份数据：按时间窗口聚合的新闻/公告条目、多空判定、强度、置信度、来源与情绪汇总。限制：这是读时聚合，不触发打分或翻译；窗口内没有条目时 state=empty 并带 news-empty-window，不要当成「没有新闻」；条目正文常只有标题（caveat body-limited），引用时必须带来源与发布时间；不返回原始网页、请求头或凭据。',
+    inputSchema: newsSentimentInputSchema,
+    outputSchema: newsSentimentOutputSchema,
+    handlerId: 'market-intelligence.query-news-sentiment',
+    timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_news_sentiment_item',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': '舆情条目详情', 'en-US': 'News sentiment item' },
+    description:
+      '读取单条舆情的详情：标题、来源、发布时间、多空判定与正文摘录（可能来自翻译）。限制：itemId 必须来自 query_news_sentiment 的返回；查不到时返回 state=unavailable，不要自行编造内容；正文摘录受长度限制，缺失时说明只有标题。',
+    inputSchema: newsSentimentItemInputSchema,
+    outputSchema: newsSentimentItemOutputSchema,
+    handlerId: 'market-intelligence.get-news-sentiment-item',
     timeoutMs: 10_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },

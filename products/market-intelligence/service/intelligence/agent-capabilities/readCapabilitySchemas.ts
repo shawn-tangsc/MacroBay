@@ -248,11 +248,29 @@ export const macroCalendarMonthInputSchema = {
 
 export const macroCalendarMonthOutputSchema = {
   type: 'object',
-  required: ['state'],
+  required: ['state', 'month', 'asOf', 'official', 'market', 'events', 'caveats'],
   properties: {
-    state: { type: 'string', enum: ['available', 'unavailable'] },
+    state: { type: 'string', enum: ['available', 'empty', 'unavailable'] },
+    month: { type: 'string' },
     asOf: { type: 'string', format: 'date-time' },
-    events: { type: 'array', items: { type: 'object' } },
+    official: { type: 'object' },
+    market: { type: 'object' },
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          source: { type: 'string', enum: ['official', 'market'] },
+          eventKey: { type: 'string' },
+          title: { type: 'string' },
+          scheduledAt: { type: ['string', 'null'] },
+          scheduledDate: { type: 'string' },
+          countryName: { type: 'string' },
+          importance: { type: 'string' }
+        }
+      }
+    },
+    caveats: { type: 'array', items: { type: 'string' } },
     failureCode: { type: 'string' }
   }
 } as const
@@ -385,5 +403,59 @@ export const describeCapabilitiesOutputSchema = {
         }
       }
     }
+  }
+} as const
+
+const newsSentimentWindowSchema = {
+  type: 'string',
+  enum: ['1h', '4h', '24h', '7d', 'all']
+} as const
+
+export const newsSentimentInputSchema = {
+  type: 'object',
+  required: ['asOf', 'window'],
+  additionalProperties: false,
+  properties: {
+    asOf: { type: 'string', format: 'date-time' },
+    window: newsSentimentWindowSchema,
+    scope: { type: 'string', enum: ['market', 'BTC', 'ETH'] },
+    direction: { type: 'string', enum: ['all', 'bullish', 'bearish', 'neutral', 'mixed'] },
+    sourceId: { type: 'string' },
+    limit: { type: 'integer', minimum: 1, maximum: 100 }
+  }
+} as const
+
+export const newsSentimentOutputSchema = {
+  type: 'object',
+  required: ['state', 'asOf', 'window', 'items', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'empty', 'unavailable'] },
+    asOf: { type: 'string' },
+    generatedAt: { type: 'string' },
+    window: newsSentimentWindowSchema,
+    summary: { type: 'object' },
+    items: { type: 'array', items: { type: 'object' } },
+    availableSources: { type: 'array', items: { type: 'object' } },
+    caveats: { type: 'array', items: { type: 'string' } }
+  }
+} as const
+
+export const newsSentimentItemInputSchema = {
+  type: 'object',
+  required: ['itemId', 'asOf'],
+  additionalProperties: false,
+  properties: {
+    itemId: { type: 'string' },
+    asOf: { type: 'string', format: 'date-time' }
+  }
+} as const
+
+export const newsSentimentItemOutputSchema = {
+  type: 'object',
+  required: ['state'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'unavailable'] },
+    itemId: { type: 'string' },
+    item: { type: 'object' }
   }
 } as const

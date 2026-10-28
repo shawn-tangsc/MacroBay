@@ -38,6 +38,8 @@ import {
   handleGetTranslationStatus,
   handleListIntelligenceSources,
   handleQueryMacroCalendar,
+  handleQueryNewsSentiment,
+  handleGetNewsSentimentItem,
   type ReadHandlerDeps
 } from './readHandlers'
 
@@ -85,6 +87,8 @@ const handlerFactories: Record<CapabilityId, HandlerFactory> = {
   get_source_detail: read(handleGetSourceDetail),
   get_intelligence_timeline: read(handleGetIntelligenceTimeline),
   query_macro_calendar: read(handleQueryMacroCalendar),
+  query_news_sentiment: read(handleQueryNewsSentiment),
+  get_news_sentiment_item: read(handleGetNewsSentimentItem),
   get_translation_status: read(handleGetTranslationStatus),
   get_cross_asset_snapshot: read(handleGetCrossAssetSnapshot),
   get_dashboard_feed_status: read(handleGetDashboardFeedStatus),
