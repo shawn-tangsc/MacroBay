@@ -242,7 +242,9 @@ export const macroCalendarMonthInputSchema = {
   properties: {
     month: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$' },
     asOf: { type: 'string', format: 'date-time' },
-    maxEvents: { type: 'integer', minimum: 1, maximum: 200 }
+    from: { type: 'string', format: 'date-time' },
+    to: { type: 'string', format: 'date-time' },
+    maxEvents: { type: 'integer', minimum: 1, maximum: 300 }
   }
 } as const
 
@@ -253,6 +255,10 @@ export const macroCalendarMonthOutputSchema = {
     state: { type: 'string', enum: ['available', 'empty', 'unavailable'] },
     month: { type: 'string' },
     asOf: { type: 'string', format: 'date-time' },
+    from: { type: 'string' },
+    to: { type: 'string' },
+    truncated: { type: 'boolean' },
+    totalEvents: { type: 'integer' },
     official: {
       type: 'object',
       required: ['state', 'eventCount'],
@@ -268,6 +274,7 @@ export const macroCalendarMonthOutputSchema = {
       properties: {
         state: { type: 'string' },
         eventCount: { type: 'integer' },
+        pages: { type: 'integer' },
         failureCode: { type: 'string' }
       }
     },

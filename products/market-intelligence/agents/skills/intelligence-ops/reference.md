@@ -31,7 +31,7 @@
 
 ## 宏观日历
 
-- `query_macro_calendar`（read）；必填：month、asOf；按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 有上限。
+- `query_macro_calendar`（read）；必填：month、asOf；按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；市场日历是分页读取的，工具会翻完所有页，但 events 默认只保留前 120 条，截断时 truncated=true 且 totalEvents 给出总数，问某一天时请用 from/to 收窄（ISO 时间，含时区）；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 最大 300。
 - `operate_macro_calendar`（write）；必填：action；动作：save-provider-profile / run-provider-now / test-provider-connection / set-release-time / clear-release-time / refresh-bls-employment / refresh-fed-fomc / sync-bls-schedule / preview-manual-ics / import-manual-ics；维护宏观日历供应商与发布时间，每次调用都会先请用户确认。动作：save-provider-profile（启用/停用供应商）、run-provider-now、test-provider-connection、set-release-time 与 clear-release-time（读者自己的发布时间覆盖，写入后立即回读）、refresh-bls-employment 与 refresh-fed-fomc（会改写已发布数值，必须同时传 acknowledgeOverwrite=true；真正的二次确认由产品注入，模型不能传 confirmed）、sync-bls-schedule（按年份同步 BLS 日程）、preview-manual-ics 与 import-manual-ics（先预览再导入手工 ICS）。限制：不返回原始 HTTP 响应、证据正文或凭据；预览不落库，导入才是显式写入。
 
 ## 翻译

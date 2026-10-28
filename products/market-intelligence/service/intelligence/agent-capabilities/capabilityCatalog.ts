@@ -249,7 +249,7 @@ export const intelligenceAgentCapabilities = [
     kind: 'read',
     title: { 'zh-CN': '宏观日历月查询', 'en-US': 'Macro calendar month' },
     description:
-      '按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 有上限。',
+      '按 YYYY-MM 查询某个月的宏观日历，同时返回「官方日历」（BLS/Fed/BEA 等官方发布）与「市场日历」（0xRouter 的市场事件），并在 events 里给出带 source 标记的合并时间线。官方侧回答官方发布与发布值，市场侧回答市场预期（consensus）、前值与已公布值，两者口径不同，不要混用。限制：asOf 之后才发生的事件修订不会出现；某一侧不可用时该侧为 unavailable 并写进 caveats，另一侧照常返回；市场日历是分页读取的，工具会翻完所有页，但 events 默认只保留前 120 条，截断时 truncated=true 且 totalEvents 给出总数，问某一天时请用 from/to 收窄（ISO 时间，含时区）；events 为空表示两侧都没有该月条目，不是「当天没有数据发布」；maxEvents 最大 300。',
     inputSchema: macroCalendarMonthInputSchema,
     outputSchema: macroCalendarMonthOutputSchema,
     handlerId: 'market-intelligence.query-macro-calendar',

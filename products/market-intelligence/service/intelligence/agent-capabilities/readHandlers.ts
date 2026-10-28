@@ -33,7 +33,7 @@ type TimelineInput = {
   limit?: number
   filters?: Record<string, unknown>
 }
-type MacroCalendarInput = { month: string; asOf: string; maxEvents?: number }
+type MacroCalendarInput = { month: string; asOf: string; from?: string; to?: string; maxEvents?: number }
 type NewsSentimentInput = {
   asOf: string
   window: '1h' | '4h' | '24h' | '7d' | 'all'
@@ -185,7 +185,7 @@ export async function handleQueryMacroCalendar(
   input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
-  const { month, asOf, maxEvents } = (input ?? {}) as MacroCalendarInput
+  const { month, asOf, from, to, maxEvents } = (input ?? {}) as MacroCalendarInput
   const queryService = getIntelligenceModule(deps.jobRuntime).publicQueryService
   const locale = (await deps.getAppLanguage()) === 'en-US' ? 'en' : 'zh'
   const caveats: string[] = []
@@ -196,25 +196,20 @@ export async function handleQueryMacroCalendar(
     ...(maxEvents === undefined ? {} : { maxEvents })
   })
 
-  let market: unknown
-  try {
-    market = queryService.queryMarketCalendarMonth({ month, asOf, locale })
-  } catch {
-    market = { state: 'unavailable' }
-    caveats.push('market-calendar-unavailable')
-  }
+  const market = readAllMarketCalendarPages(queryService, { month, asOf, locale })
+  if (market.state === 'unavailable') caveats.push('market-calendar-unavailable')
 
-  const officialEvents = readCalendarEvents(official)
-  const marketEvents = readCalendarEvents(market)
+  const officialEvents = filterCalendarEvents(readCalendarEvents(official), from, to)
+  const marketEvents = filterCalendarEvents(market.events, from, to)
   if (officialEvents.length === 0) caveats.push('official-calendar-empty')
   if (marketEvents.length === 0) caveats.push('market-calendar-empty')
 
-  const events = [
+  const merged = [
     ...officialEvents.map((event) => summarizeCalendarEvent(event, 'official')),
     ...marketEvents.map((event) => summarizeCalendarEvent(event, 'market'))
-  ]
-    .sort((left, right) => (left.scheduledAt ?? '').localeCompare(right.scheduledAt ?? ''))
-    .slice(0, maxEvents ?? CALENDAR_DEFAULT_MAX_EVENTS)
+  ].sort((left, right) => (left.scheduledAt ?? '').localeCompare(right.scheduledAt ?? ''))
+  const limit = maxEvents ?? CALENDAR_DEFAULT_MAX_EVENTS
+  const events = merged.slice(0, limit)
 
   // The raw pages carry provider identity, query envelopes and per-event provenance; the model only
   // needs the counts and the merged timeline, and the full pages overflow the tool size budget.
@@ -222,14 +217,80 @@ export async function handleQueryMacroCalendar(
     state: events.length > 0 ? 'available' : 'empty',
     month,
     asOf,
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
     official: summarizeCalendarSide(official, officialEvents.length),
-    market: summarizeCalendarSide(market, marketEvents.length),
+    market: { ...summarizeCalendarSide(market, marketEvents.length), pages: market.pages },
     events,
+    truncated: merged.length > events.length,
+    totalEvents: merged.length,
     caveats
   }
 }
 
 const CALENDAR_DEFAULT_MAX_EVENTS = 120
+const CALENDAR_MAX_PAGES = 40
+const CALENDAR_MAX_COLLECTED = 1_000
+
+/**
+ * The market query is paged by a byte budget, so one call only answers with the first page. A month
+ * keeps every event, and the caller asking "what is scheduled today" must still see today's rows
+ * even when they sit on a later page.
+ */
+function readAllMarketCalendarPages(
+  queryService: ReturnType<typeof getIntelligenceModule>['publicQueryService'],
+  input: { month: string; asOf: string; locale: 'zh' | 'en' }
+): { state: 'available' | 'unavailable'; events: Array<Record<string, unknown>>; pages: number; failureCode?: string } {
+  const events: Array<Record<string, unknown>> = []
+  let cursor: string | undefined
+  let pages = 0
+  try {
+    do {
+      const page = queryService.queryMarketCalendarMonth({
+        month: input.month,
+        asOf: input.asOf,
+        locale: input.locale,
+        ...(cursor ? { cursor } : {})
+      })
+      if (!page || page.state !== 'available') {
+        return {
+          state: 'unavailable',
+          events: [],
+          pages,
+          ...(page && typeof page.failureCode === 'string' ? { failureCode: page.failureCode } : {})
+        }
+      }
+      pages += 1
+      events.push(...readCalendarEvents(page))
+      cursor = typeof page.nextCursor === 'string' ? page.nextCursor : undefined
+    } while (cursor && pages < CALENDAR_MAX_PAGES && events.length < CALENDAR_MAX_COLLECTED)
+    return { state: 'available', events, pages }
+  } catch {
+    return { state: 'unavailable', events: [], pages }
+  }
+}
+
+function filterCalendarEvents(
+  events: Array<Record<string, unknown>>,
+  from: string | undefined,
+  to: string | undefined
+): Array<Record<string, unknown>> {
+  if (!from && !to) return events
+  // Compare instants, not strings: `scheduledAt` is UTC while the caller's window may carry an
+  // offset, and lexicographic comparison across offsets lands on the wrong day.
+  const fromMs = from ? Date.parse(from) : undefined
+  const toMs = to ? Date.parse(to) : undefined
+  return events.filter((event) => {
+    const scheduledAt = typeof event.scheduledAt === 'string' ? event.scheduledAt : undefined
+    const scheduledDate = typeof event.scheduledDate === 'string' ? event.scheduledDate : undefined
+    const point = scheduledAt ?? (scheduledDate ? `${scheduledDate}T00:00:00.000Z` : undefined)
+    const pointMs = point ? Date.parse(point) : Number.NaN
+    if (!Number.isFinite(pointMs)) return false
+    if (fromMs !== undefined && pointMs < fromMs) return false
+    if (toMs !== undefined && pointMs >= toMs) return false
+    return true
+  })
+}
 
 function summarizeCalendarSide(page: unknown, eventCount: number): {
   state: string

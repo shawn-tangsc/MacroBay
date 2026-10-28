@@ -92,6 +92,53 @@ describe('handleQueryMacroCalendar', () => {
     expect(result.caveats).toContain('market-calendar-unavailable')
   })
 
+  it('follows every market page so a later date is not hidden behind the first page', async () => {
+    const pages = [
+      { state: 'available', events: [{ eventKey: 'market-early', title: 'Early', scheduledAt: '2026-10-14T12:00:00.000Z' }], nextCursor: 'page-2' },
+      { state: 'available', events: [{ eventKey: 'market-late', title: 'Late', scheduledAt: '2026-10-28T12:30:00.000Z' }] }
+    ]
+    const queryMarketCalendarMonth = vi.fn(() => pages.shift())
+    vi.mocked(getIntelligenceModule).mockReturnValue({
+      publicQueryService: {
+        queryMacroEconomicCalendarMonth: vi.fn(async () => ({ state: 'available', events: [] })),
+        queryMarketCalendarMonth
+      },
+      newsSentiment: {}
+    } as never)
+
+    const result = await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z' }, deps) as never as {
+      events: Array<{ eventKey: string }>
+      market: { eventCount: number; pages: number }
+    }
+
+    expect(queryMarketCalendarMonth).toHaveBeenCalledTimes(2)
+    expect(result.market).toMatchObject({ eventCount: 2, pages: 2 })
+    expect(result.events.map((event) => event.eventKey)).toEqual(['market-early', 'market-late'])
+  })
+
+  it('narrows to a date window when the caller asks about one day', async () => {
+    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+      official: { state: 'available', events: [] },
+      market: {
+        state: 'available',
+        events: [
+          { eventKey: 'market-early', title: 'Early', scheduledAt: '2026-10-14T12:00:00.000Z' },
+          { eventKey: 'market-today', title: 'Today', scheduledAt: '2026-10-28T12:30:00.000Z' }
+        ]
+      }
+    }) as never)
+
+    const result = await handleQueryMacroCalendar({
+      month: '2026-10',
+      asOf: '2026-10-28T07:08:50.417Z',
+      from: '2026-10-28T00:00:00.000+08:00',
+      to: '2026-10-29T00:00:00.000+08:00'
+    }, deps) as never as { events: Array<{ eventKey: string }>; totalEvents: number }
+
+    expect(result.events.map((event) => event.eventKey)).toEqual(['market-today'])
+    expect(result.totalEvents).toBe(1)
+  })
+
   it('says empty rather than unavailable when both sides answer with nothing', async () => {
     vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({}) as never)
 
