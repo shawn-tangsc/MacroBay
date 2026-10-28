@@ -54,15 +54,15 @@ describe('handleQueryMacroCalendar', () => {
 
     const result = await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T06:50:04.794Z' }, deps) as never as {
       state: string
-      official: { events: unknown[] }
-      market: { events: unknown[] }
+      official: { eventCount: number }
+      market: { eventCount: number; state: string }
       events: Array<{ source: string; eventKey: string }>
       caveats: string[]
     }
 
     expect(result.state).toBe('available')
-    expect(result.official.events).toHaveLength(1)
-    expect(result.market.events).toHaveLength(1)
+    expect(result.official.eventCount).toBe(1)
+    expect(result.market.eventCount).toBe(1)
     expect(result.events.map((event) => [event.source, event.eventKey])).toEqual([
       ['official', 'official-cpi'],
       ['market', 'market-fomc']

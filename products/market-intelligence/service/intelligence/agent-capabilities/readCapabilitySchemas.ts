@@ -253,8 +253,24 @@ export const macroCalendarMonthOutputSchema = {
     state: { type: 'string', enum: ['available', 'empty', 'unavailable'] },
     month: { type: 'string' },
     asOf: { type: 'string', format: 'date-time' },
-    official: { type: 'object' },
-    market: { type: 'object' },
+    official: {
+      type: 'object',
+      required: ['state', 'eventCount'],
+      properties: {
+        state: { type: 'string' },
+        eventCount: { type: 'integer' },
+        failureCode: { type: 'string' }
+      }
+    },
+    market: {
+      type: 'object',
+      required: ['state', 'eventCount'],
+      properties: {
+        state: { type: 'string' },
+        eventCount: { type: 'integer' },
+        failureCode: { type: 'string' }
+      }
+    },
     events: {
       type: 'array',
       items: {
@@ -266,7 +282,12 @@ export const macroCalendarMonthOutputSchema = {
           scheduledAt: { type: ['string', 'null'] },
           scheduledDate: { type: 'string' },
           countryName: { type: 'string' },
-          importance: { type: 'string' }
+          importance: { type: 'string' },
+          lifecycleState: { type: 'string' },
+          actual: { type: 'string' },
+          previous: { type: 'string' },
+          consensus: { type: 'string' },
+          surprise: { type: 'string' }
         }
       }
     },

@@ -3,6 +3,7 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import { getIntelligenceModule } from '../intelligenceModule'
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
+import { analysisModelVocabulary } from '../analysis/analysisModelVocabulary'
 import { computeConfigurationRevision } from './configurationRevision'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import type { CapabilityDomain } from './capabilityTypes'
@@ -209,21 +210,36 @@ export async function handleQueryMacroCalendar(
   if (marketEvents.length === 0) caveats.push('market-calendar-empty')
 
   const events = [
-    ...officialEvents.map((event) => normalizeCalendarEvent(event, 'official')),
-    ...marketEvents.map((event) => normalizeCalendarEvent(event, 'market'))
+    ...officialEvents.map((event) => summarizeCalendarEvent(event, 'official')),
+    ...marketEvents.map((event) => summarizeCalendarEvent(event, 'market'))
   ]
     .sort((left, right) => (left.scheduledAt ?? '').localeCompare(right.scheduledAt ?? ''))
-    .slice(0, maxEvents ?? 200)
+    .slice(0, maxEvents ?? CALENDAR_DEFAULT_MAX_EVENTS)
 
+  // The raw pages carry provider identity, query envelopes and per-event provenance; the model only
+  // needs the counts and the merged timeline, and the full pages overflow the tool size budget.
   return {
     state: events.length > 0 ? 'available' : 'empty',
     month,
     asOf,
-    official,
-    market,
+    official: summarizeCalendarSide(official, officialEvents.length),
+    market: summarizeCalendarSide(market, marketEvents.length),
     events,
     caveats
   }
+}
+
+const CALENDAR_DEFAULT_MAX_EVENTS = 120
+
+function summarizeCalendarSide(page: unknown, eventCount: number): {
+  state: string
+  eventCount: number
+  failureCode?: string
+} {
+  const record = page && typeof page === 'object' ? (page as Record<string, unknown>) : {}
+  const state = typeof record.state === 'string' ? record.state : 'unavailable'
+  const failureCode = typeof record.failureCode === 'string' ? record.failureCode : undefined
+  return { state, eventCount, ...(failureCode ? { failureCode } : {}) }
 }
 
 function readCalendarEvents(page: unknown): Array<Record<string, unknown>> {
@@ -233,7 +249,7 @@ function readCalendarEvents(page: unknown): Array<Record<string, unknown>> {
   return events.filter((event): event is Record<string, unknown> => Boolean(event) && typeof event === 'object')
 }
 
-function normalizeCalendarEvent(
+function summarizeCalendarEvent(
   event: Record<string, unknown>,
   source: 'official' | 'market'
 ): {
@@ -244,16 +260,33 @@ function normalizeCalendarEvent(
   scheduledDate?: string
   countryName?: string
   importance?: string
+  lifecycleState?: string
+  actual?: string
+  previous?: string
+  consensus?: string
+  surprise?: string
 } {
-  const text = (value: unknown): string | undefined => (typeof value === 'string' && value.length > 0 ? value : undefined)
+  const text = (value: unknown): string | undefined =>
+    typeof value === 'string' && value.length > 0 ? value : undefined
+  const displayValue = (value: unknown): string | undefined => {
+    if (!value || typeof value !== 'object') return undefined
+    return text((value as { displayValue?: unknown }).displayValue)
+  }
+  const titleKey = text(event.titleKey)
+  const title = text(event.title) ?? text(event.name) ?? (titleKey ? analysisModelVocabulary.eventName[titleKey] ?? titleKey : '')
   return {
     source,
     eventKey: text(event.eventKey) ?? '',
-    title: text(event.title) ?? text(event.name) ?? '',
+    title,
     scheduledAt: text(event.scheduledAt) ?? null,
     ...(text(event.scheduledDate) ? { scheduledDate: text(event.scheduledDate) } : {}),
     ...(text(event.countryName) ? { countryName: text(event.countryName) } : {}),
-    ...(text(event.importance) ? { importance: text(event.importance) } : {})
+    ...(text(event.importance) ? { importance: text(event.importance) } : {}),
+    ...(text(event.lifecycleState) ? { lifecycleState: text(event.lifecycleState) } : {}),
+    ...(displayValue(event.actual) ? { actual: displayValue(event.actual) } : {}),
+    ...(displayValue(event.previous) ? { previous: displayValue(event.previous) } : {}),
+    ...(displayValue(event.consensus) ? { consensus: displayValue(event.consensus) } : {}),
+    ...(text(event.surprise) ? { surprise: text(event.surprise) } : {})
   }
 }
 
