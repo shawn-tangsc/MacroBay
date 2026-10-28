@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MacroCalendarProviderObservation } from '../macro-calendar/marketCalendarObservationNormalization'
+import { marketCalendarSurprisePolicy } from '../../../contracts/macro/marketCalendarSurprise'
 import { providerReleaseSurprisePolicy, providerReleaseSurprises, providerSurpriseBaselineKey } from './providerReleaseSurprisePolicy'
 
 /**
@@ -49,18 +50,21 @@ describe('a provider release that surprised the market', () => {
     expect(surprises([observation({ actual: { displayValue: '4.5%' }, consensus: { displayValue: '4.4%' } })])).toEqual([])
   })
 
-  it('reads the two unit classes with their own thresholds', () => {
-    const policy = providerReleaseSurprisePolicy.thresholds
-    expect(policy.percentPoints).toBe(0.2)
-    expect(policy.relativeFraction).toBe(0.05)
+  it('reads the two unit classes with the contract threshold', () => {
+    // 阈值只有一份，在契约模块；这里改一个常量，下面四条里必有一条变红。
+    expect(marketCalendarSurprisePolicy.trigger).toEqual({ percentPoints: 0.2, relativeFraction: 0.05 })
+    expect(surprises([observation({ actual: { displayValue: '4.61%' }, consensus: { displayValue: '4.4%' } })])).toHaveLength(1)
+    expect(surprises([observation({ actual: { displayValue: '4.59%' }, consensus: { displayValue: '4.4%' } })])).toEqual([])
     // 裸数字按相对量：非农 25 万 vs 预期 18 万（相对 38.9%）算意外。
     expect(surprises([observation({ titleKey: '9月季调后非农就业人口变动(万人)', actual: { displayValue: '25.0' }, consensus: { displayValue: '18.0' } })])).toHaveLength(1)
+    expect(surprises([observation({ actual: { displayValue: '158' }, consensus: { displayValue: '150' } })])).toHaveLength(1)
+    expect(surprises([observation({ actual: { displayValue: '157' }, consensus: { displayValue: '150' } })])).toEqual([])
     // 预期为 0 时没有相对量可算 —— 不猜，按不算意外处理。
     expect(surprises([observation({ actual: { displayValue: '3' }, consensus: { displayValue: '0' } })])).toEqual([])
   })
 
   it('refuses to judge a value it cannot compare', () => {
-    // 单位不同（一个带 %，一个不带）或缺失，都按"不可比"处理，与 marketCalendarSurprise 同一套规则。
+    // 单位不同（一个带 %，一个不带）或缺失，都按"不可比"处理，与契约的 `assessMarketCalendarSurprise` 同一套规则。
     expect(surprises([observation({ consensus: { displayValue: '4.4' } })])).toEqual([])
     expect(surprises([observation({ actual: null })])).toEqual([])
     expect(surprises([observation({ consensus: null })])).toEqual([])

@@ -57,7 +57,7 @@ export type SignificanceSignal = Readonly<{
    * 市场预期，只在 `provider-surprise` 上有值。
    *
    * 偏离的是"与实际值的距离"，只报实际值等于没说出意外在哪；而 provider 的预期值没有单位准入，
-   * 所以它作为**文本**随信号走，不参与比较（比较在 `marketCalendarSurpriseMagnitude` 里做）。
+   * 所以它作为**文本**随信号走，不参与比较（比较在契约的 `assessMarketCalendarSurprise` 里做）。
    */
   expectedValue?: string | null
 }>

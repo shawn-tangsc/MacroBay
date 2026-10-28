@@ -6,11 +6,14 @@ import {
   type MarketCalendarEvent,
   type MarketCalendarPage
 } from '../../../contracts/macro/marketCalendarQueryContracts'
+import {
+  assessMarketCalendarSurprise,
+  toCalendarSurpriseView
+} from '../../../contracts/macro/marketCalendarSurprise'
 import { zeroXRouterCalendarStoragePolicy } from './0xrouter-calendar/marketCalendarStorageValidation'
 import {
   marketCalendarObservationEventKey,
   marketCalendarObservationPolicy,
-  marketCalendarSurprise,
   normalizeMarketCalendarEvent,
   readMarketCalendarObservations
 } from './marketCalendarObservationNormalization'
@@ -106,20 +109,25 @@ describe('0xRouter observation normalization', () => {
 
   it('compares only values whose unit form is admitted and flags what it cannot compare', () => {
     const value = (displayValue: string) => ({ displayValue })
-    const surprise = (actual: string, consensus: string) => marketCalendarSurprise(value(actual), value(consensus))
+    const surprise = (actual: string, consensus: string) => {
+      const assessment = assessMarketCalendarSurprise(value(actual), value(consensus))
+      return { view: toCalendarSurpriseView(assessment), reason: assessment.reason }
+    }
 
-    expect(surprise('3.2', '3.1')).toBe('beat')
-    expect(surprise('3.0', '3.1')).toBe('miss')
-    expect(surprise('3.1', '3.1')).toBe('inline')
-    expect(surprise('3.2%', '3.1%')).toBe('beat')
-    expect(surprise('-1.5', '-1.2')).toBe('miss')
-    expect(surprise('.5', '0.4')).toBe('beat')
-    expect(surprise('3.2%', '3.1')).toBe('consensus-unavailable')
-    expect(surprise('250K', '240K')).toBe('consensus-unavailable')
-    expect(surprise('1.2M', '1200000')).toBe('consensus-unavailable')
-    expect(surprise('3.2-3.4', '3.1')).toBe('consensus-unavailable')
-    expect(marketCalendarSurprise(value('3.2'), null)).toBe('consensus-unavailable')
-    expect(marketCalendarSurprise(undefined, value('3.1'))).toBe('consensus-unavailable')
+    expect(surprise('3.2', '3.1')).toEqual({ view: 'beat', reason: null })
+    expect(surprise('3.0', '3.1')).toEqual({ view: 'miss', reason: null })
+    expect(surprise('3.1', '3.1')).toEqual({ view: 'inline', reason: null })
+    expect(surprise('3.2%', '3.1%')).toEqual({ view: 'beat', reason: null })
+    expect(surprise('-1.5', '-1.2')).toEqual({ view: 'miss', reason: null })
+    expect(surprise('.5', '0.4')).toEqual({ view: 'beat', reason: null })
+    expect(surprise('3.2%', '3.1')).toEqual({ view: 'consensus-unavailable', reason: 'unit-mismatch' })
+    expect(surprise('250K', '240K')).toEqual({ view: 'consensus-unavailable', reason: 'non-numeric' })
+    expect(surprise('1.2M', '1200000')).toEqual({ view: 'consensus-unavailable', reason: 'non-numeric' })
+    expect(surprise('3.2-3.4', '3.1')).toEqual({ view: 'consensus-unavailable', reason: 'non-numeric' })
+    expect(toCalendarSurpriseView(assessMarketCalendarSurprise(value('3.2'), null))).toBe('consensus-unavailable')
+    expect(assessMarketCalendarSurprise(value('3.2'), null).reason).toBe('missing-consensus')
+    expect(toCalendarSurpriseView(assessMarketCalendarSurprise(undefined, value('3.1')))).toBe('consensus-unavailable')
+    expect(assessMarketCalendarSurprise(undefined, value('3.1')).reason).toBe('missing-actual')
 
     const uncomparable = normalizeMarketCalendarEvent(event({ providerActual: { displayValue: '250K' },
       consensus: { displayValue: '240K' } }))

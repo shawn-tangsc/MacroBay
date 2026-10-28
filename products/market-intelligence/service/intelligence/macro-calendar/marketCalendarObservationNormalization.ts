@@ -6,9 +6,12 @@ import {
   type MarketCalendarEvent,
   type MarketCalendarPage
 } from '../../../contracts/macro/marketCalendarQueryContracts'
+import {
+  assessMarketCalendarSurprise,
+  toCalendarSurpriseView
+} from '../../../contracts/macro/marketCalendarSurprise'
 import type {
-  MacroEconomicCalendarEventView,
-  MacroEconomicCalendarValueView
+  MacroEconomicCalendarEventView
 } from '../../../contracts/macro/economicCalendarQueryContracts'
 
 /**
@@ -76,16 +79,6 @@ export const marketCalendarObservationPolicy = Object.freeze({
     pageUnavailable: 'provider-observation-page-unavailable',
     pagesTruncated: 'provider-observation-pages-truncated',
     observationsTruncated: 'provider-observations-truncated'
-  }),
-  surprise: Object.freeze({
-    /**
-     * Signed decimal or percent only. Provider values are display strings that never passed
-     * unit admission, so `250K`, `1.2M` and ranges are deliberately not compared.
-     */
-    comparableValuePattern: /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/,
-    percentSuffix: '%',
-    /** No numeric tolerance is admitted: the provider row has no admitted unit. */
-    inlineToleranceAbsolute: 0
   })
 })
 
@@ -118,54 +111,6 @@ export function marketCalendarObservationEventKey(observationKey: string): strin
     .update(observationKey).digest('hex').slice(0, marketCalendarObservationPolicy.eventKeyDigestCharacters)
 }
 
-/** The expected difference. Absent or incomparable inputs stay `consensus-unavailable`. */
-export function marketCalendarSurprise(
-  actual: MacroEconomicCalendarValueView | undefined,
-  consensus: MacroEconomicCalendarValueView | null | undefined
-): MacroEconomicCalendarEventView['surprise'] {
-  const left = actual ? comparableMagnitude(actual) : undefined
-  const right = consensus ? comparableMagnitude(consensus) : undefined
-  if (!left || !right || left.suffix !== right.suffix) return 'consensus-unavailable'
-  const difference = left.magnitude - right.magnitude
-  if (Math.abs(difference) <= marketCalendarObservationPolicy.surprise.inlineToleranceAbsolute) return 'inline'
-  return difference > 0 ? 'beat' : 'miss'
-}
-
-/**
- * How far a provider release landed from the market's expectation, when the two are comparable.
- *
- * 设计 145 §8 A / 146 §2 选项 3 要的是"显著偏离预期"这个**量**，而 `marketCalendarSurprise` 只回
- * beat/miss/inline。两者共用同一套可比性规则（同一单位后缀、只看带符号数字），所以这里不另立解析：
- * 单位不可比时同样返回 `undefined`，调用方按"不能判断"处理。
- *
- * `relative` 是相对预期的偏离比例，只在预期不为 0 时有值：provider 的 displayValue 没有单位准入，
- * 分不出"千人"与"万人"，百分数之外只能按相对量判断。
- */
-export function marketCalendarSurpriseMagnitude(
-  actual: MacroEconomicCalendarValueView | undefined,
-  consensus: MacroEconomicCalendarValueView | null | undefined
-): Readonly<{ difference: number; suffix: string; relative: number | undefined }> | undefined {
-  const left = actual ? comparableMagnitude(actual) : undefined
-  const right = consensus ? comparableMagnitude(consensus) : undefined
-  if (!left || !right || left.suffix !== right.suffix) return undefined
-  const difference = left.magnitude - right.magnitude
-  return Object.freeze({
-    difference,
-    suffix: left.suffix,
-    relative: right.magnitude === 0 ? undefined : difference / Math.abs(right.magnitude)
-  })
-}
-
-function comparableMagnitude(value: MacroEconomicCalendarValueView): { magnitude: number; suffix: string } | undefined {
-  const text = value.displayValue.trim()
-  const suffix = text.endsWith(marketCalendarObservationPolicy.surprise.percentSuffix)
-    ? marketCalendarObservationPolicy.surprise.percentSuffix : ''
-  const digits = suffix ? text.slice(0, -suffix.length) : text
-  if (!marketCalendarObservationPolicy.surprise.comparableValuePattern.test(digits)) return undefined
-  const magnitude = Number(digits)
-  return Number.isFinite(magnitude) ? { magnitude, suffix } : undefined
-}
-
 /** `2026-09-10T12:30:00.000Z` -> `2026-M09`, the official period key shape. */
 function periodKeyFor(scheduledAt: string): string {
   return `${scheduledAt.slice(0, 4)}-M${scheduledAt.slice(5, 7)}`
@@ -182,12 +127,13 @@ export function normalizeMarketCalendarEvent(event: MarketCalendarEvent): MacroC
   const actual = event.providerActual
   const previous = event.providerPrevious
   const consensus = event.consensus
-  const surprise = marketCalendarSurprise(actual ?? undefined, consensus)
+  const assessment = assessMarketCalendarSurprise(actual, consensus)
+  const surprise = toCalendarSurpriseView(assessment)
   const caveats: string[] = [
     marketCalendarObservationPolicy.caveats.coverageUnverified,
     marketCalendarObservationPolicy.caveats.titleIsProviderDisplayName
   ]
-  if (actual && consensus && surprise === 'consensus-unavailable') {
+  if (actual && consensus && assessment.direction === 'not-comparable') {
     caveats.push(marketCalendarObservationPolicy.caveats.surpriseNotComparable)
   }
   const eventKey = marketCalendarObservationEventKey(observationKey)
