@@ -1416,18 +1416,20 @@ button.mi-agent-card__status:focus-visible {
 .mi-calendar-card__open:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .mi-calendar-card__section { margin: 10px 10px 4px; font-size: 10px; font-weight: 600; letter-spacing: .08em; color: var(--muted); }
 .mi-calendar-card__list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0 6px 6px; list-style: none; }
-/* One content column plus the quiet tools: the clock rides the title line, so an 84px time column
-   no longer sits half empty while the event name wraps in the rest. */
-.mi-calendar-card__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 8px; width: 100%; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; text-align: left; cursor: pointer; }
+/* Two semantic columns: a metadata rail (time over kind, right-aligned to one gutter) and one
+   content stack (name, values, verdict, reaction). The rail's border makes the gutter deliberate
+   instead of leaving an accidental empty strip under the clock. */
+.mi-calendar-card__row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: start; gap: 10px; width: 100%; padding: 7px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text); font-size: 12px; text-align: left; cursor: pointer; }
 .mi-calendar-card__row[data-selected='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .mi-calendar-card__row[role='button'] { cursor: pointer; }
 .mi-calendar-card__row:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .mi-calendar-card__row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Left: when. Right: the event over its numbers, so a long name never squeezes the values out. */
-.mi-calendar-card__row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mi-calendar-card__row-when { display: flex; flex-direction: column; align-items: flex-end; align-self: stretch; gap: 4px; padding-right: 8px; border-right: 1px solid color-mix(in srgb, var(--muted) 16%, transparent); }
+.mi-calendar-card__row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .mi-calendar-card__row-country { margin-right: 4px; color: var(--muted-strong); font-size: 10px; font-style: normal; }
 .mi-calendar-card__row-title { overflow-wrap: anywhere; }
-.mi-calendar-card__row-kind { margin-right: 6px; padding: 0 4px; border: 1px solid currentcolor; border-radius: 3px; font-size: 9px; font-style: normal; line-height: 14px; white-space: nowrap; }
+.mi-calendar-card__row-kind { padding: 0 4px; border: 1px solid currentcolor; border-radius: 3px; font-size: 9px; font-style: normal; line-height: 14px; white-space: nowrap; }
 .mi-calendar-card__row-kind[data-kind='economic-indicator'] { color: var(--mi-calendar-kind-indicator); }
 .mi-calendar-card__row-kind[data-kind='financial-event'] { color: var(--mi-calendar-kind-financial); }
 .mi-calendar-card__row-kind[data-kind='central-bank-activity'] { color: var(--mi-calendar-kind-central-bank); }
@@ -1439,7 +1441,7 @@ button.mi-agent-card__status:focus-visible {
 .mi-calendar-card__row-surprise[data-calendar-surprise='miss'] { border-color: color-mix(in srgb, var(--danger) 52%, transparent); background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 .mi-calendar-card__row-surprise[data-calendar-surprise='inline'] { color: var(--muted-strong); }
 .mi-calendar-card__row-surprise[data-calendar-surprise='unavailable'] { color: var(--muted); }
-.mi-calendar-card__row time { margin-right: 6px; padding-top: 1px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-calendar-card__row time { padding-top: 1px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-calendar-card__row-tools { display: flex; align-items: center; gap: 6px; }
 .mi-calendar-card__copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }
 .mi-calendar-card__row:hover .mi-calendar-card__copy, .mi-calendar-card__copy:focus-visible { opacity: 1; }

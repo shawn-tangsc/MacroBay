@@ -66,10 +66,11 @@ it('shows both sections with the event name, time and importance', async () => {
   expect(host.textContent).toContain('10-13 12:30')
   expect(host.querySelectorAll('[data-calendar-card-row]')).toHaveLength(2)
   // A released row has to say what was published, next to what it is compared with.
-  // The clock rides the title line, so the row has no half-empty time column.
+  // The clock and the kind share the left metadata rail; the right side is the event stack.
   const firstRow = host.querySelector('.mi-calendar-card__row')!
-  expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-title time')?.textContent).toContain('10-11 06:00')
-  expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-title')?.textContent).toBeTruthy()
+  expect(firstRow.querySelector('.mi-calendar-card__row-when time')?.textContent).toContain('10-11 06:00')
+  expect(firstRow.querySelector('.mi-calendar-card__row-when .mi-calendar-card__row-kind')?.textContent).toBe('经济指标')
+  expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-title')?.textContent).not.toContain('经济指标')
   expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-value')?.textContent).toContain('实际值 0.3%')
   expect(host.textContent).toContain('实际值 0.3%')
   expect(host.textContent).toContain('市场预期 0.2%')
@@ -291,7 +292,8 @@ it('styles the verdict as a coloured badge, with the direction distinguishable',
   expect(beat).toContain('var(--accent)')
   expect(miss).toContain('var(--danger)')
   expect(styles).toContain('font-weight: 650')
-  // The row is one content column; the clock is no longer a separate 84px column.
-  expect(styles).toContain('.mi-calendar-card__row { display: grid; grid-template-columns: minmax(0, 1fr) auto;')
-  expect(styles).not.toContain('grid-template-columns: 84px minmax(0, 1fr) auto')
+  // The row keeps the metadata rail; the gutter is deliberate, not an empty time column.
+  expect(styles).toContain('.mi-calendar-card__row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto;')
+  expect(styles).toContain('.mi-calendar-card__row-when { display: flex; flex-direction: column; align-items: flex-end;')
+  expect(styles).toContain('border-right: 1px solid color-mix')
 })
