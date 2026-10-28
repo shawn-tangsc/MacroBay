@@ -21,16 +21,20 @@ typecheck、test、`pnpm build`。它不打包，所以日常 PR 不会为了一
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.1.1 -m "MacroBay 0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
+git push origin v0.2.2
 ```
 
-它在 `macos-latest` 上产出 `release/MacroBay-<version>-arm64.dmg`、在 `windows-latest` 上产出 NSIS
+它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 `windows-latest` 上产出 NSIS
 安装器，然后把这两个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都
 不需要签名密钥。
 
-- tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 job 在打包前就停下——electron-builder 是
-  按 manifest 而不是 tag 命名产物的。
+dmg 与安装器的文件名不含版本号，所以 README 可以长期链接
+`releases/latest/download/MacroBay-arm64.dmg` 和 `.../MacroBay-x64-setup.exe`；任一名字变化，
+打包 job 会直接失败。
+
+- tag 必须是 `v` 加上 `package.json` 里的 `version`，否则 `check-release-version.mjs` 会在打包前
+  让 job 停下。应用版本来自 manifest，不来自 tag。
 - 对已有 release 的 tag 重跑，只替换 assets、保留原有说明，所以 tag 不用移动也能补救失败的运行。
 - 产物未签名；Release 说明里写明 macOS 的 Gatekeeper 与 Windows 的 SmartScreen 放行方式。
 
@@ -62,7 +66,7 @@ out/renderer/   React 渲染层
 
 ```bash
 pnpm install
-pnpm dist:mac        # 先构建 bundle，再产出 release/MacroBay-<version>-arm64.dmg
+pnpm dist:mac        # 先构建 bundle，再产出 release/MacroBay-arm64.dmg
 pnpm dist:mac:dir    # 先构建 bundle，只产出 release/mac-arm64/MacroBay.app
 ```
 
@@ -121,14 +125,14 @@ pnpm dist:mac
 1. `pnpm dist:mac:dir`，然后 `open release/mac-arm64/MacroBay.app`。
 2. 主窗口标题是 `MacroBay 观潮` 并能渲染情报看板；本地数据写入
    `~/Library/Application Support/MacroBay`。
-3. `hdiutil verify release/MacroBay-<version>-arm64.dmg`，挂载后把应用拖进 Applications，再从那里
+3. `hdiutil verify release/MacroBay-arm64.dmg`，挂载后把应用拖进 Applications，再从那里
    启动。
 4. `0.1.0` 在 arm64 上的参考体积：`.dmg` 约 184 MB，安装后约 550 MB。
 
 ## 打 Windows 包
 
 ```bash
-pnpm dist:win        # 先构建 bundle，再产出 release/MacroBay-<version>-x64-setup.exe
+pnpm dist:win        # 先构建 bundle，再产出 release/MacroBay-x64-setup.exe
 pnpm dist:win:dir    # 先构建 bundle，只产出 release/win-unpacked/
 ```
 
@@ -161,7 +165,7 @@ Windows 产物放在 `windows-latest` 上产出。
 1. `pnpm dist:win:dir`，运行 `release\win-unpacked\MacroBay.exe`：主窗口标题是 `MacroBay 观潮` 并能
    渲染看板。
 2. 本地数据写入 `%APPDATA%\MacroBay`；关掉最后一个窗口进程即退出。
-3. 双击 `release\MacroBay-<version>-x64-setup.exe`，确认四步引导都在、桌面与开始菜单快捷方式可用、
+3. 双击 `release\MacroBay-x64-setup.exe`，确认四步引导都在、桌面与开始菜单快捷方式可用、
    「应用和功能」里有卸载入口。
 4. 从开始菜单启动已安装版本，核对任务栏图标与分组、通知；卸载后 `%APPDATA%\MacroBay` 应当保留。
 
@@ -180,12 +184,10 @@ Windows 产物放在 `windows-latest` 上产出。
 
 ## 版本
 
-`package.json` 当前是 `0.1.0`。首个公开版本需要定义：
+`package.json` 是应用版本的唯一来源。`pnpm release:bump <version>` 会重写应用 manifest 和公开文档里
+的所有版本号；任何一处模式匹配不到都会失败。
 
-- 应用和产品 manifest 的版本策略；
-- changelog；
-- 本地 `userData` 和数据库迁移的升级说明；
-- macOS、Windows、Linux 的支持矩阵。
+gate 通过后从 `main` 打 tag。发布清单属于维护材料，不在本文展开。
 
 ## 发布前验证
 

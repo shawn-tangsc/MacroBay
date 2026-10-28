@@ -49,8 +49,9 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 
 ## 下载
 
-**[获取最新版本](https://github.com/shawn-tangsc/MacroBay/releases/latest)** ——
-每个版本都附带 macOS（Apple Silicon）`.dmg` 和 Windows（x64）`.exe`。
+**[macOS · Apple Silicon（.dmg）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[Windows · x64（.exe）](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
+[全部版本](https://github.com/shawn-tangsc/MacroBay/releases)
 
 安装包未签名。macOS 上右键 App → **打开**，或执行
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`；Windows 上在 SmartScreen 里点
@@ -163,7 +164,7 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.2.1`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
+MacroBay 目前是 **alpha**（`0.2.2`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
 打开完整看板并读到三条已发布结论，数据来自真实录制的一周。实时面板仍需你自己的供应商凭据。
 macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
 运行态尚未验证，Linux 尚未配置打包。详见

@@ -50,7 +50,9 @@ mac:
   hardenedRuntime: false
 
 dmg:
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  # Version-free on purpose: `releases/latest/download/<name>` must keep resolving
+  # after a new tag, so the README can link the asset directly instead of the page.
+  artifactName: ${productName}-${arch}.${ext}
   window:
     width: 540
     height: 380
@@ -72,7 +74,7 @@ win:
     - target: nsis
       arch:
         - x64
-  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+  artifactName: ${productName}-${arch}-setup.${ext}
 
 nsis:
   oneClick: false

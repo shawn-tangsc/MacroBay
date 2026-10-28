@@ -49,7 +49,7 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.crossAsset.query': exposed('get_cross_asset_snapshot'),
 
   'intelligence.macro.marketCalendar.refreshManual': excluded('destructive'),
-  'intelligence.macro.marketCalendar.queryMonth': excluded('internal-view'),
+  'intelligence.macro.marketCalendar.queryMonth': exposed('query_macro_calendar'),
   'intelligence.macro.marketSnapshot.query': exposed('get_macro_market_snapshot'),
   'intelligence.macro.dashboardFeedStatus.query': exposed('get_dashboard_feed_status'),
   'intelligence.macro.ratesSnapshot.query': exposed('get_macro_rates_snapshot'),
@@ -65,8 +65,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.getOperationsHealth': exposed('get_operations_health'),
   'intelligence.getSentimentAggregates': excluded('internal-view'),
   // The news sentiment panel is composed by the workbench, not answered as an agent question.
-  'intelligence.getNewsSentiment': excluded('internal-view'),
-  'intelligence.getNewsSentimentItem': excluded('internal-view'),
+  'intelligence.getNewsSentiment': exposed('query_news_sentiment'),
+  'intelligence.getNewsSentimentItem': exposed('get_news_sentiment_item'),
   'intelligence.getNewsSentimentSettings': excluded('internal-view'),
   'intelligence.saveNewsSentimentSettings': excluded('internal-view'),
   'intelligence.rescoreNewsSentiment': excluded('internal-view'),

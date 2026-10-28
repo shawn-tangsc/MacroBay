@@ -51,8 +51,9 @@ That is the whole product: **not a paragraph you have to take on faith.**
 
 ## Download
 
-**[Get the latest release](https://github.com/shawn-tangsc/MacroBay/releases/latest)** —
-macOS (Apple Silicon) `.dmg` and Windows (x64) `.exe` are attached to every version.
+**[macOS · Apple Silicon (.dmg)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-arm64.dmg)** ·
+**[Windows · x64 (.exe)](https://github.com/shawn-tangsc/MacroBay/releases/latest/download/MacroBay-x64-setup.exe)** ·
+[All releases](https://github.com/shawn-tangsc/MacroBay/releases)
 
 The build is unsigned. On macOS, right-click the app → **Open**, or run
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`. On Windows, choose
@@ -178,7 +179,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.2.1`). macOS is the verified platform. A **sample mode** ships with the app:
+MacroBay is **alpha** (`0.2.2`). macOS is the verified platform. A **sample mode** ships with the app:
 with no key and no network you can open the full dashboard and one published analysis, replayed from a
 real recorded week. Live panels still need your own provider credentials. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified

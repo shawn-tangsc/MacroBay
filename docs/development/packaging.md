@@ -24,16 +24,20 @@ request never waits for a dmg.
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.1.1 -m "MacroBay 0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
+git push origin v0.2.2
 ```
 
-That builds `release/MacroBay-<version>-arm64.dmg` on `macos-latest` and the NSIS installer on
+That builds `release/MacroBay-arm64.dmg` on `macos-latest` and the NSIS installer on
 `windows-latest`, then publishes one GitHub Release with both files, their blockmaps and the
 auto-update metadata attached. Neither lane needs signing secrets.
 
-- The tag must be `v` plus the `version` in `package.json`; the job stops before packaging otherwise,
-  because electron-builder names artifacts from the manifest, not from the tag.
+The dmg and installer file names carry no version, so the README links
+`releases/latest/download/MacroBay-arm64.dmg` and `.../MacroBay-x64-setup.exe` permanently; the
+packaging job fails if either name changes.
+
+- The tag must be `v` plus the `version` in `package.json`; `check-release-version.mjs` stops the
+  job before packaging otherwise. The app version comes from the manifest, not from the tag.
 - Re-running a tag that already has a release replaces its assets and keeps its notes, so a failed
   run is recoverable without moving the tag.
 - Nothing is signed; the release notes carry the Gatekeeper and SmartScreen bypass.
@@ -68,7 +72,7 @@ Prerequisites: a macOS host, Node.js 22, pnpm 10, and the Xcode command line too
 
 ```bash
 pnpm install
-pnpm dist:mac        # build bundles, then release/MacroBay-<version>-arm64.dmg
+pnpm dist:mac        # build bundles, then release/MacroBay-arm64.dmg
 pnpm dist:mac:dir    # build bundles, then release/mac-arm64/MacroBay.app only
 ```
 
@@ -129,7 +133,7 @@ pnpm dist:mac
 1. `pnpm dist:mac:dir`, then `open release/mac-arm64/MacroBay.app`.
 2. The main window is titled `MacroBay 观潮` and renders the intelligence dashboard; local data is
    written under `~/Library/Application Support/MacroBay`.
-3. `hdiutil verify release/MacroBay-<version>-arm64.dmg`, mount it, drag the app to Applications, and
+3. `hdiutil verify release/MacroBay-arm64.dmg`, mount it, drag the app to Applications, and
    launch it from there.
 4. Reference sizes for `0.1.0` on arm64: about 184 MB for the `.dmg`, about 550 MB for the installed
    bundle.
@@ -137,7 +141,7 @@ pnpm dist:mac
 ## Build the Windows package
 
 ```bash
-pnpm dist:win        # build bundles, then release/MacroBay-<version>-x64-setup.exe
+pnpm dist:win        # build bundles, then release/MacroBay-x64-setup.exe
 pnpm dist:win:dir    # build bundles, then release/win-unpacked/ only
 ```
 
@@ -175,7 +179,7 @@ see `asar: false` above).
 1. `pnpm dist:win:dir`, then run `release\win-unpacked\MacroBay.exe`: the window is titled
    `MacroBay 观潮` and renders the dashboard.
 2. Local data is written under `%APPDATA%\MacroBay`; closing the last window quits the process.
-3. Double-click `release\MacroBay-<version>-x64-setup.exe` and confirm all four wizard pages appear,
+3. Double-click `release\MacroBay-x64-setup.exe` and confirm all four wizard pages appear,
    the shortcuts work, and Apps & Features lists the uninstall entry.
 4. Launch the installed build from the Start menu, check the taskbar icon and grouping plus
    notifications; uninstalling should leave `%APPDATA%\MacroBay` in place.
@@ -197,12 +201,12 @@ that builds on that OS.
 
 ## Versioning
 
-`package.json` currently uses `0.1.0`. The first public release should define:
+`package.json` is the single source of truth for the app version. `pnpm release:bump <version>`
+rewrites the app manifest and every version string the public docs show, and fails if a pattern no
+longer matches.
 
-- a versioning policy for the app and product manifests;
-- a changelog;
-- an upgrade note for local `userData` and database migrations;
-- a support matrix for macOS, Windows, and Linux.
+Tag a release from `main` after the gates pass. The release checklist itself is maintainer material
+and lives outside this guide.
 
 ## Verification before a release
 

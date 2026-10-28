@@ -126,8 +126,8 @@ git push --force-with-lease
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.1.1 -m "MacroBay 0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
+git push origin v0.2.2
 ```
 
 推送该 tag 会触发 `.github/workflows/release.yml`，由它构建 macOS dmg 和 Windows 安装器并据此创建
@@ -135,8 +135,7 @@ GitHub Release。安装包或压缩包是 Release assets，不提交进 Git。�
 **Actions → Release → Run workflow** 填入同一个 tag 重跑：已存在的 release 保留原有说明，只替换
 assets。
 
-现有 `v0.1.0` 指向 `b99c952`，不要移动。下一个版本从当前 `main` 发 `v0.1.1`（或计划中的下一个
-minor）。
+已发布的 tag 不可移动。不要移动它们；下一个版本从当前 `main` 打新 tag。
 
 ## 热修复
 
@@ -147,8 +146,8 @@ git switch main
 git pull --ff-only
 git switch -c fix/short-description
 # 修复、验证、PR、squash 合并
-git tag -a v0.1.2 -m "MacroBay 0.1.2"
-git push origin v0.1.2
+git tag -a v0.2.3 -m "MacroBay 0.2.3"
+git push origin v0.2.3
 ```
 
 旧支持线只有在已经有 `release/<minor>` 分支时才这样走：
