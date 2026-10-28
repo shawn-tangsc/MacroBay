@@ -324,7 +324,9 @@ describe('macro calendar write handlers', () => {
       action: 'save-provider-profile',
       sourceId: 'macro-calendar-fed',
       before: { enabled: false },
-      after: { enabled: true }
+      after: { enabled: true },
+      outcome: 'applied',
+      configurationChanged: true
     })
     expect(rows[0]!.changeSummary).toContain('enabled false -> true')
   })
@@ -453,6 +455,66 @@ describe('macro calendar write handlers', () => {
     const rows = changeLog!.listRecent({})
     expect(rows).toHaveLength(2)
     expect(rows[0]!.changeSummary).toContain('no configuration change')
+    expect(rows.map((row) => [row.action, row.outcome, row.configurationChanged])).toEqual([
+      ['test-provider-connection', 'unchanged', false],
+      ['run-provider-now', 'unchanged', false]
+    ])
+  })
+
+  it('records a rejected write as rejected instead of a no-op', async () => {
+    const original = macroCalendarOps.setReleaseTime
+    macroCalendarOps.setReleaseTime = async () => ({ state: 'rejected' })
+
+    try {
+      const result = (await handler('operate-macro-calendar')(
+        {
+          action: 'set-release-time',
+          eventKey: 'US.CPI.RELEASE.2026-M09',
+          scheduledAt: '2026-09-10T12:30:00.000Z',
+          scheduledDate: '2026-09-10'
+        },
+        context
+      )) as { state: string; changed: Record<string, unknown> }
+
+      expect(result.state).toBe('rejected')
+      expect(result.changed).toEqual({})
+      const [row] = changeLog!.listRecent({})
+      expect(row).toMatchObject({
+        action: 'set-release-time',
+        outcome: 'rejected',
+        configurationChanged: false,
+        before: { releaseTime: null, releaseDate: null }
+      })
+      expect(row!.changeSummary).toContain('rejected')
+    } finally {
+      macroCalendarOps.setReleaseTime = original
+    }
+  })
+
+  it('records a failed provider action as failed', async () => {
+    const original = macroCalendarOps.testProviderConnection
+    macroCalendarOps.testProviderConnection = async () => ({
+      state: 'failed',
+      failureCode: 'transport-unavailable'
+    })
+
+    try {
+      const result = (await handler('operate-macro-calendar')(
+        { action: 'test-provider-connection', providerId: 'macro-calendar-fed' },
+        context
+      )) as { state: string }
+
+      expect(result.state).toBe('failed')
+      const [row] = changeLog!.listRecent({})
+      expect(row).toMatchObject({
+        action: 'test-provider-connection',
+        outcome: 'failed',
+        configurationChanged: false
+      })
+      expect(row!.changeSummary).toContain('failed')
+    } finally {
+      macroCalendarOps.testProviderConnection = original
+    }
   })
 
   it('injects confirmed for the refresh actions after the overwrite acknowledgement', async () => {

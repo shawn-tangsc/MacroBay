@@ -1,6 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
 
-import type { AgentChangeLog } from './changeLog'
+import type { AgentChangeLog, AgentChangeLogOutcome } from './changeLog'
 import type { IntelligenceAgentCapability, ToolCallContext } from './capabilityTypes'
 import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
 
@@ -46,6 +46,12 @@ export async function runAuditedWrite(input: {
   target?: string
   /** The source-like entity the change belongs to; absent for item/lease operations. */
   sourceId?: string
+  /**
+   * Whether this action can write configuration. Pure operations (run-now,
+   * test-connection, preview, lease control) pass false so the audit row cannot be
+   * mistaken for a configuration change. Defaults to true.
+   */
+  changesConfiguration?: boolean
   read: () => Promise<WriteSnapshot>
   execute: () => Promise<Record<string, unknown>>
 }): Promise<Record<string, unknown>> {
@@ -53,6 +59,11 @@ export async function runAuditedWrite(input: {
   const business = await input.execute()
   const after = await readPostState(input.read)
   const changed = after ? diffSnapshots(before.value, after.value) : {}
+  const changesConfiguration = input.changesConfiguration ?? true
+  const outcome = deriveOutcome(business, changesConfiguration)
+  // True only when the action is a configuration write and it applied. It says nothing about
+  // whether the observed value differs: `changed` answers that.
+  const configurationChanged = changesConfiguration && outcome === 'applied'
 
   const recorded = await record({
     deps: input.deps,
@@ -63,7 +74,9 @@ export async function runAuditedWrite(input: {
     sourceId: input.sourceId,
     before,
     after,
-    changed
+    changed,
+    outcome,
+    configurationChanged
   })
 
   return {
@@ -95,6 +108,8 @@ async function record(input: {
   before: WriteSnapshot
   after: WriteSnapshot | null
   changed: ChangedFields
+  outcome: AgentChangeLogOutcome
+  configurationChanged: boolean
 }): Promise<boolean> {
   try {
     input.deps.openChangeLog().append({
@@ -107,8 +122,10 @@ async function record(input: {
       before: input.before.value,
       after: input.after?.value ?? null,
       changeSummary: input.after
-        ? summarize(input.action, input.target, input.changed)
+        ? summarize(input.action, input.target, input.changed, input.outcome)
         : `${scopeOf(input.action, input.target)}: post-state could not be read`,
+      outcome: input.outcome,
+      configurationChanged: input.configurationChanged,
       revisionBefore: input.before.revision,
       revisionAfter: input.after?.revision ?? input.before.revision,
       createdAt: new Date().toISOString()
@@ -128,8 +145,31 @@ function scopeOf(action: string, target: string | undefined): string {
   return target ? `${action} ${target}` : action
 }
 
-function summarize(action: string, target: string | undefined, changed: ChangedFields): string {
+/**
+ * A rejection or a failed provider action must read as exactly that. Before this, both wrote
+ * `changed: {}` and the same "no configuration change" sentence as a genuine no-op.
+ */
+function deriveOutcome(
+  business: Record<string, unknown>,
+  changesConfiguration: boolean
+): AgentChangeLogOutcome {
+  const state = typeof business.state === 'string' ? business.state : undefined
+  const actionOutcome = typeof business.outcome === 'string' ? business.outcome : undefined
+  if (state === 'rejected') return 'rejected'
+  if (state === 'failed' || state === 'unavailable' || actionOutcome === 'failed') return 'failed'
+  if (state === 'unchanged') return 'unchanged'
+  return changesConfiguration ? 'applied' : 'unchanged'
+}
+
+function summarize(
+  action: string,
+  target: string | undefined,
+  changed: ChangedFields,
+  outcome: AgentChangeLogOutcome
+): string {
   const scope = scopeOf(action, target)
+  if (outcome === 'rejected') return `${scope}: rejected`
+  if (outcome === 'failed') return `${scope}: failed`
   const fields = Object.entries(changed)
   if (fields.length === 0) return `${scope}: no configuration change`
   return `${scope}: ${fields

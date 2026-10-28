@@ -26,6 +26,8 @@ export async function handleConfigureCrossAssetInterface(
     context,
     capability: CROSS_ASSET_CAPABILITY,
     action: value.action,
+    // Leases are operations; the interface configuration is read, never written, here.
+    changesConfiguration: false,
     ...(typeof leaseId === 'string' && leaseId.length > 0 ? { target: leaseId } : {}),
     read: () => readCrossAssetSnapshot(deps),
     execute: async () => ({ ...(await executeCrossAssetAction(deps.crossAssetOps, value)) })

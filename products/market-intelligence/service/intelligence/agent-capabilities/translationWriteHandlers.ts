@@ -63,6 +63,8 @@ export async function handleConfigureTranslation(
     context,
     capability: TRANSLATION_CAPABILITY,
     action: value.action,
+    // Queueing and retrying spend work; they do not edit the translation settings.
+    changesConfiguration: false,
     read: () => readTranslationSnapshot(deps),
     execute: async () => {
       if (value.action === 'queue-missing') {

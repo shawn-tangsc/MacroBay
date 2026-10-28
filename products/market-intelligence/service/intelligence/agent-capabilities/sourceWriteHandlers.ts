@@ -121,6 +121,7 @@ export async function handleOperateIntelligenceSource(
       capability: OPERATE_CAPABILITY,
       action: value.action,
       target: itemId,
+      changesConfiguration: false,
       read: () => readRevisionSnapshot(deps),
       execute: async () => {
         const result = await getIntelligenceService(deps.jobRuntime).retryItemAssessment({ itemId })
@@ -137,6 +138,7 @@ export async function handleOperateIntelligenceSource(
     action: value.action,
     target: sourceId,
     sourceId,
+    changesConfiguration: false,
     read: () => readRevisionSnapshot(deps),
     execute: async () => {
       if (value.action === 'run-now') {

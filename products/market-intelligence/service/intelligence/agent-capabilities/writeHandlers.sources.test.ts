@@ -299,6 +299,7 @@ describe('source operation write handlers', () => {
     expect(result.changed).toEqual({})
     const rows = changeLog!.listRecent({})
     expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ outcome: 'unchanged', configurationChanged: false })
     expect(rows[0]!.changeSummary).toContain('no configuration change')
   })
 
@@ -318,7 +319,9 @@ describe('source operation write handlers', () => {
     expect(fixture.retries).toEqual([{ itemId: 'item-1' }])
     expect(retried.assessmentCount).toBe(1)
     expect(retried.itemId).toBe('item-1')
-    expect(changeLog!.listRecent({})).toHaveLength(2)
+    const rows = changeLog!.listRecent({})
+    expect(rows).toHaveLength(2)
+    expect(rows.every((row) => row.outcome === 'unchanged' && row.configurationChanged === false)).toBe(true)
   })
 
   it('rejects an action whose required target is missing', async () => {

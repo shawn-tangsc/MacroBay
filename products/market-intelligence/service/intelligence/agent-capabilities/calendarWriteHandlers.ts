@@ -11,6 +11,13 @@ import {
 
 const CALENDAR_CAPABILITY = { id: 'operate_macro_calendar', domain: 'calendar' } as const
 
+/** Actions that run the calendar or show a preview, but never write its configuration. */
+const PURE_CALENDAR_ACTIONS = new Set<CalendarAction>([
+  'run-provider-now',
+  'test-provider-connection',
+  'preview-manual-ics'
+])
+
 type CalendarAction =
   | 'save-provider-profile'
   | 'run-provider-now'
@@ -67,6 +74,7 @@ export async function handleOperateMacroCalendar(
     action,
     ...(target ? { target } : {}),
     ...(value.providerId ? { sourceId: value.providerId } : {}),
+    changesConfiguration: !PURE_CALENDAR_ACTIONS.has(action),
     read: () => readCalendarActionSnapshot(deps, value, imported),
     execute: async () => {
       const result = await executeCalendarAction(ops, value)
