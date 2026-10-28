@@ -151,6 +151,7 @@ export const productText = {
             awaitingData: '已到发布时刻，等待实际值',
             // 「±30 分」反应那一行的标签（原型 ④）。三条线的名字用跨资产那份词表。
             reactionWindow: '±30分',
+            dxy: '美元',
             openCalendar: '打开经济日历', switchToAgent: '切换到市场解读 Agent', switchToCalendar: '切换到日历卡片',
             openEventInCalendar: '在日历中打开该事件',
             collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定',
@@ -1452,6 +1453,7 @@ export const productText = {
             empty: 'No high-importance events in the next 7 days', unavailable: 'Calendar data is unavailable', refresh: 'Refresh',
             awaitingData: 'Scheduled time has passed; waiting for the value',
             reactionWindow: '±30 min',
+            dxy: 'DXY',
             openCalendar: 'Open the economic calendar', switchToAgent: 'Switch to the market agent', switchToCalendar: 'Switch to the calendar card',
             openEventInCalendar: 'Open this event in the calendar',
             collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD',

@@ -197,7 +197,9 @@ describe('a chart line selects a calendar event without opening the conversation
     const host = await renderSurface({}, undefined, [cardEvent])
     const row = host.querySelector<HTMLElement>('[data-calendar-card-row]')
     expect(row, 'the released value is in the card\'s today section').not.toBeNull()
-    expect(row?.querySelector('[data-calendar-surprise="unavailable"]')?.textContent).toBe(portal.calendarCard.surprise.unavailable)
+    // No consensus is not a verdict: the row keeps its readings and does not add a badge for it.
+    expect(row?.querySelector('[data-calendar-surprise]')).toBeNull()
+    expect(row?.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 3.4%')
 
     await act(async () => row!.click())
 

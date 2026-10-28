@@ -6,6 +6,7 @@ import { crossAssetSignedValue } from '../../features/industry/cross-asset/cross
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useSampleNow } from './SampleModeProvider'
+import { calendarCardReactionPolicy } from './calendarCardReaction'
 import type { MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
 import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingCalendarCard'
 
@@ -31,6 +32,8 @@ export type MarketCalendarCardText = Readonly<{
   categories: Readonly<Record<'economic-indicator' | 'financial-event' | 'central-bank-activity', string>>
   /** 三条线的名字：跨资产那份词表（`crossAsset.assets`），卡片不再抄一份。 */
   assets: Readonly<Record<CrossAssetId, string>>
+  /** The dollar's own label: it is a macro-proxy curve, not one of the three collected symbols. */
+  dxy: string
   /**
    * 指标与事件名的读法。这张卡是日历正文（chrome），跟着界面语言；只有已发布的分析正文才固定用
    * 模型输出语言（见 `conclusionReadableNames`）。
@@ -63,15 +66,33 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     return `${formatted.slice(5, 10)} ${formatted.slice(11, 16)}`
   }
   const month = projection.upcoming[0]?.month ?? projection.today[0]?.month ?? sampleNow().toISOString().slice(0, 7)
+  /**
+   * When the row can state a concrete surprise, the verdict replaces the three readings.
+   *
+   * `3.4%` and `3.1%` are what the reader would subtract themselves; the card's job is the answer,
+   * not the arithmetic. The readings stay in the drawer, and they stay on the card when there is no
+   * displayable magnitude (a bare expectation of zero, no consensus, or an in-line print).
+   */
+  const statesSurprise = (entry: CalendarCardRow): boolean =>
+    (entry.surprise.direction === 'beat' || entry.surprise.direction === 'miss') &&
+    entry.surprise.value !== null && entry.surprise.unit !== null
+  /**
+   * "No consensus" is not a verdict, it is the absence of one; when the readings are shown they
+   * already say that, so the row does not repeat it as a badge. An incomparable pair keeps its
+   * badge: the readings are there but the reader still needs to know why no difference is stated.
+   */
+  const showsSurpriseBadge = (entry: CalendarCardRow): boolean =>
+    entry.actual !== null &&
+    !(entry.surprise.direction === 'consensus-unavailable' && entry.surprise.reason === 'missing-consensus')
   /** What a reader gets on the clipboard: the same line they are looking at, plus the verdict. */
   const rowText = (entry: CalendarCardRow): string => [
     stamp(entry),
     text.categories[entry.category],
     readableAnalysisName(text.readableNames, 'eventName', entry.titleKey),
-    valuesOf(entry),
+    statesSurprise(entry) ? null : valuesOf(entry),
     // The verdict is its own line on screen; on the clipboard it is appended so a pasted row still
     // says whether the print surprised the market.
-    entry.actual ? surpriseText(entry) : null
+    showsSurpriseBadge(entry) ? surpriseText(entry) : null
   ].filter(Boolean).join(' ')
   const locale = useShellLanguage()
   /**
@@ -125,17 +146,22 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
             {entry.countryName ? <em className="mi-calendar-card__row-country" data-country>{entry.countryName}</em> : null}
             {readableAnalysisName(text.readableNames, 'eventName', entry.titleKey)}
           </span>
-          <span className="mi-calendar-card__row-value">{valuesOf(entry)}</span>
+          {statesSurprise(entry) ? null : <span className="mi-calendar-card__row-value">{valuesOf(entry)}</span>}
           {/* 预期差单独一行：三种语态共用同一个契约判断，且「无一致预期 / 不可比」都不出现数字。 */}
-          {entry.actual ? <em className="mi-calendar-card__row-surprise" data-calendar-surprise={surpriseState(entry)}>
+          {showsSurpriseBadge(entry) ? <em className="mi-calendar-card__row-surprise" data-calendar-surprise={surpriseState(entry)}>
             {surpriseText(entry)}
           </em> : null}
-          {/* 「±30 分」反应：这次发布前后各 30 分钟，三条线各自走了多少（原型 ④）。它是行情事实，
+          {/* 「±30 分」反应：这次发布前后各 30 分钟，四条线各自走了多少（原型 ④）。它是行情事实，
               不是判断——只报窗口两端的读数，谁都没说这 0.12% 是这次发布造成的。答不出来的线连名字
-              都不印（印名字配「—」会被读成 0），三条都答不出来时整行不画。 */}
+              都不印（印名字配「—」会被读成 0），四条都答不出来时整行不画。 */}
           {entry.kind === 'released-changed' && entry.reaction ? <small className="mi-calendar-card__row-reaction" data-calendar-card-reaction>
             <em>{text.reactionWindow}</em>
-            {(Object.keys(entry.reaction) as CrossAssetId[]).map(asset => entry.reaction![asset] === null ? null : <span key={asset} data-reaction-asset={asset}>{text.assets[asset]} {crossAssetSignedValue(entry.reaction![asset]!, '%')}</span>)}
+            {calendarCardReactionPolicy.displayOrder.map(asset => {
+              const value = entry.reaction?.[asset]
+              if (value === null || value === undefined) return null
+              const label = asset === 'dxy' ? text.dxy : text.assets[asset]
+              return <span key={asset} data-reaction-asset={asset}>{label} {crossAssetSignedValue(value, '%')}</span>
+            })}
           </small> : null}
           {/* 计划时刻已过、值还没到：说在等，而且就写在这一行上——读者要的是「哪一个在等」。 */}
           {entry.awaitingData ? <small className="mi-calendar-card__row-waiting" data-calendar-card-waiting>{text.awaitingData}</small> : null}

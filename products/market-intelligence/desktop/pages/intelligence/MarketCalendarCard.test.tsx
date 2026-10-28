@@ -56,7 +56,7 @@ it('never shows the raw event key, and shows a date when there is no clock time'
 })
 
 it('shows both sections with the event name, time and importance', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '0.3%', previous: '0.1%', consensus: '0.2%' })], upcoming: [row()], state: 'available' }}
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '0.3%', previous: '0.1%' })], upcoming: [row()], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   expect(host.textContent).toContain(text.title)
   expect(host.textContent).toContain(text.todaySection)
@@ -65,7 +65,7 @@ it('shows both sections with the event name, time and importance', async () => {
   // The row shows the day and the clock in the reader's zone, not the ISO instant.
   expect(host.textContent).toContain('10-13 12:30')
   expect(host.querySelectorAll('[data-calendar-card-row]')).toHaveLength(2)
-  // A released row has to say what was published, next to what it is compared with.
+  // Without a statable surprise the readings stay: the card has no verdict to replace them with.
   // The clock and the kind share the left metadata rail; the right side is the event stack.
   const firstRow = host.querySelector('.mi-calendar-card__row')!
   expect(firstRow.querySelector('.mi-calendar-card__row-when time')?.textContent).toContain('10-11 06:00')
@@ -73,8 +73,23 @@ it('shows both sections with the event name, time and importance', async () => {
   expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-title')?.textContent).not.toContain('经济指标')
   expect(firstRow.querySelector('.mi-calendar-card__row-main .mi-calendar-card__row-value')?.textContent).toContain('实际值 0.3%')
   expect(host.textContent).toContain('实际值 0.3%')
-  expect(host.textContent).toContain('市场预期 0.2%')
   expect(host.textContent).toContain('前值 0.1%')
+  // No verdict to state: the readings speak for themselves instead of an extra "no consensus" badge.
+  expect(firstRow.querySelector('[data-calendar-surprise]')).toBeNull()
+})
+
+it('replaces the three readings with the verdict when the surprise is statable', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '3.4%', previous: '3.4%', consensus: '3.1%',
+    surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null } })], upcoming: [], state: 'available' }}
+    onOpenCalendar={() => undefined} text={text} />)
+
+  const firstRow = host.querySelector('.mi-calendar-card__row')!
+  expect(firstRow.querySelector('.mi-calendar-card__row-value')).toBeNull()
+  expect(firstRow.querySelector('[data-calendar-surprise="beat"]')?.textContent).toBe('超预期 +0.3 个百分点')
+  // The values are not printed anywhere on the card once the verdict states the difference.
+  expect(host.textContent).not.toContain('实际值 3.4%')
+  expect(host.textContent).not.toContain('市场预期 3.1%')
+  expect(host.textContent).not.toContain('前值 3.4%')
 })
 
 it('names the event and its values in the reader language, not the conclusion language', async () => {
@@ -183,13 +198,13 @@ it('says which row is waiting for its value, and only that row', async () => {
 })
 
 /**
- * 「±30 分」反应（原型 ④）：已公布的行下面那一行 QQQ/BTC/ETH。
+ * 「±30 分」反应（原型 ④）：已公布的行下面那一行 QQQ/BTC/ETH/美元。
  *
  * 它是行情事实，不是判断——数字用跨资产面板同一套格式（`crossAssetSignedValue`），所以表格里写
  * 「+0.31%」的地方，这里也是同一串字符。
  */
-it('shows the ±30 minute reaction of the three lines on a released row', async () => {
-  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', actual: '0.3%', previous: '0.1%', consensus: '0.2%', reaction: { index: -0.12, btc: -0.18, eth: -0.21 } })], upcoming: [], state: 'available' }}
+it('shows the ±30 minute reaction of the four lines on a released row', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', actual: '0.3%', previous: '0.1%', reaction: { index: -0.12, btc: -0.18, eth: -0.21, dxy: 0.14 } })], upcoming: [], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   const line = host.querySelector('[data-calendar-card-reaction]')
   expect(line?.textContent).toContain(text.reactionWindow)
@@ -199,16 +214,20 @@ it('shows the ±30 minute reaction of the three lines on a released row', async 
   expect(line?.textContent).toContain('−0.18%')
   expect(line?.textContent).toContain('ETH')
   expect(line?.textContent).toContain('−0.21%')
-  // 行上原本的值一条都不能少：反应是加在它们下面的，不是替换。
+  // The dollar is a macro-proxy curve, not one of the three collected symbols.
+  expect(line?.textContent).toContain(text.dxy)
+  expect(line?.textContent).toContain('+0.14%')
+  // No statable surprise on this row, so its readings stay above the reaction.
   expect(host.textContent).toContain('实际值 0.3%')
 })
 
 it('prints only the lines that answered, and nothing at all when none did', async () => {
-  const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28 } })], upcoming: [], state: 'available' }}
+  const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28, dxy: 0.05 } })], upcoming: [], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   const line = partial.querySelector('[data-calendar-card-reaction]')
   expect(line?.textContent).toContain('+0.31%')
   expect(line?.textContent).toContain('+0.28%')
+  expect(line?.textContent).toContain('+0.05%')
   // 那一条没答出来的线连名字都不印：印个名字配「—」只会让读者以为它是 0。
   expect(line?.textContent).not.toContain('BTC')
 
@@ -216,7 +235,7 @@ it('prints only the lines that answered, and nothing at all when none did', asyn
     onOpenCalendar={() => undefined} text={text} />)
   expect(none.querySelector('[data-calendar-card-reaction]')).toBeNull()
   // 还没发布的行没有反应可看。
-  const upcoming = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ reaction: { index: 0.31, btc: 0.22, eth: 0.28 } })], state: 'available' }}
+  const upcoming = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ reaction: { index: 0.31, btc: 0.22, eth: 0.28, dxy: 0.05 } })], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   expect(upcoming.querySelector('[data-calendar-card-reaction]')).toBeNull()
 })
@@ -230,23 +249,23 @@ it('states a beat with its presentation unit, in the reader language', async () 
   const chinese = await released('zh-CN')
   const chip = chinese.querySelector('[data-calendar-surprise="beat"]')
   expect(chip?.textContent).toBe('超预期 +0.3 个百分点')
-  // The verdict lives on its own line, not twice on the value line.
-  expect(chinese.querySelector('.mi-calendar-card__row-value')?.textContent).not.toContain('超预期')
+  // The verdict lives on its own line; the readings are hidden, not duplicated.
+  expect(chinese.querySelector('.mi-calendar-card__row-value')).toBeNull()
 
   const english = await released('en-US')
   const englishChip = english.querySelector('[data-calendar-surprise="beat"]')
   expect(englishChip?.textContent).toBe('Above expectation +0.3pp')
 })
 
-it('says "no consensus" without printing any number as the difference', async () => {
+it('does not repeat "no consensus" as a badge; the readings already say it', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '3.4%', consensus: null,
     surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' }
   })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
 
-  const chip = host.querySelector('[data-calendar-surprise="unavailable"]')
-  expect(chip?.textContent).toBe(text.surprise.unavailable)
-  expect(chip?.textContent).not.toMatch(/[\d—−]/)
+  expect(host.querySelector('[data-calendar-surprise]')).toBeNull()
+  expect(host.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 3.4%')
+  expect(host.textContent).not.toContain(text.surprise.unavailable)
 })
 
 it('says the difference is not comparable when both values exist but cannot be compared', async () => {
@@ -255,6 +274,8 @@ it('says the difference is not comparable when both values exist but cannot be c
     surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'non-numeric' }
   })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
 
+  // Here the readings exist but no difference can be stated, so the badge explains why.
+  expect(host.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 250K')
   const chip = host.querySelector('[data-calendar-surprise="unavailable"]')
   expect(chip?.textContent).toBe(text.surprise.notComparable)
   expect(chip?.textContent).not.toMatch(/[\d—−]/)
@@ -281,6 +302,9 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
 
   await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__copy')!.click())
   expect(written[0]).toContain('超预期 +10%')
+  // The clipboard mirrors the row: no readings when the verdict replaced them.
+  expect(written[0]).not.toContain('实际值 165')
+  expect(written[0]).not.toContain('市场预期 150')
   // Only the released row carries a verdict; a scheduled event has nothing to compare yet.
   expect(host.querySelectorAll('[data-calendar-surprise]')).toHaveLength(1)
 })
