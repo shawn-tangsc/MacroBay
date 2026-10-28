@@ -82,6 +82,40 @@ it('reports a consensus surprise as a move too', () => {
   expect(projectUpcomingCalendarCard([surprised], asOf).today.map(row => row.eventKey)).toEqual(['surprised'])
 })
 
+it('keeps a release whose value did not change but whose surprise crossed the trigger', () => {
+  const surprised = event({ eventKey: 'surprised', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T06:00:00.000Z', actual: { displayValue: '3.4%' },
+    previous: { displayValue: '3.4%' }, consensus: { displayValue: '3.1%' } })
+  const routine = event({ eventKey: 'routine', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T05:00:00.000Z', actual: { displayValue: '3.2%' },
+    previous: { displayValue: '3.2%' }, consensus: { displayValue: '3.2%' } })
+
+  const rows = projectUpcomingCalendarCard([surprised, routine], asOf)
+  expect(rows.today.map(row => row.eventKey)).toEqual(['surprised'])
+  expect(rows.today[0]?.surprise).toMatchObject({ direction: 'beat', unit: 'pp', reason: null })
+  expect(rows.today[0]?.surprise.value).toBeCloseTo(0.3, 10)
+})
+
+it('carries the contract verdict on every row, including missing and incomparable expectations', () => {
+  const missing = event({ eventKey: 'missing', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T06:00:00.000Z', actual: { displayValue: '3.4%' }, previous: { displayValue: '3.1%' } })
+  const incomparable = event({ eventKey: 'incomparable', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T05:00:00.000Z', actual: { displayValue: '250K' },
+    previous: { displayValue: '240K' }, consensus: { displayValue: '240K' } })
+  const bare = event({ eventKey: 'bare', lifecycleState: 'released', scheduledDate: '2026-10-11',
+    scheduledAt: '2026-10-11T04:00:00.000Z', actual: { displayValue: '165' },
+    previous: { displayValue: '165' }, consensus: { displayValue: '150' } })
+
+  const rows = projectUpcomingCalendarCard([missing, incomparable, bare], asOf)
+  expect(rows.today.find(row => row.eventKey === 'missing')?.surprise)
+    .toEqual({ direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' })
+  expect(rows.today.find(row => row.eventKey === 'incomparable')?.surprise)
+    .toEqual({ direction: 'consensus-unavailable', value: null, unit: null, reason: 'non-numeric' })
+  const bareSurprise = rows.today.find(row => row.eventKey === 'bare')!.surprise
+  expect(bareSurprise).toMatchObject({ direction: 'beat', unit: 'relative-percent', reason: null })
+  expect(bareSurprise.value).toBeCloseTo(10, 10)
+})
+
 it('never exceeds the policy row limits, and keeps the earliest rows', () => {
   const events = Array.from({ length: 9 }, (_, index) => event({
     eventKey: `e-${index}`, scheduledDate: `2026-10-1${index + 1}`, scheduledAt: `2026-10-1${index + 1}T00:00:00.000Z`

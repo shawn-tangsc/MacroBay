@@ -1,8 +1,9 @@
 import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
 import { Button } from 'antd'
 import type { CrossAssetId } from '../../../contracts/crossAssetObservationContracts'
-import { readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
+import { formatReadableAnalysisValue, readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
 import { crossAssetSignedValue } from '../../features/industry/cross-asset/crossAssetFormat'
+import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { useSampleNow } from './SampleModeProvider'
 import type { MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
@@ -22,6 +23,11 @@ export type MarketCalendarCardText = Readonly<{
   /** 「±30 分」反应那一行的标签（原型 ④）。 */
   reactionWindow: string
   openCalendar: string; importanceHigh: string; timePending: string; copyEvent: string; openEventInCalendar: string
+  /**
+   * 预期差的四种语态。`unavailable` 是「没有一致预期」，`notComparable` 是「有预期但算不出量」；
+   * 两者都不得出现任何数字当差值。
+   */
+  surprise: Readonly<Record<'beat' | 'miss' | 'inline' | 'unavailable' | 'notComparable', string>>
   categories: Readonly<Record<'economic-indicator' | 'financial-event' | 'central-bank-activity', string>>
   /** 三条线的名字：跨资产那份词表（`crossAsset.assets`），卡片不再抄一份。 */
   assets: Readonly<Record<CrossAssetId, string>>
@@ -57,13 +63,34 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     return `${formatted.slice(5, 10)} ${formatted.slice(11, 16)}`
   }
   const month = projection.upcoming[0]?.month ?? projection.today[0]?.month ?? sampleNow().toISOString().slice(0, 7)
-  /** What a reader gets on the clipboard: the same line they are looking at. */
+  /** What a reader gets on the clipboard: the same line they are looking at, plus the verdict. */
   const rowText = (entry: CalendarCardRow): string => [
     stamp(entry),
     text.categories[entry.category],
     readableAnalysisName(text.readableNames, 'eventName', entry.titleKey),
-    valuesOf(entry)
+    valuesOf(entry),
+    // The verdict is its own line on screen; on the clipboard it is appended so a pasted row still
+    // says whether the print surprised the market.
+    entry.actual ? surpriseText(entry) : null
   ].filter(Boolean).join(' ')
+  const locale = useShellLanguage()
+  /**
+   * The row's surprise sentence. It never prints a number when there is no comparable magnitude:
+   * "无一致预期" and "预期差不可比" are statements about missing data, not a difference of zero.
+   */
+  const surpriseText = (entry: CalendarCardRow): string => {
+    const surprise = entry.surprise
+    if (surprise.direction === 'consensus-unavailable') {
+      return surprise.reason === 'missing-consensus' ? text.surprise.unavailable : text.surprise.notComparable
+    }
+    if (surprise.direction === 'inline') return text.surprise.inline
+    const number = surprise.value !== null && surprise.unit !== null
+      ? formatReadableAnalysisValue(surprise.value, surprise.unit, locale)
+      : null
+    return number === null ? text.surprise[surprise.direction] : `${text.surprise[surprise.direction]} ${number}`
+  }
+  const surpriseState = (entry: CalendarCardRow): 'beat' | 'miss' | 'inline' | 'unavailable' =>
+    entry.surprise.direction === 'consensus-unavailable' ? 'unavailable' : entry.surprise.direction
   const valuesOf = (entry: CalendarCardRow): string => [
     entry.kind === 'released-changed' && entry.actual ? `${readableAnalysisName(text.readableNames, 'metric', 'actual')} ${entry.actual}` : null,
     entry.consensus ? `${readableAnalysisName(text.readableNames, 'metric', 'consensus')} ${entry.consensus}` : null,
@@ -95,6 +122,10 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
             {readableAnalysisName(text.readableNames, 'eventName', entry.titleKey)}
           </span>
           <span className="mi-calendar-card__row-value">{valuesOf(entry)}</span>
+          {/* 预期差单独一行：三种语态共用同一个契约判断，且「无一致预期 / 不可比」都不出现数字。 */}
+          {entry.actual ? <em className="mi-calendar-card__row-surprise" data-calendar-surprise={surpriseState(entry)}>
+            {surpriseText(entry)}
+          </em> : null}
           {/* 「±30 分」反应：这次发布前后各 30 分钟，三条线各自走了多少（原型 ④）。它是行情事实，
               不是判断——只报窗口两端的读数，谁都没说这 0.12% 是这次发布造成的。答不出来的线连名字
               都不印（印名字配「—」会被读成 0），三条都答不出来时整行不画。 */}

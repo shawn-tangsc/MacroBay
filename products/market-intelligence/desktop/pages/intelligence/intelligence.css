@@ -1430,6 +1430,12 @@ button.mi-agent-card__status:focus-visible {
 .mi-calendar-card__row-kind[data-kind='financial-event'] { color: var(--mi-calendar-kind-financial); }
 .mi-calendar-card__row-kind[data-kind='central-bank-activity'] { color: var(--mi-calendar-kind-central-bank); }
 .mi-calendar-card__row-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+/* 预期差：一行自己的话。方向只用既有颜色 token；「无一致预期 / 不可比」与「符合预期」保持安静。 */
+.mi-calendar-card__row-surprise { display: block; margin-top: 2px; overflow: hidden; font-size: 10px; font-style: normal; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.mi-calendar-card__row-surprise[data-calendar-surprise='beat'] { color: var(--accent); }
+.mi-calendar-card__row-surprise[data-calendar-surprise='miss'] { color: var(--danger); }
+.mi-calendar-card__row-surprise[data-calendar-surprise='inline'],
+.mi-calendar-card__row-surprise[data-calendar-surprise='unavailable'] { color: var(--muted); }
 .mi-calendar-card__row time { padding-top: 1px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-calendar-card__row-tools { display: flex; align-items: center; gap: 6px; }
 .mi-calendar-card__copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }

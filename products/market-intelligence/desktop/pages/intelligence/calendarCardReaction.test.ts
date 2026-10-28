@@ -34,7 +34,8 @@ const fullWindow = [[-60, 0], [-35, 1], [-30, 2], [-5, 3], [0, 4], [25, 5], [30,
 const row = (overrides: Partial<CalendarCardRow> = {}): CalendarCardRow => ({
   eventKey: 'US.CPI.RELEASE.2026-M10', titleKey: 'cpi', month: '2026-10', date: '2026-10-14', at: iso(0),
   importance: 'high', category: 'economic-indicator', kind: 'released-changed', awaitingData: false,
-  actual: '3.2%', previous: '3.1%', consensus: '3.0%', ...overrides
+  actual: '3.2%', previous: '3.1%', consensus: '3.0%',
+  surprise: { direction: 'beat', value: 0.2, unit: 'pp', reason: null }, ...overrides
 })
 const projection = (today: readonly CalendarCardRow[], upcoming: readonly CalendarCardRow[] = []): CalendarCardProjection =>
   ({ today, upcoming, state: today.length + upcoming.length > 0 ? 'available' : 'empty' })

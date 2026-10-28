@@ -21,6 +21,6 @@ it('keeps the card copy complete and identical in both locales', () => {
 it('names every string the card and the column controls need', () => {
   expect(Object.keys(card('zh-CN')).sort()).toEqual([
     'agentTitle', 'awaitingData', 'clearConversation', 'closeAgent', 'collapseAgent', 'copyEvent', 'empty', 'eventContext', 'expandAgent', 'importanceHigh', 'openCalendar', 'openEventInCalendar', 'reactionWindow', 'refresh',
-    'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'upcomingSection'
+    'surprise', 'switchToAgent', 'switchToCalendar', 'timePending', 'title', 'todaySection', 'unavailable', 'upcomingSection'
   ])
 })

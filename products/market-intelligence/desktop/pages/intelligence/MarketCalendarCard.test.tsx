@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
 import { MarketCalendarCard } from './MarketCalendarCard'
@@ -21,14 +22,17 @@ const text = calendarText('zh-CN')
 const row = (overrides: Record<string, unknown> = {}) => ({
   eventKey: 'US.CPI.RELEASE.2026-M10', titleKey: 'cpi', month: '2026-10', date: '2026-10-13', at: '2026-10-13T12:30:00.000Z',
   importance: 'high' as const, kind: 'upcoming' as const, category: 'economic-indicator' as const, actual: null, previous: null, consensus: null,
+  surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' },
   awaitingData: false, ...overrides
 })
 
-async function render(node: React.ReactElement) {
+async function render(node: React.ReactElement, language: 'zh-CN' | 'en-US' = 'zh-CN') {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
-  await act(async () => root.render(<ShellTimeZoneProvider timeZone="UTC">{node}</ShellTimeZoneProvider>))
+  await act(async () => root.render(
+    <ShellLanguageProvider language={language}><ShellTimeZoneProvider timeZone="UTC">{node}</ShellTimeZoneProvider></ShellLanguageProvider>
+  ))
   return host
 }
 
@@ -210,4 +214,68 @@ it('prints only the lines that answered, and nothing at all when none did', asyn
   const upcoming = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ reaction: { index: 0.31, btc: 0.22, eth: 0.28 } })], state: 'available' }}
     onOpenCalendar={() => undefined} text={text} />)
   expect(upcoming.querySelector('[data-calendar-card-reaction]')).toBeNull()
+})
+
+it('states a beat with its presentation unit, in the reader language', async () => {
+  const released = (language: 'zh-CN' | 'en-US') => render(<MarketCalendarCard projection={{ today: [row({
+    kind: 'released-changed', actual: '3.4%', consensus: '3.1%',
+    surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null }
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={calendarText(language)} />, language)
+
+  const chinese = await released('zh-CN')
+  const chip = chinese.querySelector('[data-calendar-surprise="beat"]')
+  expect(chip?.textContent).toBe('超预期 +0.3 个百分点')
+  // The verdict lives on its own line, not twice on the value line.
+  expect(chinese.querySelector('.mi-calendar-card__row-value')?.textContent).not.toContain('超预期')
+
+  const english = await released('en-US')
+  const englishChip = english.querySelector('[data-calendar-surprise="beat"]')
+  expect(englishChip?.textContent).toBe('Above expectation +0.3pp')
+})
+
+it('says "no consensus" without printing any number as the difference', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [row({
+    kind: 'released-changed', actual: '3.4%', consensus: null,
+    surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' }
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+
+  const chip = host.querySelector('[data-calendar-surprise="unavailable"]')
+  expect(chip?.textContent).toBe(text.surprise.unavailable)
+  expect(chip?.textContent).not.toMatch(/[\d—−]/)
+})
+
+it('says the difference is not comparable when both values exist but cannot be compared', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [row({
+    kind: 'released-changed', actual: '250K', consensus: '240K',
+    surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'non-numeric' }
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+
+  const chip = host.querySelector('[data-calendar-surprise="unavailable"]')
+  expect(chip?.textContent).toBe(text.surprise.notComparable)
+  expect(chip?.textContent).not.toMatch(/[\d—−]/)
+})
+
+it('calls an in-line release in line without adding a zero difference', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [row({
+    kind: 'released-changed', actual: '3.1%', consensus: '3.1%',
+    surprise: { direction: 'inline', value: 0, unit: 'pp', reason: null }
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+
+  const chip = host.querySelector('[data-calendar-surprise="inline"]')
+  expect(chip?.textContent).toBe(text.surprise.inline)
+  expect(chip?.textContent).not.toMatch(/\d/)
+})
+
+it('copies the surprise with the row, and gives an upcoming row no surprise at all', async () => {
+  const written: string[] = []
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { written.push(value) } } })
+  const host = await render(<MarketCalendarCard projection={{ today: [row({
+    kind: 'released-changed', actual: '165', consensus: '150',
+    surprise: { direction: 'beat', value: 10.000000000000002, unit: 'relative-percent', reason: null }
+  })], upcoming: [row({ eventKey: 'upcoming' })], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+
+  await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__copy')!.click())
+  expect(written[0]).toContain('超预期 +10%')
+  // Only the released row carries a verdict; a scheduled event has nothing to compare yet.
+  expect(host.querySelectorAll('[data-calendar-surprise]')).toHaveLength(1)
 })
