@@ -209,7 +209,12 @@ export async function handleQueryMacroCalendar(
     ...marketEvents.map((event) => summarizeCalendarEvent(event, 'market'))
   ].sort((left, right) => (left.scheduledAt ?? '').localeCompare(right.scheduledAt ?? ''))
   const limit = maxEvents ?? CALENDAR_DEFAULT_MAX_EVENTS
-  const events = merged.slice(0, limit)
+  // Without an explicit window a busy month overflows the cap. Keeping the events closest to the
+  // query instant is the useful default: "what is scheduled around now" must not lose today behind
+  // the first 120 entries of the month.
+  const events = from || to
+    ? merged.slice(0, limit)
+    : nearestToInstant(merged, asOf, limit)
 
   // The raw pages carry provider identity, query envelopes and per-event provenance; the model only
   // needs the counts and the merged timeline, and the full pages overflow the tool size budget.
@@ -268,6 +273,27 @@ function readAllMarketCalendarPages(
   } catch {
     return { state: 'unavailable', events: [], pages }
   }
+}
+
+function nearestToInstant<
+  T extends { scheduledAt: string | null; scheduledDate?: string }
+>(events: T[], asOf: string, limit: number): T[] {
+  const asOfMs = Date.parse(asOf)
+  if (!Number.isFinite(asOfMs) || events.length <= limit) return events.slice(0, limit)
+  const pointMs = (event: T): number => {
+    const point = event.scheduledAt ?? (event.scheduledDate ? `${event.scheduledDate}T00:00:00.000Z` : undefined)
+    return point ? Date.parse(point) : Number.NaN
+  }
+  const distance = (event: T): number => {
+    const ms = pointMs(event)
+    return Number.isFinite(ms) ? Math.abs(ms - asOfMs) : Number.POSITIVE_INFINITY
+  }
+  return events
+    .map((event, index) => ({ event, index, distance: distance(event) }))
+    .sort((left, right) => left.distance - right.distance || left.index - right.index)
+    .slice(0, limit)
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.event)
 }
 
 function filterCalendarEvents(

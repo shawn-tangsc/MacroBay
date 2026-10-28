@@ -116,6 +116,30 @@ describe('handleQueryMacroCalendar', () => {
     expect(result.events.map((event) => event.eventKey)).toEqual(['market-early', 'market-late'])
   })
 
+  it('keeps the events nearest the query instant when the month overflows the cap', async () => {
+    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+      official: { state: 'available', events: [] },
+      market: {
+        state: 'available',
+        events: [
+          { eventKey: 'old', title: 'Old', scheduledAt: '2026-10-01T12:00:00.000Z' },
+          { eventKey: 'middle', title: 'Middle', scheduledAt: '2026-10-15T12:00:00.000Z' },
+          { eventKey: 'today', title: 'Today', scheduledAt: '2026-10-28T12:30:00.000Z' }
+        ]
+      }
+    }) as never)
+
+    const result = await handleQueryMacroCalendar({
+      month: '2026-10',
+      asOf: '2026-10-28T08:00:00.000Z',
+      maxEvents: 2
+    }, deps) as never as { events: Array<{ eventKey: string }>; truncated: boolean; totalEvents: number }
+
+    expect(result.events.map((event) => event.eventKey)).toEqual(['middle', 'today'])
+    expect(result.truncated).toBe(true)
+    expect(result.totalEvents).toBe(3)
+  })
+
   it('narrows to a date window when the caller asks about one day', async () => {
     vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
       official: { state: 'available', events: [] },
