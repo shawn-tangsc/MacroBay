@@ -28,7 +28,7 @@ git tag -a v0.1.1 -m "MacroBay 0.1.1"
 git push origin v0.1.1
 ```
 
-That builds `release/MacroBay-<version>-arm64.dmg` on `macos-latest` and the NSIS installer on
+That builds `release/MacroBay-arm64.dmg` on `macos-latest` and the NSIS installer on
 `windows-latest`, then publishes one GitHub Release with both files, their blockmaps and the
 auto-update metadata attached. Neither lane needs signing secrets.
 
@@ -68,7 +68,7 @@ Prerequisites: a macOS host, Node.js 22, pnpm 10, and the Xcode command line too
 
 ```bash
 pnpm install
-pnpm dist:mac        # build bundles, then release/MacroBay-<version>-arm64.dmg
+pnpm dist:mac        # build bundles, then release/MacroBay-arm64.dmg
 pnpm dist:mac:dir    # build bundles, then release/mac-arm64/MacroBay.app only
 ```
 
@@ -129,7 +129,7 @@ pnpm dist:mac
 1. `pnpm dist:mac:dir`, then `open release/mac-arm64/MacroBay.app`.
 2. The main window is titled `MacroBay 观潮` and renders the intelligence dashboard; local data is
    written under `~/Library/Application Support/MacroBay`.
-3. `hdiutil verify release/MacroBay-<version>-arm64.dmg`, mount it, drag the app to Applications, and
+3. `hdiutil verify release/MacroBay-arm64.dmg`, mount it, drag the app to Applications, and
    launch it from there.
 4. Reference sizes for `0.1.0` on arm64: about 184 MB for the `.dmg`, about 550 MB for the installed
    bundle.
@@ -137,7 +137,7 @@ pnpm dist:mac
 ## Build the Windows package
 
 ```bash
-pnpm dist:win        # build bundles, then release/MacroBay-<version>-x64-setup.exe
+pnpm dist:win        # build bundles, then release/MacroBay-x64-setup.exe
 pnpm dist:win:dir    # build bundles, then release/win-unpacked/ only
 ```
 
@@ -175,7 +175,7 @@ see `asar: false` above).
 1. `pnpm dist:win:dir`, then run `release\win-unpacked\MacroBay.exe`: the window is titled
    `MacroBay 观潮` and renders the dashboard.
 2. Local data is written under `%APPDATA%\MacroBay`; closing the last window quits the process.
-3. Double-click `release\MacroBay-<version>-x64-setup.exe` and confirm all four wizard pages appear,
+3. Double-click `release\MacroBay-x64-setup.exe` and confirm all four wizard pages appear,
    the shortcuts work, and Apps & Features lists the uninstall entry.
 4. Launch the installed build from the Start menu, check the taskbar icon and grouping plus
    notifications; uninstalling should leave `%APPDATA%\MacroBay` in place.

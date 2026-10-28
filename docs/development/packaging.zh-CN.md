@@ -25,7 +25,7 @@ git tag -a v0.1.1 -m "MacroBay 0.1.1"
 git push origin v0.1.1
 ```
 
-它在 `macos-latest` 上产出 `release/MacroBay-<version>-arm64.dmg`、在 `windows-latest` 上产出 NSIS
+它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 `windows-latest` 上产出 NSIS
 安装器，然后把这两个文件、各自的 blockmap 和自动更新元数据挂到同一个 GitHub Release。两条链路都
 不需要签名密钥。
 
@@ -62,7 +62,7 @@ out/renderer/   React 渲染层
 
 ```bash
 pnpm install
-pnpm dist:mac        # 先构建 bundle，再产出 release/MacroBay-<version>-arm64.dmg
+pnpm dist:mac        # 先构建 bundle，再产出 release/MacroBay-arm64.dmg
 pnpm dist:mac:dir    # 先构建 bundle，只产出 release/mac-arm64/MacroBay.app
 ```
 
@@ -121,14 +121,14 @@ pnpm dist:mac
 1. `pnpm dist:mac:dir`，然后 `open release/mac-arm64/MacroBay.app`。
 2. 主窗口标题是 `MacroBay 观潮` 并能渲染情报看板；本地数据写入
    `~/Library/Application Support/MacroBay`。
-3. `hdiutil verify release/MacroBay-<version>-arm64.dmg`，挂载后把应用拖进 Applications，再从那里
+3. `hdiutil verify release/MacroBay-arm64.dmg`，挂载后把应用拖进 Applications，再从那里
    启动。
 4. `0.1.0` 在 arm64 上的参考体积：`.dmg` 约 184 MB，安装后约 550 MB。
 
 ## 打 Windows 包
 
 ```bash
-pnpm dist:win        # 先构建 bundle，再产出 release/MacroBay-<version>-x64-setup.exe
+pnpm dist:win        # 先构建 bundle，再产出 release/MacroBay-x64-setup.exe
 pnpm dist:win:dir    # 先构建 bundle，只产出 release/win-unpacked/
 ```
 
@@ -161,7 +161,7 @@ Windows 产物放在 `windows-latest` 上产出。
 1. `pnpm dist:win:dir`，运行 `release\win-unpacked\MacroBay.exe`：主窗口标题是 `MacroBay 观潮` 并能
    渲染看板。
 2. 本地数据写入 `%APPDATA%\MacroBay`；关掉最后一个窗口进程即退出。
-3. 双击 `release\MacroBay-<version>-x64-setup.exe`，确认四步引导都在、桌面与开始菜单快捷方式可用、
+3. 双击 `release\MacroBay-x64-setup.exe`，确认四步引导都在、桌面与开始菜单快捷方式可用、
    「应用和功能」里有卸载入口。
 4. 从开始菜单启动已安装版本，核对任务栏图标与分组、通知；卸载后 `%APPDATA%\MacroBay` 应当保留。
 
