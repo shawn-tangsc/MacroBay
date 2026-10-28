@@ -59,9 +59,10 @@ The build is unsigned. On macOS, right-click the app → **Open**, or run
 `xattr -dr com.apple.quarantine /Applications/MacroBay.app`. On Windows, choose
 **More info → Run anyway** in the SmartScreen prompt.
 
-**No API key?** Open the app and choose **Sample mode → Open sample dashboard**. It replays one
+**No API key yet?** Open the app and choose **Sample mode → Open sample dashboard**. It replays one
 recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar months and three
-published analyses — labelled *Sample data*, and writes nothing into your database.
+published analyses — labelled *Sample data*, and writes nothing into your database. Live panels still
+need your own model provider and data-source credentials.
 
 Built for people whose read has to survive a follow-up question — whether that is your first cycle or your fourth.
 
