@@ -5,6 +5,7 @@ import type { JobRuntime } from '@platform/jobs'
 vi.mock('../intelligenceModule', () => ({ getIntelligenceModule: vi.fn() }))
 
 import { getIntelligenceModule } from '../intelligenceModule'
+import { guardProductToolOutput } from './sensitiveDataGuard'
 import {
   handleGetNewsSentimentItem,
   handleQueryMacroCalendar,
@@ -24,7 +25,7 @@ function moduleWith(parts: {
 }) {
   return {
     publicQueryService: {
-      queryMacroEconomicCalendarMonth: vi.fn(() => parts.official ?? { state: 'available', events: [] }),
+      queryMacroEconomicCalendarMonth: vi.fn(async () => parts.official ?? { state: 'available', events: [] }),
       queryMarketCalendarMonth: vi.fn(() => {
         if (parts.marketThrows) throw new Error('market unavailable')
         return parts.market ?? { state: 'available', events: [] }
@@ -67,6 +68,9 @@ describe('handleQueryMacroCalendar', () => {
       ['market', 'market-fomc']
     ])
     expect(result.caveats).toEqual([])
+    // The real handler output goes through this guard before the platform sees it; a Promise or
+    // other non-JSON value (a missing await) would fail here.
+    expect(() => guardProductToolOutput(result)).not.toThrow()
   })
 
   it('keeps the official calendar when the market side is unavailable', async () => {

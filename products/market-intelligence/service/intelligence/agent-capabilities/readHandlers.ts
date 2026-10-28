@@ -189,7 +189,7 @@ export async function handleQueryMacroCalendar(
   const locale = (await deps.getAppLanguage()) === 'en-US' ? 'en' : 'zh'
   const caveats: string[] = []
 
-  const official = queryService.queryMacroEconomicCalendarMonth({
+  const official = await queryService.queryMacroEconomicCalendarMonth({
     month,
     asOf,
     ...(maxEvents === undefined ? {} : { maxEvents })
