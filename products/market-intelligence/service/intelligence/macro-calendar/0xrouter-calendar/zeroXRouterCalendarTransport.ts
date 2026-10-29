@@ -154,11 +154,18 @@ export function createZeroXRouterCalendarTransport(deps: Readonly<{
       const batch: Promise<CalendarAutomaticBatch> = Promise.all(scopes.map((scope) => request(scope, 'automatic')))
         .then((results) => {
           const current = zeroXRouterCalendarAutomaticMonth(now)
+          const prefetch = zeroXRouterCalendarPrefetchMonth(now)
           results.forEach((result, index) => {
             const scope = scopes[index]!
             if (scope.month === current || result.state !== 'succeeded') return
             prefetchedMonths.add(prefetchKey(scope.month, scope.descriptorId))
           })
+          // Only the current and the prefetch month can be asked about again; anything else is
+          // history from an earlier tick.
+          for (const key of prefetchedMonths) {
+            const month = key.slice(0, 7)
+            if (month !== current && month !== prefetch) prefetchedMonths.delete(key)
+          }
           return { scopes, results }
         })
         .finally(() => { automaticBatches.delete(key) })
