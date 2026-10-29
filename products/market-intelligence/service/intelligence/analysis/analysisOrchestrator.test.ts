@@ -154,6 +154,42 @@ describe('analysisOrchestrator', () => {
     expect(commitSuccessfulAnalysis).not.toHaveBeenCalled()
   })
 
+  it('re-asks once when the first answer misses the contract, and publishes the second', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const repository = createRepository()
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'succeeded' })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    const repair = (invoke.mock.calls[1]![0] as { messages: readonly { role: string; content: string }[] }).messages.at(-1)!
+    expect(repair.role).toBe('user')
+    // The defect is named, so the second answer can correct it instead of guessing.
+    expect(repair.content).toContain('shape:top-level')
+  })
+
+  it('re-asks once when the reply is not JSON at all', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: false as const, errorCode: 'invalid-json', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect((invoke.mock.calls[1]![0] as { messages: readonly { role: string }[] }).messages.at(-1)!.role).toBe('user')
+  })
+
+  it('does not spend a second call on a provider error', async () => {
+    const invoke = vi.fn(async () => ({ ok: false as const, errorCode: 'provider-error' as const, trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
+    expect(invoke).toHaveBeenCalledOnce()
+  })
+
   it('records which evidence rule rejected the output, not only the shared code', async () => {
     const updateRunStatus = vi.fn()
     const repository = createRepository({

@@ -58,12 +58,13 @@ export const analysisTimelineRefreshPolicy = Object.freeze({
   pollIntervalMs: 1_000,
   /**
    * Bounded, but not shorter than one run can legitimately take: the run job's own timeout is
-   * 360s, so a shorter poll gave up on work that was still inside its budget and told the reader
-   * it had failed. Giving up while the run is still queued/running is now reported as
-   * still-running rather than as "not published", and this window matches the job's budget so a
-   * slow model that does finish is seen finishing instead of needing a manual refresh.
+   * 600s because one run may spend two model attempts after a contract rejection. A shorter poll
+   * gave up on work that was still inside its budget and told the reader it had failed. Giving up
+   * while the run is still queued/running is reported as still-running rather than as "not
+   * published", and this window matches the job's budget so a slow model that does finish is seen
+   * finishing instead of needing a manual refresh.
    */
-  maxPollAttempts: 360,
+  maxPollAttempts: 600,
   /**
    * The bounded poll above stops as soon as a node is published — which is precisely when the
    * reader stops watching a spinner and starts expecting new analyses. With no push notification
@@ -375,13 +376,6 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     return pollForCompletion(baselineEntryId, pollAttempt + 1)
   }
 
-  /** The three recorded reasons that mean "the model answered outside the contract". */
-  const retryableAnalysisFailures = new Set([
-    'analysis-invalid-output-schema',
-    'analysis-invalid-json',
-    'analysis-missing-evidence'
-  ])
-
   const requestInitialAnalysis = async (): Promise<void> => {
     setRequestState('loading')
     setRequestFailure(undefined)
@@ -425,18 +419,10 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   }
 
   const requestRefreshAnalysis = async (): Promise<void> => {
-    // The baseline is captured once: the retry below must still recognise the published node it
-    // started from, or a failed first attempt would make the second one look like a success.
-    const baseline = state.entries[0]?.id
-    const first = await enqueueRefresh(baseline)
-    if (first === 'refused' || first.outcome !== 'failed') return
-    // One automatic retry, only for a model that answered outside the contract. Those rejections
-    // are transient by nature — the previous click succeeded on a second try — and asking the
-    // reader to press "Analyze now" again was the whole failure mode: the request had gone
-    // through, the analysis had simply not been published. Refusals, timeouts and cancellations
-    // are not retried; their reason is actionable on its own.
-    if (!retryableAnalysisFailures.has(first.failureCode ?? '')) return
-    await enqueueRefresh(baseline)
+    // The retry after a contract rejection lives in the analysis orchestrator, not here: it must
+    // also cover scheduled runs and runs whose panel is closed, and it re-asks against the same
+    // frozen snapshot. The poll simply keeps waiting while that second answer is produced.
+    await enqueueRefresh(state.entries[0]?.id)
   }
 
   const selectionState: AnalysisSelectionState = state.selected

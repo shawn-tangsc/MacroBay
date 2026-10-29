@@ -273,26 +273,14 @@ describe('MarketAnalysisTimeline', () => {
     expect(container.textContent).toContain(text.failureReasons['analysis-missing-evidence'])
   })
 
-  it('retries a rejected model answer once and keeps the failed-request copy for refusals', async () => {
+  it('keeps waiting while the run itself repairs a rejected answer, without re-enqueuing', async () => {
+    // The repair attempt lives in the analysis orchestrator: the same run goes back to the model
+    // against the same snapshot, so the panel must not spend a second request of its own.
     let refreshRequests = 0
     const invoke = vi.fn(async (_product: string, method: string) => {
-      if (method === 'marketAnalysis.listTimeline') {
-        // The first run is rejected, the retry publishes: the reader never has to press again.
-        const retried = refreshRequests >= 2
-        return {
-          schemaVersion: 1,
-          items: [{
-            id: retried ? 'mi-tl-2' : 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: retried ? 'mi-ar-2' : 'mi-ar-1',
-            kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: retried ? 'mi-as-2' : 'mi-as-1',
-            safeTitle: '市场分析已生成', safeExcerpt: retried ? '重试后的新摘要' : '旧摘要', version: retried ? 2 : 1, triggerStatus: null
-          }],
-          nextCursor: null
-        }
-      }
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
       if (method === 'marketAnalysis.getLatestAttempt') {
-        return refreshRequests >= 2
-          ? { id: 'mi-ar-2', status: 'succeeded', failureCode: null, queuedAt: asOf, evidenceCount: 2 }
-          : { id: 'mi-ar-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: asOf, evidenceCount: 2 }
+        return { id: 'mi-ar-1', status: 'running', failureCode: null, queuedAt: asOf, evidenceCount: 2 }
       }
       if (method === 'marketAnalysis.requestInitialAnalysis') {
         refreshRequests += 1
@@ -309,9 +297,12 @@ describe('MarketAnalysisTimeline', () => {
     const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
     await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
-    expect(container.textContent).toContain('重试后的新摘要')
-    expect(container.textContent).not.toContain(text.attemptFailed)
-    expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(2)
+    // Still queued, still spinning: the repair is not a failure the reader has to act on.
+    const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === text.refreshAnalysis)
+    expect(button?.disabled).toBe(true)
+    expect(container.querySelector('[data-analysis-error]')).toBeNull()
+    expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(1)
+    expect(refreshRequests).toBe(1)
   })
 
   it('does not retry a refusal before a run exists', async () => {

@@ -1,5 +1,5 @@
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
-import type { StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
+import type { StructuredModelMessage, StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
 import {
   MARKET_ANALYSIS_ERROR_CODES,
   type AnalysisRun,
@@ -8,7 +8,13 @@ import {
   type Prediction,
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
-import { formatUnsafeOutputRedaction, validateAnalysisModelOutput, type FrozenAnalysisEvidence, type ValidatedAnalysisModelOutput } from './analysisOutputValidator'
+import {
+  formatUnsafeOutputRedaction,
+  validateAnalysisModelOutput,
+  type AnalysisOutputValidationResult,
+  type FrozenAnalysisEvidence,
+  type ValidatedAnalysisModelOutput
+} from './analysisOutputValidator'
 import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisModelPrompt'
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
@@ -40,8 +46,46 @@ type InvocationResult = StructuredModelTaskResult<unknown>
 // model on this input size while still ending a genuinely hung connection; a real timeout still
 // surfaces, it just no longer arrives before the model could have answered.
 export const marketAnalysisInvocationPolicy = Object.freeze({
-  modelTimeoutMs: 240_000
+  modelTimeoutMs: 240_000,
+  /**
+   * One immediate repair attempt after a contract rejection, inside the same run.
+   *
+   * A reply outside the schema is usually a sampling accident, not a broken prompt: the same
+   * reader pressed the button again and the second answer was published. Re-asking in place keeps
+   * the frozen snapshot and the run row, and the reader never sees a failure they have to act on.
+   * The enclosing job budget (`marketAnalysisJobPolicy.runTimeoutMs`) must cover both attempts.
+   */
+  maxModelAttempts: 2
 })
+
+/**
+ * The rejections worth another sample.
+ *
+ * Not retried: unsafe output (a policy problem, not a formatting one), timeouts, provider errors,
+ * and cancellation — each already says something the reader can act on, and another call would
+ * only spend the same budget twice.
+ */
+const repairableRejection: ReadonlySet<string> = new Set([
+  MARKET_ANALYSIS_ERROR_CODES.invalidJson,
+  MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema,
+  MARKET_ANALYSIS_ERROR_CODES.missingEvidence
+])
+
+/**
+ * What the model is told when it has to answer again.
+ *
+ * Deliberately short and specific: the system prompt already carries the full schema, and
+ * repeating a 30KB rejected answer would spend the context the repair needs. The defect names
+ * the part that failed, which is the one thing the first attempt could not see.
+ */
+function repairMessage(defect: Readonly<{ errorCode: string; rule?: string }>): StructuredModelMessage {
+  const reason = defect.errorCode === MARKET_ANALYSIS_ERROR_CODES.invalidJson
+    ? '上一次回复不是合法 JSON（可能被截断）。'
+    : defect.errorCode === MARKET_ANALYSIS_ERROR_CODES.missingEvidence
+      ? `上一次输出引用了快照里不存在的证据（${defect.rule ?? 'evidence'}）。`
+      : `上一次输出未通过字段结构校验（${defect.rule ?? 'shape'}）。`
+  return { role: 'user', content: `${reason}请重新输出同一个 JSON 对象：只输出 JSON，不加 Markdown；顶层字段必须恰好是 conclusion、knownFacts、transmissionHypotheses、marketReaction、supportingEvidence、counterEvidence、scenarios、directions、nextCatalysts、dataCaveats、evidenceRefs，不增加、不删除字段；必要时压缩每个数组的条数，确保 JSON 完整闭合。事实与证据只能引用输入里给出的 factRef / evidenceRef 原文。` }
+}
 
 export type AnalysisOrchestratorResult = Readonly<{
   status: 'succeeded' | 'failed' | 'invalid-output' | 'cancelled'
@@ -80,33 +124,53 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const brief = sessionBriefForTriggerKey(runRecord.triggerKey)
     const openInstant = brief ? slotInstantAtOrBefore(brief.slot, new Date(runRecord.queuedAt)) : null
     const session: AnalysisSessionInput | undefined = brief && openInstant ? { brief, openInstant } : undefined
-    let invocation: InvocationResult
-    try {
-      // The run carries the model it was queued for, so the analysis calls exactly the model the
-      // reader chose instead of whatever provider happens to be first in the store. Runs without a
-      // recorded model keep following the platform default.
-      const model = runRecord.modelProviderId && runRecord.modelId
-        ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
-        : {}
-      const proseLanguage = deps.getLanguage ? await deps.getLanguage() : undefined
-      invocation = await deps.structuredModelInvocation.invoke({
-        taskId: runRecord.id,
-        messages: buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage),
-        timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs,
-        abortSignal: signal,
-        ...model,
-        parse: value => value
-      })
-    } catch {
-      return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+    // The run carries the model it was queued for, so the analysis calls exactly the model the
+    // reader chose instead of whatever provider happens to be first in the store. Runs without a
+    // recorded model keep following the platform default.
+    const model = runRecord.modelProviderId && runRecord.modelId
+      ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
+      : {}
+    const proseLanguage = deps.getLanguage ? await deps.getLanguage() : undefined
+    let messages = buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
+    let invocation: InvocationResult | undefined
+    let validated: AnalysisOutputValidationResult | undefined
+    // One immediate repair attempt, inside the same run and against the same frozen snapshot.
+    // A model that answers outside the contract once is not a failed analysis: the previous
+    // product required the reader to press "Analyze now" again (which is exactly what they did,
+    // and the second answer was published). Asking again in place costs one call and no re-freeze.
+    for (let attempt = 1; attempt <= marketAnalysisInvocationPolicy.maxModelAttempts; attempt += 1) {
+      if (signal.aborted) return cancel(runRecord.id)
+      try {
+        invocation = await deps.structuredModelInvocation.invoke({
+          taskId: runRecord.id,
+          messages,
+          timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs,
+          abortSignal: signal,
+          ...model,
+          parse: value => value
+        })
+      } catch {
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+      }
+      // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
+      // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
+      // model was slow when nothing had gone wrong with the model at all.
+      if (!invocation.ok) {
+        if (invocation.errorCode === 'cancelled') return cancel(runRecord.id)
+        const repairable = invocation.errorCode === 'invalid-json'
+        if (!repairable || attempt >= marketAnalysisInvocationPolicy.maxModelAttempts) {
+          return fail(runRecord.id, 'failed', mapInvocationError(invocation.errorCode))
+        }
+        messages = [...messages, repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
+        continue
+      }
+      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence)
+      if (validated.ok) break
+      if (attempt >= marketAnalysisInvocationPolicy.maxModelAttempts || !repairableRejection.has(validated.errorCode)) break
+      messages = [...messages, repairMessage(validated)]
     }
-    // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
-    // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
-    // model was slow when nothing had gone wrong with the model at all.
-    if (!invocation.ok && invocation.errorCode === 'cancelled') return cancel(runRecord.id)
-    if (!invocation.ok) return fail(runRecord.id, 'failed', mapInvocationError(invocation.errorCode))
+    if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
 
-    const validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence)
     if (!validated.ok) {
       // The coarse code is what the reader sees; the rule is what the next investigation needs.
       // Three different defects used to arrive as one "missing evidence" message.
