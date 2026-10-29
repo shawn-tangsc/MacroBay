@@ -35,8 +35,12 @@ export function computeSnapshotChange(input: Readonly<{
       evidenceRefsRemoved: []
     }
   }
-  const previousFacts = new Map(input.previous.facts.map(fact => [fact.factId, fact]))
-  const currentFacts = new Map(input.current.facts.map(fact => [fact.factId, fact]))
+  // 舆情事实每轮都会随窗口整体替换：把它们算进 change，结论的「本次变化」就会被几十条
+  // 新闻的进/出淹没，真正的行情变化反而被挤到 200 条上限之外。舆情本身仍在 facts 里，模型
+  // 照样会读到；change 只回答「市场数据动了什么」。
+  const changeable = (fact: AgentFact): boolean => fact.metric !== 'news-sentiment'
+  const previousFacts = new Map(input.previous.facts.filter(changeable).map(fact => [fact.factId, fact]))
+  const currentFacts = new Map(input.current.facts.filter(changeable).map(fact => [fact.factId, fact]))
   const factChanges: SnapshotFactChange[] = []
   for (const [factId, fact] of currentFacts) {
     const before = previousFacts.get(factId)
@@ -47,8 +51,13 @@ export function computeSnapshotChange(input: Readonly<{
     if (!currentFacts.has(factId)) factChanges.push(changedFact('removed', fact, fact.value))
   }
   factChanges.sort((left, right) => left.factId.localeCompare(right.factId))
-  const previousEvidence = new Set(input.previous.evidenceRefs.map(ref => ref.evidenceRefId))
-  const currentEvidence = new Set(input.current.evidenceRefs.map(ref => ref.evidenceRefId))
+  const newsEvidence = new Set(
+    [...input.current.facts, ...input.previous.facts]
+      .filter(fact => fact.metric === 'news-sentiment' && fact.evidenceRefId)
+      .map(fact => fact.evidenceRefId as string)
+  )
+  const previousEvidence = new Set(input.previous.evidenceRefs.map(ref => ref.evidenceRefId).filter(id => !newsEvidence.has(id)))
+  const currentEvidence = new Set(input.current.evidenceRefs.map(ref => ref.evidenceRefId).filter(id => !newsEvidence.has(id)))
   const missingDomains = diffSets(input.current.missingDomains, input.previous.missingDomains)
   const caveats = diffSets(input.current.caveats, input.previous.caveats)
   return {

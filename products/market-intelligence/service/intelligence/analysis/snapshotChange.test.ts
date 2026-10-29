@@ -82,4 +82,22 @@ describe('snapshot change', () => {
     const change = computeSnapshotChange({ current: { facts, missingDomains: [], caveats: [], evidenceRefs: [ref('ev-1')] }, previous })
     expect(change.facts).toHaveLength(snapshotChangePolicy.maximumFactChanges)
   })
+  it('keeps the rotating news-sentiment facts out of the change record', () => {
+    const news = (factId: string, evidenceRefId: string): AgentFact => ({
+      ...fact(factId, '看空（强度 4/5，置信 82%）｜交易所故障', 'news-sentiment'),
+      domain: 'sentiment', subject: 'market', unit: null, comparability: 'not-comparable', evidenceRefId
+    })
+    const previous = snapshot({ facts: [fact('f1', '3.2'), news('n-old', 'ev-old')], evidenceRefs: [ref('ev-1'), ref('ev-old')] })
+    const change = computeSnapshotChange({
+      current: { facts: [fact('f1', '3.2'), news('n-new', 'ev-new')], missingDomains: [], caveats: [], evidenceRefs: [ref('ev-1'), ref('ev-new')] },
+      previous
+    })
+
+    // The market data did not move; the news window rotated. That rotation must not be reported
+    // as "what changed" and must not push the real changes past the record's cap.
+    expect(change.facts).toEqual([])
+    expect(change.evidenceRefsAdded).toEqual([])
+    expect(change.evidenceRefsRemoved).toEqual([])
+    expect(isUnchangedSnapshot(change)).toBe(true)
+  })
 })
