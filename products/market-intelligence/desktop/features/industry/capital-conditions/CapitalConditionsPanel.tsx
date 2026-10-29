@@ -84,27 +84,21 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
     </colgroup>
     <thead><tr>
       <th scope="col">{text.asset}</th>
-      <th scope="col">{text.change1d}</th>
-      <th scope="col">{text.change7d}</th>
-      <th scope="col">{text.change30d}</th>
+      <th scope="col">{text.change1d}<span className="mi-capital-conditions__pct">{state.change1dPercent}</span></th>
+      <th scope="col">{text.change7d}<span className="mi-capital-conditions__pct">{state.change7dPercent}</span></th>
+      <th scope="col">{text.change30d}<span className="mi-capital-conditions__pct">{state.change30dPercent}</span></th>
       <th scope="col">{text.totalSupply}</th>
     </tr></thead>
     <tbody><tr>
       <th scope="row">{text.stablecoin}</th>
-      <StablecoinChangeCell usd={state.change1dUsd} percent={state.change1dPercent} />
-      <StablecoinChangeCell usd={state.change7dUsd} percent={state.change7dPercent} />
-      <StablecoinChangeCell usd={state.change30dUsd} percent={state.change30dPercent} />
+      <td data-flow-direction={flowDirection(state.change1dUsd)}>{state.change1dUsd}</td>
+      <td data-flow-direction={flowDirection(state.change7dUsd)}>{state.change7dUsd}</td>
+      <td data-flow-direction={flowDirection(state.change30dUsd)}>{state.change30dUsd}</td>
       <td className="mi-capital-conditions__stable-supply">{state.currentUsd}</td>
     </tr></tbody>
   </table>
 }
 
-function StablecoinChangeCell({ usd, percent }: { usd: string; percent: string }): React.ReactElement {
-  return <td><div className="mi-capital-conditions__stable-change">
-    <span data-flow-direction={flowDirection(usd)}>{usd}</span>
-    <span className="mi-capital-conditions__pct">{percent}</span>
-  </div></td>
-}
 
 /** One row per asset, one column per horizon: no label repeats inside the body. */
 function EtfTable({ etf, text }: { etf: AvailableState['etf']; text: Text }): React.ReactElement {

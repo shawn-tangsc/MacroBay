@@ -49,7 +49,7 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('mi-capital-conditions__stable-table')
     expect(markup).toContain(`<th scope="col">${text.asset}</th>`)
     expect(markup).toContain(`<th scope="col">${text.totalSupply}</th>`)
-    for (const label of [text.change1d, text.change7d, text.change30d]) expect(markup).toContain(`<th scope="col">${label}</th>`)
+    for (const label of [text.change1d, text.change7d, text.change30d]) expect(markup).toContain(`<th scope="col">${label}<span`)
     expect(markup).toContain(`<th scope="row">${text.stablecoin}</th>`)
     expect(markup).toContain('$254.9B')
     for (const value of ['+$42M', '+0.17%', '+$82.4M', '+0.03%', '-$500M', '-0.21%']) expect(markup).toContain(value)

@@ -125,8 +125,7 @@
 .mi-capital-conditions__stable-table tbody th,
 .mi-capital-conditions__stable-table tbody td { padding-top: 7px; padding-bottom: 6px; }
 .mi-capital-conditions__stable-supply { color: var(--mi-dashboard-text); font-size: 13px; font-weight: 600; }
-.mi-capital-conditions__stable-change { display: grid; justify-items: end; gap: 1px; }
-.mi-capital-conditions__pct { color: var(--mi-dashboard-muted); font-size: 10px; }
+.mi-capital-conditions__pct { margin-left: 4px; color: var(--mi-dashboard-muted); font-size: 9px; font-weight: 400; }
 .mi-capital-conditions [data-flow-direction='inflow'] { color: var(--mi-dashboard-positive); }
 .mi-capital-conditions [data-flow-direction='outflow'] { color: var(--mi-dashboard-negative); }
 .mi-capital-conditions__etf-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
