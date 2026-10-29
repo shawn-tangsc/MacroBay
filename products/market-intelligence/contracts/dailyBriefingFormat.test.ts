@@ -8,6 +8,8 @@ describe('daily briefing formatting', () => {
     expect(formatBriefingValue({ number: -1.1, format: 'percent' }, '—')).toBe('-1.10%')
     expect(formatBriefingValue({ number: 1.1, format: 'percent' }, '—')).toBe('+1.10%')
     expect(formatBriefingValue({ number: 253_033_903_673.4, format: 'usd' }, '—', 'en-US')).toBe('253B USD')
+    expect(formatBriefingValue({ number: 252_033_903_673.4, format: 'usd' }, '—', 'zh-CN')).toBe('252B USD')
+    expect(formatBriefingValue({ number: 137_300_000, format: 'flow-usd' }, '—', 'zh-CN')).toBe('+137.3M USD')
     expect(formatBriefingValue({ number: 110_300_000, format: 'flow-usd' }, '—')).toBe('+110.3M USD')
     expect(formatBriefingValue({ number: 5, format: 'yield' }, '—')).toBe('5.00%')
     expect(formatBriefingValue({ number: 102.24, format: 'level' }, '—')).toBe('102.24')

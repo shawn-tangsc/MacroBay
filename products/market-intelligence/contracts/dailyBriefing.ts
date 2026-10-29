@@ -9,7 +9,7 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  */
 export const dailyBriefingPolicy = Object.freeze({
   schemaVersion: 1,
-  policyVersion: 'daily-briefing.v1',
+  policyVersion: 'daily-briefing.v2',
   windowHours: 24,
   maximumBytes: 256 * 1024,
   maximumNewsItems: 3,
@@ -25,6 +25,7 @@ export const dailyBriefingPolicy = Object.freeze({
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefingDocumentSchemaVersion = 1
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -162,7 +163,7 @@ export type BriefingNewsSummary = Readonly<{
 
 export type DailyBriefingDocument = Readonly<{
   schemaVersion: DailyBriefingDocumentSchemaVersion
-  policyVersion: 'daily-briefing.v1'
+  policyVersion: DailyBriefingPolicyVersion
   edition: Readonly<{
     date: string
     locale: DailyBriefingLocale

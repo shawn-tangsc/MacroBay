@@ -31,7 +31,18 @@ export function formatBriefingChange(
   }
 }
 
-function compactUsd(value: number, locale: string, signed = false): string {
-  const compact = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(Math.abs(value))
-  return `${value < 0 ? '-' : signed && value > 0 ? '+' : ''}${compact} USD`
+function compactUsd(value: number, _locale: string, signed = false): string {
+  const magnitude = Math.abs(value)
+  const unit = magnitude >= 1_000_000_000
+    ? `${trimZero(magnitude / 1_000_000_000)}B`
+    : magnitude >= 1_000_000
+      ? `${trimZero(magnitude / 1_000_000)}M`
+      : magnitude >= 1_000
+        ? `${trimZero(magnitude / 1_000)}K`
+        : String(Math.round(magnitude))
+  return `${value < 0 ? '-' : signed && value > 0 ? '+' : ''}${unit} USD`
+}
+
+function trimZero(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, '')
 }

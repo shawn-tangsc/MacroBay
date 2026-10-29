@@ -75,3 +75,25 @@
 
 .mi-brief-poster__head-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .mi-brief-poster__readonly { padding: 3px 7px; border: 1px solid #e0c9a6; border-radius: 4px; color: #8a5a35; font-size: 9.5px; }
+
+.mi-brief-poster__news-section, .mi-brief-poster__data-section { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__numbers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mi-brief-poster__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 20px; margin-top: 10px; border-top: 1px solid #ded4c2; }
+.mi-brief-poster__metrics div { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #ebdfcf; color: #6b695f; font-size: 11px; }
+.mi-brief-poster__metrics b { color: #1b1d18; font-weight: 700; }
+.mi-brief-poster__news { grid-template-columns: 50px 1fr auto; }
+.mi-brief-poster__news-source { color: #8b8475; font-size: 9px; text-align: right; white-space: nowrap; }
+.mi-brief-poster__signal { display: flex; align-items: center; gap: 12px; margin: 16px 0 0; padding: 11px 14px; border: 1px solid #e4c58f; border-radius: 7px; background: #fdf0d6; }
+.mi-brief-poster__signal > span { flex: none; padding: 3px 7px; border-radius: 3px; background: #b45309; color: #fff; font-size: 10px; font-weight: 800; }
+.mi-brief-poster__signal b { color: #6b3a0c; font-size: 12px; line-height: 1.4; }
+.mi-brief-poster__signal small { margin-left: auto; color: #8a6633; font-size: 9px; white-space: nowrap; }
+.mi-brief-poster__visuals { display: grid; grid-template-columns: 1.15fr 1fr; gap: 26px; margin-top: 12px; }
+.mi-brief-poster__visual h3 { margin: 0 0 6px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
+.mi-brief-poster__flow { display: grid; grid-template-columns: 56px 1fr 78px; gap: 8px; align-items: center; padding: 2px 0; color: #6b695f; font-size: 9px; }
+.mi-brief-poster__flow b { color: #1b1d18; font-size: 9px; text-align: right; }
+.mi-brief-poster__flow-track { height: 8px; border-radius: 2px; background: #e8dfd0; overflow: hidden; }
+.mi-brief-poster__flow-track i { display: block; height: 100%; background: #be3a2b; }
+.mi-brief-poster__flow-track i[data-positive="true"] { background: #2f7d45; }
+.mi-brief-poster__polarity { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: #e8dfd0; }
+.mi-brief-poster__polarity i { display: block; height: 100%; }
+.mi-brief-poster__visual > small { display: block; margin-top: 4px; color: #8b8475; font-size: 8.5px; }

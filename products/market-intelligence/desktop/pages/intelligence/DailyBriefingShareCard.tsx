@@ -23,6 +23,11 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const hasNews = doc.news.items.length > 0 || doc.news.macro.length > 0
   const hasData = chosen.length > 0
   const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0 || conclusion.dataGaps.length > 0 || conclusion.caveats.length > 0))
+  const keyRows = chosen.slice(0, 4)
+  const metricRows = chosen.slice(4, 8)
+  const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
+  const newsCounts = doc.data.sentiment.news.counts
+  const newsTotal = doc.data.sentiment.news.itemCount ?? 0
   return <article className="mi-brief-poster">
     <header className="mi-brief-poster__head">
       <div>
@@ -36,38 +41,64 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       </div>
     </header>
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
-
-    {hasNews || hasData ? <div className="mi-brief-poster__columns">
-      {hasNews ? <section>
-        <h2>{text.sections.news}</h2>
-        {doc.news.items.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
-          <span data-polarity={item.polarity}>{item.publishedAt.slice(11, 16)}</span>
-          <div>
-            <p>{item.translatedTitle ?? item.title}</p>
-            {item.why ? <small>{item.why}</small> : null}
-          </div>
-        </div>)}
-        {doc.news.macro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
-          <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
-          <div>
-            <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
-            <small>{text.macro.actual} {item.actual ?? '—'} · {text.macro.consensus} {item.consensus ?? text.macro.noConsensus} · {text.macro.surprise[item.surprise.direction]}</small>
-          </div>
-        </div>)}
-      </section> : null}
-
-      {hasData ? <section>
-        <h2>{text.sections.data}</h2>
-        <div className="mi-brief-poster__numbers">
-          {chosen.map((row) => <div className="mi-brief-poster__number" key={row.id}>
-            <span>{rowLabel(text, row.labelKey)}</span>
-            <strong>{formatBriefingValue(row.value, text.noValue, locale)}</strong>
-            <small>{formatBriefingChange(row.change, locale) || stateLabel(row, text)}</small>
-          </div>)}
-        </div>
-        {doc.data.sentiment.news.itemCount ? <p className="mi-brief-poster__news-summary">{text.groups.sentiment} · {doc.data.sentiment.news.itemCount} · {doc.data.sentiment.news.counts?.bearish ?? 0} / {doc.data.sentiment.news.counts?.bullish ?? 0} / {doc.data.sentiment.news.counts?.mixed ?? 0} / {doc.data.sentiment.news.counts?.neutral ?? 0}</p> : null}
-      </section> : null}
+    {conclusion ? <div className="mi-brief-poster__signal">
+      <span>{localizedDirectionTerm(conclusion.direction, locale)}</span>
+      <b>{conclusion.summary.split(/[。.!?]/)[0]}</b>
+      <small>{text.sections.conclusion} · {formatTime(conclusion.publishedAt, 'minute')}</small>
     </div> : null}
+
+    {hasNews ? <section className="mi-brief-poster__news-section">
+      <h2>{text.sections.news}</h2>
+      {doc.news.items.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
+        <span data-polarity={item.polarity}>{item.publishedAt.slice(11, 16)}</span>
+        <div>
+          <p>{item.translatedTitle ?? item.title}</p>
+          {item.why ? <small>{item.why}</small> : null}
+        </div>
+        <span className="mi-brief-poster__news-source">{item.sourceName}</span>
+      </div>)}
+      {doc.news.macro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
+        <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
+        <div>
+          <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
+          <small>{text.macro.actual} {item.actual ?? '—'} · {text.macro.consensus} {item.consensus ?? text.macro.noConsensus} · {text.macro.surprise[item.surprise.direction]}</small>
+        </div>
+      </div>)}
+    </section> : null}
+
+    {hasData ? <section className="mi-brief-poster__data-section">
+      <h2>{text.sections.data}</h2>
+      <div className="mi-brief-poster__numbers">
+        {keyRows.map((row) => <div className="mi-brief-poster__number" key={row.id}>
+          <span>{rowLabel(text, row.labelKey)}</span>
+          <strong>{formatBriefingValue(row.value, text.noValue, locale)}</strong>
+          <small>{formatBriefingChange(row.change, locale) || stateLabel(row, text)}</small>
+        </div>)}
+      </div>
+      {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
+        {metricRows.map((row) => <div key={row.id}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
+      </div> : null}
+      {etfRows.length > 0 || newsCounts ? <div className="mi-brief-poster__visuals">
+        {etfRows.length > 0 ? <div className="mi-brief-poster__visual">
+          <h3>{text.visuals.etf}</h3>
+          {etfRows.map((row) => <div className="mi-brief-poster__flow" key={row.id}>
+            <span>{rowLabel(text, row.labelKey)}</span>
+            <div className="mi-brief-poster__flow-track"><i data-positive={Boolean(row.value && row.value.number >= 0)} style={{ width: `${Math.min(100, Math.max(4, Math.abs(row.value?.number ?? 0) / 200_000_000 * 100))}%` }} /></div>
+            <b>{formatBriefingValue(row.value, text.noValue, locale)}</b>
+          </div>)}
+        </div> : null}
+        {newsCounts && newsTotal > 0 ? <div className="mi-brief-poster__visual">
+          <h3>{text.visuals.news}</h3>
+          <div className="mi-brief-poster__polarity">
+            <i style={{ width: `${newsCounts.bearish / newsTotal * 100}%`, background: '#be3a2b' }} />
+            <i style={{ width: `${newsCounts.bullish / newsTotal * 100}%`, background: '#2f7d45' }} />
+            <i style={{ width: `${newsCounts.mixed / newsTotal * 100}%`, background: '#b45309' }} />
+            <i style={{ width: `${newsCounts.neutral / newsTotal * 100}%`, background: '#b9b1a2' }} />
+          </div>
+          <small>{text.groups.sentiment} · {newsTotal} · {newsCounts.bearish} / {newsCounts.bullish} / {newsCounts.mixed} / {newsCounts.neutral}</small>
+        </div> : null}
+      </div> : null}
+    </section> : null}
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
@@ -94,7 +125,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
 
     {doc.citations.length > 0 ? <div className="mi-brief-poster__footnotes">
       {doc.citations.map((entry) => <span key={entry.index}>
-        <b>[{entry.index}]</b>{entry.statement ? `${entry.statement} · ` : ''}{entry.sourceLabel ?? entry.refId}{entry.observedAt ? ` · ${formatTime(entry.observedAt, 'minute')}` : ''}
+        <b>[{entry.index}]</b>{entry.statement ? `${entry.statement} · ` : ''}{citationSource(entry)}{citationTime(entry, formatTime) ? ` · ${citationTime(entry, formatTime)}` : ''}
       </span>)}
     </div> : null}
 
@@ -103,6 +134,21 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       <span>MI · DAILY BRIEF · {formatTime(doc.provenance.readAt, 'minute')}</span>
     </footer>
   </article>
+}
+
+function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {
+  if (entry.sourceLabel) return entry.sourceLabel
+  if (entry.refId.startsWith('query:defillama-stablecoins')) return 'DefiLlama Stablecoins'
+  if (entry.refId.startsWith('query:0xrouter')) return '0xRouter'
+  if (entry.refId.startsWith('macro-calendar')) return '宏观日历'
+  if (entry.refId.startsWith('news')) return '新闻'
+  return '分析证据'
+}
+
+function citationTime(entry: Readonly<{ refId: string; observedAt?: string }>, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
+  if (entry.observedAt) return formatTime(entry.observedAt, 'minute')
+  const match = entry.refId.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/)
+  return match ? formatTime(match[0], 'minute') : ''
 }
 
 function rowLabel(text: DailyBriefingText, labelKey: string): string {

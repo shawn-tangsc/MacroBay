@@ -158,7 +158,7 @@ async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<
 }
 
 function isCurrent(document: DailyBriefingDocument): boolean {
-  return document.schemaVersion === 1 && document.policyVersion === 'daily-briefing.v1'
+  return document.schemaVersion === 1 && document.policyVersion === dailyBriefingPolicy.policyVersion
 }
 
 function summaryFor(
