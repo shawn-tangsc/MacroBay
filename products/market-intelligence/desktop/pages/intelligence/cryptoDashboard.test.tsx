@@ -467,8 +467,8 @@ describe('crypto intelligence dashboard', () => {
     expect(capitalRule).toContain('align-content: start')
     expect(capitalRule).toContain('row-gap: var(--mi-dashboard-capital-content-row-gap)')
     expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
-    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 1fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 1fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
     expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(trendsRule).toContain('justify-content: start')
     expect(headerBandRule).toContain('min-width: 0')
@@ -490,13 +490,23 @@ describe('crypto intelligence dashboard', () => {
     expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('uses equal-width capital columns and a horizontal source status bar', () => {
+  it('fills the cumulative ETF rows across the summary width in two equal halves', () => {
+    const rowRule = cssBlock(styles, '.mi-capital-conditions__cumulative dd {')
+    const firstRule = cssBlock(styles, '.mi-capital-conditions__cumulative-window:first-child {')
+    const lastRule = cssBlock(styles, '.mi-capital-conditions__cumulative-window:last-child {')
+
+    expect(rowRule).toContain('grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr)')
+    expect(firstRule).toContain('justify-self: start')
+    expect(lastRule).toContain('justify-self: end')
+  })
+
+  it('uses chart-dominant workspaces and a horizontal source status bar', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const sourceRule = cssBlock(styles, '.mi-crypto-dashboard__source-region {')
     const sourceRowRule = cssBlock(styles, '.mi-crypto-dashboard__source-row {')
 
-    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 1fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 1fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
