@@ -15,14 +15,17 @@ function context(overrides: Partial<MarketAnalysisContextAvailable> = {}): Marke
 
 type Item = Readonly<{
   itemId: string; title: string; displayTitle?: string; sourceId: string; sourceName: string
-  publishedAt: string; polarity: 'bullish' | 'bearish' | 'neutral' | 'mixed'
+  publishedAt: string; scoredAt: string; polarity: 'bullish' | 'bearish' | 'neutral' | 'mixed'
   strength: number; confidence: number; symbols: readonly string[]
 }>
 
 function item(overrides: Partial<Item> = {}): Item {
+  const publishedAt = overrides.publishedAt ?? '2026-10-29T11:20:00.000Z'
   return {
     itemId: 'item-bull', title: 'Spot ETF inflows accelerate', displayTitle: '现货 ETF 净流入加速',
-    sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS', publishedAt: '2026-10-29T11:20:00.000Z',
+    sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS', publishedAt,
+    // Scored five minutes after publication unless the case says otherwise.
+    scoredAt: overrides.scoredAt ?? new Date(Date.parse(publishedAt) + 5 * 60_000).toISOString(),
     polarity: 'bullish', strength: 4, confidence: 82, symbols: ['BTC'], ...overrides
   }
 }
@@ -37,18 +40,19 @@ const reader = (items: readonly Item[]) => ({
 })
 
 describe('analysisNewsSentiment', () => {
-  it('starts at the later of the last analysis and the previous 8-hour session slot', () => {
+  it('uses the previous 8-hour open as the occurrence floor and the last run as the visibility floor', () => {
     // asOf = 20:00 Asia/Shanghai; the previous open strictly before it is 16:00 local (08:00Z).
     const previousSlot = Date.parse('2026-10-29T08:00:00.000Z')
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T11:30:00.000Z')).toMatchObject({ window: '1h', sinceMs: Date.parse('2026-10-29T11:30:00.000Z') })
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T09:00:00.000Z').window).toBe('4h')
-    // Older than the previous open: the window is clamped to the open, not to the stale run.
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T06:00:00.000Z')).toMatchObject({ sinceMs: previousSlot, window: '4h' })
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T11:30:00.000Z')).toMatchObject({
+      windowStartMs: previousSlot, scoredSinceMs: Date.parse('2026-10-29T11:30:00.000Z'), window: '4h'
+    })
+    // Older than the previous open: the occurrence floor wins over the stale run.
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T06:00:00.000Z')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
     // No previous analysis at all, and a run from days ago, both land on the same floor.
-    expect(resolveNewsSentimentWindow(asOf, undefined).sinceMs).toBe(previousSlot)
-    expect(resolveNewsSentimentWindow(asOf, '2026-09-01T00:00:00.000Z').sinceMs).toBe(previousSlot)
+    expect(resolveNewsSentimentWindow(asOf, undefined)).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
+    expect(resolveNewsSentimentWindow(asOf, '2026-09-01T00:00:00.000Z')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
     // A run serving the 16:00 open looks back to 08:00, not to the instant it stands on.
-    expect(resolveNewsSentimentWindow('2026-10-29T08:00:00.000Z', undefined).sinceMs).toBe(Date.parse('2026-10-29T00:00:00.000Z'))
+    expect(resolveNewsSentimentWindow('2026-10-29T08:00:00.000Z', undefined).windowStartMs).toBe(Date.parse('2026-10-29T00:00:00.000Z'))
   })
 
   it('adds only non-neutral items published after the previous analysis, as citable facts', async () => {
@@ -94,6 +98,38 @@ describe('analysisNewsSentiment', () => {
     expect(updated.facts[0]).toMatchObject({ metric: 'event-excerpt', evidenceRefId: 'ev-item-bull' })
   })
 
+  it('picks up a headline scored after the previous run though it was published before it', async () => {
+    // The previous run could not see it (its score landed after that snapshot's cutoff). Filtering
+    // by publication against the run start would lose it for good; filtering by score recovers it.
+    const lagged = item({ itemId: 'item-lag', publishedAt: '2026-10-29T10:55:00.000Z', scoredAt: '2026-10-29T11:05:00.000Z' })
+    const alreadyAnalysed = item({ itemId: 'item-done', publishedAt: '2026-10-29T10:30:00.000Z', scoredAt: '2026-10-29T10:35:00.000Z' })
+    const olderThanTheOpen = item({ itemId: 'item-older', publishedAt: '2026-10-29T07:00:00.000Z', scoredAt: '2026-10-29T11:30:00.000Z' })
+    const items = [lagged, alreadyAnalysed, olderThanTheOpen]
+    const getEvidenceExcerpt = async (input: { itemId: string }) => {
+      const found = items.find(entry => entry.itemId === input.itemId)!
+      return evidence(found.itemId, found.publishedAt)
+    }
+
+    const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader(items) as never, {
+      asOf, since: '2026-10-29T11:00:00.000Z'
+    })
+
+    expect(updated.facts).toHaveLength(1)
+    expect(String(updated.facts[0]!.value)).toContain('现货 ETF 净流入加速')
+    // Published before the previous open: the occurrence floor still excludes it.
+    expect(JSON.stringify(updated.facts)).not.toContain('item-older')
+  })
+
+  it('keeps a mixed item because it still carries a direction', async () => {
+    const mixed = item({ itemId: 'item-mixed', polarity: 'mixed', title: 'Flows conflict' })
+    const getEvidenceExcerpt = async (input: { itemId: string }) => evidence(input.itemId, mixed.publishedAt)
+    const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader([mixed]) as never, {
+      asOf, since: '2026-10-29T11:00:00.000Z'
+    })
+    expect(updated.facts).toHaveLength(1)
+    expect(String(updated.facts[0]!.value)).toContain('多空混合')
+  })
+
   it('names an unavailable store instead of pretending there was no news', async () => {
     const unavailable = { query: async () => ({ state: 'unavailable' as const, asOf, generatedAt: asOf, window: '1h' as const, items: [], caveats: [] }) }
     const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt: async () => undefined } as never, unavailable as never, { asOf })
@@ -117,7 +153,7 @@ describe('analysisNewsSentiment', () => {
       { status: 'succeeded', startedAt: '2026-10-29T19:48:00.000Z', queuedAt: '2026-10-29T19:47:00.000Z', completedAt: '2026-10-29T19:50:00.000Z' },
       { status: 'running', startedAt: '2026-10-29T21:00:00.000Z', queuedAt: '2026-10-29T20:59:00.000Z', completedAt: null },
       { status: 'failed', startedAt: '2026-10-29T20:10:00.000Z', queuedAt: '2026-10-29T20:09:00.000Z', completedAt: '2026-10-29T20:11:00.000Z' }
-    ])).toBe('2026-10-29T19:48:00.000Z')
+    ])).toBe('2026-10-29T19:47:00.000Z')
     // Nothing published yet: the group's previous snapshot is the boundary.
     expect(newsSentimentSince([], '2026-10-29T00:00:00.000Z')).toBe('2026-10-29T00:00:00.000Z')
     expect(newsSentimentSince([])).toBeUndefined()

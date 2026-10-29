@@ -39,33 +39,36 @@ const polarityLabel: Readonly<Record<string, string>> = Object.freeze({
 })
 
 export type NewsSentimentWindowResolution = Readonly<{
-  sinceMs: number
+  /** Earliest occurrence time allowed: the previous session slot. */
+  windowStartMs: number
+  /** Earliest score time allowed: the later of the previous generation and that slot. */
+  scoredSinceMs: number
   window: NewsSentimentQuery['window']
 }>
 
 /**
- * The window start: the later of the previous generation and the previous session slot.
+ * Two boundaries, because publication and scoring are two different clocks.
  *
- * The slot floor is the "theoretical" cadence, not the actual one: an app that was closed for
- * three days must not pour three days of news into one conclusion. If `since` is even later (a
- * manual refresh minutes ago) it wins, so the same headline never enters two analyses.
+ * The occurrence boundary is the previous session slot: an app that was closed for three days
+ * must not pour three days of headlines into one conclusion. The visibility boundary is the
+ * previous generation: `newsSentiment.query` only returns rows whose *score* was visible at
+ * `asOf`, so a headline published just before the previous run but scored just after it was
+ * absent from that run. Comparing publication time against the run start lost it forever, because
+ * `publishedAt > since` can never become true again. Comparing score time instead picks it up on
+ * the next run — and the same comparison is what keeps an already-analysed headline out.
  */
 export function resolveNewsSentimentWindow(asOf: string, since: string | undefined): NewsSentimentWindowResolution {
   const asOfMs = Date.parse(asOf)
   const floorMs = previousSessionSlotMs(asOfMs)
+  const windowStartMs = Number.isFinite(floorMs) ? floorMs : asOfMs - analysisNewsSentimentPolicy.fallbackLookbackMs
   const sinceMs = since ? Date.parse(since) : Number.NaN
-  const start = Math.min(
-    asOfMs,
-    Number.isFinite(floorMs)
-      ? Math.max(Number.isFinite(sinceMs) ? sinceMs : floorMs, floorMs)
-      : asOfMs - analysisNewsSentimentPolicy.fallbackLookbackMs
-  )
-  const span = asOfMs - start
+  const scoredSinceMs = Math.min(asOfMs, Number.isFinite(sinceMs) ? Math.max(sinceMs, windowStartMs) : windowStartMs)
+  const span = Math.max(0, asOfMs - windowStartMs)
   const window: NewsSentimentQuery['window'] = span <= 60 * 60 * 1_000 ? '1h'
     : span <= 4 * 60 * 60 * 1_000 ? '4h'
       : span <= 24 * 60 * 60 * 1_000 ? '24h'
         : '7d'
-  return { sinceMs: start, window }
+  return { windowStartMs, scoredSinceMs, window }
 }
 
 /**
@@ -104,7 +107,7 @@ export function newsSentimentSince(
   const published = runs
     .filter(run => run.status === 'succeeded')
     .sort((left, right) => (right.completedAt ?? right.queuedAt).localeCompare(left.completedAt ?? left.queuedAt))[0]
-  return published?.startedAt ?? published?.queuedAt ?? previousSnapshotAsOf
+  return published?.queuedAt ?? published?.startedAt ?? previousSnapshotAsOf
 }
 
 /**
@@ -128,7 +131,7 @@ export async function appendAnalysisNewsSentiment(
 ): Promise<MarketAnalysisContextAvailable> {
   if (!reader) return withCaveat(context, MARKET_ANALYSIS_CONTEXT_CAVEATS.newsSentimentUnavailable)
 
-  const { sinceMs, window } = resolveNewsSentimentWindow(input.asOf, input.since)
+  const { windowStartMs, scoredSinceMs, window } = resolveNewsSentimentWindow(input.asOf, input.since)
   let view: NewsSentimentView
   try {
     view = await reader.query({ asOf: input.asOf, window, scope: 'market', direction: 'all', limit: 100 })
@@ -148,7 +151,9 @@ export async function appendAnalysisNewsSentiment(
     .filter(item => item.polarity !== 'neutral')
     .filter(item => {
       const publishedAt = Date.parse(item.publishedAt)
-      return Number.isFinite(publishedAt) && publishedAt > sinceMs && publishedAt <= asOfMs
+      const scoredAt = Date.parse(item.scoredAt)
+      return Number.isFinite(publishedAt) && publishedAt > windowStartMs && publishedAt <= asOfMs &&
+        Number.isFinite(scoredAt) && scoredAt > scoredSinceMs
     })
     .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
     .slice(0, analysisNewsSentimentPolicy.maximumItems)
