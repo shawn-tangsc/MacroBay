@@ -1750,6 +1750,49 @@ describe('macro economic calendar', () => {
       expect(container.querySelector('.mi-market-calendar__inspector')).toBeNull()
     } finally { query.mockRestore() }
   })
+
+  it('follows the clock into the next month and reads it as of now', async () => {
+    let clock = new Date('2026-08-30T12:00:00.000Z')
+    const { container, client } = await renderCalendar({
+      now: () => clock,
+      queryMonth: async (input: { month: string; asOf: string }) => ({ state: 'available' as const, asOf: input.asOf, events: [] }),
+      getEventDetail: async () => unavailableDetail()
+    })
+    await settleCalendar()
+    expect(client.queryMonth).toHaveBeenCalledWith({ month: '2026-08', asOf: '2026-08-30T12:00:00.000Z' })
+
+    clock = new Date('2026-09-01T00:10:00.000Z')
+    await act(async () => { window.dispatchEvent(new Event('focus')) })
+    await settleCalendar()
+
+    expect(client.queryMonth).toHaveBeenCalledWith({ month: '2026-09', asOf: '2026-09-01T00:10:00.000Z' })
+    expect(container.querySelector('.mi-economic-calendar__month')?.getAttribute('data-month-key')).toBe('2026-09')
+  })
+
+  it('leaves a month the reader chose alone, and brings them back to the live one', async () => {
+    let clock = new Date('2026-08-30T12:00:00.000Z')
+    const { container, client } = await renderCalendar({
+      now: () => clock,
+      queryMonth: async (input: { month: string; asOf: string }) => ({ state: 'available' as const, asOf: input.asOf, events: [] }),
+      getEventDetail: async () => unavailableDetail()
+    })
+    await settleCalendar()
+    await act(async () => button(container, '下个月').click())
+    await settleCalendar()
+    expect(client.queryMonth).toHaveBeenLastCalledWith({ month: '2026-09', asOf: '2026-08-30T12:00:00.000Z' })
+
+    // The reader owns this month now: a boundary must not move the page under them.
+    clock = new Date('2026-10-01T00:10:00.000Z')
+    await act(async () => { window.dispatchEvent(new Event('focus')) })
+    await settleCalendar()
+    expect(client.queryMonth).not.toHaveBeenCalledWith(expect.objectContaining({ month: '2026-10' }))
+    expect(container.querySelector('.mi-economic-calendar__month')?.getAttribute('data-month-key')).toBe('2026-09')
+
+    // Asking for the current month reads the clock, not the month the page opened with.
+    await act(async () => button(container, '回到本月').click())
+    await settleCalendar()
+    expect(client.queryMonth).toHaveBeenLastCalledWith({ month: '2026-10', asOf: '2026-10-01T00:10:00.000Z' })
+  })
 })
 
 const asOf = '2026-08-05T00:00:00.000Z'

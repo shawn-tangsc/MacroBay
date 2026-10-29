@@ -68,6 +68,17 @@ export function createEconomicCalendarMonthQuery(month: string, asOf: string): {
   return { month, asOf }
 }
 
+/**
+ * The month a clock instant belongs to, for the page the reader keeps open.
+ *
+ * One owner for "which month is current": the initial query, the month-follow effect and
+ * the "back to this month" button all read it, so a month boundary moves them together.
+ * The month is the query/storage month (UTC), not the display zone's month.
+ */
+export function economicCalendarCurrentMonth(instant: string): string {
+  return instant.slice(0, 7)
+}
+
 export function shiftEconomicCalendarMonth(month: string, offset: -1 | 1): string {
   const bounds = monthBounds(month)
   if (!bounds) return month

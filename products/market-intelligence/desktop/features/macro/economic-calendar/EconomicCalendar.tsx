@@ -13,6 +13,7 @@ import {
   createEconomicCalendarProjection,
   createEconomicCalendarMonthQuery,
   createEconomicCalendarQuery,
+  economicCalendarCurrentMonth,
   economicCalendarPresentationPolicy,
   isReleaseTimeSource,
   selectEconomicCalendarMonth,
@@ -95,8 +96,16 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const [initialQuery] = useState(() => createEconomicCalendarQuery(now()))
   const [statusNow, updateStatusClock] = useCalendarStatusClock(now)
   const timeZone = useShellTimeZone()
-  const today = calendarDisplayDate(initialQuery.asOf, timeZone)
+  const today = calendarDisplayDate(statusNow, timeZone)
   const [selectedMonth, setSelectedMonth] = useState(initialQuery.month)
+  /**
+   * Whether the page is following the current month.
+   *
+   * True while the reader is looking at it, false once they pick another month. The clock can
+   * only move a page that is following; a month the reader chose stays where they put it.
+   */
+  const [followCurrentMonth, setFollowCurrentMonth] = useState(() =>
+    !openTarget?.month || openTarget.month === economicCalendarCurrentMonth(initialQuery.asOf))
   const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
   const market = useMarketCalendar({ month: selectedMonth, locale: text.market.locale, now })
   const [selectedMarket, setSelectedMarket] = useState<MarketCalendarEvent>()
@@ -285,18 +294,22 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     return () => { active = false }
   }, [asOf, client, detailReload, selectedEvent?.event.eventKey, selectedEvent?.version, selectedMonth])
 
-  const selectMonth = (month: string): void => {
+  const selectMonth = (month: string, follow?: boolean): void => {
     if (month === selectedMonthRef.current || !isEconomicCalendarMonth(month)) return
     selectedMonthRef.current = month
     setSelectedMonth(month)
+    setFollowCurrentMonth(follow ?? month === economicCalendarCurrentMonth(toCanonicalUtcMillis(now())))
     setSelectedEventKey(undefined)
     setSelectedDay(calendarDayForMonth(month, today))
     setDetailState({ state: 'idle' })
-    void syncBlsYear(month.slice(0, 4)).then((updated) => {
-      const queryAsOf = updated ? toCanonicalUtcMillis(now()) : asOf
-      if (updated) setAsOf(queryAsOf)
+    // A read is what the reader is looking at now. Keeping the mount-time as-of hid every
+    // row collected since the page opened, including a month-end prefetch of the next month.
+    const read = (): void => {
+      const queryAsOf = toCanonicalUtcMillis(now())
+      setAsOf(queryAsOf)
       loadMonth(month, true, queryAsOf)
-    }).catch(() => loadMonth(month, true, asOf))
+    }
+    void syncBlsYear(month.slice(0, 4)).then(read).catch(read)
   }
   /**
    * A caller (the dashboard card) can ask for a specific month.
@@ -309,6 +322,19 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   useEffect(() => {
     if (openTarget?.month) selectMonth(openTarget.month)
   }, [openTarget?.month]) // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * The month boundary the reader does not have to press.
+   *
+   * The status clock already ticks once a minute for release statuses; the same tick is what
+   * moves a page that is following the current month into the next one. It carries a fresh
+   * as-of, so the month it lands on is read as of now rather than as of page entry.
+   */
+  useEffect(() => {
+    if (!followCurrentMonth) return
+    const current = economicCalendarCurrentMonth(statusNow)
+    if (current === selectedMonthRef.current) return
+    selectMonth(current, true)
+  }, [statusNow, followCurrentMonth]) // eslint-disable-line react-hooks/exhaustive-deps
   const coverage: CalendarDayCoverage = market.loading || monthState.state === 'loading' ? 'loading'
     : market.failure || monthState.state !== 'available' ? 'incomplete' : 'complete'
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
@@ -377,7 +403,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             value={toEconomicCalendarMonthPickerValue(selectedMonth)}
           />
           <button aria-label={text.monthNavigation.next} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))} type="button"><ChevronRight aria-hidden="true" size={15} />{text.monthNavigation.next}</button>
-          <button aria-label={text.monthNavigation.current} onClick={() => selectMonth(initialQuery.month)} type="button">{text.monthNavigation.current}</button>
+          <button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)} type="button">{text.monthNavigation.current}</button>
           <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => setCalendarPanelOpen(true)}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
           <button onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}</button>

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createEconomicCalendarMonthQuery,
   createEconomicCalendarProjection,
+  economicCalendarCurrentMonth,
   economicCalendarCaveats,
   economicCalendarEventCategory,
   economicCalendarEventLabelKey,
@@ -162,3 +163,11 @@ function cyclicProviderIds(): readonly unknown[] {
   providerIds.push(providerIds)
   return providerIds
 }
+
+describe('economicCalendarCurrentMonth', () => {
+  it('reads the month from the canonical instant, so the page and its queries move together', () => {
+    expect(economicCalendarCurrentMonth('2026-08-31T23:59:59.999Z')).toBe('2026-08')
+    expect(economicCalendarCurrentMonth('2026-09-01T00:00:00.000Z')).toBe('2026-09')
+    expect(economicCalendarCurrentMonth('2027-01-01T00:00:00.000Z')).toBe('2027-01')
+  })
+})
