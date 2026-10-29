@@ -9,7 +9,7 @@ import {
 } from '../../shared/ipc/marketAnalysisTimelineClient'
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
-export type AnalysisRequestState = 'idle' | 'loading' | 'queued' | 'unavailable' | 'not-ready' | 'failed' | 'already-available'
+export type AnalysisRequestState = 'idle' | 'loading' | 'queued' | 'still-running' | 'unavailable' | 'not-ready' | 'failed' | 'already-available'
 /**
  * Where a failed request failed.
  *
@@ -370,10 +370,10 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     if (pollAttempt >= analysisTimelineRefreshPolicy.maxPollAttempts) {
       const stillRunning = Boolean(latest && ['queued', 'running'].includes(latest.status))
       if (stillRunning) {
-        // Stop watching without claiming a failure: the run is still inside (or past) its job
-        // budget, and the live poll will still show a published node when it lands. `queued`
-        // here would leave the action disabled with no timer left to clear it.
-        setRequestState('idle')
+        // Stop watching without claiming a failure: the run is past the job budget but may still
+        // land, and the live poll will show it. The action is released and the panel says it is
+        // still running; `queued` here would leave the button disabled with no timer left.
+        setRequestState('still-running')
         return { outcome: 'pending' }
       }
       setRequestState('failed')

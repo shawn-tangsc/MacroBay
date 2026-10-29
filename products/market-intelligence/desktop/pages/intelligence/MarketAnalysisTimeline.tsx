@@ -32,6 +32,8 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   initialAnalysisQueued: string
   initialAnalysisUnavailable: string
   analysisRefreshFailed: string
+  /** The bounded wait ended while the run was still queued/running. */
+  analysisStillRunning: string
   analysisServiceNotReady: string
   retryAnalysis: string
   /** Label of the control that puts an error banner away. */
@@ -175,6 +177,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
           </> : null}
           {state.entries.length > 0 && requestState === 'already-available' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisRefreshAlreadyAvailable}</p> : null}
           {state.entries.length > 0 && requestState === 'not-ready' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisServiceNotReady}</p> : null}
+          {state.entries.length > 0 && requestState === 'still-running' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisStillRunning}</p> : null}
           {refreshError.visible ? <AnalysisRequestErrorBanner
             // A run that finished without publishing is not a request that failed: the click was
             // accepted, the analysis was rejected. Saying "the request did not go through" for
