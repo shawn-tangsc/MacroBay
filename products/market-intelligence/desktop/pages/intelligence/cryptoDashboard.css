@@ -468,3 +468,20 @@
 :root[data-theme='light'] .mi-crypto-dashboard .mi-crypto-dashboard__label {
   color: var(--mi-dashboard-lime);
 }
+
+.mi-crypto-dashboard__briefing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-lime) 55%, var(--mi-dashboard-line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mi-dashboard-lime) 9%, var(--mi-dashboard-surface));
+  color: var(--mi-dashboard-lime);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mi-crypto-dashboard__briefing:hover { background: color-mix(in srgb, var(--mi-dashboard-lime) 15%, var(--mi-dashboard-surface)); }
+.mi-crypto-dashboard__briefing:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }

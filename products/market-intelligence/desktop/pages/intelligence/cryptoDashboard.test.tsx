@@ -656,24 +656,21 @@ describe('crypto intelligence dashboard', () => {
     expect(container.textContent).not.toContain(text.dashboard.dailyBriefing.entry)
   })
 
-  it('opens the daily brief from the header and closes it', async () => {
+  it('navigates to the daily brief page from the header', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
+    const onOpenBriefing = vi.fn()
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
-      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
+      onOpenBriefing
     })))
     await flush()
 
     await act(async () => findButton(container, text.dashboard.dailyBriefing.entry).click())
-    await flush()
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
-
-    await act(async () => container.querySelector<HTMLButtonElement>('.mi-daily-briefing__close')!.click())
-    await flush()
-    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    expect(onOpenBriefing).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the dashboard root constrained so its lower checklist sections can scroll inside the product host', () => {

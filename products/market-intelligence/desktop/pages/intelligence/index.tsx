@@ -11,6 +11,7 @@ import { AgentPortal } from './AgentPortal'
 import { useCryptoActivation } from './useCryptoActivation'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { DailyBriefingPage } from './DailyBriefingPage'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { DashboardPanelDrawer } from './DashboardPanelDrawer'
@@ -58,7 +59,7 @@ function IntelligencePageBody(): React.ReactElement {
   const sampleNow = sample.now
   const { activation, sourceCounts } = useCryptoActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
-  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar'>('portal')
+  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('portal')
   const sampleAvailable = sample.state.scenarioCount > 0
     && sample.state.unavailableReason !== 'no-scenario'
   const openCryptoPrimary = (): void => {
@@ -119,7 +120,15 @@ function IntelligencePageBody(): React.ReactElement {
           text={sampleText.banner as SampleModeBannerText}
         />
       ) : null}
-      {activeView === 'calendar' ? (
+      {activeView === 'briefing' ? (
+        <DailyBriefingPage
+          locale={language}
+          text={text.dashboard.dailyBriefing}
+          eventTitles={text.analysisWorkspace.readableNames.eventName}
+          onBack={() => setActiveView('dashboard')}
+          onConfigureSources={() => setSourceDrawerOpen(true)}
+        />
+      ) : activeView === 'calendar' ? (
         <EconomicCalendar
           client={macroEconomicCalendarClient}
           now={sampleNow}
@@ -156,6 +165,7 @@ function IntelligencePageBody(): React.ReactElement {
           key={sample.sessionKey}
           locale={language}
           briefingEnabled={!sample.state.active}
+          onOpenBriefing={() => setActiveView('briefing')}
           client={macroEconomicCalendarClient}
           fearGreedClient={intelligenceFearGreedClient}
           fundingRateClient={intelligenceFundingRateHistoryClient}

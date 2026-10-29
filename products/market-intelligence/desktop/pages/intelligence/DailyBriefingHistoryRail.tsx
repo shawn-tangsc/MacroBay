@@ -1,12 +1,14 @@
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingText } from './DailyBriefingDocumentView'
+import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
-export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, locale, text, onSelect }: Readonly<{
+export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, locale, text, formatTime, onSelect }: Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
   selectedDate?: string
   todayDate: string
   locale: DailyBriefingLocale
   text: DailyBriefingText
+  formatTime?: (value: string, precision?: 'minute' | 'second') => string
   onSelect: (date: string) => void
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
@@ -21,12 +23,20 @@ export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, lo
             aria-current={selected ? 'true' : undefined}
             data-date={edition.date} data-state={edition.state}
             className="mi-daily-briefing__rail-row" onClick={() => onSelect(edition.date)}>
-            <span className="mi-daily-briefing__rail-date">{formatDate(edition.date, locale)}</span>
-            <span className="mi-daily-briefing__rail-tags">
+            <span className="mi-daily-briefing__rail-line">
+              <span className="mi-daily-briefing__rail-date">{formatDate(edition.date, locale)}</span>
               {edition.date === todayDate ? <em>{text.history.today}</em> : null}
-              {missing ? <small>{text.history.missing}</small> : edition.availableLocales.length > 1 ? <small>{text.history.otherLocale}</small> : null}
+              {!missing && edition.availableLocales.length > 1 ? <small>{text.history.otherLocale}</small> : null}
             </span>
-            {edition.direction ? <i data-direction={edition.direction} aria-hidden="true" /> : null}
+            {missing ? <small className="mi-daily-briefing__rail-missing">{text.history.missingRun}</small> : <>
+              <span className="mi-daily-briefing__rail-direction" data-direction={edition.direction ?? 'none'}>
+                {edition.direction ? localizedDirectionTerm(edition.direction, locale) : text.history.noConclusion}
+              </span>
+              {edition.summaryLine ? <span className="mi-daily-briefing__rail-summary">{edition.summaryLine}</span> : null}
+              <small className="mi-daily-briefing__rail-meta">
+                {edition.readingsAvailable ?? 0}/4{edition.generatedAt ? ` · ${formatTime ? formatTime(edition.generatedAt, 'minute') : edition.generatedAt.slice(11, 16)} ${text.history.generated}` : ''}
+              </small>
+            </>}
           </button>
         </div>
       })}
@@ -37,7 +47,10 @@ export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, lo
 export function formatRailDate(date: string, locale: DailyBriefingLocale): string {
   const parsed = Date.parse(`${date}T00:00:00.000Z`)
   if (!Number.isFinite(parsed)) return date
-  return new Intl.DateTimeFormat(locale, { month: 'short', day: '2-digit', timeZone: 'UTC' }).format(new Date(parsed))
+  const value = new Date(parsed)
+  const day = new Intl.DateTimeFormat(locale, { month: '2-digit', day: '2-digit', timeZone: 'UTC' }).format(value)
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(value)
+  return `${day} ${weekday}`
 }
 
 const formatDate = formatRailDate

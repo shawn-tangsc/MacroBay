@@ -15,7 +15,6 @@ import { useDashboardFeedStatus } from './useDashboardFeedStatus'
 import { useDashboardEconomicCalendar } from './useDashboardEconomicCalendar'
 import { useDashboardFearGreed } from './useDashboardFearGreed'
 import { useDashboardFundingRateHistory } from './useDashboardFundingRateHistory'
-import { DailyBriefingOverlay } from './DailyBriefingOverlay'
 
 import './cryptoDashboard.css'
 import { CrossAssetObservationPanel } from '../../features/industry/cross-asset/CrossAssetObservationPanel'
@@ -52,9 +51,9 @@ type CryptoDashboardText = {
   dailyBriefing: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['dailyBriefing']
 }
 
-type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
+type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, client, fearGreedClient, fundingRateClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -70,7 +69,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
-  const [briefingOpen, setBriefingOpen] = useState(false)
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
   const [capitalRefreshing, setCapitalRefreshing] = useState(false)
   const [capitalRefreshFailed, setCapitalRefreshFailed] = useState(false)
@@ -125,7 +123,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           <p>{text.description}</p>
         </div>
         <div className="mi-crypto-dashboard__tools">
-          {briefingEnabled ? <button className="mi-crypto-dashboard__briefing" onClick={() => setBriefingOpen(true)} type="button">{text.dailyBriefing.entry}</button> : null}
+          {briefingEnabled ? <button className="mi-crypto-dashboard__briefing" onClick={onOpenBriefing} type="button">{text.dailyBriefing.entry}</button> : null}
           <button className="mi-crypto-dashboard__configure" onClick={onConfigureSources} type="button">{text.configureSources}</button>
           <button className="mi-crypto-dashboard__back" onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToAgents}</button>
         </div>
@@ -157,15 +155,6 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         <PositioningPanel fearGreedState={fearGreedState} text={text} />
         <FundingRateHistoryPanel state={fundingRateState} text={text.fundingRate} />
       </div>
-
-      <DailyBriefingOverlay
-        open={briefingOpen}
-        locale={locale}
-        text={text.dailyBriefing}
-        {...(calendarEventTitles ? { eventTitles: calendarEventTitles } : {})}
-        onClose={() => setBriefingOpen(false)}
-        onConfigureSources={() => { setBriefingOpen(false); onConfigureSources() }}
-      />
 
       <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
     </main>

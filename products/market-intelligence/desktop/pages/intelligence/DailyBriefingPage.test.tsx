@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
-import { DailyBriefingOverlay } from './DailyBriefingOverlay'
+import { DailyBriefingPage } from './DailyBriefingPage'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 
@@ -114,21 +114,21 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function renderOverlay(client: ReturnType<typeof fakeClient>, onClose = vi.fn(), onConfigureSources?: () => void): Promise<HTMLDivElement> {
+async function renderPage(client: ReturnType<typeof fakeClient>, onBack = vi.fn(), onConfigureSources?: () => void): Promise<HTMLDivElement> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DailyBriefingOverlay open locale="zh-CN" text={text} eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }} onClose={onClose} {...(onConfigureSources ? { onConfigureSources } : {})} client={client} />)
+    root!.render(<DailyBriefingPage locale="zh-CN" text={text} eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }} onBack={onBack} {...(onConfigureSources ? { onConfigureSources } : {})} client={client} />)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return container
 }
 
-describe('daily briefing overlay', () => {
-  it('renders today, the 14-day rail, and closes from the close button or Escape', async () => {
-    const onClose = vi.fn()
-    const dom = await renderOverlay(fakeClient(), onClose)
+describe('daily briefing page', () => {
+  it('renders today, the 14-day rail and goes back to the dashboard', async () => {
+    const onBack = vi.fn()
+    const dom = await renderPage(fakeClient(), onBack)
     expect(dom.textContent).toContain('每日简报')
     expect(dom.textContent).toContain('CPI 超预期')
     expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
@@ -136,15 +136,13 @@ describe('daily briefing overlay', () => {
     expect(dom.querySelector('[data-date="2026-10-30"]')?.textContent).toContain(text.history.today)
     expect(dom.querySelector('[data-date="2026-10-28"]')?.hasAttribute('disabled')).toBe(true)
 
-    act(() => dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__close')!.click())
-    expect(onClose).toHaveBeenCalledTimes(1)
-    act(() => { window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
-    expect(onClose).toHaveBeenCalledTimes(2)
+    act(() => dom.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__back')!.click())
+    expect(onBack).toHaveBeenCalledTimes(1)
   })
 
   it('loads a historical edition read-only and leaves a missing day disabled', async () => {
     const client = fakeClient()
-    const dom = await renderOverlay(client)
+    const dom = await renderPage(client)
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
 
@@ -160,7 +158,7 @@ describe('daily briefing overlay', () => {
   it('copies the current edition as text and reports success', async () => {
     const writeText = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })
-    const dom = await renderOverlay(fakeClient())
+    const dom = await renderPage(fakeClient())
     const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
     await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
     expect(writeText).toHaveBeenCalledTimes(1)
@@ -174,7 +172,7 @@ describe('daily briefing overlay', () => {
     const writeText = vi.fn(async () => { throw new Error('denied') })
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     const client = fakeClient()
-    const dom = await renderOverlay(client)
+    const dom = await renderPage(client)
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
@@ -185,7 +183,7 @@ describe('daily briefing overlay', () => {
 
   it('guides a clean install to the sources when every reading is missing', async () => {
     const onConfigureSources = vi.fn()
-    const dom = await renderOverlay(fakeClient({
+    const dom = await renderPage(fakeClient({
       getToday: vi.fn(async () => ({ state: 'available' as const, document: emptyDocument() }))
     }), vi.fn(), onConfigureSources)
     expect(dom.textContent).toContain(text.emptyGuide)
@@ -196,7 +194,7 @@ describe('daily briefing overlay', () => {
 
   it('regenerates today in place', async () => {
     const client = fakeClient()
-    const dom = await renderOverlay(client)
+    const dom = await renderPage(client)
     const regenerate = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
     await act(async () => { regenerate.click(); await Promise.resolve(); await Promise.resolve() })
     expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
@@ -208,7 +206,7 @@ describe('daily briefing overlay', () => {
       .mockRejectedValueOnce(new Error('down'))
       .mockResolvedValueOnce({ state: 'available' as const, document: briefingDocument() })
     const client = fakeClient({ getToday })
-    const dom = await renderOverlay(client)
+    const dom = await renderPage(client)
     expect(dom.textContent).toContain(text.unavailable)
     const retry = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.retry)!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })

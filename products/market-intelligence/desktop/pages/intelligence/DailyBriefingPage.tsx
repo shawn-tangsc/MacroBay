@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Settings2 } from 'lucide-react'
+import { ArrowLeft, Settings2 } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
@@ -20,18 +20,20 @@ type ViewState =
   | Readonly<{ status: 'unavailable' }>
   | Readonly<{ status: 'ready'; document: DailyBriefingDocument; kind: 'today' | 'history' }>
 
-export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose, onConfigureSources, client = dailyBriefingClient }: Readonly<{
-  open: boolean
+/**
+ * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
+ * page keeps the history rail and report in one full-width surface.
+ */
+export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigureSources, client = dailyBriefingClient }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   text: DailyBriefingText
   eventTitles?: Record<string, string>
-  onClose: () => void
+  onBack: () => void
   onConfigureSources?: () => void
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings'>
-}>): React.ReactElement | null {
+}>): React.ReactElement {
   const timeZone = useMemo(() => resolveSystemTimeZone(), [])
   const formatTime = useShellTimeFormat()
-  const closeRef = useRef<HTMLButtonElement>(null)
   const requestRef = useRef(0)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
   const [view, setView] = useState<ViewState>({ status: 'loading' })
@@ -44,7 +46,6 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
 
   useEffect(() => {
-    if (!open) return
     let active = true
     setView({ status: 'loading' })
     setEditions([])
@@ -63,17 +64,9 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
       setEditions(rows.slice(0, 14))
     })()
     return () => { active = false }
-  }, [open, locale, timeZone, client, reloadKey])
+  }, [locale, timeZone, client, reloadKey])
 
   useEffect(() => () => { if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current) }, [])
-
-  useEffect(() => {
-    if (!open) return
-    closeRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent): void => { if (event.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
 
   const selectEdition = (date: string): void => {
     const row = editions.find((edition) => edition.date === date)
@@ -129,49 +122,57 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
     copyTimer.current = window.setTimeout(() => setCopyState('idle'), 2_000)
   }
 
-  if (!open) return null
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
-  return <div className="mi-daily-briefing" role="dialog" aria-modal="true" aria-label={text.title}
-    onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-    <div className="mi-daily-briefing__panel">
-      <div className="mi-daily-briefing__actions">
+  return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
+    <header className="mi-daily-briefing-page__bar">
+      <button className="mi-daily-briefing-page__back" type="button" onClick={onBack}>
+        <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
+      </button>
+      <div className="mi-daily-briefing-page__actions">
         {view.status === 'ready' && view.kind === 'today' ? <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
           {regenerating ? text.regenerating : text.regenerate}
         </button> : null}
-        <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
         {view.status === 'ready' ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </button> : null}
-        <button ref={closeRef} className="mi-daily-briefing__close" type="button" onClick={onClose} aria-label={text.close}>×</button>
+        <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
       </div>
-      <div className="mi-daily-briefing__layout">
-        <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
-          locale={locale} text={text} onSelect={selectEdition} />
-        <div className="mi-daily-briefing__content">
-          {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.loading} minHeight={220} /></div> : null}
-          {view.status === 'unavailable' ? <div className="mi-daily-briefing__state" role="alert">
-            <h2>{text.title}</h2>
-            <p>{text.unavailable}</p>
+    </header>
+    <div className="mi-daily-briefing-page__body">
+      <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
+        locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
+      <section className="mi-daily-briefing-page__content">
+        {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.loading} minHeight={220} /></div> : null}
+        {view.status === 'unavailable' ? <div className="mi-daily-briefing-page__empty" role="alert">
+          {editions.every((edition) => edition.state === 'missing') ? <>
+            <h2>{text.noBriefTitle}</h2>
+            <p>{text.noBriefBody}</p>
+          </> : <>
+            <h2>{text.unavailable}</h2>
+            <p>{text.unavailableHint}</p>
+          </>}
+          <div className="mi-daily-briefing-page__empty-actions">
+            {onConfigureSources ? <button type="button" className="mi-daily-briefing-page__primary" onClick={onConfigureSources}>{text.configureSources}</button> : null}
             <button type="button" onClick={() => setReloadKey((key) => key + 1)}>{text.retry}</button>
-          </div> : null}
-          {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
-          {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
-            <p>{text.emptyGuide}</p>
-            {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
-          </div> : null}
-          {view.status === 'ready' ? <DailyBriefingDocumentView
-            document={view.document}
-            text={text}
-            locale={locale}
-            readOnly={view.kind === 'history'}
-            {...(eventTitles ? { eventTitles } : {})}
-            formatTime={formatTime}
-          /> : null}
-        </div>
-      </div>
+          </div>
+        </div> : null}
+        {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
+        {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
+          <p>{text.emptyGuide}</p>
+          {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
+        </div> : null}
+        {view.status === 'ready' ? <DailyBriefingDocumentView
+          document={view.document}
+          text={text}
+          locale={locale}
+          readOnly={view.kind === 'history'}
+          {...(eventTitles ? { eventTitles } : {})}
+          formatTime={formatTime}
+        /> : null}
+      </section>
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
-  </div>
+  </main>
 }
 
 function summaryFromDocument(document: DailyBriefingDocument): DailyBriefingEditionSummary {
