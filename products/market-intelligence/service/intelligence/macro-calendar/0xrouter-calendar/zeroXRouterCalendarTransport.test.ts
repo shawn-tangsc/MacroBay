@@ -286,9 +286,11 @@ describe('0xRouter calendar transport', () => {
     expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-02-26T00:00:00.000Z'))).toBe('2026-03')
     expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-12-31T00:00:00.000Z'))).toBe('2027-01')
     // Fixed rotation: the hour names one feed, so the extra two requests never come from all three.
-    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T00:10:00.000Z'))).toBe('macro-calendar-0xrouter-economic-data')
-    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T01:10:00.000Z'))).toBe('macro-calendar-0xrouter-financial-events')
-    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T02:10:00.000Z'))).toBe('macro-calendar-0xrouter-central-bank-activities')
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T00:10:00.000Z'))).toBe('macro-calendar-0xrouter-financial-events')
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T01:10:00.000Z'))).toBe('macro-calendar-0xrouter-central-bank-activities')
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T02:10:00.000Z'))).toBe('macro-calendar-0xrouter-economic-data')
+    // The day is part of the slot: the same hour tomorrow belongs to the next feed.
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-30T01:10:00.000Z'))).toBe('macro-calendar-0xrouter-economic-data')
   })
 
   it('prefetches the next UTC month for the hour feed inside the end-of-month window', async () => {
@@ -298,11 +300,11 @@ describe('0xRouter calendar transport', () => {
     expect(batch.scopes).toHaveLength(8)
     expect(batch.results).toHaveLength(8)
     expect(batch.scopes.filter(scope => scope.month === '2026-10').map(scope => [scope.descriptorId, scope.locale])).toEqual([
-      ['macro-calendar-0xrouter-financial-events', 'zh'],
-      ['macro-calendar-0xrouter-financial-events', 'en']
+      ['macro-calendar-0xrouter-central-bank-activities', 'zh'],
+      ['macro-calendar-0xrouter-central-bank-activities', 'en']
     ])
     expect(requestJsonBody).toHaveBeenCalledTimes(8)
-    const nextMonthUrl = new URL((requestJsonBody.mock.calls[4]![0] as { url: string }).url)
+    const nextMonthUrl = new URL((requestJsonBody.mock.calls[6]![0] as { url: string }).url)
     expect(nextMonthUrl.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 9, 1)))
     expect(nextMonthUrl.searchParams.get('locale')).toBe('zh')
   })

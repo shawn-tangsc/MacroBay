@@ -181,7 +181,9 @@ export const zeroXRouterCalendarAutomaticPolicy = Object.freeze({
   /** Days before the end of the UTC month from which the next month is prefetched. */
   prefetchWindowDays: 3,
   /** One feed owns the prefetch for a whole UTC hour, then the next one takes over. */
-  prefetchRotationHours: 1
+  prefetchRotationHours: 1,
+  /** Also shift the owner by the UTC day, so a short daily session still reaches every feed. */
+  prefetchRotateByDay: true
 })
 
 export type CalendarAutomaticScope = Readonly<{ descriptorId: DescriptorId; month: string; locale: Locale }>
@@ -235,8 +237,13 @@ export function zeroXRouterCalendarPrefetchMonth(now: Date): string | undefined 
 export function zeroXRouterCalendarPrefetchOwner(now: Date): DescriptorId | undefined {
   const descriptors = Object.keys(zeroXRouterCalendarTransportPolicy.descriptorPaths) as DescriptorId[]
   if (!descriptors.length) return undefined
-  const slot = Math.floor(now.getUTCHours() / zeroXRouterCalendarAutomaticPolicy.prefetchRotationHours)
-  return descriptors[slot % descriptors.length]
+  const policy = zeroXRouterCalendarAutomaticPolicy
+  const hours = Math.floor(now.getTime() / (policy.prefetchRotationHours * 3_600_000))
+  // A desktop session that only runs for a few minutes at the same time every day would always
+  // land on the same hour, so the day is part of the slot: across the end-of-month window every
+  // feed still gets its turn.
+  const days = policy.prefetchRotateByDay ? Math.floor(now.getTime() / 86_400_000) : 0
+  return descriptors[(hours + days) % descriptors.length]
 }
 
 function isCalendarRequest(input: unknown): input is CalendarRequest {

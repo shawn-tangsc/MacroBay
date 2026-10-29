@@ -83,10 +83,10 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     // months need their own verdict, and the two feeds that were not asked must not appear failed.
     const h = await setup()
     h.setTime('2026-09-29T01:00:00.000Z')
-    expect((await h.runtime.refreshAutomatic(['macro-calendar-0xrouter-financial-events'])).state).toBe('completed')
-    expect(h.runtime.readRefreshAttempt({ month: '2026-09', locale: 'zh' }, 'financial-event')).toMatchObject({
+    expect((await h.runtime.refreshAutomatic(['macro-calendar-0xrouter-central-bank-activities'])).state).toBe('completed')
+    expect(h.runtime.readRefreshAttempt({ month: '2026-09', locale: 'zh' }, 'central-bank-activity')).toMatchObject({
       state: 'succeeded', trigger: 'automatic', attemptedAt: '2026-09-29T01:00:00.000Z' })
-    expect(h.runtime.readRefreshAttempt({ month: '2026-10', locale: 'zh' }, 'financial-event')).toMatchObject({
+    expect(h.runtime.readRefreshAttempt({ month: '2026-10', locale: 'zh' }, 'central-bank-activity')).toMatchObject({
       state: 'succeeded', trigger: 'automatic' })
     expect(h.runtime.readRefreshAttempt({ month: '2026-10', locale: 'zh' }, 'economic-indicator')).toBeUndefined()
     expect(h.runtime.readRefreshAttempt({ month: '2026-09', locale: 'zh' }, 'economic-indicator')).toBeUndefined()
