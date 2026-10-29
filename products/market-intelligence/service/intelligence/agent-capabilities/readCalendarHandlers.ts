@@ -33,8 +33,15 @@ export async function handleQueryMacroCalendar(
 
   const officialEvents = filterCalendarEvents(readCalendarEvents(official), from, to)
   const marketEvents = filterCalendarEvents(market.events, from, to)
-  if (officialEvents.length === 0) caveats.push('official-calendar-empty')
-  if (marketEvents.length === 0) caveats.push('market-calendar-empty')
+
+  const officialSummary = summarizeCalendarSide(official, officialEvents.length)
+  const marketSummary = { ...summarizeCalendarSide(market, marketEvents.length), pages: market.pages }
+  // "Empty" is only an answer when that side actually answered. An unavailable side reports
+  // unavailable, never "no events" — the two are different facts and the model must not merge them.
+  if (officialSummary.state === 'available' && officialEvents.length === 0) caveats.push('official-calendar-empty')
+  if (officialSummary.state !== 'available') caveats.push('official-calendar-unavailable')
+  if (marketSummary.state === 'available' && marketEvents.length === 0) caveats.push('market-calendar-empty')
+  if (marketSummary.state === 'available' && market.failureCode) caveats.push('market-calendar-partial')
 
   const merged = [
     ...officialEvents.map((event) => summarizeCalendarEvent(event, 'official')),
@@ -50,14 +57,15 @@ export async function handleQueryMacroCalendar(
 
   // The raw pages carry provider identity, query envelopes and per-event provenance; the model only
   // needs the counts and the merged timeline, and the full pages overflow the tool size budget.
+  const answered = officialSummary.state === 'available' || marketSummary.state === 'available'
   return {
-    state: events.length > 0 ? 'available' : 'empty',
+    state: events.length > 0 ? 'available' : answered ? 'empty' : 'unavailable',
     month,
     asOf,
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
-    official: summarizeCalendarSide(official, officialEvents.length),
-    market: { ...summarizeCalendarSide(market, marketEvents.length), pages: market.pages },
+    official: officialSummary,
+    market: marketSummary,
     events,
     truncated: merged.length > events.length,
     totalEvents: merged.length,
@@ -90,12 +98,12 @@ function readAllMarketCalendarPages(
         ...(cursor ? { cursor } : {})
       })
       if (!page || page.state !== 'available') {
-        return {
-          state: 'unavailable',
-          events: [],
-          pages,
-          ...(page && typeof page.failureCode === 'string' ? { failureCode: page.failureCode } : {})
-        }
+        const failureCode = page && typeof page.failureCode === 'string' ? page.failureCode : undefined
+        // Keep the pages already read: a reader that saw 10-01..10-21 should not be told the month
+        // is empty because page four failed.
+        return pages > 0
+          ? { state: 'available', events, pages, ...(failureCode ? { failureCode } : {}) }
+          : { state: 'unavailable', events: [], pages, ...(failureCode ? { failureCode } : {}) }
       }
       pages += 1
       events.push(...readCalendarEvents(page))
@@ -138,10 +146,19 @@ function filterCalendarEvents(
   // offset, and lexicographic comparison across offsets lands on the wrong day.
   const fromMs = from ? Date.parse(from) : undefined
   const toMs = to ? Date.parse(to) : undefined
+  // Date-only events have no instant. Comparing them at UTC midnight drops a same-day event for a
+  // caller whose window starts mid-day in a western offset, so compare the date prefix instead.
+  const fromDate = from?.slice(0, 10)
+  const toDate = to?.slice(0, 10)
   return events.filter((event) => {
     const scheduledAt = typeof event.scheduledAt === 'string' ? event.scheduledAt : undefined
     const scheduledDate = typeof event.scheduledDate === 'string' ? event.scheduledDate : undefined
-    const point = scheduledAt ?? (scheduledDate ? `${scheduledDate}T00:00:00.000Z` : undefined)
+    if (!scheduledAt && scheduledDate) {
+      if (fromDate && scheduledDate < fromDate) return false
+      if (toDate && scheduledDate >= toDate) return false
+      return true
+    }
+    const point = scheduledAt
     const pointMs = point ? Date.parse(point) : Number.NaN
     if (!Number.isFinite(pointMs)) return false
     if (fromMs !== undefined && pointMs < fromMs) return false
