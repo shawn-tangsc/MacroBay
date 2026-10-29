@@ -13,7 +13,18 @@ const service = {
   get: vi.fn(async () => ({ state: 'missing' as const }))
 }
 
-registerDailyBriefingIpc(register, service)
+const settings = {
+  getView: vi.fn(async () => ({
+    settings: { editorialEnabled: true, providerId: '', modelId: '' },
+    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
+  })),
+  save: vi.fn(async (patch: { editorialEnabled?: boolean }) => ({
+    settings: { editorialEnabled: patch.editorialEnabled ?? true, providerId: '', modelId: '' },
+    resolved: { state: 'agent' as const, providerId: 'p', modelId: 'm', source: 'default' as const }
+  }))
+}
+
+registerDailyBriefingIpc(register, service, settings)
 
 describe('daily briefing IPC', () => {
   it('forwards a valid query', async () => {
@@ -21,6 +32,15 @@ describe('daily briefing IPC', () => {
     expect(service.getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     await handlers.get(DAILY_BRIEFING_IPC_METHODS.list)!({ locale: 'en-US', timeZone: 'UTC' })
     expect(service.list).toHaveBeenCalledWith({ locale: 'en-US', timeZone: 'UTC' })
+  })
+
+  it('reads and saves the editorial settings with a strict patch', async () => {
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.getSettings)!({})
+    expect(settings.getView).toHaveBeenCalledTimes(1)
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ editorialEnabled: false })
+    expect(settings.save).toHaveBeenCalledWith({ editorialEnabled: false })
+    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ providerId: 'p', extra: true }))
+      .rejects.toThrow('daily-briefing-invalid-request')
   })
 
   it('forwards a valid dated read', async () => {

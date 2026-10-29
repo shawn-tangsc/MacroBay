@@ -2,23 +2,50 @@ import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegist
 
 import { isDailyBriefingEditionDate, isDailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
+import type { DailyBriefingAiSettingsService } from '../daily-briefing/dailyBriefingAiSettingsService'
 
 const PRODUCT_ID = 'market-intelligence'
 
 export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
-  get: 'intelligence.dailyBriefing.get'
+  get: 'intelligence.dailyBriefing.get',
+  getSettings: 'intelligence.dailyBriefing.getSettings',
+  saveSettings: 'intelligence.dailyBriefing.saveSettings'
 })
 
 /** Read-only: one generation per (day, locale) on first open, then the stored edition. */
-export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService): void {
+export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service: DailyBriefingService, settings?: DailyBriefingAiSettingsService): void {
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getToday, async (payload) =>
     service.getToday(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>
     service.list(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.get, async (payload) =>
     service.get(readGet(payload)))
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getSettings, async () => {
+    if (!settings) throw new Error('daily-briefing-settings-unavailable')
+    return settings.getView()
+  })
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.saveSettings, async (payload) => {
+    if (!settings) throw new Error('daily-briefing-settings-unavailable')
+    return settings.save(readPatch(payload))
+  })
+}
+
+function readPatch(payload: unknown): Readonly<{ editorialEnabled?: boolean; providerId?: string; modelId?: string }> {
+  if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
+  const keys = Object.keys(payload)
+  if (keys.some((key) => !['editorialEnabled', 'providerId', 'modelId'].includes(key))) throw new Error('daily-briefing-invalid-request')
+  if (payload.editorialEnabled !== undefined && typeof payload.editorialEnabled !== 'boolean') throw new Error('daily-briefing-invalid-request')
+  for (const key of ['providerId', 'modelId'] as const) {
+    const value = payload[key]
+    if (value !== undefined && (typeof value !== 'string' || value.length > 256)) throw new Error('daily-briefing-invalid-request')
+  }
+  return {
+    ...(typeof payload.editorialEnabled === 'boolean' ? { editorialEnabled: payload.editorialEnabled } : {}),
+    ...(typeof payload.providerId === 'string' ? { providerId: payload.providerId } : {}),
+    ...(typeof payload.modelId === 'string' ? { modelId: payload.modelId } : {})
+  }
 }
 
 function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }> {

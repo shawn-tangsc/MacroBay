@@ -59,6 +59,8 @@ import { createNewsSentimentBodyTranslationService } from './news-sentiment/news
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
+import { createDailyBriefingAiSettingsService, type DailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
@@ -188,6 +190,7 @@ type IntelligenceModule = {
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
+  dailyBriefingAiSettings: DailyBriefingAiSettingsService
   rawRecordStore: ReturnType<typeof createRawRecordStore>
   macroCalendarEvidenceArchive: ReturnType<typeof createMacroCalendarEvidenceArchive>
   macroCalendarEvidenceReady: boolean
@@ -661,6 +664,14 @@ export function getIntelligenceModule(
       }),
       store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
     })
+    const dailyBriefingAiSettings = createDailyBriefingAiSettingsService({
+      store: createDailyBriefingAiSettingsStore(
+        createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
+        () => new Date().toISOString()
+      ),
+      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
+      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {})
+    })
     intelligenceModule = {
       pipeline,
       workerRuntime,
@@ -679,6 +690,7 @@ export function getIntelligenceModule(
       sourcesService,
       publicQueryService,
       dailyBriefingService,
+      dailyBriefingAiSettings,
       rawRecordStore,
       macroCalendarEvidenceArchive,
       macroCalendarEvidenceReady: macroCalendarEvidenceMigration.state !== 'unavailable',

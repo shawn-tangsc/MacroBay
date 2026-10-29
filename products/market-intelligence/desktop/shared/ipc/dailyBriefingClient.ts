@@ -13,7 +13,9 @@ const PRODUCT_ID = 'market-intelligence'
 const METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
-  get: 'intelligence.dailyBriefing.get'
+  get: 'intelligence.dailyBriefing.get',
+  getSettings: 'intelligence.dailyBriefing.getSettings',
+  saveSettings: 'intelligence.dailyBriefing.saveSettings'
 })
 
 export type DailyBriefingClientInput = Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }>
@@ -32,10 +34,30 @@ export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'missing' }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
+export type DailyBriefingAiSettingsView = Readonly<{
+  settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string }>
+  resolved:
+    | Readonly<{ state: 'disabled' }>
+    | Readonly<{ state: 'agent'; providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
+    | Readonly<{ state: 'unavailable'; reason: 'default-unavailable' }>
+}>
+
+export type DailyBriefingAiSettingsPatch = Readonly<{
+  editorialEnabled?: boolean
+  providerId?: string
+  modelId?: string
+}>
+
+export type DailyBriefingSettingsResult =
+  | Readonly<{ state: 'available'; view: DailyBriefingAiSettingsView }>
+  | Readonly<{ state: 'unavailable'; failureCode: string }>
+
 export type DailyBriefingClient = Readonly<{
   getToday: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   list: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientListResult>
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
+  getSettings: () => Promise<DailyBriefingSettingsResult>
+  saveSettings: (patch: DailyBriefingAiSettingsPatch) => Promise<DailyBriefingSettingsResult>
 }>
 
 export const dailyBriefingClient: DailyBriefingClient = {
@@ -66,6 +88,12 @@ export const dailyBriefingClient: DailyBriefingClient = {
       return unavailable()
     }
   },
+  async getSettings() {
+    return readSettings(() => invoke(METHODS.getSettings, {}))
+  },
+  async saveSettings(patch) {
+    return readSettings(() => invoke(METHODS.saveSettings, patch))
+  },
   async get(input) {
     try {
       const value = await invoke(METHODS.get, input)
@@ -88,6 +116,32 @@ async function invoke(method: string, payload: unknown): Promise<unknown> {
 
 function unavailable(): Readonly<{ state: 'unavailable'; failureCode: string }> {
   return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
+}
+
+async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefingSettingsResult> {
+  try {
+    const value = await read()
+    if (!isRecord(value) || !isRecord(value.settings) || !isAiSettings(value.settings) || !isResolvedModel(value.resolved)) {
+      return { state: 'unavailable', failureCode: 'daily-briefing-settings-invalid' }
+    }
+    return { state: 'available', view: { settings: value.settings, resolved: value.resolved } }
+  } catch {
+    return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
+  }
+}
+
+function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string } {
+  return isExact(value, ['editorialEnabled', 'providerId', 'modelId']) &&
+    typeof value.editorialEnabled === 'boolean' && typeof value.providerId === 'string' && typeof value.modelId === 'string'
+}
+
+function isResolvedModel(value: unknown): value is DailyBriefingAiSettingsView['resolved'] {
+  if (!isRecord(value)) return false
+  if (value.state === 'disabled') return true
+  if (value.state === 'unavailable') return value.reason === 'default-unavailable'
+  return value.state === 'agent' && isText(value.providerId) && isText(value.modelId) &&
+    (value.source === 'default' || value.source === 'custom') &&
+    (value.fallback === undefined || value.fallback === 'custom-unavailable')
 }
 
 function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {

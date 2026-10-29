@@ -57,6 +57,29 @@ describe('daily briefing client', () => {
     expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
+  it('reads and saves the AI setting view without trusting a malformed resolved state', async () => {
+    stubInvoke((method, payload) => {
+      if (method === 'intelligence.dailyBriefing.getSettings') {
+        return { settings: { editorialEnabled: true, providerId: '', modelId: '' }, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
+      }
+      return {
+        settings: { editorialEnabled: false, providerId: '', modelId: '' },
+        resolved: { state: 'disabled' },
+        patch: payload
+      }
+    })
+    const settings = await dailyBriefingClient.getSettings()
+    expect(settings.state).toBe('available')
+    const saved = await dailyBriefingClient.saveSettings({ editorialEnabled: false })
+    expect(saved.state).toBe('available')
+    if (saved.state === 'available') expect(saved.view.resolved).toEqual({ state: 'disabled' })
+
+    stubInvoke(() => ({ settings: { editorialEnabled: true, providerId: '', modelId: '' }, resolved: { state: 'agent' } }))
+    expect(await dailyBriefingClient.getSettings()).toEqual({
+      state: 'unavailable', failureCode: 'daily-briefing-settings-invalid'
+    })
+  })
+
   it('lists summaries and rejects one malformed summary', async () => {
     const summary = {
       date: '2026-10-30', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated',

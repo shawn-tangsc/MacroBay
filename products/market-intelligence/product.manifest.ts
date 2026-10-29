@@ -94,6 +94,8 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dailyBriefing.getToday' },
     { method: 'intelligence.dailyBriefing.list' },
     { method: 'intelligence.dailyBriefing.get' },
+    { method: 'intelligence.dailyBriefing.getSettings' },
+    { method: 'intelligence.dailyBriefing.saveSettings' },
     { method: 'intelligence.queryRelatedEvents' },
     { method: 'intelligence.querySentimentSeries' },
     { method: 'intelligence.querySentimentSnapshot' },
