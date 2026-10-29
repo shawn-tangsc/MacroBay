@@ -1295,7 +1295,7 @@ describe('macro economic calendar', () => {
     }
   })
 
-  it('queries a directly selected month once on every real month switch without re-arming a completed fallback', async () => {
+  it('loads the target grid window on every real month switch without re-arming a completed fallback', async () => {
     vi.useFakeTimers()
     try {
       const { container, client } = await renderCalendar({
@@ -1391,7 +1391,7 @@ describe('macro economic calendar', () => {
     )
   })
 
-  it('imports a selected local BLS ICS and refreshes only the current calendar month without changing asOf', async () => {
+  it('imports a selected local BLS ICS and re-reads the current calendar window without changing asOf', async () => {
     const path = '/private/downloads/bls.ics'
     const body = 'BEGIN:VCALENDAR\nSUMMARY:secret\nEND:VCALENDAR'
     const selectFiles = vi.fn(async () => [path])
@@ -1464,7 +1464,7 @@ describe('macro economic calendar', () => {
     expect(client.getEventDetail).toHaveBeenCalledTimes(1)
   })
 
-  it('uses previous, next, the Ant Design month picker, and current reset to load one direct target each with unchanged asOf', async () => {
+  it('uses previous, next, the Ant Design month picker, and current reset to load each target grid window with unchanged asOf', async () => {
     const { container, client } = await renderCalendar({
       queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }),
       getEventDetail: async () => unavailableDetail()
@@ -1581,7 +1581,7 @@ describe('macro economic calendar', () => {
     expect(readSource('products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx')).not.toContain('toISOString')
   })
 
-  it('shows only the selected target month and ignores an earlier month completion', async () => {
+  it('shows only the selected target window and ignores an earlier month completion', async () => {
     let resolveAugust: ((value: unknown) => void) | undefined
     let resolveDecember: ((value: unknown) => void) | undefined
     const { container } = await renderCalendar({
@@ -1827,6 +1827,28 @@ describe('macro economic calendar', () => {
       const second = container.querySelector('[data-date="2026-09-02"]')
       expect(second?.textContent).toContain(provider.title)
     } finally { query.mockRestore() }
+  })
+
+  it('shows the month it could read when a neighbouring month never answers', async () => {
+    vi.useFakeTimers()
+    try {
+      const august = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
+      const { container } = await renderCalendar({
+        queryMonth: ({ month }: { month: string }) => month === '2026-09'
+          ? new Promise(() => undefined)
+          : Promise.resolve({ state: 'available' as const, asOf, events: month === '2026-08' ? [august] : [] }),
+        getEventDetail: async () => unavailableDetail()
+      })
+      await act(async () => { await Promise.resolve() })
+      await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
+
+      // The month that answered stands; a neighbour that never did must not blank it.
+      expect(container.querySelector('[data-date="2026-08-12"]')?.textContent).toContain('CPI')
+      expect(container.querySelector('[data-day-summary]')?.textContent).toContain(
+        productText['zh-CN'].pages.intelligence.portal.calendar.unifiedDay.incomplete)
+      expect(container.textContent).not.toContain(
+        productText['zh-CN'].pages.intelligence.portal.calendar.failures['calendar-query-unavailable'])
+    } finally { vi.useRealTimers() }
   })
 
   it('keeps the month when only a neighbouring month fails, and marks the edges incomplete', async () => {

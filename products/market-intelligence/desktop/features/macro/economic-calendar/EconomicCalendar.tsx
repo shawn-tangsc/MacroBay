@@ -221,53 +221,77 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     setMonthState({ state: 'loading' })
     const readAsOf = nextAsOf ?? asOf
     const isCurrentOperation = (): boolean => mountedRef.current && selectedMonthRef.current === month && monthOperationRef.current?.id === operation.id
-    const markUnavailable = (): void => {
-      if (!isCurrentOperation()) return
-      if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
-      monthLoadingFallbackRef.current = undefined
-      monthOperationRef.current = undefined
-      setMonthState({ state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
-      setSelectedEventKey(undefined)
-    }
-    monthLoadingFallbackRef.current = setTimeout(markUnavailable, economicCalendarMonthLoadingPolicy.budgetMs)
     /**
      * Every month the grid draws is read, because a cell is drawn whether or not its month was
      * asked for. The named month decides the grid: if it fails the page says so, while a
      * neighbouring month that fails only costs the edges their rows.
      */
     const months = economicCalendarGridMonths(month)
-    const read = (candidate: string): Promise<unknown> => {
-      try {
-        return Promise.resolve(client.queryMonth(createEconomicCalendarMonthQuery(candidate, readAsOf)))
-      } catch {
-        return Promise.resolve(undefined)
-      }
-    }
-    void Promise.all(months.map(async (candidate) => toMonthState(await read(candidate),
-      createEconomicCalendarMonthQuery(candidate, readAsOf)))).then((states) => {
-      if (!isCurrentOperation()) return
+    const reads = new Map<string, MonthRead>()
+    const finish = (): void => {
       if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
       monthLoadingFallbackRef.current = undefined
       monthOperationRef.current = undefined
-      const primaryIndex = months.indexOf(month)
-      const primary = states[primaryIndex] ?? { state: 'unavailable' as const, failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
-      if (primary.state !== 'available') {
-        setMonthState(primary)
+    }
+    const applyWindow = (incomplete: boolean): void => {
+      const primary = reads.get(month)
+      if (!primary || primary.state !== 'available') {
+        setMonthState(primary ?? { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
         setSelectedEventKey(undefined)
         return
       }
       const events = [...primary.projection.events]
-      let incomplete = false
-      states.forEach((state, index) => {
-        if (index === primaryIndex) return
-        if (state.state === 'available') events.push(...state.projection.events)
-        else incomplete = true
-      })
-      setMonthState({ state: 'available', projection: primary.projection, events, incomplete, version: operation.id })
+      let missing = incomplete
+      for (const [candidate, read] of reads) {
+        if (candidate === month) continue
+        if (read.state === 'available') events.push(...read.projection.events)
+        else missing = true
+      }
+      setMonthState({ state: 'available', projection: primary.projection, events, incomplete: missing, version: operation.id })
       // The reader's own selection survives a re-read; nothing is picked on their behalf.
       setSelectedEventKey((current) => events.some((event) => event.eventKey === current) ? current : undefined)
-    }).catch(() => {
-      markUnavailable()
+    }
+    /**
+     * A month that answered must not be blanked by a neighbour that never did: the budget first
+     * uses what arrived (marked incomplete), and only reports the month unavailable when the
+     * month itself is what is missing.
+     */
+    const settle = (candidate: string, read: MonthRead): void => {
+      if (!isCurrentOperation()) return
+      reads.set(candidate, read)
+      // A failed named month has nothing to wait for; the page says so at once.
+      if (candidate === month && read.state !== 'available') {
+        finish()
+        applyWindow(false)
+        return
+      }
+      // One window, one render: the edges are part of the same reading, so the page waits for
+      // them. The budget is what keeps a neighbour that never answers from holding the month.
+      if (reads.size < months.length) return
+      finish()
+      applyWindow(false)
+    }
+    const markUnavailable = (): void => {
+      if (!isCurrentOperation()) return
+      monthLoadingFallbackRef.current = undefined
+      // A month that answered must not be blanked by a neighbour that never did.
+      if (reads.has(month)) { finish(); applyWindow(true); return }
+      monthOperationRef.current = undefined
+      setMonthState({ state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
+      setSelectedEventKey(undefined)
+    }
+    monthLoadingFallbackRef.current = setTimeout(markUnavailable, economicCalendarMonthLoadingPolicy.budgetMs)
+    months.forEach((candidate) => {
+      const unavailableRead: MonthRead = { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
+      let pending: Promise<unknown>
+      try {
+        pending = Promise.resolve(client.queryMonth(createEconomicCalendarMonthQuery(candidate, readAsOf)))
+      } catch {
+        settle(candidate, unavailableRead)
+        return
+      }
+      void pending.then((result) => settle(candidate, toMonthState(result, createEconomicCalendarMonthQuery(candidate, readAsOf))))
+        .catch(() => settle(candidate, unavailableRead))
     })
   }, [asOf, client])
 
