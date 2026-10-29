@@ -1430,6 +1430,34 @@ describe('macro economic calendar', () => {
     expect(document.body.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.results.imported)
   })
 
+  it('shows what an ICS import just wrote by re-reading as of the import', async () => {
+    const path = '/private/downloads/bls.ics'
+    const body = 'BEGIN:VCALENDAR\nEND:VCALENDAR'
+    const importedAt = '2026-08-06T09:00:00.000Z'
+    const imported = blsEvent({ eventKey: 'US.CPI.IMPORTED', scheduledDate: '2026-08-20',
+      scheduledAt: '2026-08-20T12:30:00.000Z', detectedAt: importedAt })
+    installFileBridge(vi.fn(async () => [path]), vi.fn(async () => ({ path, text: body, truncated: false })))
+    const { container, client } = await renderCalendar({
+      now: sequenceNow(asOf, importedAt),
+      queryMonth: async ({ asOf: requestedAsOf }: { asOf: string }) => ({ state: 'available' as const,
+        asOf: requestedAsOf, events: requestedAsOf === importedAt ? [imported] : [] }),
+      getEventDetail: async () => unavailableDetail(),
+      previewManualBlsIcs: async () => preview(),
+      importManualBlsIcs: async () => ({ ...preview(), state: 'imported' as const })
+    })
+
+    await flush()
+    expect(container.querySelector('[data-event-key="US.CPI.IMPORTED"]')).toBeNull()
+    await act(async () => button(container, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.action).click())
+    await flush()
+    await act(async () => button(document.body, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.actions.confirm).click())
+    await settleCalendar()
+
+    // The imported row is a new detection: the re-read has to be as of the import, not of entry.
+    expect(client.queryMonth).toHaveBeenCalledWith(expect.objectContaining({ asOf: importedAt }))
+    expect(container.querySelector('[data-event-key="US.CPI.IMPORTED"]')).not.toBeNull()
+  })
+
   it('clears a selected event and its detail when the imported-month refresh becomes unavailable', async () => {
     const path = '/private/downloads/bls.ics'
     const body = 'BEGIN:VCALENDAR\nEND:VCALENDAR'

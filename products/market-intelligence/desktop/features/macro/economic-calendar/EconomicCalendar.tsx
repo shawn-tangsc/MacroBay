@@ -313,7 +313,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const blsIcsImport = useBlsIcsImport({
     client,
     onImported: async () => {
-      loadMonth(selectedMonthRef.current, true)
+      // The import just wrote rows with a later detection time; reading with the as-of the page
+      // opened with would hide them until the reader switched months.
+      const importedAsOf = toCanonicalUtcMillis(now())
+      setAsOf(importedAsOf)
+      loadMonth(selectedMonthRef.current, true, importedAsOf)
     }
   })
 
