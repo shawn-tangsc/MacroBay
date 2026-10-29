@@ -30,6 +30,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
   const newsCounts = doc.data.sentiment.news.counts
   const newsTotal = doc.data.sentiment.news.itemCount ?? 0
+  const flowMax = niceFlowMax(etfRows)
   return <article className="mi-brief-poster">
     <header className="mi-brief-poster__head">
       <div>
@@ -43,11 +44,6 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       </div>
     </header>
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
-    {conclusion ? <div className="mi-brief-poster__signal">
-      <span>{localizedDirectionTerm(conclusion.direction, locale)}</span>
-      <b>{conclusion.summary.split(/[。.!?]/)[0]}</b>
-      <small>{text.sections.conclusion} · {formatTime(conclusion.publishedAt, 'minute')}</small>
-    </div> : null}
 
     {hasNews ? <section className="mi-brief-poster__news-section">
       <h2>{text.sections.news}</h2>
@@ -80,27 +76,20 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
         {metricRows.map((row) => <div key={row.id}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
       </div> : null}
-      {etfRows.length > 0 || newsCounts ? <div className="mi-brief-poster__visuals">
-        {etfRows.length > 0 ? <div className="mi-brief-poster__visual">
-          <h3>{text.visuals.etf}</h3>
+      {etfRows.length > 0 ? <div className="mi-brief-poster__visuals">
+        <div className="mi-brief-poster__visual">
+          <div className="mi-brief-poster__flow-head"><h3>{text.visuals.etf}</h3><small>{text.visuals.scale.replace('{max}', flowLabel(flowMax, locale))}</small></div>
           {etfRows.map((row) => <div className="mi-brief-poster__flow" key={row.id}>
             <span>{rowLabel(text, row.labelKey)}</span>
-            <div className="mi-brief-poster__flow-track"><i data-positive={Boolean(row.value && row.value.number >= 0)} style={{ width: `${Math.min(100, Math.max(4, Math.abs(row.value?.number ?? 0) / 200_000_000 * 100))}%` }} /></div>
+            <div className="mi-brief-poster__flow-track"><i className="mi-brief-poster__flow-zero" /><i className="mi-brief-poster__flow-bar" data-positive={Boolean(row.value && row.value.number >= 0)} style={flowBarStyle(row.value?.number ?? 0, flowMax)} /></div>
             <b>{formatBriefingValue(row.value, text.noValue, locale)}</b>
           </div>)}
-        </div> : null}
-        {newsCounts && newsTotal > 0 ? <div className="mi-brief-poster__visual">
-          <h3>{text.visuals.news}</h3>
-          <div className="mi-brief-poster__polarity">
-            <i style={{ width: `${newsCounts.bearish / newsTotal * 100}%`, background: '#be3a2b' }} />
-            <i style={{ width: `${newsCounts.bullish / newsTotal * 100}%`, background: '#2f7d45' }} />
-            <i style={{ width: `${newsCounts.mixed / newsTotal * 100}%`, background: '#b45309' }} />
-            <i style={{ width: `${newsCounts.neutral / newsTotal * 100}%`, background: '#b9b1a2' }} />
-          </div>
-          <small>{text.groups.sentiment} · {newsTotal} · {newsCounts.bearish} / {newsCounts.bullish} / {newsCounts.mixed} / {newsCounts.neutral}</small>
-        </div> : null}
+          <div className="mi-brief-poster__flow-axis"><span>−{flowLabel(flowMax, locale)}</span><span>0</span><span>+{flowLabel(flowMax, locale)}</span></div>
+        </div>
       </div> : null}
     </section> : null}
+
+    {newsTotal > 0 ? <p className="mi-brief-poster__news-summary">{text.visuals.news} · {newsTotal} 条：{text.polarity.bearish} {newsCounts?.bearish ?? 0} · {text.polarity.bullish} {newsCounts?.bullish ?? 0} · {text.polarity.mixed} {newsCounts?.mixed ?? 0} · {text.polarity.neutral} {newsCounts?.neutral ?? 0}</p> : null}
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
@@ -171,6 +160,23 @@ function nextCountry(item: DailyBriefingDocument['next']['items'][number]): stri
 function daysUntil(at: string, from: string): number {
   const diff = Date.parse(at) - Date.parse(from)
   return Number.isFinite(diff) ? Math.max(0, Math.ceil(diff / 86_400_000)) : 0
+}
+
+function niceFlowMax(rows: readonly Readonly<{ value: Readonly<{ number: number }> | null }>[]): number {
+  const largest = rows.reduce((max, row) => Math.max(max, Math.abs(row.value?.number ?? 0)), 0)
+  if (largest <= 0) return 0
+  const step = largest >= 1_000_000_000 ? 500_000_000 : largest >= 100_000_000 ? 50_000_000 : 10_000_000
+  return Math.ceil(largest / step) * step
+}
+
+function flowLabel(max: number, locale: 'zh-CN' | 'en-US'): string {
+  return formatBriefingValue({ number: max, format: 'flow-usd' }, '—', locale).replace(' USD', '')
+}
+
+function flowBarStyle(value: number, max: number): { left: string; width: string } {
+  if (max <= 0) return { left: '50%', width: '0%' }
+  const percent = Math.min(50, Math.abs(value) / max * 50)
+  return value >= 0 ? { left: '50%', width: `${percent}%` } : { left: `${50 - percent}%`, width: `${percent}%` }
 }
 
 function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {
