@@ -467,34 +467,36 @@ describe('crypto intelligence dashboard', () => {
     expect(capitalRule).toContain('align-content: start')
     expect(capitalRule).toContain('row-gap: var(--mi-dashboard-capital-content-row-gap)')
     expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
-    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 1fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 1fr')
     expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
     expect(trendsRule).toContain('justify-content: start')
     expect(headerBandRule).toContain('min-width: 0')
   })
 
-  it('keeps the unified three-series flow chart beside the summary instead of below it', () => {
+  it('keeps the unified three-series flow chart beside and as tall as the summary', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const etfRule = cssBlock(styles, '.mi-capital-conditions__etf-flow {')
     const barsRule = cssBlock(styles, '.mi-capital-conditions__chart {')
     const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(dashboardRootRule).toContain('--mi-dashboard-etf-flow')
-    expect(etfRule).toContain('align-self: start')
+    expect(etfRule).toContain('align-self: stretch')
+    expect(etfRule).toContain('grid-template-rows: auto auto minmax(var(--mi-dashboard-etf-flow-chart-height), 1fr)')
     expect(etfRule).toContain('margin-right: var(--mi-dashboard-band-zone-inline)')
+    expect(barsRule).toContain('min-height: var(--mi-dashboard-etf-flow-chart-height)')
     expect(barsRule).toContain('linear-gradient')
     expect(stackStyles).toContain('.mi-capital-conditions__etf-flow { margin-right: 0; }')
     expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('uses chart-dominant workspaces and a horizontal source status bar', () => {
+  it('uses equal-width capital columns and a horizontal source status bar', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const sourceRule = cssBlock(styles, '.mi-crypto-dashboard__source-region {')
     const sourceRowRule = cssBlock(styles, '.mi-crypto-dashboard__source-row {')
 
-    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 1fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')

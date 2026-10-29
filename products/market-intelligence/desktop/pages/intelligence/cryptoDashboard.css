@@ -52,8 +52,8 @@
   --mi-dashboard-gauge-block-padding: 8px 0 0;
   --mi-dashboard-positioning-sentiment-allocation: 1fr;
   --mi-dashboard-positioning-funding-allocation: 4fr;
-  --mi-dashboard-capital-summary-allocation: 8fr;
-  --mi-dashboard-market-flow-allocation: 17fr;
+  --mi-dashboard-capital-summary-allocation: 1fr;
+  --mi-dashboard-market-flow-allocation: 1fr;
   --mi-dashboard-source-row-gap: 8px;
   --mi-dashboard-sentiment-extreme-fear: #e05a63;
   --mi-dashboard-sentiment-fear: #f08b57;
@@ -115,7 +115,7 @@
 .mi-capital-conditions__primary-label { color: var(--mi-dashboard-muted); font-size: 12px; min-width: 0; }
 .mi-capital-conditions__primary-value { color: var(--mi-dashboard-caution); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .mi-capital-conditions__observed-at { color: var(--mi-dashboard-muted); font-size: 10px; }
-.mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: start; }
+.mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: stretch; }
 .mi-capital-conditions__summary { display: grid; align-content: start; gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 /* A grid item stretches to its column by default, which would give the refresh control the
    width of the panel; the terminal buttons in this workspace are content-sized. */
@@ -127,8 +127,10 @@
 .mi-capital-conditions dl > div.mi-capital-conditions__cumulative { grid-column: 1 / -1; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 4px 12px; }
 .mi-capital-conditions__cumulative dd { white-space: normal; }
 .mi-capital-conditions__cumulative-window { white-space: nowrap; }
+.mi-capital-conditions__cumulative-separator { margin: 0 10px; }
 .mi-capital-conditions__cumulative-days,
 .mi-capital-conditions__cumulative-caveat { color: var(--mi-dashboard-muted); }
+.mi-capital-conditions__cumulative-caveat { font-size: 10px; }
 .mi-capital-conditions dt { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions dd { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; text-align: left; white-space: nowrap; }
 .mi-capital-conditions dd[data-flow-direction='inflow'],
@@ -144,7 +146,7 @@
 .mi-capital-conditions__etf-summary strong i[data-series='btc'] { background: var(--mi-dashboard-etf-btc); }
 .mi-capital-conditions__etf-summary strong i[data-series='eth'] { background: var(--mi-dashboard-etf-eth); }
 .mi-capital-conditions__etf-summary span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-align: right; white-space: nowrap; }
-.mi-capital-conditions__etf-flow { display: grid; align-self: start; align-content: start; gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
+.mi-capital-conditions__etf-flow { display: grid; align-self: stretch; align-content: stretch; grid-template-rows: auto auto minmax(var(--mi-dashboard-etf-flow-chart-height), 1fr); gap: var(--mi-dashboard-etf-flow-block-gap); min-width: 0; margin-right: var(--mi-dashboard-band-zone-inline); }
 .mi-capital-conditions__etf-flow > header { display: flex; align-items: center; gap: var(--mi-dashboard-etf-flow-block-gap); }
 .mi-capital-conditions__etf-flow h3 { margin: 0; color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; }
 .mi-capital-conditions__etf-flow > p { color: var(--mi-dashboard-muted); font-size: 12px; }
@@ -154,7 +156,7 @@
 .mi-capital-conditions__chart-legend i[data-series='funds'] { background: var(--mi-dashboard-etf-funds); }
 .mi-capital-conditions__chart-legend i[data-series='btc'] { background: var(--mi-dashboard-etf-btc); }
 .mi-capital-conditions__chart-legend i[data-series='eth'] { background: var(--mi-dashboard-etf-eth); }
-.mi-capital-conditions__chart { display: flex; align-items: stretch; position: relative; height: var(--mi-dashboard-etf-flow-chart-height); min-width: 0; margin-left: var(--mi-dashboard-etf-flow-axis-width); padding: 4px 0; background: linear-gradient(to bottom, transparent calc(50% - 1px), var(--mi-dashboard-line) calc(50% - 1px), var(--mi-dashboard-line) calc(50% + 1px), transparent calc(50% + 1px)); cursor: crosshair; }
+.mi-capital-conditions__chart { display: flex; align-items: stretch; position: relative; height: auto; min-height: var(--mi-dashboard-etf-flow-chart-height); min-width: 0; margin-left: var(--mi-dashboard-etf-flow-axis-width); padding: 4px 0; background: linear-gradient(to bottom, transparent calc(50% - 1px), var(--mi-dashboard-line) calc(50% - 1px), var(--mi-dashboard-line) calc(50% + 1px), transparent calc(50% + 1px)); cursor: crosshair; }
 .mi-capital-conditions__chart-axis { position: absolute; z-index: 1; inset: 0 auto 0 calc(-1 * var(--mi-dashboard-etf-flow-axis-width)); display: grid; grid-template-rows: 1fr 1fr 1fr; width: calc(var(--mi-dashboard-etf-flow-axis-width) - 7px); color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1; pointer-events: none; text-align: right; }
 .mi-capital-conditions__chart-axis span { align-self: center; }
 .mi-capital-conditions__chart-axis span:first-child { align-self: start; }

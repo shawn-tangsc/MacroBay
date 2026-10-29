@@ -97,7 +97,7 @@ function CumulativeFact({ label, asset, text }: { label: string; asset: Dashboar
     <dt>{label}</dt>
     <dd>{asset === 'unavailable' ? text.cumulativeUnavailable : asset.cumulative.map((window, index) => (
       <Fragment key={window.windowDays}>
-        {index === 0 ? null : <span aria-hidden="true"> · </span>}
+        {index === 0 ? null : <span className="mi-capital-conditions__cumulative-separator" aria-hidden="true"> · </span>}
         <CumulativeWindow window={window} text={text} />
       </Fragment>
     ))}</dd>
