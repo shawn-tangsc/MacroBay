@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MarketAnalysisContextAvailable } from '../../../contracts/marketAnalysisContracts'
 import { appendAnalysisEventEvidence } from './analysisEventEvidence'
-import { appendAnalysisNewsSentiment, resolveNewsSentimentWindow } from './analysisNewsSentimentEvidence'
+import { appendAnalysisNewsSentiment, newsSentimentSince, resolveNewsSentimentWindow } from './analysisNewsSentimentEvidence'
 
 const asOf = '2026-10-29T12:00:00.000Z'
 
@@ -112,4 +112,23 @@ describe('analysisNewsSentiment', () => {
     expect(updated.facts).toHaveLength(0)
     expect(updated.caveats).not.toContain('news-sentiment-unavailable')
   })
+  it('continues from the latest published run and ignores failed or running ones', () => {
+    expect(newsSentimentSince([
+      { status: 'succeeded', startedAt: '2026-10-29T19:48:00.000Z', queuedAt: '2026-10-29T19:47:00.000Z', completedAt: '2026-10-29T19:50:00.000Z' },
+      { status: 'running', startedAt: '2026-10-29T21:00:00.000Z', queuedAt: '2026-10-29T20:59:00.000Z', completedAt: null },
+      { status: 'failed', startedAt: '2026-10-29T20:10:00.000Z', queuedAt: '2026-10-29T20:09:00.000Z', completedAt: '2026-10-29T20:11:00.000Z' }
+    ])).toBe('2026-10-29T19:48:00.000Z')
+    // Nothing published yet: the group's previous snapshot is the boundary.
+    expect(newsSentimentSince([], '2026-10-29T00:00:00.000Z')).toBe('2026-10-29T00:00:00.000Z')
+    expect(newsSentimentSince([])).toBeUndefined()
+  })
+
+  it('drops an item revised after the cutoff, like the anchor path does', async () => {
+    const getEvidenceExcerpt = async (input: { itemId: string }) => evidence(input.itemId, '2026-10-29T11:20:00.000Z')
+    const updated = await appendAnalysisNewsSentiment(context(), { getEvidenceExcerpt } as never, reader([item()]) as never,
+      { asOf, since: '2026-10-29T11:00:00.000Z' },
+      () => [{ itemId: 'item-bull', detectedAt: '2026-10-29T12:30:00.000Z' }])
+    expect(updated.facts).toHaveLength(0)
+  })
+
 })

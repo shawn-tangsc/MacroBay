@@ -1,6 +1,7 @@
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
   MARKET_ANALYSIS_CONTRACT_POLICY,
+  type AnalysisRun,
   type EventGroup,
   type MarketAnalysisContextAvailable
 } from '../../../contracts/marketAnalysisContracts'
@@ -26,8 +27,7 @@ import { slotInstantsWithin } from './analysisSlotCoverage'
 export const analysisNewsSentimentPolicy = Object.freeze({
   maximumItems: 20,
   /** 盘口解析失败时的兜底跨度：与三档盘口的最大间隔一致。 */
-  fallbackLookbackMs: 8 * 60 * 60 * 1_000,
-  defaultWindow: '24h' as const
+  fallbackLookbackMs: 8 * 60 * 60 * 1_000
 })
 
 export type AnalysisNewsSentimentQuery = Readonly<{
@@ -90,6 +90,24 @@ export type AppendNewsSentimentInput = Readonly<{
 }>
 
 /**
+ * The run start the sentiment window should continue from.
+ *
+ * The latest *published* run wins regardless of which event group it belonged to: the reader's
+ * complaint was that the same news was analysed twice. A failed or still-running run must not move
+ * the boundary, and with no published run the previous snapshot of this group is the best boundary;
+ * the session-slot floor in `resolveNewsSentimentWindow` still caps how far back it may reach.
+ */
+export function newsSentimentSince(
+  runs: readonly Pick<AnalysisRun, 'status' | 'startedAt' | 'queuedAt' | 'completedAt'>[],
+  previousSnapshotAsOf?: string
+): string | undefined {
+  const published = runs
+    .filter(run => run.status === 'succeeded')
+    .sort((left, right) => (right.completedAt ?? right.queuedAt).localeCompare(left.completedAt ?? left.queuedAt))[0]
+  return published?.startedAt ?? published?.queuedAt ?? previousSnapshotAsOf
+}
+
+/**
  * Appends the key sentiment as citable facts.
  *
  * Reuses the event-evidence path on purpose: the visibility, redaction, revision and excerpt-hash
@@ -101,7 +119,12 @@ export async function appendAnalysisNewsSentiment(
   context: MarketAnalysisContextAvailable,
   query: Pick<MarketIntelligencePublicQueryService, 'getEvidenceExcerpt'>,
   reader: AnalysisNewsSentimentQuery | undefined,
-  input: AppendNewsSentimentInput
+  input: AppendNewsSentimentInput,
+  /**
+   * The same revision guard the anchor path uses: an item revised after the cutoff may still be
+   * "visible as of", but its current title is not what the analysis was written against.
+   */
+  listRevisions?: () => readonly { itemId: string; detectedAt: string }[]
 ): Promise<MarketAnalysisContextAvailable> {
   if (!reader) return withCaveat(context, MARKET_ANALYSIS_CONTEXT_CAVEATS.newsSentimentUnavailable)
 
@@ -135,7 +158,8 @@ export async function appendAnalysisNewsSentiment(
   const withEvidence = await appendAnalysisEventEvidence(
     context,
     { eventRefs: selected.map(item => item.itemId), groupType: 'sentiment' } satisfies Pick<EventGroup, 'eventRefs' | 'groupType'>,
-    query
+    query,
+    listRevisions
   )
   const byItemId = new Map(selected.map(item => [item.itemId, item]))
   const facts = withEvidence.facts.map(fact => {
