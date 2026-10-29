@@ -74,8 +74,6 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     for (const claim of conclusion.counterEvidence) {
       lines.push(`- ${labels.conclusion.counter}: ${escapeMarkdown(claim.statement)} ${claim.citations.map((index) => `[${index}]`).join('')}`.trimEnd())
     }
-    if (conclusion.dataGaps.length > 0) lines.push(`- ${labels.conclusion.gaps}: ${conclusion.dataGaps.map(escapeMarkdown).join(' · ')}`)
-    if (conclusion.caveats.length > 0) lines.push(`- ${labels.conclusion.caveats}: ${conclusion.caveats.map(escapeMarkdown).join(' · ')}`)
   }
 
   const nextItems = [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))

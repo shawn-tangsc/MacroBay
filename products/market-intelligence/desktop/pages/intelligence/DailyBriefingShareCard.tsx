@@ -22,7 +22,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const conclusion = doc.conclusion
   const hasNews = doc.news.items.length > 0 || doc.news.macro.length > 0
   const hasData = chosen.length > 0
-  const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0 || conclusion.dataGaps.length > 0 || conclusion.caveats.length > 0))
+  const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0))
   const keyRows = chosen.slice(0, 4)
   const metricRows = chosen.slice(4, 8)
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
@@ -93,7 +93,6 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       <div className="mi-brief-poster__basis-grid">
         {conclusion.conditions.length > 0 ? <div className="mi-brief-poster__basis-card cond"><h3>{text.conclusion.conditions}</h3><p>{conclusion.conditions.join(' · ')}</p></div> : null}
         {conclusion.counterEvidence.length > 0 ? <div className="mi-brief-poster__basis-card counter"><h3>{text.conclusion.counter}</h3><p>{conclusion.counterEvidence.map((claim) => `${claim.statement}${claim.citations.length ? ` [${claim.citations.join('][')}]` : ''}`).join(' · ')}</p></div> : null}
-        {conclusion.dataGaps.length > 0 || conclusion.caveats.length > 0 ? <div className="mi-brief-poster__basis-card gaps"><h3>{text.conclusion.gaps} / {text.conclusion.caveats}</h3><p>{[...conclusion.dataGaps, ...conclusion.caveats].join(' · ')}</p></div> : null}
       </div>
     </section> : null}
 
@@ -105,10 +104,10 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       {focusEvent ? <div className="mi-brief-poster__next-focus">
         <div className="mi-brief-poster__next-focus-head">
           <span className="mi-brief-poster__next-tag">{text.next.focus}</span>
-          <time>{formatTime(focusEvent.at, 'minute')}</time>
+          <time>{nextTime(focusEvent.at, formatTime)}</time>
         </div>
         <h3>{nextTitle(focusEvent, eventTitles)}</h3>
-        <p>{text.next.category[focusEvent.category]} · {text.next.importance[focusEvent.importance]}{nextCountry(focusEvent) ? ` · ${nextCountry(focusEvent)}` : ''}</p>
+        <p>{text.next.importance[focusEvent.importance]}{nextCountry(focusEvent, locale) ? ` · ${nextCountry(focusEvent, locale)}` : ''}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
         {focusEvent.watch?.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{entry.condition}</span><b>{entry.implication}</b></div>)}
         <div className="mi-brief-poster__next-values">
@@ -119,8 +118,11 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       </div> : null}
       {otherEvents.length > 0 ? <div className="mi-brief-poster__next-rows">
         {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
-          <time>{formatTime(item.at, 'minute')}</time>
-          <div><b>{nextTitle(item, eventTitles)}</b><small>{text.next.category[item.category]} · {text.next.importance[item.importance]}{nextCountry(item) ? ` · ${nextCountry(item)}` : ''}</small></div>
+          <time>{nextTime(item.at, formatTime)}</time>
+          <div>
+            <b>{nextCountry(item, locale) ? `${nextCountry(item, locale)} · ` : ''}{nextTitle(item, eventTitles)}</b>
+            <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>
+          </div>
           <span>{[item.consensus ? `${text.next.expected} ${item.consensus}` : '', item.previous ? `${text.next.previous} ${item.previous}` : ''].filter(Boolean).join(' · ')}</span>
         </div>)}
       </div> : null}
@@ -159,12 +161,34 @@ function formatBriefingTime(value: string): string {
   return value.slice(0, 16).replace('T', ' ')
 }
 
-function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
-  return eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
+function shortenEventTitle(value: string): string {
+  return value
+    .replace(/制造业采购经理人指数/g, '制造业 PMI')
+    .replace(/采购经理人指数/g, 'PMI')
+    .replace(/消费者物价指数/g, 'CPI')
+    .replace(/生产者物价指数/g, 'PPI')
+    .replace(/非农就业人口变动/g, '非农就业')
 }
 
-function nextCountry(item: DailyBriefingDocument['next']['items'][number]): string {
-  return item.countryName ?? item.countryCode ?? ''
+function nextTime(value: string, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
+  return formatTime(value, 'minute').slice(5, 16)
+}
+
+function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
+  const raw = eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
+  return shortenEventTitle(raw)
+}
+
+function nextCountry(item: DailyBriefingDocument['next']['items'][number], locale: 'zh-CN' | 'en-US'): string {
+  if (item.countryName && item.countryName !== item.countryCode) return item.countryName
+  const code = item.countryCode
+  if (!code) return ''
+  const labels: Readonly<Record<string, readonly [string, string]>> = {
+    US: ['美国', 'United States'], EU: ['欧元区', 'Euro area'], EZ: ['欧元区', 'Euro area'],
+    DE: ['德国', 'Germany'], FR: ['法国', 'France'], GB: ['英国', 'United Kingdom'], JP: ['日本', 'Japan'], CN: ['中国', 'China']
+  }
+  const label = labels[code]
+  return label ? label[locale === 'zh-CN' ? 0 : 1] : code
 }
 
 function daysUntil(at: string, from: string): number {

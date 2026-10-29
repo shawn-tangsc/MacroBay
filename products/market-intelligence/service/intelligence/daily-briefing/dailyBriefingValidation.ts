@@ -92,8 +92,7 @@ export function validateDailyBriefingEditorial(
     if (!isText(raw.nextFocus.eventKey) || !isText(raw.nextFocus.why)) return fail('invalid-shape')
     if (raw.nextFocus.why.length > 200) return fail('too-long')
     if (!Array.isArray(raw.nextFocus.watch) || raw.nextFocus.watch.length < 2 || raw.nextFocus.watch.length > 3) return fail('invalid-shape')
-    const known = new Set([document.next.focus?.eventKey, ...document.next.items.map((item) => item.eventKey)].filter(Boolean))
-    if (!known.has(raw.nextFocus.eventKey)) return fail('unknown-fact')
+    if (!document.next.focus || raw.nextFocus.eventKey !== document.next.focus.eventKey) return fail('unknown-fact')
     const watch: Array<{ condition: string; implication: string }> = []
     for (const entry of raw.nextFocus.watch) {
       if (!isExact(entry, ['condition', 'implication']) || !isText(entry.condition) || !isText(entry.implication)) return fail('invalid-shape')
