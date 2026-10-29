@@ -26,6 +26,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const keyRows = chosen.slice(0, 4)
   const metricRows = chosen.slice(4, 8)
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
+  const focusEvent = doc.next.items.find((item) => item.titleKey && FOCUS_TITLE_KEYS.has(item.titleKey)) ?? doc.next.items[0]
+  const otherEvents = doc.next.items.filter((item) => item !== focusEvent)
   const newsCounts = doc.data.sentiment.news.counts
   const newsTotal = doc.data.sentiment.news.itemCount ?? 0
   return <article className="mi-brief-poster">
@@ -118,8 +120,30 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     </section> : null}
 
     {doc.next.items.length > 0 ? <section className="mi-brief-poster__next">
-      <h2>{text.sections.next}</h2>
-      {doc.next.items.map((item) => <p key={item.eventKey}><b>{formatTime(item.at, 'minute')}</b> {eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>)}
+      <div className="mi-brief-poster__next-head">
+        <h2>{text.sections.next}</h2>
+        <span>{text.next.count.replace('{count}', String(doc.next.items.length))}</span>
+      </div>
+      {focusEvent ? <div className="mi-brief-poster__next-focus">
+        <div className="mi-brief-poster__next-focus-head">
+          <span className="mi-brief-poster__next-tag">{text.next.focus}</span>
+          <time>{formatTime(focusEvent.at, 'minute')}</time>
+        </div>
+        <h3>{nextTitle(focusEvent, eventTitles)}</h3>
+        <p>{text.next.category[focusEvent.category]} · {text.next.importance[focusEvent.importance]}{nextCountry(focusEvent) ? ` · ${nextCountry(focusEvent)}` : ''}</p>
+        <div className="mi-brief-poster__next-values">
+          {focusEvent.consensus ? `${text.next.expected} ${focusEvent.consensus}` : ''}
+          {focusEvent.previous ? `${focusEvent.consensus ? ' · ' : ''}${text.next.previous} ${focusEvent.previous}` : ''}
+        </div>
+        <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
+      </div> : null}
+      {otherEvents.length > 0 ? <div className="mi-brief-poster__next-rows">
+        {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
+          <time>{formatTime(item.at, 'minute')}</time>
+          <div><b>{nextTitle(item, eventTitles)}</b><small>{text.next.category[item.category]} · {text.next.importance[item.importance]}{nextCountry(item) ? ` · ${nextCountry(item)}` : ''}</small></div>
+          <span>{[item.consensus ? `${text.next.expected} ${item.consensus}` : '', item.previous ? `${text.next.previous} ${item.previous}` : ''].filter(Boolean).join(' · ')}</span>
+        </div>)}
+      </div> : null}
     </section> : null}
 
 
@@ -134,6 +158,21 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       <span>MI · DAILY BRIEF · {formatTime(doc.provenance.readAt, 'minute')}</span>
     </footer>
   </article>
+}
+
+const FOCUS_TITLE_KEYS = new Set(['nonfarm-payrolls', 'unemployment', 'average-hourly-earnings', 'fomc', 'cpi', 'pce', 'gdp'])
+
+function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
+  return eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
+}
+
+function nextCountry(item: DailyBriefingDocument['next']['items'][number]): string {
+  return item.countryName ?? item.countryCode ?? ''
+}
+
+function daysUntil(at: string, from: string): number {
+  const diff = Date.parse(at) - Date.parse(from)
+  return Number.isFinite(diff) ? Math.max(0, Math.ceil(diff / 86_400_000)) : 0
 }
 
 function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {

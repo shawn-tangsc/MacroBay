@@ -181,6 +181,7 @@ describe('daily briefing document', () => {
           state: 'available',
           events: [{
             eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', title: 'nonfarm-payrolls', titleKey: 'nonfarm-payrolls',
+            countryCode: 'US', countryName: 'United States', consensus: '29',
             scheduledAt: '2026-11-06T12:30:00.000Z', importance: 'high', lifecycleState: 'scheduled',
             category: 'economic-indicator', surprise: { direction: 'consensus-unavailable' }
           }]
@@ -188,7 +189,7 @@ describe('daily briefing document', () => {
       }),
       date: '2026-10-30'
     })
-    expect(document.next.items.map((item) => item.eventKey)).toEqual(['US.NONFARM_PAYROLLS.RELEASE.2026-M10'])
+    expect(document.next.items[0]).toMatchObject({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', countryCode: 'US', countryName: 'United States', consensus: '29' })
   })
 
   it('keeps a readable document when the market sources are absent', () => {

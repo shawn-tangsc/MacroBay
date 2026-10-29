@@ -85,7 +85,31 @@ function crossRow(
     source: 'rule',
     reasonCode: tier.must ? 'largest-move' : 'context'
   })
-  if (!snapshot || !metric || metric.state !== 'available') {
+  if (!snapshot) {
+    return Object.freeze({
+      id, labelKey, importance: tier.must ? gap : context, state: 'unavailable' as const,
+      value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
+    })
+  }
+  if (!metric || metric.state !== 'available') {
+    // The panel may have a readable curve or a last closed bar even when the exact 24h pair is
+    // missing. Keep that persisted reading instead of turning the whole row into "unavailable".
+    const curve = [...(snapshot.curves[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
+    if (curve) {
+      return Object.freeze({
+        id, labelKey, importance: tier.must ? gap : context, state: 'stale' as const,
+        value: Object.freeze({ number: normalize(curve.returnPercent!), format: 'percent' as const }),
+        change: null, window: '24h' as const, observedAt: snapshot.analysisEnd, reason: 'stale-fallback' as const
+      })
+    }
+    const last = snapshot.lastClosed?.[id]
+    if (last) {
+      return Object.freeze({
+        id, labelKey, importance: tier.must ? gap : context, state: 'stale' as const,
+        value: Object.freeze({ number: normalize(Number(last.close)), format: 'level' as const }),
+        change: null, window: 'latest' as const, observedAt: last.at, reason: 'stale-fallback' as const
+      })
+    }
     return Object.freeze({
       id, labelKey, importance: tier.must ? gap : context, state: 'unavailable' as const,
       value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const

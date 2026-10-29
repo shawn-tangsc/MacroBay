@@ -146,7 +146,11 @@ function selectNext(packet: DailyBriefingFactPacket): readonly BriefingNextItem[
       ...(event.titleKey ? { titleKey: event.titleKey } : {}),
       at: event.scheduledAt,
       importance: event.importance,
-      category: event.category
+      category: event.category,
+      ...(event.countryCode ? { countryCode: event.countryCode } : {}),
+      ...(event.countryName ? { countryName: event.countryName } : {}),
+      ...(event.consensus ? { consensus: event.consensus } : {}),
+      ...(event.previous ? { previous: event.previous } : {})
     })))
 }
 

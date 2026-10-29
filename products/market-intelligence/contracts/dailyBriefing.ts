@@ -122,6 +122,10 @@ export type BriefingNextItem = Readonly<{
   at: string
   importance: 'high' | 'medium' | 'low'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
+  countryCode?: string
+  countryName?: string
+  consensus?: string
+  previous?: string
 }>
 
 export type BriefingCounterEvidence = Readonly<{

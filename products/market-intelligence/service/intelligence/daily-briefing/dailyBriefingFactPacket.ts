@@ -21,6 +21,8 @@ export type DailyBriefingCalendarEvent = Readonly<{
   eventKey: string
   title: string
   titleKey?: string
+  countryCode?: string
+  countryName?: string
   scheduledAt: string
   importance: 'high' | 'medium' | 'low'
   lifecycleState: 'scheduled' | 'released' | 'cancelled'

@@ -97,3 +97,22 @@
 .mi-brief-poster__polarity { display: flex; height: 10px; border-radius: 2px; overflow: hidden; background: #e8dfd0; }
 .mi-brief-poster__polarity i { display: block; height: 100%; }
 .mi-brief-poster__visual > small { display: block; margin-top: 4px; color: #8b8475; font-size: 8.5px; }
+
+.mi-brief-poster__next { margin-top: 22px; padding-top: 14px; border-top: 2px solid #1b1d18; }
+.mi-brief-poster__next-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.mi-brief-poster__next-head h2 { margin: 0; }
+.mi-brief-poster__next-head span { color: #8b8475; font-size: 9px; }
+.mi-brief-poster__next-focus { position: relative; margin-top: 10px; padding: 12px 14px; border: 1px solid #e4b98f; border-left: 4px solid #c2410c; border-radius: 7px; background: #fdf0de; }
+.mi-brief-poster__next-focus-head { display: flex; align-items: center; gap: 8px; }
+.mi-brief-poster__next-tag { padding: 2px 6px; border-radius: 3px; background: #c2410c; color: #fff; font-size: 8.5px; font-weight: 800; }
+.mi-brief-poster__next-focus-head time { color: #9a4a20; font-size: 10px; font-weight: 700; }
+.mi-brief-poster__next-focus h3 { margin: 5px 0 2px; color: #241f16; font-size: 17px; letter-spacing: -.01em; }
+.mi-brief-poster__next-focus p { margin: 0; color: #6b5a45; font-size: 10px; }
+.mi-brief-poster__next-values { margin-top: 4px; color: #6b3a0c; font-size: 10px; font-weight: 600; }
+.mi-brief-poster__next-soon { position: absolute; top: 12px; right: 14px; color: #8a6633; font-size: 9px; }
+.mi-brief-poster__next-rows { margin-top: 4px; }
+.mi-brief-poster__next-row { display: grid; grid-template-columns: 108px 1fr auto; gap: 12px; align-items: baseline; padding: 7px 2px; border-bottom: 1px solid #ded4c2; }
+.mi-brief-poster__next-row time { color: #a5431f; font-size: 9.5px; font-weight: 700; }
+.mi-brief-poster__next-row b { color: #26241c; font-size: 11.5px; font-weight: 600; }
+.mi-brief-poster__next-row small { display: block; margin-top: 1px; color: #8b8475; font-size: 8.5px; }
+.mi-brief-poster__next-row > span { color: #6b695f; font-size: 9px; text-align: right; white-space: nowrap; }

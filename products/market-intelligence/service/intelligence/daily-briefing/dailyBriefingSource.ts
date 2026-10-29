@@ -144,6 +144,18 @@ async function readCalendar(
     if (market?.state === 'available') {
       available = true
       for (const event of market.events) {
+        const linked = event.officialLink?.officialEventKey
+        if (linked && events.has(linked)) {
+          const official = events.get(linked)!
+          events.set(linked, Object.freeze({
+            ...official,
+            ...(official.consensus ? {} : event.consensus ? { consensus: event.consensus.displayValue } : {}),
+            ...(official.previous ? {} : event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
+            ...(official.countryCode ? {} : event.countryCode ? { countryCode: event.countryCode } : {}),
+            ...(official.countryName ? {} : event.countryName ? { countryName: event.countryName } : {})
+          }))
+          continue
+        }
         if (events.has(event.eventKey)) continue
         events.set(event.eventKey, marketEvent(event, asOf))
       }
@@ -165,6 +177,7 @@ function officialEvent(
     eventKey: event.eventKey,
     title: event.titleKey,
     titleKey: event.titleKey,
+    countryCode: event.countryCode,
     scheduledAt,
     importance: event.importance,
     lifecycleState: event.lifecycleState,
@@ -184,6 +197,8 @@ function marketEvent(
   return Object.freeze({
     eventKey: event.eventKey,
     title: event.title,
+    ...(event.countryCode ? { countryCode: event.countryCode } : {}),
+    ...(event.countryName ? { countryName: event.countryName } : {}),
     scheduledAt: event.scheduledAt,
     importance: event.importance,
     lifecycleState: event.providerActual ? 'released' as const : 'scheduled' as const,
