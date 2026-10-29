@@ -3,6 +3,8 @@ import { getIntelligenceModule } from '../intelligenceModule'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
 import type { CapabilityDomain } from './capabilityTypes'
 import { projectTimelineRow } from './projections'
+import { buildMarketPulseRows } from '../../../contracts/marketPulse'
+import { dailyBriefingEnabledFromProfiles } from '../daily-briefing/dailyBriefingReadingSources'
 import {
   DOMAIN_ORDER,
   type CrossAssetInput,
@@ -155,6 +157,96 @@ export async function handleGetDashboardFeedStatus(
 ): Promise<unknown> {
   const feeds = await getIntelligenceModule(deps.jobRuntime).dashboardFeedStatus.status()
   return { state: feeds.length > 0 ? 'available' : 'empty', feeds }
+}
+
+/**
+ * The agent's view of today's readings. It is deliberately not the document service: this tool
+ * never generates, writes or fetches; it reads what the existing queries can answer at `asOf`.
+ */
+export async function handleGetDailyPulse(
+  input: unknown,
+  deps: ReadHandlerDeps
+): Promise<unknown> {
+  const asOf = (input as { asOf?: unknown } | null)?.asOf
+  if (typeof asOf !== 'string' || !Number.isFinite(Date.parse(asOf))) throw new Error('daily-pulse-invalid-as-of')
+  const module = getIntelligenceModule(deps.jobRuntime)
+  const [fearGreed, funding, capital, news, profiles] = await Promise.all([
+    readOr(() => module.publicQueryService.queryFearGreedSnapshot({ asOf }), {
+      state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const
+    }),
+    readOr(() => module.publicQueryService.queryFundingRateHistory({ asOf }), {
+      state: 'unavailable' as const, failureCode: 'funding-rate-history-query-unavailable' as const
+    }),
+    readOr(() => module.publicQueryService.queryCapitalConditionsSnapshot({ asOf }), {
+      state: 'unavailable' as const, failureCode: 'capital-conditions-query-unavailable' as const
+    }),
+    readDailyPulseNews(module, asOf),
+    readDailyPulseProfiles(module)
+  ])
+  const rows = buildMarketPulseRows({
+    asOf,
+    enabled: dailyBriefingEnabledFromProfiles(profiles),
+    fearGreed,
+    funding,
+    capital
+  })
+  const readings = rows.map((row) => Object.freeze({
+    id: row.id,
+    group: row.id === 'fear-greed' ? 'sentiment' as const : 'funds' as const,
+    labelKey: row.labelKey,
+    state: row.state,
+    value: row.value,
+    change: row.change,
+    ...(row.changeReason ? { changeReason: row.changeReason } : {}),
+    window: row.window,
+    observedAt: row.observedAt,
+    ...(row.reason ? { reason: row.reason } : {})
+  }))
+  const hasValue = readings.some((row) => row.state === 'available' || row.state === 'stale')
+  const hasGap = readings.some((row) => row.state === 'unavailable' || row.state === 'source-disabled')
+  return Object.freeze({
+    state: hasValue ? (hasGap ? 'partial' : 'available') : 'unavailable',
+    asOf,
+    readings: Object.freeze(readings),
+    news,
+    caveats: Object.freeze([
+      ...(hasGap ? ['reading-gap'] : []),
+      ...(news.state === 'available' || news.state === 'empty' ? [] : ['news-unavailable']),
+      ...(profiles ? [] : ['source-switches-unknown'])
+    ])
+  })
+}
+
+async function readDailyPulseProfiles(module: ReturnType<typeof getIntelligenceModule>) {
+  try {
+    return await module.sourceProfileStore.listProfiles()
+  } catch {
+    return undefined
+  }
+}
+
+async function readDailyPulseNews(
+  module: ReturnType<typeof getIntelligenceModule>,
+  asOf: string
+): Promise<Readonly<{ state: 'available' | 'empty' | 'unavailable' | 'source-disabled'; counts?: Readonly<{ bearish: number; bullish: number; mixed: number; neutral: number }>; itemCount?: number }>> {
+  const query = module.newsSentiment.query
+  if (!query) return Object.freeze({ state: 'unavailable' as const })
+  try {
+    const view = await query.query({ asOf, window: '24h', limit: 100 })
+    const counts = { bearish: 0, bullish: 0, mixed: 0, neutral: 0 }
+    for (const item of view.items) counts[item.polarity] += 1
+    return Object.freeze({ state: view.state, counts: Object.freeze(counts), itemCount: view.items.length })
+  } catch {
+    return Object.freeze({ state: 'unavailable' as const })
+  }
+}
+
+async function readOr<T>(read: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await read()
+  } catch {
+    return fallback
+  }
 }
 
 export async function handleDescribeIntelligenceCapabilities(

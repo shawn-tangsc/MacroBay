@@ -538,3 +538,49 @@ export const newsSentimentItemOutputSchema = {
     item: { type: 'object' }
   }
 } as const
+
+export const dailyPulseInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['asOf'],
+  properties: {
+    asOf: { type: 'string', format: 'date-time' }
+  }
+} as const
+
+const dailyPulseReadingSchema = {
+  type: 'object',
+  required: ['id', 'group', 'state', 'window'],
+  properties: {
+    id: { type: 'string', enum: ['fear-greed', 'funding-btc', 'funding-eth', 'stablecoin', 'etf-btc', 'etf-eth'] },
+    group: { type: 'string', enum: ['funds', 'sentiment'] },
+    labelKey: { type: 'string' },
+    state: { type: 'string', enum: ['available', 'stale', 'unavailable', 'source-disabled'] },
+    value: { type: ['object', 'null'] },
+    change: { type: ['object', 'null'] },
+    changeReason: { type: 'string' },
+    window: { type: 'string' },
+    observedAt: { type: ['string', 'null'] },
+    reason: { type: 'string' }
+  }
+} as const
+
+export const dailyPulseOutputSchema = {
+  type: 'object',
+  required: ['state', 'asOf', 'readings', 'news', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'partial', 'unavailable'] },
+    asOf: { type: 'string', format: 'date-time' },
+    readings: { type: 'array', items: dailyPulseReadingSchema },
+    news: {
+      type: 'object',
+      required: ['state'],
+      properties: {
+        state: { type: 'string', enum: ['available', 'empty', 'unavailable', 'source-disabled'] },
+        counts: { type: 'object' },
+        itemCount: { type: 'integer', minimum: 0 }
+      }
+    },
+    caveats: { type: 'array', items: { type: 'string' } }
+  }
+} as const

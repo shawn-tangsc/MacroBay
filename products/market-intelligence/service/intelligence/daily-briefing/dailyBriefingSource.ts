@@ -8,13 +8,7 @@ import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAn
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSource } from './dailyBriefingService'
-
-const SOURCE_IDS = Object.freeze({
-  fearGreed: 'alternative-fear-greed',
-  funding: 'binance-futures-positioning',
-  stablecoin: 'defillama-stablecoins',
-  etf: '0xrouter-aggregate-provider'
-})
+import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
 
 const WINDOW_MS = 24 * 60 * 60 * 1_000
 
@@ -82,31 +76,12 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   }
 }
 
-async function readEnabled(deps: DailyBriefingSourceDeps): Promise<Readonly<{
-  fearGreed: boolean
-  funding: boolean
-  stablecoin: boolean
-  etf: boolean
-  calendar: boolean
-}>> {
-  let profiles: Awaited<ReturnType<SourceProfileStore['listProfiles']>> | undefined
+async function readEnabled(deps: DailyBriefingSourceDeps): Promise<DailyBriefingEnabledFlags> {
   try {
-    profiles = await deps.profiles.listProfiles()
+    return dailyBriefingEnabledFromProfiles(await deps.profiles.listProfiles())
   } catch {
-    profiles = undefined
+    return dailyBriefingEnabledFromProfiles(undefined)
   }
-  if (!profiles) {
-    // A failed profile read is "unknown", not "everything off": let the query state speak.
-    return Object.freeze({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
-  }
-  const enabled = (sourceId: string): boolean => profiles.some((profile) => profile.sourceId === sourceId && profile.enabled === true)
-  return Object.freeze({
-    fearGreed: enabled(SOURCE_IDS.fearGreed),
-    funding: enabled(SOURCE_IDS.funding),
-    stablecoin: enabled(SOURCE_IDS.stablecoin),
-    etf: enabled(SOURCE_IDS.etf),
-    calendar: profiles.some((profile) => profile.sourceId.startsWith('macro-calendar-') && profile.enabled === true)
-  })
 }
 
 async function readConclusion(deps: DailyBriefingSourceDeps): Promise<DailyBriefingFactPacket['conclusion']> {

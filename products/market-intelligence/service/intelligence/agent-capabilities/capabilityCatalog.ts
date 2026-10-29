@@ -18,6 +18,8 @@ import {
   crossAssetSnapshotOutputSchema,
   dashboardFeedStatusInputSchema,
   dashboardFeedStatusOutputSchema,
+  dailyPulseInputSchema,
+  dailyPulseOutputSchema,
   describeCapabilitiesInputSchema,
   describeCapabilitiesOutputSchema,
   listSourcesInputSchema,
@@ -321,6 +323,19 @@ export const intelligenceAgentCapabilities = [
     outputSchema: crossAssetSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-cross-asset-snapshot',
     timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_daily_pulse',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': '每日脉搏', 'en-US': 'Daily pulse' },
+    description:
+      '读取每日简报的六行读数：恐惧贪婪、BTC/ETH 资金费率、稳定币、BTC/ETH ETF 净流，以及过去 24 小时舆情摘要。每行带 available/stale/unavailable/source-disabled 状态、窗口与观测时间；缺失或未启用是明确状态，不用 0 或上一值补齐。只读取 asOf 时刻已有的数据，不生成日报、不写库、不触发采集。',
+    inputSchema: dailyPulseInputSchema,
+    outputSchema: dailyPulseOutputSchema,
+    handlerId: 'market-intelligence.get-daily-pulse',
+    timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {
