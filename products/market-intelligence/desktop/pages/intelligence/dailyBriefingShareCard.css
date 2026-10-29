@@ -124,3 +124,25 @@
 .mi-brief-poster__flow-bar { position: absolute !important; top: 0; height: 100% !important; display: block; background: #be3a2b; }
 .mi-brief-poster__flow-bar[data-positive="true"] { background: #2f7d45; }
 .mi-brief-poster__flow-axis { display: flex; justify-content: space-between; margin-top: 3px; color: #8b8475; font-size: 8px; }
+
+.mi-brief-poster__key { padding: 12px 14px; border: 1px solid transparent; border-radius: 8px; }
+.mi-brief-poster__key[data-tone="positive"] { background: #e4efe2; border-color: #c9ddc7; }
+.mi-brief-poster__key[data-tone="negative"] { background: #f7e2dc; border-color: #ebc9c0; }
+.mi-brief-poster__key[data-tone="neutral"] { background: #f8ecd2; border-color: #e8d3a8; }
+.mi-brief-poster__key[data-tone="positive"] strong { color: #1f5b32; }
+.mi-brief-poster__key[data-tone="negative"] strong { color: #8f2a1d; }
+.mi-brief-poster__key[data-tone="neutral"] strong { color: #7a4c10; }
+.mi-brief-poster__key[data-tone="positive"] > span { color: #2f6b3c; }
+.mi-brief-poster__key[data-tone="negative"] > span { color: #9f2d21; }
+.mi-brief-poster__key[data-tone="neutral"] > span { color: #8a5a12; }
+.mi-brief-poster__metrics div[data-tone="positive"] b { color: #256c37; }
+.mi-brief-poster__metrics div[data-tone="negative"] b { color: #a82c1f; }
+.mi-brief-poster__metrics div[data-tone="neutral"] b { color: #6b695f; }
+
+.mi-brief-poster__next-why { margin: 6px 0 0 !important; color: #4e3a24 !important; font-size: 10px !important; line-height: 1.5 !important; }
+.mi-brief-poster__next-why b { color: #8a5a12; }
+.mi-brief-poster__next-watch { display: grid; grid-template-columns: 58px 1fr; gap: 8px; margin-top: 5px; padding: 5px 7px; border-radius: 4px; background: #f6e2c8; color: #6b3a0c; font-size: 9px; }
+.mi-brief-poster__next-watch span { color: #9a4a20; font-weight: 800; }
+.mi-brief-poster__next-watch b { font-weight: 500; }
+.mi-brief-poster__next-watch:nth-of-type(even) { background: #eef0df; color: #3f5522; }
+.mi-brief-poster__next-watch:nth-of-type(even) span { color: #4e6b2a; }

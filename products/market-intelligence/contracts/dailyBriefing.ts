@@ -126,6 +126,9 @@ export type BriefingNextItem = Readonly<{
   countryName?: string
   consensus?: string
   previous?: string
+  /** Editorial: why this event is the focus, and what each surprise would imply. */
+  why?: string
+  watch?: readonly Readonly<{ condition: string; implication: string }>[]
 }>
 
 export type BriefingCounterEvidence = Readonly<{

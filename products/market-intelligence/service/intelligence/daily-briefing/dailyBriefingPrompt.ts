@@ -41,7 +41,15 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       surprise: item.surprise.direction
     })),
     data: dataFacts(document),
-    mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId)
+    mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId),
+    next: [document.next.focus, ...document.next.items].filter(Boolean).map((item) => ({
+      eventKey: item!.eventKey,
+      title: item!.title,
+      at: item!.at,
+      country: item!.countryName ?? item!.countryCode ?? null,
+      consensus: item!.consensus ?? null,
+      previous: item!.previous ?? null
+    }))
   }
   return [
     {
@@ -73,7 +81,15 @@ export function buildDailyBriefingPrompt(input: Readonly<{
           ],
           dataNote: 'one sentence about what the numbers say, at most 240 characters',
           invalidationNote: 'one sentence about what would change the read, at most 240 characters',
-          conclusionTranslation: 'translate the conclusion summary only, or omit'
+          conclusionTranslation: 'translate the conclusion summary only, or omit',
+          nextFocus: {
+            eventKey: 'the focus eventKey from FACTS.next',
+            why: 'why this event matters for the current read, at most 200 characters',
+            watch: [
+              { condition: 'higher than expected', implication: 'what follows for rates, dollar and BTC/ETH' },
+              { condition: 'lower than expected', implication: 'what follows for rates, dollar and BTC/ETH' }
+            ]
+          }
         }, null, 2),
         '',
         'RULES:',
@@ -81,7 +97,8 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- importance: only data: factIds, unique, must/support/reference. The mustFloor rows may be lifted or kept, never downgraded.',
         '- There is no required number of items or importance rows. Empty arrays are valid.',
         '- conclusionTranslation: only when the conclusion summary is in a different language from LOCALE.',
-        '- dataNote and invalidationNote are optional but must not repeat the lede.'
+        '- dataNote and invalidationNote are optional but must not repeat the lede.',
+        '- nextFocus: only for the next event list. Explain why the focus matters, then 2-3 if/then implications. Use only numbers in FACTS.'
       ].join('\n')
     }
   ]

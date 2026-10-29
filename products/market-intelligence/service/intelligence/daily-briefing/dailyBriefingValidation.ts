@@ -14,6 +14,11 @@ export type DailyBriefingEditorialOutput = Readonly<{
   dataNote?: string
   invalidationNote?: string
   conclusionTranslation?: string
+  nextFocus?: Readonly<{
+    eventKey: string
+    why: string
+    watch: readonly Readonly<{ condition: string; implication: string }>[]
+  }>
 }>
 
 export type DailyBriefingValidationFailure =
@@ -44,7 +49,7 @@ export function validateDailyBriefingEditorial(
   document: DailyBriefingDocument,
   locale: 'zh-CN' | 'en-US'
 ): DailyBriefingValidation {
-  if (!isExact(raw, ['lede', 'items', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation'])) {
+  if (!isExact(raw, ['lede', 'items', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus'])) {
     return fail('invalid-shape')
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
@@ -81,7 +86,24 @@ export function validateDailyBriefingEditorial(
   if (conclusionTranslation === false) return fail('too-long')
   if (conclusionTranslation !== undefined && (!document.conclusion || !needsTranslation(document.conclusion.summary, locale))) return fail('invalid-translation')
 
+  let nextFocus: DailyBriefingEditorialOutput['nextFocus']
+  if (raw.nextFocus !== undefined) {
+    if (!isExact(raw.nextFocus, ['eventKey', 'why', 'watch'])) return fail('invalid-shape')
+    if (!isText(raw.nextFocus.eventKey) || !isText(raw.nextFocus.why)) return fail('invalid-shape')
+    if (raw.nextFocus.why.length > 200) return fail('too-long')
+    if (!Array.isArray(raw.nextFocus.watch) || raw.nextFocus.watch.length < 2 || raw.nextFocus.watch.length > 3) return fail('invalid-shape')
+    const known = new Set([document.next.focus?.eventKey, ...document.next.items.map((item) => item.eventKey)].filter(Boolean))
+    if (!known.has(raw.nextFocus.eventKey)) return fail('unknown-fact')
+    const watch: Array<{ condition: string; implication: string }> = []
+    for (const entry of raw.nextFocus.watch) {
+      if (!isExact(entry, ['condition', 'implication']) || !isText(entry.condition) || !isText(entry.implication)) return fail('invalid-shape')
+      if (entry.condition.length > 80 || entry.implication.length > 160) return fail('too-long')
+      watch.push({ condition: entry.condition, implication: entry.implication })
+    }
+    nextFocus = Object.freeze({ eventKey: raw.nextFocus.eventKey, why: raw.nextFocus.why, watch: Object.freeze(watch.map((entry) => Object.freeze(entry))) })
+  }
   const prose = [raw.lede, ...items.map((item) => item.why), ...importance.map((entry) => entry.reasonText ?? ''),
+    ...(nextFocus ? [nextFocus.why, ...nextFocus.watch.flatMap((entry) => [entry.condition, entry.implication])] : []),
     ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
     ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : [])].join('\n')
   if (forbiddenContent(prose)) return fail('forbidden-content')
@@ -94,7 +116,8 @@ export function validateDailyBriefingEditorial(
       importance: Object.freeze(importance.map((entry) => Object.freeze(entry))),
       ...(typeof dataNote === 'string' ? { dataNote } : {}),
       ...(typeof invalidationNote === 'string' ? { invalidationNote } : {}),
-      ...(typeof conclusionTranslation === 'string' ? { conclusionTranslation } : {})
+      ...(typeof conclusionTranslation === 'string' ? { conclusionTranslation } : {}),
+      ...(nextFocus ? { nextFocus } : {})
     })
   })
 }
@@ -120,8 +143,19 @@ export function applyDailyBriefingEditorial(
     })
     return Object.freeze({ ...row, importance: value }) as T
   }
+  const nextItems = editorial.nextFocus
+    ? document.next.items.map((item) => item.eventKey === editorial.nextFocus!.eventKey
+      ? Object.freeze({ ...item, why: editorial.nextFocus!.why, watch: editorial.nextFocus!.watch })
+      : item)
+    : document.next.items
+  const focus = editorial.nextFocus
+    ? document.next.focus && document.next.focus.eventKey === editorial.nextFocus.eventKey
+      ? Object.freeze({ ...document.next.focus, why: editorial.nextFocus.why, watch: editorial.nextFocus.watch })
+      : document.next.focus
+    : document.next.focus
   return Object.freeze({
     ...document,
+    ...(editorial.nextFocus ? { next: Object.freeze({ ...document.next, items: Object.freeze(nextItems), ...(focus ? { focus } : {}) }) } : {}),
     lede: Object.freeze({
       source: 'agent' as const,
       text: editorial.lede,

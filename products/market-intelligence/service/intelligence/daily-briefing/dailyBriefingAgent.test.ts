@@ -52,7 +52,7 @@ const document = (): DailyBriefingDocument => ({
     invalidations: [{ asset: 'BTC', horizonEnd: '2026-10-31T00:00:00.000Z', text: 'Stablecoins turn positive.' }],
     counterEvidence: [], topSignal: null, dataGaps: [], caveats: []
   },
-  next: { items: [] },
+  next: { focus: { eventKey: 'US.FOMC', title: 'fomc', titleKey: 'fomc', at: '2026-11-02T18:00:00.000Z', importance: 'high', category: 'central-bank-activity', countryCode: 'US', countryName: '美国', consensus: '4.25%' }, items: [] },
   citations: [],
   provenance: { summaryId: 's1', readAt: '2026-10-30T00:30:00.000Z' }
 })
@@ -65,7 +65,15 @@ const validOutput = {
   ],
   importance: [{ factId: 'data:index', tier: 'must', reasonText: '纳指同向，说明不是单一币种问题。' }],
   dataNote: '资金面收缩与 CPI 超预期同向。',
-  invalidationNote: '稳定币转为净流入会削弱这条判断。'
+  invalidationNote: '稳定币转为净流入会削弱这条判断。',
+  nextFocus: {
+    eventKey: 'US.FOMC',
+    why: 'This is the week’s rate decision and the shared discount rate for both assets.',
+    watch: [
+      { condition: 'Hawkish', implication: 'Real yields rise and BTC/ETH come under pressure.' },
+      { condition: 'Dovish', implication: 'Rate-cut expectations improve risk appetite.' }
+    ]
+  }
 }
 
 describe('daily briefing editorial validation and application', () => {
@@ -126,6 +134,8 @@ describe('daily briefing agent', () => {
     const result = await agent.generate({ document: document(), locale: 'zh-CN', providerId: 'p', modelId: 'm1', source: 'custom' })
     expect(result.state).toBe('agent')
     expect(result.document.lede.source).toBe('agent')
+    expect(result.document.next.focus?.why).toContain('rate decision')
+    expect(result.document.next.focus?.watch).toHaveLength(2)
     expect(result.document.provenance.editorialMeta).toEqual({ promptVersion: 'daily-briefing.editorial.v1', model: 'm1', source: 'custom' })
   })
 

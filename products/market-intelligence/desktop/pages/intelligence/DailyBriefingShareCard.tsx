@@ -67,25 +67,14 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
       <div className="mi-brief-poster__numbers">
-        {keyRows.map((row) => <div className="mi-brief-poster__number" key={row.id}>
+        {keyRows.map((row) => <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)}>
           <span>{rowLabel(text, row.labelKey)}</span>
           <strong>{formatBriefingValue(row.value, text.noValue, locale)}</strong>
-          <small>{formatBriefingChange(row.change, locale) || stateLabel(row, text)}</small>
+          <small>{keyMeta(row, text, locale)}</small>
         </div>)}
       </div>
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
-        {metricRows.map((row) => <div key={row.id}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
-      </div> : null}
-      {etfRows.length > 0 ? <div className="mi-brief-poster__visuals">
-        <div className="mi-brief-poster__visual">
-          <div className="mi-brief-poster__flow-head"><h3>{text.visuals.etf}</h3><small>{text.visuals.scale.replace('{max}', flowLabel(flowMax, locale))}</small></div>
-          {etfRows.map((row) => <div className="mi-brief-poster__flow" key={row.id}>
-            <span>{rowLabel(text, row.labelKey)}</span>
-            <div className="mi-brief-poster__flow-track"><i className="mi-brief-poster__flow-zero" /><i className="mi-brief-poster__flow-bar" data-positive={Boolean(row.value && row.value.number >= 0)} style={flowBarStyle(row.value?.number ?? 0, flowMax)} /></div>
-            <b>{formatBriefingValue(row.value, text.noValue, locale)}</b>
-          </div>)}
-          <div className="mi-brief-poster__flow-axis"><span>−{flowLabel(flowMax, locale)}</span><span>0</span><span>+{flowLabel(flowMax, locale)}</span></div>
-        </div>
+        {metricRows.map((row) => <div key={row.id} data-tone={toneFor(row)}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
       </div> : null}
     </section> : null}
 
@@ -120,6 +109,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         </div>
         <h3>{nextTitle(focusEvent, eventTitles)}</h3>
         <p>{text.next.category[focusEvent.category]} · {text.next.importance[focusEvent.importance]}{nextCountry(focusEvent) ? ` · ${nextCountry(focusEvent)}` : ''}</p>
+        {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
+        {focusEvent.watch?.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{entry.condition}</span><b>{entry.implication}</b></div>)}
         <div className="mi-brief-poster__next-values">
           {focusEvent.consensus ? `${text.next.expected} ${focusEvent.consensus}` : ''}
           {focusEvent.previous ? `${focusEvent.consensus ? ' · ' : ''}${text.next.previous} ${focusEvent.previous}` : ''}
@@ -147,6 +138,25 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       <span>MI · DAILY BRIEF · {formatTime(doc.provenance.readAt, 'minute')}</span>
     </footer>
   </article>
+}
+
+function toneFor(row: BriefingMarketRow | BriefingPulseRow): 'positive' | 'negative' | 'neutral' {
+  if (row.id === 'fear-greed') return 'neutral'
+  const value = row.change?.value ?? row.value?.number ?? 0
+  return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
+}
+
+function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {
+  const change = formatBriefingChange(row.change, locale)
+  if (row.id === 'etf-btc' || row.id === 'etf-eth') {
+    const flow = (row.value?.number ?? 0) >= 0 ? text.flow.in : text.flow.out
+    return `${flow}${row.observedAt ? ` · ${row.observedAt.slice(0, 10)}` : ''}`
+  }
+  return change || (row.observedAt ? formatBriefingTime(row.observedAt) : '')
+}
+
+function formatBriefingTime(value: string): string {
+  return value.slice(0, 16).replace('T', ' ')
 }
 
 function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
