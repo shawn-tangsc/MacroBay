@@ -32,7 +32,7 @@ describe('createMacroCalendarScheduleRevisions', () => {
       scheduledDate: '2026-12-09', detectedAt, recordedAt: detectedAt,
       providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule',
       sourceUrl: getMacroCalendarOfficialSourceDescriptor('macro-calendar-fed-schedule')!.sourceUrl,
-      rawRecordId: 'raw-1', evidenceHash: 'evidence-hash', parserVersion: 'fed-fomc-schedule-v2',
+      rawRecordId: 'raw-1', evidenceHash: 'evidence-hash', parserVersion: 'fed-fomc-schedule-v3',
       caveats: ['official-time-not-published'], evidenceRefs: [{ fieldKinds: ['schedule'], rawRecordId: 'raw-1', detectedAt }]
     })
     expect(fomc.scheduledAt).toBeUndefined()
