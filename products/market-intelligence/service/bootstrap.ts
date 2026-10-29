@@ -31,6 +31,7 @@ import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntel
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
+import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
@@ -450,6 +451,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })
+  registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService)
   // Read-only startup diagnostic. The timeline renders the same empty state for "the
   // table is empty" and "the read failed", so the main process states the count it
   // can actually read. Counts only: no row contents and no credentials.

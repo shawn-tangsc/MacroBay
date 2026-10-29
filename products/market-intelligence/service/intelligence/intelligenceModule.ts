@@ -56,6 +56,9 @@ import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSenti
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
+import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
+import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
+import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
@@ -184,6 +187,7 @@ type IntelligenceModule = {
   replayService: ReturnType<typeof createIntelligenceReplayService>
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
+  dailyBriefingService: DailyBriefingService
   rawRecordStore: ReturnType<typeof createRawRecordStore>
   macroCalendarEvidenceArchive: ReturnType<typeof createMacroCalendarEvidenceArchive>
   macroCalendarEvidenceReady: boolean
@@ -635,6 +639,28 @@ export function getIntelligenceModule(
         await translationStorage.writeSettings(createDefaultTranslationSettings(await getAppLanguage()))
       }
     })().catch(() => undefined)
+    const dailyBriefingService = createDailyBriefingService({
+      source: createDailyBriefingSource({
+        repository: marketAnalysisRuntime.repository,
+        publicQuery: publicQueryService,
+        news: newsSentimentQuery
+          ? { query: (input) => newsSentimentQuery.query(input) }
+          : {
+            async query(input) {
+              return {
+                state: 'unavailable' as const,
+                asOf: input.asOf,
+                generatedAt: input.asOf,
+                window: input.window,
+                items: [],
+                caveats: []
+              }
+            }
+          },
+        profiles: profileStore
+      }),
+      store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
+    })
     intelligenceModule = {
       pipeline,
       workerRuntime,
@@ -652,6 +678,7 @@ export function getIntelligenceModule(
       },
       sourcesService,
       publicQueryService,
+      dailyBriefingService,
       rawRecordStore,
       macroCalendarEvidenceArchive,
       macroCalendarEvidenceReady: macroCalendarEvidenceMigration.state !== 'unavailable',

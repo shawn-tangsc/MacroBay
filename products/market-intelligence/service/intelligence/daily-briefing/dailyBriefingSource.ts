@@ -114,7 +114,8 @@ async function readConclusion(deps: DailyBriefingSourceDeps): Promise<DailyBrief
     const page = deps.repository.listTimeline({ limit: 50 })
     const latest = selectLatestPublishedEntry(page.items)
     if (!latest?.summaryRef) return null
-    const summary: AnalysisSummary = deps.repository.getSummary(latest.summaryRef)
+    const summary: AnalysisSummary | undefined = deps.repository.getSummary(latest.summaryRef)
+    if (!summary) return null
     const predictions: readonly Prediction[] = deps.repository.listPredictions(latest.summaryRef)
     return Object.freeze({
       summary,

@@ -5,8 +5,7 @@ import type {
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
 import type { AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
-import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
-import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRatesSnapshotContracts'
+import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 
 /**
@@ -67,8 +66,8 @@ export type DailyBriefingFactPacket = Readonly<{
   }>
   market: Readonly<{
     crossAsset?: CrossAssetSnapshot
-    macroMarket?: MacroMarketSnapshotView
-    macroRates?: MacroRatesSnapshotView
+    macroMarket?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroMarketSnapshot']>>
+    macroRates?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroRatesSnapshot']>>
   }>
   enabled: Readonly<{
     fearGreed: boolean
