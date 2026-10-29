@@ -263,6 +263,7 @@ describe('MarketAnalysisTimeline', () => {
     expect(container.textContent).toContain(text.failureReasons['analysis-missing-evidence'])
     // The recorded reason is the banner's second line, under the sentence that names the failure.
     const banner = container.querySelector('[data-analysis-error]')
+    expect(banner?.querySelector('strong')?.textContent).toBe(text.attemptFailed)
     expect(banner?.querySelector('[data-analysis-error-detail]')?.textContent).toBe(text.failureReasons['analysis-missing-evidence'])
 
     // The 60s background poll reads the page without the attempt. It used to clear the known
@@ -270,6 +271,66 @@ describe('MarketAnalysisTimeline', () => {
     await act(async () => { window.dispatchEvent(new Event('focus')) })
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
     expect(container.textContent).toContain(text.failureReasons['analysis-missing-evidence'])
+  })
+
+  it('retries a rejected model answer once and keeps the failed-request copy for refusals', async () => {
+    let refreshRequests = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') {
+        // The first run is rejected, the retry publishes: the reader never has to press again.
+        const retried = refreshRequests >= 2
+        return {
+          schemaVersion: 1,
+          items: [{
+            id: retried ? 'mi-tl-2' : 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: retried ? 'mi-ar-2' : 'mi-ar-1',
+            kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: retried ? 'mi-as-2' : 'mi-as-1',
+            safeTitle: '市场分析已生成', safeExcerpt: retried ? '重试后的新摘要' : '旧摘要', version: retried ? 2 : 1, triggerStatus: null
+          }],
+          nextCursor: null
+        }
+      }
+      if (method === 'marketAnalysis.getLatestAttempt') {
+        return refreshRequests >= 2
+          ? { id: 'mi-ar-2', status: 'succeeded', failureCode: null, queuedAt: asOf, evidenceCount: 2 }
+          : { id: 'mi-ar-1', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: asOf, evidenceCount: 2 }
+      }
+      if (method === 'marketAnalysis.requestInitialAnalysis') {
+        refreshRequests += 1
+        return { itemId: 'item-1', queued: true }
+      }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    expect(container.textContent).toContain('重试后的新摘要')
+    expect(container.textContent).not.toContain(text.attemptFailed)
+    expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(2)
+  })
+
+  it('does not retry a refusal before a run exists', async () => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.requestInitialAnalysis') throw new Error('analysis-provider-error')
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    const banner = container.querySelector('[data-analysis-error]')
+    expect(banner?.querySelector('strong')?.textContent).toBe(text.analysisRefreshFailed)
+    expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(1)
   })
 
   it('never lets the bounded poll join a background read that does not fetch the attempt', async () => {

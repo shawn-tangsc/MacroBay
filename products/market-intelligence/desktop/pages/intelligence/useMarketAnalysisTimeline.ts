@@ -10,6 +10,14 @@ import {
 
 export type AnalysisSelectionState = 'none' | 'loading' | 'ready' | 'unavailable'
 export type AnalysisRequestState = 'idle' | 'loading' | 'queued' | 'unavailable' | 'not-ready' | 'failed' | 'already-available'
+/**
+ * Where a failed request failed.
+ *
+ * A refusal before a run exists ("the service said no") and a run that finished without
+ * publishing are different failures, and rendering both as "the request did not go through"
+ * told the reader nothing about the analysis they had just asked for.
+ */
+export type AnalysisRequestFailure = 'request' | 'run'
 
 /** Text slice the workspace surfaces need; owned by the product i18n registry. */
 export type AnalysisTimelineText = Readonly<{
@@ -104,6 +112,8 @@ export type UseMarketAnalysisTimelineResult = Readonly<{
   state: State
   attempt: MarketAnalysisAttempt | null
   requestState: AnalysisRequestState
+  /** Set with `requestState === 'failed'`; absent for every other state. */
+  requestFailure?: AnalysisRequestFailure
   selectionState: AnalysisSelectionState
   /** Detail cache so the latest-conclusion card and the drawer share one fetch per node. */
   details: Readonly<Record<string, MarketAnalysisTimelineDetail>>
@@ -140,6 +150,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
 }>): UseMarketAnalysisTimelineResult {
   const [state, setState] = useState<State>({ loading: true, entries: [] })
   const [requestState, setRequestState] = useState<AnalysisRequestState>('idle')
+  const [requestFailure, setRequestFailure] = useState<AnalysisRequestFailure>()
   const [attempt, setAttempt] = useState<MarketAnalysisAttempt | null>(null)
   const generation = useRef(0)
   const selectionGeneration = useRef(0)
@@ -323,14 +334,17 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     setState(current => ({ ...current, selected: undefined, detail: undefined, detailLoading: false }))
   }
 
-  const pollForCompletion = async (baselineEntryId: string | undefined, pollAttempt = 0): Promise<void> => {
+  type PollOutcome = 'published' | 'failed' | 'pending' | 'unreadable'
+  type PollResult = Readonly<{ outcome: PollOutcome; failureCode?: string | null }>
+
+  const pollForCompletion = async (baselineEntryId: string | undefined, pollAttempt = 0): Promise<PollResult> => {
     setRequestState('queued')
     const loaded = await load(undefined, true)
-    if (!loaded) return
+    if (!loaded) return { outcome: 'unreadable' }
     const published = loaded.entries[0]
     if (published && published.id !== baselineEntryId) {
       setRequestState('idle')
-      return
+      return { outcome: 'published' }
     }
     const latest = loaded.attempt
     // `stale`/`superseded` never publish either: they are terminal for this reader's purposes,
@@ -338,48 +352,91 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     const terminalFailure = latest && ['failed', 'invalid-output', 'cancelled', 'stale', 'superseded'].includes(latest.status)
     if (terminalFailure) {
       setRequestState('failed')
-      return
+      setRequestFailure('run')
+      return { outcome: 'failed', failureCode: latest.failureCode }
     }
     if (latest?.status === 'succeeded') {
       // A succeeded run whose node never appeared is a real "not published", unlike a run that
       // is still working inside its budget.
       setRequestState('failed')
-      return
+      setRequestFailure('run')
+      return { outcome: 'failed', failureCode: latest.failureCode }
     }
     if (pollAttempt >= analysisTimelineRefreshPolicy.maxPollAttempts) {
-      setRequestState(latest && ['queued', 'running'].includes(latest.status) ? 'queued' : 'failed')
-      return
+      const stillRunning = Boolean(latest && ['queued', 'running'].includes(latest.status))
+      setRequestState(stillRunning ? 'queued' : 'failed')
+      if (!stillRunning) {
+        setRequestFailure('run')
+        return { outcome: 'failed', failureCode: latest?.failureCode }
+      }
+      return { outcome: 'pending' }
     }
     await new Promise<void>(resolve => { pollTimer.current = setTimeout(resolve, analysisTimelineRefreshPolicy.pollIntervalMs) })
-    await pollForCompletion(baselineEntryId, pollAttempt + 1)
+    return pollForCompletion(baselineEntryId, pollAttempt + 1)
   }
+
+  /** The three recorded reasons that mean "the model answered outside the contract". */
+  const retryableAnalysisFailures = new Set([
+    'analysis-invalid-output-schema',
+    'analysis-invalid-json',
+    'analysis-missing-evidence'
+  ])
 
   const requestInitialAnalysis = async (): Promise<void> => {
     setRequestState('loading')
+    setRequestFailure(undefined)
     const result = await marketAnalysisTimelineClient.requestInitialAnalysis(attempt && ['failed', 'invalid-output', 'cancelled'].includes(attempt.status) ? attempt.id : undefined)
     if (result.state !== 'queued') {
-      setRequestState(result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed')
+      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
+      setRequestState(next)
+      if (next === 'failed') setRequestFailure('request')
       return
     }
     await pollForCompletion(undefined)
   }
 
-  const requestRefreshAnalysis = async (): Promise<void> => {
+  /**
+   * One refresh request: queue the run and wait for it to publish or fail.
+   *
+   * A refusal (`already-available`, `not-ready`, an IPC error) is reported as `request`; a run
+   * that finished without publishing is reported as `run`, so the surface can say which happened.
+   */
+  const enqueueRefresh = async (baselineEntryId: string | undefined): Promise<PollResult | 'refused'> => {
     setRequestState('loading')
+    setRequestFailure(undefined)
     let result: Awaited<ReturnType<typeof marketAnalysisTimelineClient.requestInitialAnalysis>>
     try {
       result = await marketAnalysisTimelineClient.requestInitialAnalysis(undefined, 'refresh')
     } catch (error) {
       // The service refuses with `analysis-already-available` when a usable analysis already exists —
       // including the run it just finished. That is not a failure to report as "not published".
-      setRequestState(isAlreadyAvailableError(error) ? 'already-available' : 'failed')
-      return
+      const already = isAlreadyAvailableError(error)
+      setRequestState(already ? 'already-available' : 'failed')
+      if (!already) setRequestFailure('request')
+      return 'refused'
     }
     if (result.state !== 'queued') {
-      setRequestState(result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed')
-      return
+      const next: AnalysisRequestState = result.reason === 'not-eligible' ? 'unavailable' : result.reason === 'not-ready' ? 'not-ready' : result.reason === 'already-available' ? 'already-available' : 'failed'
+      setRequestState(next)
+      if (next === 'failed') setRequestFailure('request')
+      return 'refused'
     }
-    await pollForCompletion(state.entries[0]?.id)
+    return pollForCompletion(baselineEntryId)
+  }
+
+  const requestRefreshAnalysis = async (): Promise<void> => {
+    // The baseline is captured once: the retry below must still recognise the published node it
+    // started from, or a failed first attempt would make the second one look like a success.
+    const baseline = state.entries[0]?.id
+    const first = await enqueueRefresh(baseline)
+    if (first === 'refused' || first.outcome !== 'failed') return
+    // One automatic retry, only for a model that answered outside the contract. Those rejections
+    // are transient by nature — the previous click succeeded on a second try — and asking the
+    // reader to press "Analyze now" again was the whole failure mode: the request had gone
+    // through, the analysis had simply not been published. Refusals, timeouts and cancellations
+    // are not retried; their reason is actionable on its own.
+    if (!retryableAnalysisFailures.has(first.failureCode ?? '')) return
+    await enqueueRefresh(baseline)
   }
 
   const selectionState: AnalysisSelectionState = state.selected
@@ -434,7 +491,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   }, [])
 
   return {
-    state, attempt, requestState, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
+    state, attempt, requestState, requestFailure, selectionState, details, detailState, load, select, clearSelection, ensureDetail,
     loadMore: () => { void load(state.nextCursor ?? undefined) },
     requestInitialAnalysis, requestRefreshAnalysis
   }

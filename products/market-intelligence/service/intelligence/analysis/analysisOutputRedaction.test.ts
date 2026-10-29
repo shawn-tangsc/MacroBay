@@ -74,6 +74,8 @@ describe('unsafe output handling', () => {
 
   it('still refuses a payload that cannot be parsed or has the wrong shape', () => {
     expect(validateAnalysisModelOutput('not json', evidence)).toEqual({ ok: false, errorCode: 'analysis-invalid-json' })
-    expect(validateAnalysisModelOutput(JSON.stringify({ conclusion: 'x' }), evidence)).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema' })
+    // The shape defect names the missing top-level sections; the coarse code is unchanged.
+    expect(validateAnalysisModelOutput(JSON.stringify({ conclusion: 'x' }), evidence))
+      .toMatchObject({ ok: false, errorCode: 'analysis-invalid-output-schema', rule: expect.stringContaining('shape:top-level:missing-knownFacts') })
   })
 })

@@ -176,7 +176,10 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
           {state.entries.length > 0 && requestState === 'already-available' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisRefreshAlreadyAvailable}</p> : null}
           {state.entries.length > 0 && requestState === 'not-ready' ? <p role="status" className="mi-analysis-timeline__state">{text.analysisServiceNotReady}</p> : null}
           {refreshError.visible ? <AnalysisRequestErrorBanner
-            message={text.analysisRefreshFailed}
+            // A run that finished without publishing is not a request that failed: the click was
+            // accepted, the analysis was rejected. Saying "the request did not go through" for
+            // both made a rejected model answer look like a dead button.
+            message={timeline.requestFailure === 'run' ? text.attemptFailed : text.analysisRefreshFailed}
             detail={attempt?.failureCode ? text.failureReasons[attempt.failureCode] : undefined}
             dismissLabel={text.dismissError}
             onDismiss={refreshError.dismiss}

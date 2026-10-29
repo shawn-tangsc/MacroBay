@@ -177,6 +177,10 @@ function makeId(prefix: string, value: string): string {
 function mapInvocationError(errorCode: string): string {
   if (errorCode === 'model-not-ready' || errorCode === 'provider-disabled' || errorCode === 'missing-api-key') return MARKET_ANALYSIS_ERROR_CODES.providerNotReady
   if (errorCode === 'timeout') return MARKET_ANALYSIS_ERROR_CODES.timeout
-  if (errorCode === 'invalid-json' || errorCode === 'schema-validation-failed') return MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema
+  // A reply that is not JSON at all is a different defect from a JSON object with the wrong
+  // shape, and the reader can act on the difference ("it was cut off" vs "it invented a field").
+  // Keeping both as `analysis-invalid-output-schema` is what made every rejection read the same.
+  if (errorCode === 'invalid-json') return MARKET_ANALYSIS_ERROR_CODES.invalidJson
+  if (errorCode === 'schema-validation-failed') return MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema
   return MARKET_ANALYSIS_ERROR_CODES.providerError
 }

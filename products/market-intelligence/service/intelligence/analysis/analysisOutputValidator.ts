@@ -59,9 +59,19 @@ export const analysisValidationRules = Object.freeze({
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
 
+/**
+ * A shape rejection names the part of the contract the model missed.
+ *
+ * The five behaviours above are rules about meaning; a section or a missing top-level key is a
+ * formatting defect. Both used to arrive as the same coarse `analysis-invalid-output-schema`
+ * with no detail, so a rejected run could not be told from any other — the run row now keeps
+ * `shape:<section>` or `shape:top-level:<missing/extra keys>` for the next investigation.
+ */
+export type AnalysisShapeDefect = `shape:${string}`
+
 export type AnalysisOutputValidationResult =
   | Readonly<{ ok: true; value: ValidatedAnalysisModelOutput; redactions: readonly AnalysisOutputRedaction[] }>
-  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule }>
+  | Readonly<{ ok: false; errorCode: typeof MARKET_ANALYSIS_ERROR_CODES.invalidJson | typeof MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema | typeof MARKET_ANALYSIS_ERROR_CODES.missingEvidence | typeof MARKET_ANALYSIS_ERROR_CODES.unsafeOutput; rule?: AnalysisValidationRule | AnalysisShapeDefect }>
 
 function missingEvidence(rule: AnalysisValidationRule): AnalysisOutputValidationResult {
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule }
@@ -71,6 +81,26 @@ const outputKeys = [
   'conclusion', 'knownFacts', 'transmissionHypotheses', 'marketReaction', 'supportingEvidence', 'counterEvidence',
   'scenarios', 'directions', 'nextCatalysts', 'dataCaveats', 'evidenceRefs'
 ] as const
+
+/**
+ * One predicate per top-level section, checked in contract order.
+ *
+ * The first failing section is what the run row records; without it every formatting defect was
+ * the same code and a rejected run could not be investigated from its record.
+ */
+const outputSections: readonly (readonly [string, (value: unknown) => boolean])[] = [
+  ['conclusion', isConclusion],
+  ['knownFacts', isFactClaims],
+  ['transmissionHypotheses', isHypotheses],
+  ['marketReaction', isReactionClaims],
+  ['supportingEvidence', isEvidenceClaims],
+  ['counterEvidence', isEvidenceClaims],
+  ['scenarios', isScenarios],
+  ['directions', isDirections],
+  ['nextCatalysts', isCatalysts],
+  ['dataCaveats', isBoundedTextCollection],
+  ['evidenceRefs', isNonEmptyStringCollection]
+]
 
 /**
  * The conclusion as data: a language-neutral direction key plus prose fields. No markers, no
@@ -94,8 +124,27 @@ function isDirectionKey(value: unknown): value is AnalysisConclusion['direction'
     && (marketAnalysisValidationPolicy.analysisDirectionKeys as readonly string[]).includes(value)
 }
 
+/**
+ * Which of the eleven top-level keys the model got wrong, named so the run row can say it.
+ *
+ * `hasExactKeys` answers only true/false; a rejected run therefore carried no fact about what was
+ * missing. The name is bounded to the contract's own keys, never to model text.
+ */
+function topLevelShapeDefect(value: unknown): AnalysisShapeDefect | undefined {
+  if (!isPlainRecord(value)) return 'shape:not-an-object'
+  const present = Object.keys(value)
+  const missing = outputKeys.filter((key) => !Object.prototype.hasOwnProperty.call(value, key))
+  const extra = present.filter((key) => !(outputKeys as readonly string[]).includes(key))
+  if (missing.length === 0 && extra.length === 0 && present.length === outputKeys.length) return undefined
+  const details = [
+    ...missing.map((key) => `missing-${key}`),
+    ...extra.slice(0, 5).map((key) => `extra-${key}`)
+  ]
+  return `shape:top-level:${details.join(',') || 'unknown'}`
+}
+
 export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnalysisEvidence): AnalysisOutputValidationResult {
-  if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema()
+  if (utf8Length(input) > marketAnalysisValidationPolicy.maximumOutputBytes) return invalidSchema('shape:too-large')
 
   let value: unknown
   try {
@@ -103,7 +152,8 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
   } catch {
     return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson }
   }
-  if (!hasExactKeys(value, outputKeys)) return invalidSchema()
+  const topLevelDefect = topLevelShapeDefect(value)
+  if (topLevelDefect) return invalidSchema(topLevelDefect)
   // A prohibited pattern is removed in place and recorded rather than failing the
   // whole run. Rejecting everything made a usable conclusion disappear because the
   // model cited a URL, and it left no record of what triggered the rule.
@@ -112,17 +162,8 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
 
   // `hasExactKeys` already established the shape, so the record fields are safe to read.
   const record = value as Record<string, unknown>
-  if (!isConclusion(record.conclusion) ||
-    !isFactClaims(record.knownFacts) ||
-    !isHypotheses(record.transmissionHypotheses) ||
-    !isReactionClaims(record.marketReaction) ||
-    !isEvidenceClaims(record.supportingEvidence) ||
-    !isEvidenceClaims(record.counterEvidence) ||
-    !isScenarios(record.scenarios) ||
-    !isDirections(record.directions) ||
-    !isCatalysts(record.nextCatalysts) ||
-    !isBoundedTextCollection(record.dataCaveats) ||
-    !isNonEmptyStringCollection(record.evidenceRefs)) return invalidSchema()
+  const broken = outputSections.find(([key, valid]) => !valid(record[key]))
+  if (broken) return invalidSchema(`shape:${broken[0]}`)
 
   const factIds = new Set(snapshot.facts.map((fact) => fact.factId))
   const evidenceRefIds = new Set(snapshot.evidenceRefs.map((evidence) => evidence.evidenceRefId))
@@ -169,7 +210,7 @@ export function formatMarketAnalysisAcceptanceMarker(details: Readonly<{
 }
 
 /** A shape rejection, optionally naming the rule so the run's failure detail is diagnosable. */
-function invalidSchema(rule?: AnalysisValidationRule): AnalysisOutputValidationResult {
+function invalidSchema(rule?: AnalysisValidationRule | AnalysisShapeDefect): AnalysisOutputValidationResult {
   return { ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema, ...(rule ? { rule } : {}) }
 }
 
