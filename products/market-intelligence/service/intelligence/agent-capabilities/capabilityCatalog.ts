@@ -20,6 +20,8 @@ import {
   dashboardFeedStatusOutputSchema,
   dailyPulseInputSchema,
   dailyPulseOutputSchema,
+  latestConclusionInputSchema,
+  latestConclusionOutputSchema,
   describeCapabilitiesInputSchema,
   describeCapabilitiesOutputSchema,
   listSourcesInputSchema,
@@ -323,6 +325,19 @@ export const intelligenceAgentCapabilities = [
     outputSchema: crossAssetSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-cross-asset-snapshot',
     timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_latest_conclusion',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': '最新已发布结论', 'en-US': 'Latest published conclusion' },
+    description:
+      '读取 asOf 时刻之前最新一条已发布分析或复盘的结论：方向、摘要、成立条件、推翻条件、反证与多周期方向。只读已发布的摘要与预测，不触发分析、不生成日报、不写库；asOf 之后发布的结论不会提前出现，没有已发布结论时返回 empty 和 no-published-conclusion，不用模板补写。',
+    inputSchema: latestConclusionInputSchema,
+    outputSchema: latestConclusionOutputSchema,
+    handlerId: 'market-intelligence.get-latest-conclusion',
+    timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {

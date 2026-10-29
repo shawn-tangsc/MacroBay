@@ -584,3 +584,61 @@ export const dailyPulseOutputSchema = {
     caveats: { type: 'array', items: { type: 'string' } }
   }
 } as const
+
+export const latestConclusionInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['asOf'],
+  properties: {
+    asOf: { type: 'string', format: 'date-time' }
+  }
+} as const
+
+export const latestConclusionOutputSchema = {
+  type: 'object',
+  required: ['state', 'asOf', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'empty'] },
+    asOf: { type: 'string', format: 'date-time' },
+    summaryId: { type: 'string' },
+    publishedAt: { type: 'string', format: 'date-time' },
+    direction: { type: 'string', enum: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] },
+    summary: { type: 'string' },
+    change: { type: 'string' },
+    conditions: { type: 'array', items: { type: 'string' } },
+    invalidations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['asset', 'horizonEnd', 'text'],
+        properties: {
+          asset: { type: 'string', enum: ['BTC', 'ETH'] },
+          horizonEnd: { type: 'string', format: 'date-time' },
+          text: { type: 'string' }
+        }
+      }
+    },
+    counterEvidence: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['statement', 'evidenceRefId'],
+        properties: { statement: { type: 'string' }, evidenceRefId: { type: 'string' } }
+      }
+    },
+    directions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['horizon', 'direction', 'confidence'],
+        properties: {
+          horizon: { type: 'string', enum: ['short', 'medium', 'long'] },
+          direction: { type: 'string' },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+          rationale: { type: 'string' }
+        }
+      }
+    },
+    caveats: { type: 'array', items: { type: 'string' } }
+  }
+} as const

@@ -5,6 +5,7 @@ import type { CapabilityDomain } from './capabilityTypes'
 import { projectTimelineRow } from './projections'
 import { buildMarketPulseRows } from '../../../contracts/marketPulse'
 import { dailyBriefingEnabledFromProfiles } from '../daily-briefing/dailyBriefingReadingSources'
+import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 import {
   DOMAIN_ORDER,
   type CrossAssetInput,
@@ -157,6 +158,53 @@ export async function handleGetDashboardFeedStatus(
 ): Promise<unknown> {
   const feeds = await getIntelligenceModule(deps.jobRuntime).dashboardFeedStatus.status()
   return { state: feeds.length > 0 ? 'available' : 'empty', feeds }
+}
+
+/** The newest published judgement at or before `asOf`; no analysis run, no briefing write. */
+export async function handleGetLatestConclusion(
+  input: unknown,
+  deps: ReadHandlerDeps
+): Promise<unknown> {
+  const asOf = (input as { asOf?: unknown } | null)?.asOf
+  if (typeof asOf !== 'string' || !Number.isFinite(Date.parse(asOf))) throw new Error('latest-conclusion-invalid-as-of')
+  const repository = getIntelligenceModule(deps.jobRuntime).marketAnalysisRuntime.repository
+  const boundary = Date.parse(asOf)
+  const page = repository.listTimeline({ limit: 50 })
+  const latest = selectLatestPublishedEntry(page.items.filter((entry) => {
+    const at = Date.parse(entry.occurredAt)
+    return Number.isFinite(at) && at <= boundary
+  }))
+  if (!latest?.summaryRef) return Object.freeze({ state: 'empty' as const, asOf, caveats: Object.freeze(['no-published-conclusion']) })
+  const summary = repository.getSummary(latest.summaryRef)
+  if (!summary) return Object.freeze({ state: 'empty' as const, asOf, caveats: Object.freeze(['summary-not-found']) })
+  const predictions = repository.listPredictions(latest.summaryRef)
+  const conclusion = summary.conclusion
+  return Object.freeze({
+    state: 'available' as const,
+    asOf,
+    summaryId: summary.id,
+    publishedAt: summary.createdAt,
+    direction: conclusion?.direction ?? latest.direction ?? 'undecided',
+    summary: conclusion?.summary ?? summary.eventAssessment ?? '',
+    ...(conclusion?.change ? { change: conclusion.change } : {}),
+    conditions: Object.freeze([...(conclusion?.conditions ?? [])]),
+    invalidations: Object.freeze(predictions.map((prediction) => Object.freeze({
+      asset: prediction.asset,
+      horizonEnd: prediction.horizonEnd,
+      text: prediction.invalidation
+    }))),
+    counterEvidence: Object.freeze(summary.counterEvidence.map((claim) => Object.freeze({
+      statement: claim.statement,
+      evidenceRefId: claim.evidenceRefId
+    }))),
+    directions: Object.freeze(summary.directions.map((entry) => Object.freeze({
+      horizon: entry.horizon,
+      direction: entry.direction,
+      confidence: entry.confidence,
+      rationale: entry.rationale
+    }))),
+    caveats: Object.freeze(conclusion ? [] : ['legacy-conclusion'])
+  })
 }
 
 /**
