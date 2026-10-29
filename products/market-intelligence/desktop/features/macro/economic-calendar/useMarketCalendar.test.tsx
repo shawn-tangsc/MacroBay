@@ -81,3 +81,20 @@ it.each(['resolve', 'reject'] as const)('ignores a stale refresh %s after leavin
   expect(state.failure).toBe(false)
   expect(state.pending).toBe(false)
 })
+
+it('reads every month the grid draws and keeps a repeated observation once', async () => {
+  const { useMarketCalendar } = await import('./useMarketCalendar')
+  const event = { eventKey: 'shared-observation', title: 'Shared', countryCode: null, eventType: 'economic-indicator' as const,
+    importance: 'high' as const, scheduledAt: '2026-09-01T10:00:00.000Z', consensus: null, providerActual: null, providerPrevious: null,
+    source: '0xRouter' as const, sourceObservedAt: '2026-08-01T00:00:00.000Z', coverage: 'observed-unverified' as const }
+  const client = { queryMonth: vi.fn(async ({ month }: { month: string }) => ({ state: 'available' as const, month, locale: 'zh' as const,
+    asOf: now().toISOString(), events: month === '2026-09' || month === '2026-08' ? [event] : [], sources: [] })), refresh: vi.fn() }
+  let state!: ReturnType<typeof useMarketCalendar>
+  function Harness() { state = useMarketCalendar({ month: '2026-09', months: ['2026-08', '2026-09', '2026-10'], locale: 'zh', now, client }); return null }
+  root = createRoot(host)
+  await act(async () => root!.render(<Harness />))
+  expect(client.queryMonth.mock.calls.map(([query]) => query.month).sort()).toEqual(['2026-08', '2026-09', '2026-10'])
+  // The named month is read first, then the edges.
+  expect(client.queryMonth.mock.calls[0]![0]).toMatchObject({ month: '2026-09' })
+  expect(state.events).toHaveLength(1)
+})

@@ -14,6 +14,7 @@ import {
   createEconomicCalendarMonthQuery,
   createEconomicCalendarQuery,
   economicCalendarCurrentMonth,
+  economicCalendarGridMonths,
   economicCalendarPresentationPolicy,
   isReleaseTimeSource,
   selectEconomicCalendarMonth,
@@ -45,10 +46,19 @@ import { DashboardPanelDrawer } from '../../../pages/intelligence/DashboardPanel
 import './economicCalendar.css'
 
 export type EconomicCalendarText = (typeof productText)[keyof typeof productText]['pages']['intelligence']['portal']['calendar']
+/** One month's own read, before the grid window composes it with its neighbours. */
+type MonthRead =
+  | { state: 'unavailable'; failureCode: keyof EconomicCalendarText['failures'] }
+  | { state: 'available'; projection: EconomicCalendarProjection }
 type MonthState =
   | { state: 'loading' }
   | { state: 'unavailable'; failureCode: keyof EconomicCalendarText['failures'] }
-  | { state: 'available'; projection: EconomicCalendarProjection; version: number }
+  /**
+   * `projection` is the month's own grid; `events` is the union of the months that grid draws,
+   * so the first and last rows can show their own days. `incomplete` is set when a neighbouring
+   * month could not be read: the month itself still stands, its edges are just not complete.
+   */
+  | { state: 'available'; projection: EconomicCalendarProjection; events: readonly EconomicCalendarEventView[]; incomplete: boolean; version: number }
 type DetailState =
   | { state: 'idle' }
   | { state: 'loading' }
@@ -107,7 +117,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const [followCurrentMonth, setFollowCurrentMonth] = useState(() =>
     !openTarget?.month || openTarget.month === economicCalendarCurrentMonth(initialQuery.asOf))
   const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
-  const market = useMarketCalendar({ month: selectedMonth, locale: text.market.locale, now })
+  const gridMonths = economicCalendarGridMonths(selectedMonth)
+  const market = useMarketCalendar({ month: selectedMonth, months: gridMonths, locale: text.market.locale, now })
   const [selectedMarket, setSelectedMarket] = useState<MarketCalendarEvent>()
   const [selectedLinkedMarket, setSelectedLinkedMarket] = useState<MarketCalendarEvent>()
   useEffect(() => { setSelectedMarket(undefined); setSelectedLinkedMarket(undefined) }, [selectedMonth, text.market.locale])
@@ -138,7 +149,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     const targetKey = openTarget?.eventKey
     if (!targetKey || appliedOpenTargetEvent.current === targetKey) return
     const officialTarget = monthState.state === 'available'
-      ? monthState.projection.events.find(event => event.eventKey === targetKey) : undefined
+      ? monthState.events.find(event => event.eventKey === targetKey) : undefined
     if (officialTarget) {
       appliedOpenTargetEvent.current = targetKey
       setSelectedMarket(undefined)
@@ -208,7 +219,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
     monthLoadingFallbackRef.current = undefined
     setMonthState({ state: 'loading' })
-    const query = createEconomicCalendarMonthQuery(month, nextAsOf ?? asOf)
+    const readAsOf = nextAsOf ?? asOf
     const isCurrentOperation = (): boolean => mountedRef.current && selectedMonthRef.current === month && monthOperationRef.current?.id === operation.id
     const markUnavailable = (): void => {
       if (!isCurrentOperation()) return
@@ -219,26 +230,42 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       setSelectedEventKey(undefined)
     }
     monthLoadingFallbackRef.current = setTimeout(markUnavailable, economicCalendarMonthLoadingPolicy.budgetMs)
-    let queryResult: Promise<unknown>
-    try {
-      queryResult = Promise.resolve(client.queryMonth(query))
-    } catch {
-      markUnavailable()
-      return
+    /**
+     * Every month the grid draws is read, because a cell is drawn whether or not its month was
+     * asked for. The named month decides the grid: if it fails the page says so, while a
+     * neighbouring month that fails only costs the edges their rows.
+     */
+    const months = economicCalendarGridMonths(month)
+    const read = (candidate: string): Promise<unknown> => {
+      try {
+        return Promise.resolve(client.queryMonth(createEconomicCalendarMonthQuery(candidate, readAsOf)))
+      } catch {
+        return Promise.resolve(undefined)
+      }
     }
-    void queryResult.then((result) => {
+    void Promise.all(months.map(async (candidate) => toMonthState(await read(candidate),
+      createEconomicCalendarMonthQuery(candidate, readAsOf)))).then((states) => {
       if (!isCurrentOperation()) return
       if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
       monthLoadingFallbackRef.current = undefined
       monthOperationRef.current = undefined
-      const nextState = toMonthState(result, query, operation.id)
-      setMonthState(nextState)
-      if (nextState.state === 'available') {
-        // The reader's own selection survives a re-read; nothing is picked on their behalf.
-        setSelectedEventKey((current) => nextState.projection.events.some((event) => event.eventKey === current) ? current : undefined)
+      const primaryIndex = months.indexOf(month)
+      const primary = states[primaryIndex] ?? { state: 'unavailable' as const, failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
+      if (primary.state !== 'available') {
+        setMonthState(primary)
+        setSelectedEventKey(undefined)
         return
       }
-      setSelectedEventKey(undefined)
+      const events = [...primary.projection.events]
+      let incomplete = false
+      states.forEach((state, index) => {
+        if (index === primaryIndex) return
+        if (state.state === 'available') events.push(...state.projection.events)
+        else incomplete = true
+      })
+      setMonthState({ state: 'available', projection: primary.projection, events, incomplete, version: operation.id })
+      // The reader's own selection survives a re-read; nothing is picked on their behalf.
+      setSelectedEventKey((current) => events.some((event) => event.eventKey === current) ? current : undefined)
     }).catch(() => {
       markUnavailable()
     })
@@ -286,7 +313,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     const detailAsOf = asOf
     void client.getEventDetail({ eventKey: selectedEvent.event.eventKey, asOf: detailAsOf }).then((result) => {
       if (!active) return
-      const event = toDetailEvent(result, selectedEvent.event.eventKey, selectedMonth, detailAsOf)
+      const event = toDetailEvent(result, selectedEvent.event.eventKey, detailAsOf)
       setDetailState(event ? { state: 'available', event } : { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
     }).catch(() => {
       if (active) setDetailState({ state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
@@ -336,10 +363,10 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     selectMonth(current, true)
   }, [statusNow, followCurrentMonth]) // eslint-disable-line react-hooks/exhaustive-deps
   const coverage: CalendarDayCoverage = market.loading || monthState.state === 'loading' ? 'loading'
-    : market.failure || monthState.state !== 'available' ? 'incomplete' : 'complete'
+    : market.failure || monthState.state !== 'available' || monthState.incomplete ? 'incomplete' : 'complete'
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
   const formatTime = useShellTimeFormat()
-  const dayEvents = unifiedCalendarDay(selectedDay, monthState.state === 'available' ? monthState.projection.events : [], market.events, coverage, timeZone,
+  const dayEvents = unifiedCalendarDay(selectedDay, monthState.state === 'available' ? monthState.events : [], market.events, coverage, timeZone,
     new Set(market.events.filter(event => event.officialLink).map(event => event.eventKey)))
   const dayList = useRef<HTMLElement>(null)
   // A day the reader leaves keeps its scroll position, so coming back to it resumes where it was.
@@ -411,7 +438,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       </header>
       {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
       <section className="mi-market-calendar__status" aria-live="polite">
-        <span>{text.unifiedDay.coverage.replace('{month}', selectedMonth)}</span>
+        <span>{text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))}</span>
         {market.pending ? <span>{text.market.pending}</span> : market.feedback ? <span>{text.market[market.feedback.state]}</span> : null}
         {market.feedback?.failureCode === 'storage-unavailable' || market.feedback?.failureCode === 'storage-pressure' ? <span>{text.unifiedDay.storageUnavailable}</span> : null}
         {market.loading ? <LoadingState layout="inline" size="sm" label={text.market.loading} /> : null}
@@ -432,6 +459,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           onOpenDay={day => showDay(day)}
           onSelectItem={item => selectItem(item)}
           coverage={coverage}
+          events={monthState.state === 'available' ? monthState.events : []}
           marketEvents={market.events}
           marketSources={market.sources}
           selectedEventKey={selectedEventKey}
@@ -484,10 +512,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   )
 }
 
-function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onOpenDay, onSelectItem, selectedEventKey, state, text, marketEvents, marketSources, coverage }: {
+function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage }: {
   statusNow: string
   today: string
   asOf: string
+  events: readonly EconomicCalendarEventView[]
   marketEvents: readonly MarketCalendarEvent[]
   marketSources: readonly MarketCalendarSource[]
   onSelectItem: (item: CalendarDayItem) => void
@@ -502,7 +531,7 @@ function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onO
   const status = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
   if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
 }
 
 function CalendarState({ month, text, loading }: { month: string; text: string; loading: boolean }): ReactElement {
@@ -511,9 +540,10 @@ function CalendarState({ month, text, loading }: { month: string; text: string; 
   </section>
 }
 
-function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
+function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
   statusNow: string
   today: string
+  events: readonly EconomicCalendarEventView[]
   marketEvents: readonly MarketCalendarEvent[]
   marketSources: readonly MarketCalendarSource[]
   onSelectItem: (item: CalendarDayItem) => void
@@ -531,7 +561,7 @@ function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, se
     <div className="mi-economic-calendar__weekdays">{text.weekdays.map((day) => <span key={day}>{day}</span>)}</div>
     <div className="mi-economic-calendar__grid">
       {projection.days.map((day) => {
-        const unified = unifiedCalendarDay(day.dateKey, projection.events, marketEvents, coverage, timeZone, linkedMarketKeys)
+        const unified = unifiedCalendarDay(day.dateKey, events, marketEvents, coverage, timeZone, linkedMarketKeys)
         return <article className="mi-economic-calendar__day" data-date={day.dateKey} data-month={day.month} key={day.dateKey}>
           <span className="mi-economic-calendar__date" aria-current={day.dateKey === today ? 'date' : undefined}>{day.day}</span>
           <div className="mi-economic-calendar__events">
@@ -541,7 +571,7 @@ function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, se
         </article>
       })}
     </div>
-    {projection.events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState onImportBlsIcs={onImportBlsIcs} text={text} /> : null}
+    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState onImportBlsIcs={onImportBlsIcs} text={text} /> : null}
   </section>
 }
 
@@ -570,11 +600,11 @@ function calendarEventDay(event: EconomicCalendarEventView, timeZone: string): s
 function readSelectedEvent(state: MonthState, eventKey: string | undefined): { event: EconomicCalendarEventView; version: number } | undefined {
   if (!eventKey) return undefined
   if (state?.state !== 'available') return undefined
-  const event = state.projection.events.find((candidate) => candidate.eventKey === eventKey)
+  const event = state.events.find((candidate) => candidate.eventKey === eventKey)
   return event ? { event, version: state.version } : undefined
 }
 
-function toMonthState(result: unknown, query: { month: string; asOf: string }, version: number): MonthState {
+function toMonthState(result: unknown, query: { month: string; asOf: string }): MonthRead {
   try {
     if (isExactRecord(result, ['state', 'failureCode']) && result.state === 'unavailable' && isMonthFailureCode(result.failureCode)) {
       return { state: 'unavailable', failureCode: result.failureCode }
@@ -582,16 +612,18 @@ function toMonthState(result: unknown, query: { month: string; asOf: string }, v
     if (!isExactRecord(result, ['state', 'asOf', 'events']) || result.state !== 'available' || result.asOf !== query.asOf || !isExactEventArray(result.events, query.asOf)) {
       return { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
     }
-    return { state: 'available', projection: createEconomicCalendarProjection({ month: query.month, asOf: query.asOf, events: result.events }), version }
+    return { state: 'available', projection: createEconomicCalendarProjection({ month: query.month, asOf: query.asOf, events: result.events }) }
   } catch {
     return { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
   }
 }
 
-function toDetailEvent(result: unknown, eventKey: string, month: string, asOf: string): EconomicCalendarEventView | undefined {
+function toDetailEvent(result: unknown, eventKey: string, asOf: string): EconomicCalendarEventView | undefined {
   try {
     if (!isExactRecord(result, ['state', 'asOf', 'event']) || result.state !== 'available' || result.asOf !== asOf || !isExactEvent(result.event, asOf)) return undefined
-    const projection = createEconomicCalendarProjection({ month, asOf, events: [result.event] })
+    // The grid draws its neighbouring months too, so the detail is projected in the event's own
+    // month rather than in the month the page happens to be named after.
+    const projection = createEconomicCalendarProjection({ month: result.event.scheduledDate.slice(0, 7), asOf, events: [result.event] })
     return projection.events[0]?.eventKey === eventKey ? projection.events[0] : undefined
   } catch {
     return undefined

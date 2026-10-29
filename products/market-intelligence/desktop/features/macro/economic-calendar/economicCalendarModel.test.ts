@@ -4,6 +4,7 @@ import {
   createEconomicCalendarMonthQuery,
   createEconomicCalendarProjection,
   economicCalendarCurrentMonth,
+  economicCalendarGridMonths,
   economicCalendarCaveats,
   economicCalendarEventCategory,
   economicCalendarEventLabelKey,
@@ -169,5 +170,16 @@ describe('economicCalendarCurrentMonth', () => {
     expect(economicCalendarCurrentMonth('2026-08-31T23:59:59.999Z')).toBe('2026-08')
     expect(economicCalendarCurrentMonth('2026-09-01T00:00:00.000Z')).toBe('2026-09')
     expect(economicCalendarCurrentMonth('2027-01-01T00:00:00.000Z')).toBe('2027-01')
+  })
+})
+
+describe('economicCalendarGridMonths', () => {
+  it('reads the months the six-week grid draws, not just the month it is named after', () => {
+    // 2026-10 starts on a Thursday: the grid opens on 2026-09-27 and closes on 2026-11-07.
+    expect(economicCalendarGridMonths('2026-10')).toEqual(['2026-09', '2026-10', '2026-11'])
+    // 2026-02 starts on a Sunday and still leaves a trailing week of March.
+    expect(economicCalendarGridMonths('2026-02')).toEqual(['2026-02', '2026-03'])
+    expect(economicCalendarGridMonths('2026-12')).toEqual(['2026-11', '2026-12', '2027-01'])
+    expect(economicCalendarGridMonths('not-a-month')).toEqual([])
   })
 })

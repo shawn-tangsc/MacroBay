@@ -108,6 +108,28 @@ export function createEconomicCalendarProjection(input: {
   return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate) }
 }
 
+/**
+ * The months one month's grid actually draws.
+ *
+ * The grid is six fixed weeks, so its first and last rows can hold days of the months on either
+ * side. Reading exactly these months is what lets a cell show its own day instead of a blank that
+ * means "outside the month we asked for". Chronological order, the given month always included.
+ */
+export function economicCalendarGridMonths(month: string): readonly string[] {
+  const bounds = monthBounds(month)
+  if (!bounds) return []
+  const start = new Date(`${bounds.start}T00:00:00.000Z`)
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay())
+  const months: string[] = []
+  for (let index = 0; index < economicCalendarPresentationPolicy.calendarWeeks * economicCalendarPresentationPolicy.weekdaysPerWeek; index += 1) {
+    const date = new Date(start)
+    date.setUTCDate(start.getUTCDate() + index)
+    const key = date.toISOString().slice(0, 7)
+    if (!months.includes(key)) months.push(key)
+  }
+  return months
+}
+
 export function economicCalendarEventCategory(eventFamily: string): EconomicCalendarCategory | undefined {
   return economicCalendarPresentationPolicy.familyCategories[eventFamily as keyof typeof economicCalendarPresentationPolicy.familyCategories]
 }
