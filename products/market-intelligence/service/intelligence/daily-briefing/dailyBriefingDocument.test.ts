@@ -192,6 +192,24 @@ describe('daily briefing document', () => {
     expect(document.next.focus).toMatchObject({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', countryCode: 'US', countryName: 'United States', consensus: '29' })
   })
 
+  it('uses a persisted curve or last close when the exact 24h pair is missing', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        market: {
+          crossAsset: {
+            analysisEnd: '2026-10-30T00:25:00.000Z',
+            closedReturns: { btc: { '24h': { state: 'unavailable', reason: 'missing' } }, eth: { '24h': { state: 'unavailable', reason: 'missing' } } },
+            curves: { btc: [{ at: '2026-10-30T00:25:00.000Z', returnPercent: -0.43 }], eth: [{ at: '2026-10-30T00:25:00.000Z', returnPercent: -1.21 }] },
+            lastClosed: { btc: { at: '2026-10-30T00:25:00.000Z', close: '80688' }, eth: { at: '2026-10-30T00:25:00.000Z', close: '2327.67' } }
+          } as never
+        }
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.data.market.find((row) => row.id === 'btc')).toMatchObject({ state: 'stale', reason: 'stale-fallback', value: { number: -0.43, format: 'percent' } })
+    expect(document.data.market.find((row) => row.id === 'eth')).toMatchObject({ state: 'stale', value: { number: -1.21, format: 'percent' } })
+  })
+
   it('keeps a readable document when the market sources are absent', () => {
     const document = buildDailyBriefingDocument({ packet: packet({ market: {} }), date: '2026-10-30' })
     expect(document.data.market).toHaveLength(6)

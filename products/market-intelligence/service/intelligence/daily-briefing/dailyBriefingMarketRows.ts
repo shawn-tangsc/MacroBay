@@ -85,13 +85,22 @@ function crossRow(
     source: 'rule',
     reasonCode: tier.must ? 'largest-move' : 'context'
   })
+  if (snapshot && metric?.state === 'available') {
+    const stale = age(asOf, snapshot.analysisEnd) > marketStaleAfterMs
+    return Object.freeze({
+      id, labelKey, importance, state: stale ? 'stale' as const : 'available' as const,
+      value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
+      change: null, window: '24h' as const, observedAt: snapshot.analysisEnd
+    })
+  }
   if (!snapshot) {
     return Object.freeze({
       id, labelKey, importance: tier.must ? gap : context, state: 'unavailable' as const,
       value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
     })
   }
-  if (!metric || metric.state !== 'available') {
+  // The 24h pair is unavailable here; keep any persisted curve/last close.
+  {
     // The panel may have a readable curve or a last closed bar even when the exact 24h pair is
     // missing. Keep that persisted reading instead of turning the whole row into "unavailable".
     const curve = [...(snapshot.curves[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
@@ -115,12 +124,6 @@ function crossRow(
       value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
     })
   }
-  const stale = age(asOf, snapshot.analysisEnd) > marketStaleAfterMs
-  return Object.freeze({
-    id, labelKey, importance, state: stale ? 'stale' as const : 'available' as const,
-    value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
-    change: null, window: '24h' as const, observedAt: snapshot.analysisEnd
-  })
 }
 
 function macroRow(

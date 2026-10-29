@@ -179,8 +179,16 @@ function flowBarStyle(value: number, max: number): { left: string; width: string
   return value >= 0 ? { left: '50%', width: `${percent}%` } : { left: `${50 - percent}%`, width: `${percent}%` }
 }
 
+const SOURCE_LABELS: Readonly<Record<string, string>> = {
+  'defillama-stablecoins': 'DefiLlama Stablecoins',
+  'binance-futures-positioning': 'Binance Futures',
+  '0xrouter-aggregate-provider': '0xRouter ETF',
+  'alternative-fear-greed': 'Alternative.me',
+  'coinDesk-rss': 'CoinDesk RSS'
+}
+
 function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {
-  if (entry.sourceLabel) return entry.sourceLabel
+  if (entry.sourceLabel) return SOURCE_LABELS[entry.sourceLabel] ?? entry.sourceLabel
   if (entry.refId.startsWith('query:defillama-stablecoins')) return 'DefiLlama Stablecoins'
   if (entry.refId.startsWith('query:0xrouter')) return '0xRouter'
   if (entry.refId.startsWith('macro-calendar')) return '宏观日历'
