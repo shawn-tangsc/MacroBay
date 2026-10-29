@@ -95,7 +95,6 @@
 .mi-news-sentiment__drivers small { color: var(--muted, #93a196); font-size: 9.5px; white-space: normal; }
 .mi-news-sentiment__footer { display: flex; align-items: center; gap: 8px; padding: 7px 12px 9px; border-top: 1px solid color-mix(in srgb, var(--border, #2a352b) 55%, transparent); font-size: 9.5px; color: var(--muted, #93a196); }
 .mi-news-sentiment__footer button { margin-left: auto; }
-.mi-news-sentiment__badge { border: 1px solid var(--border, #2a352b); border-radius: 2px; padding: 0 4px; }
 
 @container mi-news-sentiment (max-width: 360px) {
   .mi-news-sentiment__breakdown { display: none; }
