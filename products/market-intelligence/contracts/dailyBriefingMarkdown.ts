@@ -78,9 +78,10 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     if (conclusion.caveats.length > 0) lines.push(`- ${labels.conclusion.caveats}: ${conclusion.caveats.map(escapeMarkdown).join(' · ')}`)
   }
 
-  if (document.next.items.length > 0) {
+  const nextItems = [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
+  if (nextItems.length > 0) {
     lines.push('', `## ${labels.sections.next}`)
-    for (const item of document.next.items) lines.push(nextLine(item, options))
+    for (const item of nextItems) lines.push(nextLine(item, options))
   }
 
   lines.push('', '---')

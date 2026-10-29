@@ -26,8 +26,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const keyRows = chosen.slice(0, 4)
   const metricRows = chosen.slice(4, 8)
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
-  const focusEvent = doc.next.items.find((item) => item.titleKey && FOCUS_TITLE_KEYS.has(item.titleKey)) ?? doc.next.items[0]
-  const otherEvents = doc.next.items.filter((item) => item !== focusEvent)
+  const focusEvent = doc.next.focus ?? doc.next.items[0]
+  const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
   const newsCounts = doc.data.sentiment.news.counts
   const newsTotal = doc.data.sentiment.news.itemCount ?? 0
   return <article className="mi-brief-poster">
@@ -119,10 +119,10 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       </div>
     </section> : null}
 
-    {doc.next.items.length > 0 ? <section className="mi-brief-poster__next">
+    {doc.next.items.length > 0 || doc.next.focus ? <section className="mi-brief-poster__next">
       <div className="mi-brief-poster__next-head">
         <h2>{text.sections.next}</h2>
-        <span>{text.next.count.replace('{count}', String(doc.next.items.length))}</span>
+        <span>{text.next.count.replace('{count}', String(doc.next.items.length + (doc.next.focus ? 1 : 0)))}</span>
       </div>
       {focusEvent ? <div className="mi-brief-poster__next-focus">
         <div className="mi-brief-poster__next-focus-head">
@@ -159,8 +159,6 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     </footer>
   </article>
 }
-
-const FOCUS_TITLE_KEYS = new Set(['nonfarm-payrolls', 'unemployment', 'average-hourly-earnings', 'fomc', 'cpi', 'pce', 'gdp'])
 
 function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
   return eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title

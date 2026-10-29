@@ -61,8 +61,9 @@ export function buildDailyBriefingDocument(input: Readonly<{
     }),
     conclusion: built.conclusion,
     next: Object.freeze({
-      items: next,
-      ...(next.length > 0 ? {} : { note: nextEmptyCode(packet) })
+      items: next.items,
+      ...(next.focus ? { focus: next.focus } : {}),
+      ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) })
     }),
     citations: built.citations,
     provenance: Object.freeze({
@@ -128,18 +129,17 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
   })
 }
 
-function selectNext(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
-  if (packet.calendar.state !== 'available') return Object.freeze([])
+function selectNext(packet: DailyBriefingFactPacket): Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem }> {
+  if (packet.calendar.state !== 'available') return Object.freeze({ items: Object.freeze([]) })
   const today = localDate(packet.windowEnd, packet.timeZone)
   const horizon = addDays(today, 7)
-  return Object.freeze(packet.calendar.events
+  const candidates = packet.calendar.events
     .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
     .filter((event) => {
       const day = localDate(event.scheduledAt, packet.timeZone)
       return day > today && day <= horizon
     })
     .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
-    .slice(0, dailyBriefingPolicy.maximumNextItems)
     .map((event) => Object.freeze({
       eventKey: event.eventKey,
       title: event.title,
@@ -151,7 +151,11 @@ function selectNext(packet: DailyBriefingFactPacket): readonly BriefingNextItem[
       ...(event.countryName ? { countryName: event.countryName } : {}),
       ...(event.consensus ? { consensus: event.consensus } : {}),
       ...(event.previous ? { previous: event.previous } : {})
-    })))
+    }))
+  const focusKeys = new Set(['nonfarm-payrolls', 'unemployment', 'average-hourly-earnings', 'fomc', 'cpi', 'pce', 'gdp'])
+  const focus = candidates.find((item) => item.titleKey && focusKeys.has(item.titleKey)) ?? candidates[0]
+  const items = candidates.filter((item) => item.eventKey !== focus?.eventKey).slice(0, dailyBriefingPolicy.maximumNextItems)
+  return Object.freeze({ items: Object.freeze(items), ...(focus ? { focus } : {}) })
 }
 
 function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{

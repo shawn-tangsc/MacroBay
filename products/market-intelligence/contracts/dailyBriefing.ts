@@ -201,7 +201,7 @@ export type DailyBriefingDocument = Readonly<{
     }>
   }>
   conclusion: BriefingConclusion | null
-  next: Readonly<{ items: readonly BriefingNextItem[]; note?: string }>
+  next: Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem; note?: string }>
   editorial?: Readonly<{ dataNote?: string; invalidationNote?: string }>
   citations: readonly Readonly<{
     index: number

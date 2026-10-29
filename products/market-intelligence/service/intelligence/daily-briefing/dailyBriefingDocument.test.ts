@@ -156,7 +156,7 @@ describe('daily briefing document', () => {
 
     expect(document.news.items.map((item) => item.itemId)).toEqual(['n2', 'n1'])
     expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
-    expect(document.next.items.map((item) => item.eventKey)).toEqual(['US.FOMC'])
+    expect(document.next.focus?.eventKey).toBe('US.FOMC')
     expect(document.news.items[0]).toMatchObject({ polarity: 'bullish' })
     expect(document.news.items[0]).not.toHaveProperty('translatedTitle')
     expect(document.news.notes.macroEmpty).toBeUndefined()
@@ -189,7 +189,7 @@ describe('daily briefing document', () => {
       }),
       date: '2026-10-30'
     })
-    expect(document.next.items[0]).toMatchObject({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', countryCode: 'US', countryName: 'United States', consensus: '29' })
+    expect(document.next.focus).toMatchObject({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', countryCode: 'US', countryName: 'United States', consensus: '29' })
   })
 
   it('keeps a readable document when the market sources are absent', () => {
