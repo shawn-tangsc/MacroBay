@@ -19,6 +19,9 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const conclusion = doc.conclusion
+  const hasNews = doc.news.items.length > 0 || doc.news.macro.length > 0
+  const hasData = chosen.length > 0
+  const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0 || conclusion.dataGaps.length > 0 || conclusion.caveats.length > 0))
   return <article className="mi-brief-poster">
     <header className="mi-brief-poster__head">
       <div>
@@ -30,8 +33,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     </header>
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
 
-    <div className="mi-brief-poster__columns">
-      <section>
+    {hasNews || hasData ? <div className="mi-brief-poster__columns">
+      {hasNews ? <section>
         <h2>{text.sections.news}</h2>
         {doc.news.items.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
           <span data-polarity={item.polarity}>{item.publishedAt.slice(11, 16)}</span>
@@ -40,7 +43,6 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
             {item.why ? <small>{item.why}</small> : null}
           </div>
         </div>)}
-        {doc.news.items.length === 0 ? <p className="mi-brief-poster__empty">{text.empty.news}</p> : null}
         {doc.news.macro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
           <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
           <div>
@@ -48,9 +50,9 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
             <small>{text.macro.actual} {item.actual ?? '—'} · {text.macro.consensus} {item.consensus ?? text.macro.noConsensus} · {text.macro.surprise[item.surprise.direction]}</small>
           </div>
         </div>)}
-      </section>
+      </section> : null}
 
-      <section>
+      {hasData ? <section>
         <h2>{text.sections.data}</h2>
         <div className="mi-brief-poster__numbers">
           {chosen.map((row) => <div className="mi-brief-poster__number" key={row.id}>
@@ -59,19 +61,26 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
             <small>{formatBriefingChange(row.change, locale) || stateLabel(row, text)}</small>
           </div>)}
         </div>
-        <p className="mi-brief-poster__news-summary">{text.groups.sentiment} · {doc.data.sentiment.news.itemCount ?? 0} · {doc.data.sentiment.news.counts?.bearish ?? 0} / {doc.data.sentiment.news.counts?.bullish ?? 0} / {doc.data.sentiment.news.counts?.mixed ?? 0} / {doc.data.sentiment.news.counts?.neutral ?? 0}</p>
-      </section>
-    </div>
+        {doc.data.sentiment.news.itemCount ? <p className="mi-brief-poster__news-summary">{text.groups.sentiment} · {doc.data.sentiment.news.itemCount} · {doc.data.sentiment.news.counts?.bearish ?? 0} / {doc.data.sentiment.news.counts?.bullish ?? 0} / {doc.data.sentiment.news.counts?.mixed ?? 0} / {doc.data.sentiment.news.counts?.neutral ?? 0}</p> : null}
+      </section> : null}
+    </div> : null}
 
-    <section className="mi-brief-poster__conclusion">
+    {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
-      {conclusion ? <>
         <div className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</div>
         <p className="mi-brief-poster__summary">{conclusion.summary}</p>
         {conclusion.translation ? <p className="mi-brief-poster__translation">{text.translated} · {conclusion.translation}</p> : null}
         {conclusion.invalidations[0] ? <p className="mi-brief-poster__invalidate">{text.conclusion.invalidation}：{conclusion.invalidations[0].text}</p> : null}
-      </> : <p className="mi-brief-poster__empty">{text.empty.conclusion}</p>}
-    </section>
+    </section> : null}
+
+    {hasBasis && conclusion ? <section className="mi-brief-poster__basis">
+      <h2>{text.sections.basis}</h2>
+      <div className="mi-brief-poster__basis-grid">
+        {conclusion.conditions.length > 0 ? <div className="mi-brief-poster__basis-card cond"><h3>{text.conclusion.conditions}</h3><p>{conclusion.conditions.join(' · ')}</p></div> : null}
+        {conclusion.counterEvidence.length > 0 ? <div className="mi-brief-poster__basis-card counter"><h3>{text.conclusion.counter}</h3><p>{conclusion.counterEvidence.map((claim) => `${claim.statement}${claim.citations.length ? ` [${claim.citations.join('][')}]` : ''}`).join(' · ')}</p></div> : null}
+        {conclusion.dataGaps.length > 0 || conclusion.caveats.length > 0 ? <div className="mi-brief-poster__basis-card gaps"><h3>{text.conclusion.gaps} / {text.conclusion.caveats}</h3><p>{[...conclusion.dataGaps, ...conclusion.caveats].join(' · ')}</p></div> : null}
+      </div>
+    </section> : null}
 
     {doc.next.items.length > 0 ? <section className="mi-brief-poster__next">
       <h2>{text.sections.next}</h2>

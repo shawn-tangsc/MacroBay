@@ -275,3 +275,6 @@
 .mi-daily-briefing-page .mi-daily-briefing__timeline span { font-size: 12px; }
 .mi-daily-briefing-page .mi-daily-briefing__timeline time { font-size: 10.5px; }
 .mi-daily-briefing-page__loading-hint { max-width: 420px; margin: 4px 0 0; color: #5f686e; font-size: 11px; line-height: 1.5; text-align: center; }
+
+.mi-daily-briefing__basis { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); }
+.mi-daily-briefing__basis h4 { margin: 0 0 5px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }

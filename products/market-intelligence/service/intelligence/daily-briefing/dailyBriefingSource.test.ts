@@ -19,7 +19,7 @@ const summary = {
 const officialEvent = {
   eventKey: 'US.CPI', releaseGroupKey: 'US.CPI', eventFamily: 'inflation', titleKey: 'cpi', countryCode: 'US',
   importance: 'high', periodKey: '2026-09', lifecycleState: 'released', coverage: 'available',
-  scheduledDate: '2026-10-29', scheduledAt: '2026-10-29T12:30:00.000Z', releaseTimeSource: 'official',
+  scheduledDate: '2026-10-29', scheduledAt: undefined, conventionScheduledAt: '2026-10-29T12:30:00.000Z', releaseTimeSource: 'convention-default',
   detectedAt: '2026-10-29T12:31:00.000Z', actual: { displayValue: '3.4%' }, previous: { displayValue: '3.1%' },
   consensus: { displayValue: '3.2%' }
 }
@@ -113,7 +113,7 @@ describe('daily briefing source', () => {
     expect(packet.calendar.state).toBe('available')
     expect(packet.calendar.events.map((event) => event.eventKey).sort()).toEqual(['MC.FOMC', 'US.CPI'])
     expect(packet.calendar.events.find((event) => event.eventKey === 'US.CPI')).toMatchObject({
-      title: 'cpi', titleKey: 'cpi', category: 'economic-indicator', surprise: { direction: 'beat', unit: 'pp' }
+      title: 'cpi', titleKey: 'cpi', category: 'economic-indicator', scheduledAt: '2026-10-29T12:30:00.000Z', surprise: { direction: 'beat', unit: 'pp' }
     })
     expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')).toMatchObject({
       title: 'FOMC rate decision', lifecycleState: 'scheduled'

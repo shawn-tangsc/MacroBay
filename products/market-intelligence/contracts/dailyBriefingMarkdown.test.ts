@@ -105,8 +105,9 @@ describe('daily briefing markdown', () => {
     })
     const markdown = dailyBriefingToMarkdown(empty, options)
     expect(markdown).toContain('四个读数都读不到')
-    expect(markdown).toContain('还没有已发布结论')
-    expect(markdown).toContain('日历来源未启用')
+    expect(markdown).not.toContain('## 今日要闻')
+    expect(markdown).not.toContain('## 结论')
+    expect(markdown).not.toContain('## 接下来')
   })
 
   it('escapes markdown punctuation in titles', () => {

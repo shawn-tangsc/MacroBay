@@ -156,7 +156,7 @@ function officialEvent(
   event: Extract<Awaited<ReturnType<MarketIntelligencePublicQueryService['queryMacroEconomicCalendarMonth']>>, { state: 'available' }>['events'][number],
   _asOf: string
 ): DailyBriefingCalendarEvent {
-  const scheduledAt = event.scheduledAt ?? `${event.scheduledDate}T00:00:00.000Z`
+  const scheduledAt = event.scheduledAt ?? event.conventionScheduledAt ?? `${event.scheduledDate}T00:00:00.000Z`
   const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
   return Object.freeze({
     eventKey: event.eventKey,

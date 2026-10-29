@@ -169,6 +169,24 @@ describe('daily briefing document', () => {
     expect(document.lede.text).toContain('CPI')
   })
 
+  it('includes a high-impact event on the seventh local day', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        asOf: '2026-10-29T18:03:00.000Z', windowStart: '2026-10-28T18:03:00.000Z', windowEnd: '2026-10-29T18:03:00.000Z',
+        calendar: {
+          state: 'available',
+          events: [{
+            eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', title: 'nonfarm-payrolls', titleKey: 'nonfarm-payrolls',
+            scheduledAt: '2026-11-06T12:30:00.000Z', importance: 'high', lifecycleState: 'scheduled',
+            category: 'economic-indicator', surprise: { direction: 'consensus-unavailable' }
+          }]
+        }
+      }),
+      date: '2026-10-30'
+    })
+    expect(document.next.items.map((item) => item.eventKey)).toEqual(['US.NONFARM_PAYROLLS.RELEASE.2026-M10'])
+  })
+
   it('keeps a readable document when the market sources are absent', () => {
     const document = buildDailyBriefingDocument({ packet: packet({ market: {} }), date: '2026-10-30' })
     expect(document.data.market).toHaveLength(6)

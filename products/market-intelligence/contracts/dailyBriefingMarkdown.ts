@@ -45,24 +45,26 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))} · ${readingsLabel(document, labels)}`)
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
-  lines.push('', `## ${labels.sections.news}`)
-  if (document.news.items.length === 0 && document.news.macro.length === 0) lines.push('', emptyNews(document, labels))
-  for (const item of document.news.items) lines.push('', newsLine(item, options))
-  for (const item of document.news.macro) lines.push('', macroLine(item, options))
-
-  lines.push('', `## ${labels.sections.data}`)
-  for (const tier of ['must', 'support', 'reference'] as const) {
-    const rows = dataRows(document).filter((row) => row.importance.tier === tier)
-    if (rows.length === 0) continue
-    lines.push('', `### ${labels.tiers[tier]}`)
-    for (const row of rows) lines.push(dataLine(row, options))
+  if (document.news.items.length > 0 || document.news.macro.length > 0) {
+    lines.push('', `## ${labels.sections.news}`)
+    for (const item of document.news.items) lines.push('', newsLine(item, options))
+    for (const item of document.news.macro) lines.push('', macroLine(item, options))
   }
 
-  lines.push('', `## ${labels.sections.conclusion}`)
+  const rows = dataRows(document)
+  if (rows.length > 0) {
+    lines.push('', `## ${labels.sections.data}`)
+    for (const tier of ['must', 'support', 'reference'] as const) {
+      const tierRows = rows.filter((row) => row.importance.tier === tier)
+      if (tierRows.length === 0) continue
+      lines.push('', `### ${labels.tiers[tier]}`)
+      for (const row of tierRows) lines.push(dataLine(row, options))
+    }
+  }
+
   const conclusion = document.conclusion
-  if (!conclusion) {
-    lines.push('', labels.empty.conclusion)
-  } else {
+  if (conclusion) {
+    lines.push('', `## ${labels.sections.conclusion}`)
     lines.push('', `**${options.direction(conclusion.direction)}** ${escapeMarkdown(conclusion.summary)}`)
     if (conclusion.translation) lines.push('', `_${labels.translated}_ ${escapeMarkdown(conclusion.translation)}`)
     for (const invalidation of conclusion.invalidations) {
@@ -76,10 +78,8 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     if (conclusion.caveats.length > 0) lines.push(`- ${labels.conclusion.caveats}: ${conclusion.caveats.map(escapeMarkdown).join(' · ')}`)
   }
 
-  lines.push('', `## ${labels.sections.next}`)
-  if (document.next.items.length === 0) {
-    lines.push('', nextEmpty(document, labels))
-  } else {
+  if (document.next.items.length > 0) {
+    lines.push('', `## ${labels.sections.next}`)
     for (const item of document.next.items) lines.push(nextLine(item, options))
   }
 

@@ -187,6 +187,9 @@ describe('daily briefing page', () => {
       getToday: vi.fn(async () => ({ state: 'available' as const, document: emptyDocument() }))
     }), vi.fn(), onConfigureSources)
     expect(dom.textContent).toContain(text.emptyGuide)
+    for (const section of [text.sections.news, text.sections.data, text.sections.conclusion, text.sections.next]) {
+      expect(dom.querySelector(`[aria-label="${section}"]`)).toBeNull()
+    }
     const configure = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.configureSources)!
     act(() => configure.click())
     expect(onConfigureSources).toHaveBeenCalledTimes(1)

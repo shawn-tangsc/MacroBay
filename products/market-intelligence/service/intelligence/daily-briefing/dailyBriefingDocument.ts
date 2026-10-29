@@ -130,13 +130,13 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
 
 function selectNext(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([])
-  const end = Date.parse(packet.windowEnd)
-  const horizon = end + 7 * 24 * 60 * 60 * 1_000
+  const today = localDate(packet.windowEnd, packet.timeZone)
+  const horizon = addDays(today, 7)
   return Object.freeze(packet.calendar.events
     .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
     .filter((event) => {
-      const at = Date.parse(event.scheduledAt)
-      return Number.isFinite(at) && at > end && at <= horizon
+      const day = localDate(event.scheduledAt, packet.timeZone)
+      return day > today && day <= horizon
     })
     .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
     .slice(0, dailyBriefingPolicy.maximumNextItems)
@@ -273,6 +273,21 @@ function combine(states: readonly DailyBriefingReadingState[]): DailyBriefingRea
   if (states.some((state) => state === 'available')) return 'available'
   if (states.some((state) => state === 'stale')) return 'stale'
   return 'unavailable'
+}
+
+function localDate(instant: string, timeZone: string): string {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return ''
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(parsed))
+  } catch {
+    return new Date(parsed).toISOString().slice(0, 10)
+  }
+}
+
+function addDays(date: string, days: number): string {
+  const parsed = Date.parse(`${date}T00:00:00.000Z`)
+  return Number.isFinite(parsed) ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10) : date
 }
 
 function buildLedeTitles(macro: readonly BriefingMacroItem[], news: readonly BriefingNewsItem[]): string {

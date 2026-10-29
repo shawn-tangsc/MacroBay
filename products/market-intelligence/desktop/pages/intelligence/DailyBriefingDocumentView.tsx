@@ -25,6 +25,10 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
   const support = rows.filter((row) => row.importance.tier === 'support')
   const reference = rows.filter((row) => row.importance.tier === 'reference')
   const conclusion = doc.conclusion
+  const hasNews = doc.news.items.length > 0 || doc.news.macro.length > 0
+  const hasData = rows.length > 0
+  const hasNext = doc.next.items.length > 0
+  const hasBasis = Boolean(conclusion && (conclusion.topSignal || conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0 || conclusion.dataGaps.length > 0 || conclusion.caveats.length > 0))
   return <div className="mi-daily-briefing__body">
     <header className="mi-daily-briefing__doc-head">
       <div>
@@ -48,19 +52,13 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
 
     {doc.lede.text ? <p className="mi-daily-briefing__lede">{doc.lede.text}</p> : null}
 
-    <section className="mi-daily-briefing__section" aria-label={text.sections.news}>
+    {hasNews ? <section className="mi-daily-briefing__section" aria-label={text.sections.news}>
       <h3>{text.sections.news}</h3>
       {doc.news.items.map((item) => <NewsRow key={item.itemId} item={item} text={text} />)}
       {doc.news.macro.map((item) => <MacroRow key={item.eventKey} item={item} text={text} eventTitles={eventTitles} formatTime={formatTime} />)}
-      {doc.news.items.length === 0
-        ? <p className="mi-daily-briefing__empty">{doc.news.notes.newsEmpty ? text.newsEmptyCodes[doc.news.notes.newsEmpty as keyof typeof text.newsEmptyCodes] ?? text.empty.news : text.empty.news}</p>
-        : null}
-      {doc.news.macro.length === 0
-        ? <p className="mi-daily-briefing__empty">{doc.news.notes.macroEmpty ? text.macroEmptyCodes[doc.news.notes.macroEmpty as keyof typeof text.macroEmptyCodes] ?? text.empty.macro : text.empty.macro}</p>
-        : null}
-    </section>
+    </section> : null}
 
-    <section className="mi-daily-briefing__section" aria-label={text.sections.data}>
+    {hasData ? <section className="mi-daily-briefing__section" aria-label={text.sections.data}>
       <h3>{text.sections.data}</h3>
       {must.length > 0 ? <div className="mi-daily-briefing__must-grid" data-must-count={must.length}>
         {must.map((row) => <RowCard key={row.id} row={row} text={text} formatTime={formatTime} />)}
@@ -74,11 +72,11 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
       </details> : null}
       <BriefingVisuals document={doc} text={text} formatTime={formatTime} />
       {must.length > 8 ? <p className="mi-daily-briefing__dense">{text.denseDay}</p> : null}
-    </section>
+    </section> : null}
 
-    <section className="mi-daily-briefing__section" aria-label={text.sections.conclusion}>
+    {conclusion ? <section className="mi-daily-briefing__section" aria-label={text.sections.conclusion}>
       <h3>{text.sections.conclusion}</h3>
-      {conclusion ? <>
+      <>
         <div className="mi-daily-briefing__conclusion" data-direction={analysisDirectionKey(conclusion.direction) ?? 'none'}>
           <div className="mi-daily-briefing__conclusion-head">
             <span className="mi-daily-briefing__direction">{localizedDirectionTerm(conclusion.direction, locale)}</span>
@@ -88,8 +86,8 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
           {conclusion.translation ? <p className="mi-daily-briefing__translation"><b>{text.translated}</b> {conclusion.translation}</p> : null}
           {conclusion.invalidations[0] ? <p className="mi-daily-briefing__invalidate"><b>{text.conclusion.invalidation}</b>：{conclusion.invalidations[0].text}</p> : null}
         </div>
-        <details className="mi-daily-briefing__details">
-          <summary>{text.sections.basis}</summary>
+        {hasBasis ? <div className="mi-daily-briefing__basis">
+          <h4>{text.sections.basis}</h4>
           {conclusion.topSignal ? <p className="mi-daily-briefing__basis-line">
             {conclusion.topSignal.horizon} · {localizedDirectionTerm(conclusion.topSignal.direction, locale)} · {conclusion.topSignal.confidence}
             {conclusion.topSignal.citations.length > 0 ? ` ${conclusion.topSignal.citations.map((index) => `[${index}]`).join('')}` : ''}
@@ -100,21 +98,21 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
           </p>)}
           {conclusion.dataGaps.length > 0 ? <p className="mi-daily-briefing__basis-line">{text.conclusion.gaps}：{conclusion.dataGaps.join(' · ')}</p> : null}
           {conclusion.caveats.length > 0 ? <p className="mi-daily-briefing__basis-line">{text.conclusion.caveats}：{conclusion.caveats.join(' · ')}</p> : null}
-        </details>
-      </> : <p className="mi-daily-briefing__empty">{text.empty.conclusion}</p>}
-    </section>
+        </div> : null}
+      </>
+    </section> : null}
 
-    <section className="mi-daily-briefing__section" aria-label={text.sections.next}>
+    {hasNext ? <section className="mi-daily-briefing__section" aria-label={text.sections.next}>
       <h3>{text.sections.next}</h3>
       <p className="mi-daily-briefing__visual-caption">{text.visuals.next}</p>
-      {doc.next.items.length > 0 ? <ol className="mi-daily-briefing__timeline">
+      <ol className="mi-daily-briefing__timeline">
         {doc.next.items.map((item) => <li key={item.eventKey}>
           <time>{formatTime(item.at, 'minute')}</time>
           <span>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</span>
           <small>{text.next.category[item.category]}</small>
         </li>)}
-      </ol> : <p className="mi-daily-briefing__empty">{doc.next.note ? text.nextEmptyCodes[doc.next.note as keyof typeof text.nextEmptyCodes] ?? text.empty.next : text.empty.next}</p>}
-    </section>
+      </ol>
+    </section> : null}
 
     <footer className="mi-daily-briefing__foot">
       <span>{text.citations}：{doc.citations.length > 0 ? doc.citations.map((entry) => `[${entry.index}]`).join(' ') : '—'}</span>
