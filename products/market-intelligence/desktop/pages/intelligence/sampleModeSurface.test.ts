@@ -50,7 +50,7 @@ describe('sample mode page surface', () => {
 
   it('bounds the pages that scroll inside their own panes and leaves the document page alone', () => {
     expect(surfaceStyles).toContain('.mi-sample-surface > .mi-analysis-dashboard-layout,')
-    expect(surfaceStyles).toContain('.mi-sample-surface > .mi-economic-calendar {')
+    expect(surfaceStyles).toContain('.mi-sample-surface > .mi-economic-calendar,')
 
     const bounded = surfaceStyles.slice(surfaceStyles.indexOf('.mi-sample-surface > .mi-analysis-dashboard-layout,'))
     expect(bounded).toContain('flex: 1 1 0')
