@@ -26,10 +26,10 @@ function validate(capabilityId: string, input: unknown) {
 
 describe('write capability catalog', () => {
   it('adds five write tools and one handoff to the read surface', () => {
-    expect(intelligenceAgentCapabilities).toHaveLength(28)
+    expect(intelligenceAgentCapabilities).toHaveLength(30)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'write')).toHaveLength(5)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'handoff')).toHaveLength(1)
-    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(21)
+    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(23)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'discovery')).toHaveLength(1)
     expect(intelligenceAgentCapabilities.map((capability) => capability.id)).toEqual(
       expect.arrayContaining([...WRITE_CAPABILITY_IDS, HANDOFF_CAPABILITY_ID])
