@@ -7,11 +7,12 @@ export type DailyBriefingText = DashboardText['dailyBriefing']
 
 type Row = BriefingMarketRow | BriefingPulseRow
 
-export function DailyBriefingDocumentView({ document: doc, text, locale, eventTitles, formatTime }: Readonly<{
+export function DailyBriefingDocumentView({ document: doc, text, locale, eventTitles, readOnly = false, formatTime }: Readonly<{
   document: DailyBriefingDocument
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   eventTitles?: Record<string, string>
+  readOnly?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const rows = [
@@ -34,10 +35,13 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
           <em>·</em>{text.edition.replace('{time}', formatTime(doc.edition.generatedAt, 'minute'))}
         </p>
       </div>
-      <span className="mi-daily-briefing__readings" data-state={doc.status.readingsAvailable === 0 ? 'empty' : 'ok'}>
+      <span className="mi-daily-briefing__head-side">
+        {readOnly ? <span className="mi-daily-briefing__readonly">{text.history.readOnly}</span> : null}
+        <span className="mi-daily-briefing__readings" data-state={doc.status.readingsAvailable === 0 ? 'empty' : 'ok'}>
         {doc.status.readingsAvailable === 0
           ? text.readingsAllMissing
           : text.readings.replace('{available}', String(doc.status.readingsAvailable)).replace('{total}', String(doc.status.readingsTotal))}
+        </span>
       </span>
     </header>
 
