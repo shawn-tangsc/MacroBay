@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Settings2 } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
@@ -9,6 +10,7 @@ import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdow
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingDocumentView, type DailyBriefingText } from './DailyBriefingDocumentView'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
+import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
@@ -25,7 +27,7 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
   eventTitles?: Record<string, string>
   onClose: () => void
   onConfigureSources?: () => void
-  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get'>
+  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'getSettings' | 'saveSettings'>
 }>): React.ReactElement | null {
   const timeZone = useMemo(() => resolveSystemTimeZone(), [])
   const formatTime = useShellTimeFormat()
@@ -35,6 +37,7 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const copyTimer = useRef<number | undefined>(undefined)
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
 
@@ -112,6 +115,7 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
     onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <div className="mi-daily-briefing__panel">
       <div className="mi-daily-briefing__actions">
+        <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
         {view.status === 'ready' ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </button> : null}
@@ -142,6 +146,7 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
         </div>
       </div>
     </div>
+    <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
   </div>
 }
 

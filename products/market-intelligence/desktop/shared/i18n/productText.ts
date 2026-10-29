@@ -469,7 +469,8 @@ export const productText = {
               history: { title: '过去 14 天', today: '今天', missing: '缺口', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次' },
               emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
               configureSources: '配置情报源',
-              copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试'
+              copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试',
+              aiSettings: { open: '日报 AI 设置', title: '日报 AI 设置', loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', save: '保存', saving: '保存中…', cancel: '取消', failed: '保存失败，请重试', openModelSettings: '打开模型设置' }
             }
           },
           calendar: {
@@ -1799,7 +1800,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               history: { title: 'Past 14 days', today: 'Today', missing: 'Missing', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet' },
               emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
               configureSources: 'Configure sources',
-              copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again'
+              copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again',
+              aiSettings: { open: 'Brief AI settings', title: 'Brief AI settings', loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', save: 'Save', saving: 'Saving…', cancel: 'Cancel', failed: 'Save failed — try again', openModelSettings: 'Open model settings' }
             }
           },
           calendar: {
