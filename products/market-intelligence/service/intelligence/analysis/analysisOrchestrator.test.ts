@@ -226,6 +226,36 @@ describe('analysisOrchestrator', () => {
     }
   })
 
+  it('tells the model to cite the sentiment it ignored, on the retry', async () => {
+    const news = {
+      factId: 'fact-news', domain: 'sentiment' as const, subject: 'market', metric: 'news-sentiment',
+      value: 'bearish · strength 4/5 · confidence 80%｜Exchange outage', unit: null, sourceId: 'news', sourceLabel: 'news',
+      observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 0.8, comparability: 'not-comparable' as const, evidenceRefId: 'evidence-news'
+    }
+    const snapshot = {
+      snapshotHash: 'snapshot-hash',
+      facts: [
+        { factId: 'fact-1', domain: 'macro' as const, subject: 'CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'evidence-1' },
+        news
+      ],
+      evidenceRefs: [{ evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-news' }]
+    }
+    const cited = validOutput()
+    cited.knownFacts.push({ factId: 'fact-news', statement: '舆情偏空，限制上行空间。', evidenceRefIds: ['evidence-news'] })
+    const invoke = vi.fn()
+      // First answer ignores the appended sentiment; the retry cites it.
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: cited, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ getSnapshot: () => snapshot }), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory()
+    })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect((invoke.mock.calls[1]![0] as { messages: readonly { content: string }[] }).messages.at(-1)!.content)
+      .toContain('新闻舆情')
+  })
+
   it('records which evidence rule rejected the output, not only the shared code', async () => {
     const updateRunStatus = vi.fn()
     const repository = createRepository({

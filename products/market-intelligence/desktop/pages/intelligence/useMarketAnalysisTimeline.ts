@@ -147,7 +147,13 @@ export function useMarketAnalysisTimeline(input: Readonly<{
    * timeline this fallback must not issue a second, unused read.
    */
   enabled?: boolean
+  /**
+   * Test seam only: the production policy with shorter waits. The bounded poll needs 660 ticks to
+   * reach its cap, which is too slow for a UI test; the hook is otherwise identical.
+   */
+  policy?: typeof analysisTimelineRefreshPolicy
 }>): UseMarketAnalysisTimelineResult {
+  const policy = input.policy ?? analysisTimelineRefreshPolicy
   const [state, setState] = useState<State>({ loading: true, entries: [] })
   const [requestState, setRequestState] = useState<AnalysisRequestState>('idle')
   const [requestFailure, setRequestFailure] = useState<AnalysisRequestFailure>()
@@ -194,7 +200,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       ? { ...current, refreshing: true }
       : { ...current, loading: true, failed: false })
     try {
-      const result = await withReadTimeout(marketAnalysisTimelineClient.listTimeline(cursor ? { cursor } : {}), analysisTimelineRefreshPolicy.readTimeoutMs)
+      const result = await withReadTimeout(marketAnalysisTimelineClient.listTimeline(cursor ? { cursor } : {}), policy.readTimeoutMs)
       const trace = result?.state === 'available'
         ? `${result.state}:${result.page.items.length}`
         : result?.state ?? 'timeout'
@@ -210,7 +216,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       }
       const readsAttempt = readAttempt || !result.page.items.length
       const latest = readsAttempt
-        ? await withReadTimeout(marketAnalysisTimelineClient.getLatestAttempt(), analysisTimelineRefreshPolicy.readTimeoutMs) ?? null
+        ? await withReadTimeout(marketAnalysisTimelineClient.getLatestAttempt(), policy.readTimeoutMs) ?? null
         : null
       // Only a paging read can be superseded. A successful first page is applied
       // whenever it arrives: the retry path bumps the generation counter, and
@@ -254,7 +260,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     if (input.enabled === false) return undefined
     // Never start a read on top of one that is still in flight: a service that never answers must
     // leave the list settled, not re-enter loading every interval.
-    const timer = setInterval(() => { if (!busyRef.current) void load() }, analysisTimelineRefreshPolicy.livePollIntervalMs)
+    const timer = setInterval(() => { if (!busyRef.current) void load() }, policy.livePollIntervalMs)
     const refresh = () => { void load() }
     window.addEventListener('focus', refresh)
     document.addEventListener('visibilitychange', refresh)
@@ -276,8 +282,8 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     if (retryTimer.current) clearTimeout(retryTimer.current)
     let attempt = 0
     const step = () => {
-      if (attempt >= analysisTimelineRefreshPolicy.initialRetryAttempts) return
-      const delay = Math.min(analysisTimelineRefreshPolicy.initialRetryDelayMs * (attempt + 1), analysisTimelineRefreshPolicy.initialRetryMaxDelayMs)
+      if (attempt >= policy.initialRetryAttempts) return
+      const delay = Math.min(policy.initialRetryDelayMs * (attempt + 1), policy.initialRetryMaxDelayMs)
       attempt += 1
       retryTimer.current = setTimeout(() => { void retryOnce() }, delay)
     }
@@ -367,7 +373,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       setRequestFailure('run')
       return { outcome: 'failed' }
     }
-    if (pollAttempt >= analysisTimelineRefreshPolicy.maxPollAttempts) {
+    if (pollAttempt >= policy.maxPollAttempts) {
       const stillRunning = Boolean(latest && ['queued', 'running'].includes(latest.status))
       if (stillRunning) {
         // Stop watching without claiming a failure: the run is past the job budget but may still
@@ -380,7 +386,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       setRequestFailure('run')
       return { outcome: 'failed' }
     }
-    await new Promise<void>(resolve => { pollTimer.current = setTimeout(resolve, analysisTimelineRefreshPolicy.pollIntervalMs) })
+    await new Promise<void>(resolve => { pollTimer.current = setTimeout(resolve, policy.pollIntervalMs) })
     return pollForCompletion(baselineEntryId, pollAttempt + 1)
   }
 
@@ -459,7 +465,7 @@ export function useMarketAnalysisTimeline(input: Readonly<{
       // The failure copy stays on screen while a retry runs: alternating it with "正在读取…" once
       // per attempt is the flashing this card was reported for. A successful retry replaces it.
       setDetailState(current => ({ ...current, [entry.id]: 'unavailable' }))
-      const delay = analysisTimelineRefreshPolicy.detailRetryDelaysMs[failure]
+      const delay = policy.detailRetryDelaysMs[failure]
       if (delay === undefined) {
         detailRequests.current.delete(entry.id)
         return

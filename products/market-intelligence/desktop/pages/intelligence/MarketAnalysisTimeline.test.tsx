@@ -1,4 +1,4 @@
-import { isAlreadyAvailableError } from './useMarketAnalysisTimeline'
+import { analysisTimelineRefreshPolicy, isAlreadyAvailableError } from './useMarketAnalysisTimeline'
 import { marketAnalysisTimelineClient } from '../../shared/ipc/marketAnalysisTimelineClient'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
@@ -25,13 +25,14 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
  * The list is presentational: data and selection come from the workspace hook,
  * exactly as the dashboard layout wires them.
  */
-function Timeline({ text: timelineText, onSelect, onSelectionStateChange, onBack }: {
+function Timeline({ text: timelineText, onSelect, onSelectionStateChange, onBack, policy }: {
   text: typeof text
   onBack?: () => void
   onSelect?: (binding: AnalysisWorkspaceBinding | undefined) => void
   onSelectionStateChange?: (state: AnalysisSelectionState) => void
+  policy?: Parameters<typeof useMarketAnalysisTimeline>[0]['policy']
 }): React.ReactElement {
-  const timeline = useMarketAnalysisTimeline({ text: timelineText, onSelect, onSelectionStateChange })
+  const timeline = useMarketAnalysisTimeline({ text: timelineText, onSelect, onSelectionStateChange, ...(policy ? { policy } : {}) })
   return createElement(MarketAnalysisTimeline, { text: timelineText, timeline, onBack })
 }
 
@@ -351,6 +352,30 @@ describe('MarketAnalysisTimeline', () => {
     // This click never reached a run, so the old run's reason must not be shown under it.
     expect(container.querySelector('[data-analysis-error] strong')?.textContent).toBe(text.analysisRefreshFailed)
     expect(container.querySelector('[data-analysis-error-detail]')).toBeNull()
+  })
+
+  it('says the analysis is still running when the bounded wait ends, and releases the action', async () => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return { id: 'mi-ar-1', status: 'running', failureCode: null, queuedAt: asOf, evidenceCount: 2 }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    // Two ticks instead of the production 660: the same cap path, in milliseconds.
+    const policy = { ...analysisTimelineRefreshPolicy, maxPollAttempts: 2, pollIntervalMs: 5 }
+    await act(async () => root?.render(createElement(Timeline, { text, policy })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 60)) })
+
+    expect(container.textContent).toContain(text.analysisStillRunning)
+    expect(container.querySelector('[data-analysis-error]')).toBeNull()
+    const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === text.refreshAnalysis)
+    expect(button?.disabled).toBe(false)
   })
 
   it('releases the refresh action when the follow-up read fails instead of spinning forever', async () => {
