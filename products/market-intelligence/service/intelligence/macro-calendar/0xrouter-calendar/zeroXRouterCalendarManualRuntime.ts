@@ -1,7 +1,6 @@
 import { createMarketCalendarEventRepository } from './marketCalendarEventRepository'
 import { createZeroXRouterCalendarCollectionService } from './zeroXRouterCalendarCollectionService'
 import { createZeroXRouterCalendarRefreshService } from './zeroXRouterCalendarRefreshService'
-import { zeroXRouterCalendarAutomaticMonth } from './zeroXRouterCalendarTransport'
 import { calendarRecord } from './zeroXRouterCalendarContracts'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { statfsSync, statSync } from 'node:fs'
@@ -19,7 +18,10 @@ type RepositoryDependencies = Parameters<typeof createMarketCalendarEventReposit
 type RefreshDependencies = Parameters<typeof createZeroXRouterCalendarRefreshService>[0]
 type RefreshResult = Awaited<ReturnType<ReturnType<typeof createZeroXRouterCalendarRefreshService>['refreshManual']>>
 type AttemptTrigger = typeof marketCalendarPublicPolicy.attemptTriggers[number]
-type AttemptRecords = Map<string, readonly MarketCalendarRefreshAttempt[]>
+// One slot per descriptor, in the public descriptor order. A slot stays empty when this
+// batch never asked that source, so an unattempted source is not reported as failed.
+type AttemptEntry = MarketCalendarRefreshAttempt | undefined
+type AttemptRecords = Map<string, readonly AttemptEntry[]>
 
 // Incident 133: transient outcomes for the three allowed months x two locales.
 // Eviction/restart means not refreshed this session, never inferred success.
@@ -58,33 +60,41 @@ export function createZeroXRouterCalendarManualRuntime(deps: Omit<CollectionDepe
    *
    * `attemptedAt` is the local clock at completion, and a failed entry also carries the
    * verdict that ended it, so a reader can see *why* a source has no fresh data instead of
-   * only that its timestamp is old. The old record for the scope is dropped, not merged:
-   * a success clears the previous failure.
+   * only that its timestamp is old. A success clears that source's previous failure; a source
+   * this batch never asked keeps whatever its last attempt said.
    */
   function recordBatchAttempts(records: AttemptRecords, month: string, locale: MarketCalendarScope['locale'],
     result: RefreshResult, trigger: AttemptTrigger): void {
     const key = JSON.stringify([month, locale])
     const attemptedAt = deps.now().toISOString()
+    const previous = records.get(key)
+    const entries = marketCalendarPublicPolicy.descriptors.map((descriptorId, index): AttemptEntry => {
+      const item = result.items.find(candidate => candidate.month === month && candidate.descriptorId === descriptorId && candidate.locale === locale)
+      if (item?.state === 'succeeded') return { state: 'succeeded' as const, attemptedAt, trigger }
+      if (item?.state === 'unavailable') return { state: 'failed' as const, attemptedAt, trigger, ...(item.failureCode ? { failureCode: item.failureCode } : {}) }
+      // A tick covers one feed or the month-end prefetch covers one feed of the next month;
+      // the other slots keep the last verdict rather than inventing a failure nobody ran.
+      return previous?.[index]
+    })
+    if (!entries.some(entry => entry !== undefined)) return
     records.delete(key)
     while (records.size >= CalendarEndpointRefreshOutcomePolicy.maximumScopes) records.delete(records.keys().next().value!)
-    records.set(key, marketCalendarPublicPolicy.descriptors.map(descriptorId => {
-      const item = result.items.find(candidate => candidate.descriptorId === descriptorId && candidate.locale === locale)
-      if (item?.state === 'succeeded') return { state: 'succeeded' as const, attemptedAt, trigger }
-      const failureCode = item?.state === 'unavailable' ? item.failureCode : undefined
-      return { state: 'failed' as const, attemptedAt, trigger, ...(failureCode ? { failureCode } : {}) }
-    }))
+    records.set(key, entries)
   }
   return Object.freeze({
     repository,
     // The automatic path stays separate from the manual one on purpose: it must
-    // not write a manual refresh-attempt outcome, and it derives the current UTC
-    // month itself (design 118:206). Its own record is what makes a refused
-    // automatic tick visible at all.
+    // not write a manual refresh-attempt outcome, and it derives the months it
+    // covers itself (design 118:206, 164 §5.1). Its own record is what makes a
+    // refused automatic tick visible at all. A tick can now carry the current month
+    // and the prefetched next month, so every attempted month gets its own record.
     refreshAutomatic: async (enabledFeeds?: readonly string[]): Promise<RefreshResult> => {
-      const month = zeroXRouterCalendarAutomaticMonth(deps.now())
       const result = await refresh.refreshAutomatic(enabledFeeds)
       if (result.items.length) {
-        for (const locale of zeroXRouterCalendarTransportPolicy.locales) recordBatchAttempts(automaticAttempts, month, locale, result, 'automatic')
+        const months = new Set(result.items.map(item => item.month))
+        for (const month of months) {
+          for (const locale of zeroXRouterCalendarTransportPolicy.locales) recordBatchAttempts(automaticAttempts, month, locale, result, 'automatic')
+        }
       }
       return result
     },

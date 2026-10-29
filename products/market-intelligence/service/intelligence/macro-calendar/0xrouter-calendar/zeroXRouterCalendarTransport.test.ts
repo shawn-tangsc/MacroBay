@@ -5,7 +5,7 @@ vi.mock('@platform/network/platformFetch', () => ({ getPlatformFetch: () => plat
 
 import { createSourceRequestGovernanceQueue } from '../../application/sourceRequestGovernance'
 import { zeroXRouterSourcePolicy } from '../../application/zeroXRouterSourcePolicy'
-import { createZeroXRouterCalendarTransport } from './zeroXRouterCalendarTransport'
+import { createZeroXRouterCalendarTransport, zeroXRouterCalendarPrefetchMonth, zeroXRouterCalendarPrefetchOwner } from './zeroXRouterCalendarTransport'
 
 const apiKey = 'safe-test-key'
 const acceptedBody = JSON.stringify({ code: 200, msg: 'ok', data: [] })
@@ -217,8 +217,10 @@ describe('0xRouter calendar transport', () => {
 
   it('derives all automatic work from the current UTC month without accepting caller input', async () => {
     const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-07T01:02:03.000Z') })
-    await expect(transport.requestAutomatic()).resolves.toEqual(Array.from({ length: 6 }, () =>
-      expect.objectContaining({ state: 'succeeded', month: '2026-09' })))
+    const batch = await transport.requestAutomatic()
+    expect(batch.results).toEqual(Array.from({ length: 6 }, () => expect.objectContaining({ state: 'succeeded', month: '2026-09' })))
+    expect(batch.scopes).toHaveLength(6)
+    expect(new Set(batch.scopes.map(scope => scope.month))).toEqual(new Set(['2026-09']))
     expect(requestJsonBody).toHaveBeenCalledTimes(6)
   })
 
@@ -238,7 +240,8 @@ describe('0xRouter calendar transport', () => {
     expect(url.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 7, 1)))
     for (let index = 1; index < 7; index += 1) await complete(index)
     await expect(manual).resolves.toMatchObject({ state: 'succeeded', month: '2026-08' })
-    await expect(automatic).resolves.toHaveLength(6)
+    await expect(automatic).resolves.toMatchObject({ results: expect.any(Array) })
+    expect((await automatic).results).toHaveLength(6)
     expect(enqueue).toHaveBeenCalledTimes(7)
   })
 
@@ -257,7 +260,7 @@ describe('0xRouter calendar transport', () => {
     expect(url.pathname).toBe('/cexdata/calendar/central-bank-activities')
     expect(url.searchParams.get('locale')).toBe('en')
     for (let index = 1; index < 6; index += 1) await complete(index)
-    const results = await automatic
+    const { results } = await automatic
     expect(await manual).toBe(results[5])
     expect(enqueue).toHaveBeenCalledTimes(6)
   })
@@ -270,8 +273,68 @@ describe('0xRouter calendar transport', () => {
     await vi.waitFor(() => expect(enqueue).toHaveBeenCalledTimes(2))
     expect(transport.requestAutomatic()).toBe(first)
     for (let index = 1; index < 6; index += 1) await complete(index)
-    await expect(first).resolves.toHaveLength(6)
+    await expect(first).resolves.toMatchObject({ results: expect.any(Array) })
+    expect((await first).results).toHaveLength(6)
     expect(enqueue).toHaveBeenCalledTimes(6)
+  })
+
+  it('derives the prefetch month and owner only at month end', () => {
+    expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-09-27T00:00:00.000Z'))).toBeUndefined()
+    expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-09-28T00:00:00.000Z'))).toBe('2026-10')
+    expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-09-30T23:59:59.000Z'))).toBe('2026-10')
+    expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-02-25T00:00:00.000Z'))).toBeUndefined()
+    expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-02-26T00:00:00.000Z'))).toBe('2026-03')
+    expect(zeroXRouterCalendarPrefetchMonth(new Date('2026-12-31T00:00:00.000Z'))).toBe('2027-01')
+    // Fixed rotation: the hour names one feed, so the extra two requests never come from all three.
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T00:10:00.000Z'))).toBe('macro-calendar-0xrouter-economic-data')
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T01:10:00.000Z'))).toBe('macro-calendar-0xrouter-financial-events')
+    expect(zeroXRouterCalendarPrefetchOwner(new Date('2026-09-29T02:10:00.000Z'))).toBe('macro-calendar-0xrouter-central-bank-activities')
+  })
+
+  it('prefetches the next UTC month for the hour feed inside the end-of-month window', async () => {
+    const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z') })
+    const batch = await transport.requestAutomatic()
+    // Six current-month rows plus two for the one owner feed: still inside ten per minute.
+    expect(batch.scopes).toHaveLength(8)
+    expect(batch.results).toHaveLength(8)
+    expect(batch.scopes.filter(scope => scope.month === '2026-10').map(scope => [scope.descriptorId, scope.locale])).toEqual([
+      ['macro-calendar-0xrouter-financial-events', 'zh'],
+      ['macro-calendar-0xrouter-financial-events', 'en']
+    ])
+    expect(requestJsonBody).toHaveBeenCalledTimes(8)
+    const nextMonthUrl = new URL((requestJsonBody.mock.calls[4]![0] as { url: string }).url)
+    expect(nextMonthUrl.searchParams.get('startTime')).toBe(String(Date.UTC(2026, 9, 1)))
+    expect(nextMonthUrl.searchParams.get('locale')).toBe('zh')
+  })
+
+  it('collects the prefetched month once and keeps the current month on every tick', async () => {
+    const { transport, requestJsonBody } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), queue: { enqueue: async (entry) => (entry as { run: () => Promise<unknown> }).run() } })
+    await transport.requestAutomatic()
+    const second = await transport.requestAutomatic()
+    expect(second.scopes).toHaveLength(6)
+    expect(new Set(second.scopes.map(scope => scope.month))).toEqual(new Set(['2026-09']))
+    expect(requestJsonBody).toHaveBeenCalledTimes(14)
+  })
+
+  it('asks again for a prefetched month that did not succeed', async () => {
+    const requestJsonBody = vi.fn(async ({ url }: { url: string }) => new URL(url).searchParams.get('startTime') === String(Date.UTC(2026, 9, 1))
+      ? { state: 'failed' as const, failureCode: 'response-unavailable' as const }
+      : { state: 'succeeded' as const, body: acceptedBody, acceptedBytes: Buffer.byteLength(acceptedBody), status: 200, contentType: 'application/json' })
+    const { transport } = createHarness({ now: () => new Date('2026-09-29T01:02:03.000Z'), requestJsonBody,
+      queue: { enqueue: async (entry) => (entry as { run: () => Promise<unknown> }).run() } })
+    await transport.requestAutomatic()
+    const retry = await transport.requestAutomatic()
+    expect(retry.scopes.filter(scope => scope.month === '2026-10')).toHaveLength(2)
+    expect(requestJsonBody).toHaveBeenCalledTimes(16)
+  })
+
+  it('keeps a separate in-flight batch per requested descriptor set', async () => {
+    const { transport } = createHarness({ now: () => new Date('2026-09-07T01:02:03.000Z') })
+    const economic = transport.requestAutomatic(['macro-calendar-0xrouter-economic-data'])
+    const financial = transport.requestAutomatic(['macro-calendar-0xrouter-financial-events'])
+    expect(economic).not.toBe(financial)
+    expect((await economic).scopes.every(scope => scope.descriptorId === 'macro-calendar-0xrouter-economic-data')).toBe(true)
+    expect((await financial).scopes.every(scope => scope.descriptorId === 'macro-calendar-0xrouter-financial-events')).toBe(true)
   })
 
   it('continues local work after a failed automatic response', async () => {
@@ -279,7 +342,7 @@ describe('0xRouter calendar transport', () => {
     const automatic = transport.requestAutomatic()
     await complete(0, true)
     for (let index = 1; index < 6; index += 1) await complete(index)
-    const results = await automatic
+    const { results } = await automatic
     expect(results[0]).toEqual({ state: 'unavailable', failureCode: 'response-unavailable' })
     expect(results.slice(1)).toEqual(Array.from({ length: 5 }, () => expect.objectContaining({ state: 'succeeded' })))
     expect(enqueue).toHaveBeenCalledTimes(6)

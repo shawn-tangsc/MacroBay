@@ -173,7 +173,7 @@ describe('unregistered calendar complete collection unit (derived contracts)', (
     const h = await setup()
     const batch = h.service.requestAutomatic()
     expect(h.service.requestAutomatic()).toBe(batch)
-    const results = await batch
+    const { results } = await batch
     expect(results).toHaveLength(6)
     expect(results.every(result => result.state === 'succeeded')).toBe(true)
     expect(h.evidence.append).toHaveBeenCalledTimes(6)

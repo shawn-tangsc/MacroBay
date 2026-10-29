@@ -25,7 +25,11 @@ async function setup() {
   const now = vi.fn(() => new Date('2026-09-09T00:00:00.000Z'))
   const readReadiness = vi.fn(async () => ({ enabled: true, hasCredential: true }))
   const requestManual = vi.fn(async (request: { descriptorId: string; locale: string; month: string }) => completed(request.descriptorId, request.locale, request.month))
-  const requestAutomatic = vi.fn(async () => descriptors.flatMap(id => transportPolicy.locales.map(locale => completed(id, locale))))
+  const automaticBatch = () => {
+    const scopes = descriptors.flatMap(descriptorId => transportPolicy.locales.map(locale => ({ descriptorId, month: input.month, locale })))
+    return { scopes, results: scopes.map(scope => completed(scope.descriptorId, scope.locale, scope.month)) }
+  }
+  const requestAutomatic = vi.fn(async () => automaticBatch())
   const service = create({ now, readReadiness, collection: { requestManual, requestAutomatic } as never })
   return { service, now, readReadiness, requestManual, requestAutomatic }
 }
@@ -107,14 +111,15 @@ describe('unregistered calendar refresh facade', () => {
       ? completed(request.descriptorId, request.locale, request.month) : { state: 'unavailable', failureCode: 'private-provider-error' } as never)
     const partial = await h.service.refreshManual(input)
     expect(partial.state).toBe('partial')
-    expect(partial.items[1]).toEqual({ descriptorId: descriptors[1], locale: 'zh', state: 'unavailable' })
+    expect(partial.items[1]).toEqual({ descriptorId: descriptors[1], month: input.month, locale: 'zh', state: 'unavailable' })
     const malformed = [undefined, { state: 'succeeded' }, { ...completed(descriptors[0]!), collection: undefined },
       { ...completed(descriptors[0]!), collection: { state: 'succeeded', status: 'success', inputRows: 1, skippedRows: 0, storedRows: 0 } }]
     for (const result of malformed) {
       h.requestManual.mockResolvedValue(result as never)
       expect((await h.service.refreshManual(input)).state).toBe('unavailable')
     }
-    h.requestAutomatic.mockResolvedValue([completed(descriptors[0]!, 'zh')] as never)
+    h.requestAutomatic.mockResolvedValue({ scopes: descriptors.flatMap(descriptorId => transportPolicy.locales.map(locale => ({ descriptorId, month: input.month, locale }))),
+      results: [completed(descriptors[0]!, 'zh')] } as never)
     const incomplete = await h.service.refreshAutomatic()
     expect(incomplete.state).toBe('partial')
     expect(incomplete.items).toHaveLength(6)

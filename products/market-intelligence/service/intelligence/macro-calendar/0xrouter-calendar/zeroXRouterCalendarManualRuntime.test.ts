@@ -78,6 +78,20 @@ describe('MC-V1 manual archive and SQLite composition', () => {
     expect(h.database.prepare('select count(*) as n from mi_macro_calendar_market_event_observations').get()?.n).toBe(0)
   })
 
+  it('records a month-end prefetch under its own month without judging the feeds it skipped', async () => {
+    // Month-end ticks ask for the current UTC month and, for one feed, the next one. Both
+    // months need their own verdict, and the two feeds that were not asked must not appear failed.
+    const h = await setup()
+    h.setTime('2026-09-29T01:00:00.000Z')
+    expect((await h.runtime.refreshAutomatic(['macro-calendar-0xrouter-financial-events'])).state).toBe('completed')
+    expect(h.runtime.readRefreshAttempt({ month: '2026-09', locale: 'zh' }, 'financial-event')).toMatchObject({
+      state: 'succeeded', trigger: 'automatic', attemptedAt: '2026-09-29T01:00:00.000Z' })
+    expect(h.runtime.readRefreshAttempt({ month: '2026-10', locale: 'zh' }, 'financial-event')).toMatchObject({
+      state: 'succeeded', trigger: 'automatic' })
+    expect(h.runtime.readRefreshAttempt({ month: '2026-10', locale: 'zh' }, 'economic-indicator')).toBeUndefined()
+    expect(h.runtime.readRefreshAttempt({ month: '2026-09', locale: 'zh' }, 'economic-indicator')).toBeUndefined()
+  })
+
   it('keeps the automatic record separate and shows whichever attempt is more recent', async () => {
     const options = { failEndpoint: '' }
     const h = await setup(options)

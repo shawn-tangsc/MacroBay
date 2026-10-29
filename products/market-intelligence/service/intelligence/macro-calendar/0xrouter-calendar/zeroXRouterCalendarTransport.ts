@@ -53,7 +53,12 @@ export function createZeroXRouterCalendarTransport(deps: Readonly<{
   const inFlight = new Map<string, PendingRequest>()
   const pending: PendingRequest[] = []
   let draining = false
-  let automaticBatch: Promise<readonly CalendarTransportResult[]> | undefined
+  // One in-flight batch per requested descriptor set. A single shared promise made two
+  // feeds' concurrent ticks read the first feed's results, so their own source was never
+  // requested and was reported failed.
+  const automaticBatches = new Map<string, Promise<CalendarAutomaticBatch>>()
+  // Months that already came back with a successful collection, so a tick does not ask again.
+  const prefetchedMonths = new Set<string>()
   const requestBody = deps.requestJsonBody ?? requestZeroXRouterCalendarJsonBody
 
   function request(input: CalendarRequest, intent: RequestIntent): Promise<CalendarTransportResult> {
@@ -139,17 +144,67 @@ export function createZeroXRouterCalendarTransport(deps: Readonly<{
       if (!hasOnlyKeys(input, manualInputKeys)) return Promise.resolve(unavailable('input-invalid'))
       return request(input, 'user')
     },
-    requestAutomatic(descriptorIds?: readonly DescriptorId[]): Promise<readonly CalendarTransportResult[]> {
-      if (automaticBatch) return automaticBatch
-      const month = zeroXRouterCalendarAutomaticMonth(deps.now?.() ?? new Date())
+    requestAutomatic(descriptorIds?: readonly DescriptorId[]): Promise<CalendarAutomaticBatch> {
+      const now = deps.now?.() ?? new Date()
       const selected = descriptorIds ?? Object.keys(zeroXRouterCalendarTransportPolicy.descriptorPaths) as DescriptorId[]
-      automaticBatch = Promise.all(selected.flatMap((descriptorId) =>
-        zeroXRouterCalendarTransportPolicy.locales.map((locale) =>
-          request({ descriptorId, month, locale }, 'automatic'))))
-        .finally(() => { automaticBatch = undefined })
-      return automaticBatch
+      const key = selected.join('\n')
+      const existing = automaticBatches.get(key)
+      if (existing) return existing
+      const scopes = automaticScopes(selected, now, prefetchedMonths)
+      const batch: Promise<CalendarAutomaticBatch> = Promise.all(scopes.map((scope) => request(scope, 'automatic')))
+        .then((results) => {
+          const current = zeroXRouterCalendarAutomaticMonth(now)
+          results.forEach((result, index) => {
+            const scope = scopes[index]!
+            if (scope.month === current || result.state !== 'succeeded') return
+            prefetchedMonths.add(prefetchKey(scope.month, scope.descriptorId))
+          })
+          return { scopes, results }
+        })
+        .finally(() => { automaticBatches.delete(key) })
+      automaticBatches.set(key, batch)
+      return batch
     }
   })
+}
+
+/**
+ * Which (month, descriptor, locale) rows one automatic tick asks for.
+ *
+ * Always the current UTC month. When the month is about to end, the hour's own
+ * feed also prefetches the next UTC month once; a later tick skips it until that
+ * month has one successful collection. The rotation keeps the extra work at two
+ * requests, inside the ten-per-minute budget the three feeds already share, and
+ * never asks for three months at once (design 164 §5.1).
+ */
+export const zeroXRouterCalendarAutomaticPolicy = Object.freeze({
+  /** Days before the end of the UTC month from which the next month is prefetched. */
+  prefetchWindowDays: 3,
+  /** One feed owns the prefetch for a whole UTC hour, then the next one takes over. */
+  prefetchRotationHours: 1
+})
+
+export type CalendarAutomaticScope = Readonly<{ descriptorId: DescriptorId; month: string; locale: Locale }>
+export type CalendarAutomaticBatch = Readonly<{
+  scopes: readonly CalendarAutomaticScope[]
+  results: readonly CalendarTransportResult[]
+}>
+
+function automaticScopes(
+  selected: readonly DescriptorId[], now: Date, prefetched: ReadonlySet<string>
+): readonly CalendarAutomaticScope[] {
+  const current = zeroXRouterCalendarAutomaticMonth(now)
+  const prefetch = zeroXRouterCalendarPrefetchMonth(now)
+  const owner = zeroXRouterCalendarPrefetchOwner(now)
+  return selected.flatMap((descriptorId) => {
+    const months = prefetch !== undefined && descriptorId === owner && !prefetched.has(prefetchKey(prefetch, descriptorId))
+      ? [current, prefetch] : [current]
+    return months.flatMap((month) => zeroXRouterCalendarTransportPolicy.locales.map((locale) => ({ descriptorId, month, locale })))
+  })
+}
+
+function prefetchKey(month: string, descriptorId: DescriptorId): string {
+  return `${month}\n${descriptorId}`
 }
 
 /**
@@ -160,6 +215,28 @@ export function createZeroXRouterCalendarTransport(deps: Readonly<{
  */
 export function zeroXRouterCalendarAutomaticMonth(now: Date): string {
   return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+/** The UTC month an automatic tick may prefetch, or undefined outside the end-of-month window. */
+export function zeroXRouterCalendarPrefetchMonth(now: Date): string | undefined {
+  const policy = zeroXRouterCalendarAutomaticPolicy
+  const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate()
+  if (now.getUTCDate() < daysInMonth - policy.prefetchWindowDays + 1) return undefined
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+  return zeroXRouterCalendarAutomaticMonth(next)
+}
+
+/**
+ * The feed that owns this hour's prefetch.
+ *
+ * A fixed rotation over the descriptor list: each feed gets one hour at a time, so a
+ * failed prefetch is retried soon but never by all three feeds in the same minute.
+ */
+export function zeroXRouterCalendarPrefetchOwner(now: Date): DescriptorId | undefined {
+  const descriptors = Object.keys(zeroXRouterCalendarTransportPolicy.descriptorPaths) as DescriptorId[]
+  if (!descriptors.length) return undefined
+  const slot = Math.floor(now.getUTCHours() / zeroXRouterCalendarAutomaticPolicy.prefetchRotationHours)
+  return descriptors[slot % descriptors.length]
 }
 
 function isCalendarRequest(input: unknown): input is CalendarRequest {

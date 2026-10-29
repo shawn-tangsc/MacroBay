@@ -9,7 +9,7 @@ export const zeroXRouterCalendarRefreshPolicy = Object.freeze({
 })
 type Collection = ReturnType<typeof createZeroXRouterCalendarCollectionService>
 type Request = Parameters<Collection['requestManual']>[0]
-type Scope = Pick<Request, 'descriptorId' | 'locale'>
+type Scope = Pick<Request, 'descriptorId' | 'locale' | 'month'>
 type Status = 'success' | 'success-empty' | 'all-skipped' | 'partial'
 /** What one source attempt can report back; the public boundary owns this vocabulary. */
 type AttemptFailure = typeof marketCalendarPublicPolicy.attemptFailures[number]
@@ -59,14 +59,14 @@ export function createZeroXRouterCalendarRefreshService(deps: Readonly<{
       const existing = inFlight.get(key)
       if (existing) return existing
       if (inFlight.size >= zeroXRouterCalendarRefreshPolicy.maximumInFlightManualBatches) return Promise.resolve(unavailable('busy'))
-      const scopes = descriptors.map(descriptorId => ({ descriptorId, locale }))
+      const scopes = descriptors.map(descriptorId => ({ descriptorId, locale, month }))
       const promise = (async () => {
         const failure = await readiness()
         if (failure) return unavailable(failure)
         const results = await Promise.all(scopes.map(async scope => {
           try { return await deps.collection.requestManual({ ...scope, month }) } catch { return undefined }
         }))
-        return aggregate(scopes, results, month)
+        return aggregate(scopes, results)
       })().finally(() => { inFlight.delete(key) })
       inFlight.set(key, promise)
       return promise
@@ -77,14 +77,15 @@ export function createZeroXRouterCalendarRefreshService(deps: Readonly<{
       const enabled = enabledFeeds ? new Set(enabledFeeds) : deps.readEnabledFeeds ? new Set(await deps.readEnabledFeeds()) : undefined
       const active = enabled ? descriptors.filter(descriptorId => enabled.has(descriptorId)) : descriptors
       if (active.length === 0) return unavailable('disabled')
-      const scopes = active.flatMap(descriptorId => transportPolicy.locales.map(locale => ({ descriptorId, locale })))
-      try { return aggregate(scopes, await deps.collection.requestAutomatic(active)) }
-      catch { return aggregate(scopes, []) }
+      try {
+        const batch = await deps.collection.requestAutomatic(active)
+        return aggregate(batch.scopes, batch.results)
+      } catch { return { state: 'unavailable', items: [] } }
     }
   })
 }
 
-function aggregate(scopes: readonly Scope[], results: readonly unknown[], requestedMonth?: string): RefreshResult {
+function aggregate(scopes: readonly Scope[], results: readonly unknown[]): RefreshResult {
   let storageUnavailable = false
   let storagePressure = false
   const items = scopes.map((scope, index): Item => {
@@ -96,8 +97,7 @@ function aggregate(scopes: readonly Scope[], results: readonly unknown[], reques
     const failed: Item = { ...scope, state: 'unavailable', ...(failureCode ? { failureCode } : {}) }
     if (failureCode === 'storage-pressure') storagePressure = true
     if (failureCode === 'storage-unavailable' || failureCode === 'archive-unavailable') storageUnavailable = true
-    if (result?.state !== 'succeeded' || result.descriptorId !== scope.descriptorId || result.locale !== scope.locale) return failed
-    if (requestedMonth !== undefined && result.month !== requestedMonth) return failed
+    if (result?.state !== 'succeeded' || result.descriptorId !== scope.descriptorId || result.locale !== scope.locale || result.month !== scope.month) return failed
     const value = result.collection
     if (!value || value.state !== 'succeeded') return failed
     const { inputRows, skippedRows, storedRows } = value
