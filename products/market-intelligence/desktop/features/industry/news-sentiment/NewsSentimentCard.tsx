@@ -90,10 +90,13 @@ export function NewsSentimentCard(props: {
               </button>
             ))}
           </div>
-          <footer className="mi-news-sentiment__footer">
-            {filteredItems.some((item) => item.engine === 'rules') ? <span className="mi-news-sentiment__badge">{text.engine.rules}</span> : null}
-            {view?.caveats.includes('news-body-limited') ? <span>{text.bodyLimited}</span> : null}
-          </footer>
+          {/* The footer used to carry a card-wide "Rules" badge whenever any visible item was
+              scored by the rule engine. It named no item, looked like a dead control, and the
+              drawer already reports each item's engine, so only the caveat remains — and the
+              footer disappears entirely when there is nothing to say. */}
+          {view?.caveats.includes('news-body-limited')
+            ? <footer className="mi-news-sentiment__footer"><span>{text.bodyLimited}</span></footer>
+            : null}
         </>
       )}
     </section>

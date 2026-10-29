@@ -163,6 +163,26 @@ describe('NewsSentimentFeature', () => {
     expect(exclude?.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it('drops the card-wide engine badge and hides the empty footer', async () => {
+    // The footer badge said "Rules" whenever any item was scored by the rule engine. It named no
+    // item and looked like a control that did nothing, so the card no longer shows it.
+    const container = await mount(
+      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onRefresh={() => undefined} onSelectItem={() => undefined} text={text} view={VIEW} />
+    )
+    expect(container.textContent).not.toContain(text.engine.rules)
+    expect(container.querySelector('.mi-news-sentiment__footer')).toBeNull()
+
+    // The caveat is still worth a line, and it is the only thing the footer carries now.
+    const withCaveat = await mount(
+      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
+        view={{ ...VIEW, caveats: ['news-body-limited'] }} />
+    )
+    expect(withCaveat.querySelector('.mi-news-sentiment__footer')?.textContent).toBe(text.bodyLimited)
+    expect(withCaveat.textContent).not.toContain(text.engine.rules)
+  })
+
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}

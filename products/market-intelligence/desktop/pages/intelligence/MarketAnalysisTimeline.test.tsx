@@ -1,4 +1,4 @@
-import { isAlreadyAvailableError } from './useMarketAnalysisTimeline'
+import { analysisTimelineRefreshPolicy, isAlreadyAvailableError } from './useMarketAnalysisTimeline'
 import { marketAnalysisTimelineClient } from '../../shared/ipc/marketAnalysisTimelineClient'
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
@@ -25,13 +25,14 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
  * The list is presentational: data and selection come from the workspace hook,
  * exactly as the dashboard layout wires them.
  */
-function Timeline({ text: timelineText, onSelect, onSelectionStateChange, onBack }: {
+function Timeline({ text: timelineText, onSelect, onSelectionStateChange, onBack, policy }: {
   text: typeof text
   onBack?: () => void
   onSelect?: (binding: AnalysisWorkspaceBinding | undefined) => void
   onSelectionStateChange?: (state: AnalysisSelectionState) => void
+  policy?: Parameters<typeof useMarketAnalysisTimeline>[0]['policy']
 }): React.ReactElement {
-  const timeline = useMarketAnalysisTimeline({ text: timelineText, onSelect, onSelectionStateChange })
+  const timeline = useMarketAnalysisTimeline({ text: timelineText, onSelect, onSelectionStateChange, ...(policy ? { policy } : {}) })
   return createElement(MarketAnalysisTimeline, { text: timelineText, timeline, onBack })
 }
 
@@ -263,6 +264,7 @@ describe('MarketAnalysisTimeline', () => {
     expect(container.textContent).toContain(text.failureReasons['analysis-missing-evidence'])
     // The recorded reason is the banner's second line, under the sentence that names the failure.
     const banner = container.querySelector('[data-analysis-error]')
+    expect(banner?.querySelector('strong')?.textContent).toBe(text.attemptFailed)
     expect(banner?.querySelector('[data-analysis-error-detail]')?.textContent).toBe(text.failureReasons['analysis-missing-evidence'])
 
     // The 60s background poll reads the page without the attempt. It used to clear the known
@@ -270,6 +272,136 @@ describe('MarketAnalysisTimeline', () => {
     await act(async () => { window.dispatchEvent(new Event('focus')) })
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
     expect(container.textContent).toContain(text.failureReasons['analysis-missing-evidence'])
+  })
+
+  it('keeps waiting while the run itself repairs a rejected answer, without re-enqueuing', async () => {
+    // The repair attempt lives in the analysis orchestrator: the same run goes back to the model
+    // against the same snapshot, so the panel must not spend a second request of its own.
+    let refreshRequests = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') {
+        return { id: 'mi-ar-1', status: 'running', failureCode: null, queuedAt: asOf, evidenceCount: 2 }
+      }
+      if (method === 'marketAnalysis.requestInitialAnalysis') {
+        refreshRequests += 1
+        return { itemId: 'item-1', queued: true }
+      }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    // Still queued, still spinning: the repair is not a failure the reader has to act on.
+    const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === text.refreshAnalysis)
+    expect(button?.disabled).toBe(true)
+    expect(container.querySelector('[data-analysis-error]')).toBeNull()
+    expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(1)
+    expect(refreshRequests).toBe(1)
+  })
+
+  it('does not retry a refusal before a run exists', async () => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.requestInitialAnalysis') throw new Error('analysis-provider-error')
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    const banner = container.querySelector('[data-analysis-error]')
+    expect(banner?.querySelector('strong')?.textContent).toBe(text.analysisRefreshFailed)
+    expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(1)
+  })
+
+  it('does not reuse the previous run reason for a refused click', async () => {
+    let refreshRequests = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return { id: 'mi-ar-failed', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: asOf, evidenceCount: 2 }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      refreshRequests += 1
+      // The first refresh is queued and then rejected; the second click fails before any run.
+      if (refreshRequests === 1) return { itemId: 'item-1', queued: true }
+      throw new Error('analysis-provider-error')
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = (): HTMLButtonElement | undefined => Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis) as HTMLButtonElement | undefined
+
+    await act(async () => refresh()?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // The rejected run shows its reason.
+    expect(container.querySelector('[data-analysis-error] strong')?.textContent).toBe(text.attemptFailed)
+    expect(container.querySelector('[data-analysis-error-detail]')?.textContent).toBe(text.failureReasons['analysis-invalid-output-schema'])
+
+    await act(async () => refresh()?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // This click never reached a run, so the old run's reason must not be shown under it.
+    expect(container.querySelector('[data-analysis-error] strong')?.textContent).toBe(text.analysisRefreshFailed)
+    expect(container.querySelector('[data-analysis-error-detail]')).toBeNull()
+  })
+
+  it('says the analysis is still running when the bounded wait ends, and releases the action', async () => {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return { id: 'mi-ar-1', status: 'running', failureCode: null, queuedAt: asOf, evidenceCount: 2 }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    // Two ticks instead of the production 660: the same cap path, in milliseconds.
+    const policy = { ...analysisTimelineRefreshPolicy, maxPollAttempts: 2, pollIntervalMs: 5 }
+    await act(async () => root?.render(createElement(Timeline, { text, policy })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 60)) })
+
+    expect(container.textContent).toContain(text.analysisStillRunning)
+    expect(container.querySelector('[data-analysis-error]')).toBeNull()
+    const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === text.refreshAnalysis)
+    expect(button?.disabled).toBe(false)
+  })
+
+  it('releases the refresh action when the follow-up read fails instead of spinning forever', async () => {
+    let timelineReads = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') {
+        timelineReads += 1
+        // The first read is the mounted list; the poll's read fails.
+        if (timelineReads > 1) throw new Error('read failed')
+        return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    // `queued` here was a dead state: no poll was left to clear it, so the button stayed disabled.
+    const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === text.refreshAnalysis)
+    expect(button?.disabled).toBe(false)
+    expect(container.querySelector('[data-analysis-error]')).toBeNull()
   })
 
   it('never lets the bounded poll join a background read that does not fetch the attempt', async () => {

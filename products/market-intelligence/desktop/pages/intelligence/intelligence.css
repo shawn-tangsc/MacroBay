@@ -1429,7 +1429,12 @@ button.mi-agent-card__status:focus-visible {
 .mi-calendar-card__row-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .mi-calendar-card__row-country { margin-right: 4px; color: var(--muted-strong); font-size: 10px; font-style: normal; }
 .mi-calendar-card__row-title { overflow-wrap: anywhere; }
-.mi-calendar-card__row-kind { padding: 0 4px; border: 1px solid currentcolor; border-radius: 3px; font-size: 9px; font-style: normal; line-height: 14px; white-space: nowrap; }
+/* The category tag lives in the 84px metadata rail. It used to be `white-space: nowrap`, so a
+   label wider than the rail overflowed to the left and the card's own `overflow: auto` cut its
+   first letters off — "Economic indicators" was rendered as ":conomic indicators". The tag now
+   wraps inside the rail (and the card passes shorter labels), so a long label is shown whole
+   instead of silently losing its start. */
+.mi-calendar-card__row-kind { max-width: 100%; padding: 0 4px; border: 1px solid currentcolor; border-radius: 3px; font-size: 9px; font-style: normal; line-height: 14px; text-align: right; overflow-wrap: anywhere; }
 .mi-calendar-card__row-kind[data-kind='economic-indicator'] { color: var(--mi-calendar-kind-indicator); }
 .mi-calendar-card__row-kind[data-kind='financial-event'] { color: var(--mi-calendar-kind-financial); }
 .mi-calendar-card__row-kind[data-kind='central-bank-activity'] { color: var(--mi-calendar-kind-central-bank); }

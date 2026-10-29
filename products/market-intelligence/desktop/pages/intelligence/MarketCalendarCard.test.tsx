@@ -16,7 +16,8 @@ function calendarText(language: 'zh-CN' | 'en-US') {
   const portal = productText[language].pages.intelligence.portal
   return {
     ...portal.calendarCard,
-    categories: portal.calendar.market.kinds,
+    // The card's own short labels, not the calendar page's: the rail is 84px wide.
+    categories: portal.calendarCard.categories,
     // 三条线的名字归跨资产那份词表（`crossAsset.assets`），卡片不再抄一份。
     assets: portal.dashboard.crossAsset.assets,
     readableNames: portal.analysisWorkspace.readableNames
@@ -331,4 +332,14 @@ it('styles the verdict as a coloured badge, with the direction distinguishable',
   // The rail covers the reaction row too; the reaction sits 5px under the event stack, not a full gap below.
   expect(styles).toContain('gap: 0 10px')
   expect(styles).toContain('margin-top: 5px')
+})
+
+it('keeps the category tag inside the 84px rail instead of letting the card clip it', () => {
+  // The tag is right-aligned in a fixed rail. With `white-space: nowrap` a longer English label
+  // overflowed to the left, past the card edge, where `overflow: auto` cut its first letters off.
+  const start = styles.indexOf('.mi-calendar-card__row-kind {')
+  const rule = styles.slice(start, styles.indexOf('}', start))
+  expect(rule).toContain('max-width: 100%')
+  expect(rule).toContain('text-align: right')
+  expect(rule).not.toContain('white-space: nowrap')
 })

@@ -67,7 +67,7 @@ describe('analysisOutputValidator', () => {
     const output = validOutput()
     output.knownFacts[0]!.evidenceRefIds = []
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema' })
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema', rule: 'shape:knownFacts' })
   })
 
   it('names the rule that rejected the output, so one message stops meaning three defects', () => {
@@ -124,21 +124,21 @@ describe('analysisOutputValidator', () => {
     const output = validOutput()
     output.evidenceRefs = []
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema' })
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema', rule: 'shape:evidenceRefs' })
   })
 
   it('rejects an unknown scenario horizon', () => {
     const output = validOutput()
     output.scenarios[0]!.horizon = '1h'
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema' })
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema', rule: 'shape:scenarios' })
   })
 
   it('rejects model output that attempts to publish a non-pending prediction state', () => {
     const output = validOutput()
     output.scenarios[0]!.status = 'confirmed'
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema' })
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema', rule: 'shape:scenarios' })
   })
 
   it('removes a URL and a local path without exposing them, keeping the conclusion usable', () => {
@@ -170,7 +170,7 @@ describe('analysisOutputValidator', () => {
     const output = validOutput()
     output.conclusion.summary = 'x'.repeat(MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes)
 
-    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema' })
+    expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toEqual({ ok: false, errorCode: 'analysis-invalid-output-schema', rule: 'shape:too-large' })
   })
 
   it('prints the safe acceptance marker required for manual verification', () => {
@@ -285,4 +285,56 @@ it('accepts a fully English conclusion because the contract carries no natural-l
   }
 
   expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot())).toMatchObject({ ok: true })
+})
+
+it('reports a reply that is not JSON as invalid JSON, not as a schema mismatch', () => {
+  // A fenced or truncated reply is a different defect from a JSON object with extra fields, and
+  // the reader can act on the difference. Both used to arrive as `analysis-invalid-output-schema`.
+  expect(validateAnalysisModelOutput('```json\n{"conclusion":{}}\n```', frozenSnapshot()))
+    .toEqual({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })
+})
+
+it('names the top-level key the model omitted or invented, so a rejection is diagnosable', () => {
+  const missing = validOutput() as Record<string, unknown>
+  delete missing.counterEvidence
+  expect(validateAnalysisModelOutput(JSON.stringify(missing), frozenSnapshot()))
+    .toMatchObject({
+      ok: false,
+      errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema,
+      rule: 'shape:top-level:missing-counterEvidence'
+    })
+
+  const extra = { ...validOutput(), notes: 'not part of the contract' }
+  expect(validateAnalysisModelOutput(JSON.stringify(extra), frozenSnapshot()))
+    .toMatchObject({ ok: false, rule: 'shape:top-level:extra-notes' })
+})
+
+it('names the section whose shape the model got wrong', () => {
+  const output = validOutput()
+  ;(output.directions[0] as { confidence: string }).confidence = 'certain'
+  expect(validateAnalysisModelOutput(JSON.stringify(output), frozenSnapshot()))
+    .toMatchObject({
+      ok: false,
+      errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema,
+      rule: 'shape:directions'
+    })
+})
+
+it('requires the conclusion to cite the key sentiment when the snapshot carries it', () => {
+  const snapshot = frozenSnapshot()
+  const news = {
+    ...snapshot.facts[0]!, factId: 'mi-fact-news-1', evidenceRefId: 'mi-ev-news', domain: 'sentiment' as const,
+    subject: 'market', metric: 'news-sentiment', value: 'bearish · strength 4/5 · confidence 80%｜Exchange outage',
+    unit: null, freshness: 'fresh' as const, comparability: 'not-comparable' as const
+  }
+  snapshot.facts = [...snapshot.facts, news]
+  snapshot.evidenceRefs = [...snapshot.evidenceRefs, { evidenceRefId: 'mi-ev-news' }]
+
+  // A conclusion that ignores the appended key sentiment cannot be said to have weighed it.
+  expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), snapshot))
+    .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'sentiment-not-weighed' })
+
+  const cited = validOutput()
+  cited.knownFacts.push({ factId: 'mi-fact-news-1', statement: '舆情偏空，支持谨慎判断。', evidenceRefIds: ['mi-ev-news'] })
+  expect(validateAnalysisModelOutput(JSON.stringify(cited), snapshot)).toMatchObject({ ok: true })
 })

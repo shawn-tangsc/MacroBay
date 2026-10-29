@@ -38,6 +38,10 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     '引用必须逐字一致：knownFacts 的每条 evidenceRefIds 只能写该事实自己那一个 evidenceRef 句柄，不得追加第二项；marketReaction 的每条 evidenceRefIds 必须恰好是被引用 factIds 各自事实的 evidenceRef 句柄集合。校验器要求两边完全相等，多写一个也会被整份拒绝。',
     '输入里每条事实的 factRef 与 evidenceRef、以及 evidenceRefs 段里的 evidenceRef，都是服务端可解析的短句柄。输出里的 factId / evidenceRefIds 只能填这些句柄原文（例如 f12、e7），不得改写、拼接或自行编造；服务端会把它们还原成内部标识。填入其它字符串会导致整份输出被拒绝。不要输出真实内部标识，它们很长且容易写错。',
     'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs（可比且新鲜的行情事实句柄）；输入没有该字段、或它是空数组时，marketReaction 必须为 []，不得改用其它 factRef 充当行情。',
+    // 重点舆情是本次新增的输入：只在真的有这类事实时才出现，免得模型围绕一个空段落编造。
+    ...((snapshot.facts ?? []).some(fact => fact.metric === 'news-sentiment') ? [
+      '输入里 metric 为「新闻舆情」的事实，是上次分析之后新增的重点舆情（已排除中性条目）。必须指出这些舆情与当前判断是相互支持还是相反，把它们和资金面、资金费率、跨资产反应一起权衡；舆情只能解释判断，不能当作行情证据，marketReaction 仍然只能引用 marketReactionFactRefs 里的 factRef。'
+    ] : []),
     '分析顺序必须是：先判断宏观经济日历事件及其实际值、前值、市场预期值的缺口，再判断外部市场反应，然后判断 BTC/ETH 反应，最后结合资金面、情绪、资金费率。conclusion.summary 必须先给出明确判断并写清机制，不得只罗列数据或把字段名当作结论。conclusion.direction 只能取这五个 key：'
     + directionKeys.join('、') + '；界面会按读者语言取标签，正文里不要再写任何方向标记或段落标签。',
     'conclusion.causalChain 必须按「起因事件 → 中间变量（美元、实际利率、流动性、杠杆或资金流）→ 对该资产的作用方向 → 因此本判断成立的条件」的顺序写清机制。因果链必须用现有证据说明当前最可能的机制与作用方向；不得只写「若…可能…」这类条件句而不给出机制本身，也不得把条件式假设当作唯一解释。',

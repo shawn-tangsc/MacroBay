@@ -34,6 +34,7 @@ import { createPredictionVerificationService } from '../analysis/predictionVerif
 import type { PredictionVerificationObservation } from '../analysis/predictionVerificationService'
 import { parseCrossAssetSnapshot, type CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
 import { appendAnalysisEventEvidence } from '../analysis/analysisEventEvidence'
+import { appendAnalysisNewsSentiment, newsSentimentSince } from '../analysis/analysisNewsSentimentEvidence'
 import { registerMarketAnalysisJobs } from './registerMarketAnalysisJobs'
 import { GROUP_MARKET_ANALYSIS_CHANGE_JOB, ANALYSIS_SESSION_SLOTS_JOB, RUN_MARKET_ANALYSIS_JOB } from './marketAnalysisJobIds'
 import { createInitialMarketAnalysisRequest, initialMarketAnalysisRequestPolicy } from './requestInitialMarketAnalysis'
@@ -190,6 +191,11 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   settingsService?: MarketAnalysisSettingsService
   /** 读者当前语言；分析正文按它在提交时决定用哪种语言书写。 */
   getAppLanguage?: () => Promise<'zh-CN' | 'en-US'>
+  /**
+   * 重点舆情读取器（`newsSentiment.query`）。缺省时该域不可用，快照记一条
+   * `news-sentiment-unavailable`，而不是把「没有舆情」当成「没有新闻」。
+   */
+  newsSentimentQuery?: import('../analysis/analysisNewsSentimentEvidence').AnalysisNewsSentimentQuery
   dataDir: string
   now?: () => string
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
@@ -490,10 +496,21 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const group = repository.getEventGroup(value.eventGroupId)
     if (!group) throw new Error('analysis-event-group-not-found')
     const enriched = await appendAnalysisEventEvidence(context, group, input.publicQueryService, () => input.pipeline.listRevisions())
-    if (value.analysisPhase === 'initial' && repository.listRuns().some(run => run.eventGroupId === group.id && initialMarketAnalysisRequestPolicy.blockingStatuses.includes(run.status))) throw new Error('analysis-already-available')
+    // Decided before the (up to twenty) per-item evidence reads: a refused first analysis must not
+    // pay for the sentiment window it is not going to publish.
+    const runHistory = repository.listRuns()
+    if (value.analysisPhase === 'initial' && runHistory.some(run => run.eventGroupId === group.id && initialMarketAnalysisRequestPolicy.blockingStatuses.includes(run.status))) throw new Error('analysis-already-available')
+    // 「重点舆情」从上次生成开始累计到本次：同一个窗口内的新闻只进入一次结论，中性条目被过滤。
+    // 上次生成的时间取最近一次已发布运行的开始时刻；没有就退回本组上一份快照的时点。
+    // 模块再把窗口压到「理论上的上一档盘口」——分析最大跨度 8 小时，关播三天也不会倒灌三天新闻。
+    const sentimentSince = newsSentimentSince(runHistory, previousSnapshot?.asOf)
+    const withSentiment = await appendAnalysisNewsSentiment(enriched, input.publicQueryService, input.newsSentimentQuery, {
+      asOf: value.asOf,
+      ...(sentimentSince ? { since: sentimentSince } : {})
+    }, () => input.pipeline.listRevisions())
     const snapshot = snapshots.freeze({
       eventGroupId: value.eventGroupId,
-      context: enriched,
+      context: withSentiment,
       // The predecessor fixes the frozen "what changed" record for this snapshot.
       ...(previousSnapshot ? { previous: previousSnapshot } : {})
     })

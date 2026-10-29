@@ -154,6 +154,108 @@ describe('analysisOrchestrator', () => {
     expect(commitSuccessfulAnalysis).not.toHaveBeenCalled()
   })
 
+  it('re-asks once when the first answer misses the contract, and publishes the second', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: true as const, output: { conclusion: 'not a contract' }, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const repository = createRepository()
+    const orchestrator = createAnalysisOrchestrator({ repository, structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+    expect(result).toEqual({ status: 'succeeded' })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    const messages = (invoke.mock.calls[1]![0] as { messages: readonly { role: string; content: string }[] }).messages
+    // The rejected answer is shown back as an assistant turn, so the repair is concrete and the
+    // conversation still alternates; the instruction names what the top level must contain.
+    expect(messages.at(-2)).toMatchObject({ role: 'assistant' })
+    expect(messages.at(-2)!.content).toContain('not a contract')
+    expect(messages.at(-1)).toMatchObject({ role: 'user' })
+    expect(messages.at(-1)!.content).toContain('顶层必须恰好是')
+  })
+
+  it('tells the model which direction horizon is missing, not to fix its citations', async () => {
+    const incomplete = validOutput()
+    incomplete.directions = incomplete.directions.filter(entry => entry.horizon !== 'long')
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: true as const, output: incomplete, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    expect((invoke.mock.calls[1]![0] as { messages: readonly { content: string }[] }).messages.at(-1)!.content)
+      .toContain('short、medium、long 各一条')
+  })
+
+  it('re-asks once when the reply is not JSON at all', async () => {
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: false as const, errorCode: 'invalid-json', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    const messages = (invoke.mock.calls[1]![0] as { messages: readonly { role: string; content: string }[] }).messages
+    expect(messages.at(-1)!.role).toBe('user')
+    expect(messages.at(-1)!.content).toContain('不是合法 JSON')
+  })
+
+  it('does not spend a second call on a provider error', async () => {
+    const invoke = vi.fn(async () => ({ ok: false as const, errorCode: 'provider-error' as const, trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+    const orchestrator = createAnalysisOrchestrator({ repository: createRepository(), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'failed', errorCode: 'analysis-provider-error' })
+    expect(invoke).toHaveBeenCalledOnce()
+  })
+
+  it('does not spend a second call on a timeout or a cancellation', async () => {
+    for (const [errorCode, expected] of [['timeout', 'analysis-timeout'], ['cancelled', 'analysis-cancelled']] as const) {
+      const invoke = vi.fn(async () => ({ ok: false as const, errorCode, trace: { taskId: 'mi-ar-1', durationMs: 2 } }))
+      const updateRunStatus = vi.fn()
+      const orchestrator = createAnalysisOrchestrator({ repository: createRepository({ updateRunStatus }), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory() })
+
+      const result = await orchestrator.run({ analysisRunId: 'mi-ar-1' })
+
+      expect(invoke).toHaveBeenCalledOnce()
+      if (expected === 'analysis-cancelled') {
+        expect(result.status).toBe('cancelled')
+        expect(updateRunStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'cancelled' }))
+      } else {
+        expect(result).toEqual({ status: 'failed', errorCode: expected })
+      }
+    }
+  })
+
+  it('tells the model to cite the sentiment it ignored, on the retry', async () => {
+    const news = {
+      factId: 'fact-news', domain: 'sentiment' as const, subject: 'market', metric: 'news-sentiment',
+      value: 'bearish · strength 4/5 · confidence 80%｜Exchange outage', unit: null, sourceId: 'news', sourceLabel: 'news',
+      observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 0.8, comparability: 'not-comparable' as const, evidenceRefId: 'evidence-news'
+    }
+    const snapshot = {
+      snapshotHash: 'snapshot-hash',
+      facts: [
+        { factId: 'fact-1', domain: 'macro' as const, subject: 'CPI', metric: 'actual', value: '3.2', unit: '%', sourceId: 'official', sourceLabel: '官方', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: 'evidence-1' },
+        news
+      ],
+      evidenceRefs: [{ evidenceRefId: 'evidence-1' }, { evidenceRefId: 'evidence-news' }]
+    }
+    const cited = validOutput()
+    cited.knownFacts.push({ factId: 'fact-news', statement: '舆情偏空，限制上行空间。', evidenceRefIds: ['evidence-news'] })
+    const invoke = vi.fn()
+      // First answer ignores the appended sentiment; the retry cites it.
+      .mockResolvedValueOnce({ ok: true as const, output: validOutput(), providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+      .mockResolvedValueOnce({ ok: true as const, output: cited, providerId: 'provider-1', modelId: 'model-1', trace: { taskId: 'mi-ar-1', durationMs: 2 } })
+    const orchestrator = createAnalysisOrchestrator({
+      repository: createRepository({ getSnapshot: () => snapshot }), structuredModelInvocation: { invoke } as never, now: () => asOf, idFactory: idFactory()
+    })
+
+    await expect(orchestrator.run({ analysisRunId: 'mi-ar-1' })).resolves.toEqual({ status: 'succeeded' })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect((invoke.mock.calls[1]![0] as { messages: readonly { content: string }[] }).messages.at(-1)!.content)
+      .toContain('新闻舆情')
+  })
+
   it('records which evidence rule rejected the output, not only the shared code', async () => {
     const updateRunStatus = vi.fn()
     const repository = createRepository({

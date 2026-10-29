@@ -34,11 +34,13 @@ describe('registerMarketAnalysisJobs', () => {
     expect(removed).toEqual([VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB, ANALYSIS_SESSION_SLOTS_JOB, RECOVER_MARKET_ANALYSIS_RUNS_JOB])
   })
 
-  it('keeps the enclosing job budget above the model budget', () => {
+  it('keeps the enclosing job budget above every model attempt', () => {
     // The job aborts the handler through `context.signal`, which the orchestrator forwards to the
     // model call. If the job ended first, a model that could still answer would be recorded as
-    // `analysis-timeout`. The two values are owned in different files, so the invariant lives here.
-    expect(marketAnalysisJobPolicy.runTimeoutMs).toBeGreaterThan(marketAnalysisInvocationPolicy.modelTimeoutMs)
+    // `analysis-timeout`. A contract rejection now spends a second attempt, so the bound is
+    // attempts × per-attempt budget, not one attempt. Owned in two files, asserted here.
+    expect(marketAnalysisJobPolicy.runTimeoutMs)
+      .toBeGreaterThan(marketAnalysisInvocationPolicy.maxModelAttempts * marketAnalysisInvocationPolicy.modelTimeoutMs)
   })
 
   it('freezes the verification watermark at execution, not registration', async () => {

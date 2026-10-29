@@ -600,6 +600,8 @@ export function getIntelligenceModule(
       structuredModelInvocation,
       settingsService: marketAnalysisSettingsService,
       getAppLanguage,
+      // 重点舆情进分析：与「Key sentiment」卡读的是同一个查询，窗口由分析运行时决定。
+      ...(newsSentimentQuery ? { newsSentimentQuery } : {}),
       dataDir
     })
     const sourcesService = createIntelligenceSourcesService({

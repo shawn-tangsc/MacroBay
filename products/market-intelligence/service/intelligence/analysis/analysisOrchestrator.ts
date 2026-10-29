@@ -1,5 +1,5 @@
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
-import type { StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
+import type { StructuredModelMessage, StructuredModelTaskResult } from '@platform/ai/invocation/structuredModelInvocationTypes'
 import {
   MARKET_ANALYSIS_ERROR_CODES,
   type AnalysisRun,
@@ -8,7 +8,13 @@ import {
   type Prediction,
   type TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
-import { formatUnsafeOutputRedaction, validateAnalysisModelOutput, type FrozenAnalysisEvidence, type ValidatedAnalysisModelOutput } from './analysisOutputValidator'
+import {
+  formatUnsafeOutputRedaction,
+  validateAnalysisModelOutput,
+  type AnalysisOutputValidationResult,
+  type FrozenAnalysisEvidence,
+  type ValidatedAnalysisModelOutput
+} from './analysisOutputValidator'
 import { buildAnalysisMessages, type AnalysisSessionInput } from './analysisModelPrompt'
 import { sessionBriefForTriggerKey } from './analysisSessionContext'
 import { slotInstantAtOrBefore } from './analysisSlotCoverage'
@@ -40,8 +46,97 @@ type InvocationResult = StructuredModelTaskResult<unknown>
 // model on this input size while still ending a genuinely hung connection; a real timeout still
 // surfaces, it just no longer arrives before the model could have answered.
 export const marketAnalysisInvocationPolicy = Object.freeze({
-  modelTimeoutMs: 240_000
+  modelTimeoutMs: 240_000,
+  /**
+   * One immediate repair attempt after a contract rejection, inside the same run.
+   *
+   * A reply outside the schema is usually a sampling accident, not a broken prompt: the same
+   * reader pressed the button again and the second answer was published. Re-asking in place keeps
+   * the frozen snapshot and the run row, and the reader never sees a failure they have to act on.
+   * The enclosing job budget (`marketAnalysisJobPolicy.runTimeoutMs`) must cover both attempts.
+   */
+  maxModelAttempts: 2
 })
+
+/**
+ * The rejections worth another sample.
+ *
+ * Not retried: unsafe output (a policy problem, not a formatting one), timeouts, provider errors,
+ * and cancellation — each already says something the reader can act on, and another call would
+ * only spend the same budget twice.
+ */
+const repairableRejection: ReadonlySet<string> = new Set([
+  MARKET_ANALYSIS_ERROR_CODES.invalidJson,
+  MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema,
+  MARKET_ANALYSIS_ERROR_CODES.missingEvidence
+])
+
+/**
+ * One concrete instruction per defect.
+ *
+ * The error code alone is too coarse to repair: `missing evidence` covers a missing
+ * `directions` horizon, an ineligible reaction fact and three different reference mistakes, and
+ * telling all of them "you cited an unknown reference" sends the model to rewrite citations that
+ * were never the problem. Shape rejections name the section or the missing top-level key; the
+ * matching sentence says what that section must contain.
+ *
+ * Deliberately short: the system prompt already carries the full schema, so this only points at
+ * the one thing the first attempt could not see.
+ */
+const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
+  'invalid-json': '上一次回复不是合法 JSON（可能被截断）。请重新输出完整、闭合的 JSON；必要时压缩各数组的条数。',
+  'shape:top-level': '上一次输出的顶层字段与契约不一致：顶层必须恰好是 conclusion、knownFacts、transmissionHypotheses、marketReaction、supportingEvidence、counterEvidence、scenarios、directions、nextCatalysts、dataCaveats、evidenceRefs，不增不减。',
+  'shape:conclusion': 'conclusion 必须恰好包含 direction、summary、change、causalChain、conditions、macro、evidenceStrength、dataGaps；direction 只能取五个 key，macro 与 evidenceStrength 没有内容时写 null。',
+  'shape:directions': 'directions 必须恰好 short、medium、long 各一条；每条含 horizon、direction、rationale、confidence、evidenceRefIds，confidence 只能是 low、medium 或 high。',
+  'shape:scenarios': '每个 scenario 必须恰好包含 asset、horizon、baseCase、conditions、invalidation、status；asset 只能是 BTC 或 ETH，status 只能是 pending。',
+  'shape:knownFacts': '每条 knownFacts 必须恰好包含 factId、statement、evidenceRefIds，其中 evidenceRefIds 恰好是该事实自己的那一个 evidenceRef。',
+  'shape:transmissionHypotheses': '每条 transmissionHypotheses 必须恰好包含 statement 与 evidenceRefIds（非空）。',
+  'shape:marketReaction': '每条 marketReaction 必须包含 statement、factIds、evidenceRefIds；没有可比行情时写 []。',
+  'shape:supportingEvidence': '每条 supportingEvidence 必须恰好包含 statement 与 evidenceRefId。',
+  'shape:counterEvidence': '每条 counterEvidence 必须恰好包含 statement 与 evidenceRefId。',
+  'shape:nextCatalysts': '每条 nextCatalysts 必须恰好包含 statement 与 evidenceRefIds（非空）。',
+  'shape:dataCaveats': 'dataCaveats 必须是字符串数组；没有内容时写 []。',
+  'shape:evidenceRefs': 'evidenceRefs 必须是非空的字符串数组，只能写本次实际引用的证据句柄。',
+  'direction-horizons-incomplete': 'directions 必须恰好 short、medium、long 各一条，不得缺失、重复或多出。',
+  'direction-evidence-mismatch': 'directions 的 evidenceRefIds 只能引用输入证据里的原文句柄（例如 e7），不得改写或编造。',
+  'unknown-reference': 'factId 与 evidenceRefIds 只能写输入里给出的 f# / e# 原文句柄，不得改写、拼接或编造。',
+  'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
+  'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
+  'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。'
+})
+
+function repairInstruction(defect: Readonly<{ errorCode: string; rule?: string }>): string {
+  const rule = defect.rule ?? ''
+  if (rule.startsWith('shape:top-level')) return repairInstructions['shape:top-level']!
+  if (defect.errorCode === MARKET_ANALYSIS_ERROR_CODES.invalidJson) return repairInstructions['invalid-json']!
+  return repairInstructions[rule] ?? '上一次输出未通过校验。'
+}
+
+/**
+ * The rejected answer, bounded, so the model can see what it has to correct.
+ *
+ * An `assistant` turn also keeps the conversation alternating for providers that reject two
+ * consecutive `user` messages. It is truncated: a rejected 30KB answer would spend the context the
+ * repair needs, and the defect sentence already names the failing part.
+ */
+function rejectedAnswer(output: unknown): StructuredModelMessage | undefined {
+  try {
+    const text = JSON.stringify(output)
+    if (!text || text === '{}') return undefined
+    const limit = 4_000
+    return { role: 'assistant', content: text.length > limit ? `${text.slice(0, limit)}…` : text }
+  } catch {
+    return undefined
+  }
+}
+
+function repairMessage(defect: Readonly<{ errorCode: string; rule?: string }>, previous?: unknown): StructuredModelMessage[] {
+  const answer = previous === undefined ? undefined : rejectedAnswer(previous)
+  return [
+    ...(answer ? [answer] : []),
+    { role: 'user', content: `${repairInstruction(defect)}请重新输出同一个 JSON 对象：只输出 JSON，不加 Markdown；不增加、不删除字段；必要时压缩每个数组的条数，确保 JSON 完整闭合。事实与证据只能引用输入里给出的 factRef / evidenceRef 原文。` }
+  ]
+}
 
 export type AnalysisOrchestratorResult = Readonly<{
   status: 'succeeded' | 'failed' | 'invalid-output' | 'cancelled'
@@ -80,33 +175,53 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     const brief = sessionBriefForTriggerKey(runRecord.triggerKey)
     const openInstant = brief ? slotInstantAtOrBefore(brief.slot, new Date(runRecord.queuedAt)) : null
     const session: AnalysisSessionInput | undefined = brief && openInstant ? { brief, openInstant } : undefined
-    let invocation: InvocationResult
-    try {
-      // The run carries the model it was queued for, so the analysis calls exactly the model the
-      // reader chose instead of whatever provider happens to be first in the store. Runs without a
-      // recorded model keep following the platform default.
-      const model = runRecord.modelProviderId && runRecord.modelId
-        ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
-        : {}
-      const proseLanguage = deps.getLanguage ? await deps.getLanguage() : undefined
-      invocation = await deps.structuredModelInvocation.invoke({
-        taskId: runRecord.id,
-        messages: buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage),
-        timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs,
-        abortSignal: signal,
-        ...model,
-        parse: value => value
-      })
-    } catch {
-      return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+    // The run carries the model it was queued for, so the analysis calls exactly the model the
+    // reader chose instead of whatever provider happens to be first in the store. Runs without a
+    // recorded model keep following the platform default.
+    const model = runRecord.modelProviderId && runRecord.modelId
+      ? { providerId: runRecord.modelProviderId, modelId: runRecord.modelId }
+      : {}
+    const proseLanguage = deps.getLanguage ? await deps.getLanguage() : undefined
+    let messages = buildAnalysisMessages({ ...withChange, facts }, (input.significanceSignals ?? []) as readonly SignificanceSignal[], session, proseLanguage)
+    let invocation: InvocationResult | undefined
+    let validated: AnalysisOutputValidationResult | undefined
+    // One immediate repair attempt, inside the same run and against the same frozen snapshot.
+    // A model that answers outside the contract once is not a failed analysis: the previous
+    // product required the reader to press "Analyze now" again (which is exactly what they did,
+    // and the second answer was published). Asking again in place costs one call and no re-freeze.
+    for (let attempt = 1; attempt <= marketAnalysisInvocationPolicy.maxModelAttempts; attempt += 1) {
+      if (signal.aborted) return cancel(runRecord.id)
+      try {
+        invocation = await deps.structuredModelInvocation.invoke({
+          taskId: runRecord.id,
+          messages,
+          timeoutMs: marketAnalysisInvocationPolicy.modelTimeoutMs,
+          abortSignal: signal,
+          ...model,
+          parse: value => value
+        })
+      } catch {
+        return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
+      }
+      // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
+      // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
+      // model was slow when nothing had gone wrong with the model at all.
+      if (!invocation.ok) {
+        if (invocation.errorCode === 'cancelled') return cancel(runRecord.id)
+        const repairable = invocation.errorCode === 'invalid-json'
+        if (!repairable || attempt >= marketAnalysisInvocationPolicy.maxModelAttempts) {
+          return fail(runRecord.id, 'failed', mapInvocationError(invocation.errorCode))
+        }
+        messages = [...messages, ...repairMessage({ errorCode: MARKET_ANALYSIS_ERROR_CODES.invalidJson })]
+        continue
+      }
+      validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence)
+      if (validated.ok) break
+      if (attempt >= marketAnalysisInvocationPolicy.maxModelAttempts || !repairableRejection.has(validated.errorCode)) break
+      messages = [...messages, ...repairMessage(validated, invocation.output)]
     }
-    // A cancelled invocation never spent its budget: the caller ended it (the window closed, the
-    // job was cancelled, the app is shutting down). Recording that as a timeout told the reader the
-    // model was slow when nothing had gone wrong with the model at all.
-    if (!invocation.ok && invocation.errorCode === 'cancelled') return cancel(runRecord.id)
-    if (!invocation.ok) return fail(runRecord.id, 'failed', mapInvocationError(invocation.errorCode))
+    if (!invocation?.ok || !validated) return fail(runRecord.id, 'failed', MARKET_ANALYSIS_ERROR_CODES.providerError)
 
-    const validated = validateAnalysisModelOutput(JSON.stringify(invocation.output), frozenEvidence)
     if (!validated.ok) {
       // The coarse code is what the reader sees; the rule is what the next investigation needs.
       // Three different defects used to arrive as one "missing evidence" message.
@@ -177,6 +292,10 @@ function makeId(prefix: string, value: string): string {
 function mapInvocationError(errorCode: string): string {
   if (errorCode === 'model-not-ready' || errorCode === 'provider-disabled' || errorCode === 'missing-api-key') return MARKET_ANALYSIS_ERROR_CODES.providerNotReady
   if (errorCode === 'timeout') return MARKET_ANALYSIS_ERROR_CODES.timeout
-  if (errorCode === 'invalid-json' || errorCode === 'schema-validation-failed') return MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema
+  // A reply that is not JSON at all is a different defect from a JSON object with the wrong
+  // shape, and the reader can act on the difference ("it was cut off" vs "it invented a field").
+  // Keeping both as `analysis-invalid-output-schema` is what made every rejection read the same.
+  if (errorCode === 'invalid-json') return MARKET_ANALYSIS_ERROR_CODES.invalidJson
+  if (errorCode === 'schema-validation-failed') return MARKET_ANALYSIS_ERROR_CODES.invalidOutputSchema
   return MARKET_ANALYSIS_ERROR_CODES.providerError
 }

@@ -38,6 +38,8 @@ export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
   queryEmpty: 'query-empty',
   evidenceUnavailable: 'evidence-unavailable',
   notComparable: 'not-comparable',
+  /** The news-sentiment store could not answer, so this run carries no new 舆情 facts. */
+  newsSentimentUnavailable: 'news-sentiment-unavailable',
   macroCalendarUnavailable: 'macro-calendar-unavailable',
   macroCalendarEmpty: 'macro-calendar-empty',
   macroCalendarConsensusUnavailable: 'macro-calendar-consensus-unavailable',

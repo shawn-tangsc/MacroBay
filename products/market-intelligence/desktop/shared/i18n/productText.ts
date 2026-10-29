@@ -111,7 +111,7 @@ export const productText = {
                 'us-2y-yield': '美债 2 年期收益率', 'us-2y-yield-change-1d': '美债 2 年期 1 日变化',
                 'us-10y-breakeven-inflation': '美债 10 年期盈亏平衡通胀', 'us-10y-2y-term-spread': '10Y−2Y 期限利差',
                 'event-name': '事件', 'lifecycle-state': '生命周期', 'scheduled-date': '计划日期', 'scheduled-at': '计划时间',
-                'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', surprise: '预期差（实际−预期）', 'event-excerpt': '事件摘要'
+                'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', surprise: '预期差（实际−预期）', 'event-excerpt': '事件摘要', 'news-sentiment': '新闻舆情'
               },
               subject: {
                 stablecoins: '稳定币', BTC: 'BTC', ETH: 'ETH', market: '市场', all: '全部', 'btc-vs-eth': 'BTC 相对 ETH',
@@ -127,6 +127,7 @@ export const productText = {
               caveat: {
                 'max-items-truncated': '证据条数已截断', 'source-health-unavailable': '来源健康度不可用', 'query-unavailable': '查询不可用',
                 'query-empty': '查询结果为空', 'evidence-unavailable': '证据不可用', 'not-comparable': '与其他数据不可比',
+                'news-sentiment-unavailable': '新闻舆情不可用',
                 'macro-calendar-unavailable': '经济日历不可用', 'macro-calendar-empty': '经济日历为空',
                 'macro-calendar-consensus-unavailable': '缺少市场预期值', 'macro-calendar-query-not-wired': '经济日历未接线',
                 'observed-unverified': '来源身份未验证', 'provider-title-is-display-name': '事件名取自提供方标题',
@@ -152,6 +153,8 @@ export const productText = {
             // 「±30 分」反应那一行的标签（原型 ④）。三条线的名字用跨资产那份词表。
             reactionHint: '这次发布前后各 30 分钟的相对变化（不是因果判断）',
             dxy: '美元',
+            // 卡片左栏只有 84px：这里用比日历页更短的分类标签，长标签会溢出到卡片外被裁掉。
+            categories: { 'economic-indicator': '经济指标', 'financial-event': '金融事件', 'central-bank-activity': '央行活动' },
             openCalendar: '打开经济日历', switchToAgent: '切换到市场解读 Agent', switchToCalendar: '切换到日历卡片',
             openEventInCalendar: '在日历中打开该事件',
             collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定',
@@ -159,7 +162,7 @@ export const productText = {
           },
           analysisTimeline: {
             retryAnalysis: '重试分析', attemptFailed: '上次分析未发布',
-            failureReasons: { 'analysis-invalid-output-schema': '模型输出格式不符合要求，请重试。', 'analysis-missing-evidence': '分析输出与冻结证据不一致，已拒绝发布，请重试；若持续失败请检查情报来源。', 'analysis-provider-not-ready': '模型未就绪，请检查模型服务配置。', 'analysis-provider-error': '模型调用失败，请检查连接后重试。', 'analysis-timeout': '模型调用超时，请重试。', 'analysis-cancelled': '分析被中断（应用关闭或任务取消），请重试。' },
+            failureReasons: { 'analysis-invalid-output-schema': '模型输出格式不符合要求，请重试。', 'analysis-invalid-json': '模型返回的不是合法 JSON（可能被截断），本次未发布，请重试。', 'analysis-missing-evidence': '分析输出与冻结证据不一致，已拒绝发布，请重试；若持续失败请检查情报来源。', 'analysis-provider-not-ready': '模型未就绪，请检查模型服务配置。', 'analysis-provider-error': '模型调用失败，请检查连接后重试。', 'analysis-timeout': '模型调用超时，请重试。', 'analysis-cancelled': '分析被中断（应用关闭或任务取消），请重试。' },
             triggerStatus: { label: '最近一次判定', since: '起', slotOpen: '本机开盘 ', slotDelayed: '延迟补跑', reasons: { 'significance-confirmed': '数据变化显著，已开始分析', 'significance-below-threshold': '数据无显著变化，本次未分析', 'provider-surprise-confirmed': 'provider 日历的发布显著偏离市场预期（非官方值），已开始分析', 'semantic-no-op': '数据与上次相同，本次未分析', 'interval-active': '距上次分析不足 30 分钟，已合并', 'hour-budget-exhausted': '本小时分析次数已达上限', 'day-budget-exhausted': '今天分析次数已达上限', 'schedule-reserve-exhausted': '今日盘口分析额度已用尽', 'session-slot-asia': '亚洲盘开盘分析（08:00）', 'session-slot-europe': '欧洲盘开盘分析（16:00）', 'session-slot-us': '美洲盘开盘分析（24:00）', 'invalid-significance-input': '判定输入异常，本次未分析', 'manual-request': '你在界面上手动触发', 'severity-confirmed': '这条情报达到高重要性门槛，已开始分析', 'medium-score-confirmed': '这条情报达到中等级别门槛，已开始分析', 'market-reaction-confirmed': '已确认出现可比行情反应，已开始复盘', 'restart-initial-compensated': '进程重启后补跑缺失的首次分析', 'restart-review-compensated': '进程重启后补跑缺失的复盘' } },
             loadMore: '加载更多', selectEntry: '选择一个时间轴节点查看详情。',
             settings: '设置', settingsTitle: 'AI 分析设置', analysisEnabled: '开启 AI 分析',
@@ -168,7 +171,7 @@ export const productText = {
             refusalModelUnconfigured: '没有可用的默认助手模型，请先在设置里选择分析模型。', refusalModelUnavailable: '所选模型当前不可用，请换一个模型。',
             refusalFailed: '保存失败，请重试。', saving: '保存中…', save: '保存', cancel: '取消',
             entry: '消息分析 / 时间轴', description: '查看已发布的分析摘要、预测与证据覆盖',
-            workspaceLabel: '— MARKET ANALYSIS', title: 'AI 情报分析', back: '返回 Agent', loading: '正在加载消息分析…', unavailable: '分析详情暂不可用。', empty: '暂无已发布的消息分析。', requestInitialAnalysis: '生成首次分析', refreshAnalysis: '立即分析', initialAnalysisQueued: '首次分析已入队，完成后会自动更新。', initialAnalysisUnavailable: '当前没有符合条件的已发布情报可分析。', initialAnalysisFailed: '首次分析任务启动失败，请刷新后重试。', analysisRefreshAlreadyAvailable: '已有最新分析，无需重新分析。', analysisRefreshFailed: '重新分析请求未成功，请稍后重试。', analysisServiceNotReady: '分析服务正在启动，请稍后重试。', timeline: '分析时间轴', detail: '分析详情', dismissError: '关闭提示',
+            workspaceLabel: '— MARKET ANALYSIS', title: 'AI 情报分析', back: '返回 Agent', loading: '正在加载消息分析…', unavailable: '分析详情暂不可用。', empty: '暂无已发布的消息分析。', requestInitialAnalysis: '生成首次分析', refreshAnalysis: '立即分析', initialAnalysisQueued: '首次分析已入队，完成后会自动更新。', initialAnalysisUnavailable: '当前没有符合条件的已发布情报可分析。', initialAnalysisFailed: '首次分析任务启动失败，请刷新后重试。', analysisRefreshAlreadyAvailable: '已有最新分析，无需重新分析。', analysisStillRunning: '分析仍在运行：已停止等待，完成后会自动出现在列表里。', analysisRefreshFailed: '重新分析请求未成功，请稍后重试。', analysisServiceNotReady: '分析服务正在启动，请稍后重试。', timeline: '分析时间轴', detail: '分析详情', dismissError: '关闭提示',
             eventGroup: '事件组', analysisRun: '分析运行', summaryVersion: '摘要版本', evidenceCount: '证据数量', asOf: '分析时点', dataCutoff: '数据限制', conclusion: 'AI 结论', confirmedFacts: '已确认事实', transmission: '传导判断', marketReaction: '市场反应', noMarketReaction: '当前没有可比行情证据，暂不判断市场方向。', supportingEvidence: '支撑证据', counterEvidence: '反向证据', catalysts: '后续关注', auditInfo: '查看审计信息', prediction: '预测', noPrediction: '该摘要暂无预测。', conditions: '条件', invalidation: '失效条件', verificationDue: '验证截止', agentUnavailable: '追问 Agent 将在下一阶段启用。',
             status: { published: '已发布', stale: '已过期', superseded: '已替代', pending: '待验证', confirmed: '已确认', 'partially-confirmed': '部分确认', invalidated: '已失效', expired: '已到期', 'insufficient-data': '数据不足' }
           },
@@ -1418,7 +1421,7 @@ export const productText = {
                 'us-2y-yield': 'US 2-year yield', 'us-2y-yield-change-1d': 'US 2-year 1-day change',
                 'us-10y-breakeven-inflation': 'US 10-year breakeven inflation', 'us-10y-2y-term-spread': '10Y-2Y term spread',
                 'event-name': 'Event', 'lifecycle-state': 'Lifecycle', 'scheduled-date': 'Scheduled date', 'scheduled-at': 'Scheduled time',
-                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt'
+                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt', 'news-sentiment': 'News sentiment'
               },
               subject: {
                 stablecoins: 'Stablecoins', BTC: 'BTC', ETH: 'ETH', market: 'Market', all: 'All', 'btc-vs-eth': 'BTC vs ETH',
@@ -1434,6 +1437,7 @@ export const productText = {
               caveat: {
                 'max-items-truncated': 'Evidence count truncated', 'source-health-unavailable': 'Source health unavailable', 'query-unavailable': 'Query unavailable',
                 'query-empty': 'Query returned nothing', 'evidence-unavailable': 'Evidence unavailable', 'not-comparable': 'Not comparable with other data',
+                'news-sentiment-unavailable': 'News sentiment unavailable',
                 'macro-calendar-unavailable': 'Economic calendar unavailable', 'macro-calendar-empty': 'Economic calendar empty',
                 'macro-calendar-consensus-unavailable': 'Market consensus missing', 'macro-calendar-query-not-wired': 'Economic calendar not wired',
                 'observed-unverified': 'Source identity unverified', 'provider-title-is-display-name': 'Event name is the provider title',
@@ -1458,6 +1462,10 @@ export const productText = {
             awaitingData: 'Scheduled time has passed; waiting for the value',
             reactionHint: 'Relative change in the 30 minutes around the release (not a causal claim)',
             dxy: 'DXY',
+            // The card's left rail is 84px wide. These are shorter than the calendar page's labels:
+            // "Economic indicators" overflowed the rail and the card's `overflow: auto` cut the
+            // tag's first letters off in English.
+            categories: { 'economic-indicator': 'Indicator', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' },
             openCalendar: 'Open the economic calendar', switchToAgent: 'Switch to the market agent', switchToCalendar: 'Switch to the calendar card',
             openEventInCalendar: 'Open this event in the calendar',
             collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD',
@@ -1465,7 +1473,7 @@ export const productText = {
           },
           analysisTimeline: {
             retryAnalysis: 'Retry analysis', attemptFailed: 'Last analysis was not published',
-            failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'Model is not ready. Check model settings.', 'analysis-provider-error': 'Model invocation failed. Check the connection and retry.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
+            failureReasons: { 'analysis-invalid-output-schema': 'Model output did not match the required format. Retry.', 'analysis-invalid-json': 'The model reply was not valid JSON (it may have been cut off), so it was not published. Retry.', 'analysis-missing-evidence': 'The analysis output did not match the frozen evidence, so it was not published. Retry; if it keeps failing, check sources.', 'analysis-provider-not-ready': 'Model is not ready. Check model settings.', 'analysis-provider-error': 'Model invocation failed. Check the connection and retry.', 'analysis-timeout': 'Model invocation timed out. Retry.', 'analysis-cancelled': 'The analysis was interrupted (app closed or task cancelled). Retry.' },
                         triggerStatus: { label: 'Latest decision', since: 'since', slotOpen: 'open ', slotDelayed: 'caught up late', reasons: { 'significance-confirmed': 'Data changed significantly; analysis started', 'significance-below-threshold': 'No significant change; not analysed', 'provider-surprise-confirmed': 'A provider calendar release landed far from the market expectation (not an official value); analysis started', 'semantic-no-op': 'Identical to last time; not analysed', 'interval-active': 'Less than 30 minutes since the last analysis; coalesced', 'hour-budget-exhausted': 'Hourly analysis limit reached', 'day-budget-exhausted': 'Daily analysis limit reached', 'schedule-reserve-exhausted': 'Session-slot allowance used up for today', 'session-slot-asia': 'Asian open analysis (08:00)', 'session-slot-europe': 'European open analysis (16:00)', 'session-slot-us': 'US open analysis (24:00)', 'invalid-significance-input': 'Decision input was invalid; not analysed', 'manual-request': 'You triggered it from the panel', 'severity-confirmed': 'High-importance intelligence; analysis started', 'medium-score-confirmed': 'Mid-level intelligence crossed the threshold; analysis started', 'market-reaction-confirmed': 'A comparable market reaction was confirmed; review started', 'restart-initial-compensated': 'First analysis re-run after a process restart', 'restart-review-compensated': 'Review re-run after a process restart' } },
 loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             settings: 'Settings', settingsTitle: 'AI analysis settings', analysisEnabled: 'Enable AI analysis',
@@ -1474,7 +1482,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             refusalModelUnconfigured: 'No usable default assistant model. Choose an analysis model first.', refusalModelUnavailable: 'That model cannot be called right now. Pick another one.',
             refusalFailed: 'Could not save. Retry.', saving: 'Saving…', save: 'Save', cancel: 'Cancel',
             entry: 'Message analysis / timeline', description: 'Review published summaries, predictions, and evidence coverage',
-            workspaceLabel: '— MARKET ANALYSIS', title: 'AI intelligence analysis', back: 'Back to Agents', loading: 'Loading message analysis…', unavailable: 'Analysis detail is unavailable.', empty: 'No published message analysis yet.', requestInitialAnalysis: 'Generate first analysis', refreshAnalysis: 'Analyze now', initialAnalysisQueued: 'First analysis queued; this panel updates when it finishes.', initialAnalysisUnavailable: 'No eligible published intelligence is available for analysis.', initialAnalysisFailed: 'The first-analysis job failed to start. Refresh and try again.', analysisRefreshAlreadyAvailable: 'The latest analysis is already available.', analysisRefreshFailed: 'The re-analysis request did not go through. Try again.', analysisServiceNotReady: 'The analysis service is still starting up. Try again shortly.', timeline: 'Analysis timeline', detail: 'Analysis detail', dismissError: 'Dismiss message',
+            workspaceLabel: '— MARKET ANALYSIS', title: 'AI intelligence analysis', back: 'Back to Agents', loading: 'Loading message analysis…', unavailable: 'Analysis detail is unavailable.', empty: 'No published message analysis yet.', requestInitialAnalysis: 'Generate first analysis', refreshAnalysis: 'Analyze now', initialAnalysisQueued: 'First analysis queued; this panel updates when it finishes.', initialAnalysisUnavailable: 'No eligible published intelligence is available for analysis.', initialAnalysisFailed: 'The first-analysis job failed to start. Refresh and try again.', analysisRefreshAlreadyAvailable: 'The latest analysis is already available.', analysisStillRunning: 'The analysis is still running. Stopped waiting; it will appear here when it finishes.', analysisRefreshFailed: 'The re-analysis request did not go through. Try again.', analysisServiceNotReady: 'The analysis service is still starting up. Try again shortly.', timeline: 'Analysis timeline', detail: 'Analysis detail', dismissError: 'Dismiss message',
             eventGroup: 'Event group', analysisRun: 'Analysis run', summaryVersion: 'Summary version', evidenceCount: 'Evidence count', asOf: 'As of', dataCutoff: 'Data limits', conclusion: 'AI conclusion', confirmedFacts: 'Confirmed facts', transmission: 'Transmission view', marketReaction: 'Market reaction', noMarketReaction: 'No comparable market evidence is available; direction is not judged.', supportingEvidence: 'Supporting evidence', counterEvidence: 'Counter-evidence', catalysts: 'Next catalysts', auditInfo: 'View audit information', prediction: 'Predictions', noPrediction: 'This summary has no predictions.', conditions: 'Conditions', invalidation: 'Invalidation', verificationDue: 'Verification due', agentUnavailable: 'The follow-up Agent will be enabled in the next phase.',
             status: { published: 'Published', stale: 'Stale', superseded: 'Superseded', pending: 'Pending', confirmed: 'Confirmed', 'partially-confirmed': 'Partially confirmed', invalidated: 'Invalidated', expired: 'Expired', 'insufficient-data': 'Insufficient data' }
           },

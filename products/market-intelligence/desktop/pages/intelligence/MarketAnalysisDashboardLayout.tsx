@@ -197,7 +197,9 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
           projection={cardData.projection}
           text={{
             ...text.calendarCard,
-            categories: text.calendar.market.kinds,
+            // The card carries its own short category labels: the calendar page's longer ones do
+            // not fit the 84px rail and were clipped at the card edge in English.
+            categories: text.calendarCard.categories,
             assets: text.dashboard.crossAsset.assets,
             // Calendar chrome names fields in the reader's language; only published conclusion prose
             // stays in the model's output language.

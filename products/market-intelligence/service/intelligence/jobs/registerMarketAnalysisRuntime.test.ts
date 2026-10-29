@@ -543,3 +543,73 @@ function crossAssetSnapshot(asOf: string, range: '1h' | '24h' | '7d', btcReturn:
     observationKey: { indexBtc: 'unavailable' as const, ethBtc: 'unavailable' as const }
   }
 }
+
+describe('market analysis runtime sentiment wiring', () => {
+  it('freezes the sentiment it read as citable facts before dispatching the run', async () => {
+    const directory = await mkdtemp(`${tmpdir()}/mi-analysis-sentiment-`)
+    const asOf = '2026-09-28T00:01:00.000Z'
+    const publishedAt = '2026-09-28T00:00:30.000Z'
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    const jobRuntime = {
+      registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler),
+      enqueueDefinition,
+      listRuns: () => [],
+      enqueueStartup: vi.fn(async (id: string) => ({ id }))
+    } as never
+    const evidence = (itemId: string) => {
+      const ref = {
+        evidenceRefId: `ev-${itemId}`, itemId, sourceId: 'coindesk-rss', sourceLabel: 'CoinDesk RSS',
+        occurredAt: publishedAt, publishedAt, detectedAt: publishedAt, computedAt: null,
+        visibleAt: publishedAt, excerptHash: 'a'.repeat(64)
+      }
+      return { state: 'available', evidenceRefs: [ref], data: { evidenceRef: ref, title: 'title', excerpt: `excerpt ${itemId}` } }
+    }
+    const news = {
+      itemId: 'news-1', title: 'Exchange outage', displayTitle: '交易所故障', sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS',
+      publishedAt, scoredAt: '2026-09-28T00:00:40.000Z', polarity: 'bearish' as const,
+      strength: 4, confidence: 80, symbols: ['BTC'] as const
+    }
+    const runtime = registerMarketAnalysisRuntime({
+      jobRuntime,
+      pipeline: { listItems: () => [], listRevisions: () => [] } as never,
+      publicQueryService: { getEvidenceExcerpt: async (input: { itemId: string }) => evidence(input.itemId) } as never,
+      newsSentimentQuery: { query: async () => ({ state: 'available' as const, asOf, generatedAt: asOf, window: '1h' as const, items: [news], caveats: [] }) } as never,
+      structuredModelInvocation: { invoke: vi.fn() } as never,
+      settingsService: createRuntimeSettingsService(),
+      dataDir: directory,
+      now: () => asOf
+    })
+    try {
+      const group = {
+        id: 'mi-eg-news', schemaVersion: 1 as const, status: 'open' as const, groupType: 'sentiment' as const,
+        mergeKey: 'sentiment|news', firstObservedAt: asOf, lastObservedAt: asOf, reviewDeadlineAt: '2026-09-28T02:00:00.000Z',
+        eventRefs: ['anchor-item'], triggerCount: 0, reviewCount: 0, currentSummaryId: null,
+        supersededByGroupId: null, revision: 1, createdAt: asOf, updatedAt: asOf
+      }
+      runtime.repository.appendEventGroup(group)
+      // The repository does not persist the derived change record, so capture the frozen value.
+      const appendSnapshot = vi.spyOn(runtime.repository, 'appendSnapshot')
+      const context = { jobRunId: 'sentiment-wiring', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
+
+      await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!(
+        { eventGroupId: group.id, triggerKey: 'manual.refresh', analysisPhase: 'correction', asOf }, context)
+
+      const [snapshot] = runtime.repository.listSnapshots(group.id)
+      expect(snapshot).toBeDefined()
+      const fact = snapshot!.facts.find(candidate => candidate.metric === 'news-sentiment')
+      // The whole path is exercised: the runtime's query dependency, the evidence reader, the
+      // window filter, the fact relabelling and the frozen snapshot.
+      expect(fact).toMatchObject({ domain: 'sentiment', subject: 'BTC', comparability: 'not-comparable', evidenceRefId: 'ev-news-1' })
+      expect(String(fact!.value)).toContain('bearish')
+      expect(snapshot!.evidenceRefs.some(ref => ref.evidenceRefId === 'ev-news-1')).toBe(true)
+      // The rotation is not a market change, even end to end.
+      const frozen = appendSnapshot.mock.calls[0]![0]
+      expect(frozen.change.facts.some(candidate => candidate.metric === 'news-sentiment')).toBe(false)
+      expect(enqueueDefinition).toHaveBeenCalledWith(expect.objectContaining({ handlerId: RUN_MARKET_ANALYSIS_JOB }))
+    } finally {
+      runtime.dispose()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+})

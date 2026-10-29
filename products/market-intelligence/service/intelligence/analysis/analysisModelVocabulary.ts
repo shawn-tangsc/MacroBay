@@ -43,6 +43,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     consensus: '市场预期',
     surprise: '预期差（实际−预期）',
     'event-excerpt': '事件摘要',
+    'news-sentiment': '新闻舆情',
     'dollar-index-level': '美元指数', 'dollar-index-return-15m': '美元指数 15 分钟变化',
     'dollar-index-return-1h': '美元指数 1 小时变化', 'dollar-index-return-4h': '美元指数 4 小时变化',
     'dollar-index-return-24h': '美元指数 24 小时变化', 'gold-price-usd-oz': '黄金价格',
@@ -76,6 +77,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarEmpty]: '经济日历为空',
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarConsensusUnavailable]: '缺少市场预期值',
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.macroCalendarQueryNotWired]: '经济日历未接线',
+    [MARKET_ANALYSIS_CONTEXT_CAVEATS.newsSentimentUnavailable]: '新闻舆情不可用',
     'observed-unverified': '来源身份未验证',
     'provider-title-is-display-name': '事件名取自提供方标题',
     'provider-surprise-not-comparable': '预期差不可计算',
@@ -119,6 +121,8 @@ export const analysisVocabularyRequiredIds = Object.freeze({
     ...Object.values(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics),
     'current-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'etf-net-flow-usd',
     'funding-rate-percent', 'fear-greed-index', 'price-return-15m', 'price-return-2h', 'price-return-24h', 'price-return-3d', 'relative-return-2h',
+    // 重点舆情：每条新闻作为一条事实进入快照，模型必须认得它的名字。
+    'news-sentiment', 'event-excerpt',
     // The 市场状态 block's dollar/gold row and FRED's daily rate block, which the analysis reads as
     // facts: an identifier the model is handed must have a reader-facing name.
     'dollar-index-level', 'dollar-index-return-15m', 'dollar-index-return-1h', 'dollar-index-return-4h', 'dollar-index-return-24h',

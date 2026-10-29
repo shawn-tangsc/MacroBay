@@ -11,10 +11,11 @@ export const marketAnalysisJobPolicy = Object.freeze({
   productId: 'market-intelligence',
   definitionIdPrefix: 'market-analysis:',
   // Must exceed the model invocation budget so a valid large snapshot can
-  // finish before the enclosing job aborts it. The model budget is 240s and the
-  // enclosing job keeps a further 120s for reading the snapshot and committing the
-  // summary; `registerMarketAnalysisJobs.test.ts` fails if the two ever invert.
-  runTimeoutMs: 360_000,
+  // finish before the enclosing job aborts it. A run may spend two model attempts
+  // (`marketAnalysisInvocationPolicy.maxModelAttempts`): the second one only happens after a
+  // contract rejection, and the job keeps a further 120s for reading the snapshot and
+  // committing the summary. `registerMarketAnalysisJobs.test.ts` fails if the two ever invert.
+  runTimeoutMs: 600_000,
   runRetryPolicy: { maxAttempts: 3, backoff: 'exponential' as const, baseDelayMs: 5_000, maxDelayMs: 60_000 }
 })
 
