@@ -95,6 +95,7 @@ function fakeClient(overrides: Record<string, unknown> = {}) {
   return {
     getToday: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument() })),
     list: vi.fn(async () => ({ state: 'available' as const, result: { editions } })),
+    regenerate: vi.fn(async () => ({ state: 'available' as const, document: briefingDocument('2026-10-30', '重新生成版') })),
     get: vi.fn(async ({ date }: { date: string }) => date === '2026-10-29'
       ? { state: 'available' as const, document: briefingDocument('2026-10-29', '历史版次') }
       : { state: 'missing' as const }),
@@ -191,6 +192,15 @@ describe('daily briefing overlay', () => {
     const configure = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.configureSources)!
     act(() => configure.click())
     expect(onConfigureSources).toHaveBeenCalledTimes(1)
+  })
+
+  it('regenerates today in place', async () => {
+    const client = fakeClient()
+    const dom = await renderOverlay(client)
+    const regenerate = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    await act(async () => { regenerate.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    expect(dom.textContent).toContain('重新生成版')
   })
 
   it('shows an unavailable state and retries without crashing', async () => {

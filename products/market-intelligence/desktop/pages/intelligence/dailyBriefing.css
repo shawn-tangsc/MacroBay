@@ -217,3 +217,7 @@
 
 .mi-daily-briefing__translation { margin-top: 4px !important; color: var(--mi-dashboard-muted) !important; font-size: 11px !important; }
 .mi-daily-briefing__translation b { margin-right: 5px; padding: 0 4px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px; color: var(--mi-dashboard-lime); font-size: 9px; font-weight: 500; }
+
+.mi-daily-briefing__regenerate { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
+.mi-daily-briefing__regenerate:hover:not(:disabled) { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }
+.mi-daily-briefing__regenerate:disabled { opacity: .55; cursor: default; }

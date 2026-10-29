@@ -27,7 +27,7 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
   eventTitles?: Record<string, string>
   onClose: () => void
   onConfigureSources?: () => void
-  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'getSettings' | 'saveSettings'>
+  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings'>
 }>): React.ReactElement | null {
   const timeZone = useMemo(() => resolveSystemTimeZone(), [])
   const formatTime = useShellTimeFormat()
@@ -38,6 +38,8 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenerateFailed, setRegenerateFailed] = useState(false)
   const copyTimer = useRef<number | undefined>(undefined)
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
 
@@ -89,6 +91,24 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
       .catch(() => { if (request === requestRef.current) setView({ status: 'unavailable' }) })
   }
 
+  const regenerate = async (): Promise<void> => {
+    setRegenerating(true)
+    setRegenerateFailed(false)
+    try {
+      const result = await client.regenerate({ locale, timeZone })
+      if (result.state === 'available') {
+        setView({ status: 'ready', document: result.document, kind: 'today' })
+        setEditions((current) => current.map((edition) => edition.date === result.document.edition.date ? summaryFromDocument(result.document) : edition))
+      } else {
+        setRegenerateFailed(true)
+      }
+    } catch {
+      setRegenerateFailed(true)
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   const copy = async (): Promise<void> => {
     if (view.status !== 'ready') return
     try {
@@ -115,6 +135,9 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
     onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <div className="mi-daily-briefing__panel">
       <div className="mi-daily-briefing__actions">
+        {view.status === 'ready' && view.kind === 'today' ? <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
+          {regenerating ? text.regenerating : text.regenerate}
+        </button> : null}
         <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
         {view.status === 'ready' ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
@@ -131,6 +154,7 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
             <p>{text.unavailable}</p>
             <button type="button" onClick={() => setReloadKey((key) => key + 1)}>{text.retry}</button>
           </div> : null}
+          {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
           {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
             <p>{text.emptyGuide}</p>
             {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}

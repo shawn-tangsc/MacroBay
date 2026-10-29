@@ -446,7 +446,7 @@ export const productText = {
             },
             context: { sourceStatus: { title: '来源状态' } },
             dailyBriefing: {
-              entry: '今日简报', title: '每日简报', close: '关闭', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
+              entry: '今日简报', title: '每日简报', close: '关闭', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
               window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available}/{total} 读数', readingsAllMissing: '四个读数都读不到', denseDay: '今日信息较多',
               moreNumbers: '更多数字', noValue: '—',
               sections: { news: '今日要闻', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来' },
@@ -1778,7 +1778,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             context: { sourceStatus: { title: 'Source status' } },
             dailyBriefing: {
-              entry: 'Daily brief', title: 'Daily brief', close: 'Close', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
+              entry: 'Daily brief', title: 'Daily brief', close: 'Close', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
               window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available}/{total} readings', readingsAllMissing: 'No readings available', denseDay: 'A dense day',
               moreNumbers: 'More numbers', noValue: '—',
               sections: { news: 'Today’s news', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next' },
