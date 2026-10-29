@@ -324,6 +324,35 @@ describe('MarketAnalysisTimeline', () => {
     expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(1)
   })
 
+  it('does not reuse the previous run reason for a refused click', async () => {
+    let refreshRequests = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      if (method === 'marketAnalysis.getLatestAttempt') return { id: 'mi-ar-failed', status: 'invalid-output', failureCode: 'analysis-invalid-output-schema', queuedAt: asOf, evidenceCount: 2 }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      refreshRequests += 1
+      // The first refresh is queued and then rejected; the second click fails before any run.
+      if (refreshRequests === 1) return { itemId: 'item-1', queued: true }
+      throw new Error('analysis-provider-error')
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = (): HTMLButtonElement | undefined => Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis) as HTMLButtonElement | undefined
+
+    await act(async () => refresh()?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // The rejected run shows its reason.
+    expect(container.querySelector('[data-analysis-error] strong')?.textContent).toBe(text.attemptFailed)
+    expect(container.querySelector('[data-analysis-error-detail]')?.textContent).toBe(text.failureReasons['analysis-invalid-output-schema'])
+
+    await act(async () => refresh()?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // This click never reached a run, so the old run's reason must not be shown under it.
+    expect(container.querySelector('[data-analysis-error] strong')?.textContent).toBe(text.analysisRefreshFailed)
+    expect(container.querySelector('[data-analysis-error-detail]')).toBeNull()
+  })
+
   it('releases the refresh action when the follow-up read fails instead of spinning forever', async () => {
     let timelineReads = 0
     const invoke = vi.fn(async (_product: string, method: string) => {

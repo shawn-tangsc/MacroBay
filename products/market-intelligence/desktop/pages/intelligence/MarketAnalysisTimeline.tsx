@@ -180,7 +180,9 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
             // accepted, the analysis was rejected. Saying "the request did not go through" for
             // both made a rejected model answer look like a dead button.
             message={timeline.requestFailure === 'run' ? text.attemptFailed : text.analysisRefreshFailed}
-            detail={attempt?.failureCode ? text.failureReasons[attempt.failureCode] : undefined}
+            // Only a run failure has a reason. A refused click must not inherit the previous
+            // attempt's reason, which would attribute an old run's defect to this request.
+            detail={timeline.requestFailure === 'run' && attempt?.failureCode ? text.failureReasons[attempt.failureCode] : undefined}
             dismissLabel={text.dismissError}
             onDismiss={refreshError.dismiss}
           /> : null}
