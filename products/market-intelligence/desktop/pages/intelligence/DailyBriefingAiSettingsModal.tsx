@@ -10,7 +10,7 @@ import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/she
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
-import type { DailyBriefingText } from './DailyBriefingDocumentView'
+import type { DailyBriefingText } from './dailyBriefingText'
 
 const MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
 

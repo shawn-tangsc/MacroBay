@@ -1,6 +1,6 @@
 import type { BriefingMarketRow, BriefingPulseRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
-import type { DailyBriefingText } from './DailyBriefingDocumentView'
+import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 /**

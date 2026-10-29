@@ -1,5 +1,5 @@
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingText } from './DailyBriefingDocumentView'
+import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, locale, text, formatTime, onSelect }: Readonly<{
