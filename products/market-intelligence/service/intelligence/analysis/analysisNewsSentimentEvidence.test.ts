@@ -69,7 +69,7 @@ describe('analysisNewsSentiment', () => {
     expect(updated.facts.map(fact => fact.factId)).toHaveLength(2)
     const [first] = updated.facts
     expect(first).toMatchObject({
-      domain: 'sentiment', metric: 'news-sentiment', subject: 'item-bear', comparability: 'not-comparable', evidenceRefId: 'ev-item-bear'
+      domain: 'sentiment', metric: 'news-sentiment', subject: 'BTC', comparability: 'not-comparable', evidenceRefId: 'ev-item-bear'
     })
     expect(String(first!.value)).toContain('看空')
     expect(String(first!.value)).toContain('交易所故障')

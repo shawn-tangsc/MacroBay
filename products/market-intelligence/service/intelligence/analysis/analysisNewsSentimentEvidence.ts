@@ -120,6 +120,10 @@ export async function appendAnalysisNewsSentiment(
     return {
       ...fact,
       metric: 'news-sentiment',
+      // `appendAnalysisEventEvidence` keys the subject by the pipeline item id, which the model
+      // must never read. A sentiment row is about an asset or the market, which is what the
+      // readable vocabulary already has words for.
+      subject: sentimentSubject(item),
       value: composeFactValue(item),
       // A news item can explain a judgement but never a market reaction: `isMarketReactionFact`
       // reads these two fields, so the analysis cannot claim a price move from a headline.
@@ -135,6 +139,11 @@ function composeFactValue(item: NewsSentimentView['items'][number]): string {
   const title = item.displayTitle ?? item.title
   const label = polarityLabel[item.polarity] ?? item.polarity
   return `${label}（强度 ${item.strength}/5，置信 ${Math.round(item.confidence)}%）｜${title.slice(0, MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelFieldCharacters)}`
+}
+
+/** The asset a headline is about, or the market when it names none of the two we track. */
+function sentimentSubject(item: NewsSentimentView['items'][number]): string {
+  return item.symbols.find(symbol => symbol === 'BTC' || symbol === 'ETH') ?? 'market'
 }
 
 function withCaveat(context: MarketAnalysisContextAvailable, caveat: string): MarketAnalysisContextAvailable {
