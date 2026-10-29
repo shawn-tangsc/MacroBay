@@ -444,7 +444,28 @@ export const productText = {
               manage: '管理 ›',
               manageSources: '管理来源 ›'
             },
-            context: { sourceStatus: { title: '来源状态' } }
+            context: { sourceStatus: { title: '来源状态' } },
+            dailyBriefing: {
+              entry: '今日简报', title: '每日简报', close: '关闭', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
+              window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available}/{total} 读数', readingsAllMissing: '四个读数都读不到', denseDay: '今日信息较多',
+              moreNumbers: '更多数字', noValue: '—',
+              sections: { news: '今日要闻', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来' },
+              groups: { market: '行情', funds: '资金', sentiment: '情绪' },
+              states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
+              reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面快照不可用', 'etf-unavailable': 'ETF 读数不可用' },
+              changeReasons: { 'no-baseline': '无对比基准', 'insufficient-window': '窗口不足' },
+              rows: { fearGreed: '恐惧贪婪', fundingBtc: '资金费率 BTC', fundingEth: '资金费率 ETH', stablecoin: '稳定币', etfBtc: 'ETF BTC', etfEth: 'ETF ETH', btc: 'BTC', eth: 'ETH', index: '纳指', dxy: '美元', dxySynthetic: '美元（合成）', gold: '黄金', us10y: '10Y' },
+              empty: { news: '今天没有方向明确的舆情', macro: '过去 24 小时没有已发布的高影响事件', next: '未来 7 天没有高影响事件', conclusion: '还没有已发布结论' },
+              newsEmptyCodes: { 'no-directional-news': '今天没有方向明确的舆情', 'news-unavailable': '舆情暂不可用', 'news-source-disabled': '舆情来源未启用' },
+              macroEmptyCodes: { 'past-24h-no-high-impact-release': '过去 24 小时没有已发布的高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
+              nextEmptyCodes: { 'next-7d-no-high-impact-event': '未来 7 天没有高影响事件', 'calendar-unavailable': '日历暂不可用', 'calendar-source-disabled': '日历来源未启用' },
+              macro: { actual: '实际', consensus: '预期', previous: '前值', noConsensus: '无预期', surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', 'consensus-unavailable': '无预期' } },
+              conclusion: { invalidation: '什么会推翻它', conditions: '成立条件', counter: '反证', gaps: '数据缺口', caveats: '数据限制' },
+              next: { category: { 'economic-indicator': '数据', 'financial-event': '金融事件', 'central-bank-activity': '央行' } },
+              citations: '证据',
+              horizons: { short: '短期', medium: '中期', long: '长期' },
+              visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' }
+            }
           },
           calendar: {
             unifiedDay: { total: '当日共 {count} 条', grouped: '已按类型分组', groupCount: '{type} · {count} 条', empty: '当日暂无事件', timePending: '待定', more: '还有 {count} 条', loading: '加载中', incomplete: '未完整加载', back: '返回当日列表', storageUnavailable: '存储受限，已有数据保留', coverage: '当前查询：UTC {month}；官方最多 200 条；跨月事件覆盖可能不完整' },
@@ -1748,7 +1769,28 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               manage: 'Manage ›',
               manageSources: 'Manage sources ›'
             },
-            context: { sourceStatus: { title: 'Source status' } }
+            context: { sourceStatus: { title: 'Source status' } },
+            dailyBriefing: {
+              entry: 'Daily brief', title: 'Daily brief', close: 'Close', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
+              window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available}/{total} readings', readingsAllMissing: 'No readings available', denseDay: 'A dense day',
+              moreNumbers: 'More numbers', noValue: '—',
+              sections: { news: 'Today’s news', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next' },
+              groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
+              states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
+              reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
+              changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
+              rows: { fearGreed: 'Fear & Greed', fundingBtc: 'Funding BTC', fundingEth: 'Funding ETH', stablecoin: 'Stablecoins', etfBtc: 'ETF BTC', etfEth: 'ETF ETH', btc: 'BTC', eth: 'ETH', index: 'Nasdaq', dxy: 'Dollar', dxySynthetic: 'Dollar (synthetic)', gold: 'Gold', us10y: '10Y' },
+              empty: { news: 'No directional news today', macro: 'No high-impact release in the past 24 hours', next: 'No high-impact event in the next 7 days', conclusion: 'No published conclusion yet' },
+              newsEmptyCodes: { 'no-directional-news': 'No directional news today', 'news-unavailable': 'News sentiment is unavailable', 'news-source-disabled': 'News sources are disabled' },
+              macroEmptyCodes: { 'past-24h-no-high-impact-release': 'No high-impact release in the past 24 hours', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
+              nextEmptyCodes: { 'next-7d-no-high-impact-event': 'No high-impact event in the next 7 days', 'calendar-unavailable': 'The calendar is unavailable', 'calendar-source-disabled': 'Calendar sources are disabled' },
+              macro: { actual: 'Actual', consensus: 'Consensus', previous: 'Previous', noConsensus: 'No consensus', surprise: { beat: 'Beat', miss: 'Miss', inline: 'In line', 'consensus-unavailable': 'No consensus' } },
+              conclusion: { invalidation: 'What would invalidate it', conditions: 'Conditions', counter: 'Counter-evidence', gaps: 'Data gaps', caveats: 'Data limits' },
+              next: { category: { 'economic-indicator': 'Data', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' } },
+              citations: 'Evidence',
+              horizons: { short: 'Short', medium: 'Medium', long: 'Long' },
+              visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' }
+            }
           },
           calendar: {
             unifiedDay: { total: '{count} events today', grouped: 'Grouped by type', groupCount: '{type} · {count} events', empty: 'No events today', timePending: 'TBD', more: '{count} more', loading: 'Loading', incomplete: 'Partially loaded', back: 'Back to day list', storageUnavailable: 'Storage limited; existing data retained', coverage: 'Query: UTC {month}; up to 200 official events; adjacent-month coverage may be incomplete' },

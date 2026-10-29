@@ -641,6 +641,26 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).not.toContain('.mi-crypto-dashboard__funding-rates')
   })
 
+  it('opens the daily brief from the header and closes it', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
+      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
+    })))
+    await flush()
+
+    await act(async () => findButton(container, text.dashboard.dailyBriefing.entry).click())
+    await flush()
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull()
+
+    await act(async () => container.querySelector<HTMLButtonElement>('.mi-daily-briefing__close')!.click())
+    await flush()
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+  })
+
   it('keeps the dashboard root constrained so its lower checklist sections can scroll inside the product host', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
 

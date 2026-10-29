@@ -154,6 +154,7 @@ function IntelligencePageBody(): React.ReactElement {
         >
         <CryptoIntelligenceDashboard
           key={sample.sessionKey}
+          locale={language}
           client={macroEconomicCalendarClient}
           fearGreedClient={intelligenceFearGreedClient}
           fundingRateClient={intelligenceFundingRateHistoryClient}
