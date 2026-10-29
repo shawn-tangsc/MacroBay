@@ -22,6 +22,7 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   conclusion: Readonly<{ invalidation: string; conditions: string; counter: string; gaps: string; caveats: string }>
   next: Readonly<{ category: Readonly<Record<string, string>> }>
   citations: string
+  translated: string
 }>
 
 export type DailyBriefingMarkdownOptions = Readonly<{
@@ -63,6 +64,7 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
     lines.push('', labels.empty.conclusion)
   } else {
     lines.push('', `**${options.direction(conclusion.direction)}** ${escapeMarkdown(conclusion.summary)}`)
+    if (conclusion.translation) lines.push('', `_${labels.translated}_ ${escapeMarkdown(conclusion.translation)}`)
     for (const invalidation of conclusion.invalidations) {
       lines.push(`- ${labels.conclusion.invalidation}: ${escapeMarkdown(invalidation.text)}`)
     }

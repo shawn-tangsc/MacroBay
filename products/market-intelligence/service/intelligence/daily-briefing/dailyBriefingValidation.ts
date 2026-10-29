@@ -79,7 +79,7 @@ export function validateDailyBriefingEditorial(
   if (invalidationNote === false) return fail('too-long')
   const conclusionTranslation = optionalText(raw.conclusionTranslation, 2_000)
   if (conclusionTranslation === false) return fail('too-long')
-  if (conclusionTranslation !== undefined && (!document.conclusion || locale === document.edition.locale)) return fail('invalid-translation')
+  if (conclusionTranslation !== undefined && (!document.conclusion || !needsTranslation(document.conclusion.summary, locale))) return fail('invalid-translation')
 
   const prose = [raw.lede, ...items.map((item) => item.why), ...importance.map((entry) => entry.reasonText ?? ''),
     ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
@@ -177,6 +177,11 @@ function optionalText(value: unknown, maximum: number): string | undefined | fal
   if (value === undefined) return undefined
   if (!isText(value) || value.length > maximum) return false
   return value
+}
+
+function needsTranslation(summary: string, locale: 'zh-CN' | 'en-US'): boolean {
+  const hasCjk = /[\u3400-\u9fff]/.test(summary)
+  return locale === 'zh-CN' ? !hasCjk : hasCjk
 }
 
 function forbiddenContent(text: string): boolean {

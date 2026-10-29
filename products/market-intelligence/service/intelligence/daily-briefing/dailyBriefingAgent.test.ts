@@ -98,9 +98,13 @@ describe('daily briefing editorial validation and application', () => {
       .toMatchObject({ ok: false, failureCode: 'too-long' })
   })
 
-  it('rejects a translation when the document is already in that locale', () => {
-    expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: '译文' }, document(), 'zh-CN'))
+  it('translates only when the conclusion is in the other language', () => {
+    const chinese = document()
+    chinese.conclusion!.summary = '稳定币收缩把买盘推走。'
+    expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: '译文' }, chinese, 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'invalid-translation' })
+    expect(validateDailyBriefingEditorial({ ...validOutput, conclusionTranslation: 'Stablecoin contraction pulls bids away.' }, document(), 'zh-CN'))
+      .toMatchObject({ ok: true })
   })
 
   it('keeps the must floor even when the model asks to downgrade it', () => {

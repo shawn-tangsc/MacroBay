@@ -56,6 +56,7 @@ const briefingDocument = (date = '2026-10-30', lede = 'CPI 超预期 · Ripple �
       { horizon: 'medium', direction: 'bearish', confidence: 'medium' }
     ],
     summary: 'Stablecoin contraction pulls bids away.',
+    translation: '稳定币收缩把买盘推走。',
     conditions: ['Stablecoins keep contracting'],
     invalidations: [{ asset: 'BTC', horizonEnd: `${date}T00:00:00.000Z`, text: 'Stablecoins turn positive.' }],
     counterEvidence: [{ statement: 'BTC ETF took in $110M.', citations: [1] }],

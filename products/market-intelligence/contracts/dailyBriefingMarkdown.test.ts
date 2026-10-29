@@ -50,6 +50,7 @@ const document = (overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
   conclusion: {
     summaryId: 's1', publishedAt: '2026-10-30T00:00:00.000Z', direction: 'bearish', directions: [],
     summary: 'Stablecoin contraction pulls bids away.',
+    translation: '稳定币收缩把买盘推走。',
     conditions: ['Stablecoins keep contracting'],
     invalidations: [{ asset: 'BTC', horizonEnd: '2026-10-31T00:00:00.000Z', text: 'Stablecoins turn positive.' }],
     counterEvidence: [{ statement: 'BTC ETF took in $110M.', citations: [1] }],
@@ -79,6 +80,7 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('### 重点')
     expect(markdown).toContain('稳定币')
     expect(markdown).toContain('## 结论')
+    expect(markdown).toContain('稳定币收缩把买盘推走。')
     expect(markdown).toContain('Stablecoin contraction pulls bids away.')
     expect(markdown).toContain('什么会推翻它')
     expect(markdown).toContain('[1]')

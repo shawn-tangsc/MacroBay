@@ -85,6 +85,7 @@ export function DailyBriefingDocumentView({ document: doc, text, locale, eventTi
             {conclusion.directions.length > 0 ? <DirectionRibbon directions={conclusion.directions} text={text} locale={locale} /> : null}
           </div>
           <p>{conclusion.summary}</p>
+          {conclusion.translation ? <p className="mi-daily-briefing__translation"><b>{text.translated}</b> {conclusion.translation}</p> : null}
           {conclusion.invalidations[0] ? <p className="mi-daily-briefing__invalidate"><b>{text.conclusion.invalidation}</b>：{conclusion.invalidations[0].text}</p> : null}
         </div>
         <details className="mi-daily-briefing__details">
