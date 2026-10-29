@@ -152,8 +152,8 @@ function selectNext(packet: DailyBriefingFactPacket): Readonly<{ items: readonly
       ...(event.consensus ? { consensus: event.consensus } : {}),
       ...(event.previous ? { previous: event.previous } : {})
     }))
-  const focusKeys = new Set(['nonfarm-payrolls', 'unemployment', 'average-hourly-earnings', 'fomc', 'cpi', 'pce', 'gdp'])
-  const focus = candidates.find((item) => item.titleKey && focusKeys.has(item.titleKey)) ?? candidates[0]
+  const focusOrder = ['nonfarm-payrolls', 'fomc', 'cpi', 'pce', 'gdp', 'unemployment', 'average-hourly-earnings']
+  const focus = focusOrder.map((key) => candidates.find((item) => item.titleKey === key)).find(Boolean) ?? candidates[0]
   const items = candidates.filter((item) => item.eventKey !== focus?.eventKey).slice(0, dailyBriefingPolicy.maximumNextItems)
   return Object.freeze({ items: Object.freeze(items), ...(focus ? { focus } : {}) })
 }
