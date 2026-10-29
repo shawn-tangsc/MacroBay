@@ -17,7 +17,7 @@ export const calendarSnapshotEvidencePolicy = Object.freeze({
   pageSize: 100,
   officialTables: ['mi_macro_calendar_migrations', 'mi_macro_calendar_revisions', 'mi_bea_release_observation_state'],
   marketTables: ['mi_macro_calendar_market_event_collections', 'mi_macro_calendar_market_event_observations', 'mi_macro_calendar_provider_indicator_links'],
-  migrationVersions: [1, 2, 3], hashPattern: /^[a-f0-9]{64}$/,
+  migrationVersions: [1, 2, 3, 4], hashPattern: /^[a-f0-9]{64}$/,
   canonicalMarketProvider: '0xrouter', archiveMarketProvider: 'macro-calendar-0xrouter'
 })
 export type SnapshotFailureCode = 'schema-invalid' | 'evidence-invalid' | 'evidence-unresolved' | 'capacity' | 'path-invalid' | 'bundle-invalid' | 'incomplete' | 'io-failure'

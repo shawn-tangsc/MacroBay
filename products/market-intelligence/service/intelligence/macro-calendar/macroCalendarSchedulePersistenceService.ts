@@ -24,6 +24,11 @@ export const macroCalendarSchedulePersistencePolicy = {
 export function createMacroCalendarSchedulePersistenceService(deps: {
   evidence: Pick<MacroCalendarEvidenceStore, 'getCalendarRecord' | 'readBody'>
   repository: Pick<MacroCalendarRepository, 'appendIfNew'>
+  /**
+   * Optional sink for the official policy facts. The projection marker (`8-9*`) exists only on the
+   * parsed draft: the revision factory does not carry it, so this is its last chance to be stored.
+   */
+  policyFacts?: Pick<MacroCalendarRepository, 'policyFacts'>
 }): MacroCalendarSchedulePersistenceService {
   return {
     persistScheduleEvidence(rawRecordId) {
@@ -59,6 +64,16 @@ export function createMacroCalendarSchedulePersistenceService(deps: {
         }
       } catch {
         return { ...identity, state: 'failed', failureCode: 'repository-write-failed', insertedCount }
+      }
+      if (descriptor.descriptorId === 'macro-calendar-fed-schedule') {
+        for (const draft of parsed.drafts) {
+          if (draft.eventFamily !== 'fomc' || draft.hasProjectionMaterials === undefined) continue
+          deps.policyFacts?.policyFacts.recordSchedule({
+            meetingDate: draft.scheduledDate,
+            hasProjectionMaterials: draft.hasProjectionMaterials,
+            detectedAt: record.detectedAt
+          })
+        }
       }
       return { ...identity, state: 'persisted', insertedCount, dedupedCount }
     }

@@ -73,7 +73,7 @@ export function createMacroCalendarScheduleBackend(input: {
         repository
       })
     const collection = createMacroCalendarCollectionService({ profiles, http: { request: input.request ?? createMacroCalendarHttpClient().request }, evidence })
-    const persistence = createMacroCalendarSchedulePersistenceService({ evidence, repository })
+    const persistence = createMacroCalendarSchedulePersistenceService({ evidence, repository, policyFacts: repository })
     const scheduleWorkflow = createMacroCalendarScheduleCollectionWorkflow({ collection, persistence })
     const workflow = {
       async collectAndPersistSchedule(run: Parameters<typeof scheduleWorkflow.collectAndPersistSchedule>[0]) {
