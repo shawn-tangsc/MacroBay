@@ -22,11 +22,9 @@ export async function handleQueryMacroCalendar(
   const locale = (await deps.getAppLanguage()) === 'en-US' ? 'en' : 'zh'
   const caveats: string[] = []
 
-  const official = await queryService.queryMacroEconomicCalendarMonth({
-    month,
-    asOf,
-    ...(maxEvents === undefined ? {} : { maxEvents })
-  })
+  // The caller's cap is an output budget, not a query budget: filtering a day out of a truncated
+  // month would silently drop the answer. The service keeps its own month limit.
+  const official = await queryService.queryMacroEconomicCalendarMonth({ month, asOf })
 
   const market = readAllMarketCalendarPages(queryService, { month, asOf, locale })
   if (market.state === 'unavailable') caveats.push('market-calendar-unavailable')

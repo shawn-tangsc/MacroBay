@@ -139,7 +139,13 @@ export async function handleGetCrossAssetSnapshot(
   })
   // Even an unavailable snapshot carries the channel state; otherwise the model can only guess
   // whether there is no data or the interface never ran.
-  if (!snapshot) return { state: 'unavailable', interface: interfaceStatus, caveats: [] }
+  if (!snapshot) {
+    return {
+      state: 'unavailable',
+      interface: interfaceStatus,
+      caveats: ['cross-asset-snapshot-unavailable']
+    }
+  }
   return { state: 'available', snapshot, interface: interfaceStatus, caveats: [] }
 }
 

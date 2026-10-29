@@ -156,6 +156,21 @@ describe('handleQueryMacroCalendar', () => {
     expect(result.events.map((event) => event.eventKey)).toEqual(['market-early', 'market-late'])
   })
 
+  it('does not push the caller output cap into the official query', async () => {
+    const queryMacroEconomicCalendarMonth = vi.fn(async () => ({ state: 'available', events: [] }))
+    vi.mocked(getIntelligenceModule).mockReturnValue({
+      publicQueryService: {
+        queryMacroEconomicCalendarMonth,
+        queryMarketCalendarMonth: vi.fn(() => ({ state: 'available', events: [] }))
+      },
+      newsSentiment: {}
+    } as never)
+
+    await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z', maxEvents: 5 }, deps)
+
+    expect(queryMacroEconomicCalendarMonth).toHaveBeenCalledWith({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z' })
+  })
+
   it('keeps a same-day date-only event inside a western-offset window', async () => {
     vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
       official: {
