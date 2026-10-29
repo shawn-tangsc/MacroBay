@@ -16,12 +16,13 @@ type ViewState =
   | Readonly<{ status: 'unavailable' }>
   | Readonly<{ status: 'ready'; document: DailyBriefingDocument; kind: 'today' | 'history' }>
 
-export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose, client = dailyBriefingClient }: Readonly<{
+export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose, onConfigureSources, client = dailyBriefingClient }: Readonly<{
   open: boolean
   locale: 'zh-CN' | 'en-US'
   text: DailyBriefingText
   eventTitles?: Record<string, string>
   onClose: () => void
+  onConfigureSources?: () => void
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get'>
 }>): React.ReactElement | null {
   const timeZone = useMemo(() => resolveSystemTimeZone(), [])
@@ -94,6 +95,10 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
             <h2>{text.title}</h2>
             <p>{text.unavailable}</p>
             <button type="button" onClick={() => setReloadKey((key) => key + 1)}>{text.retry}</button>
+          </div> : null}
+          {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
+            <p>{text.emptyGuide}</p>
+            {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
           </div> : null}
           {view.status === 'ready' ? <DailyBriefingDocumentView
             document={view.document}

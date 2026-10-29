@@ -641,6 +641,21 @@ describe('crypto intelligence dashboard', () => {
     expect(styles).not.toContain('.mi-crypto-dashboard__funding-rates')
   })
 
+  it('hides the daily brief entry while the sample replay is active', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
+      onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
+      briefingEnabled: false
+    })))
+    await flush()
+    expect(container.querySelector('.mi-crypto-dashboard__briefing')).toBeNull()
+    expect(container.textContent).not.toContain(text.dashboard.dailyBriefing.entry)
+  })
+
   it('opens the daily brief from the header and closes it', async () => {
     const container = document.createElement('div')
     document.body.append(container)

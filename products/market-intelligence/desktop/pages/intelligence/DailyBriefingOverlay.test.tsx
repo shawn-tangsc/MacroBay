@@ -67,6 +67,22 @@ const briefingDocument = (date = '2026-10-30', lede = 'CPI 超预期 · Ripple �
   provenance: { summaryId: 's1', readAt: `${date}T00:30:00.000Z` }
 })
 
+const emptyDocument = (): DailyBriefingDocument => ({
+  ...briefingDocument(),
+  status: {
+    readings: [
+      { id: 'fear-greed', state: 'unavailable' }, { id: 'funding', state: 'unavailable' },
+      { id: 'capital', state: 'unavailable' }, { id: 'calendar', state: 'source-disabled' }
+    ],
+    readingsAvailable: 0, readingsTotal: 4
+  },
+  lede: { source: 'template', text: '', generatedAt: '2026-10-30T00:30:00.000Z' },
+  news: { items: [], macro: [], notes: { newsEmpty: 'news-source-disabled', macroEmpty: 'calendar-source-disabled' } },
+  data: { market: [], funds: [], sentiment: { fearGreed: null, news: { state: 'source-disabled' } } },
+  conclusion: null,
+  next: { items: [], note: 'calendar-source-disabled' }
+})
+
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
@@ -95,12 +111,12 @@ afterEach(() => {
   container = null
 })
 
-async function renderOverlay(client: ReturnType<typeof fakeClient>, onClose = vi.fn()): Promise<HTMLDivElement> {
+async function renderOverlay(client: ReturnType<typeof fakeClient>, onClose = vi.fn(), onConfigureSources?: () => void): Promise<HTMLDivElement> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DailyBriefingOverlay open locale="zh-CN" text={text} eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }} onClose={onClose} client={client} />)
+    root!.render(<DailyBriefingOverlay open locale="zh-CN" text={text} eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }} onClose={onClose} {...(onConfigureSources ? { onConfigureSources } : {})} client={client} />)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return container
@@ -136,6 +152,17 @@ describe('daily briefing overlay', () => {
 
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
     expect(client.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('guides a clean install to the sources when every reading is missing', async () => {
+    const onConfigureSources = vi.fn()
+    const dom = await renderOverlay(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'available' as const, document: emptyDocument() }))
+    }), vi.fn(), onConfigureSources)
+    expect(dom.textContent).toContain(text.emptyGuide)
+    const configure = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.configureSources)!
+    act(() => configure.click())
+    expect(onConfigureSources).toHaveBeenCalledTimes(1)
   })
 
   it('shows an unavailable state and retries without crashing', async () => {

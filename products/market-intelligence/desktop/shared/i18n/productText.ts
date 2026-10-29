@@ -465,7 +465,9 @@ export const productText = {
               citations: '证据',
               horizons: { short: '短期', medium: '中期', long: '长期' },
               visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
-              history: { title: '过去 14 天', today: '今天', missing: '缺口', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次' }
+              history: { title: '过去 14 天', today: '今天', missing: '缺口', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次' },
+              emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
+              configureSources: '配置情报源'
             }
           },
           calendar: {
@@ -1791,7 +1793,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               citations: 'Evidence',
               horizons: { short: 'Short', medium: 'Medium', long: 'Long' },
               visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
-              history: { title: 'Past 14 days', today: 'Today', missing: 'Missing', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet' }
+              history: { title: 'Past 14 days', today: 'Today', missing: 'Missing', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet' },
+              emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
+              configureSources: 'Configure sources'
             }
           },
           calendar: {
