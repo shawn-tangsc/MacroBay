@@ -5,9 +5,11 @@ import { resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingDocumentView, type DailyBriefingText } from './DailyBriefingDocumentView'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
+import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
 
@@ -32,6 +34,8 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const copyTimer = useRef<number | undefined>(undefined)
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
 
   useEffect(() => {
@@ -55,6 +59,8 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
     })()
     return () => { active = false }
   }, [open, locale, timeZone, client, reloadKey])
+
+  useEffect(() => () => { if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -80,12 +86,37 @@ export function DailyBriefingOverlay({ open, locale, text, eventTitles, onClose,
       .catch(() => { if (request === requestRef.current) setView({ status: 'unavailable' }) })
   }
 
+  const copy = async (): Promise<void> => {
+    if (view.status !== 'ready') return
+    try {
+      const markdown = dailyBriefingToMarkdown(view.document, {
+        labels: text,
+        locale,
+        direction: (term) => localizedDirectionTerm(term, locale),
+        ...(eventTitles ? { eventTitle: (item) => item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title } : {}),
+        formatTime: (value) => formatTime(value, 'minute')
+      })
+      if (!navigator.clipboard?.writeText) throw new Error('clipboard-unavailable')
+      await navigator.clipboard.writeText(markdown)
+      setCopyState('copied')
+    } catch {
+      setCopyState('failed')
+    }
+    if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current)
+    copyTimer.current = window.setTimeout(() => setCopyState('idle'), 2_000)
+  }
+
   if (!open) return null
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
   return <div className="mi-daily-briefing" role="dialog" aria-modal="true" aria-label={text.title}
     onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <div className="mi-daily-briefing__panel">
-      <button ref={closeRef} className="mi-daily-briefing__close" type="button" onClick={onClose} aria-label={text.close}>×</button>
+      <div className="mi-daily-briefing__actions">
+        {view.status === 'ready' ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
+          {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
+        </button> : null}
+        <button ref={closeRef} className="mi-daily-briefing__close" type="button" onClick={onClose} aria-label={text.close}>×</button>
+      </div>
       <div className="mi-daily-briefing__layout">
         <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
           locale={locale} text={text} onSelect={selectEdition} />

@@ -451,6 +451,7 @@ export const productText = {
               moreNumbers: '更多数字', noValue: '—',
               sections: { news: '今日要闻', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来' },
               groups: { market: '行情', funds: '资金', sentiment: '情绪' },
+              tiers: { must: '重点', support: '补充', reference: '参考' },
               states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
               reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面快照不可用', 'etf-unavailable': 'ETF 读数不可用' },
               changeReasons: { 'no-baseline': '无对比基准', 'insufficient-window': '窗口不足' },
@@ -467,7 +468,8 @@ export const productText = {
               visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
               history: { title: '过去 14 天', today: '今天', missing: '缺口', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次' },
               emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
-              configureSources: '配置情报源'
+              configureSources: '配置情报源',
+              copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试'
             }
           },
           calendar: {
@@ -1779,6 +1781,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               moreNumbers: 'More numbers', noValue: '—',
               sections: { news: 'Today’s news', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next' },
               groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
+              tiers: { must: 'Must', support: 'Support', reference: 'Reference' },
               states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
               reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
               changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
@@ -1795,7 +1798,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
               history: { title: 'Past 14 days', today: 'Today', missing: 'Missing', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet' },
               emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
-              configureSources: 'Configure sources'
+              configureSources: 'Configure sources',
+              copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again'
             }
           },
           calendar: {

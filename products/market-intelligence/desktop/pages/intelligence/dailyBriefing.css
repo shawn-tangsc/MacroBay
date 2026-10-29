@@ -200,3 +200,8 @@
 .mi-daily-briefing__guide { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0 0; padding: 9px 11px; border: 1px dashed #4a3d24; border-radius: 8px; background: rgba(255, 196, 0, .04); }
 .mi-daily-briefing__guide p { margin: 0; color: var(--mi-dashboard-caution); font-size: 11px; }
 .mi-daily-briefing__guide button { flex: none; height: 26px; padding: 0 10px; border: 1px solid #3c4a2a; border-radius: 6px; background: #1c2418; color: var(--mi-dashboard-lime); font-size: 10.5px; cursor: pointer; }
+
+.mi-daily-briefing__actions { position: absolute; top: 12px; right: 14px; display: flex; align-items: center; gap: 6px; }
+.mi-daily-briefing__actions .mi-daily-briefing__close { position: static; top: auto; right: auto; }
+.mi-daily-briefing__copy { height: 28px; padding: 0 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 7px; background: transparent; color: var(--mi-dashboard-muted); font-size: 10.5px; cursor: pointer; }
+.mi-daily-briefing__copy:hover { border-color: #3c4a2a; color: var(--mi-dashboard-lime); }

@@ -61,6 +61,7 @@ export type BriefingMarketRow = Readonly<{
   state: DailyBriefingReadingState
   value: Readonly<{ number: number; format: BriefingValueFormat }> | null
   change: Readonly<{ value: number; unit: BriefingChangeUnit; window: BriefingWindow }> | null
+  changeReason?: 'no-baseline' | 'insufficient-window'
   window: BriefingWindow
   observedAt: string | null
   reason?: 'not-collected' | 'query-failed' | 'stale-fallback' | 'coverage-incomplete'

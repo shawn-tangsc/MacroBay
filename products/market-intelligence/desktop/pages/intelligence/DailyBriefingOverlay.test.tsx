@@ -109,6 +109,7 @@ afterEach(() => {
   container?.remove()
   root = null
   container = null
+  vi.unstubAllGlobals()
 })
 
 async function renderOverlay(client: ReturnType<typeof fakeClient>, onClose = vi.fn(), onConfigureSources?: () => void): Promise<HTMLDivElement> {
@@ -152,6 +153,32 @@ describe('daily briefing overlay', () => {
 
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
     expect(client.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('copies the current edition as text and reports success', async () => {
+    const writeText = vi.fn(async () => undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const dom = await renderOverlay(fakeClient())
+    const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
+    await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const markdown = writeText.mock.calls[0]?.[0] as string
+    expect(markdown).toContain('# 每日简报')
+    expect(markdown).toContain('CPI 超预期')
+    expect(dom.textContent).toContain(text.copied)
+  })
+
+  it('reports a clipboard failure and copies the historical edition that is on screen', async () => {
+    const writeText = vi.fn(async () => { throw new Error('denied') })
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const client = fakeClient()
+    const dom = await renderOverlay(client)
+    await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-29"]')!.click() })
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    const copy = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__copy')!
+    await act(async () => { copy.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.textContent).toContain(text.copyFailed)
+    expect(writeText.mock.calls[0]?.[0]).toContain('历史版次')
   })
 
   it('guides a clean install to the sources when every reading is missing', async () => {
