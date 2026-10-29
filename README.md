@@ -64,6 +64,22 @@ recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar 
 published analyses — labelled *Sample data*, and writes nothing into your database. Live panels still
 need your own model provider and data-source credentials.
 
+<div align="center">
+
+### ⭐ If this is useful to you, a star keeps it going
+
+<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
+  <img alt="Star MacroBay" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
+</a>
+
+</div>
+
+> One person builds MacroBay, in the open.
+> A star is the only signal I can see that someone is actually using it — and it decides whether the
+> next person who needs this ever finds it.
+>
+> **[→ Star the repo](https://github.com/shawn-tangsc/MacroBay/stargazers)** · it takes two seconds.
+
 Built for people whose read has to survive a follow-up question — whether that is your first cycle or your fourth.
 
 ## Who it is for

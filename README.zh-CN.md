@@ -61,6 +61,21 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 看板、资金费率、稳定币、ETF 流向、两个月的日历和三条已发布分析——界面上标注「示例数据」，并且不会写入
 你的数据库。实时面板仍然需要你自己的模型供应商和数据源凭据。
 
+<div align="center">
+
+### ⭐ 如果它对你有用，一个 star 能让它继续做下去
+
+<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
+  <img alt="给 MacroBay 点 star" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
+</a>
+
+</div>
+
+> 观潮是我一个人在做，全部开源。
+> Star 是我唯一能看到的「真的有人在用」的信号，也决定了下一个需要它的人能不能搜到。
+>
+> **[→ 给项目点个 star](https://github.com/shawn-tangsc/MacroBay/stargazers)** · 两秒钟的事。
+
 给那些"说完一句话还得接得住追问"的人——不管这是你的第一轮周期，还是第四轮。
 
 ## 这套东西适合谁
