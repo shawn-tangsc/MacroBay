@@ -1,0 +1,227 @@
+import type {
+  BriefingMacroItem,
+  BriefingNewsItem,
+  BriefingPulseRow,
+  BriefingMarketRow,
+  DailyBriefingDocument,
+  FactImportance
+} from '../../contracts/dailyBriefing'
+
+export type DailyBriefingEditorialOutput = Readonly<{
+  lede: string
+  items: readonly Readonly<{ factId: string; why: string }>[]
+  importance: readonly Readonly<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }>[]
+  dataNote?: string
+  invalidationNote?: string
+  conclusionTranslation?: string
+}>
+
+export type DailyBriefingValidationFailure =
+  | 'invalid-shape'
+  | 'unknown-fact'
+  | 'forbidden-content'
+  | 'unknown-number'
+  | 'invalid-translation'
+  | 'too-long'
+
+export type DailyBriefingValidation =
+  | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
+  | Readonly<{ ok: false; failureCode: DailyBriefingValidationFailure }>
+
+export type DailyBriefingEditorialMeta = Readonly<{
+  promptVersion: string
+  model: string
+  source: 'default' | 'custom'
+}>
+
+/**
+ * Accepts prose and a ranking, never a new fact. Fact ids are checked against the frozen document,
+ * lengths and forbidden content are checked here, and the numeric whitelist is derived from the
+ * document itself so a model cannot smuggle a price or a target into the brief.
+ */
+export function validateDailyBriefingEditorial(
+  raw: unknown,
+  document: DailyBriefingDocument,
+  locale: 'zh-CN' | 'en-US'
+): DailyBriefingValidation {
+  if (!isExact(raw, ['lede', 'items', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation'])) {
+    return fail('invalid-shape')
+  }
+  if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
+  if (raw.lede.length > 600) return fail('too-long')
+  if (!Array.isArray(raw.items) || raw.items.length > 3) return fail('invalid-shape')
+  if (!Array.isArray(raw.importance)) return fail('invalid-shape')
+  const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
+  const macroIds = new Set(document.news.macro.map((item) => `macro:${item.eventKey}`))
+  const dataIds = new Set(allDataRows(document).map((row) => `data:${row.id}`))
+  const items: Array<{ factId: string; why: string }> = []
+  for (const item of raw.items) {
+    if (!isExact(item, ['factId', 'why'])) return fail('invalid-shape')
+    if (!isText(item.factId) || !isText(item.why)) return fail('invalid-shape')
+    if (item.why.length > 200) return fail('too-long')
+    if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) return fail('unknown-fact')
+    if (items.some((existing) => existing.factId === item.factId)) return fail('invalid-shape')
+    items.push({ factId: item.factId, why: item.why })
+  }
+  const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
+  for (const entry of raw.importance) {
+    if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return fail('invalid-shape')
+    if (!isText(entry.factId) || !isText(entry.tier)) return fail('invalid-shape')
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact')
+    if (entry.tier !== 'must' && entry.tier !== 'support' && entry.tier !== 'reference') return fail('invalid-shape')
+    if (entry.reasonText !== undefined && (!isText(entry.reasonText) || entry.reasonText.length > 200)) return fail('too-long')
+    if (importance.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
+    importance.push({ factId: entry.factId, tier: entry.tier, ...(entry.reasonText ? { reasonText: entry.reasonText } : {}) })
+  }
+  const dataNote = optionalText(raw.dataNote, 240)
+  if (dataNote === false) return fail('too-long')
+  const invalidationNote = optionalText(raw.invalidationNote, 240)
+  if (invalidationNote === false) return fail('too-long')
+  const conclusionTranslation = optionalText(raw.conclusionTranslation, 2_000)
+  if (conclusionTranslation === false) return fail('too-long')
+  if (conclusionTranslation !== undefined && (!document.conclusion || locale === document.edition.locale)) return fail('invalid-translation')
+
+  const prose = [raw.lede, ...items.map((item) => item.why), ...importance.map((entry) => entry.reasonText ?? ''),
+    ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
+    ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : [])].join('\n')
+  if (forbiddenContent(prose)) return fail('forbidden-content')
+  if (!numbersAreKnown(prose, document)) return fail('unknown-number')
+  return Object.freeze({
+    ok: true as const,
+    value: Object.freeze({
+      lede: raw.lede,
+      items: Object.freeze(items.map((item) => Object.freeze(item))),
+      importance: Object.freeze(importance.map((entry) => Object.freeze(entry))),
+      ...(typeof dataNote === 'string' ? { dataNote } : {}),
+      ...(typeof invalidationNote === 'string' ? { invalidationNote } : {}),
+      ...(typeof conclusionTranslation === 'string' ? { conclusionTranslation } : {})
+    })
+  })
+}
+
+export function applyDailyBriefingEditorial(
+  document: DailyBriefingDocument,
+  editorial: DailyBriefingEditorialOutput,
+  meta: DailyBriefingEditorialMeta
+): DailyBriefingDocument {
+  const newsWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('news:')).map((item) => [item.factId.slice('news:'.length), item.why]))
+  const macroWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('macro:')).map((item) => [item.factId.slice('macro:'.length), item.why]))
+  const importance = new Map(editorial.importance.map((entry) => [entry.factId.slice('data:'.length), entry]))
+  const applyRow = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
+    const next = importance.get(row.id)
+    if (!next) return row
+    // The floor is a floor: the model may lift a support row, never downgrade a must row.
+    if (row.importance.tier === 'must' && next.tier !== 'must') return row
+    const value: FactImportance = Object.freeze({
+      tier: next.tier,
+      source: 'agent' as const,
+      reasonCode: 'agent' as const,
+      ...(next.reasonText ? { reasonText: next.reasonText } : {})
+    })
+    return Object.freeze({ ...row, importance: value })
+  }
+  return Object.freeze({
+    ...document,
+    lede: Object.freeze({
+      source: 'agent' as const,
+      text: editorial.lede,
+      factCount: editorial.items.length + document.news.macro.length,
+      generatedAt: document.edition.generatedAt
+    }),
+    news: Object.freeze({
+      ...document.news,
+      items: Object.freeze(document.news.items.map((item: BriefingNewsItem) => newsWhy.has(item.itemId)
+        ? Object.freeze({ ...item, why: newsWhy.get(item.itemId)! })
+        : item)),
+      macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => macroWhy.has(item.eventKey)
+        ? Object.freeze({ ...item, why: macroWhy.get(item.eventKey)! })
+        : item))
+    }),
+    data: Object.freeze({
+      market: Object.freeze(document.data.market.map(applyRow)),
+      funds: Object.freeze(document.data.funds.map(applyRow)),
+      sentiment: Object.freeze({
+        fearGreed: document.data.sentiment.fearGreed ? applyRow(document.data.sentiment.fearGreed) : null,
+        news: document.data.sentiment.news
+      })
+    }),
+    ...(editorial.dataNote || editorial.invalidationNote ? {
+      editorial: Object.freeze({
+        ...(editorial.dataNote ? { dataNote: editorial.dataNote } : {}),
+        ...(editorial.invalidationNote ? { invalidationNote: editorial.invalidationNote } : {})
+      })
+    } : {}),
+    ...(editorial.conclusionTranslation && document.conclusion ? {
+      conclusion: Object.freeze({ ...document.conclusion, translation: editorial.conclusionTranslation })
+    } : {}),
+    provenance: Object.freeze({
+      ...document.provenance,
+      editorialMeta: Object.freeze({
+        promptVersion: meta.promptVersion,
+        model: meta.model,
+        source: meta.source
+      })
+    })
+  })
+}
+
+function allDataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
+  return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
+}
+
+function fail(failureCode: DailyBriefingValidationFailure): DailyBriefingValidation {
+  return Object.freeze({ ok: false as const, failureCode })
+}
+
+function optionalText(value: unknown, maximum: number): string | undefined | false {
+  if (value === undefined) return undefined
+  if (!isText(value) || value.length > maximum) return false
+  return value
+}
+
+function forbiddenContent(text: string): boolean {
+  return /https?:\/\/|www\.|```|<script|买入|卖出|做多|做空|目标价|必涨|必跌|price target|buy now|sell now|go long|go short/i.test(text)
+}
+
+function numbersAreKnown(text: string, document: DailyBriefingDocument): boolean {
+  const allowed = numericWhitelist(document)
+  for (const token of text.match(/-?\d+(?:\.\d+)?/g) ?? []) {
+    const normalized = token.replace(/,/g, '')
+    if (allowed.has(normalized) || allowed.has(normalized.replace(/^-/, ''))) continue
+    return false
+  }
+  return true
+}
+
+function numericWhitelist(document: DailyBriefingDocument): Set<string> {
+  const values = new Set<string>()
+  const add = (value: number): void => {
+    for (let digits = 0; digits <= 4; digits += 1) {
+      values.add(value.toFixed(digits))
+      values.add(Math.abs(value).toFixed(digits))
+    }
+  }
+  const visit = (value: unknown): void => {
+    if (typeof value === 'number' && Number.isFinite(value)) add(value)
+    else if (typeof value === 'string') {
+      for (const token of value.match(/-?\d+(?:\.\d+)?/g) ?? []) add(Number(token.replace(/,/g, '')))
+    } else if (Array.isArray(value)) value.forEach(visit)
+    else if (value && typeof value === 'object') Object.values(value).forEach(visit)
+  }
+  visit(document)
+  return values
+}
+
+function isExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
+  if (!isRecord(value)) return false
+  const keys = Object.keys(value)
+  return required.every((key) => keys.includes(key)) && keys.every((key) => required.includes(key) || optional.includes(key))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
+}
+
+function isText(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
