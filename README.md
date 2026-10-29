@@ -137,6 +137,9 @@ it at 21:00 should produce two different, defensible answers — not one answer 
 ## What it is not
 
 - **Not a signal service.** No buy or sell calls, no return promises, no "alpha" for sale.
+- **Not a charting or entry-timing tool.** No candles, no price targets, no buy/sell levels, no chip
+  distribution, no order flow. It does not replace the chart you already read — it tells you what
+  happened behind it.
 - **Not a trading bot.** No order execution, no position management, no brokerage connection.
 - **Not a hosted account.** No MacroBay server holds your data or your keys; there is nothing to sign
   up for and nothing to cancel.

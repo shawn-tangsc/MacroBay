@@ -1,3 +1,4 @@
+import { computeEtfCumulativeFlow } from '../../../../contracts/etfCumulativeFlow'
 import {
   capitalConditionsDailyFlowPolicy,
   capitalConditionsSnapshotPolicy,
@@ -28,8 +29,11 @@ export const dashboardCapitalConditionsPresentationPolicy = {
 } as const
 
 type DashboardEtfFlowRow = { tradingDate: string; netFlowUsd: number; direction: 'inflow' | 'outflow' | 'zero'; magnitudePercent: number }
-type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: string; observedAt: string; rows: readonly DashboardEtfFlowRow[] }
-type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset }
+export type DashboardEtfCumulativeWindow = { windowDays: number; coveredDays: number; netFlowUsd: string; complete: boolean }
+export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: string; observedAt: string; cumulative: readonly DashboardEtfCumulativeWindow[]; rows: readonly DashboardEtfFlowRow[] }
+/** BTC/ETH rows are date-aligned by contract, so the table header can state one coverage per window. */
+export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
+type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[] }
 type DashboardStablecoinFlow = { tradingDate: string; netFlowUsd: number }
 type DashboardFlowHistory = { state: 'available'; rows: readonly { tradingDate: string; funds: number; btc: number; eth: number }[] }
 
@@ -114,7 +118,27 @@ function projectEtf(value: unknown, asOf: string): DashboardEtfFlow | 'unavailab
   if (!isVisibleEtfPublicSnapshot(value, asOf)) return dashboardCapitalConditionsPresentationPolicy.etfState
   const btc = projectEtfAsset(value.btc)
   const eth = projectEtfAsset(value.eth)
-  return btc && eth ? { state: 'available', btc, eth } : dashboardCapitalConditionsPresentationPolicy.etfState
+  if (!btc || !eth) return dashboardCapitalConditionsPresentationPolicy.etfState
+  const coverage = projectEtfCoverage(btc, eth)
+  return coverage ? { state: 'available', btc, eth, coverage } : dashboardCapitalConditionsPresentationPolicy.etfState
+}
+
+function projectEtfCoverage(btc: DashboardEtfFlowAsset, eth: DashboardEtfFlowAsset): readonly DashboardEtfCumulativeCoverage[] | undefined {
+  if (btc.cumulative.length !== eth.cumulative.length) return undefined
+  const coverage: DashboardEtfCumulativeCoverage[] = []
+  for (let index = 0; index < btc.cumulative.length; index += 1) {
+    const btcWindow = btc.cumulative[index]!
+    const ethWindow = eth.cumulative[index]!
+    if (btcWindow.windowDays !== ethWindow.windowDays ||
+      btcWindow.complete !== (btcWindow.coveredDays === btcWindow.windowDays) ||
+      ethWindow.complete !== (ethWindow.coveredDays === ethWindow.windowDays)) return undefined
+    coverage.push({
+      windowDays: btcWindow.windowDays,
+      coveredDays: Math.min(btcWindow.coveredDays, ethWindow.coveredDays),
+      complete: btcWindow.complete && ethWindow.complete
+    })
+  }
+  return coverage
 }
 
 function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfFlow | 'unavailable'): DashboardFlowHistory | 'unavailable' {
@@ -136,14 +160,33 @@ function projectEtfAsset(value: EtfPublicAssetSnapshot): DashboardEtfFlowAsset |
   if (!latest) return undefined
   const latestNetFlowUsd = formatUsd(latest.netFlowUsd, true)
   const largestAbsoluteFlow = Math.max(...value.rows.map((row) => Math.abs(row.netFlowUsd)))
-  if (!latestNetFlowUsd || !Number.isFinite(largestAbsoluteFlow)) return undefined
+  const cumulative = projectEtfCumulativeWindows(value)
+  if (!latestNetFlowUsd || !Number.isFinite(largestAbsoluteFlow) || !cumulative) return undefined
   const rows = value.rows.map((row) => ({
     tradingDate: row.tradingDate,
     netFlowUsd: row.netFlowUsd,
     direction: row.netFlowUsd > 0 ? dashboardCapitalConditionsPresentationPolicy.flowChart.directions.inflow : row.netFlowUsd < 0 ? dashboardCapitalConditionsPresentationPolicy.flowChart.directions.outflow : dashboardCapitalConditionsPresentationPolicy.flowChart.directions.zero,
     magnitudePercent: row.netFlowUsd === 0 ? 0 : Math.max(1, Math.min(dashboardCapitalConditionsPresentationPolicy.flowChart.maximumMagnitudePercent, Math.round(Math.abs(row.netFlowUsd) / largestAbsoluteFlow * dashboardCapitalConditionsPresentationPolicy.flowChart.maximumMagnitudePercent)))
   }))
-  return { asset: value.asset, latestNetFlowUsd, observedAt: latest.observedAt, rows }
+  return { asset: value.asset, latestNetFlowUsd, observedAt: latest.observedAt, cumulative, rows }
+}
+
+/**
+ * Sums the same validated rows the chart already uses. The window lengths live in the
+ * contract-level helper; this projection only formats each already-summed amount, and fails
+ * closed when a window cannot be represented as a display number.
+ */
+function projectEtfCumulativeWindows(value: EtfPublicAssetSnapshot): readonly DashboardEtfCumulativeWindow[] | undefined {
+  const windows = computeEtfCumulativeFlow(value.rows)
+  if (!windows) return undefined
+  const projected: DashboardEtfCumulativeWindow[] = []
+  for (const window of windows) {
+    if (!Number.isInteger(window.windowDays) || !Number.isInteger(window.coveredDays) || window.coveredDays < 1 || window.coveredDays > window.windowDays) return undefined
+    const netFlowUsd = formatUsd(window.netFlowUsd, true)
+    if (!netFlowUsd) return undefined
+    projected.push({ windowDays: window.windowDays, coveredDays: window.coveredDays, netFlowUsd, complete: window.complete })
+  }
+  return projected
 }
 
 function isDisplayNumber(value: unknown): value is number {

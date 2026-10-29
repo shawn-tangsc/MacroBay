@@ -75,6 +75,18 @@ and triggers, not a price prediction.
 
 If any of these are missing, the answer is incomplete.
 
+## What it answers, and what it does not
+
+| It is built to answer | It will not answer |
+| --- | --- |
+| What changed in the last macro release, and which assets does it touch? | Should I buy now? |
+| Which readings does this conclusion rest on? | Where is the support level? |
+| What would invalidate this interpretation? | What is the price target? |
+| What was known at a given time? | What is the chip distribution? |
+
+If your question is about entry timing, levels, chip distribution or order flow, this is the wrong
+tool — it does not read charts, and it does not pretend to.
+
 ## What the product does not do
 
 - It does not execute trades or manage positions.

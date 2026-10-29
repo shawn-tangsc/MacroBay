@@ -30,6 +30,58 @@ describe('dashboard capital conditions model', () => {
     expect(JSON.stringify(result)).not.toMatch(/verifiedAt|https?:|source|raw|error|failure/i)
   })
 
+  it('projects complete five- and twenty-day cumulative sums from the same validated rows', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshot(),
+      coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 254_900_000_000, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 1, change30dPercent: 0.01 }
+    }, asOf)
+
+    if (result.state !== 'available' || result.etf === 'unavailable') throw new Error('expected safe ETF presentation')
+    expect(result.etf.btc.cumulative).toEqual([
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '+$111', complete: true },
+      { windowDays: 20, coveredDays: 20, netFlowUsd: '+$381', complete: true }
+    ])
+    expect(result.etf.eth.cumulative).toEqual([
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '-$111', complete: true },
+      { windowDays: 20, coveredDays: 20, netFlowUsd: '-$381', complete: true }
+    ])
+    expect(result.etf.coverage).toEqual([
+      { windowDays: 5, coveredDays: 5, complete: true },
+      { windowDays: 20, coveredDays: 20, complete: true }
+    ])
+  })
+
+  it('marks the twenty-day window incomplete when the local window only holds twelve rows', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: etfSnapshot(12),
+      coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }
+    }, asOf)
+
+    if (result.state !== 'available' || result.etf === 'unavailable') throw new Error('expected safe ETF presentation')
+    expect(result.etf.btc.cumulative).toEqual([
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '+$50', complete: true },
+      { windowDays: 20, coveredDays: 12, netFlowUsd: '+$78', complete: false }
+    ])
+    expect(result.etf.eth.cumulative).toEqual([
+      { windowDays: 5, coveredDays: 5, netFlowUsd: '-$50', complete: true },
+      { windowDays: 20, coveredDays: 12, netFlowUsd: '-$78', complete: false }
+    ])
+    expect(result.etf.coverage).toEqual([
+      { windowDays: 5, coveredDays: 5, complete: true },
+      { windowDays: 20, coveredDays: 12, complete: false }
+    ])
+  })
+
+  it('does not fabricate cumulative windows when the ETF snapshot is unavailable', () => {
+    const result = projectDashboardCapitalConditionsSnapshot({
+      state: 'available', asOf, conclusion: 'partial', etf: { state: 'unavailable' },
+      coreStablecoins: { observedAt: '2026-08-18T07:00:00.000Z', verifiedAt: '2026-08-18T07:30:00.000Z', currentUsd: 1, change1dUsd: 0, change1dPercent: 0, change7dUsd: 0, change7dPercent: 0, change30dUsd: 0, change30dPercent: 0 }
+    }, asOf)
+
+    expect(result).toMatchObject({ state: 'available', etf: 'unavailable' })
+    expect(JSON.stringify(result)).not.toContain('cumulative')
+  })
+
   it('merges only common persisted capital, BTC, and ETH dates into three-series chart rows', () => {
     const result = projectDashboardCapitalConditionsSnapshot({
       state: 'available', asOf, conclusion: 'partial', etf: etfSnapshot(),
@@ -145,8 +197,8 @@ describe('dashboard capital conditions model', () => {
   })
 })
 
-function etfSnapshot() {
-  const dates = Array.from({ length: 30 }, (_, index) => new Date(Date.parse('2026-07-19T00:00:00.000Z') + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
+function etfSnapshot(length = 30) {
+  const dates = Array.from({ length }, (_, index) => new Date(Date.parse('2026-07-19T00:00:00.000Z') + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10))
   const observedAt = '2026-08-18T07:00:00.000Z'
   return {
     state: 'available' as const, schemaVersion: 1, sourceId: '0xrouter' as const, windowEnd: dates.at(-1)!, verifiedAt: observedAt,

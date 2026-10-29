@@ -156,6 +156,39 @@ describe('handleQueryMacroCalendar', () => {
     expect(result.events.map((event) => event.eventKey)).toEqual(['market-early', 'market-late'])
   })
 
+  it('does not push the caller output cap into the official query', async () => {
+    const queryMacroEconomicCalendarMonth = vi.fn(async () => ({ state: 'available', events: [] }))
+    vi.mocked(getIntelligenceModule).mockReturnValue({
+      publicQueryService: {
+        queryMacroEconomicCalendarMonth,
+        queryMarketCalendarMonth: vi.fn(() => ({ state: 'available', events: [] }))
+      },
+      newsSentiment: {}
+    } as never)
+
+    await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z', maxEvents: 5 }, deps)
+
+    expect(queryMacroEconomicCalendarMonth).toHaveBeenCalledWith({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z' })
+  })
+
+  it('keeps a same-day date-only event inside a western-offset window', async () => {
+    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+      official: {
+        state: 'available',
+        events: [{ eventKey: 'official-date-only', title: 'Date only', scheduledDate: '2026-10-28' }]
+      }
+    }) as never)
+
+    const result = await handleQueryMacroCalendar({
+      month: '2026-10',
+      asOf: '2026-10-28T18:00:00.000Z',
+      from: '2026-10-28T00:00:00.000-07:00',
+      to: '2026-10-29T00:00:00.000-07:00'
+    }, deps) as never as { events: Array<{ eventKey: string }> }
+
+    expect(result.events.map((event) => event.eventKey)).toEqual(['official-date-only'])
+  })
+
   it('keeps the events nearest the query instant when the month overflows the cap', async () => {
     vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
       official: { state: 'available', events: [] },
@@ -178,6 +211,50 @@ describe('handleQueryMacroCalendar', () => {
     expect(result.events.map((event) => event.eventKey)).toEqual(['middle', 'today'])
     expect(result.truncated).toBe(true)
     expect(result.totalEvents).toBe(3)
+  })
+
+  it('says unavailable when neither side answered, instead of pretending the month is empty', async () => {
+    vi.mocked(getIntelligenceModule).mockReturnValue({
+      publicQueryService: {
+        queryMacroEconomicCalendarMonth: vi.fn(async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })),
+        queryMarketCalendarMonth: vi.fn(() => ({ state: 'unavailable', failureCode: 'query-unavailable' }))
+      },
+      newsSentiment: {}
+    } as never)
+
+    const result = await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z' }, deps) as never as {
+      state: string
+      caveats: string[]
+    }
+
+    expect(result.state).toBe('unavailable')
+    expect(result.caveats).toContain('official-calendar-unavailable')
+    expect(result.caveats).toContain('market-calendar-unavailable')
+    expect(result.caveats).not.toContain('official-calendar-empty')
+    expect(result.caveats).not.toContain('market-calendar-empty')
+  })
+
+  it('keeps the pages it already read when a later market page fails', async () => {
+    const queryMarketCalendarMonth = vi.fn()
+      .mockReturnValueOnce({ state: 'available', events: [{ eventKey: 'market-early', title: 'Early', scheduledAt: '2026-10-14T12:00:00.000Z' }], nextCursor: 'page-2' })
+      .mockReturnValueOnce({ state: 'unavailable', failureCode: 'query-unavailable' })
+    vi.mocked(getIntelligenceModule).mockReturnValue({
+      publicQueryService: {
+        queryMacroEconomicCalendarMonth: vi.fn(async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })),
+        queryMarketCalendarMonth
+      },
+      newsSentiment: {}
+    } as never)
+
+    const result = await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T07:08:50.417Z' }, deps) as never as {
+      state: string
+      events: Array<{ eventKey: string }>
+      caveats: string[]
+    }
+
+    expect(result.state).toBe('available')
+    expect(result.events.map((event) => event.eventKey)).toEqual(['market-early'])
+    expect(result.caveats).toContain('market-calendar-partial')
   })
 
   it('narrows to a date window when the caller asks about one day', async () => {
