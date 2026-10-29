@@ -675,7 +675,7 @@ export function getIntelligenceModule(
       }),
       editorial: async ({ document, locale }) => {
         const view = await dailyBriefingAiSettings.getView()
-        if (view.resolved.state !== 'agent') return { document, state: 'template' as const }
+        if (view.resolved.state !== 'agent') return { document, state: 'template' as const, failureCode: view.resolved.state === 'disabled' ? 'editorial-disabled' : 'model-unavailable' }
         return dailyBriefingAgent.generate({
           document,
           locale,

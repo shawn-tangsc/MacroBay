@@ -87,19 +87,17 @@ export function validateDailyBriefingEditorial(
   if (conclusionTranslation !== undefined && (!document.conclusion || !needsTranslation(document.conclusion.summary, locale))) return fail('invalid-translation')
 
   let nextFocus: DailyBriefingEditorialOutput['nextFocus']
-  if (raw.nextFocus !== undefined) {
-    if (!isExact(raw.nextFocus, ['eventKey', 'why', 'watch'])) return fail('invalid-shape')
-    if (!isText(raw.nextFocus.eventKey) || !isText(raw.nextFocus.why)) return fail('invalid-shape')
-    if (raw.nextFocus.why.length > 200) return fail('too-long')
-    if (!Array.isArray(raw.nextFocus.watch) || raw.nextFocus.watch.length < 2 || raw.nextFocus.watch.length > 3) return fail('invalid-shape')
-    if (!document.next.focus || raw.nextFocus.eventKey !== document.next.focus.eventKey) return fail('unknown-fact')
-    const watch: Array<{ condition: string; implication: string }> = []
-    for (const entry of raw.nextFocus.watch) {
-      if (!isExact(entry, ['condition', 'implication']) || !isText(entry.condition) || !isText(entry.implication)) return fail('invalid-shape')
-      if (entry.condition.length > 80 || entry.implication.length > 160) return fail('too-long')
-      watch.push({ condition: entry.condition, implication: entry.implication })
+  if (raw.nextFocus !== undefined && isExact(raw.nextFocus, ['eventKey', 'why', 'watch'])) {
+    const focusKey = document.next.focus?.eventKey
+    const watchRaw = raw.nextFocus.watch
+    const watchCount = Array.isArray(watchRaw) ? watchRaw.length : 0
+    const watch = Array.isArray(watchRaw) && watchCount >= 2 && watchCount <= 3
+      ? watchRaw.filter((entry): entry is { condition: string; implication: string } => isExact(entry, ['condition', 'implication']) && isText(entry.condition) && isText(entry.implication))
+      : []
+    if (focusKey && raw.nextFocus.eventKey === focusKey && isText(raw.nextFocus.why) && raw.nextFocus.why.length <= 200 &&
+      watch.length === watchCount && watch.every((entry) => entry.condition.length <= 80 && entry.implication.length <= 160)) {
+      nextFocus = Object.freeze({ eventKey: raw.nextFocus.eventKey, why: raw.nextFocus.why, watch: Object.freeze(watch.map((entry) => Object.freeze(entry))) })
     }
-    nextFocus = Object.freeze({ eventKey: raw.nextFocus.eventKey, why: raw.nextFocus.why, watch: Object.freeze(watch.map((entry) => Object.freeze(entry))) })
   }
   const prose = [raw.lede, ...items.map((item) => item.why), ...importance.map((entry) => entry.reasonText ?? ''),
     ...(nextFocus ? [nextFocus.why, ...nextFocus.watch.flatMap((entry) => [entry.condition, entry.implication])] : []),

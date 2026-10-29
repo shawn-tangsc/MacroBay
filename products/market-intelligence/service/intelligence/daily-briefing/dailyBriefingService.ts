@@ -99,9 +99,19 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     if (deps.editorial) {
       try {
-        document = (await withDeadline(deps.editorial({ document, locale: input.locale }), 25_000)).document
+        const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 25_000)
+        document = editorial.document
+        if (editorial.state !== 'agent') {
+          document = Object.freeze({
+            ...document,
+            provenance: Object.freeze({ ...document.provenance, editorialFailure: editorial.failureCode ?? 'editorial-fallback' })
+          })
+        }
       } catch {
-        // An editorial failure keeps the fact-layer template; it never blocks the edition.
+        document = Object.freeze({
+          ...document,
+          provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-timeout' })
+        })
       }
     }
     await deps.store.put({

@@ -150,3 +150,6 @@
 .mi-brief-poster__next-row > div { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .mi-brief-poster__next-pill { padding: 1px 5px; border-radius: 3px; background: #f7e8c8; color: #8a5a12; font-size: 8px; font-weight: 700; }
 .mi-brief-poster__next-focus-head time { letter-spacing: .01em; }
+
+.mi-brief-poster__basis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mi-brief-poster__basis-card:only-child { grid-column: 1 / -1; }

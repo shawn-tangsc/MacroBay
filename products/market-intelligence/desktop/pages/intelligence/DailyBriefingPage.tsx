@@ -149,6 +149,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }
 
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
+  const appendix = view.status === 'ready' && view.document.conclusion
+    ? [...new Set([...view.document.conclusion.dataGaps, ...view.document.conclusion.caveats])]
+    : []
+  const bodyClass = `mi-daily-briefing-page__body${appendix.length > 0 ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
       <button className="mi-daily-briefing-page__back" type="button" onClick={onBack}>
@@ -167,7 +171,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
       </div>
     </header>
-    <div className="mi-daily-briefing-page__body">
+    <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
@@ -186,6 +190,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           </div>
         </div> : null}
         {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
+        {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {view.document.provenance.editorialFailure}</p> : null}
         {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
           <p>{text.emptyGuide}</p>
           {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
@@ -194,6 +199,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
+      {appendix.length > 0 ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits}>
+        <h2>{text.sections.limits}</h2>
+        {appendix.map((entry) => <p key={entry}>{entry}</p>)}
+      </aside> : null}
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
     {view.status === 'ready' ? <div className="mi-daily-briefing-share-host" aria-hidden="true">

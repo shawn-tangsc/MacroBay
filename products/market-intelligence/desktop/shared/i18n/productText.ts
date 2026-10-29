@@ -449,7 +449,7 @@ export const productText = {
               entry: '今日简报', title: '每日简报', close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；07:30 只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
               window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available}/{total} 读数', readingsUnit: '读数', readingsAllMissing: '四个读数都读不到', denseDay: '今日信息较多',
               moreNumbers: '更多数字', noValue: '—',
-              sections: { news: '今日要闻', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来' },
+              sections: { news: '今日要闻', data: '一天的数据', conclusion: '结论', basis: '依据', next: '接下来', limits: '数据缺口与限制' },
               groups: { market: '行情', funds: '资金', sentiment: '情绪' },
               tiers: { must: '重点', support: '补充', reference: '参考' },
               states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
@@ -476,7 +476,7 @@ export const productText = {
               unavailableHint: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
               configureSources: '配置情报源',
               copy: '复制日报', copied: '已复制', copyFailed: '复制失败，请重试',
-              aiSettings: { open: '日报 AI 设置', title: '日报 AI 设置', loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', save: '保存', saving: '保存中…', cancel: '取消', failed: '保存失败，请重试', openModelSettings: '打开模型设置' }
+              aiSettings: { open: '日报 AI 设置', title: '日报 AI 设置', notApplied: 'AI 编辑未生成', loading: '正在读取设置…', enabled: '使用 AI 编辑', enabledHint: '默认跟随平台默认模型；关掉只保留事实层。', model: '模型', followDefault: '跟随平台默认模型', modelUnavailable: '当前自选模型不可用会回落默认；默认也不可用时只出事实层。', save: '保存', saving: '保存中…', cancel: '取消', failed: '保存失败，请重试', openModelSettings: '打开模型设置' }
             }
           },
           calendar: {
@@ -1786,7 +1786,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               entry: 'Daily brief', title: 'Daily brief', close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; 07:30 is only a head start, and a missed run is caught up on the next open.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
               window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available}/{total} readings', readingsUnit: 'readings', readingsAllMissing: 'No readings available', denseDay: 'A dense day',
               moreNumbers: 'More numbers', noValue: '—',
-              sections: { news: 'Today’s news', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next' },
+              sections: { news: 'Today’s news', data: 'The day in numbers', conclusion: 'Conclusion', basis: 'Evidence', next: 'Next', limits: 'Data gaps & limits' },
               groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
               tiers: { must: 'Must', support: 'Support', reference: 'Reference' },
               states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
@@ -1813,7 +1813,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               unavailableHint: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
               configureSources: 'Configure sources',
               copy: 'Copy brief', copied: 'Copied', copyFailed: 'Copy failed — try again',
-              aiSettings: { open: 'Brief AI settings', title: 'Brief AI settings', loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', save: 'Save', saving: 'Saving…', cancel: 'Cancel', failed: 'Save failed — try again', openModelSettings: 'Open model settings' }
+              aiSettings: { open: 'Brief AI settings', title: 'Brief AI settings', notApplied: 'AI editing did not run', loading: 'Reading settings…', enabled: 'Use AI editing', enabledHint: 'Follows the platform default model; turn it off to keep only the fact layer.', model: 'Model', followDefault: 'Follow the platform default', modelUnavailable: 'An unavailable custom model falls back to the default; if that is unavailable too, only the fact layer is shown.', save: 'Save', saving: 'Saving…', cancel: 'Cancel', failed: 'Save failed — try again', openModelSettings: 'Open model settings' }
             }
           },
           calendar: {

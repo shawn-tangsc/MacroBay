@@ -19,12 +19,15 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])]
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
+  const support = rows.filter((row) => row.importance.tier === 'support')
   const conclusion = doc.conclusion
   const hasNews = doc.news.items.length > 0 || doc.news.macro.length > 0
   const hasData = chosen.length > 0
   const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0))
-  const keyRows = chosen.slice(0, 4)
-  const metricRows = chosen.slice(4, 8)
+  const keyIds = ['btc', 'eth', 'stablecoin', 'etf-btc'] as const
+  const keyRows = keyIds.map((id) => chosen.find((row) => row.id === id)).filter((row): row is NonNullable<typeof row> => Boolean(row))
+  const keySet = new Set(keyRows.map((row) => row.id))
+  const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support]
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
   const focusEvent = doc.next.focus ?? doc.next.items[0]
   const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
