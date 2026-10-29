@@ -9,7 +9,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
-import { DailyBriefingDocumentView, type DailyBriefingText } from './DailyBriefingDocumentView'
+import type { DailyBriefingText } from './DailyBriefingDocumentView'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
@@ -190,20 +190,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <p>{text.emptyGuide}</p>
           {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
         </div> : null}
-        {view.status === 'ready' ? <DailyBriefingDocumentView
-          document={view.document}
-          text={text}
-          locale={locale}
-          readOnly={view.kind === 'history'}
-          {...(eventTitles ? { eventTitles } : {})}
-          formatTime={formatTime}
-        /> : null}
+        {view.status === 'ready' ? <div className="mi-daily-briefing-page__paper">
+          <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+        </div> : null}
       </section>
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
     {view.status === 'ready' ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
-        <DailyBriefingShareCard document={view.document} text={text} locale={locale} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+        <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
       </div>
     </div> : null}
   </main>

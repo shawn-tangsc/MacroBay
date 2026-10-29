@@ -68,3 +68,10 @@
 .mi-brief-poster__basis-card.cond { border-left: 3px solid #2f6b3c; }
 .mi-brief-poster__basis-card.counter { border-left: 3px solid #9f2d21; }
 .mi-brief-poster__basis-card.gaps { border-left: 3px solid #b45309; }
+
+.mi-brief-poster__footnotes { margin-top: 18px; padding-top: 9px; border-top: 1px solid #d8cfbd; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 22px; color: #8b8475; font-size: 8.5px; line-height: 1.5; }
+.mi-brief-poster__footnotes b { margin-right: 3px; color: #a5431f; font-weight: 700; }
+.mi-brief-poster__footnotes span { display: block; }
+
+.mi-brief-poster__head-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.mi-brief-poster__readonly { padding: 3px 7px; border: 1px solid #e0c9a6; border-radius: 4px; color: #8a5a35; font-size: 9.5px; }

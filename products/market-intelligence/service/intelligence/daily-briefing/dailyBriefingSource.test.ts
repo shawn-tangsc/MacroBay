@@ -47,7 +47,9 @@ function deps(overrides: {
         nextCursor: null
       }),
       getSummary: () => summary,
-      listPredictions: () => []
+      listPredictions: () => [],
+      getRun: () => ({ snapshotId: 'snap-1' }),
+      getSnapshot: () => ({ evidenceRefs: [{ evidenceRefId: 'ev-1', sourceId: 's', sourceLabel: 'Source', itemId: 'n1', occurredAt: null, publishedAt: null, detectedAt: null, computedAt: null, visibleAt: '2026-10-30T00:00:00.000Z', excerptHash: 'h' }] })
     } as never,
     publicQuery: {
       queryFearGreedSnapshot: async () => overrides.failReadings

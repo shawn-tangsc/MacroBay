@@ -198,7 +198,14 @@ export type DailyBriefingDocument = Readonly<{
   conclusion: BriefingConclusion | null
   next: Readonly<{ items: readonly BriefingNextItem[]; note?: string }>
   editorial?: Readonly<{ dataNote?: string; invalidationNote?: string }>
-  citations: readonly Readonly<{ index: number; refId: string }>[]
+  citations: readonly Readonly<{
+    index: number
+    refId: string
+    sourceLabel?: string
+    observedAt?: string
+    itemId?: string
+    statement?: string
+  }>[]
   provenance: Readonly<{
     summaryId: string | null
     readAt: string

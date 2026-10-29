@@ -15,7 +15,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1_000
 type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
 
 export type DailyBriefingSourceDeps = Readonly<{
-  repository: Pick<MarketAnalysisRepository, 'listTimeline' | 'getSummary' | 'listPredictions'>
+  repository: Pick<MarketAnalysisRepository, 'listTimeline' | 'getSummary' | 'listPredictions' | 'getRun' | 'getSnapshot'>
   publicQuery: Pick<MarketIntelligencePublicQueryService,
     | 'queryFearGreedSnapshot'
     | 'queryFundingRateHistory'
@@ -92,9 +92,12 @@ async function readConclusion(deps: DailyBriefingSourceDeps): Promise<DailyBrief
     const summary: AnalysisSummary | undefined = deps.repository.getSummary(latest.summaryRef)
     if (!summary) return null
     const predictions: readonly Prediction[] = deps.repository.listPredictions(latest.summaryRef)
+    const run = latest.analysisRunId ? deps.repository.getRun(latest.analysisRunId) : undefined
+    const snapshot = run?.snapshotId ? deps.repository.getSnapshot(run.snapshotId) : undefined
     return Object.freeze({
       summary,
       predictions,
+      evidenceRefs: snapshot?.evidenceRefs ?? [],
       occurredAt: latest.occurredAt,
       direction: (latest.direction ?? null) as AnalysisConclusionDirection | null
     })

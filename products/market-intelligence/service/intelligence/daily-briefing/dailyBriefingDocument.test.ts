@@ -88,7 +88,10 @@ const predictions: readonly Prediction[] = [{
 
 const packet = (overrides: Partial<DailyBriefingFactPacket> = {}): DailyBriefingFactPacket => ({
   asOf, windowStart, windowEnd: asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai',
-  conclusion: { summary, predictions, occurredAt: '2026-10-30T00:00:00.000Z' },
+  conclusion: { summary, predictions, occurredAt: '2026-10-30T00:00:00.000Z', evidenceRefs: [
+    { evidenceRefId: 'ev-2', sourceId: 'etf', sourceLabel: 'ETF flows', itemId: null, occurredAt: null, publishedAt: '2026-10-28T00:00:00.000Z', detectedAt: null, computedAt: null, visibleAt: '2026-10-28T00:00:00.000Z', excerptHash: 'h2' },
+    { evidenceRefId: 'ev-3', sourceId: 'fg', sourceLabel: 'Fear & Greed', itemId: null, occurredAt: null, publishedAt: '2026-10-30T00:00:00.000Z', detectedAt: null, computedAt: null, visibleAt: '2026-10-30T00:00:00.000Z', excerptHash: 'h3' }
+  ] },
   news: {
     state: 'available',
     items: [
@@ -164,6 +167,7 @@ describe('daily briefing document', () => {
     expect(document.conclusion?.counterEvidence[0]?.citations).toEqual([1])
     expect(document.conclusion?.counterEvidence[1]?.citations).toEqual([2])
     expect(document.citations.map((entry) => entry.refId)).toEqual(['ev-2', 'ev-3'])
+    expect(document.citations[0]).toMatchObject({ sourceLabel: 'ETF flows', observedAt: '2026-10-28T00:00:00.000Z', statement: 'ETF flows confirm.' })
     expect(document.conclusion?.invalidations).toHaveLength(1)
     expect(document.lede.source).toBe('template')
     expect(document.lede.text).toContain('CPI')

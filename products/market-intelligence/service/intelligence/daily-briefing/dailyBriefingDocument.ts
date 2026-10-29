@@ -152,7 +152,7 @@ function selectNext(packet: DailyBriefingFactPacket): readonly BriefingNextItem[
 
 function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
   conclusion: BriefingConclusion | null
-  citations: readonly Readonly<{ index: number; refId: string }>[]
+  citations: readonly Readonly<{ index: number; refId: string; sourceLabel?: string; observedAt?: string; itemId?: string; statement?: string }>[]
 }> {
   const input = packet.conclusion
   if (!input) return Object.freeze({ conclusion: null, citations: Object.freeze([]) })
@@ -165,21 +165,21 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
     confidence: entry.confidence
   }))
   const top = selectTopSignal(structured ? summary.directions ?? [] : [])
-  const citations = new CitationCollector()
+  const citations = new CitationCollector(input.evidenceRefs ?? [])
   const topSignal: BriefingTopSignal | null = top
     ? Object.freeze({
       horizon: top.horizon,
       direction: top.direction,
       confidence: top.confidence,
       rationale: top.rationale,
-      citations: Object.freeze(citations.cite(top.evidenceRefIds))
+      citations: Object.freeze(citations.cite(top.evidenceRefIds, top.rationale))
     })
     : null
   const counterEvidence: readonly BriefingCounterEvidence[] = Object.freeze(summary.counterEvidence
     .slice(0, dailyBriefingPolicy.maximumCounterEvidence)
     .map((claim) => Object.freeze({
       statement: claim.statement,
-      citations: Object.freeze(citations.cite([claim.evidenceRefId]))
+      citations: Object.freeze(citations.cite([claim.evidenceRefId], claim.statement))
     })))
   const conclusion: BriefingConclusion = Object.freeze({
     summaryId: summary.id,
@@ -214,11 +214,22 @@ function selectTopSignal(directions: readonly DirectionAdvice[]): DirectionAdvic
 
 class CitationCollector {
   private readonly indexes = new Map<string, number>()
+  private readonly evidence: ReadonlyMap<string, Readonly<{ sourceLabel?: string; observedAt?: string; itemId?: string }>>
+  private readonly statements = new Map<string, string>()
 
-  cite(refs: readonly string[]): readonly number[] {
+  constructor(evidenceRefs: readonly Readonly<{ evidenceRefId: string; sourceLabel: string; itemId: string | null; occurredAt: string | null; publishedAt: string | null; visibleAt: string }>[]) {
+    this.evidence = new Map(evidenceRefs.map((ref) => [ref.evidenceRefId, {
+      sourceLabel: ref.sourceLabel,
+      observedAt: ref.publishedAt ?? ref.occurredAt ?? ref.visibleAt,
+      ...(ref.itemId ? { itemId: ref.itemId } : {})
+    }]))
+  }
+
+  cite(refs: readonly string[], statement?: string): readonly number[] {
     const numbers: number[] = []
     for (const ref of refs) {
       if (!ref) continue
+      if (statement && !this.statements.has(ref)) this.statements.set(ref, statement)
       let index = this.indexes.get(ref)
       if (index === undefined) {
         index = this.indexes.size + 1
@@ -229,10 +240,20 @@ class CitationCollector {
     return Object.freeze(numbers)
   }
 
-  list(): readonly Readonly<{ index: number; refId: string }>[] {
+  list(): readonly Readonly<{ index: number; refId: string; sourceLabel?: string; observedAt?: string; itemId?: string; statement?: string }>[] {
     return Object.freeze([...this.indexes.entries()]
       .sort((left, right) => left[1] - right[1])
-      .map(([refId, index]) => Object.freeze({ index, refId })))
+      .map(([refId, index]) => {
+        const evidence = this.evidence.get(refId)
+        return Object.freeze({
+          index,
+          refId,
+          ...(evidence?.sourceLabel ? { sourceLabel: evidence.sourceLabel } : {}),
+          ...(evidence?.observedAt ? { observedAt: evidence.observedAt } : {}),
+          ...(evidence?.itemId ? { itemId: evidence.itemId } : {}),
+          ...(this.statements.has(refId) ? { statement: this.statements.get(refId)! } : {})
+        })
+      }))
   }
 }
 

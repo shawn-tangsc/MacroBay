@@ -64,7 +64,7 @@ const briefingDocument = (date = '2026-10-30', lede = 'CPI 超预期 · Ripple �
     dataGaps: ['No consensus'], caveats: ['Funding is venue-specific.']
   },
   next: { items: [{ eventKey: 'US.FOMC', title: 'fomc', titleKey: 'fomc', at: `${date}T18:00:00.000Z`, importance: 'high', category: 'central-bank-activity' }] },
-  citations: [{ index: 1, refId: 'ev-1' }],
+  citations: [{ index: 1, refId: 'ev-1', sourceLabel: 'DefiLlama Stablecoins', observedAt: '2026-10-30T00:00:00.000Z', statement: '稳定币 30 日净收缩 65.66 亿美元' }],
   provenance: { summaryId: 's1', readAt: `${date}T00:30:00.000Z` }
 })
 
@@ -208,6 +208,8 @@ describe('daily briefing page', () => {
     const dom = await renderPage(fakeClient())
     expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('每日简报')
     expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('Stablecoin contraction pulls bids away.')
+    expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('DefiLlama Stablecoins')
+    expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('稳定币 30 日净收缩')
     expect(dom.querySelector('.mi-daily-briefing__export')).not.toBeNull()
   })
 

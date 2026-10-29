@@ -4,7 +4,7 @@ import type {
   FearGreedSnapshotResult,
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
-import type { AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
+import type { AgentEvidenceRef, AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 
@@ -42,6 +42,7 @@ export type DailyBriefingConclusionInput = Readonly<{
   /** The timeline node's own direction; the legacy fallback when the summary has no structured conclusion. */
   occurredAt: string
   direction?: AnalysisConclusionDirection | null
+  evidenceRefs?: readonly AgentEvidenceRef[]
 }>
 
 export type DailyBriefingFactPacket = Readonly<{

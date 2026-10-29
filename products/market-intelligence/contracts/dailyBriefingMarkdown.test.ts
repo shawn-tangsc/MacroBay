@@ -57,7 +57,7 @@ const document = (overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
     topSignal: null, dataGaps: ['No consensus'], caveats: ['Funding is venue-specific.']
   },
   next: { items: [{ eventKey: 'US.FOMC', title: 'fomc', titleKey: 'fomc', at: '2026-11-02T18:00:00.000Z', importance: 'high', category: 'central-bank-activity' }] },
-  citations: [{ index: 1, refId: 'ev-1' }],
+  citations: [{ index: 1, refId: 'ev-1', sourceLabel: 'DefiLlama', observedAt: '2026-10-30T00:00:00.000Z', statement: '稳定币收缩' }],
   provenance: { summaryId: 's1', readAt: '2026-10-30T00:30:00.000Z' },
   ...overrides
 })
@@ -87,6 +87,8 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('## 接下来')
     expect(markdown).toContain('fomc')
     expect(markdown).toContain('证据')
+    expect(markdown).toContain('DefiLlama')
+    expect(markdown).toContain('稳定币收缩')
     expect(markdown).not.toContain('<svg')
     expect(markdown).not.toContain('<div')
   })

@@ -84,7 +84,11 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   }
 
   lines.push('', '---')
-  lines.push(`${labels.citations}: ${document.citations.length > 0 ? document.citations.map((entry) => `[${entry.index}]`).join(' ') : '—'}`)
+  lines.push(`${labels.citations}:`)
+  if (document.citations.length === 0) lines.push('- —')
+  for (const entry of document.citations) {
+    lines.push(`- [${entry.index}] ${[entry.statement, entry.sourceLabel ?? entry.refId, entry.observedAt ? options.formatTime(entry.observedAt) : undefined].filter(Boolean).join(' · ')}`)
+  }
   lines.push(`${options.formatTime(document.provenance.readAt)}`)
   return `${lines.join('\n').trimEnd()}\n`
 }

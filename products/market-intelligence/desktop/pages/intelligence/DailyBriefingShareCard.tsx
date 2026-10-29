@@ -8,11 +8,12 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text, locale, eventTitles, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text, locale, eventTitles, readOnly = false, formatTime }: Readonly<{
   document: DailyBriefingDocument
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   eventTitles?: Record<string, string>
+  readOnly?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])]
@@ -29,7 +30,10 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <h1>{text.title}</h1>
         <p className="mi-brief-poster__meta">{doc.edition.date} · {text.window.replace('{time}', formatTime(doc.edition.windowEnd, 'minute'))} · {text.edition.replace('{time}', formatTime(doc.edition.generatedAt, 'minute'))}</p>
       </div>
-      <span className="mi-brief-poster__readings">{doc.status.readingsAvailable}/{doc.status.readingsTotal} {text.readingsUnit}</span>
+      <div className="mi-brief-poster__head-side">
+        {readOnly ? <span className="mi-brief-poster__readonly">{text.history.readOnly}</span> : null}
+        <span className="mi-brief-poster__readings">{doc.status.readingsAvailable}/{doc.status.readingsTotal} {text.readingsUnit}</span>
+      </div>
     </header>
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
 
@@ -87,8 +91,15 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       {doc.next.items.map((item) => <p key={item.eventKey}><b>{formatTime(item.at, 'minute')}</b> {eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>)}
     </section> : null}
 
+
+    {doc.citations.length > 0 ? <div className="mi-brief-poster__footnotes">
+      {doc.citations.map((entry) => <span key={entry.index}>
+        <b>[{entry.index}]</b>{entry.statement ? `${entry.statement} · ` : ''}{entry.sourceLabel ?? entry.refId}{entry.observedAt ? ` · ${formatTime(entry.observedAt, 'minute')}` : ''}
+      </span>)}
+    </div> : null}
+
     <footer className="mi-brief-poster__foot">
-      <span>{text.citations} {doc.citations.map((entry) => `[${entry.index}]`).join(' ')}</span>
+      <span>{text.citations}</span>
       <span>MI · DAILY BRIEF · {formatTime(doc.provenance.readAt, 'minute')}</span>
     </footer>
   </article>

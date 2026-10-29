@@ -278,3 +278,7 @@
 
 .mi-daily-briefing__basis { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-daily-briefing__basis h4 { margin: 0 0 5px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .14em; }
+
+.mi-daily-briefing-page__content { padding: 0; border: 0; background: transparent; }
+.mi-daily-briefing-page__paper { border: 1px solid var(--mi-dashboard-line); border-radius: 12px; overflow: hidden; box-shadow: 0 18px 60px rgba(0, 0, 0, .28); }
+.mi-daily-briefing-page__paper .mi-brief-poster { width: 100%; min-height: 0; padding: 30px 30px 24px; }
