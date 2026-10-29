@@ -12,6 +12,7 @@ export const INTELLIGENCE_PARQUET_EXPORT_JOB = 'market-intelligence.parquetExpor
 export const INTELLIGENCE_PURGE_JOB = 'market-intelligence.purge'
 export const INTELLIGENCE_REPLAY_WINDOW_JOB = 'market-intelligence.replayWindow'
 export const INTELLIGENCE_REINDEX_JOB = 'market-intelligence.reindex'
+export const INTELLIGENCE_DAILY_BRIEFING_JOB = 'market-intelligence.dailyBriefing'
 
 export const INTELLIGENCE_JOB_IDS = [
   INTELLIGENCE_COLLECT_SOURCE_JOB,
@@ -27,5 +28,6 @@ export const INTELLIGENCE_JOB_IDS = [
   INTELLIGENCE_PARQUET_EXPORT_JOB,
   INTELLIGENCE_PURGE_JOB,
   INTELLIGENCE_REPLAY_WINDOW_JOB,
-  INTELLIGENCE_REINDEX_JOB
+  INTELLIGENCE_REINDEX_JOB,
+  INTELLIGENCE_DAILY_BRIEFING_JOB
 ] as const

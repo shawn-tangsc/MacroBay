@@ -40,11 +40,13 @@ describe('daily briefing client', () => {
     stubInvoke((method) => {
       if (method === 'intelligence.dailyBriefing.getToday') return { state: 'available', document: document() }
       if (method === 'intelligence.dailyBriefing.get') return { state: 'missing' }
+      if (method === 'intelligence.dailyBriefing.regenerate') return { state: 'available', document: document() }
       return []
     })
     const today = await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(today.state).toBe('available')
     const missing = await dailyBriefingClient.get({ date: '2026-10-01', locale: 'zh-CN' })
+    expect((await dailyBriefingClient.regenerate({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('available')
     expect(missing.state).toBe('missing')
   })
 

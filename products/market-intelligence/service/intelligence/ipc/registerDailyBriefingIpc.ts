@@ -10,6 +10,7 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
+  regenerate: 'intelligence.dailyBriefing.regenerate',
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings'
 })
@@ -20,6 +21,8 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     service.getToday(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.list, async (payload) =>
     service.list(readQuery(payload)))
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.regenerate, async (payload) =>
+    service.regenerate(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.get, async (payload) =>
     service.get(readGet(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getSettings, async () => {

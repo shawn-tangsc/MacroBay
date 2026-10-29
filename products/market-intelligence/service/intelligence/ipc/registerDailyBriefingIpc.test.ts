@@ -10,7 +10,8 @@ const register = ((_productId: string, method: string, handler: (payload: unknow
 const service = {
   getToday: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
   list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } })),
-  get: vi.fn(async () => ({ state: 'missing' as const }))
+  get: vi.fn(async () => ({ state: 'missing' as const })),
+  regenerate: vi.fn(async () => ({ state: 'available' as const, document: {} as never }))
 }
 
 const settings = {
@@ -41,6 +42,11 @@ describe('daily briefing IPC', () => {
     expect(settings.save).toHaveBeenCalledWith({ editorialEnabled: false })
     await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ providerId: 'p', extra: true }))
       .rejects.toThrow('daily-briefing-invalid-request')
+  })
+
+  it('regenerates today from a strict query', async () => {
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(service.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
   })
 
   it('forwards a valid dated read', async () => {

@@ -59,6 +59,8 @@ import { createNewsSentimentBodyTranslationService } from './news-sentiment/news
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefingAgent } from './daily-briefing/dailyBriefingAgent'
+import { registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createDailyBriefingAiSettingsService, type DailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
@@ -642,6 +644,15 @@ export function getIntelligenceModule(
         await translationStorage.writeSettings(createDefaultTranslationSettings(await getAppLanguage()))
       }
     })().catch(() => undefined)
+    const dailyBriefingAiSettings = createDailyBriefingAiSettingsService({
+      store: createDailyBriefingAiSettingsStore(
+        createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
+        () => new Date().toISOString()
+      ),
+      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
+      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {})
+    })
+    const dailyBriefingAgent = createDailyBriefingAgent({ invoke: structuredModelInvocation.invoke })
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -662,16 +673,20 @@ export function getIntelligenceModule(
           },
         profiles: profileStore
       }),
+      editorial: async ({ document, locale }) => {
+        const view = await dailyBriefingAiSettings.getView()
+        if (view.resolved.state !== 'agent') return { document, state: 'template' as const }
+        return dailyBriefingAgent.generate({
+          document,
+          locale,
+          providerId: view.resolved.providerId,
+          modelId: view.resolved.modelId,
+          source: view.resolved.source
+        })
+      },
       store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
     })
-    const dailyBriefingAiSettings = createDailyBriefingAiSettingsService({
-      store: createDailyBriefingAiSettingsStore(
-        createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
-        () => new Date().toISOString()
-      ),
-      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
-      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {})
-    })
+    registerDailyBriefingJob(jobRuntime, { service: dailyBriefingService, getLocale: getAppLanguage })
     intelligenceModule = {
       pipeline,
       workerRuntime,

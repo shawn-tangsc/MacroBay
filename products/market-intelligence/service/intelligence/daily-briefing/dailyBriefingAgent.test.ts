@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { DailyBriefingDocument } from '../../contracts/dailyBriefing'
+import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { createDailyBriefingAgent } from './dailyBriefingAgent'
 import { buildDailyBriefingPrompt } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'

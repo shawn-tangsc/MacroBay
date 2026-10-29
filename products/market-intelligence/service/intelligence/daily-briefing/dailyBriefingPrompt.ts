@@ -1,6 +1,6 @@
 import type { StructuredModelMessage } from '@platform/ai/invocation/structuredModelInvocationTypes'
 
-import type { DailyBriefingDocument } from '../../contracts/dailyBriefing'
+import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 
 export const dailyBriefingPromptVersion = 'daily-briefing.editorial.v1'
 
@@ -12,7 +12,7 @@ export const dailyBriefingPromptVersion = 'daily-briefing.editorial.v1'
 export function buildDailyBriefingPrompt(input: Readonly<{
   document: DailyBriefingDocument
   locale: 'zh-CN' | 'en-US'
-}>): readonly StructuredModelMessage[] {
+}>): StructuredModelMessage[] {
   const { document, locale } = input
   const facts = {
     locale,
@@ -43,7 +43,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
     data: dataFacts(document),
     mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId)
   }
-  return Object.freeze([
+  return [
     {
       role: 'system',
       content: [
@@ -84,7 +84,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- dataNote and invalidationNote are optional but must not repeat the lede.'
       ].join('\n')
     }
-  ])
+  ]
 }
 
 function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{

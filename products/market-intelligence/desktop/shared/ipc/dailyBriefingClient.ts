@@ -14,6 +14,7 @@ const METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
+  regenerate: 'intelligence.dailyBriefing.regenerate',
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings'
 })
@@ -56,6 +57,7 @@ export type DailyBriefingClient = Readonly<{
   getToday: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   list: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientListResult>
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
+  regenerate: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
   saveSettings: (patch: DailyBriefingAiSettingsPatch) => Promise<DailyBriefingSettingsResult>
 }>
@@ -84,6 +86,17 @@ export const dailyBriefingClient: DailyBriefingClient = {
       const editions = value.result.editions.map(parseSummary)
       if (editions.some((edition) => edition === undefined)) return unavailable()
       return { state: 'available', result: { editions: editions as readonly DailyBriefingEditionSummary[] } }
+    } catch {
+      return unavailable()
+    }
+  },
+  async regenerate(input) {
+    try {
+      const value = await invoke(METHODS.regenerate, input)
+      if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
+        return { state: 'available', document: value.document }
+      }
+      return unavailable()
     } catch {
       return unavailable()
     }

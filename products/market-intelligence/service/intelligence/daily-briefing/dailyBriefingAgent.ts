@@ -1,7 +1,7 @@
 import type { StructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
 import type { StructuredModelInvocationErrorCode } from '@platform/ai/invocation/structuredModelInvocationTypes'
 
-import type { DailyBriefingDocument } from '../../contracts/dailyBriefing'
+import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, dailyBriefingPromptVersion } from './dailyBriefingPrompt'
 import {
   applyDailyBriefingEditorial,

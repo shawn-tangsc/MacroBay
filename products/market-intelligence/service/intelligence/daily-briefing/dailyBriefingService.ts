@@ -41,8 +41,15 @@ export type DailyBriefingListResultView =
   | Readonly<{ state: 'available'; result: DailyBriefingListResult }>
   | Readonly<{ state: 'unavailable'; failureCode: 'time-invalid' }>
 
+export type DailyBriefingEditorialResult = Readonly<{
+  document: DailyBriefingDocument
+  state: 'agent' | 'template'
+  failureCode?: string
+}>
+
 export type DailyBriefingService = Readonly<{
   getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
+  regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale }>) => Promise<DailyBriefingGetResult>
 }>
@@ -50,6 +57,7 @@ export type DailyBriefingService = Readonly<{
 export function createDailyBriefingService(deps: Readonly<{
   source: DailyBriefingSource
   store: DailyBriefingStore
+  editorial?: (input: Readonly<{ document: DailyBriefingDocument; locale: DailyBriefingLocale }>) => Promise<DailyBriefingEditorialResult>
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -62,13 +70,20 @@ export function createDailyBriefingService(deps: Readonly<{
     const key = `${date}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf, date, locale: input.locale, timeZone: input.timeZone }).finally(() => inFlight.delete(key))
+    const promise = resolveToday({ asOf, date, locale: input.locale, timeZone: input.timeZone }, false).finally(() => inFlight.delete(key))
     inFlight.set(key, promise)
     return promise
   }
 
-  async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
-    const cached = await deps.store.get(input.date, input.locale).catch(() => undefined)
+  async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
+    const asOf = now()
+    const date = localDate(asOf, input.timeZone)
+    if (!date) return { state: 'unavailable', failureCode: 'time-invalid' }
+    return resolveToday({ asOf, date, locale: input.locale, timeZone: input.timeZone }, true)
+  }
+
+  async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string }>, force: boolean): Promise<DailyBriefingTodayResult> {
+    const cached = force ? undefined : await deps.store.get(input.date, input.locale).catch(() => undefined)
     if (cached && isCurrent( cached.document)) return { state: 'available', document: cached.document }
     let packet: DailyBriefingFactPacket
     try {
@@ -81,6 +96,13 @@ export function createDailyBriefingService(deps: Readonly<{
       document = buildDailyBriefingDocument({ packet, date: input.date })
     } catch {
       return { state: 'unavailable', failureCode: 'build-failed' }
+    }
+    if (deps.editorial) {
+      try {
+        document = (await deps.editorial({ document, locale: input.locale })).document
+      } catch {
+        // An editorial failure keeps the fact-layer template; it never blocks the edition.
+      }
     }
     await deps.store.put({
       date: input.date,
@@ -118,7 +140,7 @@ export function createDailyBriefingService(deps: Readonly<{
     return row ? { state: 'available', document: row.document } : { state: 'missing' }
   }
 
-  return { getToday, list, get }
+  return { getToday, regenerate, list, get }
 }
 
 function isCurrent(document: DailyBriefingDocument): boolean {

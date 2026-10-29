@@ -78,6 +78,41 @@ describe('daily briefing service', () => {
     }
   })
 
+  it('regenerates the same day, overwrites the row and applies the editorial layer', async () => {
+    const store = memoryStore()
+    const source = fakeSource()
+    let calls = 0
+    const service = createDailyBriefingService({
+      source, store, now: () => asOf,
+      editorial: async ({ document }) => {
+        calls += 1
+        return { document: { ...document, lede: { ...document.lede, source: 'agent', text: 'AI lede' } }, state: 'agent' }
+      }
+    })
+    const first = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const second = await service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(first.state).toBe('available')
+    expect(second.state).toBe('available')
+    if (first.state === 'available' && second.state === 'available') {
+      expect(first.document.lede.source).toBe('agent')
+      expect(second.document.lede.text).toBe('AI lede')
+    }
+    expect(source.calls).toBe(2)
+    expect(calls).toBe(2)
+    expect(store.rows.size).toBe(1)
+  })
+
+  it('keeps the template when the editorial layer throws', async () => {
+    const store = memoryStore()
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      editorial: async () => { throw new Error('model down') }
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result.state).toBe('available')
+    if (result.state === 'available') expect(result.document.lede.source).toBe('template')
+  })
+
   it('coalesces concurrent opens into one generation', async () => {
     const store = memoryStore()
     const source = fakeSource()

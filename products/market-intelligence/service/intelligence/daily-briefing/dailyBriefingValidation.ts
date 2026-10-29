@@ -5,7 +5,7 @@ import type {
   BriefingMarketRow,
   DailyBriefingDocument,
   FactImportance
-} from '../../contracts/dailyBriefing'
+} from '../../../contracts/dailyBriefing'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -118,7 +118,7 @@ export function applyDailyBriefingEditorial(
       reasonCode: 'agent' as const,
       ...(next.reasonText ? { reasonText: next.reasonText } : {})
     })
-    return Object.freeze({ ...row, importance: value })
+    return Object.freeze({ ...row, importance: value }) as T
   }
   return Object.freeze({
     ...document,
