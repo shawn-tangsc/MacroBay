@@ -87,7 +87,7 @@ export function createDailyBriefingService(deps: Readonly<{
     if (cached && isCurrent( cached.document)) return { state: 'available', document: cached.document }
     let packet: DailyBriefingFactPacket
     try {
-      packet = await deps.source.buildPacket({ asOf: input.asOf, locale: input.locale, timeZone: input.timeZone })
+      packet = await withDeadline(deps.source.buildPacket({ asOf: input.asOf, locale: input.locale, timeZone: input.timeZone }), 15_000)
     } catch {
       return { state: 'unavailable', failureCode: 'source-failed' }
     }
@@ -99,7 +99,7 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     if (deps.editorial) {
       try {
-        document = (await deps.editorial({ document, locale: input.locale })).document
+        document = (await withDeadline(deps.editorial({ document, locale: input.locale }), 25_000)).document
       } catch {
         // An editorial failure keeps the fact-layer template; it never blocks the edition.
       }
@@ -141,6 +141,20 @@ export function createDailyBriefingService(deps: Readonly<{
   }
 
   return { getToday, regenerate, list, get }
+}
+
+async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      read,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('daily-briefing-generation-timeout')), milliseconds)
+      })
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
 }
 
 function isCurrent(document: DailyBriefingDocument): boolean {

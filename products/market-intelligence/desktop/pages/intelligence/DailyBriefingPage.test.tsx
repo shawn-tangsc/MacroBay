@@ -201,6 +201,13 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('重新生成版')
   })
 
+  it('renders the shareable poster and its export action', async () => {
+    const dom = await renderPage(fakeClient())
+    expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('每日简报')
+    expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('Stablecoin contraction pulls bids away.')
+    expect(dom.querySelector('.mi-daily-briefing__export')).not.toBeNull()
+  })
+
   it('shows an unavailable state and retries without crashing', async () => {
     const getToday = vi.fn()
       .mockRejectedValueOnce(new Error('down'))
@@ -208,7 +215,7 @@ describe('daily briefing page', () => {
     const client = fakeClient({ getToday })
     const dom = await renderPage(client)
     expect(dom.textContent).toContain(text.unavailable)
-    const retry = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.retry)!
+    const retry = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.generateNow)!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
     expect(getToday).toHaveBeenCalledTimes(2)
     expect(dom.textContent).toContain('每日简报')

@@ -251,3 +251,27 @@
   .mi-daily-briefing-page__body { grid-template-columns: 1fr; gap: 10px; }
   .mi-daily-briefing-page__content { padding: 14px; }
 }
+
+.mi-daily-briefing__export { height: 28px; padding: 0 10px; border: 1px solid #3c4a2a; border-radius: 7px; background: #1c2418; color: var(--mi-dashboard-lime); font-size: 10.5px; cursor: pointer; }
+.mi-daily-briefing__export:hover:not(:disabled) { background: #26301f; }
+.mi-daily-briefing__export:disabled { opacity: .55; cursor: default; }
+
+.mi-daily-briefing-page__body { grid-template-columns: 248px minmax(0, 1040px); justify-content: center; }
+.mi-daily-briefing-page .mi-daily-briefing__doc-head h2 { font-size: 25px; }
+.mi-daily-briefing-page .mi-daily-briefing__meta { font-size: 12.5px; }
+.mi-daily-briefing-page .mi-daily-briefing__lede { font-size: 13.5px; line-height: 1.7; }
+.mi-daily-briefing-page .mi-daily-briefing__section h3 { font-size: 11px; }
+.mi-daily-briefing-page .mi-daily-briefing__news-row p { font-size: 13px; }
+.mi-daily-briefing-page .mi-daily-briefing__news-row small { font-size: 11.5px; }
+.mi-daily-briefing-page .mi-daily-briefing__news-time { font-size: 10.5px; }
+.mi-daily-briefing-page .mi-daily-briefing__news-side { font-size: 10.5px; }
+.mi-daily-briefing-page .mi-daily-briefing__card-label { font-size: 10.5px; }
+.mi-daily-briefing-page .mi-daily-briefing__card-value { font-size: 19px; }
+.mi-daily-briefing-page .mi-daily-briefing__card-meta { font-size: 10.5px; }
+.mi-daily-briefing-page .mi-daily-briefing__line { font-size: 12px; }
+.mi-daily-briefing-page .mi-daily-briefing__line b { font-size: 12px; }
+.mi-daily-briefing-page .mi-daily-briefing__line small { font-size: 11px; }
+.mi-daily-briefing-page .mi-daily-briefing__conclusion p { font-size: 13px; line-height: 1.7; }
+.mi-daily-briefing-page .mi-daily-briefing__timeline span { font-size: 12px; }
+.mi-daily-briefing-page .mi-daily-briefing__timeline time { font-size: 10.5px; }
+.mi-daily-briefing-page__loading-hint { max-width: 420px; margin: 4px 0 0; color: #5f686e; font-size: 11px; line-height: 1.5; text-align: center; }

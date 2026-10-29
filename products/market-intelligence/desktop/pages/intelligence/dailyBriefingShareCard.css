@@ -1,0 +1,61 @@
+.mi-daily-briefing-share-host {
+  position: fixed;
+  top: 0;
+  left: -20000px;
+  width: 1080px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.mi-brief-poster {
+  width: 1080px;
+  box-sizing: border-box;
+  padding: 54px 58px 42px;
+  background: #f4efe4;
+  color: #1b1d18;
+  font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+.mi-brief-poster * { box-sizing: border-box; }
+
+.mi-brief-poster__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 30px; padding-bottom: 22px; border-bottom: 2px solid #1b1d18; }
+.mi-brief-poster__kicker { margin: 0 0 8px; color: #a5431f; font-size: 12px; font-weight: 700; letter-spacing: .22em; }
+.mi-brief-poster h1 { margin: 0; color: #161812; font-size: 50px; font-weight: 800; line-height: 1.05; letter-spacing: -.04em; }
+.mi-brief-poster__meta { margin: 12px 0 0; color: #6b695f; font-size: 14px; line-height: 1.5; }
+.mi-brief-poster__readings { flex: none; padding: 7px 11px; border: 1px solid #c9c1af; border-radius: 5px; color: #4f4d43; font-size: 12px; }
+
+.mi-brief-poster__lede { margin: 24px 0 26px; padding: 4px 0 4px 20px; border-left: 4px solid #c2410c; color: #26271f; font-size: 22px; line-height: 1.62; font-weight: 500; }
+
+.mi-brief-poster__columns { display: grid; grid-template-columns: 1.08fr 1fr; gap: 46px; }
+.mi-brief-poster h2 { margin: 0 0 12px; color: #8a5a35; font-size: 12px; font-weight: 700; letter-spacing: .16em; }
+
+.mi-brief-poster__news { display: grid; grid-template-columns: 50px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__news > span { color: #8a877b; font-size: 11px; line-height: 1.5; }
+.mi-brief-poster__news > span[data-polarity="bearish"] { color: #9f2d21; }
+.mi-brief-poster__news > span[data-polarity="bullish"] { color: #2f6b3c; }
+.mi-brief-poster__news p { margin: 0; color: #1b1d18; font-size: 17px; font-weight: 600; line-height: 1.42; }
+.mi-brief-poster__news small { display: block; margin-top: 4px; color: #625f55; font-size: 13px; line-height: 1.5; }
+.mi-brief-poster__empty { margin: 0; color: #777368; font-size: 13px; }
+
+.mi-brief-poster__numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
+.mi-brief-poster__number { padding: 9px 0; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__number > span { display: block; color: #777368; font-size: 11px; }
+.mi-brief-poster__number strong { display: block; margin-top: 2px; color: #161812; font-size: 26px; font-weight: 750; line-height: 1.15; letter-spacing: -.02em; }
+.mi-brief-poster__number small { display: block; margin-top: 2px; color: #6b695f; font-size: 11px; }
+.mi-brief-poster__news-summary { margin: 16px 0 0; color: #777368; font-size: 11px; line-height: 1.5; }
+
+.mi-brief-poster__conclusion { margin-top: 28px; padding-top: 18px; border-top: 2px solid #1b1d18; }
+.mi-brief-poster__direction { display: inline-block; margin-bottom: 8px; padding: 3px 9px; border-radius: 3px; background: #1b1d18; color: #f4efe4; font-size: 12px; font-weight: 700; }
+.mi-brief-poster__direction[data-direction="bullish"] { background: #2f6b3c; }
+.mi-brief-poster__direction[data-direction="bearish"] { background: #9f2d21; }
+.mi-brief-poster__direction[data-direction="range"], .mi-brief-poster__direction[data-direction="mixed"] { background: #8a5a35; }
+.mi-brief-poster__summary { margin: 0; color: #22241c; font-size: 20px; line-height: 1.62; }
+.mi-brief-poster__translation { margin: 8px 0 0; color: #625f55; font-size: 14px; line-height: 1.6; }
+.mi-brief-poster__invalidate { margin: 12px 0 0; padding: 10px 12px; background: #ece5d7; color: #7c3b1d; font-size: 13px; line-height: 1.55; }
+
+.mi-brief-poster__next { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__next p { margin: 4px 0; color: #3d3c33; font-size: 13px; }
+.mi-brief-poster__next b { margin-right: 8px; color: #a5431f; font-weight: 600; }
+
+.mi-brief-poster__foot { display: flex; justify-content: space-between; gap: 20px; margin-top: 26px; padding-top: 10px; border-top: 1px solid #d8cfbd; color: #8a877b; font-size: 10px; letter-spacing: .02em; }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, Settings2 } from 'lucide-react'
+import { toPng } from 'html-to-image'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
@@ -11,9 +12,11 @@ import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/
 import { DailyBriefingDocumentView, type DailyBriefingText } from './DailyBriefingDocumentView'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
+import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
+import './dailyBriefingShareCard.css'
 
 type ViewState =
   | Readonly<{ status: 'loading' }>
@@ -42,6 +45,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailed, setRegenerateFailed] = useState(false)
+  const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
+  const shareRef = useRef<HTMLDivElement>(null)
+  const exportTimer = useRef<number | undefined>(undefined)
   const copyTimer = useRef<number | undefined>(undefined)
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
 
@@ -50,8 +56,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     void (async () => {
-      const today = await client.getToday({ locale, timeZone }).catch(() => undefined)
-      const listed = await client.list({ locale, timeZone }).catch(() => undefined)
+      const today = await withDeadline(client.getToday({ locale, timeZone }), 45_000).catch(() => undefined)
+      const listed = await withDeadline(client.list({ locale, timeZone }), 8_000).catch(() => undefined)
       if (!active) return
       const rows = listed?.state === 'available' ? [...listed.result.editions] : []
       if (today?.state === 'available') {
@@ -66,7 +72,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     return () => { active = false }
   }, [locale, timeZone, client, reloadKey])
 
-  useEffect(() => () => { if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current) }, [])
+  useEffect(() => () => {
+    if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current)
+    if (exportTimer.current !== undefined) window.clearTimeout(exportTimer.current)
+  }, [])
 
   const selectEdition = (date: string): void => {
     const row = editions.find((edition) => edition.date === date)
@@ -102,6 +111,23 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     }
   }
 
+  const exportImage = async (): Promise<void> => {
+    if (view.status !== 'ready' || !shareRef.current) return
+    setExportState('exporting')
+    try {
+      const dataUrl = await toPng(shareRef.current, { pixelRatio: 2, backgroundColor: '#f4efe4', width: 1080, cacheBust: true })
+      const link = document.createElement('a')
+      link.download = `mi-daily-brief-${view.document.edition.date}-${locale}.png`
+      link.href = dataUrl
+      link.click()
+      setExportState('done')
+    } catch {
+      setExportState('failed')
+    }
+    if (exportTimer.current !== undefined) window.clearTimeout(exportTimer.current)
+    exportTimer.current = window.setTimeout(() => setExportState('idle'), 2_500)
+  }
+
   const copy = async (): Promise<void> => {
     if (view.status !== 'ready') return
     try {
@@ -132,6 +158,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'ready' && view.kind === 'today' ? <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
           {regenerating ? text.regenerating : text.regenerate}
         </button> : null}
+        {view.status === 'ready' ? <button className="mi-daily-briefing__export" type="button" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
+          {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
+        </button> : null}
         {view.status === 'ready' ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </button> : null}
@@ -142,7 +171,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
-        {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.loading} minHeight={220} /></div> : null}
+        {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.generating} minHeight={220} /><p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p></div> : null}
         {view.status === 'unavailable' ? <div className="mi-daily-briefing-page__empty" role="alert">
           {editions.every((edition) => edition.state === 'missing') ? <>
             <h2>{text.noBriefTitle}</h2>
@@ -153,7 +182,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           </>}
           <div className="mi-daily-briefing-page__empty-actions">
             {onConfigureSources ? <button type="button" className="mi-daily-briefing-page__primary" onClick={onConfigureSources}>{text.configureSources}</button> : null}
-            <button type="button" onClick={() => setReloadKey((key) => key + 1)}>{text.retry}</button>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)}>{text.generateNow}</button>
           </div>
         </div> : null}
         {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
@@ -172,6 +201,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </section>
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
+    {view.status === 'ready' ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
+      <div ref={shareRef}>
+        <DailyBriefingShareCard document={view.document} text={text} locale={locale} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+      </div>
+    </div> : null}
   </main>
 }
 
@@ -185,6 +219,20 @@ function summaryFromDocument(document: DailyBriefingDocument): DailyBriefingEdit
     ...(document.conclusion ? { direction: document.conclusion.direction } : {}),
     readingsAvailable: document.status.readingsAvailable,
     windowEnd: document.edition.windowEnd
+  }
+}
+
+async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      read,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('daily-briefing-request-timeout')), milliseconds)
+      })
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 
