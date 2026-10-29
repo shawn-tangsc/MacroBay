@@ -54,7 +54,14 @@ export const analysisValidationRules = Object.freeze({
   /** The three operation horizons are not all present, or one of them repeats. */
   directionHorizonsIncomplete: 'direction-horizons-incomplete',
   /** An operation direction cites evidence this snapshot does not hold. */
-  directionEvidenceMismatch: 'direction-evidence-mismatch'
+  directionEvidenceMismatch: 'direction-evidence-mismatch',
+  /**
+   * The snapshot carries key sentiment, but the conclusion cites none of it.
+   *
+   * The list is appended on purpose: a conclusion that ignores it cannot be said to have weighed
+   * it. Requiring one citation keeps the requirement checkable instead of prompt-only.
+   */
+  sentimentNotWeighed: 'sentiment-not-weighed'
 })
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
@@ -191,6 +198,20 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
     !output.marketReaction.every(claim => matchesFacts(claim.factIds, claim.evidenceRefIds))) return missingEvidence(analysisValidationRules.factEvidenceMismatch)
   const reactionFactIds = new Set(snapshot.facts.filter(isMarketReactionFact).map(fact => fact.factId))
   if (!output.marketReaction.every(claim => claim.factIds.every(id => reactionFactIds.has(id)))) return missingEvidence(analysisValidationRules.ineligibleMarketReaction)
+  // 重点舆情是本次分析必须权衡的输入：至少一条实质性论证要引用它，否则「带上了」只是 prompt 里的
+  // 一句话。只认论证区（事实、支撑/反向证据、方向、催化剂、传导假设），不认顶层 evidenceRefs 清单。
+  const sentimentRefs = new Set(snapshot.facts.filter(fact => fact.metric === 'news-sentiment' && fact.evidenceRefId).map(fact => fact.evidenceRefId!))
+  if (sentimentRefs.size > 0) {
+    const citedEvidence = new Set([
+      ...output.knownFacts.flatMap(claim => claim.evidenceRefIds),
+      ...output.transmissionHypotheses.flatMap(claim => claim.evidenceRefIds),
+      ...output.supportingEvidence.map(claim => claim.evidenceRefId),
+      ...output.counterEvidence.map(claim => claim.evidenceRefId),
+      ...output.directions.flatMap(entry => entry.evidenceRefIds),
+      ...output.nextCatalysts.flatMap(claim => claim.evidenceRefIds)
+    ])
+    if (![...sentimentRefs].some(ref => citedEvidence.has(ref))) return missingEvidence(analysisValidationRules.sentimentNotWeighed)
+  }
 
   return { ok: true, value: output, redactions }
 }

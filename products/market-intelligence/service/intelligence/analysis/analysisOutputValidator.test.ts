@@ -319,3 +319,22 @@ it('names the section whose shape the model got wrong', () => {
       rule: 'shape:directions'
     })
 })
+
+it('requires the conclusion to cite the key sentiment when the snapshot carries it', () => {
+  const snapshot = frozenSnapshot()
+  const news = {
+    ...snapshot.facts[0]!, factId: 'mi-fact-news-1', evidenceRefId: 'mi-ev-news', domain: 'sentiment' as const,
+    subject: 'market', metric: 'news-sentiment', value: 'bearish · strength 4/5 · confidence 80%｜Exchange outage',
+    unit: null, freshness: 'fresh' as const, comparability: 'not-comparable' as const
+  }
+  snapshot.facts = [...snapshot.facts, news]
+  snapshot.evidenceRefs = [...snapshot.evidenceRefs, { evidenceRefId: 'mi-ev-news' }]
+
+  // A conclusion that ignores the appended key sentiment cannot be said to have weighed it.
+  expect(validateAnalysisModelOutput(JSON.stringify(validOutput()), snapshot))
+    .toMatchObject({ ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'sentiment-not-weighed' })
+
+  const cited = validOutput()
+  cited.knownFacts.push({ factId: 'mi-fact-news-1', statement: '舆情偏空，支持谨慎判断。', evidenceRefIds: ['mi-ev-news'] })
+  expect(validateAnalysisModelOutput(JSON.stringify(cited), snapshot)).toMatchObject({ ok: true })
+})
