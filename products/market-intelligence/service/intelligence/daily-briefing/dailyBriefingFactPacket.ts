@@ -21,6 +21,7 @@ export type DailyBriefingCalendarState = 'available' | 'unavailable' | 'source-d
 export type DailyBriefingCalendarEvent = Readonly<{
   eventKey: string
   title: string
+  titleKey?: string
   scheduledAt: string
   importance: 'high' | 'medium' | 'low'
   lifecycleState: 'scheduled' | 'released' | 'cancelled'

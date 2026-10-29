@@ -118,6 +118,7 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
   return Object.freeze({
     eventKey: event.eventKey,
     title: event.title,
+    ...(event.titleKey ? { titleKey: event.titleKey } : {}),
     scheduledAt: event.scheduledAt,
     importance: event.importance,
     ...(event.actual === undefined ? {} : { actual: event.actual }),
@@ -142,6 +143,7 @@ function selectNext(packet: DailyBriefingFactPacket): readonly BriefingNextItem[
     .map((event) => Object.freeze({
       eventKey: event.eventKey,
       title: event.title,
+      ...(event.titleKey ? { titleKey: event.titleKey } : {}),
       at: event.scheduledAt,
       importance: event.importance,
       category: event.category

@@ -98,6 +98,7 @@ export type BriefingNewsItem = Readonly<{
 export type BriefingMacroItem = Readonly<{
   eventKey: string
   title: string
+  titleKey?: string
   scheduledAt: string
   importance: 'high' | 'medium' | 'low'
   actual?: string
@@ -115,6 +116,7 @@ export type BriefingMacroItem = Readonly<{
 export type BriefingNextItem = Readonly<{
   eventKey: string
   title: string
+  titleKey?: string
   at: string
   importance: 'high' | 'medium' | 'low'
   category: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
