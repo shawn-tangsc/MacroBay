@@ -8,7 +8,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = {
-  ariaLabel: string
+  title: string
   loading: string
   empty: string
   unavailable: string
@@ -48,8 +48,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   refreshFailed?: boolean
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.ariaLabel}>
+  if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__summary">
+      <h2>{text.title}</h2>
       {state.state === 'loading'
         ? <LoadingState label={text.loading} minHeight={140} />
         : <p>{text[state.state]}</p>}
@@ -61,10 +62,11 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     </div>
   </section>
 
-  return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.ariaLabel}>
+  return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
         <div className="mi-capital-conditions__header-band">
+          <h2>{text.title}</h2>
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
         <StablecoinTable state={state} text={text} />

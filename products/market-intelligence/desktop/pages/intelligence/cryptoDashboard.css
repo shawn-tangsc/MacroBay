@@ -103,6 +103,7 @@
 
 .mi-crypto-dashboard__capital-positioning-row { display: grid; min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 .mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
