@@ -1,5 +1,6 @@
 import type { productText } from '../../shared/i18n/productText'
 import type { BriefingMacroItem, BriefingNewsItem, BriefingPulseRow, BriefingMarketRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { formatBriefingChange, formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { analysisConclusionDirectionPolicy, analysisDirectionKey, localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 type DashboardText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']
@@ -152,10 +153,10 @@ function RowCard({ row, text, formatTime }: Readonly<{ row: Row; text: DailyBrie
   const label = rowLabel(text, row.labelKey)
   return <div className="mi-daily-briefing__card" data-state={row.state}>
     <span className="mi-daily-briefing__card-label">{label}</span>
-    <strong className="mi-daily-briefing__card-value">{row.state === 'available' || row.state === 'stale' ? formatValue(row.value, text) : stateText(row, text)}</strong>
+    <strong className="mi-daily-briefing__card-value">{row.state === 'available' || row.state === 'stale' ? formatBriefingValue(row.value, text.noValue) : stateText(row, text)}</strong>
     <span className="mi-daily-briefing__card-meta">
       {row.state === 'available' || row.state === 'stale'
-        ? [formatChange(row.change, text), row.observedAt ? formatTime(row.observedAt, 'minute') : ''].filter(Boolean).join(' · ')
+        ? [formatBriefingChange(row.change), row.observedAt ? formatTime(row.observedAt, 'minute') : ''].filter(Boolean).join(' · ')
         : reasonText(row, text)}
     </span>
   </div>
@@ -164,8 +165,8 @@ function RowCard({ row, text, formatTime }: Readonly<{ row: Row; text: DailyBrie
 function RowLine({ row, text, formatTime }: Readonly<{ row: Row; text: DailyBriefingText; formatTime: (value: string, precision?: 'minute' | 'second') => string }>): React.ReactElement {
   return <div className="mi-daily-briefing__line" data-state={row.state}>
     <span>{rowLabel(text, row.labelKey)}</span>
-    <b>{row.state === 'available' || row.state === 'stale' ? formatValue(row.value, text) : stateText(row, text)}</b>
-    <small>{row.state === 'available' || row.state === 'stale' ? formatChange(row.change, text) || (row.observedAt ? formatTime(row.observedAt, 'minute') : '') : reasonText(row, text)}</small>
+    <b>{row.state === 'available' || row.state === 'stale' ? formatBriefingValue(row.value, text.noValue) : stateText(row, text)}</b>
+    <small>{row.state === 'available' || row.state === 'stale' ? formatBriefingChange(row.change) || (row.observedAt ? formatTime(row.observedAt, 'minute') : '') : reasonText(row, text)}</small>
   </div>
 }
 
@@ -206,7 +207,7 @@ function EtfBar({ row, text, formatTime }: Readonly<{ row: BriefingPulseRow; tex
   return <div className="mi-daily-briefing__etf-row">
     <span>{label}</span>
     <div className="mi-daily-briefing__etf-track"><i data-positive={row.value.number >= 0 ? 'true' : 'false'} style={{ width: `${width}%` }} /></div>
-    <b>{formatValue(row.value, text)}</b>
+    <b>{formatBriefingValue(row.value, text.noValue)}</b>
     <small>{row.observedAt ? formatTime(row.observedAt, 'minute') : ''}</small>
   </div>
 }
@@ -237,32 +238,4 @@ function stateText(row: Row, text: DailyBriefingText): string {
 function reasonText(row: Row, text: DailyBriefingText): string {
   if (!row.reason) return stateText(row, text)
   return text.reasons[row.reason as keyof typeof text.reasons] ?? text.states.unavailable
-}
-
-function formatValue(value: Row['value'], text: DailyBriefingText): string {
-  if (!value) return text.noValue
-  switch (value.format) {
-    case 'score': return String(Math.round(value.number))
-    case 'percent': return `${value.number > 0 ? '+' : ''}${value.number.toFixed(2)}%`
-    case 'usd': return compactUsd(value.number)
-    case 'flow-usd': return compactUsd(value.number, true)
-    case 'yield': return `${value.number.toFixed(2)}%`
-    case 'level': return value.number.toFixed(2)
-  }
-}
-
-function compactUsd(value: number, signed = false): string {
-  const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(Math.abs(value))
-  return `${value < 0 ? '-' : signed && value > 0 ? '+' : ''}${compact} USD`
-}
-
-function formatChange(change: Row['change'], text: DailyBriefingText): string {
-  if (!change) return ''
-  const sign = change.value > 0 ? '+' : ''
-  switch (change.unit) {
-    case 'pp': return `${sign}${change.value.toFixed(4)}pp`
-    case 'percent': return `${sign}${change.value.toFixed(2)}%`
-    case 'bp': return `${sign}${Math.round(change.value)}bp`
-    case 'usd': return compactUsd(change.value, true)
-  }
 }
