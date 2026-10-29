@@ -84,9 +84,9 @@ function StablecoinTable({ state, text }: { state: AvailableState; text: Text })
     </colgroup>
     <thead><tr>
       <th scope="col">{text.asset}</th>
-      <th scope="col">{text.change1d}<span className="mi-capital-conditions__pct">{state.change1dPercent}</span></th>
-      <th scope="col">{text.change7d}<span className="mi-capital-conditions__pct">{state.change7dPercent}</span></th>
-      <th scope="col">{text.change30d}<span className="mi-capital-conditions__pct">{state.change30dPercent}</span></th>
+      <th scope="col">{text.change1d}<span className="mi-capital-conditions__pct" data-flow-direction={flowDirection(state.change1dUsd)}>({state.change1dPercent})</span></th>
+      <th scope="col">{text.change7d}<span className="mi-capital-conditions__pct" data-flow-direction={flowDirection(state.change7dUsd)}>({state.change7dPercent})</span></th>
+      <th scope="col">{text.change30d}<span className="mi-capital-conditions__pct" data-flow-direction={flowDirection(state.change30dUsd)}>({state.change30dPercent})</span></th>
       <th scope="col">{text.totalSupply}</th>
     </tr></thead>
     <tbody><tr>
