@@ -166,4 +166,19 @@ describe('analysis prose language', () => {
     const chinese = buildAnalysisMessages(snapshot({ facts: [flow] }), [], undefined, 'zh-CN')
     expect((JSON.parse(chinese.at(-1)!.content) as { facts: readonly Record<string, unknown>[] }).facts[0]!.value).toBe('-44.83 亿美元')
   })
+  it('weighs the key sentiment only when the snapshot actually carries it', () => {
+    const news = {
+      factId: 'mi-fact-news-1', domain: 'sentiment' as const, subject: 'market', metric: 'news-sentiment',
+      value: '看空（强度 4/5，置信 80%）｜交易所故障', unit: null, sourceId: 'coindesk-rss', sourceLabel: 'coindesk-rss',
+      observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 0.8, comparability: 'not-comparable' as const, evidenceRefId: 'ev-1'
+    }
+    const withNews = systemPrompt(snapshot({ facts: [news] }))
+    expect(withNews).toContain('新闻舆情')
+    expect(withNews).toContain('不能当作行情证据')
+    expect(withNews).toContain('marketReaction 仍然只能引用 marketReactionFactRefs')
+
+    // The rule names a section that is not there in every other run; adding it unconditionally
+    // would invite the model to reason about an empty block.
+    expect(systemPrompt()).not.toContain('新闻舆情')
+  })
 })

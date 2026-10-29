@@ -111,7 +111,7 @@ export const productText = {
                 'us-2y-yield': '美债 2 年期收益率', 'us-2y-yield-change-1d': '美债 2 年期 1 日变化',
                 'us-10y-breakeven-inflation': '美债 10 年期盈亏平衡通胀', 'us-10y-2y-term-spread': '10Y−2Y 期限利差',
                 'event-name': '事件', 'lifecycle-state': '生命周期', 'scheduled-date': '计划日期', 'scheduled-at': '计划时间',
-                'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', surprise: '预期差（实际−预期）', 'event-excerpt': '事件摘要'
+                'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', surprise: '预期差（实际−预期）', 'event-excerpt': '事件摘要', 'news-sentiment': '新闻舆情'
               },
               subject: {
                 stablecoins: '稳定币', BTC: 'BTC', ETH: 'ETH', market: '市场', all: '全部', 'btc-vs-eth': 'BTC 相对 ETH',
@@ -127,6 +127,7 @@ export const productText = {
               caveat: {
                 'max-items-truncated': '证据条数已截断', 'source-health-unavailable': '来源健康度不可用', 'query-unavailable': '查询不可用',
                 'query-empty': '查询结果为空', 'evidence-unavailable': '证据不可用', 'not-comparable': '与其他数据不可比',
+                'news-sentiment-unavailable': '新闻舆情不可用',
                 'macro-calendar-unavailable': '经济日历不可用', 'macro-calendar-empty': '经济日历为空',
                 'macro-calendar-consensus-unavailable': '缺少市场预期值', 'macro-calendar-query-not-wired': '经济日历未接线',
                 'observed-unverified': '来源身份未验证', 'provider-title-is-display-name': '事件名取自提供方标题',
@@ -1420,7 +1421,7 @@ export const productText = {
                 'us-2y-yield': 'US 2-year yield', 'us-2y-yield-change-1d': 'US 2-year 1-day change',
                 'us-10y-breakeven-inflation': 'US 10-year breakeven inflation', 'us-10y-2y-term-spread': '10Y-2Y term spread',
                 'event-name': 'Event', 'lifecycle-state': 'Lifecycle', 'scheduled-date': 'Scheduled date', 'scheduled-at': 'Scheduled time',
-                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt'
+                'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt', 'news-sentiment': 'News sentiment'
               },
               subject: {
                 stablecoins: 'Stablecoins', BTC: 'BTC', ETH: 'ETH', market: 'Market', all: 'All', 'btc-vs-eth': 'BTC vs ETH',
@@ -1436,6 +1437,7 @@ export const productText = {
               caveat: {
                 'max-items-truncated': 'Evidence count truncated', 'source-health-unavailable': 'Source health unavailable', 'query-unavailable': 'Query unavailable',
                 'query-empty': 'Query returned nothing', 'evidence-unavailable': 'Evidence unavailable', 'not-comparable': 'Not comparable with other data',
+                'news-sentiment-unavailable': 'News sentiment unavailable',
                 'macro-calendar-unavailable': 'Economic calendar unavailable', 'macro-calendar-empty': 'Economic calendar empty',
                 'macro-calendar-consensus-unavailable': 'Market consensus missing', 'macro-calendar-query-not-wired': 'Economic calendar not wired',
                 'observed-unverified': 'Source identity unverified', 'provider-title-is-display-name': 'Event name is the provider title',
