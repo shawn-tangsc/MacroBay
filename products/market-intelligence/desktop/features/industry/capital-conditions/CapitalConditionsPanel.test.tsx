@@ -43,6 +43,7 @@ describe('CapitalConditionsPanel', () => {
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
 
     expect(markup).toContain('class="mi-capital-conditions__header-band"')
+    expect(markup).toContain(`aria-label="${text.ariaLabel}"`)
     expect(markup).toContain('class="mi-capital-conditions__observed-at"')
     expect(markup).not.toContain('<h2>')
     expect(markup).toContain('2026-08-18 07:00 GMT')

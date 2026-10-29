@@ -27,9 +27,6 @@
   --mi-dashboard-capital-header-row-gap: 8px;
   --mi-dashboard-capital-header-column-gap: 16px;
   --mi-dashboard-capital-content-row-gap: 14px;
-  --mi-dashboard-capital-fact-row-gap: 10px;
-  --mi-dashboard-capital-etf-summary-row-gap: 8px;
-  --mi-dashboard-capital-etf-summary-block-padding: 10px 0 0;
   --mi-dashboard-etf-flow-block-gap: 8px;
   --mi-dashboard-etf-flow-chart-height: 108px;
   --mi-dashboard-etf-flow-axis-width: 42px;
@@ -109,10 +106,8 @@
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 .mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
-.mi-capital-conditions > p { color: var(--mi-dashboard-muted); font-size: 12px; }
+.mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }
-.mi-capital-conditions__primary-label { color: var(--mi-dashboard-muted); font-size: 12px; min-width: 0; }
-.mi-capital-conditions__primary-value { color: var(--mi-dashboard-caution); font-size: 12px; font-weight: 650; white-space: nowrap; }
 .mi-capital-conditions__observed-at { color: var(--mi-dashboard-muted); font-size: 10px; }
 .mi-capital-conditions__content-row { display: grid; grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation)); gap: var(--mi-dashboard-capital-content-column-gap); min-width: 0; align-items: stretch; }
 .mi-capital-conditions__summary { display: grid; align-content: start; gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }

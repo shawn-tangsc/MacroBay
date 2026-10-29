@@ -382,7 +382,7 @@ export const productText = {
               paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
             },
             capitalConditions: {
-              loading: '正在加载资金面…', empty: '暂无已验证的资金面快照。', unavailable: '资金面暂时不可用。',
+              ariaLabel: '资金面', loading: '正在加载资金面…', empty: '暂无已验证的资金面快照。', unavailable: '资金面暂时不可用。',
               stablecoin: '稳定币', asset: '资产', totalSupply: '总供给',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: '最新', windowDays: '{days} 日', coverage: '仅 {days} 天', streakColumn: '连续',
@@ -1681,7 +1681,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' }
             },
             capitalConditions: {
-              loading: 'Loading capital conditions…', empty: 'No verified capital-conditions snapshot.', unavailable: 'Capital conditions are unavailable.',
+              ariaLabel: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'No verified capital-conditions snapshot.', unavailable: 'Capital conditions are unavailable.',
               stablecoin: 'Stablecoin', asset: 'Asset', totalSupply: 'Total supply',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: 'Latest', windowDays: '{days}-day', coverage: '({days} days only)', streakColumn: 'Streak',

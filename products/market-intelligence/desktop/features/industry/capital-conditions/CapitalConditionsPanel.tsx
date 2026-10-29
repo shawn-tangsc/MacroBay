@@ -8,6 +8,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = {
+  ariaLabel: string
   loading: string
   empty: string
   unavailable: string
@@ -47,7 +48,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   refreshFailed?: boolean
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state}>
+  if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.ariaLabel}>
     <div className="mi-capital-conditions__summary">
       {state.state === 'loading'
         ? <LoadingState label={text.loading} minHeight={140} />
@@ -60,7 +61,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     </div>
   </section>
 
-  return <section className="mi-capital-conditions" data-state={state.state}>
+  return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.ariaLabel}>
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
         <div className="mi-capital-conditions__header-band">
