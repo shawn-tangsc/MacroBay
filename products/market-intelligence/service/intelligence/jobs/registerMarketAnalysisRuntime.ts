@@ -498,6 +498,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     const enriched = await appendAnalysisEventEvidence(context, group, input.publicQueryService, () => input.pipeline.listRevisions())
     // 「重点舆情」从上次生成开始累计到本次：同一个窗口内的新闻只进入一次结论，中性条目被过滤。
     // 上次生成的时间取最近一次已发布运行的开始时刻；没有就退回本组上一份快照的时点。
+    // 模块再把窗口压到「理论上的上一档盘口」——分析最大跨度 8 小时，关播三天也不会倒灌三天新闻。
     const lastPublished = repository.listRuns()
       .filter(run => run.status === 'succeeded')
       .sort((left, right) => (right.completedAt ?? right.queuedAt).localeCompare(left.completedAt ?? left.queuedAt))[0]

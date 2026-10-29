@@ -37,17 +37,18 @@ const reader = (items: readonly Item[]) => ({
 })
 
 describe('analysisNewsSentiment', () => {
-  it('resolves the smallest fixed window covering the time since the last analysis', () => {
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T11:30:00.000Z').window).toBe('1h')
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T08:30:00.000Z').window).toBe('4h')
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-28T13:00:00.000Z').window).toBe('24h')
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-25T12:00:00.000Z').window).toBe('7d')
-    // A very old boundary is capped at a week rather than asking for unbounded history.
-    const capped = resolveNewsSentimentWindow(asOf, '2026-09-01T00:00:00.000Z')
-    expect(capped.window).toBe('7d')
-    expect(capped.sinceMs).toBe(Date.parse(asOf) - 7 * 24 * 60 * 60 * 1_000)
-    // No previous analysis: the 24h fallback.
-    expect(resolveNewsSentimentWindow(asOf, undefined).window).toBe('24h')
+  it('starts at the later of the last analysis and the previous 8-hour session slot', () => {
+    // asOf = 20:00 Asia/Shanghai; the previous open strictly before it is 16:00 local (08:00Z).
+    const previousSlot = Date.parse('2026-10-29T08:00:00.000Z')
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T11:30:00.000Z')).toMatchObject({ window: '1h', sinceMs: Date.parse('2026-10-29T11:30:00.000Z') })
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T09:00:00.000Z').window).toBe('4h')
+    // Older than the previous open: the window is clamped to the open, not to the stale run.
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T06:00:00.000Z')).toMatchObject({ sinceMs: previousSlot, window: '4h' })
+    // No previous analysis at all, and a run from days ago, both land on the same floor.
+    expect(resolveNewsSentimentWindow(asOf, undefined).sinceMs).toBe(previousSlot)
+    expect(resolveNewsSentimentWindow(asOf, '2026-09-01T00:00:00.000Z').sinceMs).toBe(previousSlot)
+    // A run serving the 16:00 open looks back to 08:00, not to the instant it stands on.
+    expect(resolveNewsSentimentWindow('2026-10-29T08:00:00.000Z', undefined).sinceMs).toBe(Date.parse('2026-10-29T00:00:00.000Z'))
   })
 
   it('adds only non-neutral items published after the previous analysis, as citable facts', async () => {

@@ -8,6 +8,7 @@ import type { MarketIntelligencePublicQueryService } from '../public-query/publi
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import { appendAnalysisEventEvidence } from './analysisEventEvidence'
+import { slotInstantsWithin } from './analysisSlotCoverage'
 
 /**
  * 重点舆情进入自动分析。
@@ -17,13 +18,15 @@ import { appendAnalysisEventEvidence } from './analysisEventEvidence'
  * 作为 `sentiment` 域事实写进快照：窗口从上次分析开始，所以相邻两次结论不会重复同一条新闻；
  * 中性条目被过滤（它们多数不改变判断）；每条都通过 `appendAnalysisEventEvidence` 的同一套
  * 可见性与脱敏校验，带上可引用的 evidenceRef。
+ *
+ * 窗口起点还有一条硬下界：**理论上的上一次盘口**。分析按 08:00 / 16:00 / 24:00 三档执行，
+ * 最大跨度 8 小时；即使应用关了几天、上次真正发布是三天前，舆情也不能向更早回溯——那一段
+ * 本来就该由已经错过的分析负责，而不是堆进这一次结论。
  */
 export const analysisNewsSentimentPolicy = Object.freeze({
   maximumItems: 20,
-  /** 首次分析（或读不到上次生成时间）时回看的窗口。 */
-  fallbackLookbackMs: 24 * 60 * 60 * 1_000,
-  /** 长时间没有分析也不能一次灌进无限历史；行情事实本身也只覆盖有限窗口。 */
-  maximumLookbackMs: 7 * 24 * 60 * 60 * 1_000,
+  /** 盘口解析失败时的兜底跨度：与三档盘口的最大间隔一致。 */
+  fallbackLookbackMs: 8 * 60 * 60 * 1_000,
   defaultWindow: '24h' as const
 })
 
@@ -41,15 +44,22 @@ export type NewsSentimentWindowResolution = Readonly<{
 }>
 
 /**
- * The query window only comes in fixed sizes, so the smallest one covering `since` is asked for
- * and the exact boundary is enforced afterwards by `publishedAt > since`.
+ * The window start: the later of the previous generation and the previous session slot.
+ *
+ * The slot floor is the "theoretical" cadence, not the actual one: an app that was closed for
+ * three days must not pour three days of news into one conclusion. If `since` is even later (a
+ * manual refresh minutes ago) it wins, so the same headline never enters two analyses.
  */
 export function resolveNewsSentimentWindow(asOf: string, since: string | undefined): NewsSentimentWindowResolution {
   const asOfMs = Date.parse(asOf)
+  const floorMs = previousSessionSlotMs(asOfMs)
   const sinceMs = since ? Date.parse(since) : Number.NaN
-  const start = Number.isFinite(sinceMs) && sinceMs < asOfMs
-    ? Math.max(sinceMs, asOfMs - analysisNewsSentimentPolicy.maximumLookbackMs)
-    : asOfMs - analysisNewsSentimentPolicy.fallbackLookbackMs
+  const start = Math.min(
+    asOfMs,
+    Number.isFinite(floorMs)
+      ? Math.max(Number.isFinite(sinceMs) ? sinceMs : floorMs, floorMs)
+      : asOfMs - analysisNewsSentimentPolicy.fallbackLookbackMs
+  )
   const span = asOfMs - start
   const window: NewsSentimentQuery['window'] = span <= 60 * 60 * 1_000 ? '1h'
     : span <= 4 * 60 * 60 * 1_000 ? '4h'
@@ -58,9 +68,24 @@ export function resolveNewsSentimentWindow(asOf: string, since: string | undefin
   return { sinceMs: start, window }
 }
 
+/**
+ * The most recent session slot strictly before `asOf`.
+ *
+ * Strictly before: a run serving the 16:00 open must look back to 08:00, not to the instant it is
+ * already standing on (which would leave it with an empty news window).
+ */
+function previousSessionSlotMs(asOfMs: number): number {
+  if (!Number.isFinite(asOfMs)) return Number.NaN
+  const instants = slotInstantsWithin(new Date(asOfMs))
+  for (let index = instants.length - 1; index >= 0; index -= 1) {
+    if (instants[index]!.atMs < asOfMs) return instants[index]!.atMs
+  }
+  return Number.NaN
+}
+
 export type AppendNewsSentimentInput = Readonly<{
   asOf: string
-  /** 上一次分析的开始时间；缺省时回看 24 小时。 */
+  /** 上一次分析开始的时间；缺省（或早于理论盘口）时由盘口下界决定。 */
   since?: string
 }>
 
