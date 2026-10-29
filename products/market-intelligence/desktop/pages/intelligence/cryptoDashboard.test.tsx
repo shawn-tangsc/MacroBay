@@ -490,14 +490,13 @@ describe('crypto intelligence dashboard', () => {
     expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('fills the cumulative ETF rows across the summary width in two equal halves', () => {
-    const rowRule = cssBlock(styles, '.mi-capital-conditions__cumulative dd {')
-    const firstRule = cssBlock(styles, '.mi-capital-conditions__cumulative-window:first-child {')
-    const lastRule = cssBlock(styles, '.mi-capital-conditions__cumulative-window:last-child {')
+  it('fills the cumulative ETF rows across the summary width in three equal columns', () => {
+    const rowRule = cssBlock(styles, '.mi-capital-conditions dl > div.mi-capital-conditions__cumulative {')
+    const separatorRule = cssBlock(styles, '.mi-capital-conditions__cumulative-separator {')
 
-    expect(rowRule).toContain('grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr)')
-    expect(firstRule).toContain('justify-self: start')
-    expect(lastRule).toContain('justify-self: end')
+    expect(rowRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
+    expect(separatorRule).toContain('position: absolute')
+    expect(separatorRule).toContain('left: 66.6667%')
   })
 
   it('uses chart-dominant workspaces and a horizontal source status bar', () => {

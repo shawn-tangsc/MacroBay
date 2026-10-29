@@ -95,12 +95,14 @@ type EtfFlowConclusionAsset = { asset: 'BTC' | 'ETH'; rows: readonly { direction
 function CumulativeFact({ label, asset, text }: { label: string; asset: DashboardEtfFlowAsset | 'unavailable'; text: Text }): React.ReactElement {
   return <div className="mi-capital-conditions__cumulative" data-capital-fact="etf-cumulative">
     <dt>{label}</dt>
-    <dd>{asset === 'unavailable' ? text.cumulativeUnavailable : asset.cumulative.map((window, index) => (
-      <Fragment key={window.windowDays}>
-        {index === 0 ? null : <span className="mi-capital-conditions__cumulative-separator" aria-hidden="true"> · </span>}
-        <CumulativeWindow window={window} text={text} />
-      </Fragment>
-    ))}</dd>
+    {asset === 'unavailable'
+      ? <dd className="mi-capital-conditions__cumulative-unavailable">{text.cumulativeUnavailable}</dd>
+      : asset.cumulative.map((window, index) => (
+        <Fragment key={window.windowDays}>
+          <dd className="mi-capital-conditions__cumulative-window"><CumulativeWindow window={window} text={text} /></dd>
+          {index === 0 ? <span className="mi-capital-conditions__cumulative-separator" aria-hidden="true"> · </span> : null}
+        </Fragment>
+      ))}
   </div>
 }
 
