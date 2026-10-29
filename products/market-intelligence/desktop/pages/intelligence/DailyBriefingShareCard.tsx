@@ -51,7 +51,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     {hasNews ? <section className="mi-brief-poster__news-section">
       <h2>{text.sections.news}</h2>
       {doc.news.items.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
-        <span data-polarity={item.polarity}>{item.publishedAt.slice(11, 16)}</span>
+        <span data-polarity={item.polarity}>{formatTime(item.publishedAt, 'minute').slice(11, 16)}</span>
         <div>
           <p>{item.translatedTitle ?? item.title}</p>
           {item.why ? <small>{item.why}</small> : null}
@@ -73,7 +73,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         {keyRows.map((row) => <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)}>
           <span>{rowLabel(text, row.labelKey)}</span>
           <strong>{formatBriefingValue(row.value, text.noValue, locale)}</strong>
-          <small>{keyMeta(row, text, locale)}</small>
+          <small>{keyMeta(row, text, locale, formatTime)}</small>
         </div>)}
       </div>
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
@@ -151,17 +151,13 @@ function toneFor(row: BriefingMarketRow | BriefingPulseRow): 'positive' | 'negat
   return value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral'
 }
 
-function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {
+function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
   const change = formatBriefingChange(row.change, locale)
   if (row.id === 'etf-btc' || row.id === 'etf-eth') {
     const flow = (row.value?.number ?? 0) >= 0 ? text.flow.in : text.flow.out
     return `${flow}${row.observedAt ? ` · ${row.observedAt.slice(0, 10)}` : ''}`
   }
-  return change || (row.observedAt ? formatBriefingTime(row.observedAt) : '')
-}
-
-function formatBriefingTime(value: string): string {
-  return value.slice(0, 16).replace('T', ' ')
+  return change || (row.observedAt ? formatTime(row.observedAt, 'minute') : '')
 }
 
 function shortenEventTitle(value: string): string {
@@ -221,7 +217,7 @@ const SOURCE_LABELS: Readonly<Record<string, string>> = {
   'binance-futures-positioning': 'Binance Futures',
   '0xrouter-aggregate-provider': '0xRouter ETF',
   'alternative-fear-greed': 'Alternative.me',
-  'coinDesk-rss': 'CoinDesk RSS'
+  'coindesk-rss': 'CoinDesk RSS'
 }
 
 function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {
