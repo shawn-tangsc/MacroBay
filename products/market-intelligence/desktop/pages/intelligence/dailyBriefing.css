@@ -285,7 +285,7 @@
 
 .mi-daily-briefing-page__ai-failure { margin: 8px 0 0; padding: 6px 9px; border: 1px solid #4a3d24; border-radius: 6px; background: rgba(255, 196, 0, .05); color: var(--mi-dashboard-caution); font-size: 10px; }
 
-.mi-daily-briefing-page__body--with-appendix { grid-template-columns: 220px minmax(0, 1fr) 230px; }
+.mi-daily-briefing-page__body--with-appendix { grid-template-columns: 220px minmax(0, 1040px) 230px; justify-content: center; }
 .mi-daily-briefing-page__appendix { min-height: 0; overflow-y: auto; padding: 14px 0 0 16px; border-left: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing-page__appendix h2 { margin: 0 0 8px; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
 .mi-daily-briefing-page__appendix p { margin: 0 0 8px; padding-bottom: 8px; border-bottom: 1px solid var(--mi-dashboard-line); color: #7d8790; font-size: 10px; line-height: 1.55; }

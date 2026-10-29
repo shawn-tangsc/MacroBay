@@ -265,7 +265,24 @@ function isConclusionOrNull(value: unknown): boolean {
 
 function isNext(value: unknown): boolean {
   if (!isRecord(value) || !Array.isArray(value.items) || value.items.length > dailyBriefingPolicy.maximumNextItems) return false
-  return value.items.every((entry) => isRecord(entry) && isText(entry.eventKey) && isText(entry.title) && isText(entry.at))
+  if (!value.items.every(isNextItem)) return false
+  return value.focus === undefined || isNextItem(value.focus)
+}
+
+function isNextItem(value: unknown): boolean {
+  if (!isRecord(value) || !isText(value.eventKey) || !isText(value.title) || !isText(value.at)) return false
+  if (!['high', 'medium', 'low'].includes(String(value.importance))) return false
+  if (!['economic-indicator', 'financial-event', 'central-bank-activity'].includes(String(value.category))) return false
+  if (value.countryCode !== undefined && !isText(value.countryCode)) return false
+  if (value.countryName !== undefined && !isText(value.countryName)) return false
+  if (value.consensus !== undefined && !isText(value.consensus)) return false
+  if (value.previous !== undefined && !isText(value.previous)) return false
+  if (value.why !== undefined && !isText(value.why)) return false
+  if (value.watch !== undefined) {
+    if (!Array.isArray(value.watch) || value.watch.length > 3) return false
+    if (!value.watch.every((entry) => isRecord(entry) && isText(entry.condition) && isText(entry.implication))) return false
+  }
+  return true
 }
 
 function isProvenance(value: unknown): boolean {
