@@ -3,13 +3,13 @@ import { ArrowLeft, Settings2 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { LoadingState } from '@platform/ui/components/loading'
-import { resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
-import type { DailyBriefingText } from './DailyBriefingDocumentView'
+import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
@@ -35,7 +35,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   onConfigureSources?: () => void
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings'>
 }>): React.ReactElement {
-  const timeZone = useMemo(() => resolveSystemTimeZone(), [])
+  const timeZone = useShellTimeZone()
   const formatTime = useShellTimeFormat()
   const requestRef = useRef(0)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
