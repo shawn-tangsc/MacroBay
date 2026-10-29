@@ -34,10 +34,6 @@ export type AnalysisNewsSentimentQuery = Readonly<{
   query: (input: NewsSentimentQuery) => Promise<NewsSentimentView>
 }>
 
-const polarityLabel: Readonly<Record<string, string>> = Object.freeze({
-  bullish: '看多', bearish: '看空', mixed: '多空混合'
-})
-
 export type NewsSentimentWindowResolution = Readonly<{
   /** Earliest occurrence time allowed: the previous session slot. */
   windowStartMs: number
@@ -189,10 +185,15 @@ export async function appendAnalysisNewsSentiment(
   return { ...withEvidence, facts }
 }
 
+/**
+ * The fact value is frozen before the run's prose language is known, so it carries the
+ * language-neutral polarity key and English field names rather than Chinese words. The prompt
+ * tells the model to translate input names into its own language; a Chinese label baked here
+ * would leave an English conclusion quoting 「看空」.
+ */
 function composeFactValue(item: NewsSentimentView['items'][number]): string {
   const title = item.displayTitle ?? item.title
-  const label = polarityLabel[item.polarity] ?? item.polarity
-  return `${label}（强度 ${item.strength}/5，置信 ${Math.round(item.confidence)}%）｜${title.slice(0, MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelFieldCharacters)}`
+  return `${item.polarity} · strength ${item.strength}/5 · confidence ${Math.round(item.confidence)}%｜${title.slice(0, MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelFieldCharacters)}`
 }
 
 /** The asset a headline is about, or the market when it names none of the two we track. */

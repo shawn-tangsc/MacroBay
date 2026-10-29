@@ -76,7 +76,7 @@ describe('analysisNewsSentiment', () => {
     expect(first).toMatchObject({
       domain: 'sentiment', metric: 'news-sentiment', subject: 'BTC', comparability: 'not-comparable', evidenceRefId: 'ev-item-bear'
     })
-    expect(String(first!.value)).toContain('看空')
+    expect(String(first!.value)).toContain('bearish')
     expect(String(first!.value)).toContain('交易所故障')
     expect(updated.evidenceRefs.map(ref => ref.evidenceRefId).sort()).toEqual(['ev-item-bear', 'ev-item-bull'])
     // The neutral item and the one from before the last analysis are not in the run.
@@ -127,7 +127,7 @@ describe('analysisNewsSentiment', () => {
       asOf, since: '2026-10-29T11:00:00.000Z'
     })
     expect(updated.facts).toHaveLength(1)
-    expect(String(updated.facts[0]!.value)).toContain('多空混合')
+    expect(String(updated.facts[0]!.value)).toContain('mixed')
   })
 
   it('names an unavailable store instead of pretending there was no news', async () => {
