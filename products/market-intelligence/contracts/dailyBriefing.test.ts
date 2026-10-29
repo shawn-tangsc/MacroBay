@@ -89,3 +89,42 @@ describe('daily briefing contract', () => {
     expect(isDailyBriefingDocumentWithinBudget(circular)).toBe(false)
   })
 })
+
+describe('daily briefing editorial layer', () => {
+  it('keeps the agent lede, why lines, conclusion translation and editorial provenance optional', () => {
+    const editorial: DailyBriefingDocument = {
+      ...minimalDocument,
+      lede: { source: 'agent', text: 'Agent lede.', factCount: 3, generatedAt: '2026-10-30T00:30:00.000Z' },
+      news: {
+        items: [{
+          itemId: 'n1', title: 'Headline', translatedTitle: '标题', sourceName: 'Source',
+          publishedAt: '2026-10-30T00:00:00.000Z', polarity: 'bearish', strength: 3, confidence: 80,
+          symbols: ['BTC'], why: 'Because flows turned negative.'
+        }],
+        macro: [{
+          eventKey: 'US.CPI', title: 'cpi', scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high',
+          actual: '3.4%', consensus: '3.2%', surprise: { direction: 'beat', value: 0.2, unit: 'pp' },
+          why: 'The beat lifts the front end.'
+        }],
+        notes: {}
+      },
+      conclusion: {
+        summaryId: 's1', publishedAt: '2026-10-30T00:00:00.000Z', direction: 'bearish',
+        directions: [{ horizon: 'short', direction: 'bearish', confidence: 'medium' }],
+        summary: 'Summary.', translation: '摘要。', conditions: [], invalidations: [],
+        counterEvidence: [], topSignal: null, dataGaps: [], caveats: []
+      },
+      editorial: { dataNote: 'Data note.', invalidationNote: 'Invalidation note.' },
+      provenance: {
+        summaryId: 's1', readAt: '2026-10-30T00:30:00.000Z',
+        editorialMeta: { promptVersion: 'daily-briefing.v1', model: 'model', source: 'custom', fallback: 'custom-unavailable' }
+      }
+    }
+    expect(editorial.lede.source).toBe('agent')
+    expect(editorial.news.items[0]?.why).toBe('Because flows turned negative.')
+    expect(editorial.news.macro[0]?.why).toBe('The beat lifts the front end.')
+    expect(editorial.conclusion?.translation).toBe('摘要。')
+    expect(editorial.provenance.editorialMeta?.fallback).toBe('custom-unavailable')
+    expect(isDailyBriefingDocumentWithinBudget(editorial)).toBe(true)
+  })
+})
