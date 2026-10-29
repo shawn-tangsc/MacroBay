@@ -31,7 +31,9 @@ export const dashboardCapitalConditionsPresentationPolicy = {
 type DashboardEtfFlowRow = { tradingDate: string; netFlowUsd: number; direction: 'inflow' | 'outflow' | 'zero'; magnitudePercent: number }
 export type DashboardEtfCumulativeWindow = { windowDays: number; coveredDays: number; netFlowUsd: string; complete: boolean }
 export type DashboardEtfFlowAsset = { asset: 'BTC' | 'ETH'; latestNetFlowUsd: string; observedAt: string; cumulative: readonly DashboardEtfCumulativeWindow[]; rows: readonly DashboardEtfFlowRow[] }
-type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset }
+/** BTC/ETH rows are date-aligned by contract, so the table header can state one coverage per window. */
+export type DashboardEtfCumulativeCoverage = { windowDays: number; coveredDays: number; complete: boolean }
+type DashboardEtfFlow = { state: 'available'; btc: DashboardEtfFlowAsset; eth: DashboardEtfFlowAsset; coverage: readonly DashboardEtfCumulativeCoverage[] }
 type DashboardStablecoinFlow = { tradingDate: string; netFlowUsd: number }
 type DashboardFlowHistory = { state: 'available'; rows: readonly { tradingDate: string; funds: number; btc: number; eth: number }[] }
 
@@ -116,7 +118,27 @@ function projectEtf(value: unknown, asOf: string): DashboardEtfFlow | 'unavailab
   if (!isVisibleEtfPublicSnapshot(value, asOf)) return dashboardCapitalConditionsPresentationPolicy.etfState
   const btc = projectEtfAsset(value.btc)
   const eth = projectEtfAsset(value.eth)
-  return btc && eth ? { state: 'available', btc, eth } : dashboardCapitalConditionsPresentationPolicy.etfState
+  if (!btc || !eth) return dashboardCapitalConditionsPresentationPolicy.etfState
+  const coverage = projectEtfCoverage(btc, eth)
+  return coverage ? { state: 'available', btc, eth, coverage } : dashboardCapitalConditionsPresentationPolicy.etfState
+}
+
+function projectEtfCoverage(btc: DashboardEtfFlowAsset, eth: DashboardEtfFlowAsset): readonly DashboardEtfCumulativeCoverage[] | undefined {
+  if (btc.cumulative.length !== eth.cumulative.length) return undefined
+  const coverage: DashboardEtfCumulativeCoverage[] = []
+  for (let index = 0; index < btc.cumulative.length; index += 1) {
+    const btcWindow = btc.cumulative[index]!
+    const ethWindow = eth.cumulative[index]!
+    if (btcWindow.windowDays !== ethWindow.windowDays ||
+      btcWindow.complete !== (btcWindow.coveredDays === btcWindow.windowDays) ||
+      ethWindow.complete !== (ethWindow.coveredDays === ethWindow.windowDays)) return undefined
+    coverage.push({
+      windowDays: btcWindow.windowDays,
+      coveredDays: Math.min(btcWindow.coveredDays, ethWindow.coveredDays),
+      complete: btcWindow.complete && ethWindow.complete
+    })
+  }
+  return coverage
 }
 
 function projectFlowHistory(stablecoinHistory: readonly DashboardStablecoinFlow[] | undefined, etf: DashboardEtfFlow | 'unavailable'): DashboardFlowHistory | 'unavailable' {

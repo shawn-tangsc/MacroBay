@@ -427,7 +427,7 @@ describe('crypto intelligence dashboard', () => {
     expect(fundingRule).toContain('padding-left: var(--mi-dashboard-band-zone-inline)')
     expect(fundingRule).toContain('border-left: 1px solid var(--mi-dashboard-line)')
     expect(styles).not.toContain('mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__state-card')
-    expect(styles).toContain('mi-capital-conditions__etf-summary')
+    expect(styles).toContain('mi-capital-conditions__etf-table')
   })
 
   it('keeps the sentiment zone compact and stacks the funding-history panel at narrow widths', () => {
@@ -444,7 +444,7 @@ describe('crypto intelligence dashboard', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const rowRule = cssBlock(styles, '.mi-crypto-dashboard__capital-positioning-row {')
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
-    const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
+    const stableRule = cssBlock(styles, '.mi-capital-conditions__etf-col-asset {')
     const gaugeRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment-gauge {')
 
     expect(dashboardRootRule).toContain('--mi-dashboard-capital-header-row-gap')
@@ -453,24 +453,26 @@ describe('crypto intelligence dashboard', () => {
     expect(rowRule).toContain('padding: var(--mi-dashboard-band-block-padding) 0')
     expect(headerBandRule).toContain('flex-wrap: wrap')
     expect(headerBandRule).toContain('gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap)')
-    expect(trendsRule).toContain('margin-top: 0')
+    expect(stableRule).toContain('width: 26%')
     expect(gaugeRule).toContain('padding: var(--mi-dashboard-gauge-block-padding)')
   })
 
-  it('keeps capital facts top-aligned with a two-column summary in the first band', () => {
+  it('puts the stablecoin and fixed-layout ETF tables in the first band', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const capitalRule = cssBlock(styles, '.mi-capital-conditions {')
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
-    const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
+    const stableRule = cssBlock(styles, '.mi-capital-conditions__etf-col-asset {')
+    const tableRule = cssBlock(styles, '.mi-capital-conditions__etf-table {')
     const contentRowRule = cssBlock(styles, '.mi-capital-conditions__content-row {')
 
     expect(capitalRule).toContain('align-content: start')
     expect(capitalRule).toContain('row-gap: var(--mi-dashboard-capital-content-row-gap)')
     expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
-    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
-    expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
-    expect(trendsRule).toContain('justify-content: start')
+    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 10fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 15fr')
+    expect(stableRule).toContain('width: 26%')
+    expect(tableRule).toContain('table-layout: fixed')
+    expect(tableRule).toContain('width: 100%')
     expect(headerBandRule).toContain('min-width: 0')
   })
 
@@ -490,22 +492,24 @@ describe('crypto intelligence dashboard', () => {
     expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 
-  it('fills the cumulative ETF rows across the summary width in three equal columns', () => {
-    const rowRule = cssBlock(styles, '.mi-capital-conditions dl > div.mi-capital-conditions__cumulative {')
-    const separatorRule = cssBlock(styles, '.mi-capital-conditions__cumulative-separator {')
+  it('reserves a real streak column and a caution coverage label in the ETF table', () => {
+    const tableRule = cssBlock(styles, '.mi-capital-conditions__etf-table {')
+    const streakRule = cssBlock(styles, '.mi-capital-conditions__etf-table tbody td.mi-capital-conditions__streak {')
+    const coverageRule = cssBlock(styles, '.mi-capital-conditions__coverage {')
 
-    expect(rowRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
-    expect(separatorRule).toContain('position: absolute')
-    expect(separatorRule).toContain('left: 66.6667%')
+    expect(tableRule).toContain('table-layout: fixed')
+    expect(streakRule).toContain('font-size: 10px')
+    expect(coverageRule).toContain('color: var(--mi-dashboard-caution)')
+    expect(coverageRule).toContain('font-size: 9px')
   })
 
-  it('uses chart-dominant workspaces and a horizontal source status bar', () => {
+  it('uses a chart-forward split and a horizontal source status bar', () => {
     const dashboardRootRule = cssBlock(styles, '.mi-crypto-dashboard {')
     const sourceRule = cssBlock(styles, '.mi-crypto-dashboard__source-region {')
     const sourceRowRule = cssBlock(styles, '.mi-crypto-dashboard__source-row {')
 
-    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 8fr')
-    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 17fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-capital-summary-allocation: 10fr')
+    expect(dashboardRootRule).toContain('--mi-dashboard-market-flow-allocation: 15fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
     expect(sourceRule).toContain('grid-template-columns: repeat(3, minmax(0, 1fr))')
@@ -533,15 +537,15 @@ describe('crypto intelligence dashboard', () => {
     }
   })
 
-  it('keeps capital facts in two columns down to the stack point while allowing charts to shrink', () => {
-    const trendsRule = cssBlock(styles, '.mi-capital-conditions dl {')
+  it('lets the ETF table shrink without losing the chart axis', () => {
+    const tableRule = cssBlock(styles, '.mi-capital-conditions__etf-table {')
     const chartRule = cssBlock(styles, '.mi-capital-conditions__chart {')
     const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
-    expect(trendsRule).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))')
+    expect(tableRule).toContain('width: 100%')
     expect(chartRule).toContain('min-width: 0')
-    // 堆叠分支只把两列并成一列，不再重排事实表：事实本来就一直是两列。
-    expect(stackStyles).not.toContain('.mi-capital-conditions dl')
+    // 堆叠分支只把两列并成一列，表格列宽不变。
+    expect(stackStyles).not.toContain('.mi-capital-conditions__etf-table')
     expect(stackStyles).toContain('.mi-capital-conditions__content-row')
   })
 

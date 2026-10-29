@@ -1,38 +1,42 @@
-import { Fragment, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from 'antd'
 
-import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfCumulativeWindow, type DashboardEtfFlowAsset } from './capitalConditionsModel'
+import { etfCumulativeFlowPolicy } from '../../../../contracts/etfCumulativeFlow'
+import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = {
-  title: string
   loading: string
   empty: string
   unavailable: string
-  stablecoinSupply: string
+  stablecoin: string
+  asset: string
+  totalSupply: string
+  change1d: string
   change7d: string
-  btcEtfLatest: string
-  ethEtfLatest: string
-  btcEtfCumulative: string
-  ethEtfCumulative: string
-  cumulativeWindow: string
-  cumulativeWindowPartial: string
-  cumulativeUnavailable: string
+  change30d: string
+  latest: string
+  windowDays: string
+  coverage: string
+  streakColumn: string
+  streak: string
+  streakSingle: string
+  etfTableUnavailable: string
   observedAt: string
   etfFlow: string
+  recent7TradingDays: string
   etfUnavailable: string
   funds: string
   btc: string
   eth: string
   flowDirections: Record<'inflow' | 'outflow' | 'zero', string>
-  singleDay: string
-  consecutiveDays: string
-  valueUnavailable: string
   refresh: string
   refreshFailed: string
 }
+
+type AvailableState = Extract<DashboardCapitalConditionsState, { state: 'available' }>
 
 export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = false, refreshFailed = false }: Readonly<{
   state: DashboardCapitalConditionsState
@@ -45,7 +49,6 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
   const formatTime = useShellTimeFormat()
   if (state.state !== 'available') return <section className="mi-capital-conditions" data-state={state.state}>
     <div className="mi-capital-conditions__summary">
-      <h2>{text.title}</h2>
       {state.state === 'loading'
         ? <LoadingState label={text.loading} minHeight={140} />
         : <p>{text[state.state]}</p>}
@@ -61,76 +64,91 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
         <div className="mi-capital-conditions__header-band">
-          <h2>{text.title}</h2>
           <small className="mi-capital-conditions__observed-at">{`${text.observedAt} ${formatTime(state.observedAt)}`}</small>
         </div>
-        <div className="mi-capital-conditions__facts"><dl>
-          <Fact kind="supply" label={text.stablecoinSupply} value={state.currentUsd} />
-          <Fact kind="change" label={text.change7d} value={`${state.change7dUsd} · ${state.change7dPercent}`} direction={flowDirection(state.change7dUsd)} />
-          <Fact kind="etf" label={text.btcEtfLatest} value={state.etf === 'unavailable' ? text.valueUnavailable : state.etf.btc.latestNetFlowUsd} direction={state.etf === 'unavailable' ? 'zero' : flowDirection(state.etf.btc.latestNetFlowUsd)} />
-          <Fact kind="etf" label={text.ethEtfLatest} value={state.etf === 'unavailable' ? text.valueUnavailable : state.etf.eth.latestNetFlowUsd} direction={state.etf === 'unavailable' ? 'zero' : flowDirection(state.etf.eth.latestNetFlowUsd)} />
-          {/* Cumulative rows read the same validated ETF window as the chart. A window the source
-              cannot cover keeps its real day count instead of being shown as a full 20 days. */}
-          <CumulativeFact label={text.btcEtfCumulative} asset={state.etf === 'unavailable' ? 'unavailable' : state.etf.btc} text={text} />
-          <CumulativeFact label={text.ethEtfCumulative} asset={state.etf === 'unavailable' ? 'unavailable' : state.etf.eth} text={text} />
-        </dl></div>
-        {state.etf !== 'unavailable' ? <EtfFlowSummary etf={state.etf} text={text} /> : null}
+        <StablecoinTable state={state} text={text} />
+        <EtfTable etf={state.etf} text={text} />
       </div>
       <EtfFlow state={state.etf} flowHistory={state.flowHistory} text={text} />
     </div>
   </section>
 }
 
-type DashboardEtfFlow = Extract<Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf'], { state: 'available' }>
-
-function EtfFlowSummary({ etf, text }: { etf: DashboardEtfFlow; text: Text }): React.ReactElement {
-  return <div className="mi-capital-conditions__etf-summary">
-    <EtfFlowConclusion asset={etf.btc} label={text.btc} text={text} />
-    <EtfFlowConclusion asset={etf.eth} label={text.eth} text={text} />
-  </div>
+/** Stock and flow share one compact table language: supply plus its 1D / 7D / 30D changes. */
+function StablecoinTable({ state, text }: { state: AvailableState; text: Text }): React.ReactElement {
+  return <table className="mi-capital-conditions__etf-table mi-capital-conditions__stable-table">
+    <colgroup>
+      <col className="mi-capital-conditions__etf-col-asset" />
+      <col span={3} />
+      <col className="mi-capital-conditions__etf-col-supply" />
+    </colgroup>
+    <thead><tr>
+      <th scope="col">{text.asset}</th>
+      <th scope="col">{text.change1d}</th>
+      <th scope="col">{text.change7d}</th>
+      <th scope="col">{text.change30d}</th>
+      <th scope="col">{text.totalSupply}</th>
+    </tr></thead>
+    <tbody><tr>
+      <th scope="row">{text.stablecoin}</th>
+      <StablecoinChangeCell usd={state.change1dUsd} percent={state.change1dPercent} />
+      <StablecoinChangeCell usd={state.change7dUsd} percent={state.change7dPercent} />
+      <StablecoinChangeCell usd={state.change30dUsd} percent={state.change30dPercent} />
+      <td className="mi-capital-conditions__stable-supply">{state.currentUsd}</td>
+    </tr></tbody>
+  </table>
 }
 
-type EtfFlowConclusionAsset = { asset: 'BTC' | 'ETH'; rows: readonly { direction: 'inflow' | 'outflow' | 'zero' }[] }
-
-function CumulativeFact({ label, asset, text }: { label: string; asset: DashboardEtfFlowAsset | 'unavailable'; text: Text }): React.ReactElement {
-  return <div className="mi-capital-conditions__cumulative" data-capital-fact="etf-cumulative">
-    <dt>{label}</dt>
-    {asset === 'unavailable'
-      ? <dd className="mi-capital-conditions__cumulative-unavailable">{text.cumulativeUnavailable}</dd>
-      : asset.cumulative.map((window, index) => (
-        <Fragment key={window.windowDays}>
-          <dd className="mi-capital-conditions__cumulative-window"><CumulativeWindow window={window} text={text} /></dd>
-          {index === 0 ? <span className="mi-capital-conditions__cumulative-separator" aria-hidden="true"> · </span> : null}
-        </Fragment>
-      ))}
-  </div>
+function StablecoinChangeCell({ usd, percent }: { usd: string; percent: string }): React.ReactElement {
+  return <td><div className="mi-capital-conditions__stable-change">
+    <span data-flow-direction={flowDirection(usd)}>{usd}</span>
+    <span className="mi-capital-conditions__pct">{percent}</span>
+  </div></td>
 }
 
-/**
- * The day label and the covered-day caveat stay muted; only the formatted amount carries the
- * direction color. Splitting on `{amount}` keeps translator word order intact when the number is
- * not at the end of the sentence.
- */
-function CumulativeWindow({ window, text }: { window: DashboardEtfCumulativeWindow; text: Text }): React.ReactElement {
-  const template = window.complete ? text.cumulativeWindow : text.cumulativeWindowPartial
-  const [before = '', after = ''] = template.split('{amount}')
-  const values = { days: window.windowDays, coveredDays: window.coveredDays }
-  return <span className="mi-capital-conditions__cumulative-window">
-    <span className="mi-capital-conditions__cumulative-days">{format(before, values)}</span>
-    <span data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</span>
-    {after ? <span className="mi-capital-conditions__cumulative-caveat">{format(after, values)}</span> : null}
-  </span>
+/** One row per asset, one column per horizon: no label repeats inside the body. */
+function EtfTable({ etf, text }: { etf: AvailableState['etf']; text: Text }): React.ReactElement {
+  const coverage = etf === 'unavailable' ? undefined : etf.coverage
+  return <table className="mi-capital-conditions__etf-table">
+    <colgroup>
+      <col className="mi-capital-conditions__etf-col-asset" />
+      <col span={3} />
+      <col className="mi-capital-conditions__etf-col-streak" />
+    </colgroup>
+    <thead><tr>
+      <th scope="col">{text.asset}</th>
+      <th scope="col">{text.latest}</th>
+      {etfCumulativeFlowPolicy.windows.map((days) => {
+        const windowCoverage = coverage?.find((candidate) => candidate.windowDays === days)
+        return <th scope="col" key={days}>
+          {format(text.windowDays, { days })}
+          {windowCoverage && !windowCoverage.complete
+            ? <> <span className="mi-capital-conditions__coverage">{format(text.coverage, { days: windowCoverage.coveredDays })}</span></>
+            : null}
+        </th>
+      })}
+      <th scope="col">{text.streakColumn}</th>
+    </tr></thead>
+    <tbody>
+      {etf === 'unavailable'
+        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={5}>{text.etfTableUnavailable}</td></tr>
+        : <><EtfRow asset={etf.btc} label={text.btc} text={text} /><EtfRow asset={etf.eth} label={text.eth} text={text} /></>}
+    </tbody>
+  </table>
 }
 
-function EtfFlowConclusion({ asset, label, text }: { asset: EtfFlowConclusionAsset; label: string; text: Text }): React.ReactElement | null {
+function EtfRow({ asset, label, text }: { asset: DashboardEtfFlowAsset; label: string; text: Text }): React.ReactElement {
   const latest = asset.rows.at(-1)
-  if (!latest) return null
-  const days = consecutiveDirectionDays(asset.rows, latest.direction)
-  const duration = days === 1 ? text.singleDay : format(text.consecutiveDays, { count: days })
-  return <div data-etf-summary-asset={asset.asset.toLowerCase()}>
-    <strong><i aria-hidden="true" data-series={asset.asset.toLowerCase()} />{label}</strong>
-    <span data-flow-direction={latest.direction}>{text.flowDirections[latest.direction]} · {duration}</span>
-  </div>
+  const days = latest ? consecutiveDirectionDays(asset.rows, latest.direction) : 0
+  const streak = latest && days > 0
+    ? format(days === 1 ? text.streakSingle : text.streak, { flow: text.flowDirections[latest.direction], count: days })
+    : ''
+  return <tr>
+    <th scope="row"><i className="mi-capital-conditions__asset-dot" data-series={asset.asset.toLowerCase()} aria-hidden="true" />{label}</th>
+    <td data-flow-direction={flowDirection(asset.latestNetFlowUsd)}>{asset.latestNetFlowUsd}</td>
+    {asset.cumulative.map((window) => <td key={window.windowDays} data-flow-direction={flowDirection(window.netFlowUsd)}>{window.netFlowUsd}</td>)}
+    <td className="mi-capital-conditions__streak" data-flow-direction={latest?.direction}>{streak}</td>
+  </tr>
 }
 
 function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflow' | 'zero' }[], direction: 'inflow' | 'outflow' | 'zero'): number {
@@ -154,7 +172,7 @@ function EtfFlow({ state, flowHistory, text }: { state: Extract<DashboardCapital
     const y = clamp(event.clientY - rect.top, 0, rect.height)
     setHoveredFlow({ row, x, y, ...placeTooltip(x, y, rect.width, rect.height) })
   }
-  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available"><header><h3>{text.etfFlow}</h3></header><div className="mi-capital-conditions__chart-legend"><span><i data-series="funds" />{text.funds}</span><span><i data-series="btc" />{text.btc}</span><span><i data-series="eth" />{text.eth}</span></div><div className="mi-capital-conditions__chart" ref={chartRef} role="img" aria-label={text.etfFlow} onMouseLeave={() => setHoveredFlow(null)}><div className="mi-capital-conditions__chart-axis" aria-hidden="true" data-zero-axis={maximumMagnitude === 0 ? 'true' : undefined}>{axisMagnitude ? <><span>{axisMagnitude}</span><span>$0</span><span>-{axisMagnitude.slice(1)}</span></> : <span>$0</span>}</div><div className="mi-capital-conditions__chart-zero" />{hoveredFlow ? <><div className="mi-capital-conditions__chart-crosshair" data-flow-crosshair="vertical" style={{ left: hoveredFlow.x }} /><div className="mi-capital-conditions__chart-crosshair" data-flow-crosshair="horizontal" style={{ top: hoveredFlow.y }} /></> : null}{visibleRows.map((row) => <div className="mi-capital-conditions__chart-day" data-trading-date={row.tradingDate} key={row.tradingDate} onMouseEnter={(event) => updateHover(row, event)} onMouseMove={(event) => updateHover(row, event)}><div className="mi-capital-conditions__chart-half" data-flow-half="inflow">{dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] >= 0).map((series) => <Bar key={series} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}</div><div className="mi-capital-conditions__chart-half" data-flow-half="outflow">{dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] < 0).map((series) => <Bar key={series} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}</div></div>)}{hoveredFlow ? <div className="mi-capital-conditions__chart-tooltip" data-flow-tooltip style={{ left: hoveredFlow.tooltipLeft, top: hoveredFlow.tooltipTop }}><strong>{hoveredFlow.row.tradingDate}</strong><span><i data-series="funds" />{text.funds}<b>{formatFlowValue(hoveredFlow.row.funds)}</b></span><span><i data-series="btc" />{text.btc}<b>{formatFlowValue(hoveredFlow.row.btc)}</b></span><span><i data-series="eth" />{text.eth}<b>{formatFlowValue(hoveredFlow.row.eth)}</b></span></div> : null}</div><div className="mi-capital-conditions__chart-ticks" aria-hidden="true">{tickIndexes.map((index) => <span key={visibleRows[index].tradingDate}>{visibleRows[index].tradingDate}</span>)}</div></section>
+  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available"><header><h3>{text.etfFlow}</h3><span className="mi-capital-conditions__chart-window">{text.recent7TradingDays}</span></header><div className="mi-capital-conditions__chart-legend"><span><i data-series="funds" />{text.funds}</span><span><i data-series="btc" />{text.btc}</span><span><i data-series="eth" />{text.eth}</span></div><div className="mi-capital-conditions__chart" ref={chartRef} role="img" aria-label={text.etfFlow} onMouseLeave={() => setHoveredFlow(null)}><div className="mi-capital-conditions__chart-axis" aria-hidden="true" data-zero-axis={maximumMagnitude === 0 ? 'true' : undefined}>{axisMagnitude ? <><span>{axisMagnitude}</span><span>$0</span><span>-{axisMagnitude.slice(1)}</span></> : <span>$0</span>}</div><div className="mi-capital-conditions__chart-zero" />{hoveredFlow ? <><div className="mi-capital-conditions__chart-crosshair" data-flow-crosshair="vertical" style={{ left: hoveredFlow.x }} /><div className="mi-capital-conditions__chart-crosshair" data-flow-crosshair="horizontal" style={{ top: hoveredFlow.y }} /></> : null}{visibleRows.map((row) => <div className="mi-capital-conditions__chart-day" data-trading-date={row.tradingDate} key={row.tradingDate} onMouseEnter={(event) => updateHover(row, event)} onMouseMove={(event) => updateHover(row, event)}><div className="mi-capital-conditions__chart-half" data-flow-half="inflow">{dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] >= 0).map((series) => <Bar key={series} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}</div><div className="mi-capital-conditions__chart-half" data-flow-half="outflow">{dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] < 0).map((series) => <Bar key={series} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}</div></div>)}{hoveredFlow ? <div className="mi-capital-conditions__chart-tooltip" data-flow-tooltip style={{ left: hoveredFlow.tooltipLeft, top: hoveredFlow.tooltipTop }}><strong>{hoveredFlow.row.tradingDate}</strong><span><i data-series="funds" />{text.funds}<b>{formatFlowValue(hoveredFlow.row.funds)}</b></span><span><i data-series="btc" />{text.btc}<b>{formatFlowValue(hoveredFlow.row.btc)}</b></span><span><i data-series="eth" />{text.eth}<b>{formatFlowValue(hoveredFlow.row.eth)}</b></span></div> : null}</div><div className="mi-capital-conditions__chart-ticks" aria-hidden="true">{tickIndexes.map((index) => <span key={visibleRows[index].tradingDate}>{visibleRows[index].tradingDate}</span>)}</div></section>
 }
 
 type FlowChartRow = { tradingDate: string; funds: number; btc: number; eth: number }

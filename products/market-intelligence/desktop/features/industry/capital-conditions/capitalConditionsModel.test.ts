@@ -45,6 +45,10 @@ describe('dashboard capital conditions model', () => {
       { windowDays: 5, coveredDays: 5, netFlowUsd: '-$111', complete: true },
       { windowDays: 20, coveredDays: 20, netFlowUsd: '-$381', complete: true }
     ])
+    expect(result.etf.coverage).toEqual([
+      { windowDays: 5, coveredDays: 5, complete: true },
+      { windowDays: 20, coveredDays: 20, complete: true }
+    ])
   })
 
   it('marks the twenty-day window incomplete when the local window only holds twelve rows', () => {
@@ -61,6 +65,10 @@ describe('dashboard capital conditions model', () => {
     expect(result.etf.eth.cumulative).toEqual([
       { windowDays: 5, coveredDays: 5, netFlowUsd: '-$50', complete: true },
       { windowDays: 20, coveredDays: 12, netFlowUsd: '-$78', complete: false }
+    ])
+    expect(result.etf.coverage).toEqual([
+      { windowDays: 5, coveredDays: 5, complete: true },
+      { windowDays: 20, coveredDays: 12, complete: false }
     ])
   })
 
