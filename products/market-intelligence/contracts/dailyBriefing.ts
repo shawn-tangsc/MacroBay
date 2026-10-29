@@ -40,6 +40,7 @@ export type FactImportanceReason =
   | 'high-impact-release'
   | 'nearest-event'
   | 'counter-evidence'
+  | 'context'
   | 'agent'
 
 export type FactImportance = Readonly<{
