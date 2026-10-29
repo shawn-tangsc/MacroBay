@@ -324,6 +324,32 @@ describe('MarketAnalysisTimeline', () => {
     expect(invoke.mock.calls.filter(([, method]) => method === 'marketAnalysis.requestInitialAnalysis')).toHaveLength(1)
   })
 
+  it('releases the refresh action when the follow-up read fails instead of spinning forever', async () => {
+    let timelineReads = 0
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') {
+        timelineReads += 1
+        // The first read is the mounted list; the poll's read fails.
+        if (timelineReads > 1) throw new Error('read failed')
+        return { schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '旧摘要', version: 1, triggerStatus: null }], nextCursor: null }
+      }
+      if (method === 'marketAnalysis.getSettings') return { enabled: true, providerId: 'provider-1', modelId: 'model-1', updatedAt: asOf }
+      return { itemId: 'item-1', queued: true }
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    const refresh = Array.from(container.querySelectorAll('button')).find(button => button.textContent === text.refreshAnalysis)
+    await act(async () => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+
+    // `queued` here was a dead state: no poll was left to clear it, so the button stayed disabled.
+    const button = Array.from(container.querySelectorAll('button')).find(candidate => candidate.textContent === text.refreshAnalysis)
+    expect(button?.disabled).toBe(false)
+    expect(container.querySelector('[data-analysis-error]')).toBeNull()
+  })
+
   it('never lets the bounded poll join a background read that does not fetch the attempt', async () => {
     let releaseBackgroundRead: (() => void) | undefined
     let timelineReads = 0

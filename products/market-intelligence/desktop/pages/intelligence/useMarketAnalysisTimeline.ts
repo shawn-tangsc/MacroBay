@@ -57,14 +57,13 @@ type State = Readonly<{
 export const analysisTimelineRefreshPolicy = Object.freeze({
   pollIntervalMs: 1_000,
   /**
-   * Bounded, but not shorter than one run can legitimately take: the run job's own timeout is
-   * 600s because one run may spend two model attempts after a contract rejection. A shorter poll
-   * gave up on work that was still inside its budget and told the reader it had failed. Giving up
-   * while the run is still queued/running is reported as still-running rather than as "not
-   * published", and this window matches the job's budget so a slow model that does finish is seen
-   * finishing instead of needing a manual refresh.
+   * Bounded, but longer than the run job's own timeout: the job is 600s because one run may spend
+   * two model attempts after a contract rejection. The poll stops a minute later, so the job's own
+   * cancellation is observed as a terminal run instead of the panel giving up first. A run that is
+   * still queued/running at the cap releases the action rather than leaving a disabled button
+   * behind — no polling is left that would ever end the spinner.
    */
-  maxPollAttempts: 600,
+  maxPollAttempts: 660,
   /**
    * The bounded poll above stops as soon as a node is published — which is precisely when the
    * reader stops watching a spinner and starts expecting new analyses. With no push notification
@@ -336,12 +335,17 @@ export function useMarketAnalysisTimeline(input: Readonly<{
   }
 
   type PollOutcome = 'published' | 'failed' | 'pending' | 'unreadable'
-  type PollResult = Readonly<{ outcome: PollOutcome; failureCode?: string | null }>
+  type PollResult = Readonly<{ outcome: PollOutcome }>
 
   const pollForCompletion = async (baselineEntryId: string | undefined, pollAttempt = 0): Promise<PollResult> => {
     setRequestState('queued')
     const loaded = await load(undefined, true)
-    if (!loaded) return { outcome: 'unreadable' }
+    if (!loaded) {
+      // The read itself failed. Leaving the request `queued` kept the action disabled forever with
+      // no poll left to end it; the list already reports the read failure, so release the action.
+      setRequestState('idle')
+      return { outcome: 'unreadable' }
+    }
     const published = loaded.entries[0]
     if (published && published.id !== baselineEntryId) {
       setRequestState('idle')
@@ -354,23 +358,27 @@ export function useMarketAnalysisTimeline(input: Readonly<{
     if (terminalFailure) {
       setRequestState('failed')
       setRequestFailure('run')
-      return { outcome: 'failed', failureCode: latest.failureCode }
+      return { outcome: 'failed' }
     }
     if (latest?.status === 'succeeded') {
       // A succeeded run whose node never appeared is a real "not published", unlike a run that
       // is still working inside its budget.
       setRequestState('failed')
       setRequestFailure('run')
-      return { outcome: 'failed', failureCode: latest.failureCode }
+      return { outcome: 'failed' }
     }
     if (pollAttempt >= analysisTimelineRefreshPolicy.maxPollAttempts) {
       const stillRunning = Boolean(latest && ['queued', 'running'].includes(latest.status))
-      setRequestState(stillRunning ? 'queued' : 'failed')
-      if (!stillRunning) {
-        setRequestFailure('run')
-        return { outcome: 'failed', failureCode: latest?.failureCode }
+      if (stillRunning) {
+        // Stop watching without claiming a failure: the run is still inside (or past) its job
+        // budget, and the live poll will still show a published node when it lands. `queued`
+        // here would leave the action disabled with no timer left to clear it.
+        setRequestState('idle')
+        return { outcome: 'pending' }
       }
-      return { outcome: 'pending' }
+      setRequestState('failed')
+      setRequestFailure('run')
+      return { outcome: 'failed' }
     }
     await new Promise<void>(resolve => { pollTimer.current = setTimeout(resolve, analysisTimelineRefreshPolicy.pollIntervalMs) })
     return pollForCompletion(baselineEntryId, pollAttempt + 1)
