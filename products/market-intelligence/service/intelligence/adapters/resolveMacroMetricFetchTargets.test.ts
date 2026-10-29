@@ -58,8 +58,10 @@ describe('resolveMacroMetricFetchTargets', () => {
 
   it('builds one FRED request per configured series', () => {
     const targets = resolveMacroMetricFetchTargets(macroConfig('fred-rates-liquidity'))
-    expect(targets).toHaveLength(6)
-    expect(targets.map((target) => target.seriesId)).toEqual(['DGS2', 'DGS10', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL'])
+    expect(targets).toHaveLength(9)
+    expect(targets.map((target) => target.seriesId)).toEqual([
+      'DGS2', 'DGS10', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL', 'DFEDTARU', 'DFEDTARL', 'EFFR'
+    ])
     for (const target of targets) {
       expect(target.url).toContain('series_id=')
       expect(target.url).toContain('file_type=json')

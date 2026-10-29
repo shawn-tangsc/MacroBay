@@ -29,7 +29,7 @@ describe('macroSourceCatalogMetadata', () => {
 
   it('locks FRED series ids for rates and liquidity', () => {
     const ids = FRED_MACRO_SERIES.map((row) => row.providerSeriesId)
-    expect(ids).toEqual(['DGS2', 'DGS10', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL'])
+    expect(ids).toEqual(['DGS2', 'DGS10', 'DFII10', 'T10YIE', 'DTWEXBGS', 'WALCL', 'DFEDTARU', 'DFEDTARL', 'EFFR'])
     expect(FRED_MACRO_SERIES.find((row) => row.key === 'DXY_PROXY')?.providerSeriesId).toBe('DTWEXBGS')
   })
 

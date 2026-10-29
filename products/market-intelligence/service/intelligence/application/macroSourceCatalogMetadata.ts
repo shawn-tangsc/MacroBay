@@ -148,7 +148,13 @@ export const BEA_MACRO_SERIES: MacroSeriesDefinition[] = [
   }
 ]
 
-/** FRED series/observations — canonical rates & liquidity (doc 19). */
+/**
+ * FRED series/observations — canonical rates & liquidity (doc 19).
+ *
+ * The policy block reads the target range and the effective rate from here rather than scraping
+ * them out of statement text: the range is a level, so it needs a time series and an as-of date,
+ * and the statement only ever states it as prose.
+ */
 export const FRED_MACRO_SERIES: MacroSeriesDefinition[] = [
   {
     key: 'US_2Y_YIELD',
@@ -205,6 +211,33 @@ export const FRED_MACRO_SERIES: MacroSeriesDefinition[] = [
     comparisonBasis: 'period-change',
     frequency: 'weekly',
     unit: 'millions-usd'
+  },
+  {
+    key: 'FED_TARGET_RANGE_UPPER',
+    providerSeriesId: 'DFEDTARU',
+    metricName: 'Fed Funds Target Range Upper',
+    metricKind: 'rate',
+    comparisonBasis: 'level',
+    frequency: 'daily',
+    unit: 'percent'
+  },
+  {
+    key: 'FED_TARGET_RANGE_LOWER',
+    providerSeriesId: 'DFEDTARL',
+    metricName: 'Fed Funds Target Range Lower',
+    metricKind: 'rate',
+    comparisonBasis: 'level',
+    frequency: 'daily',
+    unit: 'percent'
+  },
+  {
+    key: 'FED_EFFECTIVE_FUNDS_RATE',
+    providerSeriesId: 'EFFR',
+    metricName: 'Effective Federal Funds Rate',
+    metricKind: 'rate',
+    comparisonBasis: 'period-change',
+    frequency: 'daily',
+    unit: 'percent'
   }
 ]
 
