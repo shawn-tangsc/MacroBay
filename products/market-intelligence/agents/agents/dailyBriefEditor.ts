@@ -1,5 +1,4 @@
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
-import { isAgentCompatibleModel } from '@platform/ai/agent-platform/agents/agentModelCompatibility'
 import type { AgentStoreSeed } from '@platform/ai/agent-platform/store/agentStore'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
@@ -61,15 +60,6 @@ export function createDailyBriefEditorAgentSeed(
     // Registering the same product tool package on a second agent collides by tool id.
     agentProductToolPackages: []
   }
-}
-
-function resolveModel(providers: SafeModelProvider[]): { id: string; name: string } {
-  const unconfigured = { id: 'unconfigured:default-chat-model', name: 'unconfigured' }
-  const provider = providers.find((candidate) => candidate.enabled && candidate.models.some((model) => isAgentCompatibleModel(candidate, model, 'claude-code', { requireReadyProvider: true })))
-  if (!provider) return unconfigured
-  const compatible = (candidate: SafeModelProvider['models'][number]) => isAgentCompatibleModel(provider, candidate, 'claude-code', { requireReadyProvider: true })
-  const model = provider.models.find((candidate) => candidate.id === provider.defaultChatModelId && compatible(candidate)) ?? provider.models.find(compatible)
-  return model ? { id: `${provider.id}:${model.id}`, name: `${provider.name} / ${model.name}` } : unconfigured
 }
 
 /** Registry entry point: one seed module exports the product seed factory. */
