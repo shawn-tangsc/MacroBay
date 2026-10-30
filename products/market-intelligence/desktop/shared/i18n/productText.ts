@@ -1097,6 +1097,22 @@ export const productText = {
         health: { 'never-run': '尚未运行', healthy: '正常', degraded: '需关注', failed: '失败' }
       },
       intelligenceSources: {
+        viewSources: '来源',
+        viewRuns: '运行记录',
+        syncRun: {
+          title: '运行记录',
+          window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部' },
+          outcome: { any: '全部结果', succeeded: '成功', failed: '失败', running: '进行中' },
+          columns: { time: '时间', source: '来源', action: '动作', outcome: '结果', duration: '耗时', detail: '说明' },
+          actions: { collect: '定时采集', refresh: '手动运行', analysis: '分析', other: '其他' },
+          outcomes: { succeeded: '成功', failed: '失败', cancelled: '已取消', running: '进行中' },
+          empty: '这段时间没有运行记录。采集任务在来源启用后才会出现。',
+          unavailable: '运行记录暂时不可用。',
+          loading: '正在读取运行记录…',
+          exportCsv: '复制 CSV',
+          exported: '已复制到剪贴板'
+        },
+
         sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
         sourceNames: {
           'macro-calendar-fed': '美联储官方日程', 'federal-reserve-rss': '美联储新闻稿',
@@ -2443,6 +2459,22 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
         health: { 'never-run': 'Never run', healthy: 'Healthy', degraded: 'Needs attention', failed: 'Failed' }
       },
       intelligenceSources: {
+        viewSources: 'Sources',
+        viewRuns: 'Run record',
+        syncRun: {
+          title: 'Run record',
+          window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All' },
+          outcome: { any: 'Any outcome', succeeded: 'Succeeded', failed: 'Failed', running: 'Running' },
+          columns: { time: 'Time', source: 'Source', action: 'Action', outcome: 'Outcome', duration: 'Duration', detail: 'Detail' },
+          actions: { collect: 'Scheduled run', refresh: 'Manual run', analysis: 'Analysis', other: 'Other' },
+          outcomes: { succeeded: 'Succeeded', failed: 'Failed', cancelled: 'Cancelled', running: 'Running' },
+          empty: 'No runs in this window. Collection appears once a source is enabled.',
+          unavailable: 'The run record is unavailable.',
+          loading: 'Reading the run record…',
+          exportCsv: 'Copy CSV',
+          exported: 'Copied to the clipboard'
+        },
+
         sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },
         sourceNames: {
           'macro-calendar-fed': 'Federal Reserve official schedule', 'federal-reserve-rss': 'Federal Reserve press releases',

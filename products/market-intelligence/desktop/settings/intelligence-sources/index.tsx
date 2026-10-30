@@ -9,6 +9,7 @@ import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { ProviderDetail } from './ProviderDetail'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
+import { SyncRunSection } from './SyncRunSection'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useIntelligenceTranslationSettings } from './useIntelligenceTranslationSettings'
 
@@ -16,6 +17,8 @@ import './intelligence-sources.css'
 
 export default function IntelligenceSourcesSettingsSection(): React.ReactElement {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  // Two views, one page: sources are what you configure, the run record is what happened.
+  const [view, setView] = useState<'sources' | 'runs'>('sources')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
@@ -62,6 +65,11 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
 
   return (
     <section className="settings-workspace intelligence-sources-workspace">
+      <div className="intelligence-sources-view-switch">
+        <button aria-pressed={view === 'sources'} className={view === 'sources' ? 'is-active' : undefined} onClick={() => setView('sources')} type="button">{t.viewSources}</button>
+        <button aria-pressed={view === 'runs'} className={view === 'runs' ? 'is-active' : undefined} onClick={() => setView('runs')} type="button">{t.viewRuns}</button>
+      </div>
+      {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection text={t.syncRun} /></div> : <>
       <SettingsSourceTree
         filter={sourceFilter}
         labels={{ title: t.title, categories: t.sourceCategories, filters: t.sourceFilters, providerNames: t.providerNames, providerSummary: t.providerSummary }}
@@ -83,6 +91,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
           /></div> : null
         })() : null}
       </div>
+      </>}
     </section>
   )
 }

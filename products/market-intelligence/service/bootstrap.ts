@@ -41,6 +41,7 @@ import type {
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
+import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
 import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
@@ -495,6 +496,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
+  registerSyncRunIpc(register, deps.jobRuntime)
   registerMacroEconomicCalendarIpc(register, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,

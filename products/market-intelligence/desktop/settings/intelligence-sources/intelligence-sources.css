@@ -1493,3 +1493,28 @@
   border-color: var(--danger);
   color: var(--danger);
 }
+
+/* Two views on one page: the switch spans both columns, the active view owns the row beneath. */
+.settings-workspace.intelligence-sources-workspace { grid-template-rows: auto minmax(0, 1fr); }
+.intelligence-sources-view-switch {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #22252d);
+}
+.intelligence-sources-view-switch button {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary, #8b8d94);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.intelligence-sources-view-switch button.is-active {
+  color: var(--text, #e8e9ec);
+  border-color: var(--border, #22252d);
+  background: var(--surface-2, #14171e);
+}
+.intelligence-sources-view-body { grid-column: 1 / -1; min-height: 0; }

@@ -89,6 +89,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.policyPath.read': excluded('internal-view'),
   // Declared by 2d16872 without its coverage row; the panel reads it, no agent tool exists yet.
   'intelligence.queryOpenInterestHistory': excluded('internal-view'),
+  'intelligence.syncRuns.list': excluded('internal-view'),
+  'intelligence.syncRuns.exportCsv': excluded('internal-view'),
   'intelligence.macro.economicCalendar.setReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.clearReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.refreshBlsEmploymentRelease': exposed('operate_macro_calendar'),
