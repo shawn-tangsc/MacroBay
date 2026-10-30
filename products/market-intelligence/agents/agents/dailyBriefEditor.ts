@@ -36,8 +36,7 @@ export function createDailyBriefEditorAgentSeed(
     model: model.id,
     modelName: model.name,
     mcps: [],
-    // Fail closed: the platform tool policy must explicitly enable these after the one-time consent.
-    disabledTools: ['WebSearch', 'WebFetch'],
+    disabledTools: [],
     configuration: {
       avatar: '📰',
       permission_mode: 'plan',
