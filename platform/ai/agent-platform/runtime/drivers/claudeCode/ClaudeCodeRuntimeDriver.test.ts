@@ -497,7 +497,6 @@ describe('Claude Code runtime driver skeleton', () => {
           protocol: 'messages',
           baseUrl: 'https://anthropic.proxy.test',
           route: 'direct',
-          serverWebToolsSupported: true,
           modelReasoningSupported: false
         },
         compatibility: {
@@ -536,8 +535,7 @@ describe('Claude Code runtime driver skeleton', () => {
         modelName: 'Claude Sonnet 4.5',
         protocol: 'messages',
         baseUrl: 'https://anthropic.proxy.test',
-        route: 'direct',
-        serverWebToolsSupported: true
+        route: 'direct'
       },
       compatibility: {
         providerId: 'anthropic',
@@ -686,8 +684,7 @@ describe('Claude Code runtime driver skeleton', () => {
           modelId: 'claude-sonnet-4-5',
           modelName: 'Claude Sonnet 4.5',
           protocol: 'messages',
-          baseUrl: 'https://anthropic.proxy.test',
-          serverWebToolsSupported: true,
+          baseUrl: 'https://anthropic.proxy.test'
         },
         mcpServers: [
           {
@@ -989,7 +986,7 @@ describe('Claude Code runtime driver skeleton', () => {
     await expect(turn).rejects.toMatchObject({
       name: 'AbortError'
     })
-    expect(resolveProviderEnvironment).toHaveBeenCalledOnce()
+    expect(resolveProviderEnvironment).not.toHaveBeenCalled()
     expect(executeTurn).not.toHaveBeenCalled()
     expect(driver.cancelMessage('run-1')).toBe(false)
   })
@@ -1029,8 +1026,7 @@ describe('Claude Code runtime driver skeleton', () => {
         modelName: 'Claude Sonnet 4.5',
         protocol: 'messages',
         baseUrl: 'https://anthropic.proxy.test',
-        route: 'direct',
-        serverWebToolsSupported: true
+        route: 'direct'
       },
       compatibility: {
         providerId: 'anthropic',
@@ -1046,8 +1042,7 @@ describe('Claude Code runtime driver skeleton', () => {
     await expect(turn).rejects.toMatchObject({
       name: 'AbortError'
     })
-    // Provider capability is resolved before the workspace so tool gating can never be skipped.
-    expect(prepareWorkspace).not.toHaveBeenCalled()
+    expect(prepareWorkspace).toHaveBeenCalledOnce()
     expect(executeTurn).not.toHaveBeenCalled()
     expect(driver.cancelSession('session-1')).toBe(false)
   })

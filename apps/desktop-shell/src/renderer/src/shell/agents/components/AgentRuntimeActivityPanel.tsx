@@ -30,12 +30,14 @@ export default function AgentRuntimeActivityPanel({
 }: AgentRuntimeActivityPanelProps): React.ReactElement | null {
   const t = useAgentText()
   const language = useAgentLanguage()
-  if (cards.length === 0 && !failure) return null
+  if (cards.length === 0 && !failure && elapsedMs === undefined) return null
   const items = dedupeActivityCards(cards)
   const hasPendingApproval = items.some((card) => card.kind === 'approval' && card.status === 'pending')
   const groupKind = items.some((card) => card.kind !== 'reasoning') ? 'execution' : 'reasoning'
   const summary = running
-    ? t.runtimeActivity.runningTitle
+    ? elapsedMs !== undefined
+      ? `${t.runtimeActivity.runningTitle} · ${formatAgentElapsed(elapsedMs, language)}`
+      : t.runtimeActivity.runningTitle
     : failure
       ? t.runtimeActivity.failureTitle
       : elapsedMs !== undefined
@@ -52,55 +54,57 @@ export default function AgentRuntimeActivityPanel({
         <strong>{summary}</strong>
         <ChevronDown className="agent-runtime-activity-chevron" size={13} aria-hidden="true" />
       </summary>
-      <div className="agent-runtime-activity-list">
-        {items.length > 0 ? (
-          <details className={`agent-runtime-activity-group ${groupKind}`} open={running || hasPendingApproval || Boolean(failure) || undefined}>
-            <summary>
-              <span className="agent-runtime-activity-icon">{renderActivityGroupIcon(groupKind)}</span>
-              <strong>{groupKind === 'reasoning' ? t.runtimeActivity.reasoningGroupTitle : t.runtimeActivity.executionGroupTitle}</strong>
-              <ChevronDown className="agent-runtime-activity-chevron" size={12} aria-hidden="true" />
-            </summary>
-            <div className="agent-runtime-activity-group-items">
-              {items.map((card) =>
-                card.kind === 'approval' && card.title === 'AskUserQuestion' && card.approvalInputText && card.approvalId ? (
-                  <AgentAskUserQuestionCard
-                    key={card.key}
-                    inputText={card.approvalInputText}
-                    labels={{
-                      title: t.runtimeActivity.questionTitle,
-                      freeform: t.runtimeActivity.questionFreeform,
-                      skip: t.runtimeActivity.questionSkip,
-                      submit: t.runtimeActivity.questionSubmit,
-                      recommended: t.runtimeActivity.questionRecommended
-                    }}
-                    onResolve={async (decision: { behavior: 'allow'; updatedInput?: unknown } | { behavior: 'deny'; message: string }) => {
-                      let approvalId = card.approvalId
-                      if (!approvalId && card.toolCallId) {
-                        const snapshot = await window.platform.agents.getRuntimeSnapshot()
-                        approvalId = (snapshot as AgentSessionRuntimeSnapshot).toolApprovals.find(
-                          (approval) => approval.toolCallId === card.toolCallId
-                        )?.approvalId ?? null
-                      }
-                      if (!approvalId) throw new Error('找不到这条待审批的工具调用，可能已经处理过了。')
-                      await resolveApproval(approvalId, decision, onRuntimeSnapshotChange)
-                    }}
-                  />
-                ) : (
-                  <ActivityItem key={card.key} card={card} onRuntimeSnapshotChange={onRuntimeSnapshotChange} />
-                )
-              )}
+      {items.length > 0 || failure ? (
+        <div className="agent-runtime-activity-list">
+          {items.length > 0 ? (
+            <details className={`agent-runtime-activity-group ${groupKind}`} open={running || hasPendingApproval || Boolean(failure) || undefined}>
+              <summary>
+                <span className="agent-runtime-activity-icon">{renderActivityGroupIcon(groupKind)}</span>
+                <strong>{groupKind === 'reasoning' ? t.runtimeActivity.reasoningGroupTitle : t.runtimeActivity.executionGroupTitle}</strong>
+                <ChevronDown className="agent-runtime-activity-chevron" size={12} aria-hidden="true" />
+              </summary>
+              <div className="agent-runtime-activity-group-items">
+                {items.map((card) =>
+                  card.kind === 'approval' && card.title === 'AskUserQuestion' && card.approvalInputText && card.approvalId ? (
+                    <AgentAskUserQuestionCard
+                      key={card.key}
+                      inputText={card.approvalInputText}
+                      labels={{
+                        title: t.runtimeActivity.questionTitle,
+                        freeform: t.runtimeActivity.questionFreeform,
+                        skip: t.runtimeActivity.questionSkip,
+                        submit: t.runtimeActivity.questionSubmit,
+                        recommended: t.runtimeActivity.questionRecommended
+                      }}
+                      onResolve={async (decision: { behavior: 'allow'; updatedInput?: unknown } | { behavior: 'deny'; message: string }) => {
+                        let approvalId = card.approvalId
+                        if (!approvalId && card.toolCallId) {
+                          const snapshot = await window.platform.agents.getRuntimeSnapshot()
+                          approvalId = (snapshot as AgentSessionRuntimeSnapshot).toolApprovals.find(
+                            (approval) => approval.toolCallId === card.toolCallId
+                          )?.approvalId ?? null
+                        }
+                        if (!approvalId) throw new Error('找不到这条待审批的工具调用，可能已经处理过了。')
+                        await resolveApproval(approvalId, decision, onRuntimeSnapshotChange)
+                      }}
+                    />
+                  ) : (
+                    <ActivityItem key={card.key} card={card} onRuntimeSnapshotChange={onRuntimeSnapshotChange} />
+                  )
+                )}
+              </div>
+            </details>
+          ) : null}
+          {failure ? (
+            <div className="agent-chat-trace-failure" role="alert">
+              <span className="agent-chat-trace-failure__dot" aria-hidden="true" />
+              <strong>{t.runtimeActivity.failureTitle}</strong>
+              <span className="agent-chat-trace-failure__message">{failure.message}</span>
+              {failure.code ? <code>{failure.code}</code> : null}
             </div>
-          </details>
-        ) : null}
-        {failure ? (
-          <div className="agent-chat-trace-failure" role="alert">
-            <span className="agent-chat-trace-failure__dot" aria-hidden="true" />
-            <strong>{t.runtimeActivity.failureTitle}</strong>
-            <span className="agent-chat-trace-failure__message">{failure.message}</span>
-            {failure.code ? <code>{failure.code}</code> : null}
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
     </details>
   )
 }

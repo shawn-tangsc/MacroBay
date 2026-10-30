@@ -47,17 +47,6 @@ export type PresetProtocolDeclaration =
   | 'protocol-agnostic'
   | 'native'
 
-/**
- * 供应商对 Anthropic **server-side 工具**的原生支持声明。
- *
- * 与 `protocolDeclaration` 分工：后者只说「聊天协议通道」，本字段说「请求体里能不能放
- * `web_search_2025xxxx` 这类没有 `input_schema` 的 server tool」。缺省 = 未声明 = 不支持
- * （fail closed）；目前只有官方 Anthropic first-party Messages API 声明 `webSearch: true`。
- */
-export type ProviderServerToolSupport = {
-  webSearch?: boolean
-}
-
 export type ProviderPresetInput = {
   id: string
   name: string
@@ -70,8 +59,6 @@ export type ProviderPresetInput = {
   requiresProxy?: boolean
   /** 模型列表的协议声明覆盖情况；缺省 = 未测（不提示）。 */
   protocolDeclaration?: PresetProtocolDeclaration
-  /** Anthropic server-side 工具支持；缺省 = 未声明 = 不支持。 */
-  serverTools?: ProviderServerToolSupport
   models?: readonly PresetModelInput[]
   websites?: ProviderWebsiteLinks
 }

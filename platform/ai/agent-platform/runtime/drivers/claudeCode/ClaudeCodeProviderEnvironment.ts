@@ -1,6 +1,5 @@
 import type { ModelChatProtocol, ModelProvider, ProviderState } from '../../../../providers/modelProviderTypes'
 import { resolveProviderChatBase } from '../../../../providers/providerChatEndpoints'
-import { supportsAnthropicServerWebSearch } from '../../../../providers/providerServerTools'
 import { resolveChatModel } from '../../../../invocation/resolveChatModel'
 import {
   isAgentRuntimeSelectable,
@@ -25,11 +24,6 @@ export type ClaudeCodeProviderEnvironmentMetadata = {
   route: AgentRuntimeRoute
   /** 模型能力 `capabilities.reasoning`；`undefined` = 厂商未声明，保持默认行为。 */
   modelReasoningSupported?: boolean
-  /**
-   * 该路由能否承载 Anthropic server-side web tools（WebSearch/WebFetch）。
-   * gateway 路由恒为 false：适配层会把 server tool 转成普通 function，语义不成立。
-   */
-  serverWebToolsSupported: boolean
 }
 
 export type ClaudeCodeProviderEnvironmentSuccess = {
@@ -149,7 +143,6 @@ export function createClaudeCodeProviderEnvironment(
         protocol: provider.endpoints[0]?.protocol,
         baseUrl: options.gateway.baseUrl,
         route: 'gateway',
-        serverWebToolsSupported: false,
         ...(modelReasoningSupported === undefined ? {} : { modelReasoningSupported })
       },
       compatibility
@@ -193,7 +186,6 @@ export function createClaudeCodeProviderEnvironment(
       protocol: provider.endpoints[0]?.protocol,
       baseUrl,
       route: 'direct',
-      serverWebToolsSupported: supportsAnthropicServerWebSearch(provider),
       ...(modelReasoningSupported === undefined ? {} : { modelReasoningSupported })
     },
     compatibility

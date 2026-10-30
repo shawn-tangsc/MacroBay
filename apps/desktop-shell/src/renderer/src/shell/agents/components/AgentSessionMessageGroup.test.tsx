@@ -78,6 +78,45 @@ describe('AgentSessionMessageGroup', () => {
     expect(markup).not.toContain('class="agent-message user"')
   })
 
+  it.each(['success', 'paused', 'error'] as const)(
+    'shows the reply duration for a finished %s assistant message',
+    (status) => {
+      const markup = render(
+        groupWithTiming(status, '2026-01-01T00:00:00.000Z', '2026-01-01T00:01:05.000Z')
+      )
+
+      expect(markup).toContain('已完成，用时 1 分 5 秒')
+    }
+  )
+
+  it('does not show a duration when the timestamps are equal', () => {
+    const markup = render(
+      groupWithTiming('success', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+    )
+
+    expect(markup).not.toContain('已完成，用时')
+  })
+
+  it('does not show a duration below one second or for unparseable timestamps', () => {
+    const subSecond = render(
+      groupWithTiming('success', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.999Z')
+    )
+    const unparseable = render(
+      groupWithTiming('error', 'not-a-date', '2026-01-01T00:00:05.000Z')
+    )
+
+    expect(subSecond).not.toContain('已完成，用时')
+    expect(unparseable).not.toContain('已完成，用时')
+  })
+
+  it('does not show a duration for user messages', () => {
+    const markup = render(
+      groupWithTiming('success', '2026-01-01T00:00:00.000Z', '2026-01-01T00:01:05.000Z', 'user')
+    )
+
+    expect(markup).not.toContain('已完成，用时')
+  })
+
   it('renders assistant file artifacts under the message content', () => {
     const markup = renderToStaticMarkup(
       <AgentSessionMessageGroup
@@ -117,6 +156,35 @@ describe('AgentSessionMessageGroup', () => {
     expect(markup).toContain('打开方式')
   })
 })
+
+function render(groupValue: AgentMessageGroup): string {
+  return renderToStaticMarkup(
+    <AgentSessionMessageGroup
+      group={groupValue}
+      activeAgent={agent()}
+      activeSessionId="session-1"
+      activeSessionWorkspacePath="/Users/demo/project"
+      chatSettings={null}
+      text={text}
+      onStateChange={(updater) => updater({} as never)}
+      onGroupElementRef={() => undefined}
+      onMessageElementRef={() => undefined}
+    />
+  )
+}
+
+function groupWithTiming(
+  status: AgentSessionMessageEntity['status'],
+  createdAt: string,
+  updatedAt: string,
+  role: AgentMessageGroup['role'] = 'assistant'
+): AgentMessageGroup {
+  const base = group(role)
+  return {
+    ...base,
+    messages: [{ ...base.messages[0]!, status, createdAt, updatedAt }]
+  }
+}
 
 function group(role: AgentMessageGroup['role']): AgentMessageGroup {
   return {

@@ -83,8 +83,7 @@ describe('Claude Code executor descriptor', () => {
         modelName: 'Claude Sonnet 4.5',
         protocol: 'messages',
         baseUrl: 'https://anthropic.proxy.test',
-        route: 'direct',
-        serverWebToolsSupported: true
+        route: 'direct'
       }
     })
 

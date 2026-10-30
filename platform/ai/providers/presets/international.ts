@@ -68,10 +68,6 @@ export const internationalPresets = [
     name: 'Anthropic',
     // 官方直连：协议由 API 本身决定，列表不给协议是正常的，**不需要**逐模型探测。
     protocolDeclaration: 'native',
-    // 只有 Anthropic first-party Messages API 实现 server-side web search（`web_search_20250305`）。
-    // 第三方 Anthropic 兼容端点通常按 function tool 校验 `input_schema`，会把 server tool 当非法
-    // schema 拒绝；它们必须保持未声明（fail closed），不能跟着 `messages` 协议一起推断。
-    serverTools: { webSearch: true },
     endpoints: [
       { protocol: 'messages', baseUrl: 'https://api.anthropic.com' }
     ],

@@ -13,9 +13,11 @@ import type { AgentMessageGroup } from '@platform/ui/agent-chat'
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { AgentContextRendererRegistry } from '../agentContextRenderers'
 import type { AgentRuntimeActivityCard } from '../agentRuntimeActivityViewModel'
+import { formatAgentElapsed } from '../agentElapsedText'
 import { buildAgentMessageFileArtifacts } from '../agentMessageFileArtifacts'
 import { buildAgentRuntimeMessagePartBlocks } from '../agentRuntimeMessageParts'
 import type { AgentText } from '../agentTextTypes'
+import { useAgentLanguage } from '../agentTextProvider'
 import { deleteSessionMessageViaApi } from '../agentSessionDataApi'
 import AgentMessageFileArtifacts from './AgentMessageFileArtifacts'
 import AgentRuntimeMessagePartBlocks from './AgentRuntimeMessagePartBlocks'
@@ -120,8 +122,10 @@ function AgentSessionMessageUnit({
   onStateChange,
   onMessageElementRef
 }: AgentSessionMessageUnitProps): React.ReactElement {
+  const language = useAgentLanguage()
   const runtimeTextOverride =
     message.status === 'pending' && pendingStatusText ? pendingStatusText : undefined
+  const replyElapsedMs = assistantReplyElapsedMs(message)
 
   return (
     <div
@@ -157,6 +161,11 @@ function AgentSessionMessageUnit({
           })}
           text={text.runtimeActivity.fileArtifacts}
         />
+      ) : null}
+      {replyElapsedMs !== undefined ? (
+        <div className="agent-message-meta agent-message-elapsed">
+          {text.runtimeActivity.completedIn(formatAgentElapsed(replyElapsedMs, language))}
+        </div>
       ) : null}
       <div className="agent-message-actions">
         <Tooltip title={text.messages.copy}>
@@ -200,4 +209,25 @@ function AgentSessionMessageUnit({
       </div>
     </div>
   )
+}
+
+const REPLY_DURATION_MIN_MS = 1_000
+
+/**
+ * A finished assistant message carries its turn's wall clock in its own timestamps, so the reply
+ * duration survives reopening the app without a schema field. Sub-second or unparseable spans are
+ * noise, and a pending message is still running.
+ */
+function assistantReplyElapsedMs(
+  message: Pick<AgentSessionMessageEntity, 'role' | 'status' | 'createdAt' | 'updatedAt'>
+): number | undefined {
+  if (message.role !== 'assistant') return undefined
+  if (message.status !== 'success' && message.status !== 'paused' && message.status !== 'error') {
+    return undefined
+  }
+  const createdAt = Date.parse(message.createdAt)
+  const updatedAt = Date.parse(message.updatedAt)
+  if (!Number.isFinite(createdAt) || !Number.isFinite(updatedAt)) return undefined
+  const elapsedMs = updatedAt - createdAt
+  return elapsedMs >= REPLY_DURATION_MIN_MS ? elapsedMs : undefined
 }

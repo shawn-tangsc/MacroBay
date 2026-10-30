@@ -1,5 +1,4 @@
 import { claudeCodeBuiltinTools } from './builtinClaudeTools'
-import { isPlatformWebSearchSessionToolName } from './platformWebTools'
 
 const builtinToolNames: ReadonlySet<string> = new Set(claudeCodeBuiltinTools.map((tool) => tool.id))
 
@@ -36,10 +35,7 @@ const readOnlyToolNames: ReadonlySet<string> = new Set(sessionReadOnlyBuiltinToo
 const blockedToolNames: ReadonlySet<string> = new Set(sessionBlockedBuiltinTools)
 
 /**
- * 会话级工具白名单只接受 **只读** 工具名：
- *  - Claude Code builtin：WebSearch/WebFetch/Read/Glob/Grep 等；
- *  - 平台自己的只读 web 工具 `web_search`（provider 不支持 Anthropic server tool 时使用，
- *    由平台 WebSearchService 执行，schema 显式声明 query/maxResults）。
+ * 会话级工具白名单只接受 **只读 builtin** 工具名（WebSearch/WebFetch/Read/Glob/Grep 等）。
  *
  * 产品可以在创建一次会话时要求"这一次自动放行 WebSearch"，而不改 agent 配置；但白名单
  * 不能成为绕过工具策略的入口：写 / 执行类 builtin（Bash/Write/Edit...）、未知名字、
@@ -66,9 +62,7 @@ export function isBuiltinToolName(name: string): boolean {
   return builtinToolNames.has(name)
 }
 
-/** 会话白名单是否允许该名字：只读 builtin 或只读平台 web 工具，且不与写/执行拒绝名单冲突。 */
+/** 会话白名单是否允许该名字：只读 builtin，且不与明确的写/执行拒绝名单冲突。 */
 export function isSessionAllowableToolName(name: string): boolean {
-  if (blockedToolNames.has(name)) return false
-  if (isPlatformWebSearchSessionToolName(name)) return true
-  return readOnlyToolNames.has(name) && builtinToolNames.has(name)
+  return readOnlyToolNames.has(name) && builtinToolNames.has(name) && !blockedToolNames.has(name)
 }

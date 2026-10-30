@@ -113,8 +113,7 @@ describe('claude code runtime dependency helpers', () => {
         modelName: 'Claude Sonnet 4.5',
         protocol: 'messages',
         baseUrl: 'https://proxy.anthropic.test',
-        route: 'direct',
-        serverWebToolsSupported: false
+        route: 'direct'
       },
       compatibility: {
         providerId: 'anthropic',

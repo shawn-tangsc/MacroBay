@@ -122,22 +122,26 @@ export default function AgentSessionMessages({
     turnRunning && liveAssistantMessage?.status === 'pending' && Number.isFinite(liveAssistantStartedAt)
       ? liveAssistantStartedAt
       : undefined
+  const liveTurnStartedAt =
+    turnRunning && Number.isFinite(liveAssistantStartedAt) ? liveAssistantStartedAt : undefined
   const [nowMs, setNowMs] = useState(() => Date.now())
   useEffect(() => {
     if (!turnRunning) return
     setNowMs(Date.now())
     const intervalId = setInterval(() => setNowMs(Date.now()), 10_000)
     return () => clearInterval(intervalId)
-  }, [turnRunning, livePendingStartedAt])
+  }, [turnRunning, livePendingStartedAt, liveTurnStartedAt])
   const livePendingElapsedMs =
     livePendingStartedAt !== undefined ? Math.max(0, nowMs - livePendingStartedAt) : undefined
+  const liveElapsedMs =
+    liveTurnStartedAt !== undefined ? Math.max(0, nowMs - liveTurnStartedAt) : undefined
   const livePhaseText = resolveAgentRuntimePhaseText({
     phase: runtimeSnapshot.sessions[activeSession.id]?.turnPhase ?? null,
     cards: runtimeActivityCards,
     elapsedMs: livePendingElapsedMs,
     text: t.runtimeText
   })
-  const turnTrace = liveAssistantGroup
+  const liveTurnTrace = liveAssistantGroup
     ? buildTurnTrace(liveAssistantGroup, turnRunning)
     : null
 
@@ -181,49 +185,51 @@ export default function AgentSessionMessages({
             {shouldVirtualize && virtualWindow.paddingTop > 0 ? (
               <div aria-hidden="true" style={{ height: `${virtualWindow.paddingTop}px` }} />
             ) : null}
-            {visibleGroups.map((group) => (
-              <AgentSessionMessageGroup
-                key={group.id}
-                group={group}
-                activeAgent={activeAgent}
-                activeSessionId={activeSession.id}
-                activeSessionWorkspacePath={activeSession.workspace.path}
-                chatSettings={chatSettings}
-                text={{
-                  messages: t.messages,
-                  runtimeActivity: t.runtimeActivity,
-                  runtimeText: t.runtimeText,
-                  input: t.input
-                }}
-                onStateChange={onStateChange}
-                pendingStatusText={
-                  group.id === liveAssistantGroup?.id ? livePhaseText ?? undefined : undefined
-                }
-                {...(contextRenderers ? { contextRenderers } : {})}
-                onGroupElementRef={(groupId, element) => {
-                  groupElementRefs.current[groupId] = element
-                }}
-                onMessageElementRef={(messageId, element) => {
-                  messageElementRefs.current[messageId] = element
-                }}
-                runtimeActivity={
-                  turnTrace && group.id === liveAssistantGroup?.id
-                    ? {
-                        cards: selectLiveActivityCards(
-                          runtimeActivityCards,
-                          // Only the message this turn is writing matters; earlier turns in the
-                          // same group already own their own persisted trace.
-                          hasPersistedRuntimeParts(group.messages.slice(-1))
-                        ),
-                        onRuntimeSnapshotChange,
-                        elapsedMs: turnTrace.elapsedMs,
-                        running: turnRunning,
-                        failure: turnTrace.failure
-                      }
-                    : undefined
-                }
-              />
-            ))}
+            {visibleGroups.map((group) => {
+              const isLiveAssistant = group.id === liveAssistantGroup?.id
+              return (
+                <AgentSessionMessageGroup
+                  key={group.id}
+                  group={group}
+                  activeAgent={activeAgent}
+                  activeSessionId={activeSession.id}
+                  activeSessionWorkspacePath={activeSession.workspace.path}
+                  chatSettings={chatSettings}
+                  text={{
+                    messages: t.messages,
+                    runtimeActivity: t.runtimeActivity,
+                    runtimeText: t.runtimeText,
+                    input: t.input
+                  }}
+                  onStateChange={onStateChange}
+                  pendingStatusText={isLiveAssistant ? livePhaseText ?? undefined : undefined}
+                  {...(contextRenderers ? { contextRenderers } : {})}
+                  onGroupElementRef={(groupId, element) => {
+                    groupElementRefs.current[groupId] = element
+                  }}
+                  onMessageElementRef={(messageId, element) => {
+                    messageElementRefs.current[messageId] = element
+                  }}
+                  runtimeActivity={
+                    liveTurnTrace && isLiveAssistant
+                      ? {
+                          cards: selectLiveActivityCards(
+                            runtimeActivityCards,
+                            // Only the message this turn is writing matters; earlier turns in the
+                            // same group already own their own persisted trace.
+                            hasPersistedRuntimeParts(group.messages.slice(-1))
+                          ),
+                          onRuntimeSnapshotChange,
+                          // The footer owns the finished duration; the panel only counts while running.
+                          elapsedMs: turnRunning ? liveElapsedMs : undefined,
+                          running: turnRunning,
+                          failure: liveTurnTrace.failure
+                        }
+                      : undefined
+                  }
+                />
+              )
+            })}
             {shouldVirtualize && virtualWindow.paddingBottom > 0 ? (
               <div aria-hidden="true" style={{ height: `${virtualWindow.paddingBottom}px` }} />
             ) : null}
@@ -257,7 +263,6 @@ export default function AgentSessionMessages({
     </div>
   )
 }
-
 
 function buildTurnTrace(
   group: AgentMessageGroup,

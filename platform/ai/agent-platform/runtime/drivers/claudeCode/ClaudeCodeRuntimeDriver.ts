@@ -249,9 +249,6 @@ export class ClaudeCodeRuntimeDriver implements AgentRuntimeDriver {
     if (!this.deps.resolveProviderEnvironment) return undefined
 
     const result = await this.deps.resolveProviderEnvironment(uniqueModelId)
-    // Some hosts only provide the resolver for gating and return nothing; treat that as "route
-    // unknown" instead of failing the turn.
-    if (!result) return undefined
     if (!result.ok) {
       throw new Error(result.message)
     }
@@ -269,18 +266,12 @@ export class ClaudeCodeRuntimeDriver implements AgentRuntimeDriver {
     throwIfAbortSignalAborted(abortController.signal)
     const composition = context.composition
     const modelId = requireModelId(composition)
-    // Resolve the provider route first: whether the endpoint can carry Anthropic server-side web
-    // tools decides the allowed/disallowed tool lists, and the SDK must never receive an
-    // unsupported `web_search` schema.
-    const providerEnvironment = await this.resolveProviderEnvironment(modelId)
-    throwIfAbortSignalAborted(abortController.signal)
     const baseSettings = buildClaudeCodeSettingsFromComposition(composition, {
-      defaultEnv: this.deps.defaultEnv,
-      ...(providerEnvironment
-        ? { serverWebToolsSupported: providerEnvironment.metadata.serverWebToolsSupported }
-        : {})
+      defaultEnv: this.deps.defaultEnv
     })
     const settings = await this.prepareWorkspaceSettings(composition, baseSettings)
+    throwIfAbortSignalAborted(abortController.signal)
+    const providerEnvironment = await this.resolveProviderEnvironment(modelId)
     throwIfAbortSignalAborted(abortController.signal)
     const query = createClaudeCodeQueryOptionsFromSettings({
       modelId: providerEnvironment?.modelId ?? modelId,
