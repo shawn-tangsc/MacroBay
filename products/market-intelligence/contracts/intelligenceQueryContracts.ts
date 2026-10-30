@@ -382,6 +382,8 @@ export type AgentSafeEvidenceRef = {
   visibleAt: string
   rendererSafeSummary: string
   excerptHash?: string
+  /** The public page behind the evidence, when the projection knows one. Never model-facing. */
+  sourceUrl?: string
   caveats: MarketIntelligenceQueryCaveat[]
 }
 

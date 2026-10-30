@@ -803,7 +803,25 @@ export function getIntelligenceModule(
       },
       macroMarketLive,
       dashboardFeedStatus,
-      setPolicyPathQuery: (query: PolicyPathQueryService) => { briefingPolicyPathQuery = query }
+      setPolicyPathQuery: (query: PolicyPathQueryService) => {
+        briefingPolicyPathQuery = query
+        // The analysis reads through the public query service, not the briefing's direct handle.
+        // The wrapper owns the one thing the direct handle cannot know: whether the reader has the
+        // source switched on. A disabled source answers `disabled`, so the analysis neither leaks
+        // stale odds nor reports a gap the reader chose to hide.
+        publicQueryService.setPolicyPathQuery({
+          read: async ({ asOf }) => {
+            try {
+              const profile = await profileStore.resolveProfile('policy-path-market')
+              if (!profile.enabled) return { state: 'disabled' as const }
+              const reading = query.read({ asOf })
+              return reading ? { state: 'available' as const, reading } : { state: 'unavailable' as const }
+            } catch {
+              return { state: 'unavailable' as const }
+            }
+          }
+        })
+      }
     }
   }
   return intelligenceModule

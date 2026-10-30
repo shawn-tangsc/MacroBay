@@ -49,6 +49,18 @@ export type PolicyPathQueryService = Readonly<{
   read: (input: { asOf: string }) => PolicyPathReading | undefined
 }>
 
+/**
+ * The analysis-facing answer: whether the reader enabled the source, and the reading if it has one.
+ *
+ * `disabled` is deliberately distinct from `unavailable`: a reader who turned the source off should
+ * not be told their analysis is missing a gap, while an enabled source with no meeting or no odds is
+ * a real gap the conclusion must name.
+ */
+export type PolicyPathContextRead =
+  | Readonly<{ state: 'available'; reading: PolicyPathReading }>
+  | Readonly<{ state: 'disabled' }>
+  | Readonly<{ state: 'unavailable' }>
+
 export const policyPathQueryPolicy = {
   venue: 'polymarket',
   /** 30 days at the 10-minute collection cadence, before thinning. */

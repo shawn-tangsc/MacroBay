@@ -166,18 +166,20 @@ describe('market analysis data-access matrix', () => {
         // The macro domain now carries two read-only agent tools (the dollar/gold snapshot and the
         // FRED daily block), so its tool flag is derived from the source registry rather than false.
         agentToolAvailable: true,
-        sourceIds: expect.arrayContaining(['fred-rates-liquidity', 'twelve-data-market']),
+        sourceIds: expect.arrayContaining(['fred-rates-liquidity', 'twelve-data-market', 'policy-path-market']),
         publicQueryMethods: [
           'macroEconomicCalendarQueryService.queryMonth',
           'marketCalendarPublicQueryService.queryMonth',
           'publicQueryService.queryMacroMarketSnapshot',
-          'publicQueryService.queryMacroRatesSnapshot'
+          'publicQueryService.queryMacroRatesSnapshot',
+          'publicQueryService.queryPolicyPath'
         ],
         ipcMethods: [
           'intelligence.macro.economicCalendar.queryMonth',
           'intelligence.macro.marketCalendar.queryMonth',
           'intelligence.macro.marketSnapshot.query',
-          'intelligence.macro.ratesSnapshot.query'
+          'intelligence.macro.ratesSnapshot.query',
+          'intelligence.macro.policyPath.read'
         ]
       })
     ]))
@@ -223,6 +225,13 @@ describe('market analysis data-access matrix', () => {
         sourceId: 'twelve-data-market', admission: 'production-ready', autoTriggerAllowed: false,
         caveats: expect.arrayContaining(['synthetic-dollar-index', 'provider-time-series']),
         agentToolAvailable: true
+      }),
+      // The policy path is one service feeding the panel card and the analysis context. It may
+      // answer an agent tool, but the odds are not permission to start an analysis from a price.
+      expect.objectContaining({
+        sourceId: 'policy-path-market', admission: 'connected-but-not-agent-tool', autoTriggerAllowed: false,
+        publicQueryMethods: ['publicQueryService.queryPolicyPath'], ipcMethods: ['intelligence.macro.policyPath.read'],
+        caveats: ['odds-are-market-pricing', 'projections-from-latest-sep-meeting'], agentToolAvailable: true
       })
     ]))
     expect(access.some(item => item.admission === 'temporarily-paused')).toBe(false)

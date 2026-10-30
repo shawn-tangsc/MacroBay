@@ -363,7 +363,7 @@ export async function safeSourceHealth(service: Pick<PublicQueryService, 'getSou
   return isEnvelope(result) && isSourceHealthData(result.data) ? result as MarketIntelligenceQueryResult<SourceHealthData> : undefined
 }
 
-export function fact(domain: AnalysisDomain, subject: string, metric: string, value: string | number | null, unit: string | null, sourceId: string, observedAt: string | null, asOf: string, comparability: AgentFact['comparability'], identitySuffix = '', options: Readonly<{ identityFromEventOnly?: boolean; subjectLabel?: string }> = {}): AgentFact {
+export function fact(domain: AnalysisDomain, subject: string, metric: string, value: string | number | null, unit: string | null, sourceId: string, observedAt: string | null, asOf: string, comparability: AgentFact['comparability'], identitySuffix = '', options: Readonly<{ identityFromEventOnly?: boolean; subjectLabel?: string; sourceUrl?: string }> = {}): AgentFact {
   // `identityFromEventOnly` is for observations whose collection instant changes on every
   // refresh (the 0xRouter macro route): with the instant in the identity, re-collecting the
   // same values produced a whole new set of facts, so the frozen "what changed" record read
@@ -378,7 +378,8 @@ export function fact(domain: AnalysisDomain, subject: string, metric: string, va
     // `subjectLabel` is how a fact is *said*, never which fact it is: it is not part of `factId`, and
     // the change diff compares values (design 141 §3.4). It exists for the calendar facts whose
     // subject is only their kind — `economic-indicator` tells a reader nothing about which release.
-    ...(options.subjectLabel ? { subjectLabel: options.subjectLabel } : {})
+    ...(options.subjectLabel ? { subjectLabel: options.subjectLabel } : {}),
+    ...(options.sourceUrl ? { sourceUrl: options.sourceUrl } : {})
   }
 }
 

@@ -62,6 +62,7 @@ import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEc
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
 import type { MacroRatesSnapshot } from '../macro-rates/macroRatesSnapshotQuery'
 import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { PolicyPathContextRead } from '../policy-path/policyPathQueryService'
 
 export type MarketIntelligencePublicQueryService = {
   querySentimentSnapshot: (
@@ -116,6 +117,14 @@ export type MarketIntelligencePublicQueryService = {
    */
   queryMacroRatesSnapshot: () => MacroRatesSnapshot | undefined
   setMacroRatesSnapshotQuery: (query: Pick<MacroRatesSnapshotQuery, 'snapshot'> | undefined) => void
+  /**
+   * The policy path the analysis reads: the next FOMC meeting, the market's odds for it, the target
+   * range, the latest SEP and the last vote. Late-bound like the rate blocks because the policy
+   * query is created in bootstrap; the implementation also checks the source switch, so a disabled
+   * source answers `disabled` rather than handing the analysis stale odds.
+   */
+  queryPolicyPath: (input: { asOf: string }) => Promise<PolicyPathContextRead>
+  setPolicyPathQuery: (query: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined) => void
 }
 
 type MacroEconomicCalendarQuery = {
@@ -157,6 +166,7 @@ export function createMarketIntelligencePublicQueryService(
   let crossAssetQuery: CrossAssetQuery | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
   let macroRatesSnapshotQuery: MacroRatesSnapshotQuery | undefined
+  let policyPathContextQuery: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined
 
   return {
     querySentimentSnapshot: (queryInput) =>
@@ -323,6 +333,17 @@ export function createMarketIntelligencePublicQueryService(
     },
     setMacroRatesSnapshotQuery(query) {
       macroRatesSnapshotQuery = query
+    },
+    async queryPolicyPath(input) {
+      if (!policyPathContextQuery) return { state: 'unavailable' as const }
+      try {
+        return await policyPathContextQuery.read(input)
+      } catch {
+        return { state: 'unavailable' as const }
+      }
+    },
+    setPolicyPathQuery(query) {
+      policyPathContextQuery = query
     }
   }
 }

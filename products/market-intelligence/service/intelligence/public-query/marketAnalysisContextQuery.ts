@@ -24,6 +24,7 @@ import type { MarketIntelligencePublicQueryService as PublicQueryService } from 
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
 import { projectMacroMarket } from './macroMarketFactProjection'
 import { projectMacroRates } from './macroRatesFactProjection'
+import { projectPolicyPath } from './policyPathFactProjection'
 import {
   compareObservedAt,
   defaultObservation,
@@ -61,20 +62,22 @@ const DOMAIN_DEFINITIONS: readonly DomainDefinition[] = Object.freeze([
       'macro-calendar-bea-schedule', 'macro-calendar-bea-release-rss',
       'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
       'macro-calendar-0xrouter-central-bank-activities',
-      'fred-rates-liquidity', 'twelve-data-market'
+      'fred-rates-liquidity', 'twelve-data-market', 'policy-path-market'
     ]),
     admission: 'connected-but-not-agent-tool',
     publicQueryMethods: Object.freeze([
       'macroEconomicCalendarQueryService.queryMonth',
       'marketCalendarPublicQueryService.queryMonth',
       'publicQueryService.queryMacroMarketSnapshot',
-      'publicQueryService.queryMacroRatesSnapshot'
+      'publicQueryService.queryMacroRatesSnapshot',
+      'publicQueryService.queryPolicyPath'
     ]),
     ipcMethods: Object.freeze([
       'intelligence.macro.economicCalendar.queryMonth',
       'intelligence.macro.marketCalendar.queryMonth',
       'intelligence.macro.marketSnapshot.query',
-      'intelligence.macro.ratesSnapshot.query'
+      'intelligence.macro.ratesSnapshot.query',
+      'intelligence.macro.policyPath.read'
     ])
   }),
   Object.freeze({
@@ -126,7 +129,7 @@ export type MarketAnalysisSourceAccess = Readonly<{
 
 type MarketAnalysisContextQueryService = Pick<PublicQueryService, 'queryFearGreedSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryCapitalConditionsSnapshot' | 'queryCrossAssetSnapshot' | 'getSourceHealth'> &
   Partial<Pick<PublicQueryService,
-    'queryMacroEconomicCalendarMonth' | 'queryMarketCalendarMonth' | 'queryMacroMarketSnapshot' | 'queryMacroRatesSnapshot'>>
+    'queryMacroEconomicCalendarMonth' | 'queryMarketCalendarMonth' | 'queryMacroMarketSnapshot' | 'queryMacroRatesSnapshot' | 'queryPolicyPath'>>
 
 const SOURCE_ACCESS_REGISTRY: readonly MarketAnalysisSourceAccess[] = Object.freeze([
   source('macro-calendar-fed-schedule', ['macro'], 'production-ready', ['macroEconomicCalendarQueryService.queryMonth'], ['intelligence.macro.economicCalendar.queryMonth'], true),
@@ -161,6 +164,13 @@ const SOURCE_ACCESS_REGISTRY: readonly MarketAnalysisSourceAccess[] = Object.fre
   source('twelve-data-market', ['macro'], 'production-ready', ['macroMarketSnapshotQuery.snapshot'],
     ['intelligence.macro.marketSnapshot.query'], false,
     [macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex, macroMarketSnapshotPublicPolicy.caveats.providerTimeSeries], true),
+  // The policy path is read by the panel's card and the analysis context: one service, two
+  // consumers. It stays a contextual source — being able to price a meeting is not permission to
+  // start an analysis from that price — and the two caveats name what a conclusion must not
+  // over-read: the odds are a venue's price, and the SEP belongs to the last publishing meeting.
+  source('policy-path-market', ['macro'], 'connected-but-not-agent-tool', ['publicQueryService.queryPolicyPath'],
+    ['intelligence.macro.policyPath.read'], false,
+    ['odds-are-market-pricing', 'projections-from-latest-sep-meeting'], true),
   // The zero-credential feeds lit this round: both OKX announcement lists, the go-ethereum release
   // feed and CoinGecko's global market snapshot. They feed the event pipeline an analysis can be
   // triggered by, not one of the five context domains — the `domains` list is empty rather than
@@ -257,7 +267,8 @@ export async function buildMarketAnalysisContext(
         detectedAt: ref.detectedAt ?? null,
         computedAt: ref.computedAt ?? null,
         visibleAt: ref.visibleAt,
-        excerptHash: ref.excerptHash ?? ''
+        excerptHash: ref.excerptHash ?? '',
+        ...(ref.sourceUrl ? { sourceUrl: ref.sourceUrl } : {})
       })
     }
   }
@@ -286,6 +297,15 @@ export async function buildMarketAnalysisContext(
     safeProject(() => projectMacroMarket(macroMarket ? macroMarket() : undefined, input.asOf, facts, caveats, observations), observations, 'macro')
     const macroRates = publicQueryService.queryMacroRatesSnapshot
     safeProject(() => projectMacroRates(macroRates ? macroRates() : undefined, input.asOf, facts, caveats, observations), observations, 'macro')
+    // The policy path is the fourth macro producer, and the only asynchronous one: it joins the
+    // meeting date, the venue's odds, the target range, the latest SEP and the last vote into the
+    // same context the freeze will persist. A disabled source answers `disabled` and contributes
+    // nothing; an enabled but empty one contributes a named gap.
+    const policyPath = publicQueryService.queryPolicyPath
+    if (policyPath) {
+      const policyRead = await safeQuery(() => policyPath({ asOf: input.asOf }))
+      safeProject(() => projectPolicyPath(policyRead ?? { state: 'unavailable' }, input.asOf, facts, caveats, observations), observations, 'macro')
+    }
   } else observations.macro = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('capital')) {
@@ -486,7 +506,8 @@ function attachQueryEvidence(facts: AgentFact[], evidenceRefs: Map<string, Agent
       detectedAt: fact.observedAt,
       computedAt: asOf,
       visibleAt: asOf,
-      excerptHash
+      excerptHash,
+      ...(fact.sourceUrl ? { sourceUrl: fact.sourceUrl } : {})
     })
   }
 }
