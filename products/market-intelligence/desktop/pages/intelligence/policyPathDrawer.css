@@ -1,12 +1,13 @@
+/* The reading's detail, opened from the rail card and anchored to the window's left edge. */
 .mi-policy-drawer {
-  /* Fixed to the window's left edge: the card lives in the right rail, so the reading opens on the
-     opposite side and leaves the rail in view. */
   position: fixed;
   top: 0;
   left: 0;
   width: 420px;
   height: 100vh;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
   background: var(--mi-surface, #14171e);
   border-right: 1px solid var(--mi-border, #22252d);
   box-shadow: 18px 0 32px rgb(0 0 0 / 38%);
@@ -16,25 +17,132 @@
 
 .mi-policy-drawer__head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 12px 14px;
+  gap: 12px;
+  padding: 16px 16px 12px;
   border-bottom: 1px solid var(--mi-border, #22252d);
 }
-.mi-policy-drawer__head h2 { margin: 0; font-size: 13px; font-weight: 600; }
-.mi-policy-drawer__head button { border: 0; background: none; color: var(--mi-text-dim, #6c6f78); cursor: pointer; }
-
-.mi-policy-drawer__section { padding: 12px 14px; border-bottom: 1px solid var(--mi-border, #22252d); }
-.mi-policy-drawer__section h3 {
-  display: flex; justify-content: space-between; gap: 12px;
-  margin: 0 0 8px; font-size: 10.5px; font-weight: 500; color: var(--mi-text-muted, #8b8d94);
+.mi-policy-drawer__head h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+.mi-policy-drawer__sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--mi-text-muted, #8b8d94);
+  font-variant-numeric: tabular-nums;
 }
-.mi-policy-drawer__section h3 a { display: inline-flex; align-items: center; gap: 3px; color: var(--mi-text-dim, #6c6f78); font-size: 10px; text-decoration: none; }
+.mi-policy-drawer__chip {
+  font-size: 9.5px;
+  color: #c8d77a;
+  border: 1px solid #4a552a;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.mi-policy-drawer__close {
+  border: 1px solid var(--mi-border, #22252d);
+  background: none;
+  color: var(--mi-text-muted, #8b8d94);
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mi-policy-drawer__close:hover { color: var(--mi-text, #e8e9ec); border-color: #33383f; }
+
+/* The same number as the card's lead, so the drawer does not read as a different product. */
+.mi-policy-drawer__hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid var(--mi-border, #22252d);
+}
+.mi-policy-drawer__value { font-size: 40px; font-weight: 650; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__hero-label { font-size: 11.5px; color: var(--mi-text-muted, #8b8d94); }
+.mi-policy-drawer__delta { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__delta[data-direction='up'] { color: #e0524c; }
+.mi-policy-drawer__delta[data-direction='down'] { color: #3fbf6f; }
+.mi-policy-drawer__delta[data-direction='flat'] { color: var(--mi-text-muted, #8b8d94); }
+
+.mi-policy-drawer__section { padding: 14px 16px 16px; border-bottom: 1px solid var(--mi-border, #22252d); }
+.mi-policy-drawer__section h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--mi-text-muted, #8b8d94);
+}
+.mi-policy-drawer__section h3 a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--mi-text-dim, #6c6f78);
+  text-decoration: none;
+}
 .mi-policy-drawer__section h3 a:hover { color: var(--mi-accent, #b7cf52); }
 
-.mi-policy-drawer__section table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
-.mi-policy-drawer__section th { color: var(--mi-text-dim, #6c6f78); font-size: 10px; font-weight: 400; text-align: right; padding: 4px 0; }
-.mi-policy-drawer__section td { text-align: right; padding: 4px 0; }
-.mi-policy-drawer__row { margin: 3px 0; font-size: 11.5px; color: var(--mi-text-muted, #8b8d94); }
-.mi-policy-drawer__meta { margin: 6px 0 0; font-size: 10px; color: var(--mi-text-dim, #6c6f78); }
-.mi-policy-drawer__row a { color: var(--mi-text-muted, #8b8d94); text-decoration: none; display: inline-flex; gap: 3px; align-items: center; }
+/* The projection path reads as five columns of "value over year", not as a spreadsheet. */
+.mi-policy-drawer__path { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.mi-policy-drawer__path > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 0 6px;
+  border: 1px solid var(--mi-border, #22252d);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--mi-surface, #14171e) 70%, #000);
+}
+.mi-policy-drawer__path b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__path span { font-size: 9.5px; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__path > div[data-empty='true'] b { color: var(--mi-text-dim, #6c6f78); }
+
+.mi-policy-drawer__vote { display: flex; align-items: baseline; gap: 8px; }
+.mi-policy-drawer__vote b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__vote span { font-size: 11px; color: var(--mi-text-muted, #8b8d94); }
+
+.mi-policy-drawer__kv { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.mi-policy-drawer__kv > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--mi-border, #22252d) 70%, transparent);
+}
+.mi-policy-drawer__kv > div:last-child { border-bottom: 0; }
+.mi-policy-drawer__kv dt { color: var(--mi-text-muted, #8b8d94); font-size: 11px; }
+.mi-policy-drawer__kv dd { margin: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+.mi-policy-drawer__note { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__empty {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--mi-border, #22252d);
+  border-radius: 8px;
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--mi-text-dim, #6c6f78);
+}
+.mi-policy-drawer__links { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0 0; }
+.mi-policy-drawer__links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--mi-text-muted, #8b8d94);
+  text-decoration: none;
+}
+.mi-policy-drawer__links a:hover { color: var(--mi-accent, #b7cf52); }
