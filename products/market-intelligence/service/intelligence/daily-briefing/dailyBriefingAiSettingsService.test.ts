@@ -44,12 +44,40 @@ describe('daily briefing AI settings service', () => {
     const api = service()
     expect(await api.getView()).toEqual({
       settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-      resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
+      resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' },
+      webSearchSupported: false
     })
     expect(await api.save({ providerId: 'p2', modelId: 'm2' })).toMatchObject({
       settings: { editorialEnabled: true, providerId: 'p2', modelId: 'm2', webSearchEnabled: false },
       resolved: { state: 'agent', providerId: 'p2', modelId: 'm2', source: 'custom' }
     })
+  })
+
+  it('reports server-side web search support for the agent model, not the editorial default', async () => {
+    const official = {
+      id: 'anthropic',
+      enabled: true,
+      baseUrl: 'https://api.anthropic.com',
+      apiKey: 'k',
+      endpoints: [{ protocol: 'messages', baseUrl: 'https://api.anthropic.com' }],
+      models: [{ id: 'claude-sonnet-4-5', capabilities: { chat: true, agentRuntimes: { claudeCode: true } } }]
+    }
+    const api = createDailyBriefingAiSettingsService({
+      store: createDailyBriefingAiSettingsStore(createInMemoryDailyBriefingAiSettingsStorage(), () => '2026-10-30T01:00:00.000Z'),
+      getModelDefaults: async () => ({ assistantModelId: 'p:m', agentModelId: 'anthropic:claude-sonnet-4-5' }) as never,
+      getProviderState: async () => ({ providers: [...providers, official] }) as never
+    })
+
+    expect((await api.getView()).webSearchSupported).toBe(true)
+
+    const thirdParty = createDailyBriefingAiSettingsService({
+      store: createDailyBriefingAiSettingsStore(createInMemoryDailyBriefingAiSettingsStorage(), () => '2026-10-30T01:00:00.000Z'),
+      getModelDefaults: async () => ({ assistantModelId: 'p:m', agentModelId: 'tokenrhythm:model' }) as never,
+      getProviderState: async () => ({ providers: [
+        { id: 'tokenrhythm', enabled: true, baseUrl: 'https://tokenrhythm.studio', apiKey: 'k', endpoints: [{ protocol: 'messages', baseUrl: 'https://tokenrhythm.studio' }], models: [{ id: 'model', capabilities: { chat: true, agentRuntimes: { claudeCode: true } } }] }
+      ] }) as never
+    })
+    expect((await thirdParty.getView()).webSearchSupported).toBe(false)
   })
 
   it('synchronizes the saved model to the editor agent', async () => {

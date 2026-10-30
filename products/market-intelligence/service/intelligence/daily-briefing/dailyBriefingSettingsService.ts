@@ -23,6 +23,8 @@ export type DailyBriefingSettingsView = Readonly<{
     webSearchAuthorizedAt?: string
   }>
   generation: Readonly<{ generationTime: string; windowHours: number; cronExpression: string }>
+  /** 日报 agent 实际模型能否使用 Anthropic server-side WebSearch/WebFetch。 */
+  webSearchSupported: boolean
   resolved:
     | Readonly<{ state: 'disabled' }>
     | Readonly<{ state: 'agent'; providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
@@ -46,7 +48,7 @@ export function createDailyBriefingSettingsService(deps: Readonly<{
 }>): DailyBriefingSettingsService {
   async function view(): Promise<DailyBriefingSettingsView> {
     const [ai, generation] = await Promise.all([deps.ai.getView(), deps.generation.getView()])
-    return Object.freeze({ settings: ai.settings, generation, resolved: ai.resolved })
+    return Object.freeze({ settings: ai.settings, generation, resolved: ai.resolved, webSearchSupported: ai.webSearchSupported })
   }
 
   return {

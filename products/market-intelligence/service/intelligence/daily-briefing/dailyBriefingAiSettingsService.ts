@@ -1,5 +1,7 @@
 import { resolveConfiguredAgentModel } from '@platform/ai/agent-platform/runtime/effectiveAgentModel'
 import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
+import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
+import type { ModelProvider } from '@platform/ai/providers/modelProviderTypes'
 
 import {
   applyDailyBriefingAiSettingsPatch,
@@ -17,6 +19,12 @@ import type { DailyBriefingAiSettingsStore } from './dailyBriefingAiSettingsStor
 export type DailyBriefingAiSettingsView = Readonly<{
   settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
   resolved: DailyBriefingEditorialModel
+  /**
+   * Whether the model that will actually run the editor agent can take Anthropic server-side web
+   * tools. `false` means WebSearch/WebFetch must not be granted: the endpoint would reject the
+   * request (third-party messages endpoints return `400 tools.0.input_schema`).
+   */
+  webSearchSupported: boolean
 }>
 
 export type DailyBriefingAiSettingsService = Readonly<{
@@ -42,6 +50,10 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
   const now = deps.now ?? (() => new Date().toISOString())
 
   async function view(settings: DailyBriefingAiSettings): Promise<DailyBriefingAiSettingsView> {
+    const [resolved, agentModel] = await Promise.all([
+      resolveDailyBriefingEditorialModel(settings, deps),
+      resolveAgentModel(settings)
+    ])
     return Object.freeze({
       settings: Object.freeze({
         editorialEnabled: settings.editorialEnabled,
@@ -50,7 +62,8 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
         webSearchEnabled: settings.webSearchEnabled,
         ...(settings.webSearchAuthorizedAt ? { webSearchAuthorizedAt: settings.webSearchAuthorizedAt } : {})
       }),
-      resolved: await resolveDailyBriefingEditorialModel(settings, deps)
+      resolved,
+      webSearchSupported: agentModel.webSearchSupported
     })
   }
 
@@ -58,12 +71,19 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
    * Resolves what the agent session may call. The view resolver answers for the optional
    * single-call editorial layer (assistant default); an agent session instead follows the platform
    * default agent model, the same one `resolveEffectiveAgentModel` gives an unbound agent.
+   *
+   * Web-search support belongs to this agent model: a custom model can differ from the editorial
+   * default, and the editor agent is the only caller that can emit Anthropic server web tools.
    */
-  async function resolveAgentModel(): Promise<DailyBriefingEditorialModel> {
-    const settings = await deps.store.getSettings()
-    if (!settings.editorialEnabled) return Object.freeze({ state: 'disabled' as const })
+  async function resolveAgentModel(settings: DailyBriefingAiSettings): Promise<{
+    model: DailyBriefingEditorialModel
+    webSearchSupported: boolean
+  }> {
+    if (!settings.editorialEnabled) {
+      return { model: Object.freeze({ state: 'disabled' as const }), webSearchSupported: false }
+    }
     if (!deps.getModelDefaults || !deps.getProviderState) {
-      return Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const })
+      return { model: Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const }), webSearchSupported: false }
     }
     try {
       const [defaults, state] = await Promise.all([deps.getModelDefaults(), deps.getProviderState()])
@@ -75,12 +95,15 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
           isModelAcceptable: (_provider, model) => model.capabilities.chat === true
         })
         if (custom.ok) {
-          return Object.freeze({
-            state: 'agent' as const,
-            providerId: custom.ref.providerId,
-            modelId: custom.ref.modelId,
-            source: 'custom' as const
-          })
+          return {
+            model: Object.freeze({
+              state: 'agent' as const,
+              providerId: custom.ref.providerId,
+              modelId: custom.ref.modelId,
+              source: 'custom' as const
+            }),
+            webSearchSupported: providerSupportsWebSearch(state.providers, custom.ref.providerId)
+          }
         }
       }
       const fallback = resolveConfiguredAgentModel({
@@ -89,21 +112,27 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
         agentType: 'claude-code'
       })
       const ref = fallback.ok ? parseConfiguredModelRef(fallback.model) : null
-      if (!ref) return Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const })
-      return Object.freeze({
-        state: 'agent' as const,
-        providerId: ref.providerId,
-        modelId: ref.modelId,
-        source: 'default' as const,
-        ...(customSet ? { fallback: 'custom-unavailable' as const } : {})
-      })
+      if (!ref) {
+        return { model: Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const }), webSearchSupported: false }
+      }
+      return {
+        model: Object.freeze({
+          state: 'agent' as const,
+          providerId: ref.providerId,
+          modelId: ref.modelId,
+          source: 'default' as const,
+          ...(customSet ? { fallback: 'custom-unavailable' as const } : {})
+        }),
+        webSearchSupported: providerSupportsWebSearch(state.providers, ref.providerId)
+      }
     } catch {
-      return Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const })
+      return { model: Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const }), webSearchSupported: false }
     }
   }
 
   async function ensureAgentModel(): Promise<DailyBriefingEditorialModel> {
-    const resolved = await resolveAgentModel()
+    const settings = await deps.store.getSettings()
+    const resolved = (await resolveAgentModel(settings)).model
     if (resolved.state !== 'agent' || !deps.applyAgentModel) return resolved
     try {
       await deps.applyAgentModel(`${resolved.providerId}:${resolved.modelId}`)
@@ -128,4 +157,9 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
     },
     ensureAgentModel
   }
+}
+
+function providerSupportsWebSearch(providers: readonly ModelProvider[], providerId: string): boolean {
+  const provider = providers.find((item) => item.id === providerId)
+  return provider ? supportsAnthropicServerWebSearch(provider) : false
 }

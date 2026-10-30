@@ -46,6 +46,8 @@ export type DailyBriefingSettingsView = Readonly<{
   settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
   /** When the automatic edition runs and what interval it covers. */
   generation: DailyBriefingGenerationSettingsView
+  /** Whether the editor agent's model can take Anthropic server-side WebSearch/WebFetch. */
+  webSearchSupported: boolean
   resolved:
     | Readonly<{ state: 'disabled' }>
     | Readonly<{ state: 'agent'; providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
@@ -147,10 +149,19 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
   try {
     const value = await read()
     if (!isRecord(value) || !isRecord(value.settings) || !isAiSettings(value.settings) ||
-      !isGenerationSettings(value.generation) || !isResolvedModel(value.resolved)) {
+      !isGenerationSettings(value.generation) || typeof value.webSearchSupported !== 'boolean' ||
+      !isResolvedModel(value.resolved)) {
       return { state: 'unavailable', failureCode: 'daily-briefing-settings-invalid' }
     }
-    return { state: 'available', view: { settings: value.settings, generation: value.generation, resolved: value.resolved } }
+    return {
+      state: 'available',
+      view: {
+        settings: value.settings,
+        generation: value.generation,
+        webSearchSupported: value.webSearchSupported,
+        resolved: value.resolved
+      }
+    }
   } catch {
     return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
   }

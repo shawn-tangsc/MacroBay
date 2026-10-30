@@ -62,11 +62,12 @@ describe('daily briefing client', () => {
   it('reads and saves the settings view without trusting a malformed resolved state', async () => {
     stubInvoke((method, payload) => {
       if (method === 'intelligence.dailyBriefing.getSettings') {
-        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' }, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
+        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' }, webSearchSupported: false, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
       }
       return {
         settings: { editorialEnabled: false, providerId: '', modelId: '', webSearchEnabled: false },
         generation: { generationTime: '09:30', windowHours: 48, cronExpression: '30 9 * * *' },
+        webSearchSupported: true,
         resolved: { state: 'disabled' },
         patch: payload
       }
@@ -75,6 +76,7 @@ describe('daily briefing client', () => {
     expect(settings.state).toBe('available')
     if (settings.state === 'available') {
       expect(settings.view.generation).toEqual({ generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' })
+      expect(settings.view.webSearchSupported).toBe(false)
     }
     const saved = await dailyBriefingClient.saveSettings({ generation: { generationTime: '09:30', windowHours: 48 } })
     expect(saved.state).toBe('available')

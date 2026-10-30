@@ -936,6 +936,22 @@ const claudeCodeRuntimeDependencies = createClaudeCodeRuntimeDriverDependencies(
   systemWorkspaceRoot: agentSystemWorkspacesRoot
 })
 let agentTaskRunController: ReturnType<typeof createAgentTaskRunController> | null = null
+const isAgentWebSearchProviderReady = async (): Promise<boolean> => {
+  const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
+  const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
+  const fetch = providers.find((provider) => provider.id === settings.defaultFetchProviderId)
+  return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
+}
+const platformAgentWebSearchBridge = {
+  search: async (request: Readonly<{ query: string; maxResults?: number }>, options?: Readonly<{ signal?: AbortSignal }>) => {
+    const response = await webSearchService.searchKeywords(
+      { keywords: [request.query] },
+      { ...(options?.signal ? { signal: options.signal } : {}), consumer: { kind: 'agent' } }
+    )
+    return request.maxResults ? { ...response, results: response.results.slice(0, request.maxResults) } : response
+  },
+  isReady: isAgentWebSearchProviderReady
+}
 const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
   loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
   getProviderState: providerStore.getState,
@@ -947,6 +963,7 @@ const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
     }
     await replaceAgentState(state)
   },
+  platformWebSearchBridge: platformAgentWebSearchBridge,
   productAgentToolBridge: {
     registry: productAgentToolRegistry,
     runtime: productAgentToolRuntimeService,
@@ -970,6 +987,7 @@ const claudeCodeRuntimeDriver = new ClaudeCodeRuntimeDriver({
   prewarmSession: (input) => claudeAgentSdkRuntime.prewarmSession(input),
   executeTurn: createClaudeSdkPreferredExecutor({
     sdkRuntime: claudeAgentSdkRuntime,
+    platformWebSearchBridge: platformAgentWebSearchBridge,
     loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
     getProviderState: providerStore.getState,
     getAgentState: () => agentStore.getState(),
@@ -2529,12 +2547,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
       deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
       updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
-      isWebSearchProviderReady: async () => {
-        const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
-        const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
-        const fetch = providers.find((provider) => provider.id === settings.defaultFetchProviderId)
-        return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
-      },
+      isWebSearchProviderReady: isAgentWebSearchProviderReady,
       invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
       invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
       assistantInvocation: assistantInvocationService

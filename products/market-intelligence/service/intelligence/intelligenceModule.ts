@@ -66,6 +66,7 @@ import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBrief
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
+import { resolveDailyBriefAgentAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
@@ -769,9 +770,15 @@ export function getIntelligenceModule(
       backfillFactory: (cutoff) => createDailyBriefBackfillExecutor({ cutoff, publicQuery: publicQueryService }),
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()
-        if (!view.settings.webSearchEnabled || !view.settings.webSearchAuthorizedAt) return undefined
-        if (hooks?.isWebSearchProviderReady && !await hooks.isWebSearchProviderReady()) return undefined
-        return ['WebSearch', 'WebFetch']
+        const providerReady = hooks?.isWebSearchProviderReady
+          ? await hooks.isWebSearchProviderReady()
+          : true
+        return resolveDailyBriefAgentAllowedTools({
+          webSearchEnabled: view.settings.webSearchEnabled,
+          authorized: Boolean(view.settings.webSearchAuthorizedAt),
+          providerReady,
+          serverWebSearchSupported: view.webSearchSupported
+        })
       }
     })
     registerDailyBriefingJob(jobRuntime, {

@@ -18,6 +18,8 @@ import {
   createClaudeCodeProviderEnvironment
 } from '../../ai/agent-platform/runtime/drivers/claudeCode'
 import { buildProductAgentToolSdkMcpServers } from './buildProductAgentToolSdkMcpServers'
+import { buildPlatformWebSearchSdkMcpServer, type PlatformWebSearchBridge } from './buildPlatformWebSearchSdkMcpServer'
+import { platformWebSearchSessionToolName } from '../../ai/agent-platform/tools/platformWebTools'
 import {
   buildTaskManagementSdkMcpServer,
   type TaskManagementSdkModule
@@ -284,6 +286,8 @@ export type ClaudeAgentSdkExecutorDependencies = {
     getAgentState: () => Promise<AgentStoreState>
     loadSdkHelpers?: () => Promise<SkillToolSdkModule | null>
   }
+  /** Platform web search for sessions whose provider cannot carry Anthropic server tools. */
+  platformWebSearchBridge?: PlatformWebSearchBridge
   taskManagementToolBridge?: {
     runtime: Pick<import('../../ai/agent-platform/runtime/tasks/TaskManagementToolRuntimeService').TaskManagementToolRuntimeService, 'invoke'>
     commands: Pick<import('../../ai/agent-platform/runtime/tasks/TaskAutomationCommandService').TaskAutomationCommandService, 'prepareCancelRun' | 'recordCancelRunOutcome'>
@@ -1110,13 +1114,28 @@ async function createSdkQueryRequestAsync(
   const executor = taskManagementMcpServer
     ? createTaskManagementBridgeExecutor(input.executor, taskManagementMcpServer.toolNames)
     : input.executor
+  const webSearchMcpServer =
+    deps.platformWebSearchBridge &&
+    (input.composition.sessionAllowedTools ?? []).includes(platformWebSearchSessionToolName)
+      ? await buildPlatformWebSearchSdkMcpServer({
+          bridge: deps.platformWebSearchBridge,
+          loadSdkHelpers: async () => {
+            try {
+              return (await import('@anthropic-ai/claude-agent-sdk')) as never
+            } catch {
+              return null
+            }
+          }
+        })
+      : null
 
   return {
     prompt: buildRuntimePromptText(input.request.text, mentionedModels),
     options: createSdkOptionsFromExecutionParts({ ...input, executor }, {
       ...productToolMcpServers,
       ...skillToolMcpServers,
-      ...(taskManagementMcpServer ? { [taskManagementMcpServer.name]: taskManagementMcpServer.server } : {})
+      ...(taskManagementMcpServer ? { [taskManagementMcpServer.name]: taskManagementMcpServer.server } : {}),
+      ...(webSearchMcpServer ? { [webSearchMcpServer.name]: webSearchMcpServer.server } : {})
     }),
     warmQueryReuseSignature: buildWarmQueryRuntimePolicySignature(input)
   }

@@ -1,6 +1,7 @@
 import { Modal, Switch } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
+import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
@@ -39,6 +40,7 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
     setDraft(null)
     setFailed(false)
     setLoadFailed(false)
+    setWebSearchBlocked(false)
     void (async () => {
       const providersPromise = window.platform?.modelProviders?.list
         ? window.platform.modelProviders.list().catch(() => [] as SafeModelProvider[])
@@ -74,6 +76,17 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
   const followLabel = defaultModel
     ? `${text.aiSettings.followDefault} · ${defaultModel.providerName} / ${defaultModel.modelName}`
     : text.aiSettings.followDefault
+  /**
+   * The switch follows the model that will actually run the editor agent. A custom model is
+   * resolved against the same provider capability as the runtime: an endpoint without Anthropic
+   * server-side web tools would answer `400 tools.0.input_schema`.
+   */
+  const draftWebSearchSupported = useMemo(() => {
+    const providerId = draft?.providerId || defaultModel?.providerId
+    if (!providerId) return false
+    const provider = providers.find((item) => item.id === providerId)
+    return provider ? supportsAnthropicServerWebSearch(provider) : false
+  }, [draft?.providerId, defaultModel?.providerId, providers])
 
   const save = async (): Promise<void> => {
     if (!draft) return
@@ -116,8 +129,13 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
       <div className="mi-daily-briefing__settings-row">
         <div><strong>{text.aiSettings.webSearch}</strong><small>{text.aiSettings.webSearchHint}</small></div>
         <div className="mi-daily-briefing-ai__websearch">
-          <Switch checked={draft.webSearchEnabled} onChange={(checked) => { setWebSearchBlocked(false); setDraft({ ...draft, webSearchEnabled: checked, ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {}) }) }} />
-          {webSearchBlocked ? <small className="mi-daily-briefing-ai__error">{text.aiSettings.webSearchNeedsSetup}</small> : null}
+          <Switch checked={draft.webSearchEnabled} onChange={(checked) => {
+            setWebSearchBlocked(false)
+            setDraft({ ...draft, webSearchEnabled: checked, ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {}) })
+          }} />
+          {webSearchBlocked
+            ? <small className="mi-daily-briefing-ai__error">{text.aiSettings.webSearchNeedsSetup}</small>
+            : !draftWebSearchSupported ? <small>{text.aiSettings.webSearchUnsupported}</small> : null}
         </div>
       </div>
       {draft.editorialEnabled ? <div className="mi-daily-briefing__settings-row">
@@ -153,8 +171,8 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
 
 async function readDefaultModel(providers: readonly SafeModelProvider[]): Promise<{ providerId: string; modelId: string; providerName: string; modelName: string } | null> {
   try {
-    const settings = await window.platform?.settings?.get() as { modelDefaults?: { assistantModelId?: unknown } } | undefined
-    const value = settings?.modelDefaults?.assistantModelId
+    const settings = await window.platform?.settings?.get() as { modelDefaults?: { agentModelId?: unknown } } | undefined
+    const value = settings?.modelDefaults?.agentModelId
     if (typeof value !== 'string' || !value) return null
     const resolved = resolveConfiguredModel({
       value,
