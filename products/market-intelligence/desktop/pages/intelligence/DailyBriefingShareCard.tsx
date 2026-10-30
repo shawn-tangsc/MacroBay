@@ -30,6 +30,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const reference = rows.filter((row) => row.importance.tier === 'reference')
   const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support, ...reference]
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
+  const footnotes = groupCitations(doc.citations)
   const focusEvent = doc.next.focus ?? doc.next.items[0]
   const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
   const newsCounts = doc.data.sentiment.news.counts
@@ -136,9 +137,9 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     </section> : null}
 
 
-    {doc.citations.length > 0 ? <div className="mi-brief-poster__footnotes">
-      {doc.citations.map((entry) => <span key={entry.index}>
-        <b>[{entry.index}]</b>{entry.statement ? `${entry.statement} · ` : ''}{citationSource(entry)}{citationTime(entry, formatTime) ? ` · ${citationTime(entry, formatTime)}` : ''}
+    {footnotes.length > 0 ? <div className="mi-brief-poster__footnotes">
+      {footnotes.map((entry) => <span key={entry.key}>
+        <b>{entry.indexes.map((index) => `[${index}]`).join('')}</b>{entry.statement ? `${entry.statement} · ` : ''}{entry.source}{entry.observedAt ? ` · ${formatTime(entry.observedAt, 'minute')}` : ''}
       </span>)}
     </div> : null}
 
@@ -222,6 +223,21 @@ const SOURCE_LABELS: Readonly<Record<string, string>> = {
   '0xrouter-aggregate-provider': '0xRouter ETF',
   'alternative-fear-greed': 'Alternative.me',
   'coindesk-rss': 'CoinDesk RSS'
+}
+
+type Citation = DailyBriefingDocument['citations'][number]
+
+function groupCitations(citations: readonly Citation[]): readonly Readonly<{ key: string; indexes: readonly number[]; statement?: string; source: string; observedAt?: string }>[] {
+  const groups = new Map<string, { indexes: number[]; statement?: string; source: string; observedAt?: string }>()
+  for (const entry of citations) {
+    const statement = entry.statement ? entry.statement.length > 80 ? `${entry.statement.slice(0, 80)}…` : entry.statement : undefined
+    const source = citationSource(entry)
+    const key = `${statement ?? ''}|${source}|${entry.observedAt ?? ''}`
+    const group = groups.get(key) ?? { indexes: [], ...(statement ? { statement } : {}), source, ...(entry.observedAt ? { observedAt: entry.observedAt } : {}) }
+    group.indexes.push(entry.index)
+    groups.set(key, group)
+  }
+  return [...groups.entries()].map(([key, value]) => Object.freeze({ key, indexes: Object.freeze([...value.indexes]), ...(value.statement ? { statement: value.statement } : {}), source: value.source, ...(value.observedAt ? { observedAt: value.observedAt } : {}) }))
 }
 
 function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {
