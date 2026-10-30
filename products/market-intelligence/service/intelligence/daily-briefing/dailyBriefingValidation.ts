@@ -16,6 +16,7 @@ import {
   type DailyBriefWebEvidenceField
 } from './dailyBriefWebEvidence'
 import { selectMacroFloorItem } from './dailyBriefingDocument'
+import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -181,7 +182,7 @@ export function validateDailyBriefingEditorial(
   // not let a legitimate "20:30" fail the numeric whitelist. Counts of the shown candidate set are
   // also safe and are not stored as string tokens in the document.
   const numericProse = prose.replace(/\b\d{1,2}:\d{2}\b/g, ' ')
-  const unknown = unknownNumber(numericProse, document)
+  const unknown = findUnknownNumber(numericProse, buildNumericFactWhitelist(document))
   if (unknown) return fail('unknown-number', unknown)
   return Object.freeze({
     ok: true as const,
@@ -315,40 +316,6 @@ function needsTranslation(summary: string, locale: 'zh-CN' | 'en-US'): boolean {
 
 function forbiddenContent(text: string): string | undefined {
   return /https?:\/\/\S*|www\.\S*|```|<script|建议\s*(?:买入|卖出|做多|做空)|目标价|必涨|必跌|price target|buy now|sell now|go long|go short/i.exec(text)?.[0]
-}
-
-function unknownNumber(text: string, document: DailyBriefingDocument): string | undefined {
-  const allowed = numericWhitelist(document)
-  for (const token of text.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? []) {
-    const normalized = token.replace(/,/g, '')
-    if (allowed.has(normalized) || allowed.has(normalized.replace(/^-/, ''))) continue
-    return token
-  }
-  return undefined
-}
-
-function numericWhitelist(document: DailyBriefingDocument): Set<string> {
-  const values = new Set<string>()
-  const add = (value: number): void => {
-    for (let digits = 0; digits <= 4; digits += 1) {
-      values.add(value.toFixed(digits))
-      values.add(Math.abs(value).toFixed(digits))
-    }
-  }
-  const visit = (value: unknown): void => {
-    if (typeof value === 'number' && Number.isFinite(value)) add(value)
-    else if (typeof value === 'string') {
-      for (const token of value.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? []) add(Number(token.replace(/,/g, '')))
-    } else if (Array.isArray(value)) value.forEach(visit)
-    else if (value && typeof value === 'object') Object.values(value).forEach(visit)
-  }
-  visit(document)
-  // Safe counts/time anchors that the prose may legitimately name.
-  add(24)
-  add(document.news.items.length)
-  add(document.news.macro.length)
-  add(document.citations.length)
-  return values
 }
 
 function isExact(value: unknown, required: readonly string[], optional: readonly string[] = []): value is Record<string, unknown> {
