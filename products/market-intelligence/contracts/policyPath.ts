@@ -20,6 +20,17 @@ export type PolicyPathObservation = Readonly<{
   quote?: PolicyPathQuote
 }>
 
+/** One SEP release, reduced to the row the policy block reads. */
+export type PolicyPathSep = Readonly<{
+  /** The meeting that published these projections; the median is only meaningful against it. */
+  asOf: string
+  medianPath: Readonly<{ y2026?: number; y2027?: number; y2028?: number; y2029?: number; longerRun?: number }>
+  rangeCurrentYear?: Readonly<{ low: number; high: number }>
+  /** The same-year median from the previous SEP, for "up or down" without a second fetch. */
+  previousMedian?: number
+  sourceUrl: string
+}>
+
 export type PolicyPathStaleness = 'live' | 'delayed' | 'stale' | 'unavailable'
 
 /** Sum drift beyond this share means the payload is not a usable distribution. */
