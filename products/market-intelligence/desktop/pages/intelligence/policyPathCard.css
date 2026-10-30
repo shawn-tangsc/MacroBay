@@ -54,3 +54,11 @@
   padding: 0;
 }
 .mi-policy-card__open:focus-visible { outline: 2px solid var(--accent, #b7cf52); outline-offset: 2px; }
+
+/* State is colour, not layout: a dot on the freshness word carries live/late/stale/absent. */
+.mi-policy-card__status { display: inline-flex; align-items: center; gap: 5px; }
+.mi-policy-card__status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.mi-policy-card[data-staleness='live'] .mi-policy-card__status { color: #3fbf6f; }
+.mi-policy-card[data-staleness='delayed'] .mi-policy-card__status { color: #d9a441; }
+.mi-policy-card[data-staleness='stale'] .mi-policy-card__status { color: #e0524c; }
+.mi-policy-card[data-staleness='unavailable'] .mi-policy-card__status { color: var(--muted, #8b8d94); }

@@ -189,19 +189,20 @@
 .mi-crypto-dashboard__sentiment-dial strong {
   /* The dial renders 112x64 from a 120x68 viewBox whose baseline is y=60; the score sits just
      inside that baseline so it reads as the gauge's value rather than a caption under it. */
-  position: absolute; right: 0; bottom: 9px; left: 0;
+  position: absolute; right: 0; bottom: 13px; left: 0;
   color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 18px; font-weight: 650; line-height: 1; text-align: center;
 }
 .mi-crypto-dashboard__gauge-segment { fill: none; stroke-width: 10; }
+.mi-crypto-dashboard__gauge-needle { stroke: none; }
 .mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { fill: var(--mi-dashboard-sentiment-extreme-fear); }
 .mi-crypto-dashboard__gauge-segment[data-gauge-tone='fear'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { fill: var(--mi-dashboard-sentiment-fear); }
 .mi-crypto-dashboard__gauge-segment[data-gauge-tone='neutral'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { fill: var(--mi-dashboard-sentiment-neutral); }
 .mi-crypto-dashboard__gauge-segment[data-gauge-tone='greed'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { fill: var(--mi-dashboard-sentiment-greed); }
 .mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-greed'],
 .mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-greed'],
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); stroke: var(--mi-dashboard-sentiment-extreme-greed); }

@@ -33,36 +33,45 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
       {reading.hasProjectionMaterials ? <span className="mi-policy-card__chip">{text.projection}</span> : null}
     </header>
 
-    {probability ? <p className="mi-policy-card__lead">
-      <span className="mi-policy-card__value">{(probability.value * 100).toFixed(0)}%</span>
+    {/* One skeleton for every state: a missing value becomes a dash, so the card never changes
+        shape - only its colour says whether the number is live, late, or absent. */}
+    <p className="mi-policy-card__lead">
+      <span className="mi-policy-card__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
       <span className="mi-policy-card__outcome">{text.cardOutcome.replace('{month}', month)}</span>
       {change === undefined ? null : <span className="mi-policy-card__delta" data-direction={change > 0 ? 'up' : change < 0 ? 'down' : 'flat'}>
         <Direction aria-hidden="true" size={12} />{Math.abs(change).toFixed(1)}pp
       </span>}
-    </p> : null}
+    </p>
 
     <dl className="mi-policy-card__facts">
       <div>
         <dt>{text.meeting}</dt>
         <dd>{reading.meetingDate.slice(5)}<span className="mi-policy-card__muted"> · {text.daysAway.replace('{days}', String(reading.daysUntilMeeting))}</span></dd>
       </div>
-      {reading.targetRange ? <div>
+      <div>
         <dt>{text.range}</dt>
-        <dd>{reading.targetRange.lowerPercent.toFixed(2)}–{reading.targetRange.upperPercent.toFixed(2)}%</dd>
-      </div> : null}
-      {reading.sep?.medianCurrentYear === undefined ? null : <div>
+        <dd>{reading.targetRange
+          ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%`
+          : '—'}</dd>
+      </div>
+      <div>
         <dt>{text.sepMedian}</dt>
-        <dd>{reading.sep.medianCurrentYear.toFixed(1)}%<span className="mi-policy-card__muted">（{reading.sep.asOf.slice(5)}）</span></dd>
-      </div>}
-      {reading.lastDecision?.vote ? <div>
+        <dd>{reading.sep?.medianCurrentYear === undefined
+          ? '—'
+          : <>{reading.sep.medianCurrentYear.toFixed(1)}%<span className="mi-policy-card__muted">（{reading.sep.asOf.slice(5)}）</span></>}</dd>
+      </div>
+      <div>
         <dt>{text.lastVote}</dt>
-        <dd>{text.unchanged} {reading.lastDecision.vote.for}–{reading.lastDecision.vote.against}</dd>
-      </div> : null}
+        <dd>{reading.lastDecision?.vote
+          ? `${text.unchanged} ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
+          : '—'}</dd>
+      </div>
     </dl>
 
     <footer className="mi-policy-card__foot">
-      {/* The freshness word describes the quote; with no quote there is nothing to age. */}
-      <span>{probability ? `${freshness} · ${probability.venue}` : text.unavailable}</span>
+      <span className="mi-policy-card__status">
+        <i aria-hidden="true" />{freshness}{probability ? ` · ${probability.venue}` : ''}
+      </span>
       {onOpen ? <button className="mi-policy-card__open" onClick={onOpen} type="button">
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </button> : null}

@@ -31,7 +31,9 @@ import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
-import { PolicyPathStrip } from './PolicyPathStrip'
+import { createPortal } from 'react-dom'
+
+import { PolicyPathCard } from './PolicyPathCard'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
 
@@ -60,7 +62,7 @@ type CryptoDashboardText = {
 
 type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, policySlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void; policySlot?: HTMLDivElement | null
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -161,8 +163,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
-      {policyPath?.state === 'available' ? <PolicyPathStrip reading={policyPath.reading} text={text.policyPath}
-        month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} /> : null}
+      {policyPath?.state === 'available' ? (() => {
+        const card = <PolicyPathCard reading={policyPath.reading} text={text.policyPath}
+          month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} />
+        // The rail is the layout's, not this page's: portal into its slot when it exists so the card
+        // sits above the calendar, and fall back to the page flow when rendered on its own.
+        return policySlot ? createPortal(card, policySlot) : card
+      })() : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
@@ -192,7 +199,9 @@ function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFea
         {/* The score sits inside the arc, not below it: as a grid row after the svg it hung under
             the dial's baseline, which read as a separate figure rather than the gauge's value. */}
         <span className="mi-crypto-dashboard__sentiment-dial">
-          <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<path className="mi-crypto-dashboard__gauge-needle" d={FearGreedGaugePresentationPolicy.trackPath} data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]} style={{ transform: `rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)}deg)` }} /></svg>
+          <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<g transform={`rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)} ${FearGreedGaugePresentationPolicy.needleOrigin})`}>
+            <path className="mi-crypto-dashboard__gauge-needle" d={FearGreedGaugePresentationPolicy.needlePath} data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]} />
+          </g></svg>
           <strong>{fearGreedState.score}</strong>
         </span>
         <span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>

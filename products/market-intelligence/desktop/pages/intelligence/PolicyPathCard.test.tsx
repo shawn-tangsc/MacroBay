@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { PolicyPathStrip } from './PolicyPathStrip'
+import { PolicyPathCard } from './PolicyPathCard'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.policyPath
 const reading: PolicyPathReading = {
@@ -27,30 +27,37 @@ afterEach(async () => {
   host = undefined
 })
 
-const render = async (candidate: PolicyPathReading | undefined) => {
+const render = async (candidate: PolicyPathReading) => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(PolicyPathStrip, { reading: candidate, text, month: '12' })))
+  await act(async () => root!.render(createElement(PolicyPathCard, { reading: candidate, text, month: '12' })))
   return host
 }
 
-describe('policy path strip', () => {
-  it('renders the policy readings with the month named in the label', async () => {
+describe('policy path card', () => {
+  it('leads with the odds and names the month', async () => {
     const rendered = await render(reading)
     expect(rendered.textContent).toContain(text.title)
-    expect(rendered.textContent).toContain('3.75–4.00%')
-    expect(rendered.textContent).toContain('12 月加息概率')
     expect(rendered.textContent).toContain('76%')
+    expect(rendered.textContent).toContain('12 月加息 25bp')
+    expect(rendered.textContent).toContain('3.75–4.00%')
     expect(rendered.textContent).toContain('维持 10–2')
     expect(rendered.textContent).toContain(text.projection)
     expect(rendered.textContent).toContain(text.live)
   })
 
-  it('renders nothing without a reading and marks a stale quote', async () => {
-    expect((await render(undefined)).firstChild).toBeNull()
+  it('keeps one skeleton: a missing reading becomes a dash, not a shorter card', async () => {
+    const rendered = await render({ ...reading, probability: undefined, targetRange: undefined, lastDecision: undefined, staleness: 'unavailable' })
+    const rows = rendered.querySelectorAll('.mi-policy-card__facts > div')
+    expect(rows).toHaveLength(4)
+    expect(rendered.textContent?.match(/—/g)?.length).toBeGreaterThanOrEqual(3)
+    expect(rendered.textContent).toContain(text.unavailable)
+  })
+
+  it('marks a stale quote with its own colour state', async () => {
     const rendered = await render({ ...reading, staleness: 'stale' })
     expect(rendered.textContent).toContain(text.stale)
-    expect(rendered.querySelector('.mi-policy-path')?.getAttribute('data-staleness')).toBe('stale')
+    expect(rendered.querySelector('.mi-policy-card')?.getAttribute('data-staleness')).toBe('stale')
   })
 })

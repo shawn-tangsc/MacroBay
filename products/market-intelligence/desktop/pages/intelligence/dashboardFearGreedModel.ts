@@ -16,6 +16,14 @@ export const FearGreedGaugePresentationPolicy = {
   arcDegrees: 180,
   svgViewBox: '0 0 120 68',
   trackPath: 'M 12 60 A 48 48 0 0 1 108 60',
+  /**
+   * A triangular pointer pinned to the arc, not the whole arc rotated: the arc itself used to be
+   * reused as the needle, so the gauge drew a second copy of itself and showed no pointer at all.
+   * It floats in the outer band rather than reaching back to the centre because the score sits in
+   * the mouth — a full needle would run straight through the number.
+   */
+  needlePath: 'M 60 17 L 57.4 27 L 62.6 27 Z',
+  needleOrigin: '60 60',
   bucketTones: {
     'extreme-fear': 'extreme-fear',
     fear: 'fear',
