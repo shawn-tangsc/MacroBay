@@ -107,8 +107,9 @@ export function validateDailyBriefingEditorial(
         sourceName: entry.sourceName, sourceUrl: entry.sourceUrl, publishedAt: entry.publishedAt, retrievedAt: document.provenance.readAt
       })
       if (checkDailyBriefWebEvidence(ref, document.edition.windowEnd) !== 'ok') return fail('invalid-shape')
-      if (webEvidence.some((existing) => existing.eventKey === ref.eventKey && existing.field === ref.field)) return fail('invalid-shape')
-      webEvidence.push(ref)
+      const duplicate = webEvidence.find((existing) => existing.eventKey === ref.eventKey && existing.field === ref.field)
+      if (duplicate && duplicate.value === ref.value && duplicate.sourceUrl === ref.sourceUrl) return fail('invalid-shape')
+      webEvidence.push(duplicate ? Object.freeze({ ...ref, sourceConflict: true }) : ref)
     }
   }
   const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
@@ -190,7 +191,7 @@ export function applyDailyBriefingEditorial(
     refId: ref.evidenceRefId,
     sourceLabel: ref.sourceName,
     observedAt: ref.publishedAt,
-    statement: `${ref.eventKey} ${ref.field}: ${ref.value}`
+    statement: `${ref.eventKey} ${ref.field}: ${ref.value}${ref.sourceConflict ? ' (source conflict)' : ''}`
   }))]
   const applyRow = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
     const next = importance.get(row.id)

@@ -9,6 +9,7 @@ export type DailyBriefWebEvidenceRef = Readonly<{
   sourceUrl: string
   publishedAt: string
   retrievedAt: string
+  sourceConflict?: boolean
 }>
 
 export type WebEvidenceCheck = 'ok' | 'missing-source' | 'invalid-url' | 'invalid-time' | 'after-cutoff'

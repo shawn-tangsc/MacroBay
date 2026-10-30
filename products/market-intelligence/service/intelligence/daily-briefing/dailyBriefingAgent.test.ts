@@ -200,5 +200,9 @@ describe('daily briefing web evidence', () => {
     expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence }, document(), 'zh-CN', [])).toMatchObject({ ok: false })
     expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence: [{ ...webEvidence[0], publishedAt: '2026-10-30T01:00:00.000Z' }] }, document(), 'zh-CN', tool)).toMatchObject({ ok: false })
     expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence: [{ ...webEvidence[0], field: 'actual', value: '3.4%' }] }, document(), 'zh-CN', tool)).toMatchObject({ ok: false })
+    const conflictTool = [{ toolCallId: 't', toolName: 'WebSearch', output: { results: [{ title: 'BLS', url: 'https://www.bls.gov/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }, { title: 'Other', url: 'https://example.com/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }] } }]
+    const conflict = validateDailyBriefingEditorial({ ...validOutput, webEvidence: [webEvidence[0], { ...webEvidence[0], value: '3.1%', sourceName: 'Other', sourceUrl: 'https://example.com/cpi' }] }, document(), 'zh-CN', conflictTool)
+    expect(conflict.ok).toBe(true)
+    if (conflict.ok) expect(conflict.value.webEvidence?.at(-1)?.sourceConflict).toBe(true)
   })
 })
