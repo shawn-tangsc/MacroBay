@@ -62,10 +62,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       const today = await withDeadline(client.getToday({ locale, timeZone }), 150_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale, timeZone }), 8_000).catch(() => undefined)
       if (!active) return
-      const rows = listed?.state === 'available' ? [...listed.result.editions] : []
+      let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       if (today?.state === 'available') {
         const date = today.document.edition.date
-        if (!rows.some((row) => row.date === date)) rows.unshift(summaryFromDocument(today.document))
+        rows = rows.some((row) => row.date === date)
+          ? rows.map((row) => row.date === date ? summaryFromDocument(today.document) : row)
+          : [summaryFromDocument(today.document), ...rows]
         setView({ status: 'ready', document: today.document, kind: 'today' })
       } else {
         setView({ status: 'unavailable' })

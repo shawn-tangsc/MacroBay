@@ -122,7 +122,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <h3>{nextTitle(focusEvent, eventTitles)}</h3>
         <p>{text.next.importance[focusEvent.importance]}{nextCountry(focusEvent, locale) ? ` · ${nextCountry(focusEvent, locale)}` : ''}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
-        {focusEvent.watch?.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{entry.condition}</span><b>{entry.implication}</b></div>)}
+        {focusEvent.watch?.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{watchLabel(entry.condition, text)}</span><b>{entry.implication}</b></div>)}
         <div className="mi-brief-poster__next-values">
           {focusEvent.consensus ? `${text.next.expected} ${focusEvent.consensus}` : ''}
           {focusEvent.previous ? `${focusEvent.consensus ? ' · ' : ''}${text.next.previous} ${focusEvent.previous}` : ''}
@@ -282,4 +282,11 @@ function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefi
   if (row.state === 'source-disabled') return text.states['source-disabled']
   if (row.state === 'unavailable') return text.states.unavailable
   return row.observedAt ? text.states[row.state] : ''
+}
+
+function watchLabel(condition: string, text: { next: { watchHigher: string; watchLower: string } }): string {
+  const normalized = condition.trim().toLowerCase()
+  if (normalized === 'higher than expected') return text.next.watchHigher
+  if (normalized === 'lower than expected') return text.next.watchLower
+  return condition
 }
