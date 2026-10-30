@@ -153,7 +153,7 @@ export const calendarCardReactionReaderPolicy = Object.freeze({ range: '24h' as 
  * 只声明它真正读的那一部分——`curves`——其余字段（相关性、闭合收益、读数）与「±30 分」无关；
  * 页面因此可以把 `crossAssetClient.query` 直接交给读取器，不必在页面入口再包一层适配。
  */
-export type CalendarCardReactionQuery = (input: Readonly<{ range: '24h'; asOf: string }>) =>
+export type CalendarCardReactionQuery = (input: Readonly<{ range: '24h'; asOf: string; knowledge: 'latest' }>) =>
   Promise<Readonly<{ state: 'unavailable' }> | Readonly<{
     curves: Readonly<Partial<Record<CrossAssetId, readonly CurvePoint[]>>>
     macroCurves?: Readonly<Partial<Record<CrossAssetMacroProxyId, readonly CurvePoint[]>>>
@@ -167,6 +167,10 @@ export type CalendarCardReactionQuery = (input: Readonly<{ range: '24h'; asOf: s
  * 正好压在 +30 分钟上的终点会被截到 +30 之前，右端就没有"已经发生"的点了。多要一步之后，右端必然存在，
  * 且窗口只可能比 ±30 分钟**宽**（左端取最后一个不晚于 −30 的点，右端取第一个不早于 +30 的点）。
  *
+ * 而且必须读 `knowledge: 'latest'`：这行问的是"那 30 分钟到底怎么走的"，不是"事件后第 35 分钟这台机器
+ * 已经下载到哪一步"。收在 +30 的那根 bar 要等下一次轮询才入库，停机补采的窗口更是整段都晚于 `asOf`；
+ * 按"当时已知"读，右端（有时连整段）会被判成那时还不存在——数据在库里，却只印得出美元那一条宏观线。
+ *
  * 读失败（不可用、抛错、返回不合法）一律是 `undefined`：卡片不画这一行。时刻不合法时连读都不读——
  * 不发一个注定没有意义的请求。
  */
@@ -179,7 +183,7 @@ export function createCalendarCardReactionReader(query: CalendarCardReactionQuer
     if (!Number.isFinite(instantMs)) return undefined
     try {
       const asOf = new Date(instantMs + offsetMs + gridMs).toISOString()
-      const result = await query({ range: calendarCardReactionReaderPolicy.range, asOf })
+      const result = await query({ range: calendarCardReactionReaderPolicy.range, asOf, knowledge: 'latest' })
       // 客户端的"不可用"是它自己的形状（`{state:'unavailable'}`）；快照本身没有 `state`。
       if ('state' in result) return undefined
       return reactionReturns({ curves: result.curves, macroCurves: result.macroCurves, instant })

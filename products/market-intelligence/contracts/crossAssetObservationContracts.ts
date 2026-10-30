@@ -95,7 +95,18 @@ export const crossAssetContractPolicy = Object.freeze({
   leaseMethods: Object.freeze([crossAssetMethods.renew, crossAssetMethods.release, crossAssetMethods.refresh])
 })
 export type CrossAssetRange = typeof crossAssetContractPolicy.ranges[number]
-export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string }
+/**
+ * Which version of a historical window answers it: `as-of` is what was known at that instant, `latest`
+ * is what is known now.
+ *
+ * The store is bitemporal (bar instant plus `observed_at`), and `as-of` is the default because a
+ * historical chart honestly reproduces "what the reader saw then". That same rule also hides every bar
+ * ingested after the instant — a late poll, or a whole window backfilled after a restart — which is
+ * wrong for a derived reading of a past window: the calendar card's ±30-minute reaction asks what the
+ * market did, not what this machine had already downloaded at minute +35. Such readers ask for `latest`.
+ */
+export type CrossAssetKnowledge = 'as-of' | 'latest'
+export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; knowledge?: CrossAssetKnowledge }
 export type CrossAssetInput = Record<string, never> | { leaseId: string } | CrossAssetQueryInput
 export type CrossAssetId = typeof crossAssetContractPolicy.assets[number]
 export type CrossAssetMacroProxyId = typeof crossAssetContractPolicy.macroProxies[number]
@@ -178,14 +189,19 @@ export function parseCrossAssetInput(method: string, value: unknown, nowMs: numb
       return keys.length === 1 && typeof value.leaseId === 'string' && value.leaseId.length <= policy.leaseIdMaxLength &&
         policy.leaseIdPattern.test(value.leaseId) ? { leaseId: value.leaseId } : undefined
     }
-    if (method !== crossAssetMethods.query || !keys.includes('range') || keys.some(key => key !== 'range' && key !== 'asOf') ||
+    if (method !== crossAssetMethods.query || !keys.includes('range') ||
+      keys.some(key => key !== 'range' && key !== 'asOf' && key !== 'knowledge') ||
       !policy.ranges.includes(value.range as CrossAssetRange)) return
     const range = value.range as CrossAssetRange
-    if (!Object.hasOwn(value, 'asOf')) return { range }
+    const knowledge = value.knowledge
+    if (knowledge !== undefined && knowledge !== 'as-of' && knowledge !== 'latest') return
+    // A version rule only means something next to a window end; without `asOf` the query is current and
+    // already reads the newest version of everything.
+    if (!Object.hasOwn(value, 'asOf')) return knowledge === undefined ? { range } : undefined
     const asOf = value.asOf
     if (typeof asOf !== 'string' || !policy.canonicalUtcPattern.test(asOf) || !Number.isFinite(Date.parse(asOf)) ||
       new Date(asOf).toISOString() !== asOf || Date.parse(asOf) > nowMs) return
-    return { range, asOf }
+    return knowledge === undefined ? { range, asOf } : { range, asOf, knowledge }
   } catch { return }
 }
 
