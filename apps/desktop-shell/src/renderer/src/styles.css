@@ -7023,10 +7023,19 @@ h1 {
   font-weight: 650;
 }
 
+/* 三个模型字段各占一行：抽屉正文只有 ~574px，三列并列时每列不到 200px，
+   选择器的 260px 最小宽度会溢出并压到相邻字段（文字重叠）。 */
 .agent-form-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+
+/* 表单里的选择器填满字段；触发器默认 260–420px 的固定宽度在表单里会溢出。 */
+.agent-form-grid .model-picker-trigger {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
 }
 
 .agent-avatar-picker {
