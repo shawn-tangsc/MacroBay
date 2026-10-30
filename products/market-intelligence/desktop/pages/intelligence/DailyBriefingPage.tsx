@@ -69,6 +69,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       setEditions(rows.slice(0, 14))
+      const cachedRow = rows.find((row) => row.date === todayDate && row.state === 'generated')
+      if (cachedRow) {
+        const cached = await client.get({ date: cachedRow.date, locale }).catch(() => undefined)
+        if (active && cached?.state === 'available' && view.status === 'loading') {
+          setView({ status: 'ready', document: cached.document, kind: 'today' })
+        }
+      }
       const today = await todayPromise
       if (!active) return
       if (today?.state === 'available') {
