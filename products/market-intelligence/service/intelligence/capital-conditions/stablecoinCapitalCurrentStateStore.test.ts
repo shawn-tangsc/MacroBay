@@ -23,7 +23,7 @@ const snapshot = {
 } as const
 
 describe('capital conditions current state store', () => {
-  it('keeps exactly one snapshot and one health slot while same canonical content retains observedAt', async () => {
+  it('keeps the current snapshot and bounded history while same content retains observedAt', async () => {
     const storage = createInMemoryCapitalConditionsStateStorage()
     const store = createCapitalConditionsCurrentStateStore({ storage })
 
@@ -37,6 +37,10 @@ describe('capital conditions current state store', () => {
         observedAt: '2026-08-17T00:00:00.000Z',
         verifiedAt: '2026-08-17T00:10:00.000Z'
       },
+      history: [
+        { ...snapshot, observedAt: '2026-08-17T00:00:00.000Z', verifiedAt: '2026-08-17T00:00:00.000Z' },
+        { ...snapshot, observedAt: '2026-08-17T00:00:00.000Z', verifiedAt: '2026-08-17T00:10:00.000Z' }
+      ],
       health: {
         status: 'healthy',
         lastAttemptAt: '2026-08-17T00:10:00.000Z',
