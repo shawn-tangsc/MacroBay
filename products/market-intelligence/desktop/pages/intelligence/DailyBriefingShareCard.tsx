@@ -181,7 +181,8 @@ function shortenEventTitle(value: string): string {
 }
 
 function nextTime(value: string, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
-  return formatTime(value, 'minute').slice(5, 16)
+  const [date, time, ...zone] = formatTime(value, 'minute').split(' ')
+  return [date.slice(5), time, ...zone].filter(Boolean).join(' ')
 }
 
 function comparisonText(doc: DailyBriefingDocument, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {
