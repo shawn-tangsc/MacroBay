@@ -68,3 +68,43 @@
 .mi-policy-card[data-staleness='delayed'] .mi-policy-card__status { color: #d9a441; }
 .mi-policy-card[data-staleness='stale'] .mi-policy-card__status { color: #e0524c; }
 .mi-policy-card[data-staleness='unavailable'] .mi-policy-card__status { color: var(--muted, #8b8d94); }
+
+/* A reader can check every other field against an official page; this one needs a sentence. */
+.mi-policy-card__help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border, #22252d);
+  border-radius: 50%;
+  color: var(--muted, #8b8d94);
+  font-size: 9.5px;
+  line-height: 1;
+  cursor: help;
+}
+.mi-policy-card__help:focus-visible { outline: 2px solid var(--accent, #b7cf52); outline-offset: 2px; }
+.mi-policy-card__help-pop {
+  position: absolute;
+  top: 20px;
+  left: -10px;
+  z-index: 30;
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  width: 258px;
+  padding: 9px 10px;
+  border: 1px solid var(--border, #22252d);
+  border-radius: 8px;
+  background: var(--surface, #0f1116);
+  box-shadow: 0 12px 28px -16px rgb(0 0 0 / 80%);
+  color: var(--muted, #8b8d94);
+  font-size: 10.5px;
+  line-height: 1.5;
+  cursor: default;
+}
+.mi-policy-card__help-pop b { color: var(--text, #e8e9ec); font-size: 11px; font-weight: 600; }
+.mi-policy-card__help:hover .mi-policy-card__help-pop,
+.mi-policy-card__help:focus .mi-policy-card__help-pop,
+.mi-policy-card__help:focus-within .mi-policy-card__help-pop { display: flex; }

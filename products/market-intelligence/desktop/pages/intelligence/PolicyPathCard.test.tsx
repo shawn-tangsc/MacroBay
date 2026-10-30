@@ -55,6 +55,15 @@ describe('policy path card', () => {
     expect(rendered.textContent).toContain(text.unavailable)
   })
 
+  it('explains where the odds come from, since no official page shows that number', async () => {
+    const rendered = await render(reading)
+    const help = rendered.querySelector('.mi-policy-card__help')
+    expect(help).not.toBeNull()
+    expect(help?.getAttribute('aria-label')).toBe(text.helpLabel)
+    // Every line the popover shows comes from the copy, so the wording is reviewable in one place.
+    for (const line of text.helpLines) expect(help?.textContent).toContain(line)
+  })
+
   it('marks a stale quote with its own colour state', async () => {
     const rendered = await render({ ...reading, staleness: 'stale' })
     expect(rendered.textContent).toContain(text.stale)

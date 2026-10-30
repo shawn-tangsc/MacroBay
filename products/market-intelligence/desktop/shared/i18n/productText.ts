@@ -432,6 +432,12 @@ export const productText = {
               projection: 'SEP',
               probability: '{month} 月加息概率',
               cardOutcome: '{month} 月加息 25bp',
+              helpLabel: '这个概率怎么来的',
+              helpLines: [
+                '取自预测市场 Polymarket 的「12 月 FOMC 决议」盘口，读的是加息 25bp 这一档的买一/卖一中间价。',
+                '五档价格合计通常略高于 1（庄家抽水），已按合计归一化；24h 是同一档前后的百分点差。',
+                '这是交易者当下愿意成交的价格，不是模型预测，也不代表实际结果。'
+              ],
               probabilityLabel: '加息概率',
               lastVote: '上次',
               sepMedian: 'SEP 中位',
@@ -1860,6 +1866,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               projection: 'SEP',
               probability: '{month} hike odds',
               cardOutcome: '{month} hike 25bp',
+              helpLabel: 'Where this odds comes from',
+              helpLines: [
+                'Read from the Polymarket pool for the December FOMC decision: the mid of the hike-25bp bucket bid and ask.',
+                'The five buckets usually sum to slightly more than 1 (the venue margin); the price is normalised by that sum. The 24h figure is the same bucket before and after.',
+                'It is what traders will transact at now, not a model forecast, and not the outcome.'
+              ],
               probabilityLabel: 'Hike odds',
               lastVote: 'Last',
               sepMedian: 'SEP median',

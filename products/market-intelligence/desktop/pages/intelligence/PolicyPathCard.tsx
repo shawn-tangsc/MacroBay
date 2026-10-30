@@ -15,6 +15,7 @@ export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
   probability: string; probabilityLabel: string; cardOutcome: string; lastVote: string; unchanged: string
   detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
+  helpLabel: string; helpLines: readonly string[]
 }>
 
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
@@ -30,6 +31,14 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   return <section className="mi-policy-card" aria-label={text.title} data-staleness={reading.staleness}>
     <header className="mi-policy-card__head">
       <h2>{text.title}</h2>
+      {/* The odds are the one number on this card a reader cannot derive from anything else here. */}
+      <span className="mi-policy-card__help" tabIndex={0} aria-label={text.helpLabel} role="note">
+        ?
+        <span className="mi-policy-card__help-pop" role="tooltip">
+          <b>{text.helpLabel}</b>
+          {text.helpLines.map((line) => <span key={line}>{line}</span>)}
+        </span>
+      </span>
       {reading.hasProjectionMaterials ? <span className="mi-policy-card__chip">{text.projection}</span> : null}
     </header>
 
