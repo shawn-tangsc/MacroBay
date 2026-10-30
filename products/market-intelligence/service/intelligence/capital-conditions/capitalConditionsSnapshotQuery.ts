@@ -30,8 +30,13 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
       try {
         if (deps.isEnabled && !await deps.isEnabled()) return unavailable()
         const state = await deps.store.read()
-        const snapshot = state?.snapshot
-        const lastSuccessAt = state?.health.lastSuccessAt
+        const history = await deps.store.readHistory?.() ?? []
+        const currentSnapshot = state?.snapshot
+        const historical = input.asOf < (currentSnapshot?.verifiedAt ?? '')
+          ? [...history].filter((entry) => entry.verifiedAt <= input.asOf).sort((left, right) => right.verifiedAt.localeCompare(left.verifiedAt))[0]
+          : undefined
+        const snapshot = historical ?? currentSnapshot
+        const lastSuccessAt = snapshot?.verifiedAt ?? state?.health.lastSuccessAt
         if (!snapshot || !lastSuccessAt || !isCanonicalCapitalConditionsSnapshotTime(snapshot.observedAt) || !isCanonicalCapitalConditionsSnapshotTime(snapshot.verifiedAt) || !isCanonicalCapitalConditionsSnapshotTime(lastSuccessAt) || snapshot.observedAt > snapshot.verifiedAt || snapshot.verifiedAt !== lastSuccessAt) {
           return state ? unavailable() : Object.freeze({ state: 'empty' as const, asOf: input.asOf })
         }

@@ -10,8 +10,8 @@ export const stablecoinCapitalCurrentStatePolicy = Object.freeze({
   sourceId: 'defillama-stablecoins',
   maximumSnapshotBytes: 4 * 1024,
   maximumHealthBytes: 4 * 1024,
-  maximumStateBytes: 8 * 1024,
-  maximumAtomicDiskBytes: 16 * 1024,
+  maximumStateBytes: 256 * 1024,
+  maximumAtomicDiskBytes: 512 * 1024,
   maximumCounter: Number.MAX_SAFE_INTEGER
 })
 
@@ -34,6 +34,7 @@ export type CapitalConditionsCurrentHealth = Readonly<{
 export type CapitalConditionsCurrentState = Readonly<{
   schemaVersion: typeof stablecoinCapitalCurrentStatePolicy.schemaVersion
   snapshot?: CapitalConditionsSnapshotState
+  history?: readonly CapitalConditionsSnapshotState[]
   health: CapitalConditionsCurrentHealth
 }>
 
@@ -76,6 +77,11 @@ export function createCapitalConditionsCurrentStateStore(deps: { storage: Capita
       if (readFailed) throw new Error('capital conditions current state is unreadable')
       return state.snapshot ? state : null
     },
+    async readHistory() {
+      const state = await current()
+      if (readFailed) throw new Error('capital conditions current state is unreadable')
+      return state.history ?? []
+    },
     async readHealth() {
       const state = await current()
       if (readFailed) throw new Error('capital conditions current state is unreadable')
@@ -93,6 +99,7 @@ export function createCapitalConditionsCurrentStateStore(deps: { storage: Capita
       const next = Object.freeze({
         schemaVersion: stablecoinCapitalCurrentStatePolicy.schemaVersion,
         snapshot,
+        history: Object.freeze([...(previous.history ?? []), snapshot].slice(-24)),
         health: Object.freeze({
           status: 'healthy' as const,
           lastAttemptAt: input.verifiedAt,
