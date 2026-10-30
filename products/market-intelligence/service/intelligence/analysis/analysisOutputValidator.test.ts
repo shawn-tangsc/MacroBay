@@ -182,7 +182,7 @@ describe('analysisOutputValidator', () => {
     const snapshot = frozenSnapshot()
     snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
     const output = validOutput()
-    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；SEP 中位 4.1%（2026-09-16 那场）。'
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 10-30 15:00 UTC；SEP 中位 4.1%（09-16 那场）。'
 
     expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
   })

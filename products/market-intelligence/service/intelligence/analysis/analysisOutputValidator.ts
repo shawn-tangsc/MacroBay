@@ -323,28 +323,23 @@ function hasTraceablePolicyProbability(conclusion: AnalysisConclusion, snapshot:
     ...conclusion.conditions, ...(conclusion.evidenceStrength ? [conclusion.evidenceStrength] : []),
     ...conclusion.dataGaps
   ].join('\n')
+  // Only percentages written as a probability are policed: a yield or a CPI print is not one.
+  const mentioned = policyProbabilityMentions(prose)
+  const allowed = probabilities.map(fact => Number(fact.value))
+  if (mentioned.some(value => !allowed.some(candidate => nearlyEqual(candidate, value)))) return false
   for (const fact of probabilities) {
     const value = Number(fact.value)
-    if (!percentageValues(prose).some(candidate => nearlyEqual(candidate, value))) continue
-    if (!mentionsInstant(prose, fact.observedAt!)) return false
-  }
-  const macro = conclusion.macro ?? ''
-  if (/(概率|定价)/.test(macro)) {
-    const allowed = probabilities.map(fact => Number(fact.value))
-    const mentioned = [
-      ...macro.matchAll(/(?:概率|定价)[^。；\n]{0,16}?(\d+(?:\.\d+)?)\s*%/g),
-      ...macro.matchAll(/(\d+(?:\.\d+)?)\s*%[^。；\n]{0,8}?(?:概率|定价)/g)
-    ].map(match => Number(match[1]))
-    if (mentioned.some(value => !allowed.some(candidate => nearlyEqual(candidate, value)))) return false
+    if (mentioned.some(candidate => nearlyEqual(candidate, value)) && !mentionsInstant(prose, fact.observedAt!)) return false
   }
   return true
 }
 
-/** Percentages written as `71%`, `71.0%` or `71 %`. */
-function percentageValues(text: string): number[] {
-  return [...text.matchAll(/(?<![\d.])(\d+(?:\.\d+)?)\s*%/g)]
-    .map(match => Number(match[1]))
-    .filter(value => Number.isFinite(value))
+/** Percentages next to 「概率」 or 「定价」, in either order, without crossing a sentence break. */
+function policyProbabilityMentions(text: string): number[] {
+  return [
+    ...text.matchAll(/(?:概率|定价)[^。；\n]{0,16}?(\d+(?:\.\d+)?)\s*%/g),
+    ...text.matchAll(/(\d+(?:\.\d+)?)\s*%[^。；\n]{0,8}?(?:概率|定价)/g)
+  ].map(match => Number(match[1])).filter(value => Number.isFinite(value))
 }
 
 function nearlyEqual(left: number, right: number): boolean {
