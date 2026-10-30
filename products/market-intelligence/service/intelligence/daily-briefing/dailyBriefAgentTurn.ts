@@ -30,7 +30,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
       const validation = validateDailyBriefingEditorial(parsed, input.document, input.locale, toolInvocations)
       if (validation.ok) {
         const document = applyDailyBriefingEditorial(input.document, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
-        await input.runner.finish(editionKey, 'accepted')
+        await input.runner.finish(started.sessionId, 'accepted')
         return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
       }
       failureCode = validation.failureCode
@@ -42,7 +42,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
       toolInvocations.push(...repair.toolInvocations)
     }
   }
-  await input.runner.finish(editionKey, 'failed')
+  await input.runner.finish(started.sessionId, 'failed')
   return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId, toolInvocations }
 }
 
