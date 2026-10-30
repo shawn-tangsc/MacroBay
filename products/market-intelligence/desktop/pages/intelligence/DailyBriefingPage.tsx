@@ -63,12 +63,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     void (async () => {
-      const [today, listed] = await Promise.all([
-        withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined),
-        withDeadline(client.list({ locale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
-      ])
+      const todayPromise = withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+      const listed = await withDeadline(client.list({ locale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
+      setEditions(rows.slice(0, 14))
+      const today = await todayPromise
+      if (!active) return
       if (today?.state === 'available') {
         const date = today.document.edition.date
         rows = rows.some((row) => row.date === date)
