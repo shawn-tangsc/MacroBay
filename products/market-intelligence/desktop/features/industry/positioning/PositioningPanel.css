@@ -25,22 +25,30 @@
 .mi-positioning-panel__tabs button[aria-pressed='true'] { background: color-mix(in srgb, var(--mi-dashboard-lime) 12%, transparent); color: var(--mi-dashboard-lime); }
 
 .mi-positioning-panel__body { display: grid; grid-template-columns: var(--mi-positioning-summary-width) minmax(0, 1fr); gap: 18px; align-items: stretch; }
-.mi-positioning-panel__summary { display: grid; align-content: start; gap: 12px; padding-right: 16px; border-right: 1px solid var(--mi-dashboard-line); }
+.mi-positioning-panel__summary { display: grid; align-content: center; gap: 14px; padding-right: 16px; border-right: 1px solid var(--mi-dashboard-line); }
 
-.mi-positioning-panel__asset { display: grid; gap: 4px; min-width: 0; }
-.mi-positioning-panel__asset-head { display: flex; align-items: baseline; gap: 7px; }
-.mi-positioning-panel__name { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 650; letter-spacing: .04em; }
-.mi-positioning-panel__rate { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; font-weight: 650; color: var(--mi-dashboard-text); }
+.mi-positioning-panel__asset {
+  display: grid; gap: 5px; min-width: 0;
+  padding: 9px 0 9px 11px;
+  border-left: 2px solid transparent;
+}
+.mi-positioning-panel__asset[data-asset='btc'] { border-left-color: var(--mi-dashboard-etf-btc); }
+.mi-positioning-panel__asset[data-asset='eth'] { border-left-color: var(--mi-dashboard-etf-eth); }
+.mi-positioning-panel__asset-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mi-positioning-panel__name { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 650; letter-spacing: .04em; }
+.mi-positioning-panel__rate { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; font-weight: 650; color: var(--mi-dashboard-text); }
 .mi-positioning-panel__rate[data-direction='long-pays-short'] { color: var(--mi-dashboard-positive); }
 .mi-positioning-panel__rate[data-direction='short-pays-long'] { color: var(--mi-dashboard-negative); }
+.mi-positioning-panel__quote { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
 .mi-positioning-panel__pay { color: var(--mi-dashboard-muted); font-size: 9.5px; }
-.mi-positioning-panel__notional { display: flex; align-items: baseline; gap: 6px; }
-.mi-positioning-panel__notional b { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; font-weight: 650; }
-.mi-positioning-panel__notional span { color: var(--mi-dashboard-muted); font-size: 9.5px; }
-.mi-positioning-panel__change { display: flex; gap: 11px; color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; }
-.mi-positioning-panel__change i { color: var(--mi-dashboard-text); font-style: normal; }
+.mi-positioning-panel__row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; min-width: 0; }
+.mi-positioning-panel__row[data-layout='pair'] { justify-content: flex-end; gap: 14px; }
+.mi-positioning-panel__pair { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+.mi-positioning-panel__label { color: var(--mi-dashboard-muted); font-size: 9.5px; font-style: normal; white-space: nowrap; }
+.mi-positioning-panel__value { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.mi-positioning-panel__row[data-layout='level'] .mi-positioning-panel__value { font-size: 13px; }
 
-.mi-positioning-panel__state { justify-self: start; padding: 1.5px 7px; border-radius: 9px; font-size: 8.5px; border: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); }
+.mi-positioning-panel__state { justify-self: end; padding: 1.5px 7px; border-radius: 9px; font-size: 8.5px; border: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); }
 .mi-positioning-panel__state[data-state='deleveraging'] { color: var(--mi-dashboard-caution); border-color: color-mix(in srgb, var(--mi-dashboard-caution) 45%, transparent); }
 .mi-positioning-panel__state[data-state='short-crowded'],
 .mi-positioning-panel__state[data-state='long-crowded'] { color: var(--mi-dashboard-negative); border-color: color-mix(in srgb, var(--mi-dashboard-negative) 45%, transparent); }

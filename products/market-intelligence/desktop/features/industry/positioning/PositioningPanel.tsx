@@ -123,6 +123,15 @@ function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInt
   )
 }
 
+/**
+ * One asset as a small reading card: who it is and what state it is in, what the rate costs,
+ * how big the position is, and how it moved over the two windows the analysis uses.
+ *
+ * The colour at the left edge is the asset's line colour in the chart, which is what ties a
+ * column of numbers to a curve three hundred pixels to its right. The state sits beside the
+ * name rather than under the numbers: it answers "what am I looking at" before the reader has
+ * read a single figure.
+ */
 function Asset({ asset, text, rate, change, notional, state }: Readonly<{
   asset: 'btc' | 'eth'
   text: Text
@@ -135,18 +144,30 @@ function Asset({ asset, text, rate, change, notional, state }: Readonly<{
     <div className="mi-positioning-panel__asset" data-asset={asset} data-funding-latest={asset}>
       <div className="mi-positioning-panel__asset-head">
         <span className="mi-positioning-panel__name">{text.assets[asset]}</span>
-        {rate ? <span className="mi-positioning-panel__rate" data-direction={rate.paymentDirection}>{formatRate(rate.ratePercent)}</span> : null}
-        {rate ? <span className="mi-positioning-panel__pay">{text.paymentDirections[rate.paymentDirection]}</span> : null}
+        {state ? <span className="mi-positioning-panel__state" data-state={state}>{text.states[state]}</span> : null}
       </div>
-      <div className="mi-positioning-panel__notional">
-        <b>{notional ? formatDashboardNotional(notional.notionalUsd) : '—'}</b>
-        <span>{text.notional}</span>
+      <div className="mi-positioning-panel__quote">
+        {rate
+          ? <>
+              <span className="mi-positioning-panel__rate" data-direction={rate.paymentDirection}>{formatRate(rate.ratePercent)}</span>
+              <span className="mi-positioning-panel__pay">{text.paymentDirections[rate.paymentDirection]}</span>
+            </>
+          : <span className="mi-positioning-panel__rate">—</span>}
       </div>
-      <div className="mi-positioning-panel__change">
-        <span>{text.change1h} <i>{formatDashboardChange(change?.h1Pct)}</i></span>
-        <span>{text.change24h} <i>{formatDashboardChange(change?.h24Pct)}</i></span>
+      <div className="mi-positioning-panel__row" data-layout="level">
+        <span className="mi-positioning-panel__label">{text.notional}</span>
+        <b className="mi-positioning-panel__value">{notional ? formatDashboardNotional(notional.notionalUsd) : '—'}</b>
       </div>
-      {state ? <span className="mi-positioning-panel__state" data-state={state}>{text.states[state]}</span> : null}
+      <div className="mi-positioning-panel__row" data-layout="pair">
+        <span className="mi-positioning-panel__pair">
+          <i className="mi-positioning-panel__label">{text.change1h}</i>
+          <b className="mi-positioning-panel__value">{formatDashboardChange(change?.h1Pct)}</b>
+        </span>
+        <span className="mi-positioning-panel__pair">
+          <i className="mi-positioning-panel__label">{text.change24h}</i>
+          <b className="mi-positioning-panel__value">{formatDashboardChange(change?.h24Pct)}</b>
+        </span>
+      </div>
     </div>
   )
 }
@@ -157,7 +178,7 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   text: Text
 }>): React.ReactElement {
   const ref = useRef<SVGSVGElement>(null)
-  const [hover, setHover] = useState<number | undefined>(undefined)
+  const [hover, setHover] = useState<Readonly<{ index: number; left: number; top: number; width: number; height: number }> | undefined>(undefined)
   const formatTime = useShellTimeFormat()
 
   const rows = positioning.btc.length >= positioning.eth.length ? positioning.btc : positioning.eth
@@ -184,9 +205,18 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 12)
   const rateY = (value: number) => VIEW.zero - (value / maximumRate) * barCentre
   const band = Math.max(2, (8 * 3_600_000 / span) * (VIEW.right - VIEW.left))
-  const barWidth = Math.max(1.5, Math.min(band * 0.58, 12))
+  // Two bars share one 8-hour band, one per asset. Drawn on the same centre they painted over
+  // each other and the amber under the translucent purple read as a third colour, which is why
+  // the lower lane looked pink instead of showing two series.
+  const barWidth = Math.max(1.6, Math.min(band * 0.36, 8))
+  const barGap = Math.max(0.8, barWidth * 0.18)
+  const barX = (centre: number, asset: 'btc' | 'eth') => {
+    const half = barWidth + barGap / 2
+    const offset = asset === 'btc' ? -half : barGap / 2
+    return Math.min(Math.max(centre + offset, VIEW.left), VIEW.right - barWidth)
+  }
 
-  const hovered = hover === undefined ? undefined : rows[hover]
+  const hovered = hover === undefined ? undefined : rows[hover.index]
   const hoveredRate = hovered
     ? fundingPoints.filter(point => Date.parse(point.observedAt) <= Date.parse(hovered.observedAt)).sort((left, right) => left.observedAt.localeCompare(right.observedAt)).at(-1)
     : undefined
@@ -196,7 +226,15 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
     if (!rect || count === 0) return
     const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
     const scaled = ((ratio * VIEW.width) - VIEW.left) / (VIEW.right - VIEW.left)
-    setHover(Math.round(scaled * (count - 1)))
+    setHover({
+      index: Math.round(Math.min(1, Math.max(0, scaled)) * (count - 1)),
+      // The tooltip follows the pointer: pinned to a corner it hid whichever half of the chart
+      // the reader was not pointing at.
+      left: event.clientX - rect.left,
+      top: event.clientY - rect.top,
+      width: rect.width,
+      height: rect.height
+    })
   }
 
   return (
@@ -213,7 +251,7 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
           const y = rateY(point.ratePercent)
           return <rect key={`${point.asset}-${point.observedAt}`} data-series={point.asset}
             className="mi-positioning-panel__bar"
-            x={x(Date.parse(point.observedAt)) - barWidth / 2} y={Math.min(y, VIEW.zero)}
+            x={barX(x(Date.parse(point.observedAt)), point.asset)} y={Math.min(y, VIEW.zero)}
             width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
         })}
         {positioning.hints.map(hint => {
@@ -229,15 +267,15 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
             </g>
           )
         })}
-        {hovered ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover!)} x2={xAt(hover!)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
+        {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
         <text x={VIEW.left} y={VIEW.height - 1} className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows[0]!.observedAt) : ''}</text>
         <text x={VIEW.right} y={VIEW.height - 1} textAnchor="end" className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows.at(-1)!.observedAt) : ''}</text>
       </svg>
-      {hovered ? (
-        <div className="mi-positioning-panel__tooltip">
+      {hovered && hover ? (
+        <div className="mi-positioning-panel__tooltip" style={tooltipStyle(hover)}>
           <strong>{formatTime(hovered.observedAt)}</strong>
           <span data-series="btc">{text.assets.btc} {formatDashboardNotional(hovered.notionalUsd)}</span>
-          <span data-series="eth">{text.assets.eth} {formatDashboardNotional(positioning.eth[hover!]?.notionalUsd ?? Number.NaN)}</span>
+          <span data-series="eth">{text.assets.eth} {formatDashboardNotional(positioning.eth[hover.index]?.notionalUsd ?? Number.NaN)}</span>
           {hoveredRate
             ? <span data-series="rate">{formatRate(hoveredRate.ratePercent)} · {formatTime(hoveredRate.observedAt)}</span>
             : <span data-series="rate">{text.noRate}</span>}
@@ -253,4 +291,18 @@ function linePath(points: readonly DashboardPositioningPoint[], x: (ms: number) 
 
 function formatRate(value: number): string {
   return `${value > 0 ? '+' : ''}${value.toFixed(4)}%`
+}
+
+const TOOLTIP = Object.freeze({ width: 214, height: 76, offset: 14, inset: 4 })
+
+/**
+ * Places the tooltip beside the pointer and flips it to the other side when the preferred side
+ * would leave the chart, so the reading never sits on top of what it is describing.
+ */
+function tooltipStyle(hover: Readonly<{ left: number; top: number; width: number; height: number }>): Readonly<{ left: number; top: number }> {
+  const { width, height, offset, inset } = TOOLTIP
+  const fitsRight = hover.left + offset + width <= hover.width - inset
+  const left = fitsRight ? hover.left + offset : Math.max(inset, hover.left - offset - width)
+  const top = Math.min(Math.max(inset, hover.top - height / 2), Math.max(inset, hover.height - height - inset))
+  return { left, top }
 }
