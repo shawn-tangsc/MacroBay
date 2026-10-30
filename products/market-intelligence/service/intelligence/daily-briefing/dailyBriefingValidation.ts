@@ -56,6 +56,7 @@ export function validateDailyBriefingEditorial(
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
   if (!isLedePattern(raw.ledePattern)) return fail('invalid-shape')
+  if (document.lede.previousPattern && document.lede.previousPattern === raw.ledePattern) return fail('invalid-shape')
   if (raw.lede.length > 600) return fail('too-long')
   if (!Array.isArray(raw.items) || raw.items.length > 50) return fail('invalid-shape')
   if (!Array.isArray(raw.hidden)) return fail('invalid-shape')
