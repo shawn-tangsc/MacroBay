@@ -196,7 +196,7 @@ describe('policy path prompt rules', () => {
     expect(system).toContain('政策与市场定价')
     expect(system).toContain('预测市场盘口')
     expect(system).toContain('截至时刻')
-    expect(system).toContain('2026-09-16 那场')
+    expect(system).toContain('YYYY-MM-DD 那场')
     expect(system).toContain('24 小时变化尚未可得')
 
     const without = systemPrompt()
