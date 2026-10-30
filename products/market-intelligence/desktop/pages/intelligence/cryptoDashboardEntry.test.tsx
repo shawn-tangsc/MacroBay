@@ -53,7 +53,7 @@ describe('crypto agent card entry flow', () => {
 
     expect(page).toContain("from '../../features/macro/economic-calendar'")
     expect(page).toContain("from '../../features/industry/fear-greed'")
-    expect(page).toContain("from '../../features/industry/funding-rates'")
+    expect(page).toContain("from '../../features/industry/positioning'")
     expect(page).not.toContain("shared/ipc/macroEconomicCalendarClient")
     expect(page).not.toContain("shared/ipc/intelligenceFearGreedClient")
     expect(page).not.toContain("shared/ipc/intelligenceFundingRatePairClient")

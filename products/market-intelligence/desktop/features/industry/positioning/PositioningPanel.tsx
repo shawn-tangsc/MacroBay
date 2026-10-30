@@ -1,76 +1,249 @@
 import { useRef, useState } from 'react'
 
-import { dashboardFundingRateHistoryPresentationPolicy, formatDashboardFundingRateHistoryValue, type DashboardFundingRateHistoryPoint, type DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
-
-import './FundingRateHistoryPanel.css'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-type Text = { title: string; pairTitle: string; loading: string; empty: string; unavailable: string; observedAt: string; assets: { btc: string; eth: string }; paymentDirections: Record<'long-pays-short' | 'short-pays-long' | 'neutral', string> }
+import type { OpenInterestWindow } from '../../../../contracts/openInterestHistory'
+import type { PositioningState } from '../../../../contracts/openInterestPositioning'
+import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
+import {
+  dashboardPositioningPresentationPolicy,
+  formatDashboardChange,
+  formatDashboardNotional,
+  positioningStateFor,
+  type DashboardPositioningPoint,
+  type DashboardPositioningViewState
+} from '../../../pages/intelligence/dashboardOpenInterestModel'
 
-type ChartPoint = Readonly<{ observedAt: string; btc?: DashboardFundingRateHistoryPoint; eth?: DashboardFundingRateHistoryPoint }>
+import './PositioningPanel.css'
 
-const fundingRateHistoryTooltipPlacementPolicy = {
-  horizontalOffset: 12,
-  inset: 4,
-  outerWidth: 204
-} as const
+type Rate = Readonly<{ observedAt: string; ratePercent: number; paymentDirection: 'long-pays-short' | 'short-pays-long' | 'neutral' }>
 
-export function FundingRateHistoryPanel({ state, text }: { state: DashboardFundingRateHistoryState; text: Text }): React.ReactElement {
-  if (state.state !== 'available') return <section className="mi-funding-rate-history" data-state={state.state}><h2>{text.pairTitle}</h2>
-    {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={140} /> : <p>{text[state.state]}</p>}
-  </section>
-  const rows = chartRows(state.btc, state.eth)
-  return <section className="mi-funding-rate-history" data-state="available"><h2>{text.pairTitle}</h2><div className="mi-funding-rate-history__content"><div className="mi-funding-rate-history__latest"><Latest asset="btc" point={state.btc.at(-1)} text={text} /><Latest asset="eth" point={state.eth.at(-1)} text={text} /></div><FundingChart rows={rows} text={text} /></div></section>
-}
+type Text = Readonly<{
+  pairTitle: string
+  loading: string
+  empty: string
+  unavailable: string
+  observedAt: string
+  stale: string
+  notional: string
+  rateLabel: string
+  assets: Readonly<Record<'btc' | 'eth', string>>
+  paymentDirections: Readonly<Record<'long-pays-short' | 'short-pays-long' | 'neutral', string>>
+  change1h: string
+  change24h: string
+  window7d: string
+  window24h: string
+  states: Readonly<Record<PositioningState, string>>
+  liquidationBadge: string
+  liquidationMore: string
+  liquidationFoot: string
+  liquidationUnavailable: string
+  noRate: string
+}>
 
-function Latest({ asset, point, text }: { asset: 'btc' | 'eth'; point?: DashboardFundingRateHistoryPoint; text: Text }): React.ReactElement {
+export type PositioningPanelProps = Readonly<{
+  funding: DashboardFundingRateHistoryState
+  positioning: DashboardPositioningViewState
+  window: OpenInterestWindow
+  onWindowChange: (window: OpenInterestWindow) => void
+  text: Text
+}>
+
+const VIEW = Object.freeze({ width: 800, height: 196, left: 40, right: 782, upperTop: 8, upperBottom: 92, zero: 146 })
+
+export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
-  return <div data-funding-latest={asset} data-payment-direction={point?.paymentDirection}><strong>{text.assets[asset]}</strong>{point ? <><b>{formatDashboardFundingRateHistoryValue(point.ratePercent)}</b><span>{text.paymentDirections[point.paymentDirection]}</span><small>{text.observedAt} {formatTime(point.observedAt)}</small></> : <span>{text.empty}</span>}</div>
+  const header = (extra?: React.ReactNode) => (
+    <header className="mi-positioning-panel__head">
+      <h2>{text.pairTitle}</h2>
+      {extra}
+      <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
+    </header>
+  )
+
+  const btcRate = funding.state === 'available' ? funding.btc : []
+  const ethRate = funding.state === 'available' ? funding.eth : []
+  const available = positioning.state === 'available'
+  const latest = available ? positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt : undefined
+  const lastHint = available ? positioning.hints.at(-1) : undefined
+  const status = (positioning.state === 'loading' || funding.state === 'loading')
+    ? <LoadingState label={text.loading} minHeight={140} />
+    : <p className="mi-positioning-panel__status">{positioning.state === 'empty' ? text.empty : text.unavailable}</p>
+
+  return (
+    <section className="mi-positioning-panel" data-state={positioning.state} data-funding-state={funding.state} data-window={window}
+      data-stale={available && positioning.staleSince ? 'true' : undefined}>
+      {header(
+        <>
+          {lastHint ? (
+            <span className="mi-positioning-panel__badge">
+              {text.liquidationBadge
+                .replace('{time}', formatTime(lastHint.observedAt))
+                .replace('{asset}', text.assets[lastHint.asset])
+                .replace('{pct}', formatDashboardChange(lastHint.dropPct))}
+              {available && positioning.hintsTruncated ? ` · ${text.liquidationMore}` : ''}
+            </span>
+          ) : null}
+          {latest
+            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(latest)}{available && positioning.staleSince ? ` · ${text.stale}` : ''}</small>
+            : null}
+        </>
+      )}
+      <div className="mi-positioning-panel__body">
+        <div className="mi-positioning-panel__summary">
+          <Asset asset="btc" text={text} rate={btcRate.at(-1)} change={available ? positioning.changeBtc : undefined}
+            notional={available ? positioning.btc.at(-1) : undefined} state={available ? positioningStateFor(positioning, btcRate, positioning.changeBtc) : undefined} />
+          <Asset asset="eth" text={text} rate={ethRate.at(-1)} change={available ? positioning.changeEth : undefined}
+            notional={available ? positioning.eth.at(-1) : undefined} state={available ? positioningStateFor(positioning, ethRate, positioning.changeEth) : undefined} />
+        </div>
+        <div className="mi-positioning-panel__chart-wrap">
+          {available
+            ? <>
+                <PositioningChart positioning={positioning} funding={funding} text={text} />
+                <p className="mi-positioning-panel__foot" data-hints-state={positioning.hintsState}>
+                  {positioning.hintsState === 'unavailable' ? text.liquidationUnavailable : text.liquidationFoot}
+                </p>
+              </>
+            : status}
+        </div>
+      </div>
+    </section>
+  )
 }
 
-function FundingChart({ rows, text }: { rows: readonly ChartPoint[]; text: Text }): React.ReactElement {
+function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInterestWindow; onWindowChange: (window: OpenInterestWindow) => void; text: Text }>): React.ReactElement {
+  return (
+    <span className="mi-positioning-panel__tabs">
+      {(['7d', '24h'] as const).map(option => (
+        <button key={option} type="button" aria-pressed={window === option} data-window={option}
+          onClick={() => onWindowChange(option)}>{option === '7d' ? text.window7d : text.window24h}</button>
+      ))}
+    </span>
+  )
+}
+
+function Asset({ asset, text, rate, change, notional, state }: Readonly<{
+  asset: 'btc' | 'eth'
+  text: Text
+  rate?: Rate
+  change?: Readonly<{ h1Pct?: number; h24Pct?: number }>
+  notional?: DashboardPositioningPoint
+  state: PositioningState | undefined
+}>): React.ReactElement {
+  return (
+    <div className="mi-positioning-panel__asset" data-asset={asset} data-funding-latest={asset}>
+      <div className="mi-positioning-panel__asset-head">
+        <span className="mi-positioning-panel__name">{text.assets[asset]}</span>
+        {rate ? <span className="mi-positioning-panel__rate" data-direction={rate.paymentDirection}>{formatRate(rate.ratePercent)}</span> : null}
+        {rate ? <span className="mi-positioning-panel__pay">{text.paymentDirections[rate.paymentDirection]}</span> : null}
+      </div>
+      <div className="mi-positioning-panel__notional">
+        <b>{notional ? formatDashboardNotional(notional.notionalUsd) : '—'}</b>
+        <span>{text.notional}</span>
+      </div>
+      <div className="mi-positioning-panel__change">
+        <span>{text.change1h} <i>{formatDashboardChange(change?.h1Pct)}</i></span>
+        <span>{text.change24h} <i>{formatDashboardChange(change?.h24Pct)}</i></span>
+      </div>
+      {state ? <span className="mi-positioning-panel__state" data-state={state}>{text.states[state]}</span> : null}
+    </div>
+  )
+}
+
+function PositioningChart({ positioning, funding, text }: Readonly<{
+  positioning: Extract<DashboardPositioningViewState, { state: 'available' }>
+  funding: DashboardFundingRateHistoryState
+  text: Text
+}>): React.ReactElement {
+  const ref = useRef<SVGSVGElement>(null)
+  const [hover, setHover] = useState<number | undefined>(undefined)
   const formatTime = useShellTimeFormat()
-  const chart = useRef<HTMLDivElement>(null); const [hover, setHover] = useState<{ row: ChartPoint; crosshairX: number; crosshairY: number; tooltipLeft: number; placement: 'left' | 'right' }>()
-  const magnitude = Math.max(...rows.flatMap((row) => [Math.abs(row.btc?.ratePercent ?? 0), Math.abs(row.eth?.ratePercent ?? 0)]), 0)
-  const hoverRow = (row: ChartPoint, event: React.MouseEvent<HTMLElement>) => { const rect = chart.current?.getBoundingClientRect(); if (rect) { const crosshairX = event.clientX - rect.left; const placement = tooltipPlacement(crosshairX, rect.width); setHover({ row, crosshairX, crosshairY: event.clientY - rect.top, tooltipLeft: tooltipLeft(crosshairX, rect.width, placement), placement }) } }
-  const tickIndexes = [...new Set([0, Math.floor((rows.length - 1) / 2), rows.length - 1])]
-  return <div className="mi-funding-rate-history__chart-wrap"><div className="mi-funding-rate-history__legend"><span><i aria-hidden="true" data-series="btc" />{text.assets.btc}</span><span><i aria-hidden="true" data-series="eth" />{text.assets.eth}</span></div><div className="mi-funding-rate-history__chart" ref={chart} onMouseLeave={() => setHover(undefined)} role="img" aria-label={text.title}><div className="mi-funding-rate-history__axis" aria-hidden="true"><span>{formatDashboardFundingRateHistoryValue(magnitude)}</span><span>0%</span><span>{formatDashboardFundingRateHistoryValue(-magnitude)}</span></div><i className="mi-funding-rate-history__zero" />{hover ? <><i className="mi-funding-rate-history__crosshair mi-funding-rate-history__crosshair--vertical" style={{ left: hover.crosshairX }} /><i className="mi-funding-rate-history__crosshair mi-funding-rate-history__crosshair--horizontal" style={{ top: hover.crosshairY }} /></> : null}{rows.map((row) => <div className="mi-funding-rate-history__day" data-observed-at={row.observedAt} key={row.observedAt} onMouseMove={(event) => hoverRow(row, event)} onMouseEnter={(event) => hoverRow(row, event)}>{(['btc', 'eth'] as const).map((asset) => <FundingBar asset={asset} key={asset} point={row[asset]} maximum={magnitude} />)}</div>)}{hover ? <div className="mi-funding-rate-history__tooltip" data-funding-tooltip data-placement={hover.placement} style={{ left: hover.tooltipLeft, top: hover.crosshairY }}><strong>{formatTime(hover.row.observedAt)}</strong>{(['btc', 'eth'] as const).map((asset) => <span key={asset} data-series={asset}>{text.assets[asset]} {hover.row[asset] ? `${formatDashboardFundingRateHistoryValue(hover.row[asset]!.ratePercent)} · ${text.paymentDirections[hover.row[asset]!.paymentDirection]}` : text.empty}</span>)}</div> : null}</div><div className="mi-funding-rate-history__ticks">{tickIndexes.map((index) => <span key={rows[index]!.observedAt}>{formatTick(rows[index]!.observedAt)}</span>)}</div></div>
+
+  const rows = positioning.btc.length >= positioning.eth.length ? positioning.btc : positioning.eth
+  const count = rows.length
+  const startMs = count > 0 ? Date.parse(rows[0]!.observedAt) : 0
+  const endMs = count > 0 ? Date.parse(rows.at(-1)!.observedAt) : 0
+  const span = Math.max(1, endMs - startMs)
+  const x = (ms: number) => VIEW.left + ((ms - startMs) / span) * (VIEW.right - VIEW.left)
+  const xAt = (index: number) => count <= 1 ? VIEW.left : VIEW.left + (index / (count - 1)) * (VIEW.right - VIEW.left)
+
+  const upperY = (value: number, points: readonly DashboardPositioningPoint[]) => {
+    const values = points.length ? points.map(point => point.notionalUsd) : [0, 1]
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const range = Math.max(max - min, dashboardPositioningPresentationPolicy.chart.minimumNotionalSpan)
+    return VIEW.upperBottom - ((value - min) / range) * (VIEW.upperBottom - VIEW.upperTop)
+  }
+
+  const fundingPoints = funding.state === 'available'
+    ? [...funding.btc.map(point => ({ ...point, asset: 'btc' as const })), ...funding.eth.map(point => ({ ...point, asset: 'eth' as const }))]
+        .filter(point => Date.parse(point.observedAt) >= startMs - 8 * 3_600_000 && Date.parse(point.observedAt) <= endMs)
+    : []
+  const maximumRate = Math.max(...fundingPoints.map(point => Math.abs(point.ratePercent)), 0.001)
+  const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 12)
+  const rateY = (value: number) => VIEW.zero - (value / maximumRate) * barCentre
+  const band = Math.max(2, (8 * 3_600_000 / span) * (VIEW.right - VIEW.left))
+  const barWidth = Math.max(1.5, Math.min(band * 0.58, 12))
+
+  const hovered = hover === undefined ? undefined : rows[hover]
+  const hoveredRate = hovered
+    ? fundingPoints.filter(point => Date.parse(point.observedAt) <= Date.parse(hovered.observedAt)).sort((left, right) => left.observedAt.localeCompare(right.observedAt)).at(-1)
+    : undefined
+
+  const pick = (event: React.MouseEvent<SVGSVGElement>) => {
+    const rect = ref.current?.getBoundingClientRect()
+    if (!rect || count === 0) return
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+    const scaled = ((ratio * VIEW.width) - VIEW.left) / (VIEW.right - VIEW.left)
+    setHover(Math.round(scaled * (count - 1)))
+  }
+
+  return (
+    <div className="mi-positioning-panel__chart">
+      <svg ref={ref} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label={text.pairTitle}
+        onMouseMove={pick} onMouseLeave={() => setHover(undefined)}>
+        <text x="0" y="10" className="mi-positioning-panel__lane">{text.notional}</text>
+        <text x="0" y={VIEW.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
+        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.upperBottom + 6} y2={VIEW.upperBottom + 6} className="mi-positioning-panel__rule" />
+        <path d={linePath(positioning.btc, x, point => upperY(point.notionalUsd, positioning.btc))} className="mi-positioning-panel__line" data-series="btc" />
+        <path d={linePath(positioning.eth, x, point => upperY(point.notionalUsd, positioning.eth))} className="mi-positioning-panel__line" data-series="eth" />
+        <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.zero} y2={VIEW.zero} className="mi-positioning-panel__zero" />
+        {fundingPoints.map(point => {
+          const y = rateY(point.ratePercent)
+          return <rect key={`${point.asset}-${point.observedAt}`} data-series={point.asset}
+            className="mi-positioning-panel__bar"
+            x={x(Date.parse(point.observedAt)) - barWidth / 2} y={Math.min(y, VIEW.zero)}
+            width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
+        })}
+        {positioning.hints.map(hint => (
+          <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
+            <line x1={x(Date.parse(hint.observedAt))} x2={x(Date.parse(hint.observedAt))} y1={VIEW.upperTop} y2={VIEW.height - 10} />
+            <text x={x(Date.parse(hint.observedAt)) + 4} y={VIEW.upperTop + 8}>▲</text>
+          </g>
+        ))}
+        {hovered ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover!)} x2={xAt(hover!)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
+        <text x={VIEW.left} y={VIEW.height - 1} className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows[0]!.observedAt) : ''}</text>
+        <text x={VIEW.right} y={VIEW.height - 1} textAnchor="end" className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows.at(-1)!.observedAt) : ''}</text>
+      </svg>
+      {hovered ? (
+        <div className="mi-positioning-panel__tooltip">
+          <strong>{formatTime(hovered.observedAt)}</strong>
+          <span data-series="btc">{text.assets.btc} {formatDashboardNotional(hovered.notionalUsd)}</span>
+          <span data-series="eth">{text.assets.eth} {formatDashboardNotional(positioning.eth[hover!]?.notionalUsd ?? Number.NaN)}</span>
+          {hoveredRate
+            ? <span data-series="rate">{formatRate(hoveredRate.ratePercent)} · {formatTime(hoveredRate.observedAt)}</span>
+            : <span data-series="rate">{text.noRate}</span>}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
-function FundingBar({ asset, point, maximum }: { asset: 'btc' | 'eth'; point?: DashboardFundingRateHistoryPoint; maximum: number }): React.ReactElement | null {
-  if (!point) return null
-  const magnitude = maximum > 0 && point.ratePercent !== 0 ? Math.max(dashboardFundingRateHistoryPresentationPolicy.chart.minimumVisibleHeightPercent, Math.abs(point.ratePercent) / maximum * dashboardFundingRateHistoryPresentationPolicy.chart.maximumHeightPercent) : 0
-  return <i data-series={asset} data-direction={point.ratePercent > 0 ? 'positive' : point.ratePercent < 0 ? 'negative' : 'zero'} style={{ '--mi-funding-height': `${magnitude}%` } as React.CSSProperties} />
+function linePath(points: readonly DashboardPositioningPoint[], x: (ms: number) => number, y: (point: DashboardPositioningPoint) => number): string {
+  return points.map((point, index) => `${index ? 'L' : 'M'}${x(Date.parse(point.observedAt)).toFixed(1)} ${y(point).toFixed(1)}`).join(' ')
 }
 
-function chartRows(btc: readonly DashboardFundingRateHistoryPoint[], eth: readonly DashboardFundingRateHistoryPoint[]): readonly ChartPoint[] {
-  const byTime = new Map<string, ChartPoint>()
-  for (const [asset, rows] of [['btc', btc], ['eth', eth]] as const) for (const row of rows) byTime.set(row.observedAt, { ...(byTime.get(row.observedAt) ?? { observedAt: row.observedAt }), [asset]: row })
-  return [...byTime.values()]
-    .sort((left, right) => left.observedAt.localeCompare(right.observedAt))
-    .slice(-dashboardFundingRateHistoryPresentationPolicy.chart.maximumTimestamps)
-}
-
-function formatTick(value: string): string { return `${value.slice(5, 10)} ${value.slice(11, 16)}` }
-
-function tooltipPlacement(x: number, width: number): 'left' | 'right' {
-  const { horizontalOffset, inset, outerWidth } = fundingRateHistoryTooltipPlacementPolicy
-  const rightFits = x + horizontalOffset + outerWidth <= width - inset
-  const leftFits = x - horizontalOffset - outerWidth >= inset
-  if (rightFits) return 'right'
-  if (leftFits) return 'left'
-  return x <= width / 2 ? 'right' : 'left'
-}
-
-function tooltipLeft(crosshairX: number, width: number, placement: 'left' | 'right'): number {
-  const { horizontalOffset, inset, outerWidth } = fundingRateHistoryTooltipPlacementPolicy
-  const preferredLeft = placement === 'right'
-    ? crosshairX + horizontalOffset
-    : crosshairX - outerWidth - horizontalOffset
-  return clamp(preferredLeft, inset, Math.max(inset, width - outerWidth - inset))
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value))
+function formatRate(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(4)}%`
 }

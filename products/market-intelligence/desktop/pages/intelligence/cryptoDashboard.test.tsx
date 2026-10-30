@@ -81,20 +81,20 @@ describe('crypto intelligence dashboard', () => {
         onManageSource: () => undefined,
         onOpenCalendar: () => undefined,
                 client: dashboardClient(),
-        fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+        fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
         now: () => new Date(asOf),
         text: text.dashboard,
         onBack: () => undefined
       })
     )
 
-    expect(markup).toContain(text.dashboard.positioning.title)
+    expect(markup).toContain(text.dashboard.sentiment.title)
     // Three panel-owned rows, plus the 异常优先 feed strip: one ✓ summary line and one line per feed
     // that needs a look (the fixtures leave every feed without a readable reading).
     const sourceRows = [...markup.matchAll(/mi-crypto-dashboard__source-row/g)].length
     expect(sourceRows).toBe(3 + (markup.includes('data-feed-summary') ? 1 : 0) + [...markup.matchAll(/data-feed-anomaly=/g)].length)
     expect(markup).not.toContain('✓ 0 源正常')
-    expect(markup).toContain(text.dashboard.fundingRate.title)
+    expect(markup).toContain(text.dashboard.positioning.title)
   })
 
   
@@ -134,9 +134,9 @@ describe('crypto intelligence dashboard', () => {
     expect(gauge.textContent).toContain(text.dashboard.fearGreed.observedAt)
     expect(rows).toHaveLength(2)
     expect(rows[0]?.textContent).toContain('+0.0123%')
-    expect(rows[0]?.textContent).toContain(text.dashboard.fundingRate.paymentDirections['long-pays-short'])
+    expect(rows[0]?.textContent).toContain(text.dashboard.positioning.paymentDirections['long-pays-short'])
     expect(rows[1]?.textContent).toContain('-0.0031%')
-    expect(rows[1]?.textContent).toContain(text.dashboard.fundingRate.paymentDirections['short-pays-long'])
+    expect(rows[1]?.textContent).toContain(text.dashboard.positioning.paymentDirections['short-pays-long'])
     expect(row.textContent).not.toMatch(/58|conclusion|classification|https?:|sourceUrl|evidence|profile|health|credential|error/i)
   })
 
@@ -147,13 +147,14 @@ describe('crypto intelligence dashboard', () => {
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(),
+      openInterestClient: openInterestClient(),
       fundingRateClient: { querySnapshot: () => Promise.resolve({ state: 'empty' }) }, now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined,
       onOpenCalendar: () => undefined, text: text.dashboard
     } as never)))
     await flush()
 
-    expect(container.querySelector('.mi-funding-rate-history')?.getAttribute('data-state')).toBe('unavailable')
+    expect(container.querySelector('.mi-positioning-panel')?.getAttribute('data-funding-state')).toBe('unavailable')
   })
 
   it.each([
@@ -167,17 +168,21 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
       client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: result === undefined ? { query: () => new Promise<never>(() => undefined) } : fundingRateClient(result), now: () => new Date(asOf),
+      openInterestClient: openInterestClient(),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
     await flush()
 
-    const card = container.querySelector('.mi-funding-rate-history')!
-    expect(card.textContent).toContain(text.dashboard.fundingRate.pairTitle)
+    const card = container.querySelector('.mi-positioning-panel')!
+    expect(card.textContent).toContain(text.dashboard.positioning.pairTitle)
+    // The card no longer blanks when one half is missing: the rate rows print an em dash and the
+    // half that failed is named by its own attribute, so a reader can tell which side is absent.
+    expect(card.getAttribute('data-funding-state')).toBe(state)
     if (state === 'available') {
       const rows = card.querySelectorAll('[data-funding-latest]')
-      expect(rows[0]?.textContent).toContain(text.dashboard.fundingRate.empty)
+      expect(rows[0]?.textContent).toContain('—')
       expect(rows[1]?.textContent).toContain('+0.0123%')
-    } else expect(card.textContent).toContain(text.dashboard.fundingRate[state])
+    } else expect(card.textContent).toContain('—')
     expect(card.textContent).not.toMatch(/5\.8|\$42M|\$18M|\$330M|liquidation|open interest|crowded|https?:|sourceUrl|evidence|profile|health|credential|error/i)
   })
 
@@ -189,14 +194,14 @@ describe('crypto intelligence dashboard', () => {
     const manageSource = vi.fn()
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), now: () => new Date(asOf),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
       onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: manageSource, onOpenCalendar: () => undefined,
       text: text.dashboard
     })))
     await flush()
     const source = container.querySelector('.mi-crypto-dashboard__source-region')!
     await act(async () => findButton(source, text.dashboard.fearGreed.manageSettings).click())
-    await act(async () => findButton(source, text.dashboard.fundingRate.manageSettings).click())
+    await act(async () => findButton(source, text.dashboard.positioning.manageSettings).click())
 
     expect(manageSource).toHaveBeenCalledTimes(2)
     expect(manageSource).toHaveBeenCalled()
@@ -219,7 +224,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       macroMarketClient: { query: async () => macro }, now: () => new Date(asOf), onBack: () => undefined,
       onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -246,7 +251,7 @@ describe('crypto intelligence dashboard', () => {
     const manageSource = vi.fn()
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: manageSource, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -265,7 +270,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
       macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
@@ -294,7 +299,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-real', level: 98.21, atMs: Date.parse(asOf), returns: {} }, { seriesId: 'xau-usd', level: 3413.9, atMs: Date.parse(asOf), returns: {} }], caveats: [] }) },
       macroRatesClient: { query: async () => ({ state: 'available', asOf, readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.12, period: '2026-09-12' }], caveats: [] }) },
@@ -323,7 +328,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard
     })))
@@ -341,7 +346,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
 
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       macroMarketClient: { query: async () => ({ state: 'available', asOf, source: { enabled: true, hasCredential: true },
         readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(asOf), returns: {}, synthetic: true }], caveats: [] }) },
       // The boundary already refuses such a payload, so this is the strip's own second lock: the code
@@ -423,7 +428,7 @@ describe('crypto intelligence dashboard', () => {
     expect(capitalRule).not.toContain('border-radius')
     expect(capitalRule).not.toContain('border-top')
     expect(capitalRule).not.toContain('border-bottom')
-    const fundingRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {')
+    const fundingRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row > .mi-positioning-panel {')
     expect(fundingRule).toContain('padding-left: var(--mi-dashboard-band-zone-inline)')
     expect(fundingRule).toContain('border-left: 1px solid var(--mi-dashboard-line)')
     expect(styles).not.toContain('mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__state-card')
@@ -437,7 +442,7 @@ describe('crypto intelligence dashboard', () => {
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
     expect(stackStyles).toContain('.mi-crypto-dashboard__sentiment,')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-positioning-panel')
   })
 
   it('uses named compact rhythm inside the real data bands', () => {
@@ -606,7 +611,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       capitalConditionsClient: capitalConditionsClient(), now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: productText['en-US'].pages.intelligence.portal.dashboard
     } as never)))
@@ -615,7 +620,7 @@ describe('crypto intelligence dashboard', () => {
     const capital = row.querySelector<HTMLElement>('.mi-capital-conditions')!
     expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions'])
     const positioning = container.querySelector<HTMLElement>('.mi-crypto-dashboard__positioning-row')!
-    expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-crypto-dashboard__sentiment', 'mi-funding-rate-history'])
+    expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-crypto-dashboard__sentiment', 'mi-positioning-panel'])
     expect([...capital.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions__content-row'])
     expect([...capital.firstElementChild!.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions__summary', 'mi-capital-conditions__etf-flow'])
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
@@ -637,7 +642,7 @@ describe('crypto intelligence dashboard', () => {
   })
 
   it('keeps the funding-history component isolated from dashboard layout styles', () => {
-    expect(styles).not.toContain('.mi-funding-rate-history__chart')
+    expect(styles).not.toContain('.mi-positioning-panel__chart')
     expect(styles).not.toContain('.mi-crypto-dashboard__funding-rates')
   })
 
@@ -646,7 +651,7 @@ describe('crypto intelligence dashboard', () => {
     document.body.append(container)
     root = createRoot(container)
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
       briefingEnabled: false
@@ -662,7 +667,7 @@ describe('crypto intelligence dashboard', () => {
     root = createRoot(container)
     const onOpenBriefing = vi.fn()
     await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
-      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(),
+      client: dashboardClient(), fearGreedClient: fearGreedClient(), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(),
       now: () => new Date(asOf), onBack: () => undefined, onConfigureSources: () => undefined,
       onManageSource: () => undefined, onOpenCalendar: () => undefined, text: text.dashboard,
       onOpenBriefing
@@ -715,6 +720,10 @@ function dashboardClientByMonth(eventsByMonth: Record<string, unknown[]>) {
 
 function fearGreedClient(result: unknown = { state: 'empty' as const, asOf }) {
   return { querySnapshot: async () => result }
+}
+
+function openInterestClient(result: unknown = { state: 'empty' as const, asOf, window: '7d' as const }) {
+  return { query: async (input: { asOf: string; window: '7d' | '24h' }) => result }
 }
 
 function fundingRateClient(result: unknown = { state: 'empty' as const, asOf }) {

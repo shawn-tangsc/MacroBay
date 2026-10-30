@@ -3,7 +3,9 @@ import { ArrowLeft } from 'lucide-react'
 
 import { type MacroEconomicCalendarClient } from '../../features/macro/economic-calendar'
 import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
-import { FundingRateHistoryPanel } from '../../features/industry/funding-rates/FundingRateHistoryPanel'
+import { PositioningPanel } from '../../features/industry/positioning/PositioningPanel'
+import { useDashboardOpenInterest } from './useDashboardOpenInterest'
+import type { OpenInterestHistoryResult, OpenInterestWindow } from '../../../contracts/openInterestHistory'
 import { CapitalConditionsPanel, useCapitalConditions, type IntelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 
 import { type DashboardEconomicCalendarState } from './dashboardEconomicCalendarModel'
@@ -47,18 +49,18 @@ type CryptoDashboardText = {
     manageSettings: string
   }
   fearGreed: { title: string; loading: string; empty: string; unavailable: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
-  fundingRate: { title: string; pairTitle: string; loading: string; empty: string; unavailable: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFundingRateHistoryState['state'], string>; manageSettings: string; assets: { btc: string; eth: string }; paymentDirections: Record<'long-pays-short' | 'short-pays-long' | 'neutral', string> }
+  positioning: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['positioning']
   capitalConditions: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['capitalConditions']
   policyPath: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['policyPath']
-  positioning: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
+  sentiment: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
   feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
   context: { sourceStatus: { title: string } }
   dailyBriefing: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['dailyBriefing']
 }
 
-type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
+type Props = { text: CryptoDashboardText; locale?: 'zh-CN' | 'en-US'; briefingEnabled?: boolean; onOpenBriefing?: () => void; client: Pick<MacroEconomicCalendarClient, 'queryMonth'>; fearGreedClient: Pick<IntelligenceFearGreedClient, 'querySnapshot'>; fundingRateClient: { query: (input: { asOf: string }) => Promise<unknown> }; openInterestClient: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }; capitalConditionsClient?: Pick<IntelligenceCapitalConditionsClient, 'querySnapshot'>; now: () => Date; onBack: () => void; onConfigureSources: () => void; onManageSource: () => void; onOpenCalendar: () => void }
 
-export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
+export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEnabled = true, onOpenBriefing, client, fearGreedClient, fundingRateClient, openInterestClient, capitalConditionsClient, now, onBack, onConfigureSources, onManageSource, onOpenCalendar, collectCapitalConditionsSources, crossAssetClient, macroMarketClient, macroRatesClient, dashboardFeedStatusClient, conclusionSlot, calendarEventTitles, readMarketEvents, onSelectChartEvent }: Props & { collectCapitalConditionsSources?: () => Promise<void>; crossAssetClient?: ReturnType<typeof createCrossAssetObservationClient>; macroMarketClient?: MacroMarketSnapshotClient; macroRatesClient?: MacroRatesSnapshotClient; dashboardFeedStatusClient?: DashboardFeedStatusClient; conclusionSlot?: (node: HTMLDivElement | null) => void
   /**
    * The calendar's event-title vocabulary, read from the product registry by the page entry and
    * carried here so the cross-asset panel can name the lines it draws. Never copied inline: one
@@ -72,6 +74,10 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   const calendarState = useDashboardEconomicCalendar({ client, now })
   const fearGreedState = useDashboardFearGreed({ client: fearGreedClient, now })
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
+  // Positioning is read per window rather than reshaped in the browser: the fold and
+  // the liquidation lookback belong to the query, so switching windows is one more read.
+  const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
+  const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
@@ -165,8 +171,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} />
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
-        <PositioningPanel fearGreedState={fearGreedState} text={text} />
-        <FundingRateHistoryPanel state={fundingRateState} text={text.fundingRate} />
+        <SentimentPanel fearGreedState={fearGreedState} text={text} />
+        <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
+          onWindowChange={setPositioningWindow} text={text.positioning} />
       </div>
 
       <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
@@ -174,14 +181,14 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   )
 }
 
-function PositioningPanel({ fearGreedState, text }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText }): React.ReactElement {
+function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText }): React.ReactElement {
   const formatTime = useShellTimeFormat()
   return <>
-    <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.positioning.title}</h2>
+    <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.sentiment.title}</h2>
       <div className="mi-crypto-dashboard__sentiment-gauge" data-sentiment-gauge>
       {fearGreedState.state === 'available' ? <>
         <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<path className="mi-crypto-dashboard__gauge-needle" d={FearGreedGaugePresentationPolicy.trackPath} data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]} style={{ transform: `rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)}deg)` }} /></svg>
-        <strong>{fearGreedState.score}</strong><span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.positioning.gaugeMarkers.fear} · {text.positioning.gaugeMarkers.neutral} · {text.positioning.gaugeMarkers.greed}</p>
+        <strong>{fearGreedState.score}</strong><span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
       </> : fearGreedState.state === 'loading'
         ? <LoadingState label={text.fearGreed.loading} minHeight={120} />
         : <span>{text.fearGreed[fearGreedState.state]}</span>}
@@ -201,7 +208,7 @@ function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, fee
     ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={calendarState.state} key={source.sourceId}><i /><span>{text.macroReleaseDynamics.sourceName}</span><small>{text.macroReleaseDynamics.sourceStates[calendarState.state]}</small><div><button onClick={onOpenCalendar} type="button">{text.macroReleaseDynamics.calendarAction}</button><button onClick={() => onManageSource()} type="button">{text.macroReleaseDynamics.manageSettings}</button></div></div>
     : source.sourceId === 'fear-greed'
       ? <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fearGreedState.state} key={source.sourceId}><i /><span>{text.fearGreed.sourceName}</span><small>{text.fearGreed.sourceStates[fearGreedState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.fearGreed.manageSettings}</button></div></div>
-      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fundingRateState.state} key={source.sourceId}><i /><span>{text.fundingRate.sourceName}</span><small>{text.fundingRate.sourceStates[fundingRateState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.fundingRate.manageSettings}</button></div></div>)}
+      : <div className="mi-crypto-dashboard__source-row" data-source-id={source.sourceId} data-state={fundingRateState.state} key={source.sourceId}><i /><span>{text.positioning.sourceName}</span><small>{text.positioning.sourceStates[fundingRateState.state]}</small><div><button onClick={() => onManageSource()} type="button">{text.positioning.manageSettings}</button></div></div>)}
     <FeedStatusStrip rows={feedRows} text={text.feedStatus} tags={tags} nowMs={nowMs} onManageSource={onManageSource} />
   </section>
 }

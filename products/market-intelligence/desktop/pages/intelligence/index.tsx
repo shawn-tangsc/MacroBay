@@ -5,7 +5,7 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import { EconomicCalendar, macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
 import { intelligenceFearGreedClient } from '../../features/industry/fear-greed'
-import { intelligenceFundingRateHistoryClient } from '../../features/industry/funding-rates'
+import { intelligenceFundingRateHistoryClient, intelligenceOpenInterestClient } from '../../features/industry/positioning'
 import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import { AgentPortal } from './AgentPortal'
 import { useCryptoActivation } from './useCryptoActivation'
@@ -171,6 +171,7 @@ function IntelligencePageBody(): React.ReactElement {
           client={macroEconomicCalendarClient}
           fearGreedClient={intelligenceFearGreedClient}
           fundingRateClient={intelligenceFundingRateHistoryClient}
+          openInterestClient={intelligenceOpenInterestClient}
           capitalConditionsClient={intelligenceCapitalConditionsClient}
           collectCapitalConditionsSources={collectCapitalConditionsSources}
           crossAssetClient={crossAssetClient}

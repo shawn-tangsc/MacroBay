@@ -210,7 +210,7 @@
  * Agent 列或页边距就会再次错位；让列自己按比例收放，这种错位就不存在了。
  */
 /* 并排形态的装饰（区内边距、列间分隔线）写在基础规则里，堆叠分支再把它们撤掉。 */
-.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row > .mi-positioning-panel { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
 
 .mi-crypto-dashboard__source-region { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__source-region > header { grid-column: 1 / -1; }
@@ -247,7 +247,7 @@
   .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
   .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .mi-crypto-dashboard__sentiment,
-  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {
+  .mi-crypto-dashboard__positioning-row > .mi-positioning-panel {
     padding: 16px 0 0;
     border-top: 1px solid var(--mi-dashboard-line);
     border-left: 0;

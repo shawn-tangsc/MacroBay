@@ -372,15 +372,35 @@ export const productText = {
               manageSettings: '管理恐惧与贪婪设置',
               buckets: { 'extreme-fear': '极度恐惧', fear: '恐惧', neutral: '中性', greed: '贪婪', 'extreme-greed': '极度贪婪' }
             },
-            fundingRate: {
-              title: '永续资金费率',
-              pairTitle: '永续资金费率 · Binance USDT 永续',
-              loading: '正在加载永续资金费率…',
-              empty: '暂无已采集的永续资金费率观测值。',
-              unavailable: '永续资金费率暂时不可用。',
+            positioning: {
+              title: '永续持仓与资金费率',
+              pairTitle: '永续持仓与资金费率 · Binance USDT 永续',
+              loading: '正在加载永续持仓与资金费率…',
+              empty: '暂无已采集的永续持仓观测值。',
+              unavailable: '永续持仓数据暂时不可用。',
               observedAt: '观测时间',
+              stale: '数据已滞后',
+              notional: '持仓名义额',
+              rateLabel: '资金费率 · 8h',
+              change1h: '1h',
+              change24h: '24h',
+              window7d: '7 天',
+              window24h: '24 小时',
+              states: {
+                'deleveraging': '去杠杆 · 多头减仓',
+                'short-crowded': '空头拥挤',
+                'long-crowded': '多头拥挤',
+                'refilling': '杠杆回补 · 未拥挤',
+                'neutral': '中性',
+                'mixed': '方向分歧'
+              },
+              liquidationBadge: '疑似强平 · {time} · {asset} {pct}',
+              liquidationMore: '更早的标记已折叠',
+              liquidationFoot: '▲ 疑似强平为推断值，非交易所强平数据（持仓骤降 + 价格同向 + 成交量放大）',
+              liquidationUnavailable: '强平标记暂不可用：成交量这一路没有采到。',
+              noRate: '该时段无费率',
               sourceName: 'Binance Futures Positioning',
-              sourceStates: { loading: '加载中', available: '资金费率可用', empty: '暂无观测值', unavailable: '资金费率不可用' },
+              sourceStates: { loading: '加载中', available: '持仓与费率可用', empty: '暂无观测值', unavailable: '持仓数据不可用' },
               manageSettings: '管理 Binance Futures Positioning 设置',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
@@ -416,7 +436,7 @@ export const productText = {
               flowDirections: { inflow: '净流入', outflow: '净流出', zero: '持平' },
               refresh: '重新采集来源', refreshFailed: '重新采集失败，请稍后重试。'
             },
-            positioning: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
+            sentiment: { title: '市场情绪', fearGreed: '恐惧与贪婪', observedAt: '观测时间', gaugeMarkers: { fear: '极恐', neutral: '中性', greed: '极贪' } },
             macroMarket: {
               sourceName: '宏观市场（Twelve Data）',
               sourceStates: {
@@ -1756,15 +1776,35 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               manageSettings: 'Manage Fear & Greed settings',
               buckets: { 'extreme-fear': 'Extreme fear', fear: 'Fear', neutral: 'Neutral', greed: 'Greed', 'extreme-greed': 'Extreme greed' }
             },
-            fundingRate: {
-              title: 'Perpetual funding rate',
-              pairTitle: 'Perpetual funding rate · Binance USDT perpetual',
-              loading: 'Loading perpetual funding rates…',
-              empty: 'No collected perpetual funding-rate observation.',
-              unavailable: 'Perpetual funding rates are unavailable.',
+            positioning: {
+              title: 'Perpetual positioning & funding',
+              pairTitle: 'Perpetual positioning & funding · Binance USDT perpetual',
+              loading: 'Loading perpetual positioning…',
+              empty: 'No collected perpetual positioning observation.',
+              unavailable: 'Perpetual positioning is unavailable.',
               observedAt: 'Observed at',
+              stale: 'stale',
+              notional: 'Notional open interest',
+              rateLabel: 'Funding rate · 8h',
+              change1h: '1h',
+              change24h: '24h',
+              window7d: '7 days',
+              window24h: '24 hours',
+              states: {
+                'deleveraging': 'Deleveraging · longs cutting',
+                'short-crowded': 'Shorts crowded',
+                'long-crowded': 'Longs crowded',
+                'refilling': 'Refilling · not crowded',
+                'neutral': 'Neutral',
+                'mixed': 'Mixed'
+              },
+              liquidationBadge: 'Suspected liquidation · {time} · {asset} {pct}',
+              liquidationMore: 'older marks collapsed',
+              liquidationFoot: '▲ Suspected liquidation is inferred, not exchange liquidation data (position drop + price move + volume expansion)',
+              liquidationUnavailable: 'Liquidation markers unavailable: the volume leg was not collected.',
+              noRate: 'No funding rate in this window',
               sourceName: 'Binance Futures Positioning',
-              sourceStates: { loading: 'Loading', available: 'Funding rate available', empty: 'No observation', unavailable: 'Funding rate unavailable' },
+              sourceStates: { loading: 'Loading', available: 'Positioning and funding available', empty: 'No observation', unavailable: 'Positioning unavailable' },
               manageSettings: 'Manage Binance Futures Positioning settings',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' }
@@ -1800,7 +1840,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               flowDirections: { inflow: 'Net inflow', outflow: 'Net outflow', zero: 'Flat' },
               refresh: 'Re-collect sources', refreshFailed: 'Re-collection failed. Try again shortly.'
             },
-            positioning: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
+            sentiment: { title: 'Market sentiment', fearGreed: 'Fear & Greed', observedAt: 'Observed at', gaugeMarkers: { fear: 'Extreme fear', neutral: 'Neutral', greed: 'Extreme greed' } },
             macroMarket: {
               sourceName: 'Macro market (Twelve Data)',
               sourceStates: {
