@@ -18,6 +18,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
   const facts = {
     locale,
     ...(input.selection !== undefined ? { selection: input.selection } : {}),
+    previousLedePattern: document.lede.previousPattern ?? null,
     edition: { date: document.edition.date, windowStart: document.edition.windowStart, windowEnd: document.edition.windowEnd },
     conclusion: document.conclusion ? {
       direction: document.conclusion.direction,
