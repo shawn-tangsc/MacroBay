@@ -62,10 +62,10 @@ describe('daily briefing client', () => {
   it('reads and saves the AI setting view without trusting a malformed resolved state', async () => {
     stubInvoke((method, payload) => {
       if (method === 'intelligence.dailyBriefing.getSettings') {
-        return { settings: { editorialEnabled: true, providerId: '', modelId: '' }, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
+        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
       }
       return {
-        settings: { editorialEnabled: false, providerId: '', modelId: '' },
+        settings: { editorialEnabled: false, providerId: '', modelId: '', webSearchEnabled: false },
         resolved: { state: 'disabled' },
         patch: payload
       }
@@ -76,7 +76,7 @@ describe('daily briefing client', () => {
     expect(saved.state).toBe('available')
     if (saved.state === 'available') expect(saved.view.resolved).toEqual({ state: 'disabled' })
 
-    stubInvoke(() => ({ settings: { editorialEnabled: true, providerId: '', modelId: '' }, resolved: { state: 'agent' } }))
+    stubInvoke(() => ({ settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, resolved: { state: 'agent' } }))
     expect(await dailyBriefingClient.getSettings()).toEqual({
       state: 'unavailable', failureCode: 'daily-briefing-settings-invalid'
     })
