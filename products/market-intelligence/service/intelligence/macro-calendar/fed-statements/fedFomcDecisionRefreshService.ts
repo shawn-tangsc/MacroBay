@@ -107,8 +107,12 @@ async function currentDecision(
   const response = await deps.http.request(fedFomcDecisionRefreshPolicy.statementDescriptorId, signal)
   if (!descriptor || !isSuccessfulResponse(response, descriptor.descriptorId)) return undefined
   const statements = parseFedFomcStatements({ descriptor, body: response.body })
-  if (statements.length !== 1) return undefined
-  const statement = statements[0]!
+  // The feed keeps the previous meeting's release inside its window, so more than one statement is
+  // normal. "Current" is the newest, and a tie on the release time is the only real ambiguity.
+  const newestReleasedAt = statements.map((entry) => entry.releasedAt).sort().at(-1)
+  const newest = statements.filter((entry) => entry.releasedAt === newestReleasedAt)
+  if (newest.length !== 1) return undefined
+  const statement = newest[0]!
   const bodyResponse = await deps.http.requestFomcStatement(statement.officialStatementUrl, signal)
   if (!isSuccessfulResponse(bodyResponse, fedFomcDecisionRefreshPolicy.statementBodyDescriptorId)) return undefined
   const document = parseFedFomcDecisionDocument({ body: Buffer.from(bodyResponse.body, 'utf8'), officialStatementUrl: statement.officialStatementUrl })

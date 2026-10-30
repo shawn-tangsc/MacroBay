@@ -36,6 +36,15 @@ describe('Fed FOMC decision refresh', () => {
     expect(result.state === 'available' && result.event.caveats).not.toContain('official-value-revised')
     repository.close()
   })
+  it('takes the newest statement when the feed still carries the previous meeting', async () => {
+    const { refresh, repository } = harness({ history: history(), prior: priorBody(), feed: rssWithPriorStatement() })
+    // The live feed lists the June statement next to July's; requiring exactly one aborted the whole
+    // refresh and left the vote uncollected.
+    await expect(refresh.refresh({ detectedAt, runId: 'derived-two-statements' })).resolves.toEqual({ state: 'updated' })
+    const result = createMacroEconomicCalendarQueryService({ repository }).getEventDetail({ eventKey: schedule().eventKey, asOf: detectedAt })
+    expect(result).toMatchObject({ state: 'available', event: { actual: { displayValue: '3.50%–3.75%' } } })
+    repository.close()
+  })
   it('reports the saved current value when the optional prior request throws', async () => {
     const input = { history: history(), prior: priorBody(), current: currentBody(), failHistory: true }
     const { refresh, repository } = harness(input)
@@ -322,14 +331,14 @@ describe('Fed FOMC decision refresh', () => {
   })
 })
 
-function harness(input: { history: string; prior: string; current?: string; failHistory?: boolean }) {
+function harness(input: { history: string; prior: string; current?: string; failHistory?: boolean; feed?: string }) {
   const rawRecords = createRawRecordStore()
   const repository = createMacroCalendarRepository({ filePath: ':memory:' })
   repository.appendManyIfNew([schedule(), priorSchedule()])
   const refresh = createFedFomcDecisionRefreshService({
     http: {
       request: vi.fn(async (descriptorId: string) => {
-        if (descriptorId === 'macro-calendar-fed-statement') return response(descriptorId, rss())
+        if (descriptorId === 'macro-calendar-fed-statement') return response(descriptorId, input.feed ?? rss())
         if (descriptorId === 'macro-calendar-fed-statement-history') {
           if (input.failHistory) throw new Error('derived-prior-failure')
           return response(descriptorId, input.history)
@@ -372,6 +381,19 @@ function response(descriptorId: string, body: string) {
 
 function unavailable(descriptorId: string) {
   return { ok: false as const, descriptorId, failureCode: 'network-request-failed' as const }
+}
+
+/** The live feed keeps the previous meeting's release too; the newest one is still the current. */
+function rssWithPriorStatement(): string {
+  return rss().replace('<item>', `<item>
+      <title>Federal Reserve issues FOMC statement</title>
+      <link><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm]]></link>
+      <guid><![CDATA[https://www.federalreserve.gov/newsevents/pressreleases/monetary20260617a.htm]]></guid>
+      <description><![CDATA[Synthetic test item.]]></description>
+      <category>Monetary Policy</category>
+      <pubDate><![CDATA[Wed, 17 Jun 2026 18:00:00 GMT]]></pubDate>
+    </item>
+    <item>`)
 }
 
 function rss(): string {
