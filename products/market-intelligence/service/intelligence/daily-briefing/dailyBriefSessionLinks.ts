@@ -20,10 +20,8 @@ export type DailyBriefSessionLink = Readonly<{
 }>
 
 export type DailyBriefSessionLinkStore = Readonly<{
-  find: (editionKey: string) => Promise<DailyBriefSessionLink | undefined>
   findBySession: (sessionId: string) => Promise<DailyBriefSessionLink | undefined>
   listByEdition: (editionKey: string) => Promise<readonly DailyBriefSessionLink[]>
-  list: () => Promise<readonly DailyBriefSessionLink[]>
   put: (link: DailyBriefSessionLink) => Promise<void>
   remove: (sessionIds: readonly string[]) => Promise<void>
   listBefore: (date: string) => Promise<readonly DailyBriefSessionLink[]>
@@ -59,10 +57,8 @@ export function createDailyBriefSessionLinkStore(filePath: string): DailyBriefSe
       drop table if exists daily_brief_session_links_v1;
     `)
   }
-  const get = db.prepare('select * from daily_brief_session_links where edition_key = ? order by created_at desc, session_id desc limit 1')
   const getBySession = db.prepare('select * from daily_brief_session_links where session_id = ?')
   const byEdition = db.prepare('select * from daily_brief_session_links where edition_key = ? order by created_at asc')
-  const all = db.prepare('select * from daily_brief_session_links order by edition_date desc')
   const before = db.prepare('select * from daily_brief_session_links where edition_date < ? order by edition_date asc')
   const put = db.prepare(`
     insert into daily_brief_session_links (edition_key, session_id, edition_date, locale, state, created_at, updated_at)
@@ -71,10 +67,8 @@ export function createDailyBriefSessionLinkStore(filePath: string): DailyBriefSe
   `)
   const remove = db.prepare('delete from daily_brief_session_links where session_id = ?')
   return Object.freeze({
-    async find(editionKey) { return row(get.get(editionKey) as Row | undefined) },
     async findBySession(sessionId) { return row(getBySession.get(sessionId) as Row | undefined) },
     async listByEdition(editionKey) { return Object.freeze((byEdition.all(editionKey) as Row[]).map(row).filter(isLink)) },
-    async list() { return Object.freeze((all.all() as Row[]).map(row).filter(isLink)) },
     async listBefore(date) { return Object.freeze((before.all(date) as Row[]).map(row).filter(isLink)) },
     async put(link) { put.run(link.editionKey, link.sessionId, link.editionDate, link.locale, link.state, link.createdAt, link.updatedAt) },
     async remove(sessionIds) { for (const id of sessionIds) remove.run(id) }

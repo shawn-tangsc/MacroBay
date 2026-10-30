@@ -735,9 +735,6 @@ export function getIntelligenceModule(
         links: dailyBriefSessionLinks,
         createSession: hooks.createAgentSession,
         send: hooks.sendAgentMessage,
-        append: hooks.appendAgentSessionMessages,
-        update: hooks.updateAgentSession,
-        delete: (ids) => hooks.deleteAgentSessions!(ids).then(() => undefined)
       })
       : undefined
     const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined
