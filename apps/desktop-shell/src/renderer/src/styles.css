@@ -9633,7 +9633,13 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 
 /* PLAT-64 — 整段结构化 JSON：代码块（等宽 + 圆角 + 横向滚动）或卡片（标题 + 正文）。
    折叠条只在超过 20 行时出现；提示「已折叠 N 行」保证折叠不会看起来像内容被吞掉。 */
-.chat-markdown-json { margin: 6px 0; }
+.chat-markdown-json {
+  /* 这个包裹层不是滚动容器，缺省 `min-width: auto` 会让整段 JSON 按最长一行撑开，
+     把气泡和整个消息滚动区一起拉宽；横滚必须落在里面的 `pre` 上。 */
+  min-width: 0;
+  max-width: 100%;
+  margin: 6px 0;
+}
 .chat-markdown-json-bar {
   display: flex;
   align-items: center;
