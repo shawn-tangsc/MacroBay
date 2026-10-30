@@ -70,7 +70,8 @@ export function createMacroCalendarScheduleBackend(input: {
           requestFomcStatement: (officialStatementUrl, signal) => (input.requestFomcStatement ?? httpClient.requestFomcStatement)(officialStatementUrl, signal)
         },
         evidence: createFedFomcDecisionEvidence({ archive: evidenceArchive }),
-        repository
+        repository,
+        facts: repository.policyFacts
       })
     const collection = createMacroCalendarCollectionService({ profiles, http: { request: input.request ?? createMacroCalendarHttpClient().request }, evidence })
     const persistence = createMacroCalendarSchedulePersistenceService({ evidence, repository, policyFacts: repository })

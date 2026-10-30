@@ -113,6 +113,7 @@ describe('Fed FOMC decision refresh', () => {
     repository.close()
   })
   it('projects a verified current target range when no prior official statement is available', async () => {
+    const recorded: Array<{ meetingDate: string; targetRange: { lowerPercent: number; upperPercent: number }; statementUrl: string }> = []
     const rawRecords = createRawRecordStore()
     const repository = createMacroCalendarRepository({ filePath: ':memory:' })
     repository.appendIfNew(schedule())
@@ -128,10 +129,12 @@ describe('Fed FOMC decision refresh', () => {
       evidence: createFedFomcDecisionEvidence({
         archive: createMacroCalendarEvidenceArchive({ rawRecords, archiveDirectory: mkdtempSync(join(tmpdir(), 'mi-fed-evidence-')) })
       }),
-      repository
+      repository,
+      facts: { recordDecision: (facts) => recorded.push(facts) }
     })
 
     await expect(refresh.refresh({ detectedAt, runId: 'fed-release-run' })).resolves.toEqual({ state: 'updated' })
+    expect(recorded[0]).toMatchObject({ meetingDate: '2026-07-29', targetRange: { lowerPercent: 3.5, upperPercent: 3.75 }, statementUrl: currentUrl })
 
     const result = createMacroEconomicCalendarQueryService({ repository }).getEventDetail({
       eventKey: 'US.FOMC.2026-07-29', asOf: detectedAt

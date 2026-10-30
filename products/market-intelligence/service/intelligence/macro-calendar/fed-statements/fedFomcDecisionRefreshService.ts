@@ -8,6 +8,7 @@ import { parseFedFomcStatements } from './fedFomcStatementParser'
 import { parseFedFomcDecisionDocument, type FedFomcDecisionDocument } from './fedFomcDecisionParser'
 import { parseFedFomcStatementHistory } from './fedFomcStatementHistoryParser'
 import type { FedFomcDecisionEvidence } from './fedFomcDecisionEvidence'
+import type { PolicyPathFactStore } from '../../policy-path/policyPathFactStore'
 
 export const fedFomcDecisionRefreshPolicy = Object.freeze({
   statementDescriptorId: 'macro-calendar-fed-statement',
@@ -38,6 +39,8 @@ export function createFedFomcDecisionRefreshService(deps: Readonly<{
   }>
   evidence: FedFomcDecisionEvidence
   repository: Pick<MacroCalendarRepository, 'getEffectiveEventAsOf' | 'appendIfNew'>
+  /** Official policy facts; optional so the refresh keeps working in isolation. */
+  facts?: Pick<PolicyPathFactStore, 'recordDecision'>
 }>): FedFomcDecisionRefreshService {
   let inFlight = false
   return Object.freeze({
@@ -53,6 +56,14 @@ export function createFedFomcDecisionRefreshService(deps: Readonly<{
         })
         if (!currentEvidence || signal?.aborted) return unavailable()
         currentWrite = deps.repository.appendIfNew(revisionForCurrent(current, currentEvidence, input.detectedAt))
+        deps.facts?.recordDecision({
+          meetingDate: current.document.decisionDate,
+          targetRange: { lowerPercent: current.document.targetRange.lowerPercent, upperPercent: current.document.targetRange.upperPercent },
+          ...(current.document.vote ? { vote: current.document.vote } : {}),
+          ...(current.document.dissents ? { dissents: current.document.dissents } : {}),
+          statementUrl: current.statementUrl,
+          detectedAt: input.detectedAt
+        })
         const prior = await adjacentPrior(current, input, signal, deps)
         if (!prior) return currentWrite.inserted ? updated() : unchanged()
         if (signal?.aborted) return unavailable()

@@ -15,6 +15,20 @@ describe('macroEconomicCalendarQueryService', () => {
     expect(service.queryMonth({ month: '2026-08', asOf: '2026-08-26T13:00:00.000Z' })).toMatchObject({ state: 'available', events: expect.arrayContaining([expect.objectContaining({ eventKey: pce.eventKey, actual: pce.actual, officialReleaseDate: '2026-08-26' }), expect.objectContaining({ eventKey: core.eventKey, actual: core.actual, officialReleaseDate: '2026-08-26' })]) })
     expect(createMacroEconomicCalendarQueryService({ repository: createRepository({ month: [pce] }) }).queryMonth({ month: '2026-08', asOf: '2026-08-26T13:00:00.000Z' })).toMatchObject({ state: 'available', events: [] })
   })
+  it('answers the next FOMC meeting at or after asOf and ignores past ones', () => {
+    const past = revision({ eventKey: 'US.FOMC.2026-07-29', eventFamily: 'fomc', eventNameKey: 'fomc', scheduledDate: '2026-07-29', providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule' })
+    const nearer = revision({ eventKey: 'US.FOMC.2026-10-28', eventFamily: 'fomc', eventNameKey: 'fomc', scheduledDate: '2026-10-28', providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule' })
+    const later = revision({ eventKey: 'US.FOMC.2026-12-09', eventFamily: 'fomc', eventNameKey: 'fomc', scheduledDate: '2026-12-09', providerId: 'macro-calendar-fed', descriptorId: 'macro-calendar-fed-schedule' })
+    const service = createMacroEconomicCalendarQueryService({ repository: createRepository({ month: [later, past, nearer] }) })
+
+    expect(service.nextFomcMeeting({ asOf: '2026-08-04T00:00:00.000Z' })).toEqual({
+      state: 'available',
+      meeting: { eventKey: 'US.FOMC.2026-10-28', scheduledDate: '2026-10-28' }
+    })
+    expect(service.nextFomcMeeting({ asOf: '2026-12-10T00:00:00.000Z' })).toEqual({ state: 'unavailable', failureCode: 'meeting-not-found' })
+    expect(service.nextFomcMeeting({ asOf: '2026-08-04T00:00:00Z' })).toEqual({ state: 'unavailable', failureCode: 'query-input-invalid' })
+  })
+
   it('rejects missing or noncanonical asOf without reading the repository', () => {
     const repository = createRepository()
     const service = createMacroEconomicCalendarQueryService({ repository })
