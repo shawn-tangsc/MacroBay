@@ -13,6 +13,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
+import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
@@ -158,7 +159,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (view.status !== 'ready') return
     try {
       const markdown = dailyBriefingToMarkdown(view.document, {
-        labels: text,
+        labels: withWindowHours(text, view.document.edition.windowHours ?? 24),
         locale,
         direction: (term) => localizedDirectionTerm(term, locale),
         ...(eventTitles ? { eventTitle: (item) => item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title } : {}),

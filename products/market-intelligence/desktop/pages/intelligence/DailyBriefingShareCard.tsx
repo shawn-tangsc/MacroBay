@@ -2,13 +2,14 @@ import type { BriefingMarketRow, BriefingPulseRow, DailyBriefingDocument } from 
 import { formatBriefingChange, formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
+import { withWindowHours } from './dailyBriefingWindowText'
 
 /**
  * The image edition. It deliberately drops the app chrome and the rail: a reader posts one page,
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text, locale, eventTitles, readOnly = false, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, formatTime }: Readonly<{
   document: DailyBriefingDocument
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
@@ -16,6 +17,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   readOnly?: boolean
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
+  const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
   const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])]
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
