@@ -86,6 +86,14 @@ export type LiquidationHint = Readonly<{
   dropPct: number
   /** Volume of this bucket divided by the mean of the previous `lookbackBars`. */
   volumeMultiple: number
+  /**
+   * The open interest this bucket closed at.
+   *
+   * Carried so the mark can be pinned to its own point: the 7-day view plots one bucket per
+   * hour, and a dip that recovered inside that hour would otherwise leave a mark floating
+   * beside a flat line with nothing to explain it.
+   */
+  notionalUsd: number
 }>
 
 export type LiquidationHintsResult = Readonly<{
@@ -150,7 +158,8 @@ export function detectLiquidationHints(input: Readonly<{
         observedAt: bar.observedAt,
         asset,
         dropPct: round(dropPct),
-        volumeMultiple: round(multiple)
+        volumeMultiple: round(multiple),
+        notionalUsd: bar.notionalUsd
       }))
     }
   }

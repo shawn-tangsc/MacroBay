@@ -43,6 +43,8 @@ export type OpenInterestLiquidationHint = Readonly<{
   asset: 'btc' | 'eth'
   dropPct: number
   volumeMultiple: number
+  /** The notional open interest of the marked bucket, so the mark can be drawn on the line. */
+  notionalUsd: number
 }>
 
 export type OpenInterestHistoryResult =
@@ -138,6 +140,7 @@ export function isOpenInterestHistoryResult(value: unknown, asOf: string, window
       if (entry.asset !== 'btc' && entry.asset !== 'eth') return false
       if (typeof entry.dropPct !== 'number' || !Number.isFinite(entry.dropPct) || entry.dropPct > 0) return false
       if (typeof entry.volumeMultiple !== 'number' || !Number.isFinite(entry.volumeMultiple) || entry.volumeMultiple < 0) return false
+      if (!isOpenInterestNotional(entry.notionalUsd)) return false
     }
   }
 

@@ -82,7 +82,7 @@ describe('positioning panel', () => {
 
   it('marks a suspected liquidation row and always carries the inferred-not-exchange note', () => {
     const markup = render({
-      positioning: { ...positioning, hints: [{ observedAt: at(30), asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4 }] }
+      positioning: { ...positioning, hints: [{ observedAt: at(30), asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, notionalUsd: 8.8e9 }] }
     })
     expect(markup).toContain('mi-positioning-panel__badge')
     expect(markup).toContain(text.liquidationFoot)

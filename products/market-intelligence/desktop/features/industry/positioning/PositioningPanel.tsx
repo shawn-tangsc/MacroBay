@@ -216,12 +216,19 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
             x={x(Date.parse(point.observedAt)) - barWidth / 2} y={Math.min(y, VIEW.zero)}
             width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
         })}
-        {positioning.hints.map(hint => (
-          <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
-            <line x1={x(Date.parse(hint.observedAt))} x2={x(Date.parse(hint.observedAt))} y1={VIEW.upperTop} y2={VIEW.height - 10} />
-            <text x={x(Date.parse(hint.observedAt)) + 4} y={VIEW.upperTop + 8}>▲</text>
-          </g>
-        ))}
+        {positioning.hints.map(hint => {
+          // Pinned to the bucket's own value. The hourly line takes the hour's last reading, so a
+          // dip that recovered inside that hour is invisible on the line — without this dot the
+          // mark would sit beside a flat stretch with nothing to explain it.
+          const cy = upperY(hint.notionalUsd, positioning[hint.asset])
+          return (
+            <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
+              <line x1={x(Date.parse(hint.observedAt))} x2={x(Date.parse(hint.observedAt))} y1={VIEW.upperTop} y2={VIEW.height - 10} />
+              <circle cx={x(Date.parse(hint.observedAt))} cy={cy} r="3" />
+              <text x={x(Date.parse(hint.observedAt)) + 5} y={VIEW.upperTop + 8}>▲</text>
+            </g>
+          )
+        })}
         {hovered ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover!)} x2={xAt(hover!)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
         <text x={VIEW.left} y={VIEW.height - 1} className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows[0]!.observedAt) : ''}</text>
         <text x={VIEW.right} y={VIEW.height - 1} textAnchor="end" className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows.at(-1)!.observedAt) : ''}</text>

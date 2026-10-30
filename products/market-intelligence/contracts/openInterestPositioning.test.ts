@@ -115,3 +115,10 @@ describe('liquidation marks', () => {
     expect(detectLiquidationHints({ asset: 'btc', bars: broken }).hints).toHaveLength(0)
   })
 })
+
+describe('liquidation mark anchoring', () => {
+  it('carries the notional value of the bucket it marks', () => {
+    const result = detectLiquidationHints({ asset: 'btc', bars: withDrop(120) })
+    expect(result.hints[0]).toMatchObject({ notionalUsd: 8_000_000_000 * 0.98 })
+  })
+})
