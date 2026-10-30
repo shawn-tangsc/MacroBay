@@ -266,7 +266,7 @@ describe('daily briefing service', () => {
     })
   })
 
-  it('keeps the other language visible when the current one has no edition', async () => {
+  it('reports a gap for the current locale but names the other locale', async () => {
     const store = memoryStore()
     const source = fakeSource()
     const service = createDailyBriefingService({ source, store, now: () => asOf })
@@ -276,7 +276,7 @@ describe('daily briefing service', () => {
     const listed = await service.list({ locale: 'en-US', timeZone: 'Asia/Shanghai' })
     expect(listed.state).toBe('available')
     if (listed.state !== 'available') return
-    expect(listed.result.editions[0]).toMatchObject({ date: '2026-10-30', locale: 'zh-CN', state: 'generated' })
+    expect(listed.result.editions[0]).toMatchObject({ date: '2026-10-30', locale: 'en-US', state: 'missing' })
     expect(listed.result.editions[0]?.availableLocales).toEqual(['zh-CN'])
     expect((await service.get({ date: '2026-10-30', locale: 'en-US' })).state).toBe('missing')
     expect((await service.get({ date: '2026-10-30', locale: 'zh-CN' as DailyBriefingLocale })).state).toBe('available')
