@@ -337,8 +337,8 @@ function hasTraceablePolicyProbability(conclusion: AnalysisConclusion, snapshot:
 /** Percentages next to 「概率」 or 「定价」, in either order, without crossing a sentence break. */
 function policyProbabilityMentions(text: string): number[] {
   return [
-    ...text.matchAll(/(?:概率|定价)[^。；\n]{0,16}?(\d+(?:\.\d+)?)\s*%/g),
-    ...text.matchAll(/(\d+(?:\.\d+)?)\s*%[^。；\n]{0,8}?(?:概率|定价)/g)
+    ...text.matchAll(/(?:概率|定价)[^。；\n]{0,16}?(\d+(?:\.\d+)?)\s*[%％]/g),
+    ...text.matchAll(/(\d+(?:\.\d+)?)\s*[%％][^。；\n]{0,8}?(?:概率|定价)/g)
   ].map(match => Number(match[1])).filter(value => Number.isFinite(value))
 }
 
