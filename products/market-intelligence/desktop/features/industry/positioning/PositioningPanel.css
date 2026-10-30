@@ -66,7 +66,12 @@
 .mi-positioning-panel__bar[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); opacity: .5; }
 .mi-positioning-panel__hint line { stroke: var(--mi-dashboard-negative); stroke-width: 1; stroke-dasharray: 2 2; opacity: .9; }
 .mi-positioning-panel__hint circle { fill: var(--mi-dashboard-negative); }
-.mi-positioning-panel__hint text { fill: var(--mi-dashboard-negative); font-size: 8.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mi-positioning-panel__hint-chip {
+  fill: color-mix(in srgb, var(--mi-dashboard-negative) 16%, var(--mi-dashboard-surface));
+  stroke: color-mix(in srgb, var(--mi-dashboard-negative) 45%, transparent);
+  stroke-width: 1;
+}
+.mi-positioning-panel__hint text { fill: var(--mi-dashboard-negative); font-size: 9px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mi-positioning-panel__crosshair { stroke: var(--mi-dashboard-text); stroke-width: 1; stroke-dasharray: 3 3; opacity: .35; }
 .mi-positioning-panel__tick { fill: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
 

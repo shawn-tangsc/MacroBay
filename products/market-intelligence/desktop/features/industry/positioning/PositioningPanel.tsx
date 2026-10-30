@@ -277,12 +277,17 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
           // Each mark says who and how much, on its own line: a header badge could only name the
           // newest one, and the instant is already readable from where the line sits.
           const crowded = index > 0 && cx - x(Date.parse(positioning.hints[index - 1]!.observedAt)) < 58
-          const labelY = Math.max(VIEW.upperTop + 9, cy - 10 - (crowded ? 11 : 0))
+          const label = `${text.assets[hint.asset]} ${formatDashboardChange(hint.dropPct)}`
+          // A chip behind the text: bare red glyphs over two curves were unreadable, which defeats
+          // the point of labelling the mark at all.
+          const chipWidth = Math.round(label.length * 5.2 + 12)
+          const chipY = Math.max(VIEW.upperTop, cy - 20 - (crowded ? 12 : 0))
           return (
             <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
               <line x1={cx} x2={cx} y1={VIEW.upperTop} y2={VIEW.height - 10} />
               <circle cx={cx} cy={cy} r="3" />
-              <text x={cx} y={labelY} textAnchor="middle">{text.assets[hint.asset]} {formatDashboardChange(hint.dropPct)}</text>
+              <rect className="mi-positioning-panel__hint-chip" x={cx - chipWidth / 2} y={chipY} width={chipWidth} height={14} rx="3" />
+              <text x={cx} y={chipY + 10} textAnchor="middle">{label}</text>
             </g>
           )
         })}
