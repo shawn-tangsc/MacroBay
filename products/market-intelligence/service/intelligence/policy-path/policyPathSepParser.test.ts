@@ -36,3 +36,24 @@ describe('policy path SEP parser', () => {
     expect(parsed.medianPath.y2026).toBe(4.1)
   })
 })
+
+// The published page splits the header into two rows: the years, then the longer run as a group.
+const liveShapedTable = `
+<table>
+<tr><th>Variable</th><th>Median 1</th><th>Central Tendency 2</th><th>Range 3</th></tr>
+<tr><th>Variable</th><th>2026</th><th>2027</th><th>2028</th><th>2029</th></tr>
+<tr><td>Federal funds rate</td><td>4.1</td><td>4.1</td><td>3.9</td><td>3.6</td><td>3.2</td><td>4.1–4.4</td><td>3.6–4.4</td><td>3.1–4.1</td><td>3.1–3.6</td><td>3.0–3.6</td><td>3.9–4.4</td><td>3.1–4.4</td><td>3.1–4.1</td><td>2.9–3.9</td><td>2.9–3.9</td></tr>
+<tr><td>June projection</td><td>3.8</td><td>3.6</td><td>3.4</td><td>—</td><td>3.1</td></tr>
+</table>`
+
+describe('policy path SEP parser on the published layout', () => {
+  it('finds the year row when the header is split in two', () => {
+    expect(parsePolicyPathSep({ body: liveShapedTable, sourceUrl: url })).toEqual({
+      asOf: '2026-09-16',
+      medianPath: { y2026: 4.1, y2027: 4.1, y2028: 3.9, y2029: 3.6, longerRun: 3.2 },
+      rangeCurrentYear: { low: 3.9, high: 4.4 },
+      previousMedian: 3.8,
+      sourceUrl: url
+    })
+  })
+})

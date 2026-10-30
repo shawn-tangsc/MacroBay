@@ -46,6 +46,8 @@ export type PolicyPathFactStore = Readonly<{
   readLatestSep: (asOf: string) => PolicyPathFacts | undefined
   /** Projection meetings at or before `asOf`, newest first: which SEP tables are published by now. */
   listProjectionMeetings: (asOf: string, limit: number) => readonly string[]
+  /** The most recent scheduled meeting at or before `asOf`, decided or not. */
+  readLatestMeeting: (asOf: string) => string | undefined
   read: (meetingDate: string) => PolicyPathFacts | undefined
 }>
 
@@ -84,6 +86,9 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
   const selectLatestSep = database.prepare(
     'select * from mi_policy_path_facts where meeting_date <= ? and has_projection_materials = 1 order by meeting_date desc limit 1'
   )
+  const selectLatestMeeting = database.prepare(
+    'select meeting_date from mi_policy_path_facts where meeting_date <= ? order by meeting_date desc limit 1'
+  )
   const selectProjectionMeetings = database.prepare(
     'select meeting_date from mi_policy_path_facts where meeting_date <= ? and has_projection_materials = 1 order by meeting_date desc limit ?'
   )
@@ -108,6 +113,10 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
     },
     recordSep({ meetingDate, sep }) {
       upsertSep.run(meetingDate, JSON.stringify(sep), sep.asOf)
+    },
+    readLatestMeeting(asOf) {
+      const row = selectLatestMeeting.get(asOf.slice(0, 10)) as { meeting_date: string } | undefined
+      return row?.meeting_date
     },
     readLatestSep(asOf) {
       const row = selectLatestSep.get(asOf.slice(0, 10)) as FactRow | undefined

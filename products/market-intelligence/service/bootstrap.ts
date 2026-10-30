@@ -380,10 +380,12 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     const refresh = macroCalendarBackend.fedFomcRefresh
     if (!refresh) return
     const now = new Date().toISOString()
-    const latest = macroCalendarBackend.repository.policyFacts.readLatestDecision(now)
-    const cutoff = new Date(Date.parse(now) - 60 * 86_400_000).toISOString().slice(0, 10)
-    if (latest && latest.meetingDate >= cutoff) return
-    await refresh.refresh({ detectedAt: now, runId: `startup-catch-up:${now}` })
+    const meetingDate = macroCalendarBackend.repository.policyFacts.readLatestMeeting(now)
+    if (!meetingDate) return
+    const decided = macroCalendarBackend.repository.policyFacts.read(meetingDate)
+    if (decided?.targetRange) return
+    // The manual refresh service wants the event key and an explicit confirmation, not a run id.
+    await refresh.refresh({ eventKey: `US.FOMC.${meetingDate}`, confirmed: true })
   })().catch(() => undefined)
 
   deps.registerProductDisposer?.(async () => {

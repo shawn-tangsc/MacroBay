@@ -20,9 +20,13 @@ export function parsePolicyPathSep(input: { body: string; sourceUrl: string }): 
   if (!asOf || !input.body.includes(policyPathSepPolicy.rowLabel)) return undefined
 
   const rows = tableRows(input.body)
-  const header = rows.find((cells) => cells[0] === 'Variable') ?? rows[0]
+  // The header row only carries the four calendar years; the fifth column is the longer run, which
+  // the page labels in a separate group row. Reading the years off the first `Variable` row found
+  // gave three section labels ("Median 1", "Central Tendency 2", …) instead of years.
+  const header = rows.find((cells) => cells[0] === 'Variable' && cells.slice(1).filter((cell) => /^\d{4}$/.test(cell)).length >= 4)
   if (!header) return undefined
-  const years = header.slice(1, 6)
+  const calendarYears = header.slice(1).filter((cell) => /^\d{4}$/.test(cell)).slice(0, 4)
+  const years = calendarYears.length === 4 ? [...calendarYears, 'Longer run'] : calendarYears
   if (years.length < 5) return undefined
 
   const index = rows.findIndex((cells) => cells[0]?.startsWith(policyPathSepPolicy.rowLabel))
