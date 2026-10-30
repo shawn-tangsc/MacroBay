@@ -395,7 +395,8 @@ export const productText = {
               probabilityLabel: '加息概率',
               lastVote: '上次',
               sepMedian: 'SEP 中位',
-              sepPath: 'SEP 中位数路径', decision: '上次决议', basis: '口径', close: '关闭',
+              sepPath: 'SEP 中位数路径', decision: '上次决议', basis: '盘口与口径', close: '关闭',
+              odds: '加息 25bp', change24h: '24h', range30d: '近 30 日', quote: '买卖',
               openSource: '原文', median: '中位', sepRange: '区间', previous: '上一季', vote: '票型', dissents: '反对票', venue: '场所', asOf: '截至', empty: '官方日历已同步会议日期；决议与盘口还没有采到。',
               unchanged: '维持',
               detail: '详情',
@@ -1111,7 +1112,10 @@ export const productText = {
           loading: '正在读取运行记录…',
           exportCsv: '复制 CSV',
           exported: '已复制到剪贴板',
-          exportFailed: '无法写入剪贴板，请重试'
+          exportFailed: '无法写入剪贴板，请重试',
+          allSources: '全部来源',
+          showing: '显示 {shown} 条，共 {total} 条',
+          retention: '明细保留 30 天，更早的只留每日汇总'
         },
 
         sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
@@ -1772,7 +1776,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               probabilityLabel: 'Hike odds',
               lastVote: 'Last',
               sepMedian: 'SEP median',
-              sepPath: 'SEP median path', decision: 'Last decision', basis: 'Basis', close: 'Close',
+              sepPath: 'SEP median path', decision: 'Last decision', basis: 'Quotes and basis', close: 'Close',
+              odds: 'Hike 25bp', change24h: '24h', range30d: 'Last 30 days', quote: 'Bid / ask',
               openSource: 'Source', median: 'Median', sepRange: 'Range', previous: 'Previous', vote: 'Vote', dissents: 'Dissents', venue: 'Venue', asOf: 'As of', empty: 'Meeting dates are synced; the decision and the odds are not collected yet.',
               unchanged: 'Hold',
               detail: 'Details',
@@ -2474,7 +2479,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           loading: 'Reading the run record…',
           exportCsv: 'Copy CSV',
           exported: 'Copied to the clipboard',
-          exportFailed: 'Could not write to the clipboard'
+          exportFailed: 'Could not write to the clipboard',
+          allSources: 'All sources',
+          showing: 'Showing {shown} of {total}',
+          retention: 'Details are kept 30 days; older runs only survive as daily counts'
         },
 
         sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },

@@ -23,7 +23,9 @@ export function registerSyncRunIpc(
     if (!query) return { state: 'unavailable', failureCode: 'query-invalid' }
     try {
       const nowMs = Date.parse(now())
-      const jobRows = projectSyncRuns(jobRuntime.listRuns({ productId, limit: SYNC_RUN_LIMITS.maximumLimit }), query, nowMs)
+      // The platform orders by run id as a string, which stops matching time past the 9999th run;
+      // ask for time order so "last 24 hours" is not a month-old page.
+      const jobRows = projectSyncRuns(jobRuntime.listRuns({ productId, newestFirst: true, limit: SYNC_RUN_LIMITS.maximumLimit }), query, nowMs)
       const auditRows = audit
         ? audit.list({ since: sinceOf(query.window, nowMs), limit: SYNC_RUN_LIMITS.maximumLimit })
           .map(projectSyncAudit)

@@ -15,6 +15,9 @@ import './sync-run-section.css'
 export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
   columns: Readonly<Record<'time' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
+  allSources: string
+  showing: string
+  retention: string
   empty: string; unavailable: string; loading: string; exportCsv: string; exported: string; exportFailed: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   outcomes: Readonly<Record<'succeeded' | 'failed' | 'cancelled' | 'running', string>>
@@ -27,18 +30,26 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   const [outcome, setOutcome] = useState<SyncRunQuery['outcome']>()
   const [state, setState] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [rows, setRows] = useState<readonly SyncRunRow[]>([])
+  const [sourceFilter, setSourceFilter] = useState('')
   const [notice, setNotice] = useState<string>()
-  const query: SyncRunQuery = { window, limit: 200, ...(outcome ? { outcome } : {}) }
+  // The window is the server-side filter; outcome and source narrow what is already on screen so
+  // the source list can be built from the same fetch instead of a second round trip.
+  const query: SyncRunQuery = { window, limit: 500 }
 
   useEffect(() => {
     let cancelled = false
     setState('loading')
-    void syncRunClient.list({ window, limit: 200, ...(outcome ? { outcome } : {}) }).then((result) => {
+    void syncRunClient.list({ window, limit: 500 }).then((result) => {
       if (cancelled) return
       if (result.state === 'available') { setRows(result.rows); setState('available') } else setState('unavailable')
     })
     return () => { cancelled = true }
   }, [window, outcome])
+
+  const sources = [...new Map(rows.map((row) => [row.sourceLabel, row.sourceLabel])).keys()].sort()
+  const visible = rows
+    .filter((row) => sourceFilter === '' || row.sourceLabel === sourceFilter)
+    .filter((row) => outcome === undefined || row.outcome === outcome)
 
   const exportCsv = async () => {
     const result = await syncRunClient.exportCsv(query)
@@ -61,6 +72,12 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
             {WINDOWS.map((value) => <option key={value} value={value}>{text.window[value]}</option>)}
           </select>
         </label>
+        <label>{text.columns.source}
+          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+            <option value="">{text.allSources}</option>
+            {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+          </select>
+        </label>
         <label>{text.columns.outcome}
           <select value={outcome ?? ''} onChange={(event) => setOutcome((event.target.value || undefined) as SyncRunQuery['outcome'])}>
             <option value="">{text.outcome.any}</option>
@@ -74,12 +91,13 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
     {state === 'loading' ? <LoadingState label={text.loading} minHeight={160} /> : null}
     {state === 'unavailable' ? <p className="mi-sync-run__empty">{text.unavailable}</p> : null}
     {state === 'available' && rows.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
-    {state === 'available' && rows.length > 0 ? <table className="mi-sync-run__table">
+    {state === 'available' && rows.length > 0 && visible.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
+    {state === 'available' && visible.length > 0 ? <div className="mi-sync-run__scroll"><table className="mi-sync-run__table">
       <thead><tr>
         <th>{text.columns.time}</th><th>{text.columns.source}</th><th>{text.columns.action}</th>
         <th>{text.columns.outcome}</th><th>{text.columns.duration}</th><th>{text.columns.detail}</th>
       </tr></thead>
-      <tbody>{rows.map((row) => <tr key={row.runId} data-outcome={row.outcome}>
+      <tbody>{visible.map((row) => <tr key={row.runId} data-outcome={row.outcome}>
         <td className="mi-sync-run__time">{formatTime(row.at)}</td>
         <td>{row.sourceLabel}</td>
         <td>{text.actions[row.action]}</td>
@@ -87,7 +105,10 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
         <td className="mi-sync-run__duration">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</td>
         <td className="mi-sync-run__detail">{row.failureCode ? <code>{row.failureCode}</code> : null}{row.detail ? <span>{row.detail}</span> : null}</td>
       </tr>)}</tbody>
-    </table> : null}
+    </table></div> : null}
+    {state === 'available' && visible.length > 0
+      ? <footer className="mi-sync-run__foot">{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(rows.length))} · {text.retention}</footer>
+      : null}
   </section>
 }
 

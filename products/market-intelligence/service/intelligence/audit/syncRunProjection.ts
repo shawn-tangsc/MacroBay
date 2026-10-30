@@ -28,7 +28,21 @@ export const syncRunHandlerCatalog: Readonly<Record<string, Readonly<{ sourceId?
   'market-intelligence.collect-policy-path': { sourceId: 'policy-path-market', sourceLabel: 'Fed 决议盘口', action: 'collect' },
   'market-intelligence.runMarketAnalysis': { sourceLabel: 'AI 分析', action: 'analysis' },
   'market-intelligence.freezeMarketAnalysisSnapshot': { sourceLabel: '分析快照', action: 'analysis' },
-  'market-intelligence.dailyBriefing': { sourceLabel: '每日简报', action: 'analysis' }
+  'market-intelligence.dailyBriefing': { sourceLabel: '每日简报', action: 'analysis' },
+  'market-intelligence.translateItems': { sourceLabel: '翻译任务', action: 'other' },
+  'market-intelligence.scoreNewsSentiment': { sourceLabel: '舆情评分', action: 'analysis' },
+  'market-intelligence.enrichNewsDocuments': { sourceLabel: '舆情正文', action: 'collect' },
+  'market-intelligence.normalizeRawRecords': { sourceLabel: '原始记录归一', action: 'other' },
+  'market-intelligence.assessChangedItems': { sourceLabel: '变更判定', action: 'analysis' },
+  'market-intelligence.groupMarketAnalysisChange': { sourceLabel: '变更分组', action: 'analysis' },
+  'market-intelligence.recoverMarketAnalysisRuns': { sourceLabel: '分析恢复', action: 'analysis' },
+  'market-intelligence.analysisSessionSlots': { sourceLabel: '分析盘口', action: 'analysis' },
+  'market-intelligence.verifyMarketAnalysisPredictions': { sourceLabel: '预测校验', action: 'analysis' },
+  'market-intelligence.refreshSentimentAggregates': { sourceLabel: '舆情汇总', action: 'analysis' },
+  'market-intelligence.syncBlsScheduleAndValues': { sourceId: 'macro-calendar-bls', sourceLabel: 'BLS 日程与数值', action: 'collect' },
+  'market-intelligence.refreshMarketCalendar.economic-data': { sourceId: 'macro-calendar-0xrouter-economic-data', sourceLabel: '市场日历 · 经济数据', action: 'collect' },
+  'market-intelligence.refreshMarketCalendar.financial-events': { sourceId: 'macro-calendar-0xrouter-financial-events', sourceLabel: '市场日历 · 金融事件', action: 'collect' },
+  'market-intelligence.refreshMarketCalendar.central-bank-activities': { sourceId: 'macro-calendar-0xrouter-central-bank-activities', sourceLabel: '市场日历 · 央行活动', action: 'collect' }
 }
 
 const FAILURE_CODE = /\b([a-z]+(?:-[a-z]+){1,4})\b/

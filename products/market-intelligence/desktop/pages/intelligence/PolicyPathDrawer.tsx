@@ -12,6 +12,7 @@ import './policyPathDrawer.css'
 export type PolicyPathDrawerText = Readonly<{
   title: string; sepPath: string; decision: string; basis: string; close: string; openSource: string
   median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
+  odds: string; change24h: string; range30d: string; quote: string
 }>
 
 export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
@@ -44,6 +45,13 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
     </section> : null}
     <section className="mi-policy-drawer__section">
       <h3>{text.basis}</h3>
+      {reading.probability ? <>
+        <p className="mi-policy-drawer__row">{text.odds} {(reading.probability.value * 100).toFixed(0)}%
+          {reading.probability.changeInPp24h === undefined ? null : <span> · {text.change24h} {reading.probability.changeInPp24h > 0 ? '+' : ''}{reading.probability.changeInPp24h.toFixed(1)}pp</span>}
+        </p>
+        {reading.probability.range30d ? <p className="mi-policy-drawer__row">{text.range30d} {(reading.probability.range30d.min * 100).toFixed(0)}–{(reading.probability.range30d.max * 100).toFixed(0)}%</p> : null}
+        {reading.probability.quote ? <p className="mi-policy-drawer__row">{text.quote} {(reading.probability.quote.bid * 100).toFixed(0)} / {(reading.probability.quote.ask * 100).toFixed(0)}</p> : null}
+      </> : null}
       <p className="mi-policy-drawer__row">{text.venue} {reading.probability?.venue ?? '—'}</p>
       {reading.probability?.asOf ? <p className="mi-policy-drawer__row">{text.asOf} {reading.probability.asOf}</p> : null}
       {reading.targetRange ? <p className="mi-policy-drawer__row">
