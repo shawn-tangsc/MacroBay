@@ -12,10 +12,12 @@ export const dailyBriefingPromptVersion = 'daily-briefing.editorial.v1'
 export function buildDailyBriefingPrompt(input: Readonly<{
   document: DailyBriefingDocument
   locale: 'zh-CN' | 'en-US'
+  selection?: unknown
 }>): StructuredModelMessage[] {
   const { document, locale } = input
   const facts = {
     locale,
+    ...(input.selection !== undefined ? { selection: input.selection } : {}),
     edition: { date: document.edition.date, windowStart: document.edition.windowStart, windowEnd: document.edition.windowEnd },
     conclusion: document.conclusion ? {
       direction: document.conclusion.direction,
@@ -138,4 +140,27 @@ function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{
     window: row.window,
     must: row.importance.tier === 'must'
   }))
+}
+
+/** Stage 1: the editor chooses which candidates matter and which fields it needs. */
+export function buildDailyBriefingSelectionPrompt(input: Readonly<{
+  document: DailyBriefingDocument
+  locale: 'zh-CN' | 'en-US'
+}>): StructuredModelMessage[] {
+  const { document, locale } = input
+  const candidates = {
+    news: document.news.items.map((item) => ({ factId: `news:${item.itemId}`, title: item.translatedTitle ?? item.title, source: item.sourceName })),
+    macro: document.news.macro.map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
+    next: [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null }))
+  }
+  return [
+    { role: 'system', content: 'You are the editor of a frozen daily market brief. Select, do not write prose yet. Return one JSON object and nothing else.' },
+    { role: 'user', content: [
+      `LOCALE: ${locale}`,
+      'CANDIDATES:',
+      JSON.stringify(candidates, null, 2),
+      'Return this exact shape: {"stage":"select","focus":"<eventKey>","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}]}',
+      'Select only from the lists. Keep next/macro/news IDs exact. requests may ask for missing fields; do not invent values.'
+    ].join('\n') }
+  ]
 }
