@@ -77,6 +77,9 @@ export function buildDailyBriefingPrompt(input: Readonly<{
             { factId: 'news:<id>', why: 'one sentence, at most 200 characters' },
             { factId: 'macro:<key>', why: 'one sentence, at most 200 characters' }
           ],
+          hidden: [
+            { factId: 'news:<id>|macro:<key>', reason: 'one sentence, at most 200 characters' }
+          ],
           importance: [
             { factId: 'data:<id>', tier: 'must|support|reference', reasonText: 'one short sentence, at most 200 characters' }
           ],
@@ -100,6 +103,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- There is no required number of items or importance rows. The model, not a cap, decides visibility.',
         '- conclusionTranslation: only when the conclusion summary is in a different language from LOCALE.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
+        '- items are shown facts with why; hidden contains every other candidate with a reason. items + hidden must cover every news and macro candidate exactly once.',
         '- The lede is event-first: lead with the dominant event/tension and its transmission, not with a direction or a data recital. Never enumerate the news headlines or the data rows. Avoid generic openers such as “market sentiment is cautious” or “mixed signals”.',
         '- nextFocus: only for the next event list. Explain why the focus matters, then 2-3 if/then implications. Use only numbers in FACTS.'
       ].join('\n')

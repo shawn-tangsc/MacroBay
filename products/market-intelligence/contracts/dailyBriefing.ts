@@ -98,6 +98,7 @@ export type BriefingNewsItem = Readonly<{
   why?: string
   /** AI visibility decision; absent means shown for older editions. */
   visibility?: 'shown' | 'hidden'
+  visibilityReason?: string
 }>
 
 export type BriefingMacroItem = Readonly<{
@@ -118,6 +119,7 @@ export type BriefingMacroItem = Readonly<{
   why?: string
   /** AI visibility decision; absent means shown for older editions. */
   visibility?: 'shown' | 'hidden'
+  visibilityReason?: string
 }>
 
 export type BriefingNextItem = Readonly<{

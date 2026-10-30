@@ -64,6 +64,7 @@ const validOutput = {
     { factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' },
     { factId: 'macro:US.CPI', why: 'CPI 超预期压低了降息预期。' }
   ],
+  hidden: [],
   importance: [{ factId: 'data:index', tier: 'must', reasonText: '纳指同向，说明不是单一币种问题。' }],
   dataNote: '资金面收缩与 CPI 超预期同向。',
   invalidationNote: '稳定币转为净流入会削弱这条判断。',

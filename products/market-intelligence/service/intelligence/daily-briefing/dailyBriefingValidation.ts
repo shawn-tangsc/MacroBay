@@ -11,6 +11,7 @@ export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
   ledePattern?: string
   items: readonly Readonly<{ factId: string; why: string }>[]
+  hidden: readonly Readonly<{ factId: string; reason: string }>[]
   importance: readonly Readonly<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }>[]
   dataNote?: string
   invalidationNote?: string
@@ -50,13 +51,14 @@ export function validateDailyBriefingEditorial(
   document: DailyBriefingDocument,
   locale: 'zh-CN' | 'en-US'
 ): DailyBriefingValidation {
-  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus'])) {
+  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus'])) {
     return fail('invalid-shape')
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
   if (!isLedePattern(raw.ledePattern)) return fail('invalid-shape')
   if (raw.lede.length > 600) return fail('too-long')
   if (!Array.isArray(raw.items) || raw.items.length > 50) return fail('invalid-shape')
+  if (!Array.isArray(raw.hidden)) return fail('invalid-shape')
   if (!Array.isArray(raw.importance)) return fail('invalid-shape')
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
   const macroIds = new Set(document.news.macro.map((item) => `macro:${item.eventKey}`))
@@ -70,6 +72,16 @@ export function validateDailyBriefingEditorial(
     if (items.some((existing) => existing.factId === item.factId)) return fail('invalid-shape')
     items.push({ factId: item.factId, why: item.why })
   }
+  const hidden: Array<{ factId: string; reason: string }> = []
+  for (const entry of raw.hidden) {
+    if (!isExact(entry, ['factId', 'reason'])) return fail('invalid-shape')
+    if (!isText(entry.factId) || !isText(entry.reason)) return fail('invalid-shape')
+    if (entry.reason.length > 200) return fail('too-long')
+    if (!newsIds.has(entry.factId) && !macroIds.has(entry.factId)) return fail('unknown-fact')
+    if (items.some((shown) => shown.factId === entry.factId) || hidden.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
+    hidden.push({ factId: entry.factId, reason: entry.reason })
+  }
+  if (items.length + hidden.length !== newsIds.size + macroIds.size) return fail('invalid-shape')
   const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
   for (const entry of raw.importance) {
     if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return fail('invalid-shape')
@@ -118,6 +130,7 @@ export function validateDailyBriefingEditorial(
     value: Object.freeze({
       lede: raw.lede,
       items: Object.freeze(items.map((item) => Object.freeze(item))),
+      hidden: Object.freeze(hidden.map((entry) => Object.freeze(entry))),
       importance: Object.freeze(importance.map((entry) => Object.freeze(entry))),
       ...(typeof dataNote === 'string' ? { dataNote } : {}),
       ...(typeof invalidationNote === 'string' ? { invalidationNote } : {}),
@@ -135,6 +148,7 @@ export function applyDailyBriefingEditorial(
   const newsWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('news:')).map((item) => [item.factId.slice('news:'.length), item.why]))
   const macroWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('macro:')).map((item) => [item.factId.slice('macro:'.length), item.why]))
   const importance = new Map(editorial.importance.map((entry) => [entry.factId.slice('data:'.length), entry]))
+  const hiddenReason = new Map(editorial.hidden.map((entry) => [entry.factId, entry.reason]))
   const applyRow = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
     const next = importance.get(row.id)
     if (!next) return row
@@ -173,10 +187,10 @@ export function applyDailyBriefingEditorial(
       ...document.news,
       items: Object.freeze(document.news.items.map((item: BriefingNewsItem) => newsWhy.has(item.itemId)
         ? Object.freeze({ ...item, why: newsWhy.get(item.itemId)!, visibility: 'shown' as const })
-        : Object.freeze({ ...item, visibility: 'hidden' as const }))),
+        : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`news:${item.itemId}`) ? { visibilityReason: hiddenReason.get(`news:${item.itemId}`)! } : {}) }))),
       macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => macroWhy.has(item.eventKey)
         ? Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
-        : Object.freeze({ ...item, visibility: 'hidden' as const })))
+        : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })))
     }),
     data: Object.freeze({
       market: Object.freeze(document.data.market.map(applyRow)),
