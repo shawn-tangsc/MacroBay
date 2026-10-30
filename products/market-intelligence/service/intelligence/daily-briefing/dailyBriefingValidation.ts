@@ -117,6 +117,12 @@ export function validateDailyBriefingEditorial(
     ...(nextFocus ? [nextFocus.why, ...nextFocus.watch.flatMap((entry) => [entry.condition, entry.implication])] : []),
     ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
     ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : [])].join('\n')
+  const hiddenTitles = [
+    ...document.news.items.filter((item) => hidden.some((entry) => entry.factId === `news:${item.itemId}`)).map((item) => item.translatedTitle ?? item.title),
+    ...document.news.macro.filter((item) => hidden.some((entry) => entry.factId === `macro:${item.eventKey}`)).map((item) => item.title)
+  ].filter((title) => title.trim().length >= 8)
+  const proseLower = prose.toLowerCase()
+  if (hiddenTitles.some((title) => proseLower.includes(title.trim().toLowerCase()))) return fail('invalid-shape')
   const forbidden = forbiddenContent(prose)
   if (forbidden) return fail('forbidden-content', forbidden)
   // Times are facts from calendar timestamps but are written as HH:mm, not as a bare number; do
