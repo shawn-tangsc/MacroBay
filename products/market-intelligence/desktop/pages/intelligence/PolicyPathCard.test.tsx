@@ -44,7 +44,7 @@ describe('policy path card', () => {
     // The label follows the leading bucket: a hold or a cut must not still read 'hike'.
     expect(rendered.textContent).toContain(text.outcomes['hike-25'])
     expect(rendered.textContent).toContain('3.75–4.00%')
-    expect(rendered.textContent).toContain('维持 10–2')
+    expect(rendered.textContent).toContain('维持 · 10–2')
     expect(rendered.textContent).toContain(text.projection)
     expect(rendered.textContent).toContain(text.live)
   })

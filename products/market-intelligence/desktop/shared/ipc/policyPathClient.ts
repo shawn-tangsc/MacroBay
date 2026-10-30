@@ -65,8 +65,17 @@ function readLastDecision(value: unknown): PolicyPathReading['lastDecision'] | u
     ? { for: value.vote.for, against: value.vote.against }
     : undefined
   if (!vote) return undefined
+  const dissents = Array.isArray(value.dissents)
+    ? value.dissents.flatMap((entry) => {
+      if (!isObject(entry) || typeof entry.name !== 'string') return []
+      const preferred = entry.preferred
+      if (preferred !== 'raise' && preferred !== 'lower' && preferred !== 'maintain') return []
+      return [{ name: entry.name, preferred: preferred as 'raise' | 'lower' | 'maintain' }]
+    }).slice(0, 12)
+    : undefined
   return {
     vote,
+    ...(dissents?.length ? { dissents } : {}),
     ...(typeof value.statementUrl === 'string' && value.statementUrl.startsWith('https://') ? { statementUrl: value.statementUrl } : {})
   }
 }

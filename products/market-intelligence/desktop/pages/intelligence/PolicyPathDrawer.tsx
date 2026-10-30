@@ -18,6 +18,7 @@ export type PolicyPathDrawerText = Readonly<{
   odds: string; change24h: string; range30d: string; quote: string
   sepMissing: string; decisionMissing: string
   meeting: string; daysAway: string; projection: string; unchanged: string; range: string
+  preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
 }>
 
@@ -80,7 +81,8 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         <div className="mi-policy-drawer__vote">
           <b>{vote.for}–{vote.against}</b><span>{text.unchanged}</span>
         </div>
-        <p className="mi-policy-drawer__note">{text.dissents} {(reading.lastDecision?.dissents ?? []).map((row) => row.name).join('、') || '—'}</p>
+        <p className="mi-policy-drawer__note">{text.dissents} {(reading.lastDecision?.dissents ?? [])
+          .map((row) => `${row.name}（${text.preferred[row.preferred]}）`).join('、') || '—'}</p>
       </> : <p className="mi-policy-drawer__empty">{text.decisionMissing}</p>}
     </section>
 

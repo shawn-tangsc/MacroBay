@@ -16,6 +16,8 @@ export type PolicyPathCardText = Readonly<{
   probability: string; probabilityLabel: string; lastVote: string; unchanged: string
   detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
   helpLabel: string; helpLines: readonly string[]
+  /** Explains the for-against pair on hover: "10–2" alone is not self-evident. */
+  voteHint: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
 }>
 
@@ -74,9 +76,13 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
       </div>
       <div>
         <dt>{text.lastVote}</dt>
-        <dd>{reading.lastDecision?.vote
-          ? `${text.unchanged} ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
-          : '—'}</dd>
+        <dd title={reading.lastDecision?.vote ? text.voteHint
+          .replace('{for}', String(reading.lastDecision.vote.for))
+          .replace('{against}', String(reading.lastDecision.vote.against)) : undefined}>
+          {reading.lastDecision?.vote
+            ? `${text.unchanged} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
+            : '—'}
+        </dd>
       </div>
     </dl>
 
