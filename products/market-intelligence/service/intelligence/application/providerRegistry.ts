@@ -130,6 +130,22 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     ]
   }),
   provider({
+    providerId: 'policy-path',
+    displayName: 'Fed 决议盘口',
+    category: 'macro',
+    credential: 'none',
+    // The odds are collected by the product's own ten-minute job; the generic adapter must not arm a
+    // second poller, and there is nothing for the reader to test.
+    sources: [src({
+      sourceId: 'policy-path-market',
+      displayName: 'Fed decision markets',
+      panels: ['dashboard'],
+      collection: 'none',
+      capabilities: { runNow: 'none', testConnection: false },
+      adapterRef: 'policy-path-market'
+    })]
+  }),
+  provider({
     providerId: 'fred',
     displayName: 'Federal Reserve Economic Data (FRED)',
     category: 'macro',
@@ -327,7 +343,8 @@ export const agentRegistry: readonly AgentDefinition[] = [
           'macro-calendar-coinmarketcal',
           'federal-reserve-rss',
           'fred-rates-liquidity',
-          'treasury-fiscal-data'
+          'treasury-fiscal-data',
+          'policy-path-market'
         ]
       },
       { groupId: 'stablecoin-defi', agentId: 'crypto', tier: 'recommended', sourceIds: ['defillama-stablecoins', 'defillama-tvl'] },
