@@ -237,6 +237,15 @@ async function probeUrlConnection(
       testedAt
     }
   }
+  // A 3xx means the host answered but the configured path is not the endpoint the collector uses.
+  // Saying "empty body" here would send the reader looking for the wrong fault.
+  if (response.status >= 300) {
+    return {
+      ok: false,
+      message: `${label} redirected (HTTP ${response.status}); probe the collector's own path instead.`,
+      testedAt
+    }
+  }
 
   if (!response.bodyText.trim()) {
     return { ok: false, message: `${label} returned an empty body.`, testedAt }

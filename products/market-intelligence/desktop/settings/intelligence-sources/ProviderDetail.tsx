@@ -225,7 +225,11 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
       <div className="source-provider-detail__actions">
         {provider.website && !hideWebsite ? <Button onClick={() => window.open(provider.website, '_blank', 'noopener,noreferrer')}>{labels.website}</Button> : null}
         {provider.signupUrl ? <Button onClick={() => window.open(provider.signupUrl, '_blank', 'noopener,noreferrer')}>{labels.signup}</Button> : null}
-        {provider.credential !== 'api-key' ? <Button disabled={testingConnection} loading={testingConnection} onClick={() => void testConnection()}>{labels.testConnection}</Button> : null}
+        {/* A provider whose sources declare no probe has nothing to test; offering the button
+            only produces a red error for an action that was never supported. */}
+        {provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities.testConnection)
+          ? <Button disabled={testingConnection} loading={testingConnection} onClick={() => void testConnection()}>{labels.testConnection}</Button>
+          : null}
         {connectionFeedback ? <Alert
           message={connectionFeedback === 'succeeded' ? labels.connectionSucceeded : connectionFeedback === 'unsupported' ? labels.connectionUnsupported : labels.connectionFailed}
           showIcon

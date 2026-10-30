@@ -23,11 +23,11 @@ describe('daily briefing AI settings service', () => {
   it('shows the default model and saves a custom one', async () => {
     const api = service()
     expect(await api.getView()).toEqual({
-      settings: { editorialEnabled: true, providerId: '', modelId: '' },
+      settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
       resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
     })
     expect(await api.save({ providerId: 'p2', modelId: 'm2' })).toMatchObject({
-      settings: { editorialEnabled: true, providerId: 'p2', modelId: 'm2' },
+      settings: { editorialEnabled: true, providerId: 'p2', modelId: 'm2', webSearchEnabled: false },
       resolved: { state: 'agent', providerId: 'p2', modelId: 'm2', source: 'custom' }
     })
   })
