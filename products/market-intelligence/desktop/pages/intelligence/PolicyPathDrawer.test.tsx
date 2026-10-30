@@ -17,6 +17,9 @@ const settlement: PolicyPathSettlement = {
   priced: 0.38,
   pricedOutcome: 'no-change',
   conclusion: { kind: 'relative', direction: 'hawkish', surprisePp: 62 },
+  pricedDistribution: {
+    'no-change': 0.59, 'hike-25': 0.38, 'hike-50-plus': 0.01, 'cut-25': 0.01, 'cut-50-plus': 0.01
+  },
   nextMeeting: { meetingDate: '2027-01-27', daysUntil: 50 }
 }
 
@@ -25,7 +28,10 @@ const reading: PolicyPathReading = {
   phase: { kind: 'settlement', minutesSinceDecision: 42 },
   settlement,
   targetRange: { lowerPercent: 4, upperPercent: 4.25 },
-  lastDecision: { vote: { for: 9, against: 3 } },
+  lastDecision: {
+    vote: { for: 9, against: 3 },
+    statementUrl: 'https://www.federalreserve.gov/newsevents/pressreleases/monetary20261209a.htm'
+  },
   staleness: 'unavailable'
 }
 
@@ -54,15 +60,15 @@ describe('policy path drawer settlement', () => {
     const section = rendered.querySelector('[data-settlement]')
     expect(section).not.toBeNull()
     expect(section?.textContent).toContain(text.settlementTitle)
-    expect(section?.textContent).toContain('加息 25bp')
     expect(section?.textContent).toContain('12-09 实际')
-    expect(section?.textContent).toContain('38%')
-    expect(section?.textContent).toContain('维持利率')
-    expect(section?.textContent).toContain('相对定价 +62pp')
-    expect(section?.textContent).toContain('3.75–4.00%')
-    expect(section?.textContent).toContain('4.00–4.25%')
-    expect(section?.textContent).toContain('9–3')
-    expect(section?.textContent).toContain('01-27 · 50 天')
+    expect(section?.textContent).toContain('加息 25bp')
+    expect(section?.textContent).toContain('票型 9–3')
+    // Leading band, realised band, and everything else as one number: no five-bucket ladder.
+    expect(section?.textContent).toContain('决议前 1 小时：维持利率 59% · 加息 25bp 38% · 其他 3%')
+    expect(section?.textContent).toContain('相对定价偏鹰 +62pp（实际档当时只被定价 38%）')
+    const statement = section?.querySelector('a')
+    expect(statement?.getAttribute('href')).toBe(reading.lastDecision?.statementUrl)
+    expect(statement?.textContent).toContain(text.settlementStatementLink)
     expect(section?.textContent).not.toContain('鹰派')
     expect(section?.textContent).not.toContain('鸽派')
   })
@@ -74,6 +80,7 @@ describe('policy path drawer settlement', () => {
         ...settlement,
         priced: undefined,
         pricedOutcome: undefined,
+        pricedDistribution: undefined,
         conclusion: { kind: 'unavailable', reason: 'settlement-pricing-unavailable' }
       }
     })

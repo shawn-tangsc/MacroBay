@@ -103,12 +103,23 @@
 .mi-policy-drawer__muted { color: var(--mi-text-dim, #6c6f78); }
 .mi-policy-drawer__muted + .mi-policy-drawer__muted { margin-left: 4px; font-size: 10px; }
 
-/* The settlement band reads as a result, not as another odds figure: bigger, and followed by the
-   same kv rows the rest of the drawer uses for the numbers behind it. */
-.mi-policy-drawer__settle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-.mi-policy-drawer__settle b { font-size: 24px; font-weight: 650; letter-spacing: -.01em; line-height: 1.1; }
+/* The settlement lines read as a record, not as a headline: the drawer's job here is the full
+   explanation behind the card's one-line verdict. */
+.mi-policy-drawer__settle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0 0 2px; font-size: 11.5px; }
+.mi-policy-drawer__settle b { font-size: 13px; font-weight: 600; }
 .mi-policy-drawer__settle span { font-size: 11.5px; color: var(--mi-text-muted, #8b8d94); }
-.mi-policy-drawer__conclusion { margin-left: auto; font-style: normal; font-size: 12px; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__conclusion { font-style: normal; font-variant-numeric: tabular-nums; }
 .mi-policy-drawer__conclusion[data-direction='hawkish'] { color: #e0524c; }
 .mi-policy-drawer__conclusion[data-direction='dovish'] { color: #3fbf6f; }
 .mi-policy-drawer__conclusion[data-direction='priced'] { color: var(--mi-text-muted, #8b8d94); }
+
+/* The statement is the evidence for this section; it sits under the conclusion, not in the header. */
+.mi-policy-drawer__source {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--mi-text-dim, #6c6f78);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+.mi-policy-drawer__source:hover { color: var(--mi-accent, #b7cf52); }

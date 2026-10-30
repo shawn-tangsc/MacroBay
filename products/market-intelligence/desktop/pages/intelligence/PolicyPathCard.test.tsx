@@ -147,7 +147,7 @@ describe('policy path card shapes', () => {
     expect(rendered.textContent).toContain(text.phaseSettlement)
     expect(rendered.textContent).toContain('加息 25bp')
     expect(rendered.textContent).toContain('12-09 实际')
-    expect(rendered.textContent).toContain('相对定价 +62pp')
+    expect(rendered.textContent).toContain('相对定价偏鹰 +62pp')
     expect(rendered.textContent).toContain('决议前 1 小时定价 38%')
     expect(rendered.textContent).toContain('实际落在 加息 25bp 档 · 之前主档「维持利率」')
     expect(rendered.textContent).toContain('4.00–4.25%')
@@ -180,22 +180,46 @@ describe('policy path card shapes', () => {
     expect(rendered.textContent).toContain('结算后 5 小时')
   })
 
-  it('keeps the normal body in the verdict and only remembers the gap in grey', async () => {
+  it('keeps the normal body in the verdict and remembers the gap in one clickable grey line', async () => {
+    let opened = 0
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(PolicyPathCard, {
+      reading: {
+        ...reading,
+        meetingDate: '2027-01-27',
+        daysUntilMeeting: 50,
+        phase: { kind: 'verdict', daysSinceDecision: 1 },
+        settlement,
+        probability: { ...reading.probability!, outcome: 'no-change', value: 0.66, changeInPp24h: 0.4 }
+      },
+      text,
+      month: '1',
+      onOpen: () => { opened += 1 }
+    })))
+
+    expect(host.querySelector('.mi-policy-card')?.getAttribute('data-phase')).toBe('verdict')
+    expect(host.textContent).toContain('66%')
+    expect(host.querySelectorAll('.mi-policy-card__facts > div')).toHaveLength(4)
+    // The verdict does not take the header chip: the header is the normal one again.
+    expect(host.querySelector('.mi-policy-card__phase')).toBeNull()
+    const judged = host.querySelector('.mi-policy-card__judged')
+    expect(judged?.textContent).toContain('已判定 · 上次相对定价')
+    expect(judged?.textContent).toContain('偏鹰 +62pp')
+    expect(judged?.querySelector('b')?.getAttribute('data-direction')).toBe('hawkish')
+    // The whole line opens the drawer, where the full explanation lives.
+    await act(async () => (judged as HTMLButtonElement).click())
+    expect(opened).toBe(1)
+  })
+
+  it('names the last decision direction in the verdict row instead of a fixed hold', async () => {
     const rendered = await render({
       ...reading,
-      meetingDate: '2027-01-27',
-      daysUntilMeeting: 50,
       phase: { kind: 'verdict', daysSinceDecision: 1 },
-      settlement,
-      probability: { ...reading.probability!, outcome: 'no-change', value: 0.66, changeInPp24h: 0.4 }
+      settlement
     })
-
-    expect(rendered.querySelector('.mi-policy-card')?.getAttribute('data-phase')).toBe('verdict')
-    expect(rendered.textContent).toContain(text.phaseVerdict)
-    expect(rendered.textContent).toContain('66%')
-    expect(rendered.querySelectorAll('.mi-policy-card__facts > div')).toHaveLength(4)
-    expect(rendered.querySelector('.mi-policy-card__verdict-foot')?.textContent)
-      .toContain('已判定 · 相对定价 +62pp')
+    expect(rendered.textContent).toContain('加息 · 10–2')
   })
 
   it('can carry an intraday marker without upgrading the card', async () => {

@@ -2,6 +2,7 @@ import { ExternalLink } from 'lucide-react'
 
 import { MiSideDrawer } from './MiSideDrawer'
 
+import { POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { conclusionView, percentOf } from './policyPathSettlementText'
 import './policyPathDrawer.css'
@@ -28,10 +29,12 @@ export type PolicyPathDrawerText = Readonly<{
   sepSteps: string; sepStepsLevel: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
   /** The settlement section: the realised band against the price one hour before it. */
-  settlementTitle: string; settlementPricedLabel: string; settlementLeadingLabel: string
-  settlementConclusionLabel: string; previousRange: string; newTargetRange: string; voteTally: string
+  settlementTitle: string; settlementPricingBefore: string; settlementOther: string
+  settlementPricedDetail: string; settlementStatementLink: string
+  settlementConclusionLabel: string; voteTally: string
   settlementActual: string; settlementPricedMissing: string
-  settlementPricedConclusion: string; settlementRelative: string; settlementConclusionMissing: string
+  settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
+  settlementConclusionMissing: string
 }>
 
 /**
@@ -139,37 +142,51 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
  * The settlement section: what the meeting did, what the market had priced an hour before it, and
  * the gap between the two. It repeats the card's arithmetic from the same reading, so the two
  * surfaces cannot describe the same decision differently.
+ *
+ * The pricing line names the leading band, the realised band and everything else as one number: the
+ * three remaining buckets are noise at this width, and the point is what was priced, not a ladder.
  */
 function SettlementSection({ reading, text }: Readonly<{ reading: PolicyPathReading; text: PolicyPathDrawerText }>): React.ReactElement | null {
   const settlement = reading.settlement
   if (!settlement) return null
   const conclusion = conclusionView(settlement, text)
   const vote = reading.lastDecision?.vote
-  const next = settlement.nextMeeting
-  const range = (value: Readonly<{ lowerPercent: number; upperPercent: number }> | undefined) => value
-    ? `${value.lowerPercent.toFixed(2)}–${value.upperPercent.toFixed(2)}%`
-    : '—'
+  const distribution = settlement.pricedDistribution
+  const leading = settlement.pricedOutcome
+  const otherShare = distribution && leading
+    ? POLICY_PATH_OUTCOMES
+      .filter((outcome) => outcome !== leading && outcome !== settlement.actualOutcome)
+      .reduce((sum, outcome) => sum + distribution[outcome], 0)
+    : undefined
+  const statementUrl = reading.lastDecision?.statementUrl
   return <section className="mi-policy-drawer__section" data-settlement>
     <h3>{text.settlementTitle}</h3>
-    <div className="mi-policy-drawer__settle">
-      <b>{text.outcomes[settlement.actualOutcome]}</b>
+    <p className="mi-policy-drawer__settle">
       <span>{text.settlementActual.replace('{date}', settlement.decidedMeetingDate.slice(5))}</span>
-      {conclusion ? <em className="mi-policy-drawer__conclusion" data-direction={conclusion.direction}>{conclusion.label}</em> : null}
-    </div>
-    <dl className="mi-policy-drawer__kv">
-      <div><dt>{text.settlementPricedLabel}</dt><dd>{settlement.priced === undefined
-        ? text.settlementPricedMissing
-        : percentOf(settlement.priced)}</dd></div>
-      <div><dt>{text.settlementLeadingLabel}</dt><dd>{settlement.pricedOutcome
-        ? text.outcomes[settlement.pricedOutcome]
-        : '—'}</dd></div>
-      <div><dt>{text.settlementConclusionLabel}</dt><dd>{conclusion?.label ?? text.settlementConclusionMissing}</dd></div>
-      <div><dt>{text.previousRange}</dt><dd>{range(settlement.previousTargetRange)}</dd></div>
-      <div><dt>{text.newTargetRange}</dt><dd>{range(reading.targetRange)}</dd></div>
-      <div><dt>{text.voteTally}</dt><dd>{vote ? `${vote.for}–${vote.against}` : '—'}</dd></div>
-      <div><dt>{text.meeting}</dt><dd>{next
-        ? `${next.meetingDate.slice(5)} · ${text.daysAway.replace('{days}', String(next.daysUntil))}`
-        : '—'}</dd></div>
-    </dl>
+      <b>{text.outcomes[settlement.actualOutcome]}</b>
+      {vote ? <span>· {text.voteTally} {vote.for}–{vote.against}</span> : null}
+    </p>
+    {distribution && leading && otherShare !== undefined
+      ? <p className="mi-policy-drawer__note">
+        {text.settlementPricingBefore}
+        {text.outcomes[leading]} {percentOf(distribution[leading])} ·{' '}
+        {text.outcomes[settlement.actualOutcome]} {percentOf(distribution[settlement.actualOutcome])} ·{' '}
+        {text.settlementOther} {percentOf(otherShare)}
+      </p>
+      : <p className="mi-policy-drawer__note">{text.settlementPricedMissing}</p>}
+    <p className="mi-policy-drawer__note">
+      {text.settlementConclusionLabel}{' '}
+      {conclusion
+        ? <em className="mi-policy-drawer__conclusion" data-direction={conclusion.direction}>{conclusion.label}</em>
+        : text.settlementConclusionMissing}
+      {settlement.conclusion.kind === 'relative' && settlement.priced !== undefined
+        ? text.settlementPricedDetail.replace('{value}', percentOf(settlement.priced))
+        : null}
+    </p>
+    {statementUrl ? <p className="mi-policy-drawer__note">
+      <a className="mi-policy-drawer__source" href={statementUrl} rel="noreferrer" target="_blank">
+        {text.settlementStatementLink}<ExternalLink aria-hidden="true" size={11} />
+      </a>
+    </p> : null}
   </section>
 }

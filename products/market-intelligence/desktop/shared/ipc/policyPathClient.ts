@@ -1,6 +1,7 @@
 import {
   POLICY_PATH_OUTCOMES,
-  type PolicyPathMarker, type PolicyPathOutcome, type PolicyPathPhase, type PolicyPathSettlement
+  type PolicyPathDistribution, type PolicyPathMarker, type PolicyPathOutcome, type PolicyPathPhase,
+  type PolicyPathSettlement
 } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-path/ipc/registerPolicyPathIpc'
@@ -112,6 +113,7 @@ function readSettlement(value: unknown): PolicyPathSettlement | undefined {
   const previousTargetRange = readRange(value.previousTargetRange)
   const priced = isFiniteNumber(value.priced) && value.priced >= 0 && value.priced <= 1 ? value.priced : undefined
   const pricedOutcome = isOutcome(value.pricedOutcome) ? value.pricedOutcome : undefined
+  const pricedDistribution = readDistribution(value.pricedDistribution)
   const nextMeeting = readNextMeeting(value.nextMeeting)
   return {
     decidedMeetingDate: value.decidedMeetingDate,
@@ -119,6 +121,7 @@ function readSettlement(value: unknown): PolicyPathSettlement | undefined {
     actualOutcome: value.actualOutcome,
     ...(priced === undefined ? {} : { priced }),
     ...(pricedOutcome ? { pricedOutcome } : {}),
+    ...(pricedDistribution ? { pricedDistribution } : {}),
     conclusion,
     ...(nextMeeting ? { nextMeeting } : {})
   }
@@ -144,6 +147,16 @@ function readNextMeeting(value: unknown): NonNullable<PolicyPathSettlement['next
 function readRange(value: unknown): Readonly<{ lowerPercent: number; upperPercent: number }> | undefined {
   if (!isObject(value) || !isFiniteNumber(value.lowerPercent) || !isFiniteNumber(value.upperPercent)) return undefined
   return { lowerPercent: value.lowerPercent, upperPercent: value.upperPercent }
+}
+
+function readDistribution(value: unknown): PolicyPathDistribution | undefined {
+  if (!isObject(value)) return undefined
+  const entries = POLICY_PATH_OUTCOMES.map((outcome) => [outcome, value[outcome]] as const)
+  if (!entries.every(([, share]) => isFiniteNumber(share) && share >= 0 && share <= 1)) return undefined
+  const total = entries.reduce((sum, [, share]) => sum + (share as number), 0)
+  return Math.abs(total - 1) <= 0.01
+    ? Object.fromEntries(entries) as PolicyPathDistribution
+    : undefined
 }
 
 function isOutcome(value: unknown): value is PolicyPathOutcome {

@@ -222,6 +222,7 @@ function settlementOf(input: Readonly<{
     actualOutcome: input.actualOutcome,
     ...(priced === undefined ? {} : { priced }),
     ...(pricedOutcome ? { pricedOutcome } : {}),
+    ...(before ? { pricedDistribution: before.values } : {}),
     conclusion,
     ...(nextMeetingDate && daysUntil !== undefined && Number.isFinite(daysUntil)
       ? { nextMeeting: { meetingDate: nextMeetingDate, daysUntil } }

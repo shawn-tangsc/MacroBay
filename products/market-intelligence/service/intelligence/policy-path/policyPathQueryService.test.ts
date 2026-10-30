@@ -198,6 +198,7 @@ describe('policy path settlement', () => {
       actualOutcome: 'hike-25',
       priced: 0.38,
       pricedOutcome: 'no-change',
+      pricedDistribution: values(0.38),
       conclusion: { kind: 'relative', direction: 'hawkish', surprisePp: 62 },
       nextMeeting: { meetingDate: '2027-01-27', daysUntil: 48 }
     })

@@ -256,6 +256,8 @@ export type PolicyPathSettlement = Readonly<{
   priced?: number
   /** The band that was leading in that same observation. */
   pricedOutcome?: PolicyPathOutcome
+  /** That whole distribution, so the drawer can say what else was priced instead of one number. */
+  pricedDistribution?: PolicyPathDistribution
   conclusion:
     | Readonly<{ kind: 'priced' }>
     | Readonly<{ kind: 'relative'; direction: 'hawkish' | 'dovish'; surprisePp: number }>

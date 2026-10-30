@@ -162,5 +162,27 @@
 .mi-policy-card__verdict[data-direction='dovish'] { color: #3fbf6f; }
 .mi-policy-card__verdict[data-direction='priced'] { color: var(--muted, #8b8d94); }
 
-/* The verdict line replaces the freshness stamp: it is the card's memory, in grey. */
-.mi-policy-card__verdict-foot { color: var(--muted, #8b8d94); }
+/* The verdict line: one grey row between the facts and the footer, with a hairline above it. It is
+   a button because it opens the drawer's explanation, and the whole row is the target. */
+.mi-policy-card__judged {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 7px 0 0;
+  border: 0;
+  border-top: 1px solid #1b1e25;
+  background: none;
+  color: var(--muted, #8b8d94);
+  font-size: 10.5px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+.mi-policy-card__judged:focus-visible { outline: 2px solid var(--accent, #b7cf52); outline-offset: 2px; }
+.mi-policy-card__judged b { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-policy-card__judged b[data-direction='hawkish'] { color: #e0524c; }
+.mi-policy-card__judged b[data-direction='dovish'] { color: #3fbf6f; }
+.mi-policy-card__judged b[data-direction='priced'],
+.mi-policy-card__judged b[data-direction='missing'] { color: var(--muted, #8b8d94); }

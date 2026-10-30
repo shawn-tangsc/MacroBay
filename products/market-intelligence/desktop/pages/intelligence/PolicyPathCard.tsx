@@ -5,7 +5,7 @@ import './policyPathCard.css'
 import { formatSignedPp } from '../../../contracts/policyPath'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
-import { conclusionView, percentOf, settledFor } from './policyPathSettlementText'
+import { conclusionView, judgedView, percentOf, settledFor } from './policyPathSettlementText'
 
 /**
  * The policy reading as a rail card.
@@ -28,7 +28,7 @@ export type PolicyPathCardText = Readonly<{
   voteHint: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
   /** Which shape the block is in: the countdown, the settlement, or the verdict. */
-  phasePreMeeting: string; phaseSettlement: string; phaseVerdict: string
+  phasePreMeeting: string; phaseSettlement: string
   /** The single repricing chip, and the two ways it can read. */
   markerRepricing: string; markerIntraday: string
   /** The pre-meeting block: what the median implies and what the venue quotes. */
@@ -38,12 +38,24 @@ export type PolicyPathCardText = Readonly<{
   /** The settlement strip: the realised band, the price before it, and the gap. */
   settlementActual: string; settlementPriced: string; settlementPricedMissing: string
   settlementOutcomeLine: string; settlementOutcomeLineNoPricing: string
-  settlementPricedConclusion: string; settlementRelative: string; settlementConclusionMissing: string
+  settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
+  settlementConclusionMissing: string
+  /** The verdict line under the facts: what the last decision was, against what was priced. */
+  judgedLabel: string; judgedPriced: string; judgedHawkish: string; judgedDovish: string
   newTargetRange: string; voteTally: string
-  settledMinutes: string; settledHours: string; verdictLine: string
+  settledMinutes: string; settledHours: string
+  /** The last decision's direction, for the "last" row when the settlement knows it. */
+  decisionHike: string; decisionCut: string
 }>
 
 const signedCount = (value: number): string => `${value > 0 ? '+' : ''}${value}`
+
+/** The previous decision's direction, when the settlement strip is on screen and knows it. */
+function lastActionOf(settlement: PolicyPathSettlement | undefined, text: PolicyPathCardText): string {
+  if (!settlement) return text.unchanged
+  if (settlement.actualOutcome === 'no-change') return text.unchanged
+  return settlement.actualOutcome.startsWith('hike') ? text.decisionHike : text.decisionCut
+}
 
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   reading: PolicyPathReading
@@ -73,12 +85,12 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   const phaseChip = phase.kind === 'pre-meeting'
     ? <span className="mi-policy-card__phase" data-phase="pre">{text.phasePreMeeting.replace('{days}', String(phase.daysLeft))}</span>
     : phase.kind === 'settlement'
+      // The verdict does not chip the header: its memory is the clickable line under the facts.
       ? <span className="mi-policy-card__phase" data-phase="settle">{text.phaseSettlement}</span>
-      : phase.kind === 'verdict'
-        ? <span className="mi-policy-card__phase" data-phase="verdict">{text.phaseVerdict}</span>
-        : null
+      : null
 
   const conclusion = conclusionView(settlement, text)
+  const judged = judgedView(settlement, text)
   const meetingValue = (date: string, days: number) => <>
     {date.slice(5)}<span className="mi-policy-card__muted"> · {text.daysAway.replace('{days}', String(days))}</span>
   </>
@@ -109,7 +121,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
           {
             label: text.lastVote,
             value: reading.lastDecision?.vote
-              ? `${text.unchanged} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
+              ? `${lastActionOf(settlement, text)} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
               : '—',
             ...(reading.lastDecision?.vote ? { hint: text.voteHint
               .replace('{for}', String(reading.lastDecision.vote.for))
@@ -130,7 +142,9 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
       </span>
       {markerChip}
       {phaseChip}
-      {phase.kind === 'normal' && reading.hasProjectionMaterials ? <span className="mi-policy-card__chip">{text.projection}</span> : null}
+      {phase.kind === 'normal' || phase.kind === 'verdict'
+        ? reading.hasProjectionMaterials ? <span className="mi-policy-card__chip">{text.projection}</span> : null
+        : null}
     </header>
 
     {/* One skeleton for every state: a missing value becomes a dash, so the card never changes
@@ -161,14 +175,17 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
       </div>)}
     </dl>
 
+    {/* The verdict survives the strip as one clickable grey line: the full explanation lives in the
+        drawer, so the card keeps the normal reading position and only adds a memory. */}
+    {phase.kind === 'verdict' && judged ? <button type="button" className="mi-policy-card__judged" onClick={onOpen}>
+      <span>{text.judgedLabel}</span>
+      <b data-direction={judged.direction}>{judged.label}</b>
+    </button> : null}
+
     <footer className="mi-policy-card__foot">
-      {phase.kind === 'verdict'
-        ? <span className="mi-policy-card__verdict-foot">
-          {text.verdictLine.replace('{conclusion}', conclusion?.label ?? text.settlementConclusionMissing)}
-        </span>
-        : phase.kind === 'settlement'
-          ? <span className="mi-policy-card__status"><i aria-hidden="true" />{settledFor(phase.minutesSinceDecision, text)}</span>
-          : <span className="mi-policy-card__status"><i aria-hidden="true" />{freshness}{probability ? ` · ${probability.venue}` : ''}</span>}
+      {phase.kind === 'settlement'
+        ? <span className="mi-policy-card__status"><i aria-hidden="true" />{settledFor(phase.minutesSinceDecision, text)}</span>
+        : <span className="mi-policy-card__status"><i aria-hidden="true" />{freshness}{probability ? ` · ${probability.venue}` : ''}</span>}
       {onOpen ? <button className="mi-policy-card__open" onClick={onOpen} type="button">
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
       </button> : null}
