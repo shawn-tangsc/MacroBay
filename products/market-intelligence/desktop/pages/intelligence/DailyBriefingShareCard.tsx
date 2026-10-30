@@ -91,7 +91,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <b>BTC OI {doc.data.leverage.btc.openInterestUsd !== undefined ? `$${(doc.data.leverage.btc.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.btc.change24hPct !== undefined ? `${doc.data.leverage.btc.change24hPct.toFixed(1)}%` : '—'}</b>
         <b>ETH OI {doc.data.leverage.eth.openInterestUsd !== undefined ? `$${(doc.data.leverage.eth.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.eth.change24hPct !== undefined ? `${doc.data.leverage.eth.change24hPct.toFixed(1)}%` : '—'}</b>
       </div> : null}
-      {doc.data.policyPath ? <div className="mi-brief-poster__policy"><span>利率路径</span><b>{Math.round(doc.data.policyPath.probability)}% · {doc.data.policyPath.outcome} · {doc.data.policyPath.meetingDate}</b><small>市场隐含 · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : '区间未收录'}</small></div> : null}
+      {doc.data.policyPath ? <div className="mi-brief-poster__policy"><span>利率路径</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, locale)} · {doc.data.policyPath.meetingDate}</b><small>市场隐含 · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : '区间未收录'}</small></div> : null}
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
         {metricRows.map((row) => <div key={row.id} data-tone={toneFor(row)}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
       </div> : null}
@@ -305,4 +305,15 @@ function macroTime(value: string, formatTime: (value: string, precision: 'minute
 function clockWithZone(value: string, formatTime: (value: string, precision: 'minute') => string): string {
   const [date, time, ...zone] = formatTime(value, 'minute').split(' ')
   return `${date}\n${[time, ...zone].filter(Boolean).join(' ')}`
+}
+
+function policyOutcomeLabel(outcome: string, locale: 'zh-CN' | 'en-US'): string {
+  const labels: Record<string, [string, string]> = {
+    'no-change': ['维持利率', 'No change'],
+    'hike-25': ['加息 25bp', 'Hike 25bp'],
+    'hike-50-plus': ['加息 50bp+', 'Hike 50bp+'],
+    'cut-25': ['降息 25bp', 'Cut 25bp'],
+    'cut-50-plus': ['降息 50bp+', 'Cut 50bp+']
+  }
+  return labels[outcome]?.[locale === 'zh-CN' ? 0 : 1] ?? outcome
 }
