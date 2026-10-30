@@ -8,8 +8,8 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * its window and observation time. The main process builds it; the renderer never re-derives it.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 3,
-  policyVersion: 'daily-briefing.v13',
+  schemaVersion: 4,
+  policyVersion: 'daily-briefing.v14',
   windowHours: 24,
   maximumBytes: 256 * 1024,
   maximumNewsItems: 50,
@@ -24,8 +24,8 @@ export const dailyBriefingPolicy = Object.freeze({
 })
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -95,6 +95,8 @@ export type BriefingNewsItem = Readonly<{
   confidence: number
   symbols: readonly ('BTC' | 'ETH')[]
   why?: string
+  /** AI visibility decision; absent means shown for older editions. */
+  visibility?: 'shown' | 'hidden'
 }>
 
 export type BriefingMacroItem = Readonly<{
@@ -113,6 +115,8 @@ export type BriefingMacroItem = Readonly<{
     reason?: string
   }>
   why?: string
+  /** AI visibility decision; absent means shown for older editions. */
+  visibility?: 'shown' | 'hidden'
 }>
 
 export type BriefingNextItem = Readonly<{

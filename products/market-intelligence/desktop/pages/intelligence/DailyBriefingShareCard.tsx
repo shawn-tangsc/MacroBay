@@ -21,7 +21,9 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const support = rows.filter((row) => row.importance.tier === 'support')
   const conclusion = doc.conclusion
-  const hasNews = doc.news.items.length > 0 || doc.news.macro.length > 0
+  const visibleNews = doc.news.items.filter((item) => item.visibility !== 'hidden')
+  const visibleMacro = doc.news.macro.filter((item) => item.visibility !== 'hidden')
+  const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
   const hasData = chosen.length > 0
   const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0))
   const keyIds = ['btc', 'eth', 'stablecoin', 'etf-btc'] as const
@@ -53,7 +55,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
 
     {hasNews ? <section className="mi-brief-poster__news-section">
       <h2>{text.sections.news}</h2>
-      {doc.news.items.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
+      {visibleNews.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
         <span data-polarity={item.polarity}>{formatTime(item.publishedAt, 'minute').slice(11, 16)}</span>
         <div>
           <p>{item.translatedTitle ?? item.title}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
@@ -61,8 +63,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
-      {doc.news.macro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
-      {doc.news.macro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
+      {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
+      {visibleMacro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
         <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
         <div>
           <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>

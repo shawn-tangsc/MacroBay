@@ -54,7 +54,7 @@ export function validateDailyBriefingEditorial(
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
   if (raw.lede.length > 600) return fail('too-long')
-  if (!Array.isArray(raw.items) || raw.items.length > 3) return fail('invalid-shape')
+  if (!Array.isArray(raw.items) || raw.items.length > 50) return fail('invalid-shape')
   if (!Array.isArray(raw.importance)) return fail('invalid-shape')
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
   const macroIds = new Set(document.news.macro.map((item) => `macro:${item.eventKey}`))
@@ -162,11 +162,11 @@ export function applyDailyBriefingEditorial(
     news: Object.freeze({
       ...document.news,
       items: Object.freeze(document.news.items.map((item: BriefingNewsItem) => newsWhy.has(item.itemId)
-        ? Object.freeze({ ...item, why: newsWhy.get(item.itemId)! })
-        : item)),
+        ? Object.freeze({ ...item, why: newsWhy.get(item.itemId)!, visibility: 'shown' as const })
+        : Object.freeze({ ...item, visibility: 'hidden' as const }))),
       macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => macroWhy.has(item.eventKey)
-        ? Object.freeze({ ...item, why: macroWhy.get(item.eventKey)! })
-        : item))
+        ? Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
+        : Object.freeze({ ...item, visibility: 'hidden' as const })))
     }),
     data: Object.freeze({
       market: Object.freeze(document.data.market.map(applyRow)),

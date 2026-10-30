@@ -27,8 +27,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const next = selectNext(packet)
   const built = buildConclusion(packet)
   const document: DailyBriefingDocument = Object.freeze({
-    schemaVersion: 3,
-    policyVersion: 'daily-briefing.v13',
+    schemaVersion: 4,
+    policyVersion: 'daily-briefing.v14',
     edition: Object.freeze({
       date,
       locale: packet.locale,
