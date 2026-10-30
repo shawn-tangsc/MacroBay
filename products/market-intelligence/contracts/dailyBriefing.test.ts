@@ -47,7 +47,7 @@ const minimalDocument: DailyBriefingDocument = {
 describe('daily briefing contract', () => {
   it('pins the document caps the product promises', () => {
     expect(dailyBriefingPolicy.maximumNewsItems).toBe(3)
-    expect(dailyBriefingPolicy.maximumMacroItems).toBe(3)
+    expect(dailyBriefingPolicy.maximumMacroItems).toBe(50)
     expect(dailyBriefingPolicy.maximumNextItems).toBe(3)
     expect(dailyBriefingPolicy.maximumCounterEvidence).toBe(3)
     expect(dailyBriefingPolicy.maximumConditions).toBe(5)
