@@ -8,6 +8,8 @@ import {
   marketIntelligenceEvidenceInputSchema,
   marketIntelligenceQueryOutputSchema,
   marketIntelligenceTimeBoundInputSchema,
+  policyPathInputSchema,
+  policyPathOutputSchema,
   provenanceExplainInputSchema,
   provenanceExplainOutputSchema
 } from './capabilitySchemas'
@@ -103,6 +105,19 @@ export const intelligenceAgentCapabilities = [
     inputSchema: macroSnapshotEmptyInputSchema,
     outputSchema: macroRatesSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-macro-rates-snapshot',
+    timeoutMs: 5_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_policy_path',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': 'Fed 利率路径', 'en-US': 'Fed policy path' },
+    description:
+      '读取下一次 FOMC 会议的政策读数：目标区间、会议日期与剩余天数、预测市场对「最可能那一档」的定价（当前值、24h 变化、近 30 日区间、买卖价）、最新一份 SEP 的中位数路径与本年区间，以及上次决议的票型与反对票。限制：概率是预测市场的**成交价格**，不是模型预测，也不代表结果；24h 变化需要至少一天的观测，序列不足时该字段缺席而不是 0；SEP 属于**最近一次发布预测的会议**（可能早于下一次会议数月），必须带 asOf 引用；目标区间在声明尚未解析时回落 FRED 已发布的 DFEDTARU/L；staleness 为 live/delayed/stale/unavailable，表示报价新鲜度而非数据完整性。只读，不触发分析。',
+    inputSchema: policyPathInputSchema,
+    outputSchema: policyPathOutputSchema,
+    handlerId: 'market-intelligence.get-policy-path',
     timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },

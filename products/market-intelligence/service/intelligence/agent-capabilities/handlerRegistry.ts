@@ -45,6 +45,7 @@ import {
   handleGetNewsSentimentItem,
   type ReadHandlerDeps
 } from './readHandlers'
+import { handleGetPolicyPath } from './readPolicyPathHandler'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -53,6 +54,7 @@ export type IntelligenceAgentToolHandlerDeps = {
   getAppLanguage?: () => Promise<AppLanguage>
   macroCalendarOps: MacroCalendarOps
   crossAssetOps: CrossAssetOps
+  policyPath?: { read: (input: { asOf: string }) => unknown | undefined }
   /** Test seam; production opens the product-owned audit store lazily on the first write. */
   changeLog?: AgentChangeLog
 }
@@ -62,6 +64,7 @@ type HandlerFactoryDeps = {
   getAppLanguage: () => Promise<AppLanguage>
   adapterHandlers: ReadonlyMap<string, ProductAgentToolHandlerRegistration>
   writeDeps: WriteHandlerDeps
+  policyPath?: { read: (input: { asOf: string }) => unknown | undefined }
 }
 
 type HandlerFactory = (deps: HandlerFactoryDeps) => ProductAgentToolHandler
@@ -78,6 +81,7 @@ const handlerFactories: Record<CapabilityId, HandlerFactory> = {
   get_market_analysis_context: adapter('market-intelligence.get-market-analysis-context'),
   get_macro_market_snapshot: adapter('market-intelligence.get-macro-market-snapshot'),
   get_macro_rates_snapshot: adapter('market-intelligence.get-macro-rates-snapshot'),
+  get_policy_path: read(handleGetPolicyPath),
   explain_figure: adapter('market-intelligence.explain-figure'),
   query_sentiment_snapshot: adapter('market-intelligence.query-sentiment-snapshot'),
   query_sentiment_series: adapter('market-intelligence.query-sentiment-series'),
@@ -155,7 +159,7 @@ export function registerIntelligenceAgentToolHandlers(
     }
     const guarded: GuardedHandler = wrapProductToolHandler({
       capability,
-      handle: factory({ jobRuntime: deps.jobRuntime, getAppLanguage, adapterHandlers, writeDeps }),
+      handle: factory({ jobRuntime: deps.jobRuntime, getAppLanguage, adapterHandlers, writeDeps, ...(deps.policyPath ? { policyPath: deps.policyPath } : {}) }),
       actionRules: intelligenceWriteActionRules[capability.id]
     })
     if (!isGuardedHandler(guarded) || guarded.capabilityId !== capability.id) {
@@ -186,7 +190,8 @@ function read(handle: (input: unknown, deps: ReadHandlerDeps) => Promise<unknown
       jobRuntime: deps.jobRuntime,
       getAppLanguage: deps.getAppLanguage,
       macroCalendarOps: deps.writeDeps.macroCalendarOps,
-      crossAssetOps: deps.writeDeps.crossAssetOps
+      crossAssetOps: deps.writeDeps.crossAssetOps,
+      ...(deps.policyPath ? { policyPath: deps.policyPath } : {})
     })
 }
 

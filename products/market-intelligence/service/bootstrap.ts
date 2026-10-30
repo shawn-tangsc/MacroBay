@@ -646,6 +646,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     jobRuntime: deps.jobRuntime,
     getAppLanguage: deps.getAppLanguage,
     macroCalendarOps,
-    crossAssetOps
+    crossAssetOps,
+    policyPath: { read: (input: { asOf: string }) => policyPathQueryService.read(input) }
   })
 }

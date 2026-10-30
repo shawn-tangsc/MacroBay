@@ -234,3 +234,25 @@ export const marketIntelligenceAgentToolDefaults = {
   timeoutMs: 10_000,
   maxOutputBytes: 64_000
 } as const
+
+/** The policy reading needs a time boundary: the odds are a live number, not a level. */
+export const policyPathInputSchema = {
+  type: 'object',
+  required: ['asOf'],
+  additionalProperties: false,
+  properties: { asOf: { type: 'string', format: 'date-time' } }
+} as const
+
+export const policyPathOutputSchema = {
+  type: 'object',
+  required: ['state'],
+  additionalProperties: true,
+  properties: {
+    state: { enum: ['available', 'unavailable'] },
+    asOf: { type: 'string' },
+    meetingDate: { type: 'string' },
+    failureCode: { type: 'string' },
+    reading: { type: 'object' },
+    caveats: { type: 'array', items: { type: 'string' } }
+  }
+} as const

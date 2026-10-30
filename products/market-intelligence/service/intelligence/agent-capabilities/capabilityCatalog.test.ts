@@ -5,10 +5,10 @@ import { marketIntelligenceProductManifest } from '../../../product.manifest'
 
 describe('intelligence agent capability catalog', () => {
   it('declares the full read, write, discovery, and handoff surface', () => {
-    expect(intelligenceAgentCapabilities).toHaveLength(30)
-    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.id)).size).toBe(30)
-    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.handlerId)).size).toBe(30)
-    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(23)
+    expect(intelligenceAgentCapabilities).toHaveLength(31)
+    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.id)).size).toBe(31)
+    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.handlerId)).size).toBe(31)
+    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(24)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'write')).toHaveLength(5)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'handoff')).toHaveLength(1)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'discovery')).toHaveLength(1)

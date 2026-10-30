@@ -9,6 +9,8 @@ export type ReadHandlerDeps = {
   getAppLanguage: () => Promise<AppLanguage>
   macroCalendarOps: MacroCalendarOps
   crossAssetOps: CrossAssetOps
+  /** The panel's own read, so a tool answer and the card can never disagree. */
+  policyPath?: { read: (input: { asOf: string }) => unknown | undefined }
 }
 
 export const DOMAIN_ORDER: readonly CapabilityDomain[] = [

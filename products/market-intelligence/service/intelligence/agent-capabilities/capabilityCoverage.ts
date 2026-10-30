@@ -86,7 +86,7 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.economicCalendar.previewManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.queryMonth': exposed('query_macro_calendar'),
   // The policy row is a dashboard read; the Agent reaches the same facts through the calendar tool.
-  'intelligence.macro.policyPath.read': excluded('internal-view'),
+  'intelligence.macro.policyPath.read': exposed('get_policy_path'),
   // Declared by 2d16872 without its coverage row; the panel reads it, no agent tool exists yet.
   'intelligence.queryOpenInterestHistory': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
