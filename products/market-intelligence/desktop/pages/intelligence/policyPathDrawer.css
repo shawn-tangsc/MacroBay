@@ -50,19 +50,24 @@
 }
 .mi-policy-drawer__section h3 a:hover { color: var(--mi-accent, #b7cf52); }
 
-/* The projection path reads as five columns of "value over year", not as a spreadsheet. */
-.mi-policy-drawer__path { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+/* Five columns of "value over year", read as one line: the cells had borders and a fill, which at
+   this width turned into five cramped boxes competing with the numbers. */
+.mi-policy-drawer__path {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 10px 0 9px;
+  border-top: 1px solid var(--mi-border, #22252d);
+  border-bottom: 1px solid var(--mi-border, #22252d);
+}
 .mi-policy-drawer__path > div {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 7px 0 6px;
-  border: 1px solid var(--mi-border, #22252d);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--mi-surface, #14171e) 70%, #000);
+  gap: 2px;
+  padding: 0;
 }
-.mi-policy-drawer__path b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__path b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .mi-policy-drawer__path span { font-size: 9.5px; color: var(--mi-text-dim, #6c6f78); }
 .mi-policy-drawer__path > div[data-empty='true'] b { color: var(--mi-text-dim, #6c6f78); }
 
@@ -83,7 +88,7 @@
 .mi-policy-drawer__kv dt { color: var(--mi-text-muted, #8b8d94); font-size: 11px; }
 .mi-policy-drawer__kv dd { margin: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
-.mi-policy-drawer__note { margin: 10px 0 0; font-size: 10.5px; line-height: 1.6; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__note { margin: 12px 0 0; font-size: 10.5px; line-height: 1.7; color: var(--mi-text-dim, #6c6f78); }
 .mi-policy-drawer__empty {
   margin: 0;
   padding: 10px 12px;
