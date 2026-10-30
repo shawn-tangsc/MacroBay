@@ -179,8 +179,12 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       </section>
 
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title} style={{ '--mi-chat-percent': `${chatPercent}%` } as CSSProperties}>
-    {railHeader}
-    {card}
+    {/* One grid row holds both the rail header and the card: a second child here would push the
+        divider and the news column out of their declared rows. */}
+    <div className="mi-analysis-agent-workspace__card">
+      {railHeader}
+      {card}
+    </div>
 
     <div className="mi-analysis-agent-workspace__divider" role="separator" tabIndex={0} aria-label={t.resize} aria-orientation="horizontal" aria-valuemin={layout.minChatPercent} aria-valuemax={layout.maxChatPercent} aria-valuenow={chatPercent}
       onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); resize(chatPercent + (event.key === 'ArrowDown' ? layout.keyboardStepPercent : -layout.keyboardStepPercent)) } }}

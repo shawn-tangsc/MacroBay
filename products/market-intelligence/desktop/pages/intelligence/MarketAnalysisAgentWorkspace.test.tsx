@@ -161,6 +161,15 @@ function stubPlatform(options: {
   return { platform, state, createSession, sendMessage }
 }
 
+it('puts a rail header above the card in the same grid row', async () => {
+  const panel = await renderPanel({ railHeader: createElement('p', { 'data-rail-header': true }, '利率路径') }, false)
+  const row = panel.querySelector('.mi-analysis-agent-workspace__card')
+  expect(row).not.toBeNull()
+  // The header must not become a sibling of the card: the aside's grid gives the card its own row
+  // and a fourth child would land in the news column.
+  expect([...row!.children].map(child => child.hasAttribute('data-rail-header') ? 'header' : 'card')).toEqual(['header', 'card'])
+})
+
 async function renderPanel(props: Record<string, unknown> = {}, openPanel = true): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)

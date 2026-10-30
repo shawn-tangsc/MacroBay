@@ -200,7 +200,11 @@ function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFea
             the dial's baseline, which read as a separate figure rather than the gauge's value. */}
         <span className="mi-crypto-dashboard__sentiment-dial">
           <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<g transform={`rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)} ${FearGreedGaugePresentationPolicy.needleOrigin})`}>
-            <path className="mi-crypto-dashboard__gauge-needle" d={FearGreedGaugePresentationPolicy.needlePath} data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]} />
+            <circle className="mi-crypto-dashboard__gauge-needle"
+              data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}
+              cx={FearGreedGaugePresentationPolicy.needleRing.cx} cy={FearGreedGaugePresentationPolicy.needleRing.cy}
+              r={FearGreedGaugePresentationPolicy.needleRing.radius}
+              strokeWidth={FearGreedGaugePresentationPolicy.needleRing.strokeWidth} />
           </g></svg>
           <strong>{fearGreedState.score}</strong>
         </span>

@@ -17,12 +17,12 @@ export const FearGreedGaugePresentationPolicy = {
   svgViewBox: '0 0 120 68',
   trackPath: 'M 12 60 A 48 48 0 0 1 108 60',
   /**
-   * A triangular pointer pinned to the arc, not the whole arc rotated: the arc itself used to be
-   * reused as the needle, so the gauge drew a second copy of itself and showed no pointer at all.
-   * It floats in the outer band rather than reaching back to the centre because the score sits in
-   * the mouth — a full needle would run straight through the number.
+   * The mark is a ring riding on the arc at the score's angle, not a needle reaching into the
+   * mouth: the dial is 112px wide and the score sits in the middle, so anything longer either
+   * ran through the number or read as a stray fleck. A thumb on the band says "the reading is
+   * here" and stays out of the way.
    */
-  needlePath: 'M 60 17 L 57.4 27 L 62.6 27 Z',
+  needleRing: { cx: 60, cy: 12, radius: 4.2, strokeWidth: 2.4 },
   needleOrigin: '60 60',
   bucketTones: {
     'extreme-fear': 'extreme-fear',
