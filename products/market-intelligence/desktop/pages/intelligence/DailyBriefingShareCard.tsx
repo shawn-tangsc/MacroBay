@@ -192,7 +192,7 @@ function nextCountry(item: DailyBriefingDocument['next']['items'][number], local
 
 function daysUntil(at: string, from: string): number {
   const diff = Date.parse(at) - Date.parse(from)
-  return Number.isFinite(diff) ? Math.max(0, Math.ceil(diff / 86_400_000)) : 0
+  return Number.isFinite(diff) ? Math.max(0, Math.floor(diff / 86_400_000)) : 0
 }
 
 function niceFlowMax(rows: readonly Readonly<{ value: Readonly<{ number: number }> | null }>[]): number {
