@@ -63,6 +63,7 @@ export function createDailyBriefingService(deps: Readonly<{
   editorial?: (input: Readonly<{ document: DailyBriefingDocument; locale: DailyBriefingLocale }>) => Promise<DailyBriefingEditorialResult>
   agentRunner?: DailyBriefAgentRunner
   agentAllowedTools?: () => Promise<readonly string[] | undefined>
+  editorialEnabled?: () => Promise<boolean>
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -102,14 +103,21 @@ export function createDailyBriefingService(deps: Readonly<{
       return { state: 'unavailable', failureCode: 'build-failed' }
     }
     let publish = true
-    if (deps.agentRunner) {
-      const turn = await runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}) })
+    const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
+    if (deps.agentRunner && editorialEnabled) {
+      let turn: Awaited<ReturnType<typeof runDailyBriefAgentTurn>>
+      try {
+        turn = await withDeadline(runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}) }), 120_000)
+      } catch {
+        publish = false
+        turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: 'unknown', toolInvocations: [] }
+      }
       if (turn.state === 'accepted') document = turn.document
       else {
         publish = false
         document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, aiSessionId: turn.sessionId, editorialFailure: turn.failureCode, ...(turn.failureDetail ? { editorialFailureDetail: turn.failureDetail } : {}) }) })
       }
-    } else if (deps.editorial) {
+    } else if (deps.editorial && editorialEnabled) {
       try {
         const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 120_000)
         document = editorial.document
@@ -127,6 +135,8 @@ export function createDailyBriefingService(deps: Readonly<{
           provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-timeout' })
         })
       }
+    } else if (!editorialEnabled) {
+      document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-disabled' }) })
     }
     if (publish) await deps.store.put({
       date: input.date,

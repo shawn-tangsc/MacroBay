@@ -738,6 +738,7 @@ export function getIntelligenceModule(
       },
       store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite')),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
+      editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()
         if (!view.settings.webSearchEnabled || !view.settings.webSearchAuthorizedAt) return undefined
