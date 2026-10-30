@@ -177,6 +177,8 @@ export type IntelligenceModulePlatformHooks = {
    * binding it eagerly would hand the product a constructor that fails on its first connect.
    */
   createPlatformWebSocket?: () => PlatformWebSocketConstructor
+  /** Any source switch, so a product-owned job can arm or drop its own schedule. */
+  onSourceEnabledChanged?: (sourceId: string) => void | Promise<void>
   /** Reconcile the automatic calendar job registry after a feed switch. */
   onCalendarEnabledChanged?: () => void | Promise<void>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
@@ -654,6 +656,7 @@ export function getIntelligenceModule(
       capitalConditions,
       credentialStore,
       onCalendarEnabledChanged: hooks?.onCalendarEnabledChanged,
+      onSourceEnabledChanged: hooks?.onSourceEnabledChanged,
       requestGovernanceQueue,
       ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
     })

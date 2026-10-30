@@ -149,6 +149,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const register: ProductIpcRegistrar = sampleMode.wrap(deps.register)
   sampleMode.registerIpc(register)
   let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
+  // A product-owned job arms its own schedule from the switch; the module only forwards the event.
+  const sourceEnableListeners = new Map<string, () => void>()
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
     getProviderState: deps.getProviderState,
     getAppLanguage: deps.getAppLanguage,
@@ -211,6 +213,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   intelligenceModule.setPolicyPathQuery(policyPathQueryService)
   policyPathRuntime.start()
+  sourceEnableListeners.set('policy-path-market', () => { void policyPathRuntime.sync() })
   const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
   let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
   try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }

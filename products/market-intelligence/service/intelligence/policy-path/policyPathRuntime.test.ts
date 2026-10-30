@@ -64,9 +64,9 @@ describe('policy path runtime', () => {
       .resolves.toEqual({ state: 'skipped', reason: 'no-reading' })
   })
 
-  it('registers exactly one schedule and no startup duplicate', () => {
+  it('registers exactly one schedule and no startup duplicate', async () => {
     const { runtime } = runtimeWith({ scheduled: '2026-12-09' })
-    const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn() }
+    const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn() }
     const scoped = createPolicyPathRuntime({
       jobRuntime,
       repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() }, policyFacts: { read: () => undefined, recordSep: vi.fn(), listProjectionMeetings: () => [] } } as never,
@@ -74,8 +74,10 @@ describe('policy path runtime', () => {
       isEnabled: async () => true
     })
     scoped.start()
+    // The schedule is armed from the switch, so it lands one microtask after start().
+    await vi.waitFor(() => expect(jobRuntime.setSchedule).toHaveBeenCalledTimes(1))
     expect(jobRuntime.registerHandler).toHaveBeenCalledTimes(1)
-    expect(jobRuntime.setSchedule).toHaveBeenCalledTimes(1)
+    expect(jobRuntime.removeSchedule).not.toHaveBeenCalled()
     void runtime
   })
 })

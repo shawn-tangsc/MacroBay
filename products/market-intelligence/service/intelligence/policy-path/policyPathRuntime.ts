@@ -32,13 +32,15 @@ export type PolicyPathRunResult =
 
 export type PolicyPathRuntime = Readonly<{
   run: (atMs?: number) => Promise<PolicyPathRunResult>
+  /** Arm or drop the schedule to match the switch; the handler itself also re-checks. */
+  sync: () => Promise<void>
   start: () => void
 }>
 
 type FetchLike = (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>
 
 export function createPolicyPathRuntime(deps: {
-  jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule'>
+  jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule'>
   repository: Pick<MacroCalendarRepository, 'policyObservations' | 'policyFacts' | 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
   fetch: FetchLike
   isEnabled: () => Promise<boolean>
@@ -85,19 +87,29 @@ export function createPolicyPathRuntime(deps: {
     }
   }
 
-  return Object.freeze({
-    run,
-    start() {
-      deps.jobRuntime.registerHandler(policyPathRuntimePolicy.jobId, async () => { await run() })
-      deps.jobRuntime.setSchedule({
+  async function sync(): Promise<void> {
+    const on = await enabled()
+    if (!on) {
+      deps.jobRuntime.removeSchedule?.(policyPathRuntimePolicy.jobId)
+      return
+    }
+    deps.jobRuntime.setSchedule({
         id: policyPathRuntimePolicy.jobId,
         owner: 'product',
         productId: policyPathRuntimePolicy.productId,
         handlerId: policyPathRuntimePolicy.jobId,
         title: 'Collect the policy path odds',
         trigger: { kind: 'interval', intervalMs: policyPathRuntimePolicy.intervalMs, anchor: 'lastComplete' },
-        payload: {}
-      } as never)
+      payload: {}
+    } as never)
+  }
+
+  return Object.freeze({
+    run,
+    sync,
+    start() {
+      deps.jobRuntime.registerHandler(policyPathRuntimePolicy.jobId, async () => { await run() })
+      void sync()
     }
   })
 }

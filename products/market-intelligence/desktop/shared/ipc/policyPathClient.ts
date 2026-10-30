@@ -1,3 +1,4 @@
+import { POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-path/ipc/registerPolicyPathIpc'
 
@@ -40,10 +41,14 @@ function readReading(value: unknown): PolicyPathReading | undefined {
   if (typeof value.daysUntilMeeting !== 'number' || typeof value.hasProjectionMaterials !== 'boolean') return undefined
   if (value.staleness !== 'live' && value.staleness !== 'delayed' && value.staleness !== 'stale' && value.staleness !== 'unavailable') return undefined
   const probability = isObject(value.probability) && typeof value.probability.value === 'number'
+    && typeof value.probability.outcome === 'string'
+    && (POLICY_PATH_OUTCOMES as readonly string[]).includes(value.probability.outcome)
     ? { ...value.probability } as PolicyPathReading['probability']
     : undefined
   const lastDecision = readLastDecision(value.lastDecision)
-  const sep = isObject(value.sep) && typeof value.sep.medianCurrentYear === 'number' && typeof value.sep.sourceUrl === 'string'
+  // `medianCurrentYear` is optional: a table whose year column is missing is still a valid SEP, and
+  // requiring it here silently dropped the whole path.
+  const sep = isObject(value.sep) && isObject(value.sep.medianPath) && typeof value.sep.sourceUrl === 'string'
     ? value.sep as NonNullable<PolicyPathReading['sep']>
     : undefined
   return {
