@@ -1444,6 +1444,17 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state, updated_at asc, id asc);
       create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
     `
+  },
+  {
+    id: '0040_dedupe_product_tool_bindings',
+    up: `
+      delete from agent_product_tool_package_bindings
+      where rowid not in (
+        select min(rowid)
+        from agent_product_tool_package_bindings
+        group by product_id
+      );
+    `
   }
 ]
 
