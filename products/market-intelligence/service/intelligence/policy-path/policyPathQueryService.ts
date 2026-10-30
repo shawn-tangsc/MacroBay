@@ -53,6 +53,8 @@ export const policyPathQueryPolicy = {
   venue: 'polymarket',
   /** 30 days at the 10-minute collection cadence, before thinning. */
   seriesLookback: 4320,
+  /** The window the range is quoted over, independent of how many points arrived. */
+  rangeDays: 30,
   chartPoints: 120
 } as const
 
@@ -79,14 +81,17 @@ export function createPolicyPathQueryService(deps: {
       // decided; reading them off `decided` would hide a September SEP behind an October statement.
       const sepFact = decided?.sep ? decided : deps.facts.readLatestSep(asOf)
       const daysUntilMeeting = Math.round((Date.parse(`${meetingDate}T00:00:00.000Z`) - Date.parse(asOf)) / 86_400_000)
+      // Replays ask for a past instant; only points at or before it may be used, or the reading would
+      // describe the future it was asked about.
+      const asOfMs = Date.parse(asOf)
       const series = deps.observations.list(meetingDate, policyPathQueryPolicy.seriesLookback)
+        .filter((row) => !Number.isFinite(asOfMs) || Date.parse(row.at) <= asOfMs)
+      const range = targetRangeOf(decided?.targetRange, deps.readTargetRange)
       return {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
-        ...(targetRangeOf(decided?.targetRange, deps.readTargetRange) === undefined
-          ? {}
-          : { targetRange: targetRangeOf(decided?.targetRange, deps.readTargetRange)! }),
+        ...(range === undefined ? {} : { targetRange: range }),
         ...(sepFact?.sep ? { sep: sepOf(sepFact.sep, sepFact.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
           ? { lastDecision: { ...(decided.vote ? { vote: decided.vote } : {}), ...(decided.dissents ? { dissents: decided.dissents } : {}), ...(decided.statementUrl ? { statementUrl: decided.statementUrl } : {}) } }
@@ -137,7 +142,12 @@ function probabilityOf(series: readonly PolicyPathObservation[], asOf: string): 
   const { outcome, probability } = leadingOutcome(latest.values)
   const thinned = thinSeries(series, policyPathQueryPolicy.chartPoints)
   const previous = valueAtOrBefore(series, outcome, 24 * 60)
-  const window = series.slice(-policyPathQueryPolicy.seriesLookback).map((row) => row.values[outcome])
+  // Thirty days is a time window, not a count: a paused collector would otherwise compare against
+  // points older than a month and widen the range without saying so.
+  const windowStart = Date.parse(asOf) - policyPathQueryPolicy.rangeDays * 86_400_000
+  const window = series
+    .filter((row) => !Number.isFinite(windowStart) || Date.parse(row.at) >= windowStart)
+    .map((row) => row.values[outcome])
   return {
     venue: policyPathQueryPolicy.venue,
     asOf: latest.at,

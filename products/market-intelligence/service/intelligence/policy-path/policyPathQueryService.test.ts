@@ -63,3 +63,17 @@ describe('policy path query service', () => {
     expect(reading.staleness).toBe('stale')
   })
 })
+
+describe('policy path reading windows', () => {
+  it('ignores observations after the requested instant', () => {
+    const probe = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: false, detectedAt: '2026-10-29T00:00:00.000Z' },
+      series: [observation('2026-10-28T00:00:00.000Z', 0.6), observation('2026-10-31T00:00:00.000Z', 0.9)]
+    })
+    const reading = probe.read({ asOf: '2026-10-30T00:00:00.000Z' })!
+    // The later print belongs to a future the caller did not ask about.
+    expect(reading.probability?.value).toBeCloseTo(0.6, 5)
+    expect(reading.probability?.asOf).toBe('2026-10-28T00:00:00.000Z')
+  })
+})

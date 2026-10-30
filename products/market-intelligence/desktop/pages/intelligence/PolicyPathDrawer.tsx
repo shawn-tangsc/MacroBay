@@ -21,6 +21,8 @@ export type PolicyPathDrawerText = Readonly<{
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
   change24hPending: string
+  /** "The median is one 25bp step above the range midpoint" - the design's core question. */
+  sepSteps: string; sepStepsLevel: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
 }>
 
@@ -72,6 +74,12 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
           {reading.sep.rangeCurrentYear ? ` · ${text.sepRange} ${reading.sep.rangeCurrentYear.low}–${reading.sep.rangeCurrentYear.high}%` : ''}
           {reading.sep.previousMedian === undefined ? '' : ` · ${text.previous} ${reading.sep.previousMedian}%`}
         </p>
+        {reading.sep.stepsFromCurrent === undefined ? null : <p className="mi-policy-drawer__note">
+          {reading.sep.stepsFromCurrent === 0
+            ? text.sepStepsLevel
+            : text.sepSteps.replace('{steps}', String(Math.abs(reading.sep.stepsFromCurrent)))
+              .replace('{direction}', reading.sep.stepsFromCurrent > 0 ? '↑' : '↓')}
+        </p>}
       </> : <p className="mi-policy-drawer__empty">{text.sepMissing}</p>}
     </section>
 

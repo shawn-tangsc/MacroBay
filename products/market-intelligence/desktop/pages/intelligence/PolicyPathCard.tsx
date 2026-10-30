@@ -13,7 +13,7 @@ import type { PolicyPathReading } from '../../../service/intelligence/policy-pat
  */
 export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
-  probability: string; probabilityLabel: string; lastVote: string; unchanged: string
+  lastVote: string; unchanged: string
   detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
   helpLabel: string; helpLines: readonly string[]
   /** Explains the for-against pair on hover: "10–2" alone is not self-evident. */

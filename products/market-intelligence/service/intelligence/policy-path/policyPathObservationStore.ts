@@ -70,7 +70,7 @@ function parseQuote(value: unknown): PolicyPathQuote | undefined {
   const parsed = parseJson(value)
   if (!parsed || typeof parsed !== 'object') return undefined
   const { bid, ask } = parsed as Record<string, unknown>
-  return typeof bid === 'number' && typeof ask === 'number' && bid >= 0 && ask <= 1 ? { bid, ask } : undefined
+  return typeof bid === 'number' && typeof ask === 'number' && bid >= 0 && ask <= 1 && bid <= ask ? { bid, ask } : undefined
 }
 
 function parseJson(value: unknown): unknown {
