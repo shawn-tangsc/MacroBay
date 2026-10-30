@@ -27,12 +27,13 @@ type ViewState =
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
  * page keeps the history rail and report in one full-width surface.
  */
-export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigureSources, client = dailyBriefingClient }: Readonly<{
+export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigureSources, onConfigureWebSearch, client = dailyBriefingClient }: Readonly<{
   locale: 'zh-CN' | 'en-US'
   text: DailyBriefingText
   eventTitles?: Record<string, string>
   onBack: () => void
   onConfigureSources?: () => void
+  onConfigureWebSearch?: () => void
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings'>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
@@ -43,6 +44,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailed, setRegenerateFailed] = useState(false)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
@@ -71,6 +73,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     })()
     return () => { active = false }
   }, [locale, timeZone, client, reloadKey])
+
+  useEffect(() => {
+    let active = true
+    void client.getSettings?.().then((result) => {
+      if (active && result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [client])
 
   useEffect(() => () => {
     if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current)
@@ -176,6 +186,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
+        {webSearchEnabled === false ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
+          <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
+          <button type="button" onClick={() => onConfigureWebSearch?.()}>{text.aiSettings.goEnable}</button>
+        </div> : null}
         {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.generating} minHeight={220} /><p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p></div> : null}
         {view.status === 'unavailable' ? <div className="mi-daily-briefing-page__empty" role="alert">
           {editions.every((edition) => edition.state === 'missing') ? <>
@@ -212,7 +226,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {appendix.map((entry) => <p key={entry}>{entry}</p>)}
       </aside> : null}
     </div>
-    <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
+    <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
+      setSettingsOpen(false)
+      void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
+    }} />
     {view.status === 'ready' && !editorialFailed ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />

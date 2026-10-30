@@ -12,6 +12,7 @@ import { useCryptoActivation } from './useCryptoActivation'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
+import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { DashboardPanelDrawer } from './DashboardPanelDrawer'
@@ -127,6 +128,7 @@ function IntelligencePageBody(): React.ReactElement {
           eventTitles={text.analysisWorkspace.readableNames.eventName}
           onBack={() => setActiveView('dashboard')}
           onConfigureSources={() => setSourceDrawerOpen(true)}
+          onConfigureWebSearch={openWebSearchSettings}
         />
       ) : activeView === 'calendar' ? (
         <EconomicCalendar

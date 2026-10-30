@@ -6,7 +6,8 @@ export const MARKET_INTELLIGENCE_SETTINGS_PANELS = {
 /** Built-in shell settings sections this product navigates to; the proxy section lives in `preferences`. */
 export const PLATFORM_SETTINGS_PANELS = {
   preferences: 'preferences',
-  models: 'models'
+  models: 'models',
+  webSearch: 'web-search'
 } as const
 
 export type AppShellNavigateDetail = {
@@ -33,6 +34,10 @@ export function openMacroCalendarSettings(): void {
 }
 
 /** Opens the built-in model service page (providers and default models). */
+export function openWebSearchSettings(): void {
+  navigateAppShell({ navKey: 'settings', settingsPanelKey: PLATFORM_SETTINGS_PANELS.webSearch })
+}
+
 export function openModelSettings(): void {
   navigateAppShell({ navKey: 'settings', settingsPanelKey: PLATFORM_SETTINGS_PANELS.models })
 }
