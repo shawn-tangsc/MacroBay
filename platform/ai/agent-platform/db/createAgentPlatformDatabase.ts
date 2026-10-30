@@ -1446,6 +1446,16 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    id: '0042_unbind_daily_brief_editor_model',
+    up: `
+      update agent_entities
+      set model = 'unconfigured:default-chat-model',
+          model_name = '默认智能体模型',
+          updated_at = '2026-10-30T00:00:00.000Z'
+      where id = 'daily-brief-editor';
+    `
+  },
+  {
     id: '0041_clear_daily_brief_websearch_block',
     up: `
       update agent_entities

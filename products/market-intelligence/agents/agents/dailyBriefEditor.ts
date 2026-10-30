@@ -26,7 +26,7 @@ export function createDailyBriefEditorAgentSeed(
 ): AgentStoreSeed {
   const language = options.language === 'en-US' ? 'en-US' : 'zh-CN'
   const text = copy[language]
-  const model = resolveModel(providers)
+  const model = { id: 'unconfigured:default-chat-model', name: '默认智能体模型' }
   const agent: AgentEntity = {
     id: AGENT_ID,
     type: 'claude-code',
