@@ -29,7 +29,7 @@ const reading: PolicyPathReading = {
     venue: 'polymarket',
     asOf: '2026-09-25T08:20:00.000Z',
     outcome: 'hike-25',
-    value: 0.71,
+    value: 0.706,
     changeInPp24h: 2,
     quote: { bid: 0.7, ask: 0.72 },
     points: 40

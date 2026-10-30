@@ -176,8 +176,13 @@ function withinBudget(drafts: readonly PolicyFactDraft[], caveats: Set<string>):
   return kept
 }
 
+/**
+ * The panel prints the odds as a whole percent (`71%`), so the fact carries the same whole percent.
+ * A fact that said `70.6%` would make a reader's quote of the card fail the citation check for a
+ * difference the reader cannot see.
+ */
 function percent(value: number): number {
-  return Math.round(value * 1000) / 10
+  return Math.round(value * 100)
 }
 
 function decisionDateOf(reading: PolicyPathReading, asOf: string): string {
@@ -191,8 +196,8 @@ function medianPathText(path: Readonly<Record<string, number>> | undefined): str
   if (!path) return undefined
   const parts = Object.keys(path).sort()
     .filter(key => /^y\d{4}$/.test(key) && typeof path[key] === 'number')
-    .map(key => `${key.slice(1)} 年 ${path[key]}%`)
-  if (typeof path.longerRun === 'number') parts.push(`长期 ${path.longerRun}%`)
+    .map(key => `${key.slice(1)} 年 ${path[key]!.toFixed(1)}%`)
+  if (typeof path.longerRun === 'number') parts.push(`长期 ${path.longerRun.toFixed(1)}%`)
   return parts.length > 0 ? parts.join('；') : undefined
 }
 
