@@ -83,7 +83,7 @@
 .mi-brief-poster__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 20px; margin-top: 10px; border-top: 1px solid #ded4c2; }
 .mi-brief-poster__metrics div { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #ebdfcf; color: #6b695f; font-size: 11px; }
 .mi-brief-poster__metrics b { color: #1b1d18; font-weight: 700; }
-.mi-brief-poster__news { grid-template-columns: 50px 1fr auto; }
+.mi-brief-poster__news { grid-template-columns: 110px 1fr; }
 .mi-brief-poster__news-source { color: #8b8475; font-size: 9px; text-align: right; white-space: nowrap; }
 .mi-brief-poster__signal { display: flex; align-items: center; gap: 12px; margin: 16px 0 0; padding: 11px 14px; border: 1px solid #e4c58f; border-radius: 7px; background: #fdf0d6; }
 .mi-brief-poster__signal > span { flex: none; padding: 3px 7px; border-radius: 3px; background: #b45309; color: #fff; font-size: 10px; font-weight: 800; }
