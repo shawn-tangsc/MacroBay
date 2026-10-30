@@ -89,7 +89,11 @@ describe('positioning panel', () => {
     expect(markup).toContain('data-hint="btc"')
     expect(markup).toContain('疑似强平 BTC -1.9%')
     expect(markup).not.toContain('mi-positioning-panel__badge')
-    expect(markup).toContain(text.liquidationFoot)
+    // The caveat is no longer a permanent line: it lives in the help popover, which also says
+    // what the two series mean together — the part a reader cannot infer from the numbers.
+    expect(markup).toContain('data-help')
+    expect(markup).toContain(text.helpLines[0])
+    expect(markup).toContain(text.helpLines[1])
   })
 
   it('says the marks are unavailable instead of implying there were none', () => {
@@ -195,5 +199,22 @@ describe('bars at the axis edge', () => {
       .map(match => Number(/ x="([\d.]+)"/.exec(match[0])?.[1]))
     expect(xs).toHaveLength(2)
     expect(Math.abs(xs[0]! - xs[1]!)).toBeGreaterThan(1)
+  })
+})
+
+describe('combined readout', () => {
+  it('shows the state and the two numbers behind it', () => {
+    const markup = render()
+    expect(markup).toContain(text.states.deleveraging)
+    expect(markup).toContain('mi-positioning-panel__state-tip')
+    // The tooltip quotes the open interest change and both funding readings, so the label can be
+    // checked instead of taken on trust.
+    expect(markup).toContain('24h')
+    expect(markup).toContain('+0.0062%')
+    expect(markup).toContain('+0.0121%')
+  })
+
+  it('explains the six states in the help popover', () => {
+    expect(render()).toContain('六档判定')
   })
 })

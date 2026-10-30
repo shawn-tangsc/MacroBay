@@ -40,9 +40,11 @@ type Text = Readonly<{
   window7d: string
   window24h: string
   states: Readonly<Record<PositioningState, string>>
+  stateWhy: string
   liquidationMore: string
   liquidationChip: string
-  liquidationFoot: string
+  helpLabel: string
+  helpLines: readonly string[]
   liquidationUnavailable: string
   noRate: string
 }>
@@ -64,6 +66,12 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const header = (extra?: React.ReactNode) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
+      <span className="mi-positioning-panel__help" tabIndex={0} role="note" aria-label={text.helpLabel} data-help>
+        <i aria-hidden="true">?</i>
+        <span className="mi-positioning-panel__help-pop" role="tooltip">
+          {text.helpLines.map(line => <b key={line}>{line}</b>)}
+        </span>
+      </span>
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
     </header>
@@ -89,19 +97,20 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       )}
       <div className="mi-positioning-panel__body">
         <div className="mi-positioning-panel__summary">
-          <Asset asset="btc" text={text} rate={btcRate.at(-1)} change={available ? positioning.changeBtc : undefined}
+          <Asset asset="btc" text={text} rate={btcRate.at(-1)} rateAgo={btcRate.at(-4)} change={available ? positioning.changeBtc : undefined}
             notional={available ? positioning.btc.at(-1) : undefined} state={available ? positioningStateFor(positioning, btcRate, positioning.changeBtc) : undefined} />
-          <Asset asset="eth" text={text} rate={ethRate.at(-1)} change={available ? positioning.changeEth : undefined}
+          <Asset asset="eth" text={text} rate={ethRate.at(-1)} rateAgo={ethRate.at(-4)} change={available ? positioning.changeEth : undefined}
             notional={available ? positioning.eth.at(-1) : undefined} state={available ? positioningStateFor(positioning, ethRate, positioning.changeEth) : undefined} />
         </div>
         <div className="mi-positioning-panel__chart-wrap">
           {available
             ? <>
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
-                <p className="mi-positioning-panel__foot" data-hints-state={positioning.hintsState}>
-                  {positioning.hintsState === 'unavailable' ? text.liquidationUnavailable : text.liquidationFoot}
-                  {positioning.hintsState === 'available' && positioning.hintsTruncated ? ` · ${text.liquidationMore}` : ''}
-                </p>
+                {positioning.hintsState === 'available' && !positioning.hintsTruncated ? null : (
+                  <p className="mi-positioning-panel__foot" data-hints-state={positioning.hintsState}>
+                    {positioning.hintsState === 'unavailable' ? text.liquidationUnavailable : text.liquidationMore}
+                  </p>
+                )}
               </>
             : status}
         </div>
@@ -130,10 +139,11 @@ function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInt
  * name rather than under the numbers: it answers "what am I looking at" before the reader has
  * read a single figure.
  */
-function Asset({ asset, text, rate, change, notional, state }: Readonly<{
+function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly<{
   asset: 'btc' | 'eth'
   text: Text
   rate?: Rate
+  rateAgo?: Rate
   change?: Readonly<{ h1Pct?: number; h24Pct?: number }>
   notional?: DashboardPositioningPoint
   state: PositioningState | undefined
@@ -142,7 +152,19 @@ function Asset({ asset, text, rate, change, notional, state }: Readonly<{
     <div className="mi-positioning-panel__asset" data-asset={asset} data-funding-latest={asset}>
       <div className="mi-positioning-panel__asset-head">
         <span className="mi-positioning-panel__name">{text.assets[asset]}</span>
-        {state ? <span className="mi-positioning-panel__state" data-state={state}>{text.states[state]}</span> : null}
+        {state ? (
+          // The label alone is a conclusion. Hovering it shows the two numbers the conclusion was
+          // drawn from, which is what makes it checkable rather than another opaque badge.
+          <span className="mi-positioning-panel__state" data-state={state} tabIndex={0}>
+            {text.states[state]}
+            <span className="mi-positioning-panel__state-tip" role="tooltip">
+              {text.stateWhy
+                .replace('{change}', formatDashboardChange(change?.h24Pct))
+                .replace('{now}', rate ? formatRate(rate.ratePercent) : '—')
+                .replace('{ago}', rateAgo ? formatRate(rateAgo.ratePercent) : '—')}
+            </span>
+          </span>
+        ) : null}
       </div>
       <div className="mi-positioning-panel__quote">
         {rate
