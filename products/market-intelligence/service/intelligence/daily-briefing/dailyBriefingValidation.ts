@@ -6,12 +6,15 @@ import type {
   DailyBriefingDocument,
   FactImportance
 } from '../../../contracts/dailyBriefing'
+import type { AgentRuntimeToolInvocation } from '@platform/ai/agent-platform/runtime/runtimeTypes'
+import { checkDailyBriefWebEvidence, type DailyBriefWebEvidenceRef, type DailyBriefWebEvidenceField } from './dailyBriefWebEvidence'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
   ledePattern?: string
   items: readonly Readonly<{ factId: string; why: string }>[]
   hidden: readonly Readonly<{ factId: string; reason: string }>[]
+  webEvidence?: readonly DailyBriefWebEvidenceRef[]
   importance: readonly Readonly<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }>[]
   dataNote?: string
   invalidationNote?: string
@@ -49,9 +52,10 @@ export type DailyBriefingEditorialMeta = Readonly<{
 export function validateDailyBriefingEditorial(
   raw: unknown,
   document: DailyBriefingDocument,
-  locale: 'zh-CN' | 'en-US'
+  locale: 'zh-CN' | 'en-US',
+  toolInvocations: readonly AgentRuntimeToolInvocation[] = []
 ): DailyBriefingValidation {
-  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus'])) {
+  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus', 'webEvidence'])) {
     return fail('invalid-shape')
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
@@ -83,6 +87,27 @@ export function validateDailyBriefingEditorial(
     hidden.push({ factId: entry.factId, reason: entry.reason })
   }
   if (items.length + hidden.length !== newsIds.size + macroIds.size) return fail('invalid-shape')
+  const webEvidence: DailyBriefWebEvidenceRef[] = []
+  if (raw.webEvidence !== undefined) {
+    if (!Array.isArray(raw.webEvidence) || raw.webEvidence.length > 3) return fail('invalid-shape')
+    const results = collectToolResults(toolInvocations)
+    for (const entry of raw.webEvidence) {
+      if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return fail('invalid-shape')
+      if (!isText(entry.eventKey) || !isText(entry.field) || !isText(entry.value) || !isText(entry.sourceName) || !isText(entry.sourceUrl) || !isText(entry.publishedAt)) return fail('invalid-shape')
+      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact')
+      if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return fail('invalid-shape')
+      const result = results.get(entry.sourceUrl)
+      if (!result || result.publishedAt !== entry.publishedAt) return fail('invalid-shape')
+      const ref: DailyBriefWebEvidenceRef = Object.freeze({
+        evidenceRefId: `web:${entry.eventKey}:${entry.field}:${webEvidence.length + 1}`,
+        eventKey: entry.eventKey, field: entry.field as DailyBriefWebEvidenceField, value: entry.value,
+        sourceName: entry.sourceName, sourceUrl: entry.sourceUrl, publishedAt: entry.publishedAt, retrievedAt: document.provenance.readAt
+      })
+      if (checkDailyBriefWebEvidence(ref, document.edition.windowEnd) !== 'ok') return fail('invalid-shape')
+      if (webEvidence.some((existing) => existing.eventKey === ref.eventKey && existing.field === ref.field)) return fail('invalid-shape')
+      webEvidence.push(ref)
+    }
+  }
   const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
   for (const entry of raw.importance) {
     if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return fail('invalid-shape')
@@ -138,6 +163,7 @@ export function validateDailyBriefingEditorial(
       lede: raw.lede,
       items: Object.freeze(items.map((item) => Object.freeze(item))),
       hidden: Object.freeze(hidden.map((entry) => Object.freeze(entry))),
+      ...(webEvidence.length > 0 ? { webEvidence: Object.freeze(webEvidence.map((entry) => Object.freeze(entry))) } : {}),
       importance: Object.freeze(importance.map((entry) => Object.freeze(entry))),
       ...(typeof dataNote === 'string' ? { dataNote } : {}),
       ...(typeof invalidationNote === 'string' ? { invalidationNote } : {}),
@@ -156,6 +182,13 @@ export function applyDailyBriefingEditorial(
   const macroWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('macro:')).map((item) => [item.factId.slice('macro:'.length), item.why]))
   const importance = new Map(editorial.importance.map((entry) => [entry.factId.slice('data:'.length), entry]))
   const hiddenReason = new Map(editorial.hidden.map((entry) => [entry.factId, entry.reason]))
+  const citations = [...document.citations, ...(editorial.webEvidence ?? []).map((ref) => Object.freeze({
+    index: document.citations.length + (editorial.webEvidence ?? []).indexOf(ref) + 1,
+    refId: ref.evidenceRefId,
+    sourceLabel: ref.sourceName,
+    observedAt: ref.publishedAt,
+    statement: `${ref.eventKey} ${ref.field}: ${ref.value}`
+  }))]
   const applyRow = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
     const next = importance.get(row.id)
     if (!next) return row
@@ -216,6 +249,7 @@ export function applyDailyBriefingEditorial(
     ...(editorial.conclusionTranslation && document.conclusion ? {
       conclusion: Object.freeze({ ...document.conclusion, translation: editorial.conclusionTranslation })
     } : {}),
+    citations: Object.freeze(citations),
     provenance: Object.freeze({
       ...document.provenance,
       editorialMeta: Object.freeze({
@@ -300,4 +334,20 @@ function isText(value: unknown): value is string {
 
 export function isLedePattern(value: unknown): value is import('../../../contracts/dailyBriefing').DailyBriefLedePattern {
   return value === 'event-shock' || value === 'surprise-gap' || value === 'tension' || value === 'structure' || value === 'setup' || value === 'outlier' || value === 'falsification'
+}
+
+function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]): Map<string, { title: string; publishedAt: string }> {
+  const results = new Map<string, { title: string; publishedAt: string }>()
+  for (const invocation of invocations) {
+    if (!invocation.output || typeof invocation.output !== 'object') continue
+    const candidate = invocation.output as { results?: unknown }
+    if (!Array.isArray(candidate.results)) continue
+    for (const item of candidate.results) {
+      if (!item || typeof item !== 'object') continue
+      const row = item as { title?: unknown; url?: unknown; publishedAt?: unknown }
+      if (typeof row.url !== 'string' || typeof row.publishedAt !== 'string') continue
+      results.set(row.url, { title: typeof row.title === 'string' ? row.title : row.url, publishedAt: row.publishedAt })
+    }
+  }
+  return results
 }

@@ -189,3 +189,15 @@ describe('daily briefing agent', () => {
     expect(text).not.toContain('http')
   })
 })
+
+describe('daily briefing web evidence', () => {
+  it('only accepts a source that came from this turn and is inside the cutoff', () => {
+    const tool = [{ toolCallId: 't', toolName: 'WebSearch', output: { results: [{ title: 'CPI release', url: 'https://www.bls.gov/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }] } }]
+    const webEvidence = [{ eventKey: 'US.CPI', field: 'consensus', value: '3.2%', sourceName: 'BLS', sourceUrl: 'https://www.bls.gov/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }]
+    const valid = validateDailyBriefingEditorial({ ...validOutput, webEvidence }, document(), 'zh-CN', tool)
+    expect(valid.ok).toBe(true)
+    if (valid.ok) expect(applyDailyBriefingEditorial(document(), valid.value, { promptVersion: 'v1', model: 'm', source: 'default' }).citations.at(-1)?.sourceLabel).toBe('BLS')
+    expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence }, document(), 'zh-CN', [])).toMatchObject({ ok: false })
+    expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence: [{ ...webEvidence[0], publishedAt: '2026-10-30T01:00:00.000Z' }] }, document(), 'zh-CN', tool)).toMatchObject({ ok: false })
+  })
+})

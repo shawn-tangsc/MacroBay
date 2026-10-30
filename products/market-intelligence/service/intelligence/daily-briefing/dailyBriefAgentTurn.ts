@@ -27,7 +27,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
     let parsed: unknown
     try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
     if (parsed) {
-      const validation = validateDailyBriefingEditorial(parsed, input.document, input.locale)
+      const validation = validateDailyBriefingEditorial(parsed, input.document, input.locale, toolInvocations)
       if (validation.ok) {
         const document = applyDailyBriefingEditorial(input.document, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
         await input.runner.finish(editionKey, 'accepted')
