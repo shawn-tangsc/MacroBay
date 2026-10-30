@@ -9,6 +9,7 @@ import type {
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
+  ledePattern?: string
   items: readonly Readonly<{ factId: string; why: string }>[]
   importance: readonly Readonly<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }>[]
   dataNote?: string
@@ -49,10 +50,11 @@ export function validateDailyBriefingEditorial(
   document: DailyBriefingDocument,
   locale: 'zh-CN' | 'en-US'
 ): DailyBriefingValidation {
-  if (!isExact(raw, ['lede', 'items', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus'])) {
+  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus'])) {
     return fail('invalid-shape')
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
+  if (!isLedePattern(raw.ledePattern)) return fail('invalid-shape')
   if (raw.lede.length > 600) return fail('too-long')
   if (!Array.isArray(raw.items) || raw.items.length > 50) return fail('invalid-shape')
   if (!Array.isArray(raw.importance)) return fail('invalid-shape')
@@ -162,6 +164,8 @@ export function applyDailyBriefingEditorial(
     lede: Object.freeze({
       source: 'agent' as const,
       text: editorial.lede,
+      ...(isLedePattern(editorial.ledePattern) ? { pattern: editorial.ledePattern } : {}),
+      ...(document.lede.previousPattern ? { previousPattern: document.lede.previousPattern } : {}),
       factCount: editorial.items.length + document.news.macro.length,
       generatedAt: document.edition.generatedAt
     }),
@@ -271,4 +275,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
+}
+
+export function isLedePattern(value: unknown): value is import('../../../contracts/dailyBriefing').DailyBriefLedePattern {
+  return value === 'event-shock' || value === 'surprise-gap' || value === 'tension' || value === 'structure' || value === 'setup' || value === 'outlier' || value === 'falsification'
 }

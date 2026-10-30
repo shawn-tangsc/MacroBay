@@ -24,6 +24,7 @@ export const dailyBriefingPolicy = Object.freeze({
 })
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
+export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
 export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6
 export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17'
 
@@ -201,6 +202,8 @@ export type DailyBriefingDocument = Readonly<{
   lede: Readonly<{
     source: 'template' | 'agent'
     text: string
+    pattern?: DailyBriefLedePattern
+    previousPattern?: DailyBriefLedePattern
     factCount?: number
     generatedAt: string
   }>

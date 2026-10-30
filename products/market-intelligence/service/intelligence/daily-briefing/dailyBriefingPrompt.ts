@@ -71,7 +71,8 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '',
         'Write this exact JSON shape:',
         JSON.stringify({
-          lede: '2-3 sentences led by the day’s dominant event or tension. Choose one pattern: event shock, surprise gap, opposing forces, flow/price structure, next-event setup, outlier, or falsification. Do not recite the data table or the headlines. No numbers outside FACTS.',
+          lede: '2-3 sentences led by the day’s dominant event or tension. Do not recite the data table or the headlines. No numbers outside FACTS.',
+          ledePattern: 'event-shock|surprise-gap|tension|structure|setup|outlier|falsification',
           items: [
             { factId: 'news:<id>', why: 'one sentence, at most 200 characters' },
             { factId: 'macro:<key>', why: 'one sentence, at most 200 characters' }

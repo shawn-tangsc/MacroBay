@@ -59,6 +59,7 @@ const document = (): DailyBriefingDocument => ({
 
 const validOutput = {
   lede: '恐惧贪婪 48，稳定币继续收缩；CPI 3.4% 超预期，资金面仍是主线。',
+  ledePattern: 'event-shock',
   items: [
     { factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' },
     { factId: 'macro:US.CPI', why: 'CPI 超预期压低了降息预期。' }

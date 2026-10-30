@@ -27,8 +27,10 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const next = selectNext(packet)
   const built = buildConclusion(packet)
   const document: DailyBriefingDocument = Object.freeze({
-    schemaVersion: 5,
-    policyVersion: 'daily-briefing.v16',
+    // Read from the policy rather than repeating the literals: a version bump that updates only one
+    // of the two makes every read look stale, and the brief is regenerated on every poll.
+    schemaVersion: dailyBriefingPolicy.schemaVersion,
+    policyVersion: dailyBriefingPolicy.policyVersion,
     edition: Object.freeze({
       date,
       locale: packet.locale,
@@ -41,6 +43,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
     lede: Object.freeze({
       source: 'template' as const,
       text: '',
+      ...(input.previous?.lede.pattern ? { previousPattern: input.previous.lede.pattern } : {}),
       factCount: 0,
       generatedAt: packet.asOf
     }),
