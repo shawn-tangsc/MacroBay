@@ -7,7 +7,7 @@ import { createMacroCalendarEvidenceStore } from './macroCalendarEvidenceStore'
 import type { MacroCalendarHttpResult } from './macroCalendarHttpClient'
 import { createMacroCalendarHttpClient } from './macroCalendarHttpClient'
 import { createMacroCalendarProviderHealthJsonStorage, createMacroCalendarProviderHealthStore } from './macroCalendarProviderHealthStore'
-import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
+import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore, type MacroCalendarProviderProfileStore } from './macroCalendarProviderProfileStore'
 import { createMacroCalendarReleaseTimeOverrideCache, createMacroCalendarReleaseTimeOverrideJsonStorage, createMacroCalendarReleaseTimeOverrideStore } from './macroCalendarReleaseTimeOverrideStore'
 import { createMacroCalendarRepository } from './macroCalendarRepository'
 import { createMacroCalendarSqlite } from './macroCalendarSqlite'
@@ -34,8 +34,14 @@ export function createMacroCalendarScheduleBackend(input: {
   blsScheduleBridge?: Readonly<{ run: (operation: BlsPythonBridgeOperation) => Promise<BlsPythonBridgeResult> }>
   evidenceArchive?: MacroCalendarEvidenceArchive
   evidenceReady?: boolean
+  /**
+   * The switch store the collector reads. Bootstrap passes the unified store, so enabling a provider
+   * in settings and collecting it read the same flag; without it the collector sees the legacy file
+   * and reports `provider-disabled` while the settings panel says enabled.
+   */
+  profiles?: MacroCalendarProviderProfileStore
 }) {
-  const profiles = createMacroCalendarProviderProfileStore(createMacroCalendarProviderProfileJsonStorage(join(input.dataDir, 'macro-calendar-provider-profiles.json')))
+  const profiles = input.profiles ?? createMacroCalendarProviderProfileStore(createMacroCalendarProviderProfileJsonStorage(join(input.dataDir, 'macro-calendar-provider-profiles.json')))
   const healthStore = createMacroCalendarProviderHealthStore(createMacroCalendarProviderHealthJsonStorage(join(input.dataDir, 'macro-calendar-provider-health.json')))
   // The reader's own release times: durable in their own file, and mirrored into the synchronous
   // view a calendar query reads (see `macroCalendarReleaseTimeOverrideStore`).

@@ -50,6 +50,7 @@ import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calenda
 import { createMacroCalendarProviderSettingsService } from './intelligence/macro-calendar/macroCalendarProviderSettingsService'
 import { createUnifiedMacroCalendarProfileStore } from './intelligence/macro-calendar/macroCalendarUnifiedProfileStore'
 import { registerMacroEconomicCalendarIpc } from './intelligence/macro-calendar/ipc/registerMacroEconomicCalendarIpc'
+import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore } from './intelligence/macro-calendar/macroCalendarProviderProfileStore'
 import { createMacroCalendarWriteActions } from './intelligence/macro-calendar/macroCalendarWriteActions'
 import { registerMacroMarketIpc, registerDashboardFeedStatusIpc } from './intelligence/macro-market/ipc/registerMacroMarketIpc'
 import { createMacroMarketSnapshotQuery } from './intelligence/macro-market/macroMarketSnapshotQuery'
@@ -155,12 +156,20 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     await intelligenceModule.sourcesService.initializeRuntime()
     await intelligenceModule.marketAnalysisRuntime.startRecovery()
   }
+  // One switch store for both readers: the settings panel writes the unified profile, and the
+  // collector must read that same flag or it reports the provider as disabled behind an enabled UI.
+  // The legacy file stays only as the pre-migration fallback for installations that still hold it.
+  const legacyCalendarProfiles = createMacroCalendarProviderProfileStore(
+    createMacroCalendarProviderProfileJsonStorage(join(getIntelligenceProductDataDir(), 'macro-calendar-provider-profiles.json'))
+  )
+  const calendarProfiles = createUnifiedMacroCalendarProfileStore(intelligenceModule.sourceProfileStore, legacyCalendarProfiles)
   const macroCalendarBackend = createMacroCalendarScheduleBackend({
     dataDir: getIntelligenceProductDataDir(),
     rawRecords: intelligenceModule.rawRecordStore,
     blsScheduleBridge: blsPythonRequestsBridge,
     evidenceArchive: intelligenceModule.macroCalendarEvidenceArchive,
-    evidenceReady: intelligenceModule.macroCalendarEvidenceReady
+    evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
+    profiles: calendarProfiles
   })
   const macroEconomicCalendarQueryService = createMacroEconomicCalendarQueryService({ repository: macroCalendarBackend.repository })
   intelligenceModule.publicQueryService.setMacroEconomicCalendarQuery(macroEconomicCalendarQueryService)
@@ -289,7 +298,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     refresh: blsEmploymentMvpRefresh,
     now: () => new Date().toISOString()
   })
-  const calendarProfiles = createUnifiedMacroCalendarProfileStore(intelligenceModule.sourceProfileStore, macroCalendarBackend.profiles)
   const macroCalendarJobs = createMacroCalendarScheduleJobRuntime({
     jobRuntime: deps.jobRuntime,
     profiles: calendarProfiles,
