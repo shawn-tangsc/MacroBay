@@ -58,3 +58,26 @@ describe('policy path fact store', () => {
     expect(repository().policyFacts.read('2027-01-27')).toBeUndefined()
   })
 })
+
+describe('policy path fact store overwrite semantics', () => {
+  it('clears the previous dissents when a later statement is unanimous', () => {
+    const store = repository().policyFacts
+    store.recordDecision({
+      meetingDate: '2026-12-09',
+      targetRange: { lowerPercent: 3.75, upperPercent: 4 },
+      vote: { for: 10, against: 2 },
+      dissents: [{ name: 'Lisa D. Cook', preferred: 'raise' }],
+      statementUrl: statement,
+      detectedAt: '2026-12-10T00:00:00.000Z'
+    })
+    store.recordDecision({
+      meetingDate: '2026-12-09',
+      targetRange: { lowerPercent: 3.75, upperPercent: 4 },
+      vote: { for: 12, against: 0 },
+      statementUrl: statement,
+      detectedAt: '2026-12-11T00:00:00.000Z'
+    })
+    expect(store.read('2026-12-09')).toMatchObject({ vote: { for: 12, against: 0 } })
+    expect(store.read('2026-12-09')?.dissents).toBeUndefined()
+  })
+})

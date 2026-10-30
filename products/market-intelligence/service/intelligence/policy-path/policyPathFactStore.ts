@@ -57,9 +57,11 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
      on conflict(meeting_date) do update set
        target_lower = excluded.target_lower,
        target_upper = excluded.target_upper,
-       vote_for = coalesce(excluded.vote_for, mi_policy_path_facts.vote_for),
-       vote_against = coalesce(excluded.vote_against, mi_policy_path_facts.vote_against),
-       dissents_json = coalesce(excluded.dissents_json, mi_policy_path_facts.dissents_json),
+       -- The decision write is authoritative for the decision columns: a unanimous statement
+       -- clears the previous meeting's dissents instead of leaving them to look current.
+       vote_for = excluded.vote_for,
+       vote_against = excluded.vote_against,
+       dissents_json = excluded.dissents_json,
        statement_url = excluded.statement_url,
        detected_at = excluded.detected_at`
   )

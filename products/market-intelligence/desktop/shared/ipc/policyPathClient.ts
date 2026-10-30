@@ -42,13 +42,28 @@ function readReading(value: unknown): PolicyPathReading | undefined {
   const probability = isObject(value.probability) && typeof value.probability.value === 'number'
     ? { ...value.probability } as PolicyPathReading['probability']
     : undefined
+  const lastDecision = readLastDecision(value.lastDecision)
   return {
     meetingDate: value.meetingDate,
     daysUntilMeeting: value.daysUntilMeeting,
     hasProjectionMaterials: value.hasProjectionMaterials,
     ...(isObject(value.targetRange) ? { targetRange: value.targetRange as NonNullable<PolicyPathReading['targetRange']> } : {}),
+    ...(lastDecision ? { lastDecision } : {}),
     ...(probability ? { probability } : {}),
     staleness: value.staleness
+  }
+}
+
+/** The vote is the only part of the previous decision the row draws; anything else is dropped. */
+function readLastDecision(value: unknown): PolicyPathReading['lastDecision'] | undefined {
+  if (!isObject(value)) return undefined
+  const vote = isObject(value.vote) && typeof value.vote.for === 'number' && typeof value.vote.against === 'number'
+    ? { for: value.vote.for, against: value.vote.against }
+    : undefined
+  if (!vote) return undefined
+  return {
+    vote,
+    ...(typeof value.statementUrl === 'string' && value.statementUrl.startsWith('https://') ? { statementUrl: value.statementUrl } : {})
   }
 }
 

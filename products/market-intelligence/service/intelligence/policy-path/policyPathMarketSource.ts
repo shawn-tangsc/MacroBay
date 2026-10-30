@@ -55,7 +55,7 @@ export function parsePolicyPathMarketPayload(body: string, at: string): PolicyPa
   if (!Array.isArray(markets) || markets.length === 0) return undefined
 
   const raw: Partial<Record<PolicyPathOutcome, number>> = {}
-  let quote: { bid: number; ask: number } | undefined
+  const quotes = new Map<PolicyPathOutcome, { bid: number; ask: number }>()
   for (const market of markets) {
     const bucket = market as { groupItemTitle?: unknown; outcomePrices?: unknown; bestBid?: unknown; bestAsk?: unknown }
     const outcome = typeof bucket.groupItemTitle === 'string' ? policyPathMarketPolicy.buckets[bucket.groupItemTitle] : undefined
@@ -63,13 +63,16 @@ export function parsePolicyPathMarketPayload(body: string, at: string): PolicyPa
     const price = leadingPrice(bucket.outcomePrices)
     if (price === undefined) return undefined
     raw[outcome] = price
-    if (typeof bucket.bestBid === 'number' && typeof bucket.bestAsk === 'number' && bucket.bestBid >= 0 && bucket.bestAsk <= 1) {
-      const candidate = { bid: bucket.bestBid, ask: bucket.bestAsk }
-      quote = quote === undefined || candidate.ask - candidate.bid < quote.ask - quote.bid ? candidate : quote
+    if (typeof bucket.bestBid === 'number' && typeof bucket.bestAsk === 'number' &&
+      bucket.bestBid >= 0 && bucket.bestAsk <= 1 && bucket.bestBid <= bucket.bestAsk) {
+      quotes.set(outcome, { bid: bucket.bestBid, ask: bucket.bestAsk })
     }
   }
   const values = normalizeOutcomes(raw)
   if (!values) return undefined
+  // The quote belongs to the bucket the row leads with; a tighter spread on a 1% tail bucket is
+  // not the price a reader is looking at.
+  const quote = quotes.get(leadingOutcome(values).outcome)
   return { at, values, ...(quote ? { quote } : {}) }
 }
 

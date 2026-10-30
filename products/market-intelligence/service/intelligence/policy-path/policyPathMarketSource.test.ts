@@ -22,7 +22,8 @@ describe('policy path market source', () => {
     expect(observation.at).toBe('2026-10-30T02:10:00.000Z')
     expect(observation.values['hike-25']).toBeCloseTo(0.760, 3)
     expect(Object.values(observation.values).reduce((total, value) => total + value, 0)).toBeCloseTo(1, 10)
-    expect(observation.quote).toEqual({ bid: 0.02, ask: 0.02 })
+    // hike-25 leads at ~76%; its own quote is the one shown, not the 2%/2% tail bucket.
+    expect(observation.quote).toEqual({ bid: 0.76, ask: 0.77 })
   })
 
   it('refuses a payload that is not a full distribution', () => {

@@ -47,7 +47,7 @@ export function createPolicyPathRuntime(deps: {
   const calendar = createMacroEconomicCalendarQueryService({ repository: deps.repository })
 
   async function run(atMs?: number): Promise<PolicyPathRunResult> {
-    if (!(await deps.isEnabled())) return { state: 'disabled' }
+    if (!(await enabled())) return { state: 'disabled' }
     const at = atMs === undefined ? now() : new Date(atMs).toISOString()
     const next = calendar.nextFomcMeeting({ asOf: at })
     if (next.state !== 'available') return { state: 'skipped', reason: 'no-meeting' }
@@ -58,6 +58,15 @@ export function createPolicyPathRuntime(deps: {
     if (!observation) return { state: 'skipped', reason: 'no-reading' }
     deps.repository.policyObservations.append(meetingDate, observation)
     return { state: 'recorded', meetingDate, at }
+  }
+
+  /** A profile store that cannot answer is treated as "off", not as a broken job. */
+  async function enabled(): Promise<boolean> {
+    try {
+      return await deps.isEnabled()
+    } catch {
+      return false
+    }
   }
 
   return Object.freeze({

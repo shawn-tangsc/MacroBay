@@ -167,7 +167,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const policyPathRuntime = createPolicyPathRuntime({
     jobRuntime: deps.jobRuntime,
     repository: macroCalendarBackend.repository,
-    fetch: url => (deps.platformFetch ?? fetch)(url),
+    // Never fall back to the global fetch here: it would bypass the platform proxy and the
+    // collector would fail silently on a machine that needs one.
+    fetch: url => deps.platformFetch
+      ? deps.platformFetch(url)
+      : Promise.resolve({ ok: false, status: 0, text: async () => '' }),
     isEnabled: async () => (await intelligenceModule.sourceProfileStore.resolveProfile('policy-path-market')).enabled
   })
   const policyPathQueryService = createPolicyPathQueryService({
