@@ -55,8 +55,14 @@
 .mi-positioning-panel__state[data-state='refilling'] { color: var(--mi-dashboard-etf-eth); border-color: color-mix(in srgb, var(--mi-dashboard-etf-eth) 45%, transparent); }
 
 .mi-positioning-panel__chart-wrap { min-width: 0; }
+.mi-positioning-panel__legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 4px; color: var(--mi-dashboard-muted); font-size: 9.5px; }
+.mi-positioning-panel__legend span { display: inline-flex; align-items: center; gap: 5px; }
+.mi-positioning-panel__legend i { width: 8px; height: 8px; border-radius: 2px; }
+.mi-positioning-panel__legend span[data-series='btc'] i { background: var(--mi-dashboard-etf-btc); }
+.mi-positioning-panel__legend span[data-series='eth'] i { background: var(--mi-dashboard-etf-eth); }
+.mi-positioning-panel__legend em { font-style: normal; opacity: .8; }
 .mi-positioning-panel__chart { position: relative; min-width: 0; }
-.mi-positioning-panel__chart svg { display: block; width: 100%; height: var(--mi-positioning-chart-height); cursor: crosshair; }
+.mi-positioning-panel__chart svg { display: block; width: 100%; height: calc(var(--mi-positioning-chart-height) - 16px); cursor: crosshair; }
 .mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: 9px; letter-spacing: .05em; }
 .mi-positioning-panel__rule { stroke: var(--mi-dashboard-line); stroke-width: 1; }
 .mi-positioning-panel__zero { stroke: var(--mi-dashboard-text); stroke-width: 1; opacity: .5; }

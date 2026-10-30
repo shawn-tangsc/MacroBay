@@ -28,6 +28,11 @@ type Text = Readonly<{
   stale: string
   notional: string
   rateLabel: string
+  oiShort: string
+  rateShort: string
+  settledAt: string
+  legendLine: string
+  legendBar: string
   assets: Readonly<Record<'btc' | 'eth', string>>
   paymentDirections: Readonly<Record<'long-pays-short' | 'short-pays-long' | 'neutral', string>>
   change1h: string
@@ -228,9 +233,12 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   }
 
   const hovered = hover === undefined ? undefined : rows[hover.index]
-  const hoveredRate = hovered
-    ? fundingPoints.filter(point => Date.parse(point.observedAt) <= Date.parse(hovered.observedAt)).sort((left, right) => left.observedAt.localeCompare(right.observedAt)).at(-1)
-    : undefined
+  // The rate that applies at the pointed instant: the period it falls in, not "the last point
+  // before it" — with the two symbols settling seconds apart that lookup returned whichever
+  // symbol happened to be stored first.
+  const hoveredSlot = hovered === undefined
+    ? undefined
+    : slots.get(Math.floor(Date.parse(hovered.observedAt) / periodMs) * periodMs + periodMs)
 
   const pick = (event: React.MouseEvent<SVGSVGElement>) => {
     const rect = ref.current?.getBoundingClientRect()
@@ -287,11 +295,20 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
       {hovered && hover ? (
         <div className="mi-positioning-panel__tooltip" style={tooltipStyle(hover)}>
           <strong>{formatTime(hovered.observedAt)}</strong>
-          <span data-series="btc">{text.assets.btc} {formatDashboardNotional(hovered.notionalUsd)}</span>
-          <span data-series="eth">{text.assets.eth} {formatDashboardNotional(positioning.eth[hover.index]?.notionalUsd ?? Number.NaN)}</span>
-          {hoveredRate
-            ? <span data-series="rate">{formatRate(hoveredRate.ratePercent)} · {formatTime(hoveredRate.observedAt)}</span>
-            : <span data-series="rate">{text.noRate}</span>}
+          {(['btc', 'eth'] as const).map(asset => {
+            const notional = positioning[asset][hover!.index]?.notionalUsd
+            const rate = hoveredSlot?.[asset]
+            return (
+              <span key={asset} data-series={asset}>
+                <b>{text.assets[asset]}</b>
+                <em>{text.oiShort}</em> {notional === undefined ? '—' : formatDashboardNotional(notional)}
+                <em>{text.rateShort}</em> {rate === undefined ? text.noRate : formatRate(rate)}
+              </span>
+            )
+          })}
+          {hoveredSlot
+            ? <small>{text.settledAt} {formatTime(new Date(Math.floor(Date.parse(hovered.observedAt) / periodMs) * periodMs).toISOString())}</small>
+            : null}
         </div>
       ) : null}
     </div>

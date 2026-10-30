@@ -151,3 +151,28 @@ describe('funding bars per settlement period', () => {
     expect([...render({ funding: duplicate }).matchAll(/class="mi-positioning-panel__bar"/g)].length).toBe(2)
   })
 })
+
+describe('hover readout', () => {
+  it('names both series for both assets, so the pointer answers four numbers, not three', () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+        funding, positioning, window: '7d', onWindowChange: () => undefined, text
+      })))
+    })
+    const svg = container.querySelector('svg')!
+    act(() => {
+      svg.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 300, clientY: 40 }))
+    })
+    const tooltip = container.querySelector('.mi-positioning-panel__tooltip')!
+    expect(tooltip.textContent).toContain(text.assets.btc)
+    expect(tooltip.textContent).toContain(text.assets.eth)
+    expect(tooltip.textContent).toContain(text.oiShort)
+    expect(tooltip.textContent).toContain(text.rateShort)
+    // Two assets, each with two readings.
+    expect(tooltip.querySelectorAll('span[data-series]')).toHaveLength(2)
+    act(() => root.unmount())
+  })
+})
