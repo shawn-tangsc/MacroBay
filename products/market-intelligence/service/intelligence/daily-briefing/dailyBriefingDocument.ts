@@ -174,8 +174,9 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
   const candidates = packet.calendar.events
     .filter((event) => event.lifecycleState === 'scheduled' && event.importance === 'high')
     .filter((event) => {
+      const at = Date.parse(event.scheduledAt)
       const day = localDate(event.scheduledAt, packet.timeZone)
-      return day > today && day <= horizon
+      return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
     })
     .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
     .map((event) => Object.freeze({
