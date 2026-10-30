@@ -12,6 +12,7 @@ import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/
 import type { DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
+import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
@@ -47,6 +48,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [reloadKey, setReloadKey] = useState(0)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailed, setRegenerateFailed] = useState(false)
@@ -61,8 +63,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     void (async () => {
-      const today = await withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
-      const listed = await withDeadline(client.list({ locale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
+      const [today, listed] = await Promise.all([
+        withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined),
+        withDeadline(client.list({ locale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
+      ])
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       if (today?.state === 'available') {
@@ -187,6 +191,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'ready' && !editorialFailed ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </button> : null}
+        <button className="mi-daily-briefing__regenerate" type="button" onClick={() => setGenerationSettingsOpen(true)} aria-label={text.generationSettings.open}>
+          {text.generationSettings.open}
+        </button>
         <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
       </div>
     </header>
@@ -238,6 +245,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setSettingsOpen(false)
       void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
     }} />
+    <DailyBriefingGenerationSettingsModal open={generationSettingsOpen} text={text} client={client} onClose={() => setGenerationSettingsOpen(false)} />
     {view.status === 'ready' && !editorialFailed ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
