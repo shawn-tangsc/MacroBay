@@ -98,7 +98,13 @@ export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStora
       if (!isCanonicalUtcMillis(input.asOf)) return unavailable()
       const state = await current()
       const verifiedAt = state.snapshot?.verifiedAt
-      if (readFailed || !state.snapshot || !verifiedAt || Date.parse(input.asOf) < Date.parse(verifiedAt) || !input.allowStale && Date.parse(input.asOf) - Date.parse(verifiedAt) > etfCurrentStateStorePolicy.maximumSnapshotAgeMs) return unavailable()
+      if (readFailed || !state.snapshot || !verifiedAt) return unavailable()
+      if (Date.parse(input.asOf) < Date.parse(verifiedAt)) {
+        // A later refresh may contain only flows through the previous trading day; those were known at the cutoff.
+        if (state.snapshot.window.windowEnd < input.asOf.slice(0, 10)) return Object.freeze({ state: 'available' as const, window: state.snapshot.window, verifiedAt })
+        return unavailable()
+      }
+      if (!input.allowStale && Date.parse(input.asOf) - Date.parse(verifiedAt) > etfCurrentStateStorePolicy.maximumSnapshotAgeMs) return unavailable()
       return Object.freeze({ state: 'available' as const, window: state.snapshot.window, verifiedAt })
     }
   }
