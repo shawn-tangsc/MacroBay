@@ -89,10 +89,12 @@
 .mi-crypto-dashboard h1 { color: #fff; font-size: 30px; font-weight: 650; letter-spacing: -.035em; line-height: 1.16; }
 .mi-crypto-dashboard__heading > p:last-child { max-width: 660px; margin-top: 8px; color: var(--mi-dashboard-muted); font-size: 14px; line-height: 1.5; }
 .mi-crypto-dashboard__tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.mi-crypto-dashboard__briefing,
 .mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { border: 1px solid var(--mi-dashboard-line); background: var(--mi-dashboard-surface); color: var(--mi-dashboard-text); font: inherit; font-size: 12px; }
+.mi-crypto-dashboard__back { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
+.mi-crypto-dashboard__briefing,
 .mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { display: inline-flex; gap: 6px; align-items: center; padding: 11px 12px; border-radius: 8px; cursor: pointer; }
+.mi-crypto-dashboard__back { cursor: pointer; }
 .mi-crypto-dashboard__configure { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
 .mi-crypto-dashboard__back { color: var(--mi-dashboard-muted); }
 .mi-crypto-dashboard__configure:focus-visible,
@@ -495,10 +497,6 @@
 }
 
 .mi-crypto-dashboard__briefing {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 11px 14px;
   border: 1px solid color-mix(in srgb, var(--mi-dashboard-lime) 55%, var(--mi-dashboard-line));
   border-radius: 8px;
   background: color-mix(in srgb, var(--mi-dashboard-lime) 9%, var(--mi-dashboard-surface));
