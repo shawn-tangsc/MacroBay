@@ -13,7 +13,7 @@ const reading: PolicyPathReading = {
   meetingDate: '2026-12-09', daysUntilMeeting: 40, hasProjectionMaterials: true,
   phase: { kind: 'normal' },
   targetRange: { lowerPercent: 3.75, upperPercent: 4 },
-  lastDecision: { vote: { for: 10, against: 2 } },
+  lastDecision: { vote: { for: 10, against: 2 }, outcome: 'no-change' },
   probability: { venue: 'polymarket', asOf: '2026-10-30T02:10:00.000Z', outcome: 'hike-25', value: 0.76, changeInPp24h: -1, points: 40 },
   staleness: 'live'
 }
@@ -217,9 +217,11 @@ describe('policy path card shapes', () => {
     const rendered = await render({
       ...reading,
       phase: { kind: 'verdict', daysSinceDecision: 1 },
-      settlement
+      settlement,
+      // The reading carries what the decision did; the settlement's own answer is only a fallback.
+      lastDecision: { vote: { for: 10, against: 2 }, outcome: 'hike-25' }
     })
-    expect(rendered.textContent).toContain('加息 · 10–2')
+    expect(rendered.textContent).toContain('加息 25bp · 10–2')
   })
 
   it('can carry an intraday marker without upgrading the card', async () => {

@@ -178,8 +178,12 @@ function readLastDecision(value: unknown): PolicyPathReading['lastDecision'] | u
       return [{ name: entry.name, preferred: preferred as 'raise' | 'lower' | 'maintain' }]
     }).slice(0, 12)
     : undefined
+  const outcome = typeof value.outcome === 'string' && (POLICY_PATH_OUTCOMES as readonly string[]).includes(value.outcome)
+    ? value.outcome as (typeof POLICY_PATH_OUTCOMES)[number]
+    : undefined
   return {
     vote,
+    ...(outcome ? { outcome } : {}),
     ...(dissents?.length ? { dissents } : {}),
     ...(typeof value.statementUrl === 'string' && value.statementUrl.startsWith('https://') ? { statementUrl: value.statementUrl } : {})
   }

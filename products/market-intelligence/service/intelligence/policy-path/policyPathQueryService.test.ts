@@ -44,6 +44,7 @@ const service = (input: {
         ? input.previousDecision
         : input.facts) as never
     },
+    readLatestDecisionBefore: () => input.previousDecision as never,
     readLatestSep: () => input.facts as never
   },
   observations: { list: (meetingDate: string) => input.observations?.[meetingDate] ?? input.series ?? [] },
@@ -269,5 +270,24 @@ describe('policy path projection gap', () => {
     // 4.1 against the 3.875 midpoint is one 25bp step; last quarter's 3.9 was on the midpoint.
     expect(reading.sep?.stepsFromCurrent).toBe(1)
     expect(reading.sep?.previousStepsFromCurrent).toBe(0)
+  })
+})
+
+describe('last decision direction', () => {
+  it('names a hike from the two ranges instead of calling every decision a hold', () => {
+    const probe = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: false, targetRange: { lowerPercent: 4, upperPercent: 4.25 }, vote: { for: 9, against: 3 }, detectedAt: '2026-12-10T00:00:00.000Z' },
+      previousDecision: { meetingDate: '2026-10-28', hasProjectionMaterials: false, targetRange: { lowerPercent: 3.75, upperPercent: 4 }, detectedAt: '2026-10-29T00:00:00.000Z' }
+    })
+    expect(probe.read({ asOf: '2026-12-10T00:00:00.000Z' })?.lastDecision?.outcome).toBe('hike-25')
+  })
+
+  it('leaves the direction unknown when there is no earlier range to compare', () => {
+    const probe = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: false, targetRange: { lowerPercent: 4, upperPercent: 4.25 }, vote: { for: 9, against: 3 }, detectedAt: '2026-12-10T00:00:00.000Z' }
+    })
+    expect(probe.read({ asOf: '2026-12-10T00:00:00.000Z' })?.lastDecision?.outcome).toBeUndefined()
   })
 })

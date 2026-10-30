@@ -5,7 +5,7 @@ import {
   type PolicyPathSettlement, type PolicyPathStaleness
 } from '../../../contracts/policyPath'
 import type { MacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
-import type { PolicyPathFactStore } from './policyPathFactStore'
+import type { PolicyPathFactStore, PolicyPathFacts } from './policyPathFactStore'
 import type { PolicyPathObservationStore } from './policyPathObservationStore'
 
 /**
@@ -41,6 +41,8 @@ export type PolicyPathReading = Readonly<{
     vote?: Readonly<{ for: number; against: number }>
     dissents?: ReadonlyArray<Readonly<{ name: string; preferred: 'raise' | 'lower' | 'maintain' }>>
     statementUrl?: string
+    /** What the decision did, from the range before it: the card must not call every decision "维持". */
+    outcome?: PolicyPathOutcome
   }>
   probability?: Readonly<{
     venue: string
@@ -82,7 +84,7 @@ export const policyPathQueryPolicy = {
 
 export function createPolicyPathQueryService(deps: {
   calendar: Pick<MacroEconomicCalendarQueryService, 'nextFomcMeeting'>
-  facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision' | 'readLatestSep'>
+  facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision' | 'readLatestDecisionBefore' | 'readLatestSep'>
   observations: Pick<PolicyPathObservationStore, 'list'>
   /**
    * The policy range as FRED already publishes it. The decision refresh only writes a fact when a
@@ -157,7 +159,14 @@ export function createPolicyPathQueryService(deps: {
         ...(range === undefined ? {} : { targetRange: range }),
         ...(sepFact?.sep ? { sep: sepOf(sepFact.sep, sepFact.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
-          ? { lastDecision: { ...(decided.vote ? { vote: decided.vote } : {}), ...(decided.dissents ? { dissents: decided.dissents } : {}), ...(decided.statementUrl ? { statementUrl: decided.statementUrl } : {}) } }
+          ? { lastDecision: {
+            ...(decided.vote ? { vote: decided.vote } : {}),
+            ...(decided.dissents ? { dissents: decided.dissents } : {}),
+            ...(decided.statementUrl ? { statementUrl: decided.statementUrl } : {}),
+            // What the decision actually did, from the two ranges. Without it the card has to call
+            // every decision "维持", which is wrong the first time the committee moves.
+            ...(lastActionOf(decided, deps.facts) === undefined ? {} : { outcome: lastActionOf(decided, deps.facts)! })
+          } }
           : {}),
         ...(series.length ? { probability: probabilityOf(series, asOf) } : {}),
         staleness: series.length ? stalenessOf(series[series.length - 1]!.at, asOf) : 'unavailable'
@@ -241,6 +250,17 @@ function dayAfter(date: string): string {
 function shiftDay(date: string, days: number): string {
   const parsed = Date.parse(`${date}T00:00:00.000Z`)
   return Number.isFinite(parsed) ? new Date(parsed + days * 86_400_000).toISOString().slice(0, 10) : date
+}
+
+/** The last decision's direction, read from the range before it and the range after it. */
+function lastActionOf(
+  decided: PolicyPathFacts,
+  facts: Pick<PolicyPathFactStore, 'readLatestDecisionBefore'>
+): PolicyPathOutcome | undefined {
+  if (!decided.targetRange) return undefined
+  const previous = facts.readLatestDecisionBefore(decided.meetingDate)
+  if (!previous?.targetRange) return undefined
+  return outcomeFromRangeChange({ previous: previous.targetRange, current: decided.targetRange })
 }
 
 /** The parsed statement wins; the published series fills in when no decision has been parsed. */

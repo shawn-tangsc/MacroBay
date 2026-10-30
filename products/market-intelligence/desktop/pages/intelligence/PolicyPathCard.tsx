@@ -50,11 +50,16 @@ export type PolicyPathCardText = Readonly<{
 
 const signedCount = (value: number): string => `${value > 0 ? '+' : ''}${value}`
 
-/** The previous decision's direction, when the settlement strip is on screen and knows it. */
-function lastActionOf(settlement: PolicyPathSettlement | undefined, text: PolicyPathCardText): string {
-  if (!settlement) return text.unchanged
-  if (settlement.actualOutcome === 'no-change') return text.unchanged
-  return settlement.actualOutcome.startsWith('hike') ? text.decisionHike : text.decisionCut
+/**
+ * What the last decision did. The reading derives it from the two ranges; the settlement's own
+ * answer is only a fallback for older payloads, because a card that always says "维持" would be
+ * wrong the first time the committee moves.
+ */
+function lastActionOf(reading: PolicyPathReading, settlement: PolicyPathSettlement | undefined, text: PolicyPathCardText): string {
+  const outcome = reading.lastDecision?.outcome ?? settlement?.actualOutcome
+  if (!outcome) return '—'
+  // A hold stays one short word here; only a real move needs the band spelled out.
+  return outcome === 'no-change' ? text.unchanged : text.outcomes[outcome]
 }
 
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
@@ -121,7 +126,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
           {
             label: text.lastVote,
             value: reading.lastDecision?.vote
-              ? `${lastActionOf(settlement, text)} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
+              ? `${lastActionOf(reading, settlement, text)} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
               : '—',
             ...(reading.lastDecision?.vote ? { hint: text.voteHint
               .replace('{for}', String(reading.lastDecision.vote.for))
