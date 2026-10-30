@@ -39,6 +39,7 @@ export const PRODUCT_ACCEPTANCE_CLEANUP_GUARD_POLICY = {
 const PRODUCT_ACCEPTANCE_PROFILE_ENV = 'AI_DESKTOP_PRODUCT_ACCEPTANCE'
 const PRODUCT_ACCEPTANCE_PROFILE_CLI_FLAG = '--product-acceptance-profile'
 const PRODUCT_ACCEPTANCE_PROFILE_PREFIX = 'ai-desktop-product-acceptance-'
+const PRODUCT_ACCEPTANCE_DIR_ENV = 'AI_DESKTOP_PRODUCT_ACCEPTANCE_DIR'
 const registeredCleanupTargets = new Set<string>()
 
 export function resolveProductAcceptanceProfileOptIn(input: {
@@ -54,7 +55,9 @@ export function configureProductAcceptanceProfile(deps: Dependencies): ProductAc
   }
 
   const tempRoot = deps.tempRoot ?? tmpdir()
-  const userDataPath = createProductAcceptanceProfileDirectory(tempRoot)
+  const configuredDir = deps.environment[PRODUCT_ACCEPTANCE_DIR_ENV]?.trim()
+  if (configuredDir && !isAbsolute(configuredDir)) failAcceptance('absolute-profile-dir', 'acceptance dir must be absolute')
+  const userDataPath = configuredDir ? resolve(configuredDir) : createProductAcceptanceProfileDirectory(tempRoot)
   const resolvedUserDataPath = resolve(userDataPath)
   let registered = false
 
@@ -107,6 +110,10 @@ export function cleanupProductAcceptanceProfile(path: string, options: CleanupOp
 
 function createProductAcceptanceProfileDirectory(tempRoot: string): string {
   return mkdtempSync(join(tempRoot, PRODUCT_ACCEPTANCE_PROFILE_PREFIX))
+}
+
+function failAcceptance(code: string, message: string): never {
+  throw new Error(`[product-acceptance] ${code}: ${message}`)
 }
 
 function removeCreatedProfileDirectory(path: string): void {
