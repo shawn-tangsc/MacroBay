@@ -58,6 +58,25 @@ describe('ProductAgentToolRegistry', () => {
     const [pkg] = registry.listPackages(['market-intelligence'])
     expect(pkg?.status).toBe('missing-handler')
   })
+  it('carries the localized tool title into the package descriptor', () => {
+    const registry = new ProductAgentToolRegistry()
+    registry.registerToolMetadata({
+      toolName: 'get_source_health',
+      productId: 'market-intelligence',
+      handlerId: 'market-intelligence.get-source-health',
+      inputSchema: { type: 'object' },
+      outputSchema: { type: 'object' },
+      schemaVersion: 1,
+      description: 'health',
+      title: { 'zh-CN': '情报源健康', 'en-US': 'Source health' },
+      readOnly: true,
+      requiresTemporalBoundary: false,
+      requiresApproval: 'never'
+    })
+
+    const [pkg] = registry.listPackages(['market-intelligence'])
+    expect(pkg?.tools[0]?.title).toEqual({ 'zh-CN': '情报源健康', 'en-US': 'Source health' })
+  })
 })
 
 describe('ProductAgentToolRegistry write registrations', () => {

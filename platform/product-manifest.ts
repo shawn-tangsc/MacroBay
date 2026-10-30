@@ -93,6 +93,11 @@ export type ProductAgentToolRegistration = {
   outputSchema: Record<string, unknown>
   schemaVersion: number
   description: string
+  /**
+   * 工具的本地化短名，给配置界面和运行记录用；省略时界面回退到 `toolName`。
+   * `description` 是写给模型的长指令，不能直接当标题。
+   */
+  title?: LocalizedText
   /** Read-only tools may run without a prompt under `allow-read-only`; mutating tools always ask. */
   readOnly: boolean
   requiresTemporalBoundary: boolean

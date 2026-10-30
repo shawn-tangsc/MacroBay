@@ -100,6 +100,13 @@ describe('intelligence agent capability catalog', () => {
     )
   })
 
+  it('carries capability titles into the derived manifest so the editor can label tools', () => {
+    const manifestTools = marketIntelligenceProductManifest.productAgentTools ?? []
+    expect(manifestTools.map((tool) => tool.title)).toEqual(
+      intelligenceAgentCapabilities.map((capability) => capability.title)
+    )
+  })
+
   it('lists explain_figure on the analysis agent now that the manifest is derived', () => {
     const agent = marketIntelligenceProductManifest.agents?.find((entry) => entry.id === 'crypto-market-analyst')
     expect(agent?.toolIds).toEqual(expect.arrayContaining(['explain_figure']))

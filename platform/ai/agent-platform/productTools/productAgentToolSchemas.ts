@@ -21,6 +21,7 @@ export type ProductAgentToolDescriptor = {
   productId: string
   handlerId: string
   description: string
+  title?: ProductAgentToolRegistration['title']
   schemaVersion: number
   readOnly: boolean
   requiresTemporalBoundary: boolean
