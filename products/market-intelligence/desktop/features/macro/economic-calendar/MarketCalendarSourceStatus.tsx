@@ -1,6 +1,6 @@
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import type { EconomicCalendarText } from './EconomicCalendar'
+import type { EconomicCalendarText } from './economicCalendarText'
 import { marketCalendarAutomaticRefreshPolicy } from './marketCalendarAutomaticPolicy'
 
 // CalendarObservedDataTimePolicy (133): receipt time is never page-open time.

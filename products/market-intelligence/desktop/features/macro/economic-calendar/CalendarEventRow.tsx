@@ -1,7 +1,7 @@
 import { Tooltip } from 'antd'
 import { Landmark, Newspaper, TrendingUp, type LucideIcon } from 'lucide-react'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
-import type { EconomicCalendarText } from './EconomicCalendar'
+import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarItemType, isHighImportanceCalendarItem, type CalendarDayItem } from './economicCalendarDayModel'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { calendarEventStatus } from './calendarEventStatusModel'

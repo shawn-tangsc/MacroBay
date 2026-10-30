@@ -68,6 +68,11 @@ export function createEconomicCalendarMonthQuery(month: string, asOf: string): {
   return { month, asOf }
 }
 
+/** True for a canonical `YYYY-MM` month the calendar queries accept. */
+export function isEconomicCalendarMonth(value: string): boolean {
+  return economicCalendarPresentationPolicy.monthPattern.test(value)
+}
+
 /**
  * The month a clock instant belongs to, for the page the reader keeps open.
  *
