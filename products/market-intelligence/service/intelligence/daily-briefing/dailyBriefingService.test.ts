@@ -81,6 +81,21 @@ describe('daily briefing service', () => {
     }
   })
 
+  it('returns a failed document without storing an edition when the agent turn fails', async () => {
+    const store = memoryStore()
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: {
+        async start() { return { sessionId: 's', created: true, assistantText: '{}' } },
+        async continue() { return '{}' },
+        async finish() {}
+      }
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result.state).toBe('available')
+    expect(store.rows.size).toBe(0)
+  })
+
   it('regenerates the same day, overwrites the row and applies the editorial layer', async () => {
     const store = memoryStore()
     const source = fakeSource()
