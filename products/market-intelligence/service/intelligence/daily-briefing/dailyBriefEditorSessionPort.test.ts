@@ -21,11 +21,12 @@ describe('daily brief editor session port', () => {
   it('creates once per edition, reuses the link, renames and deletes', async () => {
     const d = deps()
     const port = createDailyBriefEditorSessionPort(d as never)
-    const first = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: '10-30 每日简报 · AI 编辑 · 中文', agentId: 'daily-brief-editor' })
+    const first = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: '10-30 每日简报 · AI 编辑 · 中文', agentId: 'daily-brief-editor', allowedTools: ['WebSearch', 'WebFetch'] })
     const second = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'another', agentId: 'daily-brief-editor' })
     expect(first.created).toBe(true)
     expect(second).toEqual({ sessionId: first.sessionId, created: false })
     expect(d.createSession).toHaveBeenCalledTimes(1)
+    expect(d.createSession).toHaveBeenCalledWith(expect.objectContaining({ allowedTools: ['WebSearch', 'WebFetch'] }))
     await port.rename(first.sessionId, '10-30 每日简报 · 稳定币收缩 · AI 编辑 · 中文')
     expect(d.update).toHaveBeenCalledWith(first.sessionId, { name: '10-30 每日简报 · 稳定币收缩 · AI 编辑 · 中文' })
     await port.delete([first.sessionId])

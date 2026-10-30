@@ -3,7 +3,7 @@ import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionD
 import type { DailyBriefSessionLinkStore, DailyBriefSessionState } from './dailyBriefSessionLinks'
 
 export type DailyBriefEditorSessionPort = Readonly<{
-  ensure: (input: Readonly<{ editionKey: string; editionDate: string; locale: 'zh-CN' | 'en-US'; title: string; agentId: string }>) => Promise<{ sessionId: string; created: boolean }>
+  ensure: (input: Readonly<{ editionKey: string; editionDate: string; locale: 'zh-CN' | 'en-US'; title: string; agentId: string; allowedTools?: readonly string[] }>) => Promise<{ sessionId: string; created: boolean }>
   send: (sessionId: string, request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
   append: (sessionId: string, input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
   rename: (sessionId: string, title: string) => Promise<void>
@@ -26,7 +26,7 @@ export function createDailyBriefEditorSessionPort(deps: Readonly<{
     async ensure(input) {
       const existing = await deps.links.find(input.editionKey)
       if (existing) return { sessionId: existing.sessionId, created: false }
-      const session = await deps.createSession({ agentId: input.agentId, name: input.title, workspace: { type: 'system' } })
+      const session = await deps.createSession({ agentId: input.agentId, name: input.title, workspace: { type: 'system' }, ...(input.allowedTools && input.allowedTools.length > 0 ? { allowedTools: [...input.allowedTools] } : {}) })
       const at = now()
       await deps.links.put({ editionKey: input.editionKey, sessionId: session.id, editionDate: input.editionDate, locale: input.locale, state: 'running', createdAt: at, updatedAt: at })
       return { sessionId: session.id, created: true }

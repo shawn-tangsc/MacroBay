@@ -728,7 +728,11 @@ export function getIntelligenceModule(
         })
       },
       store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite')),
-      ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {})
+      ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
+      agentAllowedTools: async () => {
+        const view = await dailyBriefingAiSettings.getView()
+        return view.settings.webSearchEnabled && view.settings.webSearchAuthorizedAt ? ['WebSearch', 'WebFetch'] : undefined
+      }
     })
     registerDailyBriefingJob(jobRuntime, { service: dailyBriefingService, getLocale: getAppLanguage })
     if (hooks?.deleteAgentSessions) {

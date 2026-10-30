@@ -1446,6 +1446,15 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    id: '0044_require_daily_brief_session_tools',
+    up: `
+      update agent_entities
+      set configuration_json = json_set(coalesce(configuration_json, '{}'), '$.requireSessionToolAllowlist', json('true')),
+          updated_at = '2026-10-30T00:00:00.000Z'
+      where id = 'daily-brief-editor';
+    `
+  },
+  {
     id: '0042_unbind_daily_brief_editor_model',
     up: `
       update agent_entities

@@ -12,12 +12,13 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   runner: DailyBriefAgentRunner
   document: DailyBriefingDocument
   locale: DailyBriefingLocale
+  allowedTools?: readonly string[]
 }>): Promise<DailyBriefAgentTurnResult> {
   const prompt = buildDailyBriefingPrompt({ document: input.document, locale: input.locale })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   const editionKey = dailyBriefEditionKey(input.document.edition.date, input.locale)
   const summary = factSummary(input.document)
-  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt, displayText: `${summary.detail}\n\n任务：从候选中决定展示项，并写导语、why 与焦点情景。`, context: summary })
+  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt, displayText: `${summary.detail}\n\n任务：从候选中决定展示项，并写导语、why 与焦点情景。`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}) })
   let response = started.assistantText
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined

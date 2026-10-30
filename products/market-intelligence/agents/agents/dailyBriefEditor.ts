@@ -44,7 +44,8 @@ export function createDailyBriefEditorAgentSeed(
       heartbeat_enabled: false,
       productId: 'market-intelligence',
       dataAccessProfileId: 'crypto-market-analysis-v1',
-      configProfileId: 'daily-brief-editor-v1'
+      configProfileId: 'daily-brief-editor-v1',
+      requireSessionToolAllowlist: true
     },
     createdAt: CREATED_AT,
     updatedAt: CREATED_AT,

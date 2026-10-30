@@ -62,6 +62,7 @@ export function createDailyBriefingService(deps: Readonly<{
   store: DailyBriefingStore
   editorial?: (input: Readonly<{ document: DailyBriefingDocument; locale: DailyBriefingLocale }>) => Promise<DailyBriefingEditorialResult>
   agentRunner?: DailyBriefAgentRunner
+  agentAllowedTools?: () => Promise<readonly string[] | undefined>
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -102,7 +103,7 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     let publish = true
     if (deps.agentRunner) {
-      const turn = await runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale })
+      const turn = await runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}) })
       if (turn.state === 'accepted') document = turn.document
       else {
         publish = false
