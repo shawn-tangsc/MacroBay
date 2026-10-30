@@ -7,6 +7,8 @@ import type {
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
+import { runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
 
 /** The stored shape. The store owns the file; the service owns when a row is written. */
 export type DailyBriefingStoredEdition = Readonly<{
@@ -59,6 +61,7 @@ export function createDailyBriefingService(deps: Readonly<{
   source: DailyBriefingSource
   store: DailyBriefingStore
   editorial?: (input: Readonly<{ document: DailyBriefingDocument; locale: DailyBriefingLocale }>) => Promise<DailyBriefingEditorialResult>
+  agentRunner?: DailyBriefAgentRunner
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -97,7 +100,11 @@ export function createDailyBriefingService(deps: Readonly<{
     } catch {
       return { state: 'unavailable', failureCode: 'build-failed' }
     }
-    if (deps.editorial) {
+    if (deps.agentRunner) {
+      const turn = await runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale })
+      if (turn.state === 'accepted') document = turn.document
+      else document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, aiSessionId: turn.sessionId, editorialFailure: turn.failureCode, ...(turn.failureDetail ? { editorialFailureDetail: turn.failureDetail } : {}) }) })
+    } else if (deps.editorial) {
       try {
         const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 120_000)
         document = editorial.document
