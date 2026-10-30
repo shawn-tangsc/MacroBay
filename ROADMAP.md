@@ -5,12 +5,13 @@ scope may change as the product evolves.
 
 ## Agent platform
 
-- [ ] **General-purpose agent.** A default agent that works outside any single product module.
-- [ ] **Parent-child agent runs.** Let a session hand work to sub-agent runs and follow their status
-  and results without leaving the parent conversation, with the parent deciding when to wait and
-  when to move on.
+- [ ] **General-purpose agent and entry.** One always-available place to ask, backed by a
+  platform-level agent that can consult every installed product's read tools.
 - [ ] **Product-scoped sub-agents.** Let a parent agent delegate to focused sub-agents owned by a
   product, with separate prompts, tools, and evidence boundaries.
+- [ ] **Parent-child agent runs.** Let a session hand work to sub-agent runs, follow their status in
+  the parent conversation, and message them while they run. Exploratory: the value is unclear until
+  there is real work that must run in parallel with separate context.
 - [ ] **Channel notifications.** Route completed analysis, alerts, and approval requests to
   configured channels instead of only the in-app inbox.
 
