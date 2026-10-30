@@ -35,7 +35,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const reference = rows.filter((row) => row.importance.tier === 'reference')
   const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support, ...reference]
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
-  const footnotes = groupCitations(doc.citations)
+  const footnotes = groupCitations(doc.citations, text)
   const focusEvent = doc.next.focus ?? doc.next.items[0]
   const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
   const newsCounts = doc.data.sentiment.news.counts
@@ -91,20 +91,20 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <b>BTC OI {doc.data.leverage.btc.openInterestUsd !== undefined ? `$${(doc.data.leverage.btc.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.btc.change24hPct !== undefined ? `${doc.data.leverage.btc.change24hPct.toFixed(1)}%` : '—'}</b>
         <b>ETH OI {doc.data.leverage.eth.openInterestUsd !== undefined ? `$${(doc.data.leverage.eth.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.eth.change24hPct !== undefined ? `${doc.data.leverage.eth.change24hPct.toFixed(1)}%` : '—'}</b>
       </div> : null}
-      {doc.data.policyPath ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, locale)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
+      {doc.data.policyPath ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, text)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
         {metricRows.map((row) => <div key={row.id} data-tone={toneFor(row)}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
       </div> : null}
     </section> : null}
 
-    {newsTotal > 0 ? <p className="mi-brief-poster__news-summary">{text.visuals.news} · {newsTotal} 条：{text.polarity.bearish} {newsCounts?.bearish ?? 0} · {text.polarity.bullish} {newsCounts?.bullish ?? 0} · {text.polarity.mixed} {newsCounts?.mixed ?? 0} · {text.polarity.neutral} {newsCounts?.neutral ?? 0}</p> : null}
+    {newsTotal > 0 ? <p className="mi-brief-poster__news-summary">{text.visuals.news} · {text.newsCount.replace('{count}', String(newsTotal))}{text.labelSeparator}{text.polarity.bearish} {newsCounts?.bearish ?? 0} · {text.polarity.bullish} {newsCounts?.bullish ?? 0} · {text.polarity.mixed} {newsCounts?.mixed ?? 0} · {text.polarity.neutral} {newsCounts?.neutral ?? 0}</p> : null}
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
         <div className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</div>
         <p className="mi-brief-poster__summary">{conclusion.summary}</p>
         {conclusion.translation ? <p className="mi-brief-poster__translation">{text.translated} · {conclusion.translation}</p> : null}
-        {conclusion.invalidations[0] ? <p className="mi-brief-poster__invalidate">{text.conclusion.invalidation}：{conclusion.invalidations[0].text}</p> : null}
+        {conclusion.invalidations[0] ? <p className="mi-brief-poster__invalidate">{text.conclusion.invalidation}{text.labelSeparator}{conclusion.invalidations[0].text}</p> : null}
     </section> : null}
 
     {hasBasis && conclusion ? <section className="mi-brief-poster__basis">
@@ -126,7 +126,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
           <time>{nextTime(focusEvent.at, formatTime)}</time>
         </div>
         <h3>{nextTitle(focusEvent, eventTitles)}</h3>
-        <p>{text.next.importance[focusEvent.importance]}{nextCountry(focusEvent, locale) ? ` · ${nextCountry(focusEvent, locale)}` : ''}</p>
+        <p>{text.next.importance[focusEvent.importance]}{nextCountry(focusEvent, text) ? ` · ${nextCountry(focusEvent, text)}` : ''}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
         {focusEvent.watch && focusEvent.watch.length > 0 ? <div className="mi-brief-poster__next-watch-grid">{focusEvent.watch.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{watchLabel(entry.condition, text)}</span><b>{entry.implication}</b></div>)}</div> : null}
         {focusEvent.consensus || focusEvent.previous ? <div className="mi-brief-poster__next-values">
@@ -139,7 +139,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
           <time>{nextTime(item.at, formatTime)}</time>
           <div>
-            <b>{nextCountry(item, locale) ? `${nextCountry(item, locale)} · ` : ''}{nextTitle(item, eventTitles)}</b>
+            <b>{nextCountry(item, text) ? `${nextCountry(item, text)} · ` : ''}{nextTitle(item, eventTitles)}</b>
             <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>
           </div>
           <span>{[item.consensus ? `${text.next.expected} ${item.consensus}` : '', item.previous ? `${text.next.previous} ${item.previous}` : ''].filter(Boolean).join(' · ')}</span>
@@ -208,16 +208,12 @@ function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTi
   return shortenEventTitle(raw)
 }
 
-function nextCountry(item: DailyBriefingDocument['next']['items'][number], locale: 'zh-CN' | 'en-US'): string {
-  if (item.countryName && item.countryName !== item.countryCode) return item.countryName
+function nextCountry(item: DailyBriefingDocument['next']['items'][number], text: DailyBriefingText): string {
   const code = item.countryCode
-  if (!code) return ''
-  const labels: Readonly<Record<string, readonly [string, string]>> = {
-    US: ['美国', 'United States'], EU: ['欧元区', 'Euro area'], EZ: ['欧元区', 'Euro area'],
-    DE: ['德国', 'Germany'], FR: ['法国', 'France'], GB: ['英国', 'United Kingdom'], JP: ['日本', 'Japan'], CN: ['中国', 'China']
-  }
-  const label = labels[code]
-  return label ? label[locale === 'zh-CN' ? 0 : 1] : code
+  const label = code ? text.countries[code as keyof DailyBriefingText['countries']] : undefined
+  if (label) return label
+  if (item.countryName && item.countryName !== code) return item.countryName
+  return code ?? ''
 }
 
 function daysUntil(at: string, from: string): number {
@@ -252,11 +248,11 @@ const SOURCE_LABELS: Readonly<Record<string, string>> = {
 
 type Citation = DailyBriefingDocument['citations'][number]
 
-function groupCitations(citations: readonly Citation[]): readonly Readonly<{ key: string; indexes: readonly number[]; statement?: string; source: string; observedAt?: string }>[] {
+function groupCitations(citations: readonly Citation[], text: DailyBriefingText): readonly Readonly<{ key: string; indexes: readonly number[]; statement?: string; source: string; observedAt?: string }>[] {
   const groups = new Map<string, { indexes: number[]; statement?: string; source: string; observedAt?: string }>()
   for (const entry of citations) {
     const statement = entry.statement ? entry.statement.length > 80 ? `${entry.statement.slice(0, 80)}…` : entry.statement : undefined
-    const source = citationSource(entry)
+    const source = citationSource(entry, text)
     const key = `${statement ?? ''}|${source}|${entry.observedAt ?? ''}`
     const group = groups.get(key) ?? { indexes: [], ...(statement ? { statement } : {}), source, ...(entry.observedAt ? { observedAt: entry.observedAt } : {}) }
     group.indexes.push(entry.index)
@@ -265,13 +261,13 @@ function groupCitations(citations: readonly Citation[]): readonly Readonly<{ key
   return [...groups.entries()].map(([key, value]) => Object.freeze({ key, indexes: Object.freeze([...value.indexes]), ...(value.statement ? { statement: value.statement } : {}), source: value.source, ...(value.observedAt ? { observedAt: value.observedAt } : {}) }))
 }
 
-function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>): string {
+function citationSource(entry: Readonly<{ refId: string; sourceLabel?: string }>, text: DailyBriefingText): string {
   if (entry.sourceLabel) return SOURCE_LABELS[entry.sourceLabel] ?? entry.sourceLabel
   if (entry.refId.startsWith('query:defillama-stablecoins')) return 'DefiLlama Stablecoins'
   if (entry.refId.startsWith('query:0xrouter')) return '0xRouter'
-  if (entry.refId.startsWith('macro-calendar')) return '宏观日历'
-  if (entry.refId.startsWith('news')) return '新闻'
-  return '分析证据'
+  if (entry.refId.startsWith('macro-calendar')) return text.citationSources.macroCalendar
+  if (entry.refId.startsWith('news')) return text.citationSources.news
+  return text.citationSources.analysis
 }
 
 function citationTime(entry: Readonly<{ refId: string; observedAt?: string }>, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
@@ -307,13 +303,6 @@ function clockWithZone(value: string, formatTime: (value: string, precision: 'mi
   return `${date}\n${[time, ...zone].filter(Boolean).join(' ')}`
 }
 
-function policyOutcomeLabel(outcome: string, locale: 'zh-CN' | 'en-US'): string {
-  const labels: Record<string, [string, string]> = {
-    'no-change': ['维持利率', 'No change'],
-    'hike-25': ['加息 25bp', 'Hike 25bp'],
-    'hike-50-plus': ['加息 50bp+', 'Hike 50bp+'],
-    'cut-25': ['降息 25bp', 'Cut 25bp'],
-    'cut-50-plus': ['降息 50bp+', 'Cut 50bp+']
-  }
-  return labels[outcome]?.[locale === 'zh-CN' ? 0 : 1] ?? outcome
+function policyOutcomeLabel(outcome: string, text: DailyBriefingText): string {
+  return text.policyOutcomes[outcome as keyof DailyBriefingText['policyOutcomes']] ?? outcome
 }

@@ -1,7 +1,7 @@
 import type { AgentChatContextReference } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
 import type { AgentRuntimeToolInvocation } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import type { DailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
-import { dailyBriefSessionTitle } from './dailyBriefEditorSessionNaming'
+import { dailyBriefSessionCopy, dailyBriefSessionCopyText, dailyBriefSessionTitle } from './dailyBriefEditorSessionNaming'
 import type { DailyBriefSessionState } from './dailyBriefSessionLinks'
 
 export type DailyBriefAgentRunner = Readonly<{
@@ -18,7 +18,7 @@ export function createDailyBriefAgentRunner(deps: Readonly<{
     async start(input) {
       const title = dailyBriefSessionTitle({ date: input.date, locale: input.locale, ...(input.topic ? { topic: input.topic } : {}) })
       const session = await deps.port.ensure({ editionKey: input.editionKey, editionDate: input.date, locale: input.locale, title, agentId: deps.agentId, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}) })
-      const result = await deps.port.send(session.sessionId, { agentId: deps.agentId, sessionId: session.sessionId, text: input.prompt, displayText: input.displayText ?? `生成 ${input.date} 每日简报编辑层：从候选中决定展示项，并写导语、why 与焦点情景。` })
+      const result = await deps.port.send(session.sessionId, { agentId: deps.agentId, sessionId: session.sessionId, text: input.prompt, displayText: input.displayText ?? dailyBriefSessionCopyText(dailyBriefSessionCopy(input.locale).startTask, { date: input.date }) })
       return { ...session, assistantText: result.assistantMessage.searchableText, toolInvocations: result.toolInvocations ?? [] }
     },
     async continue(sessionId, text) {

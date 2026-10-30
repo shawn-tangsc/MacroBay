@@ -17,4 +17,21 @@ describe('daily brief agent runner', () => {
     await runner.finish('2026-10-30:zh-CN', 'accepted')
     expect(port.state).toHaveBeenCalledWith('2026-10-30:zh-CN', 'accepted')
   })
+
+  it('writes the first visible task in the edition language', async () => {
+    const sent: { displayText?: string }[] = []
+    const port = {
+      ensure: vi.fn(async () => ({ sessionId: 's1', created: true })),
+      send: vi.fn(async (_sessionId: string, message: { displayText?: string }) => {
+        sent.push(message)
+        return { assistantMessage: { searchableText: '{}' }, toolInvocations: [] }
+      }),
+      state: vi.fn(async () => undefined)
+    }
+    const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
+    await runner.start({ editionKey: '2026-10-30:en-US', date: '2026-10-30', locale: 'en-US', prompt: 'task' })
+    expect(sent[0]?.displayText).toContain('2026-10-30')
+    expect(sent[0]?.displayText).toContain('daily brief')
+    expect(sent[0]?.displayText).not.toMatch(/[\u4e00-\u9fff]/)
+  })
 })
