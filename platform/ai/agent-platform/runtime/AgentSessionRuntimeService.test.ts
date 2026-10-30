@@ -950,6 +950,111 @@ describe('agent session runtime service', () => {
     })
   })
 
+  it('rejects a turn whose driver never settles, cancels it, and leaves no in-flight state', async () => {
+    const registry = new RuntimeDriverRegistry()
+    const driver: AgentRuntimeDriver = {
+      sendMessage: vi.fn(() => new Promise<AgentChatRuntimeResult>(() => undefined)),
+      cancelMessage: vi.fn(() => true),
+      cancelSession: vi.fn(() => true)
+    }
+    registry.register('claude-code', driver)
+    const runtime = new AgentSessionRuntimeService({
+      getAgentState: async () => createState(),
+      driverRegistry: registry,
+      turnTimeoutMs: 25
+    })
+
+    const turn = runtime.sendMessage({
+      agentId: 'agent-1',
+      sessionId: 'session-1',
+      text: 'Hang while connecting',
+      runId: 'run-1'
+    })
+
+    await expect(turn).rejects.toThrow(
+      'Agent turn timed out after 25ms waiting for the runtime driver.'
+    )
+
+    const timeoutStopReason = {
+      kind: 'runtime-stop',
+      message: 'Agent turn timed out after 25ms waiting for the runtime driver.'
+    }
+    expect(driver.cancelMessage).toHaveBeenCalledWith('run-1', timeoutStopReason)
+    expect(driver.cancelSession).not.toHaveBeenCalled()
+    expect(runtime.isSessionBusy('session-1')).toBe(false)
+    expect(runtime.getSnapshot().sessions['session-1']).toMatchObject({
+      turnState: 'idle',
+      turnPhase: 'idle',
+      inflightRequestCount: 0,
+      queuedTurnCount: 0,
+      lastTerminalStatus: 'error',
+      lastStopReason: timeoutStopReason
+    })
+  })
+
+  it('cancels the session when a timed-out turn has no run id', async () => {
+    const registry = new RuntimeDriverRegistry()
+    const driver: AgentRuntimeDriver = {
+      sendMessage: vi.fn(() => new Promise<AgentChatRuntimeResult>(() => undefined)),
+      cancelMessage: vi.fn(() => true),
+      cancelSession: vi.fn(() => true)
+    }
+    registry.register('claude-code', driver)
+    const runtime = new AgentSessionRuntimeService({
+      getAgentState: async () => createState(),
+      driverRegistry: registry,
+      turnTimeoutMs: 25
+    })
+
+    const turn = runtime.sendMessage({
+      agentId: 'agent-1',
+      sessionId: 'session-1',
+      text: 'Hang without a run id'
+    })
+
+    await expect(turn).rejects.toThrow('Agent turn timed out after 25ms')
+
+    expect(driver.cancelSession).toHaveBeenCalledWith('session-1', {
+      kind: 'runtime-stop',
+      message: 'Agent turn timed out after 25ms waiting for the runtime driver.'
+    })
+    expect(driver.cancelMessage).not.toHaveBeenCalled()
+    expect(runtime.isSessionBusy('session-1')).toBe(false)
+  })
+
+  it('does not cancel a turn that completes before the timeout', async () => {
+    const registry = new RuntimeDriverRegistry()
+    const { driver, pending } = createDeferredDriver()
+    registry.register('claude-code', driver)
+    const runtime = new AgentSessionRuntimeService({
+      getAgentState: async () => createState(),
+      driverRegistry: registry,
+      turnTimeoutMs: 500
+    })
+
+    const request: AgentChatRuntimeRequest = {
+      agentId: 'agent-1',
+      sessionId: 'session-1',
+      text: 'Finish quickly',
+      runId: 'run-1'
+    }
+    const turn = runtime.sendMessage(request)
+    const dispatched = await waitForPendingRequest(pending, 0)
+    dispatched.resolve(createRuntimeResult(request))
+    await expect(turn).resolves.toMatchObject({
+      assistantMessage: { status: 'success' }
+    })
+
+    expect(driver.cancelMessage).not.toHaveBeenCalled()
+    expect(driver.cancelSession).not.toHaveBeenCalled()
+    expect(runtime.isSessionBusy('session-1')).toBe(false)
+    expect(runtime.getSnapshot().sessions['session-1']).toMatchObject({
+      turnState: 'idle',
+      inflightRequestCount: 0,
+      lastTerminalStatus: 'success'
+    })
+  })
+
   it('tracks tool approval requests inside the runtime snapshot and clears them when resolved', async () => {
     const registry = new RuntimeDriverRegistry()
     registry.register('claude-code', createDeferredDriver().driver)

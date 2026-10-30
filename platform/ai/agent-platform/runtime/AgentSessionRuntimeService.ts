@@ -31,6 +31,8 @@ type AgentSessionRuntimeServiceDependencies = {
   toolApprovalRegistry?: ToolApprovalRegistry
   traceRecorder?: AgentRuntimeTraceRecorder
   now?: () => string
+  /** Overrides the per-turn provider timeout; production keeps the default. */
+  turnTimeoutMs?: number
 }
 
 type RuntimeEntry = {
@@ -84,6 +86,20 @@ const runtimeDisposeStopReason: AgentRuntimeStopReason = {
  * bounded tail; approvals are never dropped because they need a user decision.
  */
 export const MAX_RUNTIME_CHUNKS_PER_SESSION = 400
+
+/**
+ * A provider connection that never answers must not hold a turn open forever. The watchdog bounds
+ * the driver dispatch phase, where the provider call actually happens; context resolution and
+ * persistence keep their existing behavior.
+ */
+export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 120_000
+
+export class AgentTurnTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(createTurnTimeoutMessage(timeoutMs))
+    this.name = 'AgentTurnTimeoutError'
+  }
+}
 
 export class AgentSessionRuntimeService {
   private readonly entries = new Map<string, RuntimeEntry>()
@@ -293,7 +309,12 @@ export class AgentSessionRuntimeService {
         entry.updatedAt = this.timestamp()
         this.emitSnapshot()
 
-        const result = await resultPromise
+        const result = await this.awaitTurnResult(entry, {
+          sessionId: session.id,
+          runId,
+          driver,
+          resultPromise
+        })
         const toolInvocations = this.collectToolInvocations(request.sessionId)
         this.setTurnPhase(entry, 'finishing')
         entry.lastResumeToken = result.assistantMessage.runtimeResumeToken
@@ -435,6 +456,54 @@ export class AgentSessionRuntimeService {
     }
     this.emitSnapshot()
     await this.flushTraceRecorder()
+  }
+
+  private async awaitTurnResult(
+    entry: RuntimeEntry,
+    input: {
+      sessionId: string
+      runId: string | null
+      driver: AgentRuntimeDriver
+      resultPromise: Promise<AgentChatRuntimeResult>
+    }
+  ): Promise<AgentChatRuntimeResult> {
+    const timeoutMs = this.deps.turnTimeoutMs ?? DEFAULT_AGENT_TURN_TIMEOUT_MS
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        const reason = createTurnTimeoutStopReason(timeoutMs)
+        entry.lastStopReason = cloneStopReason(reason)
+        this.setTurnPhase(entry, 'pausing')
+        // Reject before cancelling so a cancel that synchronously settles the driver cannot turn
+        // the timeout into a user-stop/paused result.
+        reject(new AgentTurnTimeoutError(timeoutMs))
+        this.cancelTimedOutTurn(input, reason)
+      }, timeoutMs)
+      timer.unref?.()
+    })
+    // The driver may settle only after the timeout. Observe it so a late rejection is not
+    // reported as unhandled, and keep the turn's own rejection as the single outcome.
+    void input.resultPromise.catch(() => undefined)
+    try {
+      return await Promise.race([input.resultPromise, timeoutPromise])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
+  private cancelTimedOutTurn(
+    input: { sessionId: string; runId: string | null; driver: AgentRuntimeDriver },
+    reason: AgentRuntimeStopReason
+  ): void {
+    try {
+      if (input.runId) {
+        input.driver.cancelMessage(input.runId, reason)
+      } else {
+        input.driver.cancelSession(input.sessionId, reason)
+      }
+    } catch {
+      // A failed cancel must not mask the timeout; the rejection above still settles the turn.
+    }
   }
 
   private async resolveDriverContext(request: AgentRuntimePrewarmSessionRequest): Promise<{
@@ -935,6 +1004,17 @@ function deriveTurnPhase(entry: RuntimeEntry): AgentSessionRuntimeState['turnPha
   if (turnState === 'queued') return 'queued'
   if (turnState === 'stopping') return 'pausing'
   return entry.turnPhase === 'idle' || entry.turnPhase === 'queued' ? 'resolving-context' : entry.turnPhase
+}
+
+function createTurnTimeoutMessage(timeoutMs: number): string {
+  return `Agent turn timed out after ${timeoutMs}ms waiting for the runtime driver.`
+}
+
+function createTurnTimeoutStopReason(timeoutMs: number): AgentRuntimeStopReason {
+  return {
+    kind: 'runtime-stop',
+    message: createTurnTimeoutMessage(timeoutMs)
+  }
 }
 
 function cloneStopReason(reason: AgentRuntimeStopReason): AgentRuntimeStopReason {
