@@ -171,12 +171,23 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const appendix = view.status === 'ready' && view.document.conclusion
     ? [...new Set([...view.document.conclusion.dataGaps, ...view.document.conclusion.caveats])]
     : []
+  const generation = view.status === 'loading'
+    ? { state: 'checking', label: text.generation.checking }
+    : view.status === 'unavailable'
+      ? { state: 'missing', label: text.generation.missing }
+      : view.kind === 'today'
+        ? { state: 'ready', label: text.generation.ready }
+        : { state: 'history', label: text.generation.history }
   const bodyClass = `mi-daily-briefing-page__body${appendix.length > 0 ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
       <button className="mi-daily-briefing-page__back" type="button" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </button>
+      <div className="mi-daily-briefing-page__status" data-state={generation.state} role="status">
+        <span>{text.generation.schedule}</span>
+        <b>{generation.label}</b>
+      </div>
       <div className="mi-daily-briefing-page__actions">
         {view.status === 'ready' && view.kind === 'today' ? <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
           {regenerating ? text.regenerating : text.regenerate}
