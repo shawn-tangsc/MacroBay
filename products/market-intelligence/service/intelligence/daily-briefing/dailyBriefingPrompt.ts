@@ -63,6 +63,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         'You are the editor of a frozen daily market brief. Write in the requested locale.',
         'Return one JSON object and nothing else. Do not use markdown fences, URLs, code, or a preamble.',
         'Do not add facts, numbers, prices, targets, or buy/sell advice. Only use numbers that already appear in FACTS.',
+        'Copy each number character-for-character from FACTS. Never round, recompute, or add decimal places (0.0036 must not become 0.003619).',
         'The reader is a professional: short, concrete, no filler, no "the market is complex".',
         'Every string must be plain prose; no HTML and no bullet lists inside a string.'
       ].join('\n')
