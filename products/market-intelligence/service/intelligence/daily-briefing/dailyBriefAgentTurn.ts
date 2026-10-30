@@ -46,7 +46,26 @@ export type DailyBriefAgentTurnInput = Readonly<{
    * `backfill-unwired`, which is a gap, not a fabricated value or a failed edition.
    */
   backfill?: DailyBriefBackfillExecutor
+  /**
+   * The generation deadline. Once it aborts, no further agent round is opened: a timed-out edition
+   * must stop costing tokens instead of finishing in the background.
+   */
+  signal?: AbortSignal
+  /** Reports the session as soon as it exists, before the first round resolves. */
+  onSession?: (sessionId: string) => void
 }>
+
+/** The generation deadline fired, so the turn refuses to open another agent round. */
+export class DailyBriefTurnAbortedError extends Error {
+  constructor() {
+    super('daily-brief-turn-aborted')
+    this.name = 'DailyBriefTurnAbortedError'
+  }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DailyBriefTurnAbortedError()
+}
 
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
   const editionKey = dailyBriefEditionKey(input.document.edition.date, input.locale)
@@ -59,13 +78,15 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n'),
     ...(protocol ? [protocol] : [])
   ].join('\n\n')
-  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}) })
+  throwIfAborted(input.signal)
+  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
   let selection: unknown
   try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
   const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]
   let response: string
   if (!selection || typeof selection !== 'object' || (selection as { stage?: unknown }).stage !== 'select') {
-    const corrected = await input.runner.continue(started.sessionId, 'Your selection JSON was invalid. Return {"stage":"select",...} and nothing else.')
+    throwIfAborted(input.signal)
+    const corrected = await input.runner.continue(started.sessionId, 'Your selection JSON was invalid. Return {"stage":"select",...} and nothing else.', undefined, input.signal)
     try { selection = JSON.parse(corrected.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
     toolInvocations.push(...corrected.toolInvocations)
   }
@@ -84,7 +105,8 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     const sections: string[] = []
     if (Array.isArray(requests) && requests.length > 0) sections.push(`FIELD RESPONSE:\n${fieldResponse(input.document, requests, input.locale)}`)
     if (backfill) sections.push(backfillMessage(backfill, input.document.edition.windowEnd))
-    const answer = await input.runner.continue(started.sessionId, `${sections.join('\n\n')}\nReturn the next selection JSON if you need to adjust; otherwise continue.`)
+    throwIfAborted(input.signal)
+    const answer = await input.runner.continue(started.sessionId, `${sections.join('\n\n')}\nReturn the next selection JSON if you need to adjust; otherwise continue.`, undefined, input.signal)
     toolInvocations.push(...answer.toolInvocations)
     try {
       const adjusted = JSON.parse(answer.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''))
@@ -94,7 +116,8 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   const selectedDocument = selectDocument(input.document, selection)
   const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
-  const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`)
+  throwIfAborted(input.signal)
+  const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`, input.signal)
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
   let failureCode = 'invalid-json'
@@ -113,7 +136,8 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       failureDetail = validation.detail
     }
     if (attempt < 2) {
-      const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`)
+      throwIfAborted(input.signal)
+      const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`, undefined, input.signal)
       response = repair.assistantText
       toolInvocations.push(...repair.toolInvocations)
     }
@@ -284,24 +308,17 @@ function backfillMessage(outcomes: readonly BackfillOutcome[], cutoff: string): 
 function factSummary(document: DailyBriefingDocument, locale: DailyBriefingLocale): Readonly<{ kind: string; label: string; detail: string }> {
   const copy = dailyBriefSessionCopy(locale)
   const fill = dailyBriefSessionCopyText
-  const macro = (document.news.macroCandidates ?? document.news.macro).map((item) => fill(copy.macroFact, {
-    title: item.title, actual: item.actual ?? '—', consensus: item.consensus ?? copy.missing, previous: item.previous ?? '—'
-  }))
-  const news = document.news.items.map((item) => item.translatedTitle ?? item.title)
-  const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item))
-    .map((item) => fill(copy.nextFact, { title: item.title, at: item.at, country: item.countryName ? ` · ${item.countryName}` : '' }))
-  const data = [...document.data.market, ...document.data.funds].map((row) => `${row.id} ${row.value?.number ?? '—'}`)
+  const short = (title: string) => title.length > 54 ? `${title.slice(0, 54)}…` : title
+  const macro = (document.news.macroCandidates ?? document.news.macro).slice(0, 8).map((item) => short(item.title))
+  const news = document.news.items.slice(0, 8).map((item) => short(item.translatedTitle ?? item.title))
+  const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 6).map((item) => short(item.title))
   const details = [
     fill(copy.window, { start: document.edition.windowStart, end: document.edition.windowEnd }),
     fill(copy.macroCandidates, { count: String(macro.length), items: macro.join(copy.listSeparator) || copy.empty }),
     fill(copy.newsCandidates, { count: String(news.length), items: news.join(copy.listSeparator) || copy.empty }),
-    fill(copy.data, { items: data.join(copy.listSeparator) || copy.empty }),
-    ...(document.data.leverage ? [fill(copy.leverage, { btc: String(document.data.leverage.btc.openInterestUsd ?? '—'), eth: String(document.data.leverage.eth.openInterestUsd ?? '—') })] : []),
-    ...(document.data.policyPath ? [fill(copy.policyPath, { probability: String(Math.round(document.data.policyPath.probability)), outcome: document.data.policyPath.outcome, meetingDate: document.data.policyPath.meetingDate })] : []),
-    fill(copy.conclusion, { summary: document.conclusion ? document.conclusion.summary.slice(0, 160) : copy.empty }),
     fill(copy.next, { items: next.join(copy.listSeparator) || copy.empty })
   ].join('\n')
-  return Object.freeze({ kind: 'daily-briefing-facts', label: copy.factsLabel, detail: details.slice(0, 1600) })
+  return Object.freeze({ kind: 'daily-briefing-facts', label: copy.factsLabel, detail: details.slice(0, 700) })
 }
 
 function fieldResponse(document: DailyBriefingDocument, requests: readonly unknown[], locale: DailyBriefingLocale): string {
