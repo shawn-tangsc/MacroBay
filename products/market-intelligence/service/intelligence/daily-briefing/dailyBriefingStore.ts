@@ -8,7 +8,7 @@ import type { DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBrie
 
 export const dailyBriefingStoragePolicy = Object.freeze({
   fileName: 'daily-briefings.sqlite',
-  schemaVersion: 1
+  schemaVersion: 2
 })
 
 /**
