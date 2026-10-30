@@ -157,9 +157,19 @@ export const marketIntelligenceProductManifest = {
       description: '基于可追溯市场证据生成条件式分析。',
       seedModule: './agents/agents/cryptoMarketAnalyst',
       seedOnStartup: true,
-      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1', 'daily-brief-editor-skill-v1'],
+      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
       toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
       workflowIds: ['market-analysis-auto-run-v1']
+    },
+    {
+      id: 'daily-brief-editor',
+      title: '每日简报编辑',
+      description: '以交易分析师视角决定日报候选可见性并生成编辑层。',
+      seedModule: './agents/agents/dailyBriefEditor',
+      seedOnStartup: true,
+      skillIds: ['daily-brief-editor-skill-v1'],
+      toolIds: [],
+      workflowIds: []
     }
   ],
   workflows: [
