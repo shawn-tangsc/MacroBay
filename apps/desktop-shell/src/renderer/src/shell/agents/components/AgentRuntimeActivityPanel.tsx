@@ -7,6 +7,7 @@ import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/ru
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { AgentRuntimeActivityCard } from '../agentRuntimeActivityViewModel'
+import { formatAgentElapsed } from '../agentElapsedText'
 import { resolveApprovalInputDraft } from '../agentRuntimeApprovalInput'
 import { useAgentLanguage, useAgentText } from '../agentTextProvider'
 import AgentAskUserQuestionCard from './AgentAskUserQuestionCard'
@@ -38,7 +39,7 @@ export default function AgentRuntimeActivityPanel({
     : failure
       ? t.runtimeActivity.failureTitle
       : elapsedMs !== undefined
-        ? t.runtimeActivity.completedIn(formatElapsed(elapsedMs, language))
+        ? t.runtimeActivity.completedIn(formatAgentElapsed(elapsedMs, language))
         : t.runtimeActivity.completedSummary
 
   return (
@@ -191,14 +192,6 @@ function dedupeActivityCards(cards: AgentRuntimeActivityCard[]): AgentRuntimeAct
     })
   }
   return [...byTool.values()]
-}
-
-function formatElapsed(ms: number, language: 'zh-CN' | 'en-US'): string {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000))
-  if (totalSeconds < 60) return language === 'zh-CN' ? `${totalSeconds} 秒` : `${totalSeconds}s`
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return language === 'zh-CN' ? `${minutes} 分 ${seconds} 秒` : `${minutes}m ${seconds}s`
 }
 
 function ApprovalActions({

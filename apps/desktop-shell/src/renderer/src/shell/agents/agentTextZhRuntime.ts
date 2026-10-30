@@ -12,7 +12,8 @@ export const agentTextZhRuntime: Pick<AgentText, 'runtimeText' | 'runtimeActivit
     providerRequestFailed: '模型请求失败，请重试。',
     modelRetired: '该模型已下线，请更换模型。',
     modelNotActivated: '该模型未开通，请到供应商控制台开通。',
-    modelNotFound: '该模型不存在或已下线，请更换模型。'
+    modelNotFound: '该模型不存在或已下线，请更换模型。',
+    stillWaiting: '仍在等待模型响应…'
   },
   runtimeActivity: {
     title: '运行时活动',

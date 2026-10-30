@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AgentRuntimeActivityCard } from './agentRuntimeActivityViewModel'
+import { agentText } from './agentText'
 import { resolveAgentRuntimePhaseText } from './agentRuntimePhaseText'
 
 const text = {
@@ -14,7 +15,8 @@ const text = {
   providerRequestFailed: 'request-failed',
   modelRetired: 'model-retired',
   modelNotActivated: 'model-not-activated',
-  modelNotFound: 'model-not-found'
+  modelNotFound: 'model-not-found',
+  stillWaiting: 'still-waiting'
 }
 
 function card(overrides: Partial<AgentRuntimeActivityCard>): AgentRuntimeActivityCard {
@@ -35,6 +37,34 @@ describe('resolveAgentRuntimePhaseText', () => {
   it('keeps the initial connecting copy until the first runtime chunk arrives', () => {
     expect(resolveAgentRuntimePhaseText({ phase: 'resolving-context', cards: [], text })).toBeNull()
     expect(resolveAgentRuntimePhaseText({ phase: 'opening-stream', cards: [], text })).toBeNull()
+  })
+
+  it('names the wait only after 90 seconds without a first chunk', () => {
+    expect(
+      resolveAgentRuntimePhaseText({ phase: 'opening-stream', cards: [], elapsedMs: 89_000, text })
+    ).toBeNull()
+    expect(
+      resolveAgentRuntimePhaseText({ phase: 'opening-stream', cards: [], elapsedMs: 90_000, text })
+    ).toBe('still-waiting')
+  })
+
+  it('uses the shared wait copy in both dictionaries at the threshold', () => {
+    expect(
+      resolveAgentRuntimePhaseText({
+        phase: 'opening-stream',
+        cards: [],
+        elapsedMs: 90_000,
+        text: agentText['zh-CN'].runtimeText
+      })
+    ).toBe(agentText['zh-CN'].runtimeText.stillWaiting)
+    expect(
+      resolveAgentRuntimePhaseText({
+        phase: 'opening-stream',
+        cards: [],
+        elapsedMs: 90_000,
+        text: agentText['en-US'].runtimeText
+      })
+    ).toBe(agentText['en-US'].runtimeText.stillWaiting)
   })
 
   it('reports thinking while reasoning chunks are running', () => {

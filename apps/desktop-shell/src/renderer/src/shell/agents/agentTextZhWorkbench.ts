@@ -13,7 +13,9 @@ export const agentTextZhWorkbench: AgentTextWorkbench = {
     agentResponding: '智能体正在响应',
     responseNeedsErrorHandling: '响应需要处理错误',
     agentResponseCompleted: '智能体已完成响应',
-    waitingAgentResponse: '等待智能体响应'
+    waitingAgentResponse: '等待智能体响应',
+    elapsed: (duration) => `已用 ${duration}`,
+    stillWaiting: '仍在等待模型响应…'
   },
   taskCenter: {
     title: '任务中心',

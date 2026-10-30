@@ -1,13 +1,16 @@
 import { AlertTriangle, Check, ChevronDown, Circle, Wrench } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentSessionEntity, AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import { LoadingSpinner } from '@platform/ui/components/loading'
 
 import type { AgentText } from '../agentText'
-import { useAgentText } from '../agentTextProvider'
+import { useAgentLanguage, useAgentText } from '../agentTextProvider'
+import { formatAgentElapsed } from '../agentElapsedText'
+import { AGENT_STILL_WAITING_THRESHOLD_MS } from '../agentRuntimePhaseText'
 import { sortAgentSessionMessages } from '@platform/ui/agent-chat'
 
 type AgentTodoListPanelProps = {
@@ -25,6 +28,12 @@ export type TodoItem = {
   status: TodoStatus
 }
 
+/** Clock context for the responding row; omitted by callers that only need the skeleton. */
+export type TodoElapsedContext = {
+  nowMs: number
+  language: AppLanguage
+}
+
 export default function AgentTodoListPanel({
   agent,
   session,
@@ -32,8 +41,21 @@ export default function AgentTodoListPanel({
   narrow = false
 }: AgentTodoListPanelProps): React.ReactElement | null {
   const t = useAgentText()
+  const language = useAgentLanguage()
   const [expanded, setExpanded] = useState(false)
-  const items = useMemo(() => buildTodoItems(agent, session, messages, t.todos), [agent, messages, session, t.todos])
+  // This panel has no turn-state prop, so a pending assistant message is the running signal.
+  const pendingStartedAt = useMemo(() => resolvePendingAssistantStartedAt(messages), [messages])
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (pendingStartedAt === undefined) return
+    setNowMs(Date.now())
+    const intervalId = setInterval(() => setNowMs(Date.now()), 10_000)
+    return () => clearInterval(intervalId)
+  }, [pendingStartedAt])
+  const items = useMemo(
+    () => buildTodoItems(agent, session, messages, t.todos, { nowMs, language }),
+    [agent, language, messages, nowMs, session, t.todos]
+  )
   if (!shouldShowTodoPanel(items)) return null
 
   const completed = items.filter((item) => item.status === 'completed').length
@@ -68,7 +90,8 @@ export function buildTodoItems(
   agent: AgentEntity,
   session: AgentSessionEntity,
   messages: AgentSessionMessageEntity[],
-  text: AgentText['todos']
+  text: AgentText['todos'],
+  elapsed?: TodoElapsedContext
 ): TodoItem[] {
   const sortedMessages = sortAgentSessionMessages(messages)
   const latestUserMessageIndex = findLatestUserMessageIndex(sortedMessages)
@@ -82,6 +105,9 @@ export function buildTodoItems(
   const hasError = relevantAssistantMessages.some((message) => message.status === 'error')
   const hasPending =
     !hasAssistantSuccess && !hasError && relevantAssistantMessages.some((message) => message.status === 'pending')
+  const pendingElapsedMs = hasPending
+    ? resolveElapsedMs(findLatestPendingAssistant(relevantAssistantMessages), elapsed)
+    : undefined
 
   return [
     {
@@ -102,7 +128,7 @@ export function buildTodoItems(
     {
       id: 'runtime',
       label: hasPending
-        ? text.agentResponding
+        ? buildRespondingLabel(text, pendingElapsedMs, elapsed?.language ?? 'zh-CN')
         : hasError
           ? text.responseNeedsErrorHandling
           : hasAssistantSuccess
@@ -111,6 +137,53 @@ export function buildTodoItems(
       status: hasPending ? 'in_progress' : hasError ? 'error' : hasAssistantSuccess ? 'completed' : 'pending'
     }
   ]
+}
+
+function buildRespondingLabel(
+  text: AgentText['todos'],
+  elapsedMs: number | undefined,
+  language: AppLanguage
+): string {
+  if (elapsedMs === undefined) return text.agentResponding
+  if (elapsedMs >= AGENT_STILL_WAITING_THRESHOLD_MS) {
+    return `${text.agentResponding} · ${text.stillWaiting}`
+  }
+  return `${text.agentResponding} · ${text.elapsed(formatAgentElapsed(elapsedMs, language))}`
+}
+
+function resolveElapsedMs(
+  pendingAssistant: AgentSessionMessageEntity | undefined,
+  elapsed: TodoElapsedContext | undefined
+): number | undefined {
+  if (!pendingAssistant || !elapsed) return undefined
+  const startedAt = Date.parse(pendingAssistant.createdAt)
+  if (!Number.isFinite(startedAt)) return undefined
+  return Math.max(0, elapsed.nowMs - startedAt)
+}
+
+function findLatestPendingAssistant(
+  messages: readonly AgentSessionMessageEntity[]
+): AgentSessionMessageEntity | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message?.status === 'pending') return message
+  }
+  return undefined
+}
+
+/** Newest assistant row decides: a finished reply means the earlier pending row is stale. */
+function resolvePendingAssistantStartedAt(
+  messages: readonly AgentSessionMessageEntity[]
+): number | undefined {
+  const ordered = sortAgentSessionMessages(messages)
+  for (let index = ordered.length - 1; index >= 0; index -= 1) {
+    const message = ordered[index]
+    if (!message || message.role !== 'assistant') continue
+    if (message.status !== 'pending') return undefined
+    const startedAt = Date.parse(message.createdAt)
+    return Number.isFinite(startedAt) ? startedAt : undefined
+  }
+  return undefined
 }
 
 function findLatestUserMessageIndex(messages: readonly AgentSessionMessageEntity[]): number {

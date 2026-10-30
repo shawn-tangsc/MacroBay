@@ -60,6 +60,86 @@ describe('AgentTodoListPanel view model', () => {
     expect(shouldShowTodoPanel(items)).toBe(true)
   })
 
+  it('appends the elapsed time to the responding step while a pending assistant message runs', () => {
+    const messages = [
+      message({
+        id: 'user-1',
+        role: 'user',
+        status: 'success',
+        text: '你好',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      }),
+      message({
+        id: 'assistant-pending',
+        role: 'assistant',
+        status: 'pending',
+        text: '',
+        createdAt: '2026-01-01T00:00:05.000Z'
+      })
+    ]
+    const items = buildTodoItems(agent(), session(), messages, todosText, {
+      nowMs: Date.parse('2026-01-01T00:00:17.000Z'),
+      language: 'zh-CN'
+    })
+
+    expect(items.find((item) => item.id === 'runtime')).toMatchObject({
+      label: `${todosText.agentResponding} · 已用 12 秒`,
+      status: 'in_progress'
+    })
+  })
+
+  it('switches the responding step to the still-waiting copy after 90 seconds', () => {
+    const messages = [
+      message({
+        id: 'user-1',
+        role: 'user',
+        status: 'success',
+        text: '你好',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      }),
+      message({
+        id: 'assistant-pending',
+        role: 'assistant',
+        status: 'pending',
+        text: '',
+        createdAt: '2026-01-01T00:00:05.000Z'
+      })
+    ]
+    const items = buildTodoItems(agent(), session(), messages, todosText, {
+      nowMs: Date.parse('2026-01-01T00:02:05.000Z'),
+      language: 'zh-CN'
+    })
+
+    const label = items.find((item) => item.id === 'runtime')?.label ?? ''
+    expect(label).toBe(`${todosText.agentResponding} · ${todosText.stillWaiting}`)
+    expect(label).not.toContain('已用')
+  })
+
+  it('leaves the completed responding step without elapsed copy', () => {
+    const messages = [
+      message({
+        id: 'user-1',
+        role: 'user',
+        status: 'success',
+        text: '你好',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      }),
+      message({
+        id: 'assistant-1',
+        role: 'assistant',
+        status: 'success',
+        text: '你好！',
+        createdAt: '2026-01-01T00:00:05.000Z'
+      })
+    ]
+    const items = buildTodoItems(agent(), session(), messages, todosText, {
+      nowMs: Date.parse('2026-01-01T00:02:05.000Z'),
+      language: 'zh-CN'
+    })
+
+    expect(items.find((item) => item.id === 'runtime')?.label).toBe(todosText.agentResponseCompleted)
+  })
+
   it('shows the task status panel after a user task is submitted while waiting for the assistant turn to start', () => {
     const messages = [
       message({ id: 'user-1', role: 'user', status: 'success', text: '你好' })

@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentSessionEntity, AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
@@ -114,9 +114,27 @@ export default function AgentSessionMessages({
   const turnRunning =
     runtimeSnapshot.sessions[activeSession.id]?.turnState === 'running' ||
     runtimeSnapshot.sessions[activeSession.id]?.turnState === 'queued'
+  // The pending assistant message's `createdAt` is the turn's start; its `updatedAt` only moves
+  // when content is written, which is exactly what does not happen before the first chunk.
+  const liveAssistantMessage = liveAssistantGroup?.messages.at(-1)
+  const liveAssistantStartedAt = liveAssistantMessage ? Date.parse(liveAssistantMessage.createdAt) : NaN
+  const livePendingStartedAt =
+    turnRunning && liveAssistantMessage?.status === 'pending' && Number.isFinite(liveAssistantStartedAt)
+      ? liveAssistantStartedAt
+      : undefined
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (!turnRunning) return
+    setNowMs(Date.now())
+    const intervalId = setInterval(() => setNowMs(Date.now()), 10_000)
+    return () => clearInterval(intervalId)
+  }, [turnRunning, livePendingStartedAt])
+  const livePendingElapsedMs =
+    livePendingStartedAt !== undefined ? Math.max(0, nowMs - livePendingStartedAt) : undefined
   const livePhaseText = resolveAgentRuntimePhaseText({
     phase: runtimeSnapshot.sessions[activeSession.id]?.turnPhase ?? null,
     cards: runtimeActivityCards,
+    elapsedMs: livePendingElapsedMs,
     text: t.runtimeText
   })
   const turnTrace = liveAssistantGroup

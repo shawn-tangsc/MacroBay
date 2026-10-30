@@ -13,7 +13,9 @@ export const agentTextEnWorkbench: AgentTextWorkbench = {
     agentResponding: 'Agent is responding',
     responseNeedsErrorHandling: 'Response needs error handling',
     agentResponseCompleted: 'Agent response completed',
-    waitingAgentResponse: 'Waiting for agent response'
+    waitingAgentResponse: 'Waiting for agent response',
+    elapsed: (duration) => `in progress for ${duration}`,
+    stillWaiting: 'Still waiting for the model…'
   },
   taskCenter: {
     title: 'Task center',
