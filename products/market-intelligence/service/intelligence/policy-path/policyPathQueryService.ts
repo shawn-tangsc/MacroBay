@@ -16,7 +16,7 @@ export type PolicyPathReading = Readonly<{
   meetingDate: string
   daysUntilMeeting: number
   hasProjectionMaterials: boolean
-  targetRange?: Readonly<{ lowerPercent: number; upperPercent: number }>
+  targetRange?: Readonly<{ lowerPercent: number; upperPercent: number; source?: 'statement' | 'fred' }>
   sep?: Readonly<{
     asOf: string
     medianPath?: Readonly<Record<string, number>>
@@ -120,9 +120,10 @@ function targetRangeOf(
   decided: PolicyPathReading['targetRange'] | undefined,
   read: (() => PolicyPathReading['targetRange'] | undefined) | undefined
 ): PolicyPathReading['targetRange'] | undefined {
-  if (decided) return decided
+  if (decided) return { ...decided, source: 'statement' }
   try {
-    return read?.()
+    const fred = read?.()
+    return fred ? { ...fred, source: 'fred' } : undefined
   } catch {
     return undefined
   }

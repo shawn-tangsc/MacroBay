@@ -106,6 +106,13 @@ describe('policy path analysis facts', () => {
     expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathSourceUrlInvalid)
   })
 
+  it('links a FRED fallback range to FRED even when a decision statement exists', async () => {
+    const result = await context({ ...reading, targetRange: { ...reading.targetRange!, source: 'fred' } })
+    const range = policyFacts(result).find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.targetRange)
+
+    expect(range?.sourceUrl).toBe('https://fred.stlouisfed.org/series/DFEDTARU')
+  })
+
   it('keeps the probability and names the gap when the 24-hour change is not available yet', async () => {
     const { probability, ...withoutProbability } = reading
     const result = await context({

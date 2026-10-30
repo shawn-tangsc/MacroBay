@@ -12,6 +12,7 @@ const service = (input: {
   meeting?: { eventKey: string; scheduledDate: string } | null
   facts?: Record<string, unknown> | null
   series?: PolicyPathObservation[]
+  readTargetRange?: () => { lowerPercent: number; upperPercent: number } | undefined
 }) => createPolicyPathQueryService({
   calendar: { nextFomcMeeting: () => input.meeting === null ? { state: 'unavailable', failureCode: 'meeting-not-found' } as const : { state: 'available', meeting: input.meeting! } },
   facts: {
@@ -19,7 +20,8 @@ const service = (input: {
     readLatestDecision: () => input.facts as never,
     readLatestSep: () => input.facts as never
   },
-  observations: { list: () => input.series ?? [] }
+  observations: { list: () => input.series ?? [] },
+  ...(input.readTargetRange ? { readTargetRange: input.readTargetRange } : {})
 })
 
 describe('policy path query service', () => {
@@ -33,11 +35,21 @@ describe('policy path query service', () => {
     expect(reading.meetingDate).toBe('2026-12-09')
     expect(reading.daysUntilMeeting).toBe(40)
     expect(reading.hasProjectionMaterials).toBe(true)
-    expect(reading.targetRange).toEqual({ lowerPercent: 3.75, upperPercent: 4 })
+    expect(reading.targetRange).toEqual({ lowerPercent: 3.75, upperPercent: 4, source: 'statement' })
     expect(reading.lastDecision?.vote).toEqual({ for: 10, against: 2 })
     expect(reading.probability).toMatchObject({ outcome: 'hike-25', changeInPp24h: -1, venue: 'polymarket' })
     expect(reading.probability?.range30d).toEqual({ min: 0.765, max: 0.775 })
     expect(reading.staleness).toBe('live')
+  })
+
+  it('marks a range that fell back to FRED as a FRED reading, not a statement one', () => {
+    const reading = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: null,
+      readTargetRange: () => ({ lowerPercent: 3.5, upperPercent: 3.75 })
+    }).read({ asOf: '2026-10-30T02:10:00.000Z' })!
+
+    expect(reading.targetRange).toEqual({ lowerPercent: 3.5, upperPercent: 3.75, source: 'fred' })
   })
 
   it('reports no reading when the calendar has no next meeting', () => {

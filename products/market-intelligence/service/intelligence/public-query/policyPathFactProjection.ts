@@ -95,13 +95,15 @@ export function projectPolicyPath(
   const statementUrl = safeUrl(reading.lastDecision?.statementUrl, caveats)
   const decisionDate = decisionDateOf(reading, statementUrl, asOf)
   if (reading.targetRange) {
+    // A statement-derived range links to the statement; a FRED fallback links to the series, even
+    // when an unrelated decision row happens to carry a statement URL.
+    const rangeUrl = reading.targetRange.source === 'fred'
+      ? POLICY_PATH_SOURCE_URLS.fredTargetUpper
+      : statementUrl ?? POLICY_PATH_SOURCE_URLS.fredTargetUpper
     add({
       metric: METRICS.targetRange, subject: 'fomc',
       value: `${reading.targetRange.lowerPercent.toFixed(2)}%-${reading.targetRange.upperPercent.toFixed(2)}%`,
-      unit: null, observedAt: decisionDate,
-      ...(statementUrl
-        ? { sourceUrl: statementUrl }
-        : { sourceUrl: POLICY_PATH_SOURCE_URLS.fredTargetUpper }),
+      unit: null, observedAt: decisionDate, sourceUrl: rangeUrl,
       suffix: decisionDate.slice(0, 10)
     })
   } else {
