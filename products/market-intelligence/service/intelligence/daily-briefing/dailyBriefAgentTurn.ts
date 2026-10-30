@@ -33,6 +33,11 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
     await input.runner.finish(started.sessionId, 'failed')
     return { state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection', sessionId: started.sessionId, toolInvocations }
   }
+  const unknown = unknownSelection(selection, input.document)
+  if (unknown) {
+    await input.runner.finish(started.sessionId, 'failed')
+    return { state: 'failed', failureCode: 'invalid-shape', failureDetail: `selection-unknown:${unknown}`, sessionId: started.sessionId, toolInvocations }
+  }
   const requests = (selection as { requests?: unknown }).requests
   if (Array.isArray(requests) && requests.length > 0) {
     const answer = await input.runner.continue(started.sessionId, `FIELD RESPONSE:\n${fieldResponse(input.document, requests, input.locale)}\nReturn the next selection JSON if you need to adjust; otherwise continue.`)
@@ -45,7 +50,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   const selectedDocument = selectDocument(input.document, selection)
   const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
-  const written = await input.runner.continue(started.sessionId, prompt, '任务 2/2：基于已选事件写导语、why、watch。')
+  const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`)
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
   let failureCode = 'invalid-json'
@@ -150,4 +155,23 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
     next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) }),
     provenance: Object.freeze({ ...document.provenance, selectionAudit: audit })
   })
+}
+
+function unknownSelection(selection: unknown, document: DailyBriefingDocument): string | undefined {
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown }
+  const nextKeys = new Set((document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))).map((item) => item.eventKey))
+  const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
+  const macroIds = new Set((document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
+  if (typeof value.focus === 'string' && !nextKeys.has(value.focus)) return value.focus
+  for (const key of ['news', 'macro', 'next'] as const) {
+    const list = value[key]
+    if (!Array.isArray(list)) continue
+    for (const id of list) {
+      if (typeof id !== 'string') return String(id)
+      if (key === 'news' && !newsIds.has(id)) return id
+      if (key === 'macro' && !macroIds.has(id)) return id
+      if (key === 'next' && !nextKeys.has(id)) return id
+    }
+  }
+  return undefined
 }
