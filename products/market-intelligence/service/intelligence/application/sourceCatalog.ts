@@ -184,6 +184,26 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     adapterConfig: { endpointUrl: 'https://status.kraken.com/api/v2/components.json' }
   }),
   source({
+    sourceId: 'policy-path-market',
+    displayName: 'Fed Decision Markets',
+    sourceGroup: 'macro-regulation',
+    adapterType: 'rest-api-poller',
+    category: 'macro',
+    // `manual` keeps the generic adapter runtime from arming a poller: the product's own ten-minute
+    // job owns this source's cadence, and the profile's enable flag is what that job reads.
+    defaultCollectionPreset: 'manual',
+    defaultScopePolicy: 'all',
+    supportsSentiment: false,
+    authMode: 'none',
+    supportsCredentialTest: false,
+    supportsRunNow: false,
+    parserStrategy: 'policy-path-market-v1',
+    readiness: 'live',
+    collectionOwner: 'product',
+    readinessNote: '预测市场对下一次 FOMC 会议的隐含概率；由产品自己的采集作业每十分钟读一次，只存衍生读数。',
+    adapterConfig: { endpointUrl: 'https://gamma-api.polymarket.com' }
+  }),
+  source({
     sourceId: 'twelve-data-market',
     displayName: 'Twelve Data (macro market)',
     sourceGroup: 'macro-regulation',
