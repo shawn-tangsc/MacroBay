@@ -196,7 +196,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <section className="mi-daily-briefing-page__content">
         {webSearchEnabled === false ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
-          <button type="button" onClick={() => onConfigureWebSearch?.()}>{text.aiSettings.goEnable}</button>
+          <button type="button" onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</button>
         </div> : null}
         {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.generating} minHeight={220} /><p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p></div> : null}
         {view.status === 'unavailable' ? <div className="mi-daily-briefing-page__empty" role="alert">
