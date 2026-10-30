@@ -101,8 +101,11 @@
 .mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-.mi-crypto-dashboard__capital-positioning-row { display: grid; min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__capital-positioning-row {
+  display: grid;
+  grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation));
+  min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
 .mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
@@ -220,7 +223,7 @@
  * Agent 列或页边距就会再次错位；让列自己按比例收放，这种错位就不存在了。
  */
 /* 并排形态的装饰（区内边距、列间分隔线）写在基础规则里，堆叠分支再把它们撤掉。 */
-.mi-crypto-dashboard__positioning-row > .mi-positioning-panel { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row > .mi-positioning-panel { padding-left: 0; border-left: 0; }
 
 .mi-crypto-dashboard__source-region { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__source-region > header { grid-column: 1 / -1; }
@@ -255,12 +258,14 @@
  */
 @container (max-width: 899px) {
   .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
+  .mi-crypto-dashboard__capital-positioning-row,
   .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .mi-crypto-dashboard__sentiment,
-  .mi-crypto-dashboard__positioning-row > .mi-positioning-panel {
+  .mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions {
     padding: 16px 0 0;
     border-top: 1px solid var(--mi-dashboard-line);
     border-left: 0;
+    border-right: 0;
   }
   .mi-capital-conditions__etf-flow { margin-right: 0; }
   .mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }

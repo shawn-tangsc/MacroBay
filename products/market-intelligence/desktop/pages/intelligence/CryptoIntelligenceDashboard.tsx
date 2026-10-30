@@ -165,13 +165,15 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} /> : null}
       {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
         text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
+      {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
+          beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
+        <SentimentPanel fearGreedState={fearGreedState} text={text} />
         <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={collectCapitalConditionsSources ? () => void refreshCapitalConditions() : undefined}
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} />
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
-        <SentimentPanel fearGreedState={fearGreedState} text={text} />
         <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
           onWindowChange={setPositioningWindow} text={text.positioning} />
       </div>

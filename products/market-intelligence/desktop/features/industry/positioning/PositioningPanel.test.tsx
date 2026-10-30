@@ -218,3 +218,12 @@ describe('combined readout', () => {
     expect(render()).toContain('六档判定')
   })
 })
+
+describe('time axis', () => {
+  it('labels five instants across the window so a dip can be placed in time', () => {
+    const markup = render()
+    const ticks = [...markup.matchAll(/class="mi-positioning-panel__tick">([^<]*)</g)].map(match => match[1])
+    expect(ticks).toHaveLength(5)
+    expect(ticks[0]).not.toBe(ticks.at(-1))
+  })
+})

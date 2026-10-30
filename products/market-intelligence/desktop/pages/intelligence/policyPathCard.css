@@ -1,0 +1,56 @@
+/* A rail card, not a full-width strip: same tokens as the calendar card beside it. */
+.mi-policy-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: none;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border, #22252d);
+  background: var(--surface, #0f1116);
+  color: var(--text, #e8e9ec);
+}
+.mi-policy-card__head { display: flex; align-items: center; gap: 8px; }
+.mi-policy-card__head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.mi-policy-card__chip {
+  margin-left: auto;
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  color: #c8d77a;
+  border: 1px solid #4a552a;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+.mi-policy-card__lead { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.mi-policy-card__value { font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.mi-policy-card__outcome { font-size: 11px; color: var(--muted, #8b8d94); }
+.mi-policy-card__delta { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-policy-card__delta[data-direction='up'] { color: #e0524c; }
+.mi-policy-card__delta[data-direction='down'] { color: #3fbf6f; }
+.mi-policy-card__delta[data-direction='flat'] { color: var(--muted, #8b8d94); }
+.mi-policy-card__facts { display: flex; flex-direction: column; gap: 3px; margin: 0; }
+.mi-policy-card__facts > div { display: flex; justify-content: space-between; gap: 10px; }
+.mi-policy-card__facts dt { color: var(--muted, #8b8d94); font-size: 11px; }
+.mi-policy-card__facts dd { margin: 0; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-policy-card__muted { color: var(--muted, #8b8d94); }
+.mi-policy-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border, #22252d) 70%, transparent);
+  color: var(--muted, #8b8d94);
+  font-size: 10.5px;
+}
+.mi-policy-card__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  background: none;
+  color: var(--text, #e8e9ec);
+  font-size: 10.5px;
+  cursor: pointer;
+  padding: 0;
+}
+.mi-policy-card__open:focus-visible { outline: 2px solid var(--accent, #b7cf52); outline-offset: 2px; }

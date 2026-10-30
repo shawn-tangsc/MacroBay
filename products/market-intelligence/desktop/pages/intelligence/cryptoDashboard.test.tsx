@@ -122,9 +122,12 @@ describe('crypto intelligence dashboard', () => {
     })))
     await flush()
 
-    const row = container.querySelector('.mi-crypto-dashboard__positioning-row')!
+    // Sentiment sits with the money rows: the reading order is 资金 → 风险偏好 → 杠杆.
+    const row = container.querySelector('.mi-crypto-dashboard__capital-positioning-row')!
     const gauge = row.querySelector('[data-sentiment-gauge]')!
-    const rows = row.querySelectorAll('[data-funding-latest]')
+    expect(row.querySelector('.mi-capital-conditions')).not.toBeNull()
+    expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
+    const rows = container.querySelectorAll('.mi-crypto-dashboard__positioning-row [data-funding-latest]')
     expect(gauge.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
     expect(gauge.querySelectorAll('[data-gauge-segment]')).toHaveLength(5)
     expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.getAttribute('data-gauge-bucket')).toBe('extreme-fear')
@@ -420,17 +423,19 @@ describe('crypto intelligence dashboard', () => {
     expect(dashboardRootRule).toContain('container-type: inline-size')
     expect(rowRule).toContain('border-top: 1px solid var(--mi-dashboard-line)')
     expect(rowRule).toContain('border-bottom: 1px solid var(--mi-dashboard-line)')
-    // 资金面带只有一块：它自己不再是两列，并排发生在面板内部的 content-row。
-    expect(rowRule).not.toContain('grid-template-columns')
+    // 资金面带现在是「情绪 | 资金面」两列；资金面内部的 content-row 仍是它自己的两列。
+    expect(rowRule).toContain('grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-sentiment-allocation: 1fr')
     expect(dashboardRootRule).toContain('--mi-dashboard-positioning-funding-allocation: 4fr')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__capital-positioning-row,')
     expect(capitalRule).not.toContain('border-radius')
     expect(capitalRule).not.toContain('border-top')
     expect(capitalRule).not.toContain('border-bottom')
+    // The positioning panel now spans the band on its own, so it must not keep the divider it
+    // needed when the gauge sat to its left.
     const fundingRule = cssBlock(styles, '.mi-crypto-dashboard__positioning-row > .mi-positioning-panel {')
-    expect(fundingRule).toContain('padding-left: var(--mi-dashboard-band-zone-inline)')
-    expect(fundingRule).toContain('border-left: 1px solid var(--mi-dashboard-line)')
+    expect(fundingRule).toContain('padding-left: 0')
+    expect(fundingRule).toContain('border-left: 0')
     expect(styles).not.toContain('mi-crypto-dashboard__capital-positioning-row .mi-crypto-dashboard__state-card')
     expect(styles).toContain('mi-capital-conditions__etf-table')
   })
@@ -442,7 +447,7 @@ describe('crypto intelligence dashboard', () => {
     expect(sentimentRule).toContain('container-type: inline-size')
     expect(sentimentRule).toContain('container-name: mi-sentiment-positioning')
     expect(stackStyles).toContain('.mi-crypto-dashboard__sentiment,')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row > .mi-positioning-panel')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions')
   })
 
   it('uses named compact rhythm inside the real data bands', () => {
@@ -560,10 +565,10 @@ describe('crypto intelligence dashboard', () => {
     const stackStyles = cssBlock(styles, '@container (max-width: 899px)')
 
     expect(contentRowRule).toContain('grid-template-columns: minmax(240px, var(--mi-dashboard-capital-summary-allocation)) minmax(0, var(--mi-dashboard-market-flow-allocation))')
-    expect(positioningRule).toContain('grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation))')
+    expect(positioningRule).toContain('grid-template-columns: minmax(0, 1fr)')
     // 并排不再挂在"内容宽 ≥ 1176px"的闸门上：那道闸门在 16 寸全屏上差 4px 就整块塌掉。
     expect(styles).not.toContain('@container (min-width: 1176px)')
-    expect(stackStyles).toContain('.mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }')
+    expect(stackStyles).toContain('.mi-crypto-dashboard__capital-positioning-row,')
     expect(stackStyles).toContain('.mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }')
     expect(stackStyles).toContain('.mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }')
   })
@@ -606,7 +611,7 @@ describe('crypto intelligence dashboard', () => {
     expect(contentWidth(compactAt + 1, 'split'), '切换点以上（双栏）').toBeGreaterThanOrEqual(stackBelow)
   })
 
-  it('renders capital in the first data band and sentiment/funding in the second', async () => {
+  it('renders sentiment with capital in the first band and the perpetual card in the second', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -618,9 +623,9 @@ describe('crypto intelligence dashboard', () => {
     await flush()
     const row = container.querySelector<HTMLElement>('.mi-crypto-dashboard__capital-positioning-row')!
     const capital = row.querySelector<HTMLElement>('.mi-capital-conditions')!
-    expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions'])
+    expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-crypto-dashboard__sentiment', 'mi-capital-conditions'])
     const positioning = container.querySelector<HTMLElement>('.mi-crypto-dashboard__positioning-row')!
-    expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-crypto-dashboard__sentiment', 'mi-positioning-panel'])
+    expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-positioning-panel'])
     expect([...capital.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions__content-row'])
     expect([...capital.firstElementChild!.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions__summary', 'mi-capital-conditions__etf-flow'])
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')

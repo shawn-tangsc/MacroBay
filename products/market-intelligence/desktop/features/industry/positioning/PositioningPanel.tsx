@@ -325,8 +325,11 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
           )
         })}
         {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
-        <text x={VIEW.left} y={VIEW.height - 1} className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows[0]!.observedAt) : ''}</text>
-        <text x={VIEW.right} y={VIEW.height - 1} textAnchor="end" className="mi-positioning-panel__tick">{count > 0 ? formatTime(rows.at(-1)!.observedAt) : ''}</text>
+        {axisTicks(startMs, span, count).map(tick => (
+          <text key={tick.at} x={x(tick.at)} y={VIEW.height - 1}
+            textAnchor={tick.first ? 'start' : tick.last ? 'end' : 'middle'}
+            className="mi-positioning-panel__tick">{formatTime(new Date(tick.at).toISOString())}</text>
+        ))}
       </svg>
       {hovered && hover ? (
         <div className="mi-positioning-panel__tooltip" style={tooltipStyle(hover)}>
@@ -378,4 +381,19 @@ function chipWidthFor(label: string): number {
   let width = 0
   for (const character of label) width += /[\u3000-\u9fff]/.test(character) ? 9 : 5.2
   return Math.round(width + 12)
+}
+
+/**
+ * Five evenly spaced instants across the window, snapped to the hour so the labels read as
+ * round times. The card is full width now, and two labels at the ends left most of the axis
+ * unreadable — a reader could not tell where in the week a dip happened.
+ */
+function axisTicks(startMs: number, span: number, count: number): readonly Readonly<{ at: number; first: boolean; last: boolean }>[] {
+  if (count < 2 || span <= 0) return []
+  const steps = 4
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    const raw = startMs + (span * index) / steps
+    const at = index === 0 ? startMs : index === steps ? startMs + span : Math.round(raw / 3_600_000) * 3_600_000
+    return { at, first: index === 0, last: index === steps }
+  })
 }
