@@ -56,7 +56,9 @@ export function createDailyBriefEditorAgentSeed(
     messagesBySessionId: {},
     workspaces: [],
     agentSkills: [{ agentId: AGENT_ID, skillId: 'daily-brief-editor-skill-v1', isEnabled: true }],
-    agentProductToolPackages: [{ agentId: AGENT_ID, productId: 'market-intelligence', permissionMode: 'allow-read-only', updatedAt: CREATED_AT }]
+    // No market-intelligence product tools: the editor only needs the built-in WebSearch/WebFetch.
+    // Registering the same product tool package on a second agent collides by tool id.
+    agentProductToolPackages: []
   }
 }
 
