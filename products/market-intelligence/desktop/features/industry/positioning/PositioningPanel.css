@@ -1,6 +1,5 @@
 .mi-positioning-panel {
   --mi-positioning-summary-width: 264px;
-  --mi-positioning-chart-height: 230px;
   display: grid;
   gap: 10px;
   min-width: 0;
@@ -74,7 +73,9 @@
 .mi-positioning-panel__legend span[data-series='eth'] i { background: var(--mi-dashboard-etf-eth); }
 .mi-positioning-panel__legend em { font-style: normal; opacity: .8; }
 .mi-positioning-panel__chart { position: relative; width: 100%; min-width: 0; }
-.mi-positioning-panel__chart svg { display: block; width: 100%; height: calc(var(--mi-positioning-chart-height) - 16px); cursor: crosshair; }
+/* Width-driven: the viewBox keeps its aspect, so the drawing fills the card instead of being
+   letterboxed by a fixed height (that is what left the empty sides on a wide window). */
+.mi-positioning-panel__chart svg { display: block; width: 100%; height: auto; cursor: crosshair; }
 .mi-positioning-panel__lane { fill: var(--mi-dashboard-muted); font-size: 9px; letter-spacing: .05em; }
 .mi-positioning-panel__rule { stroke: var(--mi-dashboard-line); stroke-width: 1; }
 .mi-positioning-panel__zero { stroke: var(--mi-dashboard-text); stroke-width: 1; opacity: .5; }
