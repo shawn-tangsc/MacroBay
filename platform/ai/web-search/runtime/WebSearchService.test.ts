@@ -42,10 +42,7 @@ describe('WebSearchService', () => {
   it('fetches URLs successfully with the default fetch provider', async () => {
     const service = createWebSearchService({
       credentialStore: createWebSearchCredentialStore(),
-      getSettings: async () => ({
-        ...createDefaultWebSearchSettings(),
-        providerOverrides: { fetch: { enabled: true } }
-      }),
+      getSettings: async () => createDefaultWebSearchSettings(),
       fetch: (async () => new Response('plain text body', { headers: { 'content-type': 'text/plain' } })) as typeof globalThis.fetch
     })
 
@@ -113,11 +110,14 @@ describe('WebSearchService', () => {
     })
   })
 
-  it('does not execute providers that are disabled by default', async () => {
+  it('does not execute a provider that is explicitly disabled', async () => {
     let called = false
     const service = createWebSearchService({
       credentialStore: createWebSearchCredentialStore(),
-      getSettings: async () => createDefaultWebSearchSettings(),
+      getSettings: async () => ({
+        ...createDefaultWebSearchSettings(),
+        providerOverrides: { fetch: { enabled: false } }
+      }),
       fetch: (async () => {
         called = true
         return new Response('never')
@@ -128,6 +128,18 @@ describe('WebSearchService', () => {
       code: 'provider_disabled'
     })
     expect(called).toBe(false)
+  })
+
+  it('lists the credential-free fetch provider as enabled by default', async () => {
+    const service = createWebSearchService({
+      credentialStore: createWebSearchCredentialStore(),
+      getSettings: async () => createDefaultWebSearchSettings()
+    })
+
+    const views = await service.listProviderViews()
+
+    expect(views.find((view) => view.id === 'fetch')).toMatchObject({ enabled: true })
+    expect(views.find((view) => view.id === 'tavily')).toMatchObject({ enabled: false })
   })
 
   it('rejects unsafe fetch URLs before dispatching to any provider driver', async () => {

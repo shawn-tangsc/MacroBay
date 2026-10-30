@@ -32,6 +32,8 @@ export type WebSearchProviderPreset = {
   name: string
   type: WebSearchProviderType
   capabilities: WebSearchProviderCapabilityPreset[]
+  /** Enabled before the user touches any setting, for providers that work without credentials. */
+  enabledByDefault?: boolean
   websites?: {
     apiKey?: string
     docs?: string
