@@ -5,7 +5,7 @@ describe('daily brief agent runner', () => {
   it('creates a session, sends the first prompt, continues, and records state', async () => {
     const port = {
       ensure: vi.fn(async () => ({ sessionId: 's1', created: true })),
-      send: vi.fn(async () => ({})),
+      send: vi.fn(async () => ({ assistantMessage: { searchableText: '{}' } })),
       state: vi.fn(async () => undefined)
     }
     const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
