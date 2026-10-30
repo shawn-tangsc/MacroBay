@@ -298,6 +298,6 @@ function macroTime(value: string, formatTime: (value: string, precision: 'minute
 }
 
 function clockWithZone(value: string, formatTime: (value: string, precision: 'minute') => string): string {
-  const parts = formatTime(value, 'minute').split(' ')
-  return [parts[1], ...parts.slice(2)].filter(Boolean).join(' ')
+  const [date, time, ...zone] = formatTime(value, 'minute').split(' ')
+  return `${date.slice(5)}\n${[time, ...zone].filter(Boolean).join(' ')}`
 }
