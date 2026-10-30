@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
@@ -106,12 +106,20 @@ function fakeClient(overrides: Record<string, unknown> = {}) {
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
+// The fixture editions are dated 2026-10-30, and the rail marks "today" from the wall clock.
+// Without a frozen clock this test passes only before midnight and fails on the next calendar day.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-30T04:00:00.000Z'))
+})
+
 afterEach(() => {
   if (root) act(() => root!.unmount())
   container?.remove()
   root = null
   container = null
   vi.unstubAllGlobals()
+  vi.useRealTimers()
 })
 
 async function renderPage(client: ReturnType<typeof fakeClient>, onBack = vi.fn(), onConfigureSources?: () => void): Promise<HTMLDivElement> {
