@@ -80,6 +80,19 @@ describe('session-scoped allowed tools', () => {
     })
   })
 
+  it('never pre-approves write or execute builtins a session asked for', () => {
+    const settings = buildClaudeCodeSettingsFromComposition({
+      ...composition(),
+      sessionAllowedTools: ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebSearch']
+    })
+
+    expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+    expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('Bash')).toEqual({
+      kind: 'prompt',
+      toolName: 'Bash'
+    })
+  })
+
   it('drops unknown, duplicated and non-builtin session names', () => {
     const settings = buildClaudeCodeSettingsFromComposition({
       ...composition(),
