@@ -71,7 +71,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '',
         'Write this exact JSON shape:',
         JSON.stringify({
-          lede: '2-3 sentences: the day’s main line and its tension. No numbers outside FACTS.',
+          lede: '2-3 sentences led by the day’s dominant event or tension. Choose one pattern: event shock, surprise gap, opposing forces, flow/price structure, next-event setup, outlier, or falsification. Do not recite the data table or the headlines. No numbers outside FACTS.',
           items: [
             { factId: 'news:<id>', why: 'one sentence, at most 200 characters' },
             { factId: 'macro:<key>', why: 'one sentence, at most 200 characters' }
@@ -99,7 +99,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- There is no required number of items or importance rows. The model, not a cap, decides visibility.',
         '- conclusionTranslation: only when the conclusion summary is in a different language from LOCALE.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
-        '- The lede is a takeaway and its tension, never a list of the news headlines shown below; do not enumerate them again.',
+        '- The lede is event-first: lead with the dominant event/tension and its transmission, not with a direction or a data recital. Never enumerate the news headlines or the data rows. Avoid generic openers such as “market sentiment is cautious” or “mixed signals”.',
         '- nextFocus: only for the next event list. Explain why the focus matters, then 2-3 if/then implications. Use only numbers in FACTS.'
       ].join('\n')
     }

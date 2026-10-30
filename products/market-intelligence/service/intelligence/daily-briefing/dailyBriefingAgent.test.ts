@@ -103,6 +103,7 @@ describe('daily briefing editorial validation and application', () => {
     expect(validateDailyBriefingEditorial({ ...validOutput, lede: 'https://example.com' }, document(), 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'forbidden-content' })
     expect(validateDailyBriefingEditorial({ ...validOutput, lede: 'ETF 买入增加，资金面改善。' }, document(), 'zh-CN').ok).toBe(true)
+    expect(validateDailyBriefingEditorial({ ...validOutput, lede: '过去 24 小时，20:30 的发布是主线。' }, document(), 'zh-CN').ok).toBe(true)
     expect(validateDailyBriefingEditorial({ ...validOutput, lede: '建议买入 BTC。' }, document(), 'zh-CN'))
       .toMatchObject({ ok: false, failureCode: 'forbidden-content' })
     expect(validateDailyBriefingEditorial({ ...validOutput, lede: 'x'.repeat(601) }, document(), 'zh-CN'))
@@ -150,6 +151,18 @@ describe('daily briefing agent', () => {
     }))
     const agent = createDailyBriefingAgent({ invoke: invoke as never })
     expect(await agent.generate({ document: document(), locale: 'zh-CN' })).toMatchObject({ state: 'agent' })
+  })
+
+  it('repairs a validation failure in a follow-up turn', async () => {
+    const invalid = { ...validOutput, lede: '999 是事实包外的数字。' }
+    const invoke = vi.fn()
+      .mockResolvedValueOnce({ ok: true as const, output: JSON.stringify(invalid), providerId: 'p', modelId: 'm1', trace: { taskId: 't1', durationMs: 1 } })
+      .mockResolvedValueOnce({ ok: true as const, output: JSON.stringify(validOutput), providerId: 'p', modelId: 'm1', trace: { taskId: 't2', durationMs: 1 } })
+    const agent = createDailyBriefingAgent({ invoke: invoke as never })
+    const result = await agent.generate({ document: document(), locale: 'zh-CN' })
+    expect(result.state).toBe('agent')
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect((invoke.mock.calls[1]?.[0] as { messages: unknown[] }).messages).toHaveLength(4)
   })
 
   it('falls back to the untouched template on an error, invalid JSON or a bad fact', async () => {

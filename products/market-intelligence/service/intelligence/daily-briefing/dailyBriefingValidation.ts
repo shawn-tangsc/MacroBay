@@ -31,7 +31,7 @@ export type DailyBriefingValidationFailure =
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
-  | Readonly<{ ok: false; failureCode: DailyBriefingValidationFailure }>
+  | Readonly<{ ok: false; failureCode: DailyBriefingValidationFailure; detail?: string }>
 
 export type DailyBriefingEditorialMeta = Readonly<{
   promptVersion: string
@@ -103,8 +103,14 @@ export function validateDailyBriefingEditorial(
     ...(nextFocus ? [nextFocus.why, ...nextFocus.watch.flatMap((entry) => [entry.condition, entry.implication])] : []),
     ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
     ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : [])].join('\n')
-  if (forbiddenContent(prose)) return fail('forbidden-content')
-  if (!numbersAreKnown(prose, document)) return fail('unknown-number')
+  const forbidden = forbiddenContent(prose)
+  if (forbidden) return fail('forbidden-content', forbidden)
+  // Times are facts from calendar timestamps but are written as HH:mm, not as a bare number; do
+  // not let a legitimate "20:30" fail the numeric whitelist. Counts of the shown candidate set are
+  // also safe and are not stored as string tokens in the document.
+  const numericProse = prose.replace(/\b\d{1,2}:\d{2}\b/g, ' ')
+  const unknown = unknownNumber(numericProse, document)
+  if (unknown) return fail('unknown-number', unknown)
   return Object.freeze({
     ok: true as const,
     value: Object.freeze({
@@ -200,8 +206,8 @@ function allDataRows(document: DailyBriefingDocument): Array<BriefingMarketRow |
   return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
 }
 
-function fail(failureCode: DailyBriefingValidationFailure): DailyBriefingValidation {
-  return Object.freeze({ ok: false as const, failureCode })
+function fail(failureCode: DailyBriefingValidationFailure, detail?: string): DailyBriefingValidation {
+  return Object.freeze({ ok: false as const, failureCode, ...(detail ? { detail } : {}) })
 }
 
 function optionalText(value: unknown, maximum: number): string | undefined | false {
@@ -215,18 +221,18 @@ function needsTranslation(summary: string, locale: 'zh-CN' | 'en-US'): boolean {
   return locale === 'zh-CN' ? !hasCjk : hasCjk
 }
 
-function forbiddenContent(text: string): boolean {
-  return /https?:\/\/|www\.|```|<script|建议\s*(买入|卖出|做多|做空)|目标价|必涨|必跌|price target|buy now|sell now|go long|go short/i.test(text)
+function forbiddenContent(text: string): string | undefined {
+  return /https?:\/\/\S*|www\.\S*|```|<script|建议\s*(?:买入|卖出|做多|做空)|目标价|必涨|必跌|price target|buy now|sell now|go long|go short/i.exec(text)?.[0]
 }
 
-function numbersAreKnown(text: string, document: DailyBriefingDocument): boolean {
+function unknownNumber(text: string, document: DailyBriefingDocument): string | undefined {
   const allowed = numericWhitelist(document)
   for (const token of text.match(/-?\d+(?:\.\d+)?/g) ?? []) {
     const normalized = token.replace(/,/g, '')
     if (allowed.has(normalized) || allowed.has(normalized.replace(/^-/, ''))) continue
-    return false
+    return token
   }
-  return true
+  return undefined
 }
 
 function numericWhitelist(document: DailyBriefingDocument): Set<string> {
@@ -245,6 +251,11 @@ function numericWhitelist(document: DailyBriefingDocument): Set<string> {
     else if (value && typeof value === 'object') Object.values(value).forEach(visit)
   }
   visit(document)
+  // Safe counts/time anchors that the prose may legitimately name.
+  add(24)
+  add(document.news.items.length)
+  add(document.news.macro.length)
+  add(document.citations.length)
   return values
 }
 

@@ -45,6 +45,7 @@ export type DailyBriefingEditorialResult = Readonly<{
   document: DailyBriefingDocument
   state: 'agent' | 'template'
   failureCode?: string
+  failureDetail?: string
 }>
 
 export type DailyBriefingService = Readonly<{
@@ -98,12 +99,12 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     if (deps.editorial) {
       try {
-        const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 60_000)
+        const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 120_000)
         document = editorial.document
         if (editorial.state !== 'agent') {
           document = Object.freeze({
             ...document,
-            provenance: Object.freeze({ ...document.provenance, editorialFailure: editorial.failureCode ?? 'editorial-fallback' })
+            provenance: Object.freeze({ ...document.provenance, editorialFailure: editorial.failureCode ?? 'editorial-fallback', ...(editorial.failureDetail ? { editorialFailureDetail: editorial.failureDetail } : {}) })
           })
         }
       } catch {

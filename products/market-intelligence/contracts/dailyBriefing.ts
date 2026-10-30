@@ -8,8 +8,8 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * its window and observation time. The main process builds it; the renderer never re-derives it.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 4,
-  policyVersion: 'daily-briefing.v15',
+  schemaVersion: 5,
+  policyVersion: 'daily-briefing.v16',
   windowHours: 24,
   maximumBytes: 256 * 1024,
   maximumNewsItems: 50,
@@ -24,8 +24,8 @@ export const dailyBriefingPolicy = Object.freeze({
 })
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -241,6 +241,7 @@ export type DailyBriefingDocument = Readonly<{
     }>
     /** Present when the fact layer shipped because the editorial layer did not run. */
     editorialFailure?: string
+    editorialFailureDetail?: string
   }>
 }>
 

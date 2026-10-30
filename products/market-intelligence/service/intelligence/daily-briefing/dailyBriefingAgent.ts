@@ -15,6 +15,7 @@ export type DailyBriefingAgentResult = Readonly<{
   document: DailyBriefingDocument
   state: 'agent' | 'template'
   failureCode?: EditorialFailure
+  failureDetail?: string
 }>
 
 export type DailyBriefingAgent = Readonly<{
@@ -38,33 +39,59 @@ export function createDailyBriefingAgent(deps: Readonly<{
   return {
     async generate(input) {
       const promptVersion = deps.promptVersion ?? dailyBriefingPromptVersion
-      const messages = buildDailyBriefingPrompt({ document: input.document, locale: input.locale })
-      let result: Awaited<ReturnType<typeof deps.invoke>>
-      try {
-        result = await deps.invoke({
-          taskId: `daily-briefing:${input.document.edition.date}:${input.locale}`,
-          messages,
-          timeoutMs: 55_000,
-          ...(input.providerId ? { providerId: input.providerId } : {}),
-          ...(input.modelId ? { modelId: input.modelId } : {}),
-          parse: (value) => value
-        })
-      } catch {
-        return templateResult(input.document, 'provider-error')
+      let messages = buildDailyBriefingPrompt({ document: input.document, locale: input.locale })
+      let lastFailure: EditorialFailure | undefined
+      let lastDetail: string | undefined
+      for (let attempt = 0; attempt < 3; attempt++) {
+        let result: Awaited<ReturnType<typeof deps.invoke>>
+        try {
+          result = await deps.invoke({
+            taskId: `daily-briefing:${input.document.edition.date}:${input.locale}:${attempt}`,
+            messages,
+            timeoutMs: 40_000,
+            ...(input.providerId ? { providerId: input.providerId } : {}),
+            ...(input.modelId ? { modelId: input.modelId } : {}),
+            parse: (value) => value
+          })
+        } catch {
+          return templateResult(input.document, 'provider-error')
+        }
+        if (!result.ok) return templateResult(input.document, result.errorCode)
+        const raw = typeof result.output === 'string' ? result.output : JSON.stringify(result.output)
+        const parsed = parseEditorial(result.output)
+        if (!parsed) {
+          lastFailure = 'invalid-json'
+          lastDetail = 'the response was not a JSON object'
+        } else {
+          const validation = validateDailyBriefingEditorial(parsed, input.document, input.locale)
+          if (validation.ok) {
+            return Object.freeze({
+              document: applyDailyBriefingEditorial(input.document, validation.value, {
+                promptVersion,
+                model: result.modelId || input.modelId || 'unknown',
+                source: input.source ?? 'default'
+              }),
+              state: 'agent' as const
+            })
+          }
+          lastFailure = validation.failureCode
+          lastDetail = validation.detail
+        }
+        if (attempt < 2) {
+          messages = [
+            ...messages,
+            { role: 'assistant' as const, content: raw },
+            {
+              role: 'user' as const,
+              content: [
+                `Your previous JSON failed validation: ${lastFailure}${lastDetail ? ` (${lastDetail})` : ''}.`,
+                'Rewrite the complete JSON now. Keep the same fact ids, remove the offending value, and use only numbers that appear verbatim in FACTS. Do not give trade advice, price targets, URLs or new facts.'
+              ].join(' ')
+            }
+          ]
+        }
       }
-      if (!result.ok) return templateResult(input.document, result.errorCode)
-      const parsed = parseEditorial(result.output)
-      if (!parsed) return templateResult(input.document, 'invalid-json')
-      const validation = validateDailyBriefingEditorial(parsed, input.document, input.locale)
-      if (!validation.ok) return templateResult(input.document, validation.failureCode)
-      return Object.freeze({
-        document: applyDailyBriefingEditorial(input.document, validation.value, {
-          promptVersion,
-          model: result.modelId || input.modelId || 'unknown',
-          source: input.source ?? 'default'
-        }),
-        state: 'agent' as const
-      })
+      return templateResult(input.document, lastFailure ?? 'invalid-json', lastDetail)
     }
   }
 }
@@ -88,6 +115,6 @@ function parseEditorial(raw: unknown): unknown {
   }
 }
 
-function templateResult(document: DailyBriefingDocument, failureCode: EditorialFailure): DailyBriefingAgentResult {
-  return Object.freeze({ document, state: 'template' as const, failureCode })
+function templateResult(document: DailyBriefingDocument, failureCode: EditorialFailure, failureDetail?: string): DailyBriefingAgentResult {
+  return Object.freeze({ document, state: 'template' as const, failureCode, ...(failureDetail ? { failureDetail } : {}) })
 }

@@ -56,7 +56,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     void (async () => {
-      const today = await withDeadline(client.getToday({ locale, timeZone }), 75_000).catch(() => undefined)
+      const today = await withDeadline(client.getToday({ locale, timeZone }), 150_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale, timeZone }), 8_000).catch(() => undefined)
       if (!active) return
       const rows = listed?.state === 'available' ? [...listed.result.editions] : []
@@ -148,6 +148,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     copyTimer.current = window.setTimeout(() => setCopyState('idle'), 2_000)
   }
 
+  const editorialFailed = view.status === 'ready' && Boolean(view.document.provenance.editorialFailure) && view.document.provenance.editorialFailure !== 'editorial-disabled'
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
   const appendix = view.status === 'ready' && view.document.conclusion
     ? [...new Set([...view.document.conclusion.dataGaps, ...view.document.conclusion.caveats])]
@@ -162,10 +163,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'ready' && view.kind === 'today' ? <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
           {regenerating ? text.regenerating : text.regenerate}
         </button> : null}
-        {view.status === 'ready' ? <button className="mi-daily-briefing__export" type="button" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
+        {view.status === 'ready' && !editorialFailed ? <button className="mi-daily-briefing__export" type="button" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
           {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
         </button> : null}
-        {view.status === 'ready' ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
+        {view.status === 'ready' && !editorialFailed ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
         </button> : null}
         <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
@@ -190,22 +191,29 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           </div>
         </div> : null}
         {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
-        {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status" title={view.document.provenance.editorialFailure}>{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}
+        {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status" title={view.document.provenance.editorialFailureDetail ?? view.document.provenance.editorialFailure}>{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}
+        {editorialFailed ? <div className="mi-daily-briefing-page__empty" role="alert">
+          <h2>{text.aiSettings.notApplied}</h2>
+          <p>{text.aiSettings.failedHint}</p>
+          <div className="mi-daily-briefing-page__empty-actions">
+            <button type="button" className="mi-daily-briefing-page__primary" disabled={regenerating} onClick={() => void regenerate()}>{regenerating ? text.regenerating : text.regenerate}</button>
+          </div>
+        </div> : null}
         {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
           <p>{text.emptyGuide}</p>
           {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
         </div> : null}
-        {view.status === 'ready' ? <div className="mi-daily-briefing-page__paper">
+        {view.status === 'ready' && !editorialFailed ? <div className="mi-daily-briefing-page__paper">
           <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
-      {appendix.length > 0 ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits}>
+      {appendix.length > 0 && !editorialFailed ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits}>
         <h2>{text.sections.limits}</h2>
         {appendix.map((entry) => <p key={entry}>{entry}</p>)}
       </aside> : null}
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => setSettingsOpen(false)} />
-    {view.status === 'ready' ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
+    {view.status === 'ready' && !editorialFailed ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
       </div>
