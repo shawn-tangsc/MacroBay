@@ -105,7 +105,7 @@
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
-.mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
+.mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }
@@ -180,6 +180,16 @@
 .mi-capital-conditions__chart-ticks { display: flex; justify-content: space-between; min-width: 0; margin: 4px 0 0 var(--mi-dashboard-etf-flow-axis-width); color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1; }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
 .mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 64px; overflow: visible; }
+/* The dial is the positioning context: the score is drawn into the arc's mouth rather than
+   stacked under it, so the reading and the needle cannot look like two unrelated things. */
+.mi-crypto-dashboard__sentiment-dial { position: relative; display: grid; justify-items: center; }
+.mi-crypto-dashboard__sentiment-dial strong {
+  /* The dial renders 112x64 from a 120x68 viewBox whose baseline is y=60; the score sits just
+     inside that baseline so it reads as the gauge's value rather than a caption under it. */
+  position: absolute; right: 0; bottom: 9px; left: 0;
+  color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px; font-weight: 650; line-height: 1; text-align: center;
+}
 .mi-crypto-dashboard__gauge-segment { fill: none; stroke-width: 10; }
 .mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'],
 .mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
