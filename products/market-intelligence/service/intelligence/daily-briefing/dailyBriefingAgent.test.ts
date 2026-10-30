@@ -78,6 +78,37 @@ const validOutput = {
   }
 }
 
+const documentWithMacro = (eventKeys: readonly string[], withNews = true): DailyBriefingDocument => {
+  const base = document()
+  const template = base.news.macro[0]!
+  const macro = eventKeys.map((eventKey, index) => ({
+    ...template,
+    eventKey,
+    title: `High impact release ${index + 1}`,
+    scheduledAt: `2026-10-29T${String(12 + index).padStart(2, '0')}:30:00.000Z`
+  }))
+  return { ...base, news: { ...base.news, items: withNews ? base.news.items : [], macro, macroCandidates: macro } }
+}
+
+const hiddenOnlyEditorial = (eventKeys: readonly string[]) => ({
+  lede: 'Stablecoin contraction keeps the read unchanged.',
+  ledePattern: 'structure',
+  items: [],
+  hidden: eventKeys.map((eventKey) => ({ factId: `macro:${eventKey}`, reason: 'already reflected in the conclusion' })),
+  importance: []
+})
+
+const webTool = (urls: readonly string[], publishedAt = '2026-10-29T00:00:00.000Z') => [{
+  toolCallId: 't', toolName: 'WebSearch',
+  output: { results: urls.map((url) => ({ title: url, url, publishedAt })) }
+}]
+
+const repeatedWebTool = (count: number, url: string, publishedAt = '2026-10-29T00:00:00.000Z') =>
+  Array.from({ length: count }, (_, index) => ({
+    toolCallId: `t${index}`, toolName: 'WebSearch',
+    output: { results: [{ title: 'BLS', url, publishedAt }] }
+  }))
+
 describe('daily briefing editorial validation and application', () => {
   it('accepts prose that only repeats facts and cannot downgrade the must floor', () => {
     const validated = validateDailyBriefingEditorial(validOutput, document(), 'zh-CN')
@@ -127,6 +158,21 @@ describe('daily briefing editorial validation and application', () => {
       importance: [{ factId: 'data:btc', tier: 'reference', reasonText: 'less important' }]
     }, { promptVersion: 'v1', model: 'm1', source: 'default' })
     expect(applied.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
+  })
+
+  it('keeps the key high-impact release visible when the editorial hides every release', () => {
+    const source = document()
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      items: [{ factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' }],
+      hidden: [{ factId: 'macro:US.CPI', reason: '已反映在结论中。' }],
+      importance: []
+    }, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.news.items[0]).toMatchObject({ itemId: 'n1', visibility: 'shown' })
+    expect(applied.news.macro[0]).toMatchObject({ eventKey: 'US.CPI', visibility: 'shown' })
   })
 })
 
@@ -203,6 +249,43 @@ describe('daily briefing web evidence', () => {
     const conflictTool = [{ toolCallId: 't', toolName: 'WebSearch', output: { results: [{ title: 'BLS', url: 'https://www.bls.gov/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }, { title: 'Other', url: 'https://example.com/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }] } }]
     const conflict = validateDailyBriefingEditorial({ ...validOutput, webEvidence: [webEvidence[0], { ...webEvidence[0], value: '3.1%', sourceName: 'Other', sourceUrl: 'https://example.com/cpi' }] }, document(), 'zh-CN', conflictTool)
     expect(conflict.ok).toBe(true)
-    if (conflict.ok) expect(conflict.value.webEvidence?.at(-1)?.sourceConflict).toBe(true)
+    if (conflict.ok) {
+      expect(conflict.value.webEvidence).toHaveLength(1)
+      expect(conflict.value.webEvidence?.[0]).toMatchObject({ value: '3.2%', sourceName: 'BLS', sourceConflict: true })
+    }
+  })
+
+  it('keeps the official value in citations when a non-official source conflicts', () => {
+    const official = { eventKey: 'US.CPI', field: 'consensus', value: '3.2%', sourceName: 'BLS', sourceUrl: 'https://www.bls.gov/cpi', publishedAt: '2026-10-29T00:00:00.000Z' }
+    const unofficial = { ...official, value: '3.1%', sourceName: 'Other', sourceUrl: 'https://example.com/cpi' }
+    const tool = webTool([official.sourceUrl, unofficial.sourceUrl])
+    for (const webEvidence of [[unofficial, official], [official, unofficial]]) {
+      const validated = validateDailyBriefingEditorial({ ...validOutput, webEvidence }, document(), 'zh-CN', tool)
+      expect(validated.ok).toBe(true)
+      if (!validated.ok) continue
+      expect(validated.value.webEvidence).toHaveLength(1)
+      expect(validated.value.webEvidence?.[0]).toMatchObject({ value: '3.2%', sourceName: 'BLS', sourceConflict: true })
+      const applied = applyDailyBriefingEditorial(document(), validated.value, { promptVersion: 'v1', model: 'm', source: 'default' })
+      expect(applied.citations).toHaveLength(1)
+      expect(applied.citations[0]).toMatchObject({ sourceLabel: 'BLS', statement: 'US.CPI consensus: 3.2% (source conflict)' })
+    }
+  })
+
+  it('rejects a fourth event and a seventh search', () => {
+    const events = ['US.CPI', 'US.NFP', 'US.PCE', 'US.GDP']
+    const urls = events.map((eventKey) => `https://www.bls.gov/${eventKey.toLowerCase()}`)
+    const evidence = events.map((eventKey, index) => ({
+      eventKey, field: 'consensus', value: '1%', sourceName: 'BLS', sourceUrl: urls[index]!, publishedAt: '2026-10-29T00:00:00.000Z'
+    }))
+    expect(validateDailyBriefingEditorial({ ...hiddenOnlyEditorial(events), webEvidence: evidence }, documentWithMacro(events, false), 'zh-CN', webTool(urls)))
+      .toMatchObject({ ok: false, failureCode: 'invalid-shape' })
+
+    const one = ['US.CPI']
+    const url = 'https://www.bls.gov/cpi'
+    const single = { eventKey: 'US.CPI', field: 'consensus', value: '3.2%', sourceName: 'BLS', sourceUrl: url, publishedAt: '2026-10-29T00:00:00.000Z' }
+    const editorial = { ...hiddenOnlyEditorial(one), webEvidence: [single] }
+    expect(validateDailyBriefingEditorial(editorial, documentWithMacro(one, false), 'zh-CN', repeatedWebTool(6, url)).ok).toBe(true)
+    expect(validateDailyBriefingEditorial(editorial, documentWithMacro(one, false), 'zh-CN', repeatedWebTool(7, url)))
+      .toMatchObject({ ok: false, failureCode: 'invalid-shape' })
   })
 })

@@ -10,7 +10,7 @@ import type { AnalysisSummary, Prediction } from '../../../contracts/marketAnaly
 import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
-import { buildDailyBriefingDocument } from './dailyBriefingDocument'
+import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 const asOf = '2026-10-30T00:30:00.000Z'
@@ -291,5 +291,17 @@ describe('daily briefing document', () => {
     expect(document.status.readings[1]?.state).toBe('unavailable')
     expect(document.status.readings[2]?.state).toBe('unavailable')
     expect(document.status.readingsAvailable).toBe(1)
+  })
+
+  it('floors the largest surprise, then the latest release, among high-impact events', () => {
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+    const cpi = document.news.macro[0]!
+    expect(selectMacroFloorItem([])).toBeUndefined()
+    expect(selectMacroFloorItem([{ ...cpi, importance: 'medium' }])).toBeUndefined()
+    const largerOlder = { ...cpi, eventKey: 'US.OLDER', scheduledAt: '2026-10-29T10:00:00.000Z', surprise: { direction: 'miss' as const, value: 0.6, unit: 'pp' as const } }
+    const smallerNewer = { ...cpi, eventKey: 'US.NEWER', scheduledAt: '2026-10-29T18:00:00.000Z', surprise: { direction: 'beat' as const, value: 0.1, unit: 'pp' as const } }
+    const latest = { ...cpi, eventKey: 'US.LATEST', scheduledAt: '2026-10-29T20:00:00.000Z', surprise: { direction: 'beat' as const, value: 0.1, unit: 'pp' as const } }
+    expect(selectMacroFloorItem([smallerNewer, largerOlder])?.eventKey).toBe('US.OLDER')
+    expect(selectMacroFloorItem([smallerNewer, latest])?.eventKey).toBe('US.LATEST')
   })
 })

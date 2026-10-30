@@ -153,6 +153,25 @@ function selectMacro(packet: DailyBriefingFactPacket, candidates: readonly Brief
   return Object.freeze(candidates.slice(0, dailyBriefingPolicy.maximumMacroItems))
 }
 
+/**
+ * The high-impact floor: the release with the largest surprise, and the latest release when the
+ * surprise is equal. Selection and the final visibility pass both use this one ordering so a model
+ * cannot silently hide every high-impact release.
+ */
+export function selectMacroFloorItem(items: readonly BriefingMacroItem[]): BriefingMacroItem | undefined {
+  let floor: BriefingMacroItem | undefined
+  for (const item of items) {
+    if (item.importance !== 'high') continue
+    if (!floor) {
+      floor = item
+      continue
+    }
+    const difference = surpriseMagnitude(item) - surpriseMagnitude(floor)
+    if (difference > 0 || (difference === 0 && Date.parse(item.scheduledAt) > Date.parse(floor.scheduledAt))) floor = item
+  }
+  return floor
+}
+
 function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
   return Object.freeze({
     eventKey: event.eventKey,
@@ -379,7 +398,7 @@ function nextEmptyCode(packet: DailyBriefingFactPacket): string {
   return 'next-7d-no-high-impact-event'
 }
 
-function surpriseMagnitude(event: DailyBriefingCalendarEvent): number {
+function surpriseMagnitude(event: Readonly<{ surprise: BriefingMacroItem['surprise'] }>): number {
   if (event.surprise.unit === 'pp' && typeof event.surprise.value === 'number') return Math.abs(event.surprise.value)
   if (event.surprise.unit === 'relative-percent' && typeof event.surprise.value === 'number') return Math.abs(event.surprise.value) / 10
   return event.surprise.direction === 'inline' || event.surprise.direction === 'consensus-unavailable' ? 0 : 1

@@ -7,7 +7,15 @@ import type {
   FactImportance
 } from '../../../contracts/dailyBriefing'
 import type { AgentRuntimeToolInvocation } from '@platform/ai/agent-platform/runtime/runtimeTypes'
-import { checkDailyBriefWebEvidence, type DailyBriefWebEvidenceRef, type DailyBriefWebEvidenceField } from './dailyBriefWebEvidence'
+import {
+  checkDailyBriefWebEvidence,
+  createWebSearchBudget,
+  dailyBriefWebSearchBudget,
+  isOfficialWebSource,
+  type DailyBriefWebEvidenceRef,
+  type DailyBriefWebEvidenceField
+} from './dailyBriefWebEvidence'
+import { selectMacroFloorItem } from './dailyBriefingDocument'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -88,9 +96,10 @@ export function validateDailyBriefingEditorial(
   }
   if (items.length + hidden.length !== newsIds.size + macroIds.size) return fail('invalid-shape')
   const webEvidence: DailyBriefWebEvidenceRef[] = []
+  if (toolInvocations.filter((invocation) => invocation.toolName === 'WebSearch').length > dailyBriefWebSearchBudget.maximumSearches) return fail('invalid-shape')
   if (raw.webEvidence !== undefined) {
-    if (!Array.isArray(raw.webEvidence) || raw.webEvidence.length > 3) return fail('invalid-shape')
-    if (toolInvocations.filter((invocation) => invocation.toolName === 'WebSearch').length > 6) return fail('invalid-shape')
+    if (!Array.isArray(raw.webEvidence)) return fail('invalid-shape')
+    const budget = createWebSearchBudget()
     const results = collectToolResults(toolInvocations)
     for (const entry of raw.webEvidence) {
       if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return fail('invalid-shape')
@@ -101,17 +110,29 @@ export function validateDailyBriefingEditorial(
       if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return fail('invalid-shape')
       const result = results.get(entry.sourceUrl)
       if (!result || (result.publishedAt !== undefined && result.publishedAt !== entry.publishedAt)) return fail('invalid-shape')
+      // The same event/field lookup is cached; a fourth event or seventh lookup is refused before
+      // it can enter the citation list.
+      if (budget.request(entry.eventKey, entry.field as DailyBriefWebEvidenceField) === 'denied') return fail('invalid-shape')
       const ref: DailyBriefWebEvidenceRef = Object.freeze({
         evidenceRefId: `web:${entry.eventKey}:${entry.field}:${webEvidence.length + 1}`,
         eventKey: entry.eventKey, field: entry.field as DailyBriefWebEvidenceField, value: entry.value,
         sourceName: entry.sourceName, sourceUrl: entry.sourceUrl, publishedAt: entry.publishedAt, retrievedAt: document.provenance.readAt
       })
       if (checkDailyBriefWebEvidence(ref, document.edition.windowEnd) !== 'ok') return fail('invalid-shape')
-      const duplicate = webEvidence.find((existing) => existing.eventKey === ref.eventKey && existing.field === ref.field)
-      if (duplicate && duplicate.value === ref.value && duplicate.sourceUrl === ref.sourceUrl) return fail('invalid-shape')
-      webEvidence.push(duplicate ? Object.freeze({ ...ref, sourceConflict: true }) : ref)
+      const existingIndex = webEvidence.findIndex((existing) => existing.eventKey === ref.eventKey && existing.field === ref.field)
+      if (existingIndex < 0) {
+        webEvidence.push(ref)
+        continue
+      }
+      const existing = webEvidence[existingIndex]!
+      if (existing.value === ref.value && existing.sourceUrl === ref.sourceUrl) return fail('invalid-shape')
+      const existingOfficial = isOfficialWebSource(existing.sourceUrl)
+      const refOfficial = isOfficialWebSource(ref.sourceUrl)
+      if (refOfficial && !existingOfficial) webEvidence[existingIndex] = Object.freeze({ ...ref, sourceConflict: true })
+      else if (existingOfficial && !refOfficial) webEvidence[existingIndex] = Object.freeze({ ...existing, sourceConflict: true })
+      else webEvidence.push(Object.freeze({ ...ref, sourceConflict: true }))
     }
-    webEvidence.sort((left, right) => Number(isOfficialSource(right.sourceUrl)) - Number(isOfficialSource(left.sourceUrl)))
+    webEvidence.sort((left, right) => Number(isOfficialWebSource(right.sourceUrl)) - Number(isOfficialWebSource(left.sourceUrl)))
   }
   const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
   for (const entry of raw.importance) {
@@ -187,6 +208,8 @@ export function applyDailyBriefingEditorial(
   const macroWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('macro:')).map((item) => [item.factId.slice('macro:'.length), item.why]))
   const importance = new Map(editorial.importance.map((entry) => [entry.factId.slice('data:'.length), entry]))
   const hiddenReason = new Map(editorial.hidden.map((entry) => [entry.factId, entry.reason]))
+  const macroFloor = selectMacroFloorItem(document.news.macro)
+  const highImpactShown = document.news.macro.some((item) => item.importance === 'high' && macroWhy.has(item.eventKey))
   const citations = [...document.citations, ...(editorial.webEvidence ?? []).map((ref) => Object.freeze({
     index: document.citations.length + (editorial.webEvidence ?? []).indexOf(ref) + 1,
     refId: ref.evidenceRefId,
@@ -233,9 +256,13 @@ export function applyDailyBriefingEditorial(
       items: Object.freeze(document.news.items.map((item: BriefingNewsItem) => newsWhy.has(item.itemId)
         ? Object.freeze({ ...item, why: newsWhy.get(item.itemId)!, visibility: 'shown' as const })
         : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`news:${item.itemId}`) ? { visibilityReason: hiddenReason.get(`news:${item.itemId}`)! } : {}) }))),
-      macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => macroWhy.has(item.eventKey)
-        ? Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
-        : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })))
+      macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => {
+        if (macroWhy.has(item.eventKey)) return Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
+        // The floor is a floor: if the editorial would hide every high-impact release, the key
+        // release stays visible even though the model listed it in `hidden` with a reason.
+        if (!highImpactShown && macroFloor?.eventKey === item.eventKey) return Object.freeze({ ...item, visibility: 'shown' as const })
+        return Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })
+      }))
     }),
     data: Object.freeze({
       ...document.data,
@@ -356,11 +383,4 @@ function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]):
   }
   for (const invocation of invocations) walk(invocation.output)
   return results
-}
-
-function isOfficialSource(url: string): boolean {
-  try {
-    const host = new URL(url).hostname.toLowerCase()
-    return host.endsWith('.gov') || ['federalreserve.gov', 'ecb.europa.eu', 'bis.org', 'imf.org', 'oecd.org'].some((domain) => host === domain || host.endsWith(`.${domain}`))
-  } catch { return false }
 }
