@@ -28,6 +28,9 @@ import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapsh
 import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { PolicyPathStrip } from './PolicyPathStrip'
+import { policyPathMonth } from './policyPathMonth'
+import { usePolicyPathReading } from './usePolicyPathReading'
 
 type CryptoDashboardText = {
   workspaceLabel: string
@@ -45,6 +48,7 @@ type CryptoDashboardText = {
   fearGreed: { title: string; loading: string; empty: string; unavailable: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
   fundingRate: { title: string; pairTitle: string; loading: string; empty: string; unavailable: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFundingRateHistoryState['state'], string>; manageSettings: string; assets: { btc: string; eth: string }; paymentDirections: Record<'long-pays-short' | 'short-pays-long' | 'neutral', string> }
   capitalConditions: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['capitalConditions']
+  policyPath: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['policyPath']
   positioning: { title: string; fearGreed: string; observedAt: string; gaugeMarkers: { fear: string; neutral: string; greed: string } }
   feedStatus: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['feedStatus']
   context: { sourceStatus: { title: string } }
@@ -82,6 +86,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // The 来源状态 strip's per-feed lines: the reader's switches and last outcomes, plus the cross-asset
   // snapshot that says which index leg is answering. Read at its own slow cadence, and read-only.
   const feedView = useDashboardFeedStatus({ client: dashboardFeedStatusClient, crossAssetClient })
+  // The policy row reads one assembled object: the meeting date, the official facts and the odds
+  // history are joined in the main process, so this dashboard never builds a second opinion.
+  const policyPath = usePolicyPathReading(true)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
   // make it re-query the calendar on every render of this dashboard.
@@ -146,6 +153,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         // detail drawer and the recorded selection.
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
+      {policyPath?.state === 'available' ? <PolicyPathStrip reading={policyPath.reading} text={text.policyPath}
+        month={policyPathMonth(policyPath.reading.meetingDate, locale)} /> : null}
       <div className="mi-crypto-dashboard__capital-positioning-row">
         <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={collectCapitalConditionsSources ? () => void refreshCapitalConditions() : undefined}

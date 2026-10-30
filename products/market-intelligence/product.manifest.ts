@@ -76,6 +76,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.macro.economicCalendar.importManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.previewManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.queryMonth' },
+    { method: 'intelligence.macro.policyPath.read' },
     // The reader's own release time: every registered product method must be in this sealed
     // baseline, in the order main registers it.
     { method: 'intelligence.macro.economicCalendar.setReleaseTime' },

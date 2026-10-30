@@ -85,6 +85,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.economicCalendar.importManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.previewManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.queryMonth': exposed('query_macro_calendar'),
+  // The policy row is a dashboard read; the Agent reaches the same facts through the calendar tool.
+  'intelligence.macro.policyPath.read': excluded('internal-view'),
   'intelligence.macro.economicCalendar.setReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.clearReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.refreshBlsEmploymentRelease': exposed('operate_macro_calendar'),

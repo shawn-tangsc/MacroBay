@@ -39,6 +39,9 @@ import type {
   MacroCalendarOps
 } from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
+import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
+import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
+import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
@@ -161,6 +164,18 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   })
   const macroEconomicCalendarQueryService = createMacroEconomicCalendarQueryService({ repository: macroCalendarBackend.repository })
   intelligenceModule.publicQueryService.setMacroEconomicCalendarQuery(macroEconomicCalendarQueryService)
+  const policyPathRuntime = createPolicyPathRuntime({
+    jobRuntime: deps.jobRuntime,
+    repository: macroCalendarBackend.repository,
+    fetch: url => (deps.platformFetch ?? fetch)(url),
+    isEnabled: async () => (await intelligenceModule.sourceProfileStore.resolveProfile('policy-path-market')).enabled
+  })
+  const policyPathQueryService = createPolicyPathQueryService({
+    calendar: macroEconomicCalendarQueryService,
+    facts: macroCalendarBackend.repository.policyFacts,
+    observations: macroCalendarBackend.repository.policyObservations
+  })
+  policyPathRuntime.start()
   const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
   let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
   try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }
@@ -467,6 +482,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   } catch (error) {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
+  registerPolicyPathIpc(register, policyPathQueryService)
   registerMacroEconomicCalendarIpc(register, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
