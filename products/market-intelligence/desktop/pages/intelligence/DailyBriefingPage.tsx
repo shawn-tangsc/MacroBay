@@ -38,6 +38,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
   const formatTime = useShellTimeFormat()
+  const timeZoneRef = useRef(timeZone)
+  timeZoneRef.current = timeZone
   const requestRef = useRef(0)
   const emptyGenerateRef = useRef(false)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
@@ -59,8 +61,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     void (async () => {
-      const today = await withDeadline(client.getToday({ locale, timeZone }), 150_000).catch(() => undefined)
-      const listed = await withDeadline(client.list({ locale, timeZone }), 8_000).catch(() => undefined)
+      const today = await withDeadline(client.getToday({ locale, timeZone: timeZoneRef.current }), 150_000).catch(() => undefined)
+      const listed = await withDeadline(client.list({ locale, timeZone: timeZoneRef.current }), 8_000).catch(() => undefined)
       if (!active) return
       let rows = listed?.state === 'available' ? [...listed.result.editions] : []
       if (today?.state === 'available') {
@@ -78,7 +80,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       setRegenerating(false)
     })()
     return () => { active = false }
-  }, [locale, timeZone, client, reloadKey])
+  }, [locale, client, reloadKey])
 
   useEffect(() => {
     let active = true
