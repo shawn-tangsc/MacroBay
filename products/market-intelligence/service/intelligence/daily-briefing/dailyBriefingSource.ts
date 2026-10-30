@@ -48,8 +48,8 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
         readCalendar(deps, input.asOf, input.locale, enabled.calendar),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
-        safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined),
-        safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined),
+        usableSnapshot(safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined), input.asOf),
+        usableSnapshot(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
       ])
       const asOfMs = Date.parse(input.asOf)
@@ -303,4 +303,10 @@ function unavailableFunding() {
 
 function unavailableCapital() {
   return { state: 'unavailable' as const, failureCode: 'capital-conditions-query-unavailable' as const }
+}
+
+function usableSnapshot<T extends { asOf?: string }>(value: T | undefined, cutoff: string): T | undefined {
+  if (!value) return undefined
+  if (!value.asOf || !Number.isFinite(Date.parse(value.asOf))) return value
+  return value.asOf <= cutoff ? value : undefined
 }
