@@ -20,6 +20,7 @@ import type {
 } from '../store/agentStore'
 import type { ProductAgentToolCallTrace } from '../productTools/productAgentToolSchemas'
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
+import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 import type { CursorPaginationResponse } from '../store/agentStore'
 import type { TaskMutationAuditEntity } from '../runtime/tasks/taskAutomationContracts'
 
@@ -107,6 +108,7 @@ type SessionRow = {
   workspace_id: string
   trace_id: string | null
   order_key: string
+  allowed_tools_json: string
   created_at: string
   updated_at: string
 }
@@ -470,8 +472,8 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
     },
     upsert(entity: AgentSessionEntity): void {
       db.prepare(
-        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, created_at, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict(id) do update set
            agent_id = excluded.agent_id,
            name = excluded.name,
@@ -479,6 +481,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
            workspace_id = excluded.workspace_id,
            trace_id = excluded.trace_id,
            order_key = excluded.order_key,
+           allowed_tools_json = excluded.allowed_tools_json,
            created_at = excluded.created_at,
            updated_at = excluded.updated_at`
       ).run(
@@ -489,6 +492,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         entity.workspaceId,
         entity.traceId ?? null,
         entity.orderKey,
+        JSON.stringify(normalizeSessionAllowedTools(entity.allowedTools)),
         entity.createdAt,
         entity.updatedAt
       )
@@ -496,7 +500,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
     listAll(workspacesById: ReadonlyMap<string, AgentWorkspaceEntity>): AgentSessionEntity[] {
       return db
         .prepare(
-          `select id, agent_id, name, description, workspace_id, trace_id, order_key, created_at, updated_at
+          `select id, agent_id, name, description, workspace_id, trace_id, order_key, allowed_tools_json, created_at, updated_at
            from agent_sessions
            order by order_key asc, id asc`
         )
@@ -2232,8 +2236,22 @@ function mapSessionEntity(row: SessionRow, workspace: AgentWorkspaceEntity): Age
     workspace,
     traceId: row.trace_id ?? undefined,
     orderKey: row.order_key,
+    allowedTools: parseAllowedTools(row.allowed_tools_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  }
+}
+
+/** 旧行 / 脏 JSON 一律读成空数组：绝不能因为一行坏数据让会话打不开。 */
+function parseAllowedTools(value: string | null | undefined): string[] {
+  if (!value) return []
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed)
+      ? normalizeSessionAllowedTools(parsed.filter((entry): entry is string => typeof entry === 'string'))
+      : []
+  } catch {
+    return []
   }
 }
 

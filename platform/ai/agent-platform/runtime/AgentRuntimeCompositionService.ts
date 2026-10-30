@@ -20,10 +20,16 @@ import {
 import { DEFAULT_SYSTEM_WORKSPACE_PATH, type AgentWorkspaceType } from '../schemas/workspaceSchemas'
 import type { McpServerEntity } from '../schemas/mcpServerSchemas'
 import type { EffectiveAgentModel } from './effectiveAgentModel'
+import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 
 export type AgentRuntimeComposition = {
   agentId: string
   sessionId: string
+  /**
+   * 会话级白名单（已规范化，只含 builtin 名）。缺省 = 该会话没有额外放行任何工具，
+   * 行为与改动前完全一致。消费者只能"加白"，deny（tools.disabled）永远优先。
+   */
+  sessionAllowedTools?: string[]
   agentType: AgentStoreState['agents'][number]['type']
   instructions: string | null
   modelId: string | null
@@ -102,6 +108,7 @@ export class AgentRuntimeCompositionService {
     return {
       agentId: agent.id,
       sessionId: session.id,
+      sessionAllowedTools: normalizeSessionAllowedTools(session.allowedTools),
       agentType: agent.type,
       instructions: agent.instructions?.trim() || null,
       modelId: effectiveModel?.model ?? agent.model,

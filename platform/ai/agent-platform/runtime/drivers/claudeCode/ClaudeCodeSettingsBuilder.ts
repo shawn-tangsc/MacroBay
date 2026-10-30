@@ -10,6 +10,7 @@ import {
 } from './ClaudeCodeMcpServerConfig'
 import { buildProductAgentToolRuntimeName } from '../../../productTools/productAgentToolRuntimeNames'
 import type { ToolApproval } from '../../../schemas/toolSchemas'
+import { normalizeSessionAllowedTools } from '../../../tools/sessionAllowedTools'
 
 export type ClaudeCodeCompositionSettings = {
   cwd: string | null
@@ -43,7 +44,10 @@ export function buildClaudeCodeSettingsFromComposition(
     },
     permissionMode: composition.permissionMode,
     effort: composition.effort,
-    allowedTools: uniqueToolIds(composition.tools.enabled),
+    allowedTools: uniqueStrings([
+      ...uniqueToolIds(composition.tools.enabled),
+      ...resolveSessionAllowedTools(composition)
+    ]),
     disallowedTools: uniqueToolIds(composition.tools.disabled),
     mcpSources: composition.mcp.sources.map((source) => ({ ...source })),
     mcpServers: buildClaudeCodeMcpServerConfigs({
@@ -56,6 +60,19 @@ export function buildClaudeCodeSettingsFromComposition(
     runtimeMcpApprovalByName: buildRuntimeMcpApprovalByName(composition),
     skillContext: buildClaudeCodeSkillContext(composition.skills.skills)
   }
+}
+
+/**
+ * 会话白名单只允许 builtin 工具，且永远让位于 agent 的 deny 列表：
+ * 一个会话可以额外放行 WebSearch，但不能把 agent 明确禁用的工具重新打开。
+ */
+function resolveSessionAllowedTools(composition: AgentRuntimeComposition): string[] {
+  const disabled = new Set(composition.tools.disabled.map((tool) => tool.id))
+  return normalizeSessionAllowedTools(composition.sessionAllowedTools).filter((toolName) => !disabled.has(toolName))
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values)]
 }
 
 function uniqueToolIds(tools: readonly Pick<Tool, 'id'>[]): string[] {

@@ -1473,6 +1473,13 @@ const migrations: AgentPlatformMigration[] = [
         group by product_id
       );
     `
+  },
+  {
+    id: '0043_agent_session_allowed_tools',
+    up: `
+      alter table agent_sessions
+        add column allowed_tools_json text not null default '[]';
+    `
   }
 ]
 

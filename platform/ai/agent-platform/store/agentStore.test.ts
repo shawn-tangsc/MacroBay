@@ -187,6 +187,37 @@ describe('agent store', () => {
     expect(withSession.activeSessionId).toBe(withSession.sessions[0].id)
   })
 
+  it('normalizes the session-scoped tool allowlist and defaults it to empty', () => {
+    const state = createAgentStoreState({ agents, sessions, workspaces: [workspace] })
+    const withAllowlist = createAgentSession(state, {
+      agentId: 'agent-1',
+      name: 'Brief session',
+      workspace: { type: 'system' },
+      allowedTools: [' WebSearch ', 'WebSearch', 'NotATool', 'WebFetch', '']
+    })
+    const withoutAllowlist = createAgentSession(state, {
+      agentId: 'agent-1',
+      name: 'Plain session',
+      workspace: { type: 'system' }
+    })
+
+    expect(withAllowlist.sessions[0].allowedTools).toEqual(['WebSearch', 'WebFetch'])
+    expect(withoutAllowlist.sessions[0].allowedTools).toEqual([])
+  })
+
+  it('keeps the session allowlist when the session is renamed or re-bound', () => {
+    const state = createAgentStoreState({
+      agents,
+      sessions: [{ ...sessions[0], allowedTools: ['WebSearch'] }],
+      workspaces: [workspace]
+    })
+    const renamed = updateAgentSession(state, 'session-1', { name: 'Renamed session' })
+    const rebound = updateAgentSessionAgent(renamed, 'session-1', 'agent-2')
+
+    expect(renamed.sessions[0].allowedTools).toEqual(['WebSearch'])
+    expect(rebound.sessions[0].allowedTools).toEqual(['WebSearch'])
+  })
+
   it('creates default sessions with a dedicated system workspace ', () => {
     const state = createAgentStoreState({ agents, sessions, workspaces: [workspace] })
     const next = createAgentSession(state, {

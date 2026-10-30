@@ -80,6 +80,44 @@ const skill: InstalledSkill = {
 }
 
 describe('agent runtime composition service', () => {
+  it('carries the normalized session allowlist into the composition', async () => {
+    const toolRegistry = new ToolRegistry()
+    const mcpRuntime = new McpRuntimeService({ toolRegistry })
+    const skillsRuntime = new SkillsRuntimeService({ getSkillTools: () => [] })
+    const state = createAgentStoreState({
+      agents: [agent],
+      sessions: [{ ...session, allowedTools: ['WebSearch', 'WebSearch', 'NotATool', 'WebFetch'] }],
+      workspaces: [workspace]
+    })
+
+    const composition = await new AgentRuntimeCompositionService({
+      toolRegistry,
+      mcpRuntime,
+      skillsRuntime
+    }).compose({ state, agentId: 'agent-1', sessionId: 'session-1' })
+
+    expect(composition.sessionAllowedTools).toEqual(['WebSearch', 'WebFetch'])
+  })
+
+  it('leaves the session allowlist undefined when the session has none', async () => {
+    const toolRegistry = new ToolRegistry()
+    const mcpRuntime = new McpRuntimeService({ toolRegistry })
+    const skillsRuntime = new SkillsRuntimeService({ getSkillTools: () => [] })
+    const state = createAgentStoreState({
+      agents: [agent],
+      sessions: [session],
+      workspaces: [workspace]
+    })
+
+    const composition = await new AgentRuntimeCompositionService({
+      toolRegistry,
+      mcpRuntime,
+      skillsRuntime
+    }).compose({ state, agentId: 'agent-1', sessionId: 'session-1' })
+
+    expect(composition.sessionAllowedTools).toEqual([])
+  })
+
   it('builds a driver-ready runtime snapshot from agent/session/store state', async () => {
     const toolRegistry = new ToolRegistry()
     const mcpRuntime = new McpRuntimeService({ toolRegistry })

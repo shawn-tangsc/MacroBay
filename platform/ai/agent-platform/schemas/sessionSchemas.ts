@@ -109,6 +109,12 @@ export type AgentSessionEntity = {
   workspace: AgentWorkspaceEntity
   traceId?: string
   orderKey: string
+  /**
+   * 会话级工具白名单：只放该会话额外自动放行的 builtin 工具名（由平台规范化，见
+   * `normalizeSessionAllowedTools`）。缺省 / 空数组 = 完全沿用 agent 的工具策略。
+   * 读侧统一走 `normalizeSessionAllowedTools(session.allowedTools)`，旧快照无需迁移。
+   */
+  allowedTools?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -118,6 +124,11 @@ export type CreateAgentSessionDto = {
   name: string
   description?: string
   workspace: AgentSessionWorkspaceSource
+  /**
+   * 可选：仅本次会话额外放行的 builtin 工具名（WebSearch / WebFetch 等）。
+   * 只能加白；agent 的 disabledTools（deny）优先，未知名字会被丢弃。
+   */
+  allowedTools?: string[]
 }
 
 export type UpdateAgentSessionDto = {

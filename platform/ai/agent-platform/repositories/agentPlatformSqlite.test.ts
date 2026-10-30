@@ -113,6 +113,60 @@ describe('agent platform sqlite repositories', () => {
     expect(secondPage.items.map((item: { id: string }) => item.id)).toEqual(['session-3'])
   })
 
+  it('persists the session-scoped tool allowlist across a reopen', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-session-tools-'))
+    try {
+      const path = join(dir, 'agent.sqlite')
+      const db = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(db)
+      repos.workspaces.upsert(workspace)
+      repos.sessions.upsert({
+        ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Brief' }),
+        allowedTools: ['WebSearch', 'WebFetch']
+      })
+      db.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const rows = createAgentPlatformRepositories(reopened).sessions.listAll(
+        new Map([[workspace.id, workspace]])
+      )
+      expect(rows[0]?.allowedTools).toEqual(['WebSearch', 'WebFetch'])
+      reopened.connection.close()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads rows written before the allowlist column as an empty allowlist', () => {
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    db.connection
+      .prepare(
+        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run('legacy-session', agent.id, 'Legacy', null, workspace.id, null, '0009', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+
+    const rows = repos.sessions.listAll(new Map([[workspace.id, workspace]]))
+
+    expect(rows[0]?.allowedTools).toEqual([])
+  })
+
+  it('stores only built-in tool names from the session allowlist', () => {
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    repos.sessions.upsert({
+      ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Brief' }),
+      allowedTools: ['WebSearch', 'NotATool', 'WebSearch']
+    })
+
+    const rows = repos.sessions.listAll(new Map([[workspace.id, workspace]]))
+
+    expect(rows[0]?.allowedTools).toEqual(['WebSearch'])
+  })
+
   it('queries agents with search, stable sorting, and offset pagination at the repository layer', () => {
     const db = createAgentPlatformDatabase(':memory:')
     const repos = createAgentPlatformRepositories(db)
