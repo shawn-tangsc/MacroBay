@@ -1446,6 +1446,14 @@ const migrations: AgentPlatformMigration[] = [
     `
   },
   {
+    id: '0041_clear_daily_brief_websearch_block',
+    up: `
+      update agent_entities
+      set disabled_tools_json = '[]', updated_at = '2026-10-30T00:00:00.000Z'
+      where id = 'daily-brief-editor';
+    `
+  },
+  {
     id: '0040_dedupe_product_tool_bindings',
     up: `
       delete from agent_product_tool_package_bindings
