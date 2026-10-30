@@ -224,7 +224,7 @@ function officialEvent(
     scheduledAt,
     importance: event.importance,
     lifecycleState: event.lifecycleState,
-    category: 'economic-indicator' as const,
+    category: event.eventType,
     ...(event.actual ? { actual: event.actual.displayValue } : {}),
     ...(event.previous ? { previous: event.previous.displayValue } : {}),
     ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),
