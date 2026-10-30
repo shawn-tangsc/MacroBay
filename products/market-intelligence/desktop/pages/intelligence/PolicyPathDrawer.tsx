@@ -17,11 +17,19 @@ export type PolicyPathDrawerText = Readonly<{
   median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
   odds: string; change24h: string; range30d: string; quote: string
   sepMissing: string; decisionMissing: string
-  meeting: string; daysAway: string; projection: string; cardOutcome: string; unchanged: string; range: string
+  meeting: string; daysAway: string; projection: string; unchanged: string; range: string
+  outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
 }>
 
-const years = ['y2026', 'y2027', 'y2028', 'y2029', 'longerRun'] as const
-const yearLabels: Record<typeof years[number], string> = { y2026: '2026', y2027: '2027', y2028: '2028', y2029: '2029', longerRun: '长期' }
+/**
+ * The projection columns come from the stored table, not from a fixed list: next year's SEP covers a
+ * different four-year window, and a hardcoded 2026–2029 would print four dashes for it.
+ */
+function projectionColumns(medianPath: Readonly<Record<string, number>> | undefined) {
+  const keys = Object.keys(medianPath ?? {}).filter((key) => key === 'longerRun' || /^y\d{4}$/.test(key))
+  return keys.sort((left, right) => (left === 'longerRun' ? 1 : right === 'longerRun' ? -1 : left.localeCompare(right)))
+    .map((key) => ({ key, label: key === 'longerRun' ? '长期' : key.slice(1) }))
+}
 
 export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
   reading: PolicyPathReading
@@ -38,7 +46,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
 
     <div className="mi-policy-drawer__hero">
       <span className="mi-policy-drawer__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
-      <span className="mi-policy-drawer__hero-label">{text.cardOutcome.replace('{month}', String(Number(reading.meetingDate.slice(5, 7))))}</span>
+      <span className="mi-policy-drawer__hero-label">{probability
+        ? `${Number(reading.meetingDate.slice(5, 7))} 月${text.outcomes[probability.outcome]}`
+        : ''}</span>
       {probability?.changeInPp24h === undefined ? null : <span className="mi-policy-drawer__delta" data-direction={probability.changeInPp24h > 0 ? 'up' : probability.changeInPp24h < 0 ? 'down' : 'flat'}>
         {probability.changeInPp24h > 0 ? '+' : ''}{probability.changeInPp24h.toFixed(1)}pp · {text.change24h}
       </span>}
@@ -50,8 +60,8 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       </h3>
       {reading.sep ? <>
         <div className="mi-policy-drawer__path">
-          {years.map((year) => <div key={year} data-empty={reading.sep?.medianPath?.[year] === undefined ? 'true' : undefined}>
-            <b>{reading.sep?.medianPath?.[year]?.toFixed(1) ?? '—'}</b><span>{yearLabels[year]}</span>
+          {projectionColumns(reading.sep.medianPath).map(({ key, label }) => <div key={key} data-empty={reading.sep?.medianPath?.[key] === undefined ? 'true' : undefined}>
+            <b>{reading.sep?.medianPath?.[key]?.toFixed(1) ?? '—'}</b><span>{label}</span>
           </div>)}
         </div>
         <p className="mi-policy-drawer__note">

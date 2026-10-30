@@ -13,9 +13,10 @@ import type { PolicyPathReading } from '../../../service/intelligence/policy-pat
  */
 export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
-  probability: string; probabilityLabel: string; cardOutcome: string; lastVote: string; unchanged: string
+  probability: string; probabilityLabel: string; lastVote: string; unchanged: string
   detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
   helpLabel: string; helpLines: readonly string[]
+  outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
 }>
 
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
@@ -28,6 +29,8 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   const change = probability?.changeInPp24h
   const Direction = change === undefined || change === 0 ? Minus : change > 0 ? TrendingUp : TrendingDown
   const freshness = text[reading.staleness] ?? text.unavailable
+  // The leading bucket is the market's answer, not necessarily a hike.
+  const outcomeLabel = probability ? `${month} 月${text.outcomes[probability.outcome]}` : ''
   return <section className="mi-policy-card" aria-label={text.title} data-staleness={reading.staleness}>
     <header className="mi-policy-card__head">
       <h2>{text.title}</h2>
@@ -46,7 +49,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
         shape - only its colour says whether the number is live, late, or absent. */}
     <p className="mi-policy-card__lead">
       <span className="mi-policy-card__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
-      <span className="mi-policy-card__outcome">{text.cardOutcome.replace('{month}', month)}</span>
+      {probability ? <span className="mi-policy-card__outcome">{outcomeLabel}</span> : null}
       {change === undefined ? null : <span className="mi-policy-card__delta" data-direction={change > 0 ? 'up' : change < 0 ? 'down' : 'flat'}>
         <Direction aria-hidden="true" size={12} />{Math.abs(change).toFixed(1)}pp
       </span>}

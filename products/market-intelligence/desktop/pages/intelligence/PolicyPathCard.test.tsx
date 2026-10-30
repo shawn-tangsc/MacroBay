@@ -41,6 +41,8 @@ describe('policy path card', () => {
     expect(rendered.textContent).toContain(text.title)
     expect(rendered.textContent).toContain('76%')
     expect(rendered.textContent).toContain('12 月加息 25bp')
+    // The label follows the leading bucket: a hold or a cut must not still read 'hike'.
+    expect(rendered.textContent).toContain(text.outcomes['hike-25'])
     expect(rendered.textContent).toContain('3.75–4.00%')
     expect(rendered.textContent).toContain('维持 10–2')
     expect(rendered.textContent).toContain(text.projection)
@@ -68,5 +70,16 @@ describe('policy path card', () => {
     const rendered = await render({ ...reading, staleness: 'stale' })
     expect(rendered.textContent).toContain(text.stale)
     expect(rendered.querySelector('.mi-policy-card')?.getAttribute('data-staleness')).toBe('stale')
+  })
+})
+
+describe('policy path card labels', () => {
+  it('names the leading bucket instead of a fixed hike', async () => {
+    const rendered = await render({
+      ...reading,
+      probability: { ...reading.probability!, outcome: 'no-change', value: 0.62 }
+    })
+    expect(rendered.textContent).toContain(text.outcomes['no-change'])
+    expect(rendered.textContent).not.toContain(text.outcomes['hike-25'])
   })
 })
