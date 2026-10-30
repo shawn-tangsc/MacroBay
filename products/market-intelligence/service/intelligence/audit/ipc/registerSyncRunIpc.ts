@@ -1,4 +1,4 @@
-import type { JobRunPage, JobRunRecord, JobRuntime } from '@platform/jobs'
+import type { JobRuntime } from '@platform/jobs'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import {
@@ -67,5 +67,3 @@ function parseQuery(payload: unknown): SyncRunQuery | undefined {
     ...(typeof value.outcome === 'string' ? { outcome: value.outcome as SyncRunQuery['outcome'] } : {})
   }
 }
-
-export type { JobRunPage, JobRunRecord }

@@ -1110,7 +1110,8 @@ export const productText = {
           unavailable: '运行记录暂时不可用。',
           loading: '正在读取运行记录…',
           exportCsv: '复制 CSV',
-          exported: '已复制到剪贴板'
+          exported: '已复制到剪贴板',
+          exportFailed: '无法写入剪贴板，请重试'
         },
 
         sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
@@ -2472,7 +2473,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           unavailable: 'The run record is unavailable.',
           loading: 'Reading the run record…',
           exportCsv: 'Copy CSV',
-          exported: 'Copied to the clipboard'
+          exported: 'Copied to the clipboard',
+          exportFailed: 'Could not write to the clipboard'
         },
 
         sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },

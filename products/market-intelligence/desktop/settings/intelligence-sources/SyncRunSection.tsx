@@ -15,7 +15,7 @@ import './sync-run-section.css'
 export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
   columns: Readonly<Record<'time' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
-  empty: string; unavailable: string; loading: string; exportCsv: string; exported: string
+  empty: string; unavailable: string; loading: string; exportCsv: string; exported: string; exportFailed: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   outcomes: Readonly<Record<'succeeded' | 'failed' | 'cancelled' | 'running', string>>
 }>
@@ -47,8 +47,8 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
       await navigator.clipboard.writeText(result.csv)
       setNotice(text.exported)
     } catch {
-      // A clipboard the shell refuses is not a reason to lose the data or claim success.
-      setNotice(undefined)
+      // A clipboard the shell refuses is not a reason to claim success.
+      setNotice(text.exportFailed)
     }
   }
 

@@ -37,6 +37,8 @@ export function projectSyncRun(row: JobRunRecord): SyncRunRow {
   const entry = syncRunHandlerCatalog[row.handlerId]
   const at = row.completedAt ?? row.startedAt ?? row.createdAt
   const detail = row.lastError ? row.lastError.slice(0, SYNC_RUN_LIMITS.detailMaxLength) : undefined
+  const durationMs = durationOf(row)
+  const failureCode = failureCodeOf(row.lastError)
   return {
     at,
     runId: row.id,
@@ -46,8 +48,8 @@ export function projectSyncRun(row: JobRunRecord): SyncRunRow {
     handlerId: row.handlerId,
     action: entry?.action ?? 'other',
     outcome: outcomeOf(row.status),
-    ...(durationOf(row) === undefined ? {} : { durationMs: durationOf(row) }),
-    ...(failureCodeOf(row.lastError) === undefined ? {} : { failureCode: failureCodeOf(row.lastError) }),
+    ...(durationMs === undefined ? {} : { durationMs }),
+    ...(failureCode === undefined ? {} : { failureCode }),
     ...(detail ? { detail } : {})
   }
 }
@@ -59,7 +61,9 @@ export function projectSyncAudit(entry: SyncAuditEntry): SyncRunRow {
     at: entry.at,
     runId: entry.id,
     correlationId: entry.id,
-    ...(entry.target.startsWith('macro-calendar-') || entry.target === 'policy-path-market' ? { sourceId: entry.target } : {}),
+    // The target is always a source or provider id; dropping it left those rows out of every
+    // per-source filter.
+    sourceId: entry.target,
     sourceLabel: label ?? entry.target,
     handlerId: entry.action,
     action: entry.action,

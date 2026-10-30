@@ -60,6 +60,11 @@ export function createPolicyPathQueryService(deps: {
   calendar: Pick<MacroEconomicCalendarQueryService, 'nextFomcMeeting'>
   facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision'>
   observations: Pick<PolicyPathObservationStore, 'list'>
+  /**
+   * The policy range as FRED already publishes it. The decision refresh only writes a fact when a
+   * statement is parsed, so a range that depends on it alone stays empty until the next meeting.
+   */
+  readTargetRange?: () => Readonly<{ lowerPercent: number; upperPercent: number }> | undefined
 }): PolicyPathQueryService {
   return Object.freeze({
     read({ asOf }) {
@@ -76,7 +81,9 @@ export function createPolicyPathQueryService(deps: {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
-        ...(decided?.targetRange ? { targetRange: decided.targetRange } : {}),
+        ...(targetRangeOf(decided?.targetRange, deps.readTargetRange) === undefined
+          ? {}
+          : { targetRange: targetRangeOf(decided?.targetRange, deps.readTargetRange)! }),
         ...(decided?.sep ? { sep: sepOf(decided.sep, decided.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
           ? { lastDecision: { ...(decided.vote ? { vote: decided.vote } : {}), ...(decided.dissents ? { dissents: decided.dissents } : {}), ...(decided.statementUrl ? { statementUrl: decided.statementUrl } : {}) } }
@@ -86,6 +93,19 @@ export function createPolicyPathQueryService(deps: {
       }
     }
   })
+}
+
+/** The parsed statement wins; the published series fills in when no decision has been parsed. */
+function targetRangeOf(
+  decided: PolicyPathReading['targetRange'] | undefined,
+  read: (() => PolicyPathReading['targetRange'] | undefined) | undefined
+): PolicyPathReading['targetRange'] | undefined {
+  if (decided) return decided
+  try {
+    return read?.()
+  } catch {
+    return undefined
+  }
 }
 
 function sepOf(

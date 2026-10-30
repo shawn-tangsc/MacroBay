@@ -42,7 +42,8 @@ import { createMacroCalendarScheduleBackend } from './intelligence/macro-calenda
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
-import { createSyncAuditStore } from './intelligence/audit/syncAuditStore'
+import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
+import { createSyncAuditStoreIfAvailable } from './intelligence/audit/syncAuditStore'
 import { withSyncAudit } from './intelligence/audit/syncAuditRecorder'
 import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
@@ -199,7 +200,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const policyPathQueryService = createPolicyPathQueryService({
     calendar: macroEconomicCalendarQueryService,
     facts: macroCalendarBackend.repository.policyFacts,
-    observations: macroCalendarBackend.repository.policyObservations
+    observations: macroCalendarBackend.repository.policyObservations,
+    // The parsed statement wins when it exists; between meetings the published FRED series is the
+    // only current source of the range.
+    readTargetRange: () => readPublishedTargetRange(intelligenceModule.pipeline.listMetricEvents())
   })
   policyPathRuntime.start()
   const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
@@ -364,7 +368,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     .catch(() => undefined)
   // Product-side audit lives beside the calendar but in its own file: it must not carry the
   // calendar's schema version or backup policy.
-  const syncAudit = createSyncAuditStore(join(getIntelligenceProductDataDir(), 'sync-audit.sqlite'))
+  const syncAudit = createSyncAuditStoreIfAvailable(join(getIntelligenceProductDataDir(), 'sync-audit.sqlite'))
   deps.registerProductDisposer?.(async () => {
     // The gold stream closes first: it must not survive the module whose store it reports against.
     await intelligenceModule.macroMarketLive.dispose()
@@ -378,7 +382,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     macroCalendarJobs.dispose()
     macroCalendarBackend.dispose()
     intelligenceModule.marketAnalysisRuntime.dispose()
-    syncAudit.close()
+    syncAudit?.close()
   })
   deps.registerProductCache('market-intelligence', {
     cacheId: 'market-intelligence.translation-records',
@@ -482,7 +486,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
 
   // Audit the reader's own actions on the IPC seam: one place sees the payload, the duration and
   // the failure, so no service has to grow a logging dependency for it.
-  const auditedRegister = withSyncAudit(register, syncAudit)
+  const auditedRegister = syncAudit ? withSyncAudit(register, syncAudit) : register
 
   registerIntelligenceIpc(register, deps.jobRuntime)
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime)

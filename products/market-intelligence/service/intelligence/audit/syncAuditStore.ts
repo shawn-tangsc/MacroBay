@@ -24,6 +24,15 @@ export type SyncAuditStore = Readonly<{
   close: () => void
 }>
 
+/** A broken audit file must not stop the product from booting; auditing simply stays off. */
+export function createSyncAuditStoreIfAvailable(filePath: string): SyncAuditStore | undefined {
+  try {
+    return createSyncAuditStore(filePath)
+  } catch {
+    return undefined
+  }
+}
+
 export function createSyncAuditStore(filePath: string): SyncAuditStore {
   const database = new DatabaseSync(filePath)
   database.exec(`create table if not exists mi_sync_audit (
@@ -40,15 +49,17 @@ export function createSyncAuditStore(filePath: string): SyncAuditStore {
 
   return Object.freeze({
     append(entry) {
-      const correlationId = entry.detail && entry.detail.length > syncAuditPolicy.detailMaxLength
-        ? entry.detail.slice(0, syncAuditPolicy.detailMaxLength)
-        : entry.detail
+      // One id for both columns: the row is its own correlation key, and a second random value
+      // would be a column nothing reads.
+      const id = randomUUID()
+      const detail = entry.detail ? entry.detail.slice(0, syncAuditPolicy.detailMaxLength) : null
       insert.run(
-        randomUUID(), entry.at, entry.actor, entry.action, entry.target, entry.outcome,
-        entry.failureCode ?? null, entry.durationMs ?? null, correlationId ?? null, randomUUID()
+        id, entry.at, entry.actor, entry.action, entry.target, entry.outcome,
+        entry.failureCode ?? null, entry.durationMs ?? null, detail, id
       )
       // Cheap with the index in place, and it keeps the file bounded without a separate job.
-      prune.run(new Date(Date.parse(entry.at) - syncAuditPolicy.retentionDays * 86_400_000).toISOString())
+      const at = Date.parse(entry.at)
+      if (Number.isFinite(at)) prune.run(new Date(at - syncAuditPolicy.retentionDays * 86_400_000).toISOString())
     },
     list({ since, limit }) {
       return (select.all(since, Math.max(1, limit)) as Array<Record<string, unknown>>).map(toEntry)
