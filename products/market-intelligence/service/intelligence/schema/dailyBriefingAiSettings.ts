@@ -71,3 +71,7 @@ export function applyDailyBriefingAiSettingsPatch(
   if (hasHalfBoundDailyBriefingModel(next)) throw new Error(dailyBriefingAiSettingsPolicy.halfBoundError)
   return next
 }
+
+export function isDailyBriefingWebSearchAuthorized(settings: Pick<DailyBriefingAiSettings, 'webSearchEnabled' | 'webSearchAuthorizedAt'>): boolean {
+  return settings.webSearchEnabled === true && Boolean(settings.webSearchAuthorizedAt)
+}
