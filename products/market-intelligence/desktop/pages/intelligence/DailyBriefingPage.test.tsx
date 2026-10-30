@@ -163,7 +163,7 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('[data-date="2026-10-29"]')?.getAttribute('aria-current')).toBe('true')
 
     await act(async () => { dom.querySelector<HTMLButtonElement>('[data-date="2026-10-28"]')!.click() })
-    expect(client.get).toHaveBeenCalledTimes(1)
+    expect(client.get).toHaveBeenCalledTimes(2)
   })
 
   it('copies the current edition as text and reports success', async () => {
