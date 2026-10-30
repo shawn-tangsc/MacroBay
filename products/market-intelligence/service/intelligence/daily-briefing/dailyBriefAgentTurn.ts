@@ -36,6 +36,10 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   if (Array.isArray(requests) && requests.length > 0) {
     const answer = await input.runner.continue(started.sessionId, `FIELD RESPONSE:\n${fieldResponse(input.document, requests)}\nReturn the next selection JSON if you need to adjust; otherwise continue.`)
     toolInvocations.push(...answer.toolInvocations)
+    try {
+      const adjusted = JSON.parse(answer.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''))
+      if (adjusted && typeof adjusted === 'object' && (adjusted as { stage?: unknown }).stage === 'select') selection = adjusted
+    } catch { /* keep the prior selection when the model just acknowledges */ }
   }
   const selectedDocument = selectDocument(input.document, selection)
   const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
@@ -69,16 +73,18 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
 }
 
 function factSummary(document: DailyBriefingDocument): Readonly<{ kind: string; label: string; detail: string }> {
-  const macro = document.news.macro.map((item) => `${item.title}：实际 ${item.actual ?? '—'} / 预期 ${item.consensus ?? '未收录'} / 前值 ${item.previous ?? '—'}`)
+  const macro = (document.news.macroCandidates ?? document.news.macro).map((item) => `${item.title}：实际 ${item.actual ?? '—'} / 预期 ${item.consensus ?? '未收录'} / 前值 ${item.previous ?? '—'}`)
   const news = document.news.items.map((item) => item.translatedTitle ?? item.title)
   const data = [...document.data.market, ...document.data.funds].map((row) => `${row.id} ${row.value?.number ?? '—'}`)
-  const next = [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
+  const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item))
     .map((item) => `${item.title}（${item.at}${item.countryName ? ` · ${item.countryName}` : ''}）`)
   const details = [
     `窗口 ${document.edition.windowStart} → ${document.edition.windowEnd}`,
     `宏观候选 ${macro.length}：${macro.join('；') || '无'}`,
     `舆情候选 ${news.length}：${news.join('；') || '无'}`,
     `数据：${data.join('；') || '无'}`,
+    ...(document.data.leverage ? [`杠杆：BTC OI ${document.data.leverage.btc.openInterestUsd ?? '—'} · ETH OI ${document.data.leverage.eth.openInterestUsd ?? '—'}`] : []),
+    ...(document.data.policyPath ? [`利率路径：${Math.round(document.data.policyPath.probability)}% ${document.data.policyPath.outcome} ${document.data.policyPath.meetingDate}`] : []),
     document.conclusion ? `结论：${document.conclusion.summary.slice(0, 160)}` : '结论：无',
     `今日要看的：${next.join('；') || '无'}`
   ].join('\n')
