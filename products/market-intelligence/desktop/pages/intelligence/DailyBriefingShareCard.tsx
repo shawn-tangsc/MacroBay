@@ -27,7 +27,10 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const hasData = chosen.length > 0
   const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0))
   const keyIds = ['btc', 'eth', 'stablecoin', 'etf-btc'] as const
-  const keyRows = keyIds.map((id) => chosen.find((row) => row.id === id)).filter((row): row is NonNullable<typeof row> => Boolean(row))
+  const keyRows = keyIds.flatMap((id) => {
+    const row = chosen.find((candidate) => candidate.id === id)
+    return row && row.value !== null ? [row] : []
+  })
   const keySet = new Set(keyRows.map((row) => row.id))
   const reference = rows.filter((row) => row.importance.tier === 'reference')
   const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support, ...reference]
@@ -68,7 +71,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
         <div>
           <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
-          <small>{text.macro.actual} {item.actual ?? '—'} · {text.macro.consensus} {item.consensus ?? text.macro.noConsensus} · {text.macro.surprise[item.surprise.direction]}</small>
+          <small>{text.macro.actual} {item.actual ?? '—'} · {item.consensus ? `${text.macro.consensus} ${item.consensus}` : text.macro.noConsensus}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}</small>
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
