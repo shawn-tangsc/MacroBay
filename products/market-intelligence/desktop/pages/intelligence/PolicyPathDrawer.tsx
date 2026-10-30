@@ -1,4 +1,6 @@
-import { ExternalLink, X } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
+
+import { MiSideDrawer } from './MiSideDrawer'
 
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import './policyPathDrawer.css'
@@ -28,17 +30,11 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
 }>): React.ReactElement {
   const probability = reading.probability
   const vote = reading.lastDecision?.vote
-  return <aside className="mi-policy-drawer" role="dialog" aria-label={text.title}>
-    <header className="mi-policy-drawer__head">
-      <div>
-        <h2>{text.title}</h2>
-        <p className="mi-policy-drawer__sub">
-          {text.meeting} {reading.meetingDate.slice(5)} · {text.daysAway.replace('{days}', String(reading.daysUntilMeeting))}
-          {reading.hasProjectionMaterials ? <span className="mi-policy-drawer__chip">{text.projection}</span> : null}
-        </p>
-      </div>
-      <button aria-label={text.close} className="mi-policy-drawer__close" onClick={onClose} type="button"><X aria-hidden="true" size={15} /></button>
-    </header>
+  return <MiSideDrawer title={text.title} closeLabel={text.close} onClose={onClose}
+    meta={<>
+      <span>{text.meeting} {reading.meetingDate.slice(5)} · {text.daysAway.replace('{days}', String(reading.daysUntilMeeting))}</span>
+      {reading.hasProjectionMaterials ? <em className="mi-policy-drawer__chip">{text.projection}</em> : null}
+    </>}>
 
     <div className="mi-policy-drawer__hero">
       <span className="mi-policy-drawer__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
@@ -96,5 +92,5 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         {reading.lastDecision?.statementUrl ? <a href={reading.lastDecision.statementUrl} rel="noreferrer" target="_blank">声明原文<ExternalLink aria-hidden="true" size={11} /></a> : null}
       </p>
     </section>
-  </aside>
+  </MiSideDrawer>
 }

@@ -1,11 +1,9 @@
 import { useEffect } from 'react'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { LoadingState } from '@platform/ui/components/loading'
-import { Button } from 'antd'
-import { X } from 'lucide-react'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { AnalysisConclusionDetail, type AnalysisDetailText } from './AnalysisConclusionDetail'
-import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
+import { MiSideDrawer } from './MiSideDrawer'
 import type { UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 
 export type AnalysisDetailDrawerText = Readonly<{ closeDetail: string; detailUnavailable: string }>
@@ -33,28 +31,14 @@ export function AnalysisDetailDrawer({ text, workspaceText, timeline, openEntry,
   // The drawer may be opened from the conclusion card as well as from the
   // timeline, so it primes its own detail read.
   useEffect(() => { if (openEntry) timeline.ensureDetail(openEntry) }, [openEntryId])
-  useEffect(() => {
-    if (!openEntryId) return
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onOpenChange(undefined) }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openEntryId])
 
   if (!openEntry) return null
   const detail = timeline.details[openEntry.id]
   const pending = timeline.detailState[openEntry.id]
-  return <aside className="mi-analysis-drawer" role={analysisConclusionSurfacePolicy.drawerRole} aria-label={text.detail}>
-    <header className="mi-analysis-drawer__header">
-      <div>
-        <h2>{text.detail}</h2>
-        <div className="mi-analysis-drawer__meta"><time>{formatTime(openEntry.occurredAt, 'second')}</time><em>{text.status[openEntry.status]}</em></div>
-      </div>
-      <Button type="text" size="small" icon={<X aria-hidden="true" size={15} />} aria-label={workspaceText.closeDetail} onClick={() => onOpenChange(undefined)} />
-    </header>
-    <div className="mi-analysis-drawer__body">
-      {!detail && pending !== 'unavailable' ? <LoadingState label={text.loading} minHeight={200} /> : null}
-      {!detail && pending === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{workspaceText.detailUnavailable}</p> : null}
-      {detail ? <AnalysisConclusionDetail detail={detail} text={text} /> : null}
-    </div>
-  </aside>
+  return <MiSideDrawer title={text.detail} closeLabel={workspaceText.closeDetail} onClose={() => onOpenChange(undefined)}
+    meta={<><time>{formatTime(openEntry.occurredAt, 'second')}</time><em>{text.status[openEntry.status]}</em></>}>
+    {!detail && pending !== 'unavailable' ? <LoadingState label={text.loading} minHeight={200} /> : null}
+    {!detail && pending === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{workspaceText.detailUnavailable}</p> : null}
+    {detail ? <AnalysisConclusionDetail detail={detail} text={text} /> : null}
+  </MiSideDrawer>
 }
