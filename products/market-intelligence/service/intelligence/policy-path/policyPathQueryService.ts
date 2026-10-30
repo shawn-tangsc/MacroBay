@@ -1,6 +1,8 @@
 import {
-  changeInPp, decisionInstant, leadingOutcome, phaseAt, repricingMarkers, stalenessOf, thinSeries, valueAtOrBefore,
-  type PolicyPathMarker, type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase, type PolicyPathStaleness
+  changeInPp, decisionInstant, leadingOutcome, outcomeFromRangeChange, phaseAt, repricingMarkers,
+  settlementConclusion, stalenessOf, thinSeries, valueAtOrBefore,
+  type PolicyPathMarker, type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase,
+  type PolicyPathSettlement, type PolicyPathStaleness
 } from '../../../contracts/policyPath'
 import type { MacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type { PolicyPathFactStore } from './policyPathFactStore'
@@ -20,6 +22,8 @@ export type PolicyPathReading = Readonly<{
   phase: PolicyPathPhase
   /** At most one repricing chip; absent when neither window moved enough to name. */
   markers?: readonly PolicyPathMarker[]
+  /** The realised band against the price one hour before the decision; settlement and verdict only. */
+  settlement?: PolicyPathSettlement
   targetRange?: Readonly<{ lowerPercent: number; upperPercent: number; source?: 'statement' | 'fred' }>
   sep?: Readonly<{
     asOf: string
@@ -105,12 +109,49 @@ export function createPolicyPathQueryService(deps: {
         .filter((row) => !Number.isFinite(asOfMs) || Date.parse(row.at) <= asOfMs)
       const range = targetRangeOf(decided?.targetRange, deps.readTargetRange)
       const markers = markersOf(series)
+      const nextPhase = phaseOfMeeting(meetingDate, asOf)
+      const decidedPhase = decided?.targetRange ? phaseOfMeeting(decided.meetingDate, asOf) : undefined
+      const settledPhase = decidedPhase && (decidedPhase.kind === 'settlement' || decidedPhase.kind === 'verdict')
+        ? decidedPhase
+        : undefined
+      // The decided meeting's own series is not the next meeting's: after the decision the collector
+      // starts on the next meeting, and the strip still needs the price from before this one.
+      const decidedSeries = settledPhase && decided && decided.meetingDate !== meetingDate
+        ? deps.observations.list(decided.meetingDate, policyPathQueryPolicy.seriesLookback)
+          .filter((row) => !Number.isFinite(asOfMs) || Date.parse(row.at) <= asOfMs)
+        : series
+      const previousDecision = settledPhase && decided?.targetRange
+        ? deps.facts.readLatestDecision(dayBefore(decided.meetingDate))
+        : undefined
+      const decidedRange = decided?.targetRange
+      const settlement = settledPhase && decided && decidedRange && previousDecision?.targetRange
+        ? settlementOf({
+          asOf,
+          decidedMeetingDate: decided.meetingDate,
+          targetRange: decidedRange,
+          previousTargetRange: previousDecision.targetRange,
+          actualOutcome: outcomeFromRangeChange({ previous: previousDecision.targetRange, current: decidedRange }),
+          series: decidedSeries,
+          nextMeetingAfter: (meetingDateAfter) => {
+            const after = deps.calendar.nextFomcMeeting({ asOf: `${dayAfter(meetingDateAfter)}T00:00:00.000Z` })
+            return after.state === 'available' ? after.meeting.scheduledDate : undefined
+          }
+        })
+        : undefined
+      // A decision window whose decision has not been collected falls back to the normal block:
+      // without the realised band and the price before it there is nothing honest to strip against.
+      const phase: PolicyPathPhase = settlement && settledPhase
+        ? settledPhase
+        : nextPhase.kind === 'normal' || nextPhase.kind === 'pre-meeting'
+          ? nextPhase
+          : { kind: 'normal' }
       return {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
-        phase: phaseOf({ asOf, meetingDate, decidedMeetingDate: decided?.targetRange ? decided.meetingDate : undefined }),
+        phase,
         ...(markers.length ? { markers } : {}),
+        ...(settlement ? { settlement } : {}),
         ...(range === undefined ? {} : { targetRange: range }),
         ...(sepFact?.sep ? { sep: sepOf(sepFact.sep, sepFact.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
@@ -137,19 +178,66 @@ function markersOf(series: readonly PolicyPathObservation[]): readonly PolicyPat
   })
 }
 
+/** The phase of one meeting's decision instant, or normal when the date is unusable. */
+function phaseOfMeeting(meetingDate: string, asOf: string): PolicyPathPhase {
+  const decisionAt = decisionInstant(meetingDate)
+  return decisionAt ? phaseAt(decisionAt, asOf) : { kind: 'normal' }
+}
+
 /**
- * The shape of the block at `asOf`.
+ * The settlement strip: the realised band, the price in force one hour before the decision, and the
+ * gap between them.
  *
- * A meeting that just decided keeps the card through its settlement window and its three verdict
- * days, even after the calendar has moved on to the next meeting; outside those windows the next
- * meeting's own decision instant decides between the normal shape and the pre-meeting countdown.
+ * The price is the last observation at or before T0-1h — not the first after and not the latest:
+ * the question is what the market had already paid for before the statement landed.
  */
-function phaseOf(input: Readonly<{ asOf: string; meetingDate: string; decidedMeetingDate?: string }>): PolicyPathPhase {
-  const decidedAt = input.decidedMeetingDate ? decisionInstant(input.decidedMeetingDate) : undefined
-  const decidedPhase = decidedAt ? phaseAt(decidedAt, input.asOf) : undefined
-  if (decidedPhase?.kind === 'settlement' || decidedPhase?.kind === 'verdict') return decidedPhase
-  const nextAt = decisionInstant(input.meetingDate)
-  return nextAt ? phaseAt(nextAt, input.asOf) : { kind: 'normal' }
+function settlementOf(input: Readonly<{
+  asOf: string
+  decidedMeetingDate: string
+  targetRange: Readonly<{ lowerPercent: number; upperPercent: number }>
+  previousTargetRange: Readonly<{ lowerPercent: number; upperPercent: number }>
+  actualOutcome: PolicyPathOutcome
+  series: readonly PolicyPathObservation[]
+  nextMeetingAfter: (meetingDate: string) => string | undefined
+}>): PolicyPathSettlement {
+  const decisionAt = decisionInstant(input.decidedMeetingDate)
+  const cutoff = decisionAt ? Date.parse(decisionAt) - 3_600_000 : Number.NaN
+  const before = Number.isFinite(cutoff)
+    ? input.series.filter((row) => Date.parse(row.at) <= cutoff).at(-1)
+    : undefined
+  const pricedOutcome = before ? leadingOutcome(before.values).outcome : undefined
+  const priced = before ? before.values[input.actualOutcome] : undefined
+  const conclusion: PolicyPathSettlement['conclusion'] = before && pricedOutcome && priced !== undefined
+    ? settlementConclusion({ actual: input.actualOutcome, pricedOutcome, pricedShare: priced })
+    : { kind: 'unavailable', reason: 'settlement-pricing-unavailable' }
+  const nextMeetingDate = input.nextMeetingAfter(input.decidedMeetingDate)
+  const daysUntil = nextMeetingDate === undefined
+    ? undefined
+    : Math.round((Date.parse(`${nextMeetingDate}T00:00:00.000Z`) - Date.parse(input.asOf)) / 86_400_000)
+  return {
+    decidedMeetingDate: input.decidedMeetingDate,
+    previousTargetRange: input.previousTargetRange,
+    actualOutcome: input.actualOutcome,
+    ...(priced === undefined ? {} : { priced }),
+    ...(pricedOutcome ? { pricedOutcome } : {}),
+    conclusion,
+    ...(nextMeetingDate && daysUntil !== undefined && Number.isFinite(daysUntil)
+      ? { nextMeeting: { meetingDate: nextMeetingDate, daysUntil } }
+      : {})
+  }
+}
+
+function dayBefore(date: string): string {
+  return shiftDay(date, -1)
+}
+
+function dayAfter(date: string): string {
+  return shiftDay(date, 1)
+}
+
+function shiftDay(date: string, days: number): string {
+  const parsed = Date.parse(`${date}T00:00:00.000Z`)
+  return Number.isFinite(parsed) ? new Date(parsed + days * 86_400_000).toISOString().slice(0, 10) : date
 }
 
 /** The parsed statement wins; the published series fills in when no decision has been parsed. */

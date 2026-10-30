@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, phaseAt, repricingMarkers, stalenessOf,
-  thinSeries, valueAtOrBefore, verdictOf, type PolicyPathObservation
+  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
+  POLICY_PATH_OUTCOME_ORDER, repricingMarkers, settlementConclusion, stalenessOf, thinSeries,
+  valueAtOrBefore, verdictOf, type PolicyPathObservation
 } from './policyPath'
 
 const observation = (at: string, noChange: number, hike25: number): PolicyPathObservation => ({
@@ -140,5 +141,36 @@ describe('policy path repricing markers', () => {
     expect(repricingMarkers({})).toEqual([])
     expect(repricingMarkers({ change24hPp: 4.9 })).toEqual([])
     expect(repricingMarkers({ change24hPp: 1, change6hPp: 2.9 })).toEqual([])
+  })
+})
+
+describe('policy path settlement', () => {
+  const range = (lowerPercent: number, upperPercent: number) => ({ lowerPercent, upperPercent })
+
+  it('reads the realised band from the range change, in 25bp steps', () => {
+    expect(outcomeFromRangeChange({ previous: range(3.75, 4), current: range(3.75, 4) })).toBe('no-change')
+    expect(outcomeFromRangeChange({ previous: range(3.75, 4), current: range(4, 4.25) })).toBe('hike-25')
+    expect(outcomeFromRangeChange({ previous: range(3.75, 4), current: range(4.25, 4.5) })).toBe('hike-50-plus')
+    expect(outcomeFromRangeChange({ previous: range(3.75, 4), current: range(4.25, 4.75) })).toBe('hike-50-plus')
+    expect(outcomeFromRangeChange({ previous: range(4, 4.25), current: range(3.75, 4) })).toBe('cut-25')
+    expect(outcomeFromRangeChange({ previous: range(4.25, 4.5), current: range(3.75, 4) })).toBe('cut-50-plus')
+  })
+
+  it('orders the bands from the easiest to the tightest', () => {
+    expect(POLICY_PATH_OUTCOME_ORDER).toEqual(['cut-50-plus', 'cut-25', 'no-change', 'hike-25', 'hike-50-plus'])
+  })
+
+  it('calls a band the market already led with priced', () => {
+    expect(settlementConclusion({ actual: 'no-change', pricedOutcome: 'no-change', pricedShare: 0.71 }))
+      .toEqual({ kind: 'priced' })
+  })
+
+  it('measures the unpriced share and signs it by the band order', () => {
+    expect(settlementConclusion({ actual: 'hike-25', pricedOutcome: 'no-change', pricedShare: 0.38 }))
+      .toEqual({ kind: 'relative', direction: 'hawkish', surprisePp: 62 })
+    expect(settlementConclusion({ actual: 'cut-25', pricedOutcome: 'no-change', pricedShare: 0.29 }))
+      .toEqual({ kind: 'relative', direction: 'dovish', surprisePp: 71 })
+    expect(settlementConclusion({ actual: 'hike-50-plus', pricedOutcome: 'hike-25', pricedShare: 0.14 }))
+      .toEqual({ kind: 'relative', direction: 'hawkish', surprisePp: 86 })
   })
 })

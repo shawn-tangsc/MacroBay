@@ -21,6 +21,6 @@ export async function handleGetPolicyPath(input: unknown, deps: ReadHandlerDeps)
   // The panel's shape and its transient conclusions are excluded from the analysis snapshot by
   // design: the same sentence would mean something else a day later, so the model gets the facts
   // (the meeting, the range, the odds) and none of the clock-derived panel state.
-  const { phase: _phase, markers: _markers, ...facts } = reading
+  const { phase: _phase, markers: _markers, settlement: _settlement, ...facts } = reading
   return { state: 'available', asOf, meetingDate: reading.meetingDate, reading: facts, caveats }
 }

@@ -1,4 +1,7 @@
-import { POLICY_PATH_OUTCOMES, type PolicyPathMarker, type PolicyPathPhase } from '../../../contracts/policyPath'
+import {
+  POLICY_PATH_OUTCOMES,
+  type PolicyPathMarker, type PolicyPathOutcome, type PolicyPathPhase, type PolicyPathSettlement
+} from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-path/ipc/registerPolicyPathIpc'
 
@@ -52,12 +55,14 @@ function readReading(value: unknown): PolicyPathReading | undefined {
     ? value.sep as NonNullable<PolicyPathReading['sep']>
     : undefined
   const markers = readMarkers(value.markers)
+  const settlement = readSettlement(value.settlement)
   return {
     meetingDate: value.meetingDate,
     daysUntilMeeting: value.daysUntilMeeting,
     hasProjectionMaterials: value.hasProjectionMaterials,
     phase: readPhase(value.phase),
     ...(markers ? { markers } : {}),
+    ...(settlement ? { settlement } : {}),
     ...(isObject(value.targetRange) ? { targetRange: value.targetRange as NonNullable<PolicyPathReading['targetRange']> } : {}),
     ...(lastDecision ? { lastDecision } : {}),
     ...(sep ? { sep } : {}),
@@ -93,6 +98,56 @@ function readMarkers(value: unknown): readonly PolicyPathMarker[] | undefined {
     return [{ kind: entry.kind, level: entry.level, changeInPp: entry.changeInPp }]
   })
   return markers.length ? markers : undefined
+}
+
+/**
+ * The settlement strip is arithmetic about the market, so only its two shapes are accepted: a
+ * priced/relative conclusion with its numbers, or the named reason the conclusion is absent.
+ */
+function readSettlement(value: unknown): PolicyPathSettlement | undefined {
+  if (!isObject(value) || typeof value.decidedMeetingDate !== 'string') return undefined
+  if (!isOutcome(value.actualOutcome)) return undefined
+  const conclusion = readConclusion(value.conclusion)
+  if (!conclusion) return undefined
+  const previousTargetRange = readRange(value.previousTargetRange)
+  const priced = isFiniteNumber(value.priced) && value.priced >= 0 && value.priced <= 1 ? value.priced : undefined
+  const pricedOutcome = isOutcome(value.pricedOutcome) ? value.pricedOutcome : undefined
+  const nextMeeting = readNextMeeting(value.nextMeeting)
+  return {
+    decidedMeetingDate: value.decidedMeetingDate,
+    ...(previousTargetRange ? { previousTargetRange } : {}),
+    actualOutcome: value.actualOutcome,
+    ...(priced === undefined ? {} : { priced }),
+    ...(pricedOutcome ? { pricedOutcome } : {}),
+    conclusion,
+    ...(nextMeeting ? { nextMeeting } : {})
+  }
+}
+
+function readConclusion(value: unknown): PolicyPathSettlement['conclusion'] | undefined {
+  if (!isObject(value)) return undefined
+  if (value.kind === 'priced') return { kind: 'priced' }
+  if (value.kind === 'unavailable' && value.reason === 'settlement-pricing-unavailable') {
+    return { kind: 'unavailable', reason: 'settlement-pricing-unavailable' }
+  }
+  if (value.kind === 'relative' && (value.direction === 'hawkish' || value.direction === 'dovish') && isFiniteNumber(value.surprisePp)) {
+    return { kind: 'relative', direction: value.direction, surprisePp: value.surprisePp }
+  }
+  return undefined
+}
+
+function readNextMeeting(value: unknown): NonNullable<PolicyPathSettlement['nextMeeting']> | undefined {
+  if (!isObject(value) || typeof value.meetingDate !== 'string' || !isFiniteNumber(value.daysUntil)) return undefined
+  return { meetingDate: value.meetingDate, daysUntil: value.daysUntil }
+}
+
+function readRange(value: unknown): Readonly<{ lowerPercent: number; upperPercent: number }> | undefined {
+  if (!isObject(value) || !isFiniteNumber(value.lowerPercent) || !isFiniteNumber(value.upperPercent)) return undefined
+  return { lowerPercent: value.lowerPercent, upperPercent: value.upperPercent }
+}
+
+function isOutcome(value: unknown): value is PolicyPathOutcome {
+  return typeof value === 'string' && (POLICY_PATH_OUTCOMES as readonly string[]).includes(value)
 }
 
 /** The vote is the only part of the previous decision the row draws; anything else is dropped. */

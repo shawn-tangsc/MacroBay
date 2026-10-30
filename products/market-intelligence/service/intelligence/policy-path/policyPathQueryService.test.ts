@@ -7,20 +7,46 @@ const values = (hike: number): PolicyPathObservation['values'] => ({
   'no-change': 1 - hike - 0.03, 'hike-25': hike, 'hike-50-plus': 0.01, 'cut-25': 0.01, 'cut-50-plus': 0.01
 })
 const observation = (at: string, hike: number): PolicyPathObservation => ({ at, values: values(hike), quote: { bid: hike - 0.01, ask: hike + 0.01 } })
+/** For a realised band the hike helper cannot describe, such as a cut. */
+const CUT_VALUES: PolicyPathObservation['values'] = {
+  'no-change': 0.2, 'hike-25': 0.01, 'hike-50-plus': 0.01, 'cut-25': 0.77, 'cut-50-plus': 0.01
+}
 
 const service = (input: {
   meeting?: { eventKey: string; scheduledDate: string } | null
   facts?: Record<string, unknown> | null
+  /** The decision before `facts`; the settlement strip asks for the day before the meeting. */
+  previousDecision?: Record<string, unknown> | null
+  /** The meeting the calendar returns once the decided one is in the past. */
+  nextAfter?: { eventKey: string; scheduledDate: string }
   series?: PolicyPathObservation[]
+  /** Observations per meeting, when the decided meeting and the next one differ. */
+  observations?: Record<string, PolicyPathObservation[]>
   readTargetRange?: () => { lowerPercent: number; upperPercent: number } | undefined
 }) => createPolicyPathQueryService({
-  calendar: { nextFomcMeeting: () => input.meeting === null ? { state: 'unavailable', failureCode: 'meeting-not-found' } as const : { state: 'available', meeting: input.meeting! } },
+  calendar: {
+    nextFomcMeeting: (query: unknown) => {
+      const meetingDate = typeof (input.facts as { meetingDate?: unknown } | null | undefined)?.meetingDate === 'string'
+        ? String((input.facts as { meetingDate: string }).meetingDate)
+        : ''
+      const queriedAt = String((query as { asOf?: string } | undefined)?.asOf ?? '').slice(0, 10)
+      if (input.nextAfter && meetingDate && queriedAt > meetingDate) return { state: 'available', meeting: input.nextAfter } as const
+      return input.meeting === null
+        ? { state: 'unavailable', failureCode: 'meeting-not-found' } as const
+        : { state: 'available', meeting: input.meeting! } as const
+    }
+  },
   facts: {
     read: () => input.facts as never,
-    readLatestDecision: () => input.facts as never,
+    readLatestDecision: (asOf: string) => {
+      const meetingDate = (input.facts as { meetingDate?: string } | null | undefined)?.meetingDate
+      return (input.previousDecision && meetingDate && asOf.slice(0, 10) < meetingDate
+        ? input.previousDecision
+        : input.facts) as never
+    },
     readLatestSep: () => input.facts as never
   },
-  observations: { list: () => input.series ?? [] },
+  observations: { list: (meetingDate: string) => input.observations?.[meetingDate] ?? input.series ?? [] },
   ...(input.readTargetRange ? { readTargetRange: input.readTargetRange } : {})
 })
 
@@ -137,5 +163,89 @@ describe('policy path repricing markers', () => {
       series: [observation('2026-10-30T03:00:00.000Z', 0.7), observation('2026-10-30T10:00:00.000Z', 0.74)]
     }).read({ asOf: '2026-10-30T10:10:00.000Z' })!
     expect(reading.markers).toEqual([{ kind: 'intraday', level: 'normal', changeInPp: 4 }])
+  })
+})
+
+describe('policy path settlement', () => {
+  const meeting = { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' }
+  const previous = {
+    meetingDate: '2026-11-04', hasProjectionMaterials: false,
+    targetRange: { lowerPercent: 3.75, upperPercent: 4 }, detectedAt: '2026-11-04T19:05:00.000Z'
+  }
+  const decided = {
+    meetingDate: '2026-12-09', hasProjectionMaterials: true,
+    targetRange: { lowerPercent: 4, upperPercent: 4.25 }, vote: { for: 9, against: 3 },
+    detectedAt: '2026-12-09T19:05:00.000Z'
+  }
+  const nextAfter = { eventKey: 'US.FOMC.2027-01-27', scheduledDate: '2027-01-27' }
+
+  it('settles the realised band against the price one hour before the decision', () => {
+    const reading = service({
+      meeting, facts: decided, previousDecision: previous, nextAfter,
+      series: [
+        // The last point at or before T0-1h is the one that counts: the 18:40 print already reacts
+        // to the statement and must not be mistaken for the price before it.
+        observation('2026-12-09T17:00:00.000Z', 0.3),
+        observation('2026-12-09T18:00:00.000Z', 0.38),
+        observation('2026-12-09T18:40:00.000Z', 0.9)
+      ]
+    }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+
+    expect(reading.phase).toEqual({ kind: 'settlement', minutesSinceDecision: 60 })
+    expect(reading.settlement).toMatchObject({
+      decidedMeetingDate: '2026-12-09',
+      previousTargetRange: { lowerPercent: 3.75, upperPercent: 4 },
+      actualOutcome: 'hike-25',
+      priced: 0.38,
+      pricedOutcome: 'no-change',
+      conclusion: { kind: 'relative', direction: 'hawkish', surprisePp: 62 },
+      nextMeeting: { meetingDate: '2027-01-27', daysUntil: 48 }
+    })
+  })
+
+  it('calls the outcome priced when it was already the leading band', () => {
+    const reading = service({
+      meeting,
+      facts: { ...decided, targetRange: { lowerPercent: 3.75, upperPercent: 4 } },
+      previousDecision: previous, nextAfter,
+      series: [observation('2026-12-09T18:00:00.000Z', 0.37)]
+    }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+
+    expect(reading.settlement?.actualOutcome).toBe('no-change')
+    expect(reading.settlement?.pricedOutcome).toBe('no-change')
+    expect(reading.settlement?.conclusion).toEqual({ kind: 'priced' })
+  })
+
+  it('names the missing pre-decision price instead of guessing a conclusion', () => {
+    const reading = service({
+      meeting, facts: decided, previousDecision: previous, nextAfter,
+      series: [observation('2026-12-09T18:30:00.000Z', 0.5)]
+    }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+
+    expect(reading.settlement).toMatchObject({
+      actualOutcome: 'hike-25',
+      conclusion: { kind: 'unavailable', reason: 'settlement-pricing-unavailable' }
+    })
+    expect(reading.settlement?.priced).toBeUndefined()
+    expect(reading.settlement?.pricedOutcome).toBeUndefined()
+  })
+
+  it('reads a cut from the range change and keeps the strip through the next day', () => {
+    const reading = service({
+      meeting,
+      facts: { ...decided, targetRange: { lowerPercent: 3.75, upperPercent: 4 } },
+      previousDecision: { ...previous, targetRange: { lowerPercent: 4, upperPercent: 4.25 } },
+      nextAfter,
+      observations: { '2026-12-09': [{ at: '2026-12-09T18:00:00.000Z', values: CUT_VALUES }] }
+    }).read({ asOf: '2026-12-10T20:00:00.000Z' })!
+
+    expect(reading.phase).toEqual({ kind: 'verdict', daysSinceDecision: 1 })
+    expect(reading.meetingDate).toBe('2027-01-27')
+    expect(reading.settlement).toMatchObject({
+      actualOutcome: 'cut-25',
+      pricedOutcome: 'cut-25',
+      conclusion: { kind: 'priced' },
+      nextMeeting: { meetingDate: '2027-01-27', daysUntil: 47 }
+    })
   })
 })

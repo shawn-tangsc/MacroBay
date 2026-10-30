@@ -223,6 +223,66 @@ export function phaseAt(decisionAt: string, now: string): PolicyPathPhase {
   return { kind: 'normal' }
 }
 
+/** The band order the settlement conclusion reads: later entries are the tighter policy. */
+export const POLICY_PATH_OUTCOME_ORDER: readonly PolicyPathOutcome[] = Object.freeze([
+  'cut-50-plus', 'cut-25', 'no-change', 'hike-25', 'hike-50-plus'
+] as const)
+
+/**
+ * The realised band implied by a target-range change.
+ *
+ * The change, not the statement's wording, names the band: the parser already verified both bounds,
+ * and anything at or beyond two 25bp steps is the same "50bp or more" bucket the venue quotes.
+ */
+export function outcomeFromRangeChange(input: Readonly<{
+  previous: Readonly<{ lowerPercent: number; upperPercent: number }>
+  current: Readonly<{ lowerPercent: number; upperPercent: number }>
+}>): PolicyPathOutcome {
+  const steps = Math.round((input.current.lowerPercent - input.previous.lowerPercent) / 0.25)
+  if (steps >= 2) return 'hike-50-plus'
+  if (steps === 1) return 'hike-25'
+  if (steps <= -2) return 'cut-50-plus'
+  if (steps === -1) return 'cut-25'
+  return 'no-change'
+}
+
+/** What the realised band was worth against the price one hour before the decision. */
+export type PolicyPathSettlement = Readonly<{
+  decidedMeetingDate: string
+  /** The range the meeting started from, so the move can be read without a second query. */
+  previousTargetRange?: Readonly<{ lowerPercent: number; upperPercent: number }>
+  actualOutcome: PolicyPathOutcome
+  /** The realised band's share in the last observation before the decision. */
+  priced?: number
+  /** The band that was leading in that same observation. */
+  pricedOutcome?: PolicyPathOutcome
+  conclusion:
+    | Readonly<{ kind: 'priced' }>
+    | Readonly<{ kind: 'relative'; direction: 'hawkish' | 'dovish'; surprisePp: number }>
+    | Readonly<{ kind: 'unavailable'; reason: 'settlement-pricing-unavailable' }>
+  /** The meeting after the decided one; the strip's last row. */
+  nextMeeting?: Readonly<{ meetingDate: string; daysUntil: number }>
+}>
+
+/**
+ * How far the realised band sat from the one the market priced, in probability points.
+ *
+ * The sign carries the direction, and no motive is asserted: comparing two bands is arithmetic,
+ * while calling one of them "dovish" would be a judgement about why the committee moved. A band the
+ * market already led with is simply priced.
+ */
+export function settlementConclusion(input: Readonly<{
+  actual: PolicyPathOutcome
+  pricedOutcome: PolicyPathOutcome
+  pricedShare: number
+}>): PolicyPathSettlement['conclusion'] {
+  if (input.actual === input.pricedOutcome) return { kind: 'priced' }
+  const direction = POLICY_PATH_OUTCOME_ORDER.indexOf(input.actual) > POLICY_PATH_OUTCOME_ORDER.indexOf(input.pricedOutcome)
+    ? 'hawkish'
+    : 'dovish'
+  return { kind: 'relative', direction, surprisePp: Math.round((1 - input.pricedShare) * 1000) / 10 }
+}
+
 /** The value that was in force `minutes` before the newest observation, if the series reaches back. */
 export function valueAtOrBefore(series: readonly PolicyPathObservation[], outcome: PolicyPathOutcome, minutes: number): number | undefined {
   const newest = series.at(-1)
