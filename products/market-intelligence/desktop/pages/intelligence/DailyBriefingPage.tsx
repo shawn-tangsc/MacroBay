@@ -50,6 +50,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
+  const [webSearchSupported, setWebSearchSupported] = useState<boolean | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailed, setRegenerateFailed] = useState(false)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
@@ -90,7 +91,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   useEffect(() => {
     let active = true
     void client.getSettings?.().then((result) => {
-      if (active && result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled)
+      if (!active || result.state !== 'available') return
+      setWebSearchEnabled(result.view.settings.webSearchEnabled)
+      setWebSearchSupported(result.view.webSearchSupported)
     }).catch(() => undefined)
     return () => { active = false }
   }, [client])
@@ -202,7 +205,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
-        {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
+        {webSearchEnabled === false && webSearchSupported === true && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <button type="button" onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</button>
         </div> : null}
@@ -244,7 +247,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
       setSettingsOpen(false)
-      void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
+      void client.getSettings?.().then((result) => {
+        if (result.state !== 'available') return
+        setWebSearchEnabled(result.view.settings.webSearchEnabled)
+        setWebSearchSupported(result.view.webSearchSupported)
+      }).catch(() => undefined)
     }} />
     <DailyBriefingGenerationSettingsModal open={generationSettingsOpen} text={text} client={client} onClose={() => setGenerationSettingsOpen(false)} />
     {view.status === 'ready' && !editorialFailed ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
