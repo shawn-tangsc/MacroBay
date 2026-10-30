@@ -13,6 +13,7 @@ const SOURCE_ID = MARKET_ANALYSIS_POLICY_PATH_POLICY.sourceId
 /** The public pages a reader can open to check each class of policy fact. */
 export const POLICY_PATH_SOURCE_URLS = Object.freeze({
   calendar: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
+  pressReleases: 'https://www.federalreserve.gov/newsevents/pressreleases.htm',
   fredTargetUpper: 'https://fred.stlouisfed.org/series/DFEDTARU',
   fredTargetLower: 'https://fred.stlouisfed.org/series/DFEDTARL',
   polymarket: 'https://polymarket.com/'
@@ -73,8 +74,8 @@ export function projectPolicyPath(
     caveats.add(MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.oddsAreMarketPricing)
     const value = percent(probability.value)
     add({
-      metric: METRICS.impliedProbability, subject: probability.outcome, value, unit: '%',
-      observedAt: probability.asOf, ...(probabilityUrl ? { sourceUrl: probabilityUrl } : {}),
+      metric: METRICS.impliedProbability, subject: probability.outcome, value, unit: 'percent',
+      observedAt: probability.asOf, sourceUrl: probabilityUrl ?? POLICY_PATH_SOURCE_URLS.polymarket,
       suffix: reading.meetingDate
     })
     if (probability.changeInPp24h === undefined) {
@@ -82,7 +83,7 @@ export function projectPolicyPath(
     } else {
       add({
         metric: METRICS.probabilityChange24h, subject: probability.outcome, value: probability.changeInPp24h, unit: 'pp',
-        observedAt: probability.asOf, ...(probabilityUrl ? { sourceUrl: probabilityUrl } : {}),
+        observedAt: probability.asOf, sourceUrl: probabilityUrl ?? POLICY_PATH_SOURCE_URLS.polymarket,
         suffix: `${reading.meetingDate}-change-24h`
       })
     }
@@ -114,15 +115,15 @@ export function projectPolicyPath(
     const median = sep.medianCurrentYear
     if (median !== undefined) {
       add({
-        metric: METRICS.sepMedianCurrentYear, subject: 'fomc', value: median, unit: '%',
-        observedAt: sepDate, ...(sepUrl ? { sourceUrl: sepUrl } : {}), suffix: sep.asOf
+        metric: METRICS.sepMedianCurrentYear, subject: 'fomc', value: median, unit: 'percent',
+        observedAt: sepDate, sourceUrl: sepUrl ?? POLICY_PATH_SOURCE_URLS.calendar, suffix: sep.asOf
       })
     }
     const path = medianPathText(sep.medianPath)
     if (path) {
       add({
         metric: METRICS.sepMedianPath, subject: 'fomc', value: path, unit: null,
-        observedAt: sepDate, ...(sepUrl ? { sourceUrl: sepUrl } : {}), suffix: `${sep.asOf}-path`
+        observedAt: sepDate, sourceUrl: sepUrl ?? POLICY_PATH_SOURCE_URLS.calendar, suffix: `${sep.asOf}-path`
       })
     }
   } else {
@@ -135,7 +136,7 @@ export function projectPolicyPath(
       metric: METRICS.lastDecisionVote, subject: 'fomc',
       value: `${vote.for}-${vote.against}${dissents.length > 0 ? `（反对：${dissents.join('、')}）` : ''}`,
       unit: null, observedAt: decisionDate,
-      ...(statementUrl ? { sourceUrl: statementUrl } : {}),
+      sourceUrl: statementUrl ?? POLICY_PATH_SOURCE_URLS.pressReleases,
       suffix: decisionDate.slice(0, 10)
     })
   }

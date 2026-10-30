@@ -182,3 +182,38 @@ describe('analysis prose language', () => {
     expect(systemPrompt()).not.toContain('新闻舆情')
   })
 })
+
+describe('policy path prompt rules', () => {
+  const policyFact = {
+    factId: 'mi-fact-macro-policy-implied-probability-hike-25-2026-11-04', domain: 'macro' as const, subject: 'hike-25',
+    metric: 'policy-implied-probability', value: 71, unit: 'percent', sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
+    observedAt: '2026-10-30T15:00:00.000Z', asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const,
+    evidenceRefId: 'ev-policy', sourceUrl: 'https://polymarket.com/'
+  }
+
+  it('states the market-pricing and SEP-meeting rules only when the facts are present', () => {
+    const system = systemPrompt(snapshot({ facts: [policyFact] }))
+    expect(system).toContain('政策与市场定价')
+    expect(system).toContain('预测市场盘口')
+    expect(system).toContain('截至时刻')
+    expect(system).toContain('2026-09-16 那场')
+    expect(system).toContain('24 小时变化尚未可得')
+
+    const without = systemPrompt()
+    expect(without).not.toContain('政策与市场定价')
+  })
+
+  it('hides the source URL from the model while naming the fact', () => {
+    const messages = buildAnalysisMessages(snapshot({ facts: [policyFact] }))
+    const user = JSON.parse(messages.at(-1)!.content) as { facts: readonly Record<string, unknown>[] }
+    expect(user.facts[0]).toMatchObject({ metric: '下次会议市场定价概率', value: '71%', observedAt: '2026-10-30T15:00:00.000Z' })
+    expect(JSON.stringify(user)).not.toContain('polymarket.com')
+  })
+
+  it('asks for a named gap when an enabled policy source has no reading', () => {
+    const system = systemPrompt(snapshot({ caveats: ['policy-path-unavailable'] }))
+    expect(system).toContain('政策路径数据不可用')
+    expect(system).toContain('conclusion.dataGaps')
+    expect(system).toContain('不得用「政策不确定」「政策中性」')
+  })
+})

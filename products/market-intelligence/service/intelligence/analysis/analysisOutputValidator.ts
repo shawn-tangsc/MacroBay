@@ -1,5 +1,6 @@
 import {
   MARKET_ANALYSIS_ERROR_CODES,
+  MARKET_ANALYSIS_POLICY_PATH_POLICY,
   isMarketAnalysisFiniteNumber,
   type AnalysisDirectionHorizon,
   type AnalysisScenarioHorizon,
@@ -17,7 +18,7 @@ import { isMarketReactionFact, marketAnalysisUnsafeOutputPolicy, marketAnalysisV
 import { buildAnalysisReferenceMap, resolveAnalysisReferences } from './analysisReferenceHandles'
 
 export type FrozenAnalysisEvidence = Readonly<{
-  facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'comparability' | 'freshness'>[]
+  facts: readonly Pick<AgentFact, 'factId' | 'evidenceRefId' | 'metric' | 'comparability' | 'freshness' | 'value' | 'observedAt'>[]
   evidenceRefs: readonly Pick<EvidenceClaim, 'evidenceRefId'>[]
 }>
 
@@ -61,7 +62,13 @@ export const analysisValidationRules = Object.freeze({
    * The list is appended on purpose: a conclusion that ignores it cannot be said to have weighed
    * it. Requiring one citation keeps the requirement checkable instead of prompt-only.
    */
-  sentimentNotWeighed: 'sentiment-not-weighed'
+  sentimentNotWeighed: 'sentiment-not-weighed',
+  /**
+   * A policy probability in the conclusion must be traceable: the same value in the frozen snapshot,
+   * cited with that fact's own as-of at minute precision. A percentage near "概率/定价" that no
+   * policy fact carries is a fabricated number, not a rounding difference.
+   */
+  policyProbabilityCitation: 'policy-probability-citation'
 })
 
 export type AnalysisValidationRule = typeof analysisValidationRules[keyof typeof analysisValidationRules]
@@ -212,6 +219,7 @@ export function validateAnalysisModelOutput(input: string, snapshot: FrozenAnaly
     ])
     if (![...sentimentRefs].some(ref => citedEvidence.has(ref))) return missingEvidence(analysisValidationRules.sentimentNotWeighed)
   }
+  if (!hasTraceablePolicyProbability(output.conclusion, snapshot)) return missingEvidence(analysisValidationRules.policyProbabilityCitation)
 
   return { ok: true, value: output, redactions }
 }
@@ -293,6 +301,63 @@ function hasCompleteDirectionHorizons(directions: readonly DirectionAdvice[]): b
 function isCatalysts(value: unknown): value is Catalyst[] {
   return isBoundedCollection(value) && value.every((item) => hasExactKeys(item, ['statement', 'evidenceRefIds']) &&
     isBoundedText(item.statement) && isNonEmptyStringCollection(item.evidenceRefIds))
+}
+
+/**
+ * A policy probability quoted in the conclusion must be checkable against the frozen snapshot.
+ *
+ * The rule is intentionally narrow: only the probability metric is policed, because the other
+ * policy facts (a range, a vote, a SEP path) are protected by the prompt and by their own display
+ * rules. Every percentage in the conclusion that equals a frozen probability must be accompanied by
+ * that fact's `observedAt` at minute precision; a percentage next to 「概率」 or 「定价」 that no
+ * policy fact carries is rejected as an invented number.
+ */
+function hasTraceablePolicyProbability(conclusion: AnalysisConclusion, snapshot: FrozenAnalysisEvidence): boolean {
+  const probabilities = snapshot.facts.filter(fact =>
+    fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.impliedProbability &&
+    typeof fact.value === 'number' && Number.isFinite(fact.value) && typeof fact.observedAt === 'string')
+  if (probabilities.length === 0) return true
+  const prose = [
+    conclusion.summary, conclusion.change, conclusion.causalChain,
+    ...(conclusion.macro ? [conclusion.macro] : []),
+    ...conclusion.conditions, ...(conclusion.evidenceStrength ? [conclusion.evidenceStrength] : []),
+    ...conclusion.dataGaps
+  ].join('\n')
+  for (const fact of probabilities) {
+    const value = Number(fact.value)
+    if (!percentageValues(prose).some(candidate => nearlyEqual(candidate, value))) continue
+    if (!mentionsInstant(prose, fact.observedAt!)) return false
+  }
+  const macro = conclusion.macro ?? ''
+  if (/(概率|定价)/.test(macro)) {
+    const allowed = probabilities.map(fact => Number(fact.value))
+    const mentioned = [
+      ...macro.matchAll(/(?:概率|定价)[^。；\n]{0,16}?(\d+(?:\.\d+)?)\s*%/g),
+      ...macro.matchAll(/(\d+(?:\.\d+)?)\s*%[^。；\n]{0,8}?(?:概率|定价)/g)
+    ].map(match => Number(match[1]))
+    if (mentioned.some(value => !allowed.some(candidate => nearlyEqual(candidate, value)))) return false
+  }
+  return true
+}
+
+/** Percentages written as `71%`, `71.0%` or `71 %`. */
+function percentageValues(text: string): number[] {
+  return [...text.matchAll(/(?<![\d.])(\d+(?:\.\d+)?)\s*%/g)]
+    .map(match => Number(match[1]))
+    .filter(value => Number.isFinite(value))
+}
+
+function nearlyEqual(left: number, right: number): boolean {
+  return Math.abs(left - right) < 0.05
+}
+
+/** `observedAt` is UTC; accept the ISO form, `YYYY-MM-DD HH:mm`, or `MM-DD HH:mm`. */
+function mentionsInstant(text: string, observedAt: string): boolean {
+  const date = observedAt.slice(0, 10)
+  const time = observedAt.slice(11, 16)
+  const short = date.slice(5)
+  return text.includes(observedAt) || text.includes(`${date} ${time}`) || text.includes(`${date}T${time}`) ||
+    text.includes(`${short} ${time}`) || text.includes(`${short}T${time}`)
 }
 
 function hasKnownReferences(output: ValidatedAnalysisModelOutput, factIds: ReadonlySet<string>, evidenceRefIds: ReadonlySet<string>): boolean {

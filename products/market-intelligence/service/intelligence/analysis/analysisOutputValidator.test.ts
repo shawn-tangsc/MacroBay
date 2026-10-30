@@ -178,12 +178,54 @@ describe('analysisOutputValidator', () => {
     console.log(marker)
     expect(marker).toBe('{"marker":"MI_ANALYSIS_ACCEPTANCE","package":"MI-A01","event":"output-validator","status":"pass","details":{"valid":1,"rejectedUnsafe":1,"rejectedMissingEvidence":1}}')
   })
+  it('accepts a policy probability that carries the frozen as-of it came from', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，截至 2026-10-30 15:00 UTC；SEP 中位 4.1%（2026-09-16 那场）。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toMatchObject({ ok: true })
+  })
+
+  it('rejects a policy probability without its as-of', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 71%，SEP 中位 4.1%。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'policy-probability-citation'
+    })
+  })
+
+  it('rejects a probability-shaped number the snapshot does not carry', () => {
+    const snapshot = frozenSnapshot()
+    snapshot.facts = [...snapshot.facts, policyProbabilityFact()]
+    const output = validOutput()
+    output.conclusion.macro = '政策与市场定价：市场定价 65%，截至 2026-10-30 15:00 UTC。'
+
+    expect(validateAnalysisModelOutput(JSON.stringify(output), snapshot)).toEqual({
+      ok: false, errorCode: MARKET_ANALYSIS_ERROR_CODES.missingEvidence, rule: 'policy-probability-citation'
+    })
+  })
+
 })
 
 function frozenSnapshot(): import('./analysisOutputValidator').FrozenAnalysisEvidence & { facts: import('../../../contracts/marketAnalysisContracts').AgentFact[] } {
   return {
     facts: [{ factId: 'mi-fact-btc-return', evidenceRefId: 'mi-ev-market-move', metric: 'price-return', comparability: 'comparable', freshness: 'fresh', domain: 'cross-asset', subject: 'BTC', value: 1, unit: '%', sourceId: 'source', sourceLabel: 'source', observedAt: '2026-10-04T00:00:00.000Z', asOf: '2026-10-04T00:00:00.000Z', confidence: 1 }],
     evidenceRefs: [{ evidenceRefId: 'mi-ev-market-move' }]
+  }
+}
+
+function policyProbabilityFact(): import('../../../contracts/marketAnalysisContracts').AgentFact {
+  return {
+    factId: 'mi-fact-macro-policy-implied-probability-hike-25-2026-11-04', evidenceRefId: 'mi-ev-policy',
+    metric: 'policy-implied-probability', domain: 'macro', subject: 'hike-25', value: 71, unit: '%',
+    sourceId: 'policy-path-market', sourceLabel: 'policy-path-market',
+    observedAt: '2026-10-30T15:00:00.000Z', asOf: '2026-10-30T15:05:00.000Z',
+    freshness: 'fresh', confidence: 1, comparability: 'comparable',
+    sourceUrl: 'https://polymarket.com/'
   }
 }
 

@@ -102,7 +102,8 @@ const repairInstructions: Readonly<Record<string, string>> = Object.freeze({
   'unknown-reference': 'factId 与 evidenceRefIds 只能写输入里给出的 f# / e# 原文句柄，不得改写、拼接或编造。',
   'fact-evidence-mismatch': '每条 knownFact 只能引用它自己的那一个 evidenceRef；marketReaction 的 evidenceRefIds 必须恰好覆盖它 factIds 对应的证据集合，多一个也会被拒绝。',
   'ineligible-market-reaction': 'marketReaction 的 factIds 只能取自输入里的 marketReactionFactRefs；输入没有该字段或为空时写 []。',
-  'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。'
+  'sentiment-not-weighed': '输入里有「新闻舆情」事实，但结论没有引用任何一条。请在 knownFacts 或 supportingEvidence 中至少引用一条舆情事实，并说明它与当前判断的关系。',
+  'policy-probability-citation': '结论里的政策概率必须与快照同值，并在同一段写出该概率的截至时刻（例如「市场定价 71%，截至 2026-10-30 15:00 UTC」）；「概率/定价」附近的百分数只能取自输入里的概率事实，不得自行取整、换档或编造。'
 })
 
 function repairInstruction(defect: Readonly<{ errorCode: string; rule?: string }>): string {
