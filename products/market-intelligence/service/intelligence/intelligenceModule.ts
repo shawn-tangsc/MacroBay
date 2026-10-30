@@ -63,6 +63,7 @@ import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefingAgent } from './daily-briefing/dailyBriefingAgent'
 import { registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
@@ -724,6 +725,14 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {})
     })
     registerDailyBriefingJob(jobRuntime, { service: dailyBriefingService, getLocale: getAppLanguage })
+    if (hooks?.deleteAgentSessions) {
+      registerDailyBriefSessionRetentionJob(jobRuntime, {
+        links: dailyBriefSessionLinks,
+        deleteSessions: (ids) => hooks.deleteAgentSessions!(ids),
+        today: () => new Date().toISOString().slice(0, 10),
+        timeZone: () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } }
+      })
+    }
     intelligenceModule = {
       pipeline,
       workerRuntime,
