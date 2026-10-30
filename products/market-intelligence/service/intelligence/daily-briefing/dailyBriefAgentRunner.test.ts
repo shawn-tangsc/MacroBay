@@ -18,6 +18,35 @@ describe('daily brief agent runner', () => {
     expect(port.state).toHaveBeenCalledWith('2026-10-30:zh-CN', 'accepted')
   })
 
+  it('does not let a failing cancel escape as an unhandled rejection', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason) }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const controller = new AbortController()
+      const cancelled: string[] = []
+      const port = {
+        ensure: async () => ({ sessionId: 's1', created: true }),
+        send: () => new Promise<never>(() => undefined),
+        cancel: async (sessionId: string) => {
+          cancelled.push(sessionId)
+          throw new Error('runtime already stopped')
+        },
+        state: async () => undefined
+      }
+      const runner = createDailyBriefAgentRunner({ port: port as never, agentId: 'daily-brief-editor' })
+      void runner.start({ editionKey: '2026-10-30:zh-CN', date: '2026-10-30', locale: 'zh-CN', prompt: 'task', signal: controller.signal })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      controller.abort()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+
+      expect(cancelled).toEqual(['s1'])
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
+  })
+
   it('writes the first visible task in the edition language', async () => {
     const sent: { displayText?: string }[] = []
     const port = {

@@ -167,11 +167,25 @@ export function createDailyBriefingService(deps: Readonly<{
         document = markEditorialFailure(document, 'editorial-disabled')
       } else {
         let turn: Awaited<ReturnType<typeof runDailyBriefAgentTurn>>
+        const controller = new AbortController()
+        let sessionId: string | undefined
         try {
-          turn = await withDeadline(runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}), ...(deps.backfillFactory ? { backfill: deps.backfillFactory(document.edition.windowEnd) } : {}) }), 120_000)
+          turn = await withDeadline(runDailyBriefAgentTurn({
+            runner: deps.agentRunner,
+            document,
+            locale: input.locale,
+            ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}),
+            ...(deps.backfillFactory ? { backfill: deps.backfillFactory(document.edition.windowEnd) } : {}),
+            signal: controller.signal,
+            onSession: (id) => { sessionId = id }
+          }), 120_000, () => controller.abort())
         } catch {
           publish = false
-          turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: 'unknown', toolInvocations: [] }
+          turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: sessionId ?? 'unknown', toolInvocations: [] }
+          // The answer is no longer awaited, but the runtime session must stop. The port only
+          // abandons a link that is still running, so a turn that finished at the deadline keeps its
+          // terminal state. A deadline that fires before any session exists has nothing to close.
+          if (sessionId) await deps.agentRunner.finish(sessionId, 'abandoned').catch(() => undefined)
         }
         if (turn.state === 'accepted') {
           document = model?.state === 'agent' ? withEditorialModel(turn.document, model) : turn.document
@@ -289,13 +303,22 @@ function candidateOverflow(packet: DailyBriefingFactPacket, document: DailyBrief
     macroCandidates > dailyBriefingPolicy.maximumMacroItems
 }
 
-async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<T> {
+async function withDeadline<T>(read: Promise<T>, milliseconds: number, onTimeout?: () => void): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
       read,
       new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('daily-briefing-generation-timeout')), milliseconds)
+        timer = setTimeout(() => {
+          // The losing turn rejects later: it is being cancelled at this instant. `Promise.race`
+          // already subscribes to its inputs, but observe the loser explicitly here so a future
+          // rewrite of this deadline can never leave a rejection for the main process.
+          void read.catch(() => undefined)
+          // The timeout is a cancellation, not just an abandoned wait: the work behind `read` is
+          // told to stop before the caller is released with a failure.
+          onTimeout?.()
+          reject(new Error('daily-briefing-generation-timeout'))
+        }, milliseconds)
       })
     ])
   } finally {

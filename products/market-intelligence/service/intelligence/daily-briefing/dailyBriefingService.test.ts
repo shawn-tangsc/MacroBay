@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { createDailyBriefAgentRunner } from './dailyBriefAgentRunner'
+import { DailyBriefTurnAbortedError } from './dailyBriefAgentTurn'
+import { createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
+import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import {
   briefingWindow,
   createDailyBriefingService,
@@ -241,6 +245,69 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(result.state).toBe('available')
     expect(store.rows.size).toBe(0)
+  })
+
+  it('cancels the runtime session and abandons its link when the editorial deadline fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = memoryStore()
+      const links = createDailyBriefSessionLinkStore(':memory:')
+      const cancelAgentSession = vi.fn(async () => undefined)
+      const port = createDailyBriefEditorSessionPort({
+        links,
+        createSession: async () => ({ id: 's-timeout' } as never),
+        send: () => new Promise<never>(() => undefined),
+        cancelAgentSession,
+        now: () => asOf
+      })
+      const service = createDailyBriefingService({
+        source: fakeSource(), store, now: () => asOf,
+        agentRunner: createDailyBriefAgentRunner({ port, agentId: 'daily-brief-editor' })
+      })
+
+      const pending = service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+      await vi.advanceTimersByTimeAsync(120_000)
+      const result = await pending
+
+      expect(cancelAgentSession).toHaveBeenCalledWith('s-timeout')
+      expect((await links.findBySession('s-timeout'))?.state).toBe('abandoned')
+      expect(result.state).toBe('available')
+      if (result.state === 'available') {
+        expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
+      }
+      expect(store.rows.size).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips the abandoned write when the deadline fires before a session exists', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = memoryStore()
+      const finish = vi.fn(async () => undefined)
+      const service = createDailyBriefingService({
+        source: fakeSource(), store, now: () => asOf,
+        agentRunner: {
+          start: () => new Promise<never>(() => undefined),
+          async continue() { return { assistantText: '{}', toolInvocations: [] } },
+          finish
+        }
+      })
+
+      const pending = service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+      await vi.advanceTimersByTimeAsync(120_000)
+      const result = await pending
+
+      expect(finish).not.toHaveBeenCalled()
+      expect(result.state).toBe('available')
+      if (result.state === 'available') {
+        expect(result.document.provenance.editorialFailure).toBe('editorial-timeout')
+      }
+      expect(store.rows.size).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('runs the agent on the platform default and records the fallback when the custom model is unavailable', async () => {

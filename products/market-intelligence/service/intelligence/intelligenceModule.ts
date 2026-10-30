@@ -191,6 +191,7 @@ export type IntelligenceModulePlatformHooks = {
   onCalendarEnabledChanged?: () => void | Promise<void>
   createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
   sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
+  cancelAgentSession?: (sessionId: string) => Promise<void> | void
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
@@ -735,6 +736,7 @@ export function getIntelligenceModule(
         links: dailyBriefSessionLinks,
         createSession: hooks.createAgentSession,
         send: hooks.sendAgentMessage,
+        cancelAgentSession: hooks.cancelAgentSession,
       })
       : undefined
     const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined

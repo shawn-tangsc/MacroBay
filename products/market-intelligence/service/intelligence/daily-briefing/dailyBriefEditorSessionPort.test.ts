@@ -18,6 +18,30 @@ const deps = () => {
 }
 
 describe('daily brief editor session port', () => {
+  it('forwards cancel to the platform runtime session', async () => {
+    const d = deps()
+    const cancelAgentSession = vi.fn(async () => undefined)
+    const port = createDailyBriefEditorSessionPort({ ...d, cancelAgentSession } as never)
+    await port.cancel('s-1')
+    expect(cancelAgentSession).toHaveBeenCalledWith('s-1')
+  })
+
+  it('treats cancel as a no-op when no cancel entry is wired', async () => {
+    const port = createDailyBriefEditorSessionPort(deps() as never)
+    await expect(port.cancel('s-1')).resolves.toBeUndefined()
+  })
+
+  it('abandons a running link but never rewrites a link that already finished', async () => {
+    const d = deps()
+    const port = createDailyBriefEditorSessionPort(d as never)
+    const { sessionId } = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'edition', agentId: 'daily-brief-editor' })
+    await port.state(sessionId, 'abandoned')
+    expect((await d.links.findBySession(sessionId))?.state).toBe('abandoned')
+    await port.state(sessionId, 'accepted')
+    await port.state(sessionId, 'abandoned')
+    expect((await d.links.findBySession(sessionId))?.state).toBe('accepted')
+  })
+
   it('creates once per edition, reuses the link, renames and deletes', async () => {
     const d = deps()
     const port = createDailyBriefEditorSessionPort(d as never)

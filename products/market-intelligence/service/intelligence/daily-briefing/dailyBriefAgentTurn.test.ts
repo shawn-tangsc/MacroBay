@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
+import { DailyBriefTurnAbortedError, runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
 
 const CJK = /[\u4e00-\u9fff]/
 
@@ -91,6 +91,22 @@ function fakeRunner() {
 }
 
 describe('daily brief agent turn copy', () => {
+  it('does not open another agent round once the generation is aborted', async () => {
+    const { continues, runner } = fakeRunner()
+    const controller = new AbortController()
+    const start = runner.start
+    runner.start = vi.fn(async (input: { displayText?: string; context?: { label: string } }) => {
+      const result = await start(input)
+      controller.abort()
+      return result
+    })
+
+    await expect(runDailyBriefAgentTurn({ runner, document: document('en-US'), locale: 'en-US', signal: controller.signal }))
+      .rejects.toBeInstanceOf(DailyBriefTurnAbortedError)
+    expect(continues).toHaveLength(0)
+    expect(runner.finish).not.toHaveBeenCalled()
+  })
+
   it('writes the first task, the fact card and the field answers in English for en-US', async () => {
     const { starts, continues, runner } = fakeRunner()
     await runDailyBriefAgentTurn({ runner, document: document('en-US'), locale: 'en-US' })

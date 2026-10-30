@@ -93,6 +93,7 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   getNetworkSettings?: () => Promise<NetworkSettings>
   createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
   sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
+  cancelAgentSession?: (sessionId: string) => Promise<void> | void
   appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
   updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
@@ -160,6 +161,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     platformFetch: deps.platformFetch,
     createAgentSession: deps.createAgentSession,
     sendAgentMessage: deps.sendAgentMessage,
+    cancelAgentSession: deps.cancelAgentSession,
     appendAgentSessionMessages: deps.appendAgentSessionMessages,
     updateAgentSession: deps.updateAgentSession,
     deleteAgentSessions: deps.deleteAgentSessions,
