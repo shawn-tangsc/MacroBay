@@ -165,6 +165,31 @@ async function readCalendar(
       }
     }
   }
+  // A later collection can omit the actual value even though an earlier collection in the same
+  // release batch stored it. Ask again at the latest release instant in the window and merge the
+  // actual/previous/consensus fields; no extra month is read.
+  const start = Date.parse(asOf) - 24 * 60 * 60 * 1000
+  const missing = [...events.values()]
+    .filter((event) => event.importance === 'high' && event.actual === undefined)
+    .filter((event) => {
+      const at = Date.parse(event.scheduledAt)
+      return Number.isFinite(at) && at >= start && at < Date.parse(asOf)
+    })
+    .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
+  const latest = missing.at(-1)
+  if (latest) {
+    const fallbackAsOf = new Date(Date.parse(latest.scheduledAt) + 60 * 60 * 1000).toISOString()
+    const refreshed = safeSync(
+      () => deps.publicQuery.queryMarketCalendarMonth({ month: latest.scheduledAt.slice(0, 7), locale: locale === 'en-US' ? 'en' : 'zh', asOf: fallbackAsOf }),
+      undefined
+    )
+    if (refreshed?.state === 'available') {
+      for (const event of refreshed.events) {
+        const existing = events.get(event.eventKey)
+        if (existing && !existing.actual && event.providerActual) events.set(event.eventKey, marketEvent(event, asOf))
+      }
+    }
+  }
   return Object.freeze({
     state: available ? 'available' as const : 'unavailable' as const,
     events: Object.freeze([...events.values()])

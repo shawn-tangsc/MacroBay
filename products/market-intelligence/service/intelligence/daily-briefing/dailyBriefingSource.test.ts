@@ -123,6 +123,22 @@ describe('daily briefing source', () => {
     expect(packet.enabled).toMatchObject({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
   })
 
+  it('re-reads the release instant when the latest collection omitted actuals', async () => {
+    const base = deps()
+    const publicQuery = base.publicQuery as unknown as { queryMarketCalendarMonth: (input: { month: string; locale: string; asOf: string }) => unknown }
+    let calls = 0
+    publicQuery.queryMarketCalendarMonth = (input) => {
+      calls += 1
+      return {
+        state: 'available', month: input.month, locale: input.locale, asOf: input.asOf, sources: [],
+        events: [{ ...marketEvent, scheduledAt: '2026-10-29T12:30:00.000Z', providerActual: calls >= 3 ? { displayValue: '3.4%' } : null }]
+      }
+    }
+    const packet = await createDailyBriefingSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')?.actual).toBe('3.4%')
+    expect(calls).toBeGreaterThanOrEqual(3)
+  })
+
   it('degrades each read to a stated gap instead of failing the packet', async () => {
     const packet = await createDailyBriefingSource(deps({ failReadings: true, failCalendar: true }))
       .buildPacket({ asOf, locale: 'en-US', timeZone: 'UTC' })
