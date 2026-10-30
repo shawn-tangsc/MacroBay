@@ -249,3 +249,24 @@ describe('policy path settlement', () => {
     })
   })
 })
+
+describe('policy path projection gap', () => {
+  it('carries the previous quarter gap the countdown block compares against', () => {
+    const reading = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: {
+        meetingDate: '2026-12-09', hasProjectionMaterials: true,
+        targetRange: { lowerPercent: 3.75, upperPercent: 4 },
+        sep: {
+          asOf: '2026-09-16', medianPath: { y2026: 4.1 }, medianCurrentYear: 4.1, previousMedian: 3.9,
+          sourceUrl: 'https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm'
+        },
+        detectedAt: '2026-10-29T00:00:00.000Z'
+      }
+    }).read({ asOf: '2026-10-30T10:00:00.000Z' })!
+
+    // 4.1 against the 3.875 midpoint is one 25bp step; last quarter's 3.9 was on the midpoint.
+    expect(reading.sep?.stepsFromCurrent).toBe(1)
+    expect(reading.sep?.previousStepsFromCurrent).toBe(0)
+  })
+})

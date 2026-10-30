@@ -33,6 +33,8 @@ export type PolicyPathReading = Readonly<{
     rangeCurrentYear?: Readonly<{ low: number; high: number }>
     /** What the median still implies against the current midpoint, in 25bp steps. */
     stepsFromCurrent?: number
+    /** The same gap for the previous quarter's median, so the move can be read at a glance. */
+    previousStepsFromCurrent?: number
     sourceUrl: string
   }>
   lastDecision?: Readonly<{
@@ -264,6 +266,9 @@ function sepOf(
   const stepsFromCurrent = medianCurrentYear !== undefined && midpoint !== undefined
     ? Math.round((medianCurrentYear - midpoint) / 0.25)
     : undefined
+  const previousStepsFromCurrent = sep.previousMedian !== undefined && midpoint !== undefined
+    ? Math.round((sep.previousMedian - midpoint) / 0.25)
+    : undefined
   return {
     asOf: sep.asOf,
     medianPath: sep.medianPath as Record<string, number>,
@@ -271,6 +276,7 @@ function sepOf(
     ...(sep.previousMedian === undefined ? {} : { previousMedian: sep.previousMedian }),
     ...(sep.rangeCurrentYear ? { rangeCurrentYear: sep.rangeCurrentYear } : {}),
     ...(stepsFromCurrent === undefined ? {} : { stepsFromCurrent }),
+    ...(previousStepsFromCurrent === undefined ? {} : { previousStepsFromCurrent }),
     sourceUrl: sep.sourceUrl
   }
 }

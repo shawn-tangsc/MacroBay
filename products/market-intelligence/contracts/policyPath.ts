@@ -283,6 +283,16 @@ export function settlementConclusion(input: Readonly<{
   return { kind: 'relative', direction, surprisePp: Math.round((1 - input.pricedShare) * 1000) / 10 }
 }
 
+/** A pp figure as the cards write it: one decimal, and no trailing ".0" on a whole number. */
+export function formatPp(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
+}
+
+/** The same figure with an explicit sign, where the direction is the point of showing it. */
+export function formatSignedPp(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatPp(value)}`
+}
+
 /** The value that was in force `minutes` before the newest observation, if the series reaches back. */
 export function valueAtOrBefore(series: readonly PolicyPathObservation[], outcome: PolicyPathOutcome, minutes: number): number | undefined {
   const newest = series.at(-1)

@@ -108,3 +108,59 @@
 .mi-policy-card__help:hover .mi-policy-card__help-pop,
 .mi-policy-card__help:focus .mi-policy-card__help-pop,
 .mi-policy-card__help:focus-within .mi-policy-card__help-pop { display: flex; }
+
+/* The phase chip holds the header's right edge in every upgraded shape, so the title and the marker
+   keep the same start position and the card does not appear to re-flow as the clock advances. */
+.mi-policy-card__phase {
+  margin-left: auto;
+  font-size: 9.5px;
+  letter-spacing: .04em;
+  color: #c8d77a;
+  border: 1px solid #4a552a;
+  border-radius: 3px;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.mi-policy-card__phase[data-phase='pre'] { color: #d9c27a; border-color: #5c512a; }
+.mi-policy-card__phase[data-phase='settle'] { color: #9ec2ff; border-color: #33456b; }
+.mi-policy-card__phase[data-phase='verdict'] { color: #9ec2ff; border-color: #33456b; }
+
+/* One chip, sized by the move: red only when the day was repriced hard enough to be the headline. */
+.mi-policy-card__marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #e0a35c;
+  border: 1px solid #5f4526;
+  background: #231a10;
+  border-radius: 4px;
+  padding: 0 5px;
+  white-space: nowrap;
+}
+.mi-policy-card__marker[data-level='strong'] { color: #e0524c; border-color: #5c2a28; background: #241313; }
+
+/* The upgraded block sits between the lead and the facts: a quiet inset, not a second card. */
+.mi-policy-card__upgrade {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 9px;
+  border: 1px solid #2d3340;
+  border-radius: 7px;
+  background: #0c0f14;
+}
+.mi-policy-card__upgrade b { font-size: 12px; font-weight: 600; }
+.mi-policy-card__upgrade span { font-size: 10.5px; color: var(--muted, #8b8d94); }
+
+/* The settlement lead keeps the odds' weight without pretending to be a probability. */
+.mi-policy-card__settle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin: 0; }
+.mi-policy-card__settle b { font-size: 26px; font-weight: 650; line-height: 1.1; letter-spacing: -.01em; }
+.mi-policy-card__settle span { font-size: 11px; color: var(--muted, #8b8d94); }
+.mi-policy-card__verdict { margin-left: auto; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mi-policy-card__verdict[data-direction='hawkish'] { color: #e0524c; }
+.mi-policy-card__verdict[data-direction='dovish'] { color: #3fbf6f; }
+.mi-policy-card__verdict[data-direction='priced'] { color: var(--muted, #8b8d94); }
+
+/* The verdict line replaces the freshness stamp: it is the card's memory, in grey. */
+.mi-policy-card__verdict-foot { color: var(--muted, #8b8d94); }
