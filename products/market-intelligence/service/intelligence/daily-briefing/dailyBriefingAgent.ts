@@ -75,7 +75,16 @@ function parseEditorial(raw: unknown): unknown {
   try {
     return JSON.parse(text) as unknown
   } catch {
-    return undefined
+    // Some compatible endpoints add one sentence before the object, or keep a trailing fence.
+    // Recover the first complete object rather than treating a valid answer as a parse failure.
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start < 0 || end <= start) return undefined
+    try {
+      return JSON.parse(text.slice(start, end + 1)) as unknown
+    } catch {
+      return undefined
+    }
   }
 }
 

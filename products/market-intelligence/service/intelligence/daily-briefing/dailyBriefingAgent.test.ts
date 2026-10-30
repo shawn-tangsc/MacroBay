@@ -139,6 +139,16 @@ describe('daily briefing agent', () => {
     expect(result.document.provenance.editorialMeta).toEqual({ promptVersion: 'daily-briefing.editorial.v1', model: 'm1', source: 'custom' })
   })
 
+  it('recovers a valid object wrapped in prose', async () => {
+    const invoke = vi.fn(async () => ({
+      ok: true as const,
+      output: `Here is the briefing JSON.\n${JSON.stringify(validOutput)}\nDone.`,
+      providerId: 'p', modelId: 'm1', trace: { taskId: 't', durationMs: 1 }
+    }))
+    const agent = createDailyBriefingAgent({ invoke: invoke as never })
+    expect(await agent.generate({ document: document(), locale: 'zh-CN' })).toMatchObject({ state: 'agent' })
+  })
+
   it('falls back to the untouched template on an error, invalid JSON or a bad fact', async () => {
     const template = document()
     const failing = createDailyBriefingAgent({ invoke: vi.fn(async () => ({ ok: false as const, errorCode: 'timeout' as const, trace: { taskId: 't', durationMs: 1 } })) as never })
