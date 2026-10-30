@@ -190,7 +190,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           </div>
         </div> : null}
         {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
-        {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {view.document.provenance.editorialFailure}</p> : null}
+        {view.status === 'ready' && view.document.provenance.editorialFailure ? <p className="mi-daily-briefing-page__ai-failure" role="status" title={view.document.provenance.editorialFailure}>{text.aiSettings.notApplied} · {editorialFailureText(view.document.provenance.editorialFailure, text)}</p> : null}
         {view.status === 'ready' && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
           <p>{text.emptyGuide}</p>
           {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
@@ -247,4 +247,8 @@ function localDate(timeZone: string): string {
   } catch {
     return new Date().toISOString().slice(0, 10)
   }
+}
+
+function editorialFailureText(code: string, text: DailyBriefingText): string {
+  return (text.aiSettings.failure as Readonly<Record<string, string>>)[code] ?? code
 }
