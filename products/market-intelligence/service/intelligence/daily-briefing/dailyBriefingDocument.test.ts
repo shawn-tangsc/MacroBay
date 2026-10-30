@@ -87,7 +87,7 @@ const predictions: readonly Prediction[] = [{
 }]
 
 const packet = (overrides: Partial<DailyBriefingFactPacket> = {}): DailyBriefingFactPacket => ({
-  asOf, windowStart, windowEnd: asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai',
+  asOf, windowStart, windowEnd: asOf, windowHours: 24, locale: 'zh-CN', timeZone: 'Asia/Shanghai',
   conclusion: { summary, predictions, occurredAt: '2026-10-30T00:00:00.000Z', evidenceRefs: [
     { evidenceRefId: 'ev-2', sourceId: 'etf', sourceLabel: 'ETF flows', itemId: null, occurredAt: null, publishedAt: '2026-10-28T00:00:00.000Z', detectedAt: null, computedAt: null, visibleAt: '2026-10-28T00:00:00.000Z', excerptHash: 'h2' },
     { evidenceRefId: 'ev-3', sourceId: 'fg', sourceLabel: 'Fear & Greed', itemId: null, occurredAt: null, publishedAt: '2026-10-30T00:00:00.000Z', detectedAt: null, computedAt: null, visibleAt: '2026-10-30T00:00:00.000Z', excerptHash: 'h3' }
@@ -147,7 +147,7 @@ describe('daily briefing document', () => {
   it('builds the six readings, market rows, news, macro, next and conclusion', () => {
     const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
 
-    expect(document.edition).toMatchObject({ date: '2026-10-30', locale: 'zh-CN', windowStart })
+    expect(document.edition).toMatchObject({ date: '2026-10-30', locale: 'zh-CN', windowStart, windowHours: 24 })
     expect(document.status).toMatchObject({ readingsAvailable: 4, readingsTotal: 4 })
     expect(document.data.funds).toHaveLength(5)
     expect(document.data.funds.every((row) => row.importance.tier === 'must')).toBe(true)
@@ -175,6 +175,24 @@ describe('daily briefing document', () => {
     expect(document.conclusion?.invalidations).toHaveLength(1)
     expect(document.lede.source).toBe('template')
     expect(document.lede.text).toBe('')
+  })
+
+  it('records the packet window that generation actually read', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        windowStart: '2026-10-28T00:30:00.000Z',
+        windowEnd: asOf,
+        windowHours: 48
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.schemaVersion).toBe(7)
+    expect(document.edition).toMatchObject({
+      windowStart: '2026-10-28T00:30:00.000Z',
+      windowEnd: asOf,
+      windowHours: 48
+    })
   })
 
   it('compares the edition with the previous day', () => {

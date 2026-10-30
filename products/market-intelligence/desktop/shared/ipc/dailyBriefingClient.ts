@@ -35,22 +35,34 @@ export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'missing' }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
-export type DailyBriefingAiSettingsView = Readonly<{
+export type DailyBriefingGenerationSettingsView = Readonly<{
+  generationTime: string
+  windowHours: number
+  cronExpression: string
+}>
+
+export type DailyBriefingSettingsView = Readonly<{
+  /** The AI editorial preference. */
   settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
+  /** When the automatic edition runs and what interval it covers. */
+  generation: DailyBriefingGenerationSettingsView
   resolved:
     | Readonly<{ state: 'disabled' }>
     | Readonly<{ state: 'agent'; providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
     | Readonly<{ state: 'unavailable'; reason: 'default-unavailable' }>
 }>
 
-export type DailyBriefingAiSettingsPatch = Readonly<{
+export type DailyBriefingSettingsPatch = Readonly<{
   editorialEnabled?: boolean
   providerId?: string
   modelId?: string
+  webSearchEnabled?: boolean
+  webSearchAuthorizedAt?: string
+  generation?: Readonly<{ generationTime?: string; windowHours?: number }>
 }>
 
 export type DailyBriefingSettingsResult =
-  | Readonly<{ state: 'available'; view: DailyBriefingAiSettingsView }>
+  | Readonly<{ state: 'available'; view: DailyBriefingSettingsView }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
 export type DailyBriefingClient = Readonly<{
@@ -59,7 +71,7 @@ export type DailyBriefingClient = Readonly<{
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
   regenerate: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
-  saveSettings: (patch: DailyBriefingAiSettingsPatch) => Promise<DailyBriefingSettingsResult>
+  saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
 }>
 
 export const dailyBriefingClient: DailyBriefingClient = {
@@ -134,13 +146,20 @@ function unavailable(): Readonly<{ state: 'unavailable'; failureCode: string }> 
 async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefingSettingsResult> {
   try {
     const value = await read()
-    if (!isRecord(value) || !isRecord(value.settings) || !isAiSettings(value.settings) || !isResolvedModel(value.resolved)) {
+    if (!isRecord(value) || !isRecord(value.settings) || !isAiSettings(value.settings) ||
+      !isGenerationSettings(value.generation) || !isResolvedModel(value.resolved)) {
       return { state: 'unavailable', failureCode: 'daily-briefing-settings-invalid' }
     }
-    return { state: 'available', view: { settings: value.settings, resolved: value.resolved } }
+    return { state: 'available', view: { settings: value.settings, generation: value.generation, resolved: value.resolved } }
   } catch {
     return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
   }
+}
+
+function isGenerationSettings(value: unknown): value is DailyBriefingGenerationSettingsView {
+  return isExact(value, ['generationTime', 'windowHours', 'cronExpression']) &&
+    isText(value.generationTime) && typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
+    isText(value.cronExpression)
 }
 
 function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } {
@@ -148,7 +167,7 @@ function isAiSettings(value: Record<string, unknown>): value is { editorialEnabl
     typeof value.editorialEnabled === 'boolean' && typeof value.providerId === 'string' && typeof value.modelId === 'string' && typeof value.webSearchEnabled === 'boolean' && (value.webSearchAuthorizedAt === undefined || typeof value.webSearchAuthorizedAt === 'string')
 }
 
-function isResolvedModel(value: unknown): value is DailyBriefingAiSettingsView['resolved'] {
+function isResolvedModel(value: unknown): value is DailyBriefingSettingsView['resolved'] {
   if (!isRecord(value)) return false
   if (value.state === 'disabled') return true
   if (value.state === 'unavailable') return value.reason === 'default-unavailable'
@@ -178,16 +197,19 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
 
 function isDocument(value: unknown): value is DailyBriefingDocument {
   if (!isRecord(value) || !isDailyBriefingDocumentWithinBudget(value)) return false
-  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17')) return false
-  if (!isEdition(value.edition) || !isStatus(value.status) || !isLede(value.lede)) return false
+  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2 && value.schemaVersion !== 3 && value.schemaVersion !== 4 && value.schemaVersion !== 5 && value.schemaVersion !== 6 && value.schemaVersion !== 7) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8' && value.policyVersion !== 'daily-briefing.v9' && value.policyVersion !== 'daily-briefing.v10' && value.policyVersion !== 'daily-briefing.v11' && value.policyVersion !== 'daily-briefing.v12' && value.policyVersion !== 'daily-briefing.v13' && value.policyVersion !== 'daily-briefing.v14' && value.policyVersion !== 'daily-briefing.v15' && value.policyVersion !== 'daily-briefing.v16' && value.policyVersion !== 'daily-briefing.v17' && value.policyVersion !== 'daily-briefing.v18')) return false
+  if (!isEdition(value.edition, value.schemaVersion) || !isStatus(value.status) || !isLede(value.lede)) return false
   if (!isNews(value.news) || !isData(value.data) || !isConclusionOrNull(value.conclusion)) return false
   if (!isNext(value.next) || !Array.isArray(value.citations) || !isProvenance(value.provenance)) return false
   if (value.editorial !== undefined && !isEditorial(value.editorial)) return false
   return true
 }
 
-function isEdition(value: unknown): boolean {
-  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'])) return false
+function isEdition(value: unknown, schemaVersion: unknown): boolean {
+  if (!isExact(value, ['date', 'locale', 'generatedAt', 'windowStart', 'windowEnd', 'timeZone'], ['windowHours'])) return false
+  if (value.windowHours !== undefined && typeof value.windowHours !== 'number') return false
+  // From schema 7 the edition states the window it actually covered; older rows may omit it.
+  if (typeof schemaVersion === 'number' && schemaVersion >= 7 && typeof value.windowHours !== 'number') return false
   return isText(value.date) && isDailyBriefingLocale(value.locale) && isText(value.generatedAt) &&
     isText(value.windowStart) && isText(value.windowEnd) && isText(value.timeZone)
 }

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
-import { registerDailyBriefingJob } from './registerDailyBriefingJob'
+import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './registerDailyBriefingJob'
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from './intelligenceJobIds'
 
 function runtime() {
@@ -16,7 +16,7 @@ function runtime() {
 }
 
 describe('daily briefing job', () => {
-  it('registers a local 08:05 cron and generates through the same service', async () => {
+  it('registers the default 08:00 cron and generates through the same service', async () => {
     const { runtime: jobRuntime, schedules, run } = runtime()
     const getToday = vi.fn(async () => ({
       state: 'available' as const,
@@ -26,10 +26,34 @@ describe('daily briefing job', () => {
 
     expect(schedules).toEqual([expect.objectContaining({
       id: INTELLIGENCE_DAILY_BRIEFING_JOB,
-      trigger: { kind: 'cron', expression: '5 8 * * *', timezone: 'Asia/Shanghai' }
+      trigger: { kind: 'cron', expression: '0 8 * * *', timezone: 'Asia/Shanghai' }
     })])
     expect(await run()).toBeUndefined()
     expect(getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+  })
+
+  it('follows the saved generation time and re-registers the same job when it changes', async () => {
+    const { runtime: jobRuntime, schedules } = runtime()
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday: vi.fn() },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'Asia/Shanghai',
+      getGenerationTime: async () => '07:30'
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(schedules).toEqual([expect.objectContaining({
+      id: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      trigger: { kind: 'cron', expression: '30 7 * * *', timezone: 'Asia/Shanghai' }
+    })])
+
+    scheduleDailyBriefingJob(jobRuntime, { timeZone: 'Asia/Shanghai', generationTime: '09:30' })
+    expect(schedules).toHaveLength(2)
+    expect(schedules.at(-1)).toMatchObject({
+      id: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      trigger: { kind: 'cron', expression: '30 9 * * *', timezone: 'Asia/Shanghai' }
+    })
   })
 
   it('surfaces a generation failure and survives a runtime without a scheduler', async () => {

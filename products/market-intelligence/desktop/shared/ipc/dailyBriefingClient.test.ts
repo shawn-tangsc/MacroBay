@@ -59,27 +59,61 @@ describe('daily briefing client', () => {
     expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
-  it('reads and saves the AI setting view without trusting a malformed resolved state', async () => {
+  it('reads and saves the settings view without trusting a malformed resolved state', async () => {
     stubInvoke((method, payload) => {
       if (method === 'intelligence.dailyBriefing.getSettings') {
-        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
+        return { settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' }, resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' } }
       }
       return {
         settings: { editorialEnabled: false, providerId: '', modelId: '', webSearchEnabled: false },
+        generation: { generationTime: '09:30', windowHours: 48, cronExpression: '30 9 * * *' },
         resolved: { state: 'disabled' },
         patch: payload
       }
     })
     const settings = await dailyBriefingClient.getSettings()
     expect(settings.state).toBe('available')
-    const saved = await dailyBriefingClient.saveSettings({ editorialEnabled: false })
+    if (settings.state === 'available') {
+      expect(settings.view.generation).toEqual({ generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' })
+    }
+    const saved = await dailyBriefingClient.saveSettings({ generation: { generationTime: '09:30', windowHours: 48 } })
     expect(saved.state).toBe('available')
-    if (saved.state === 'available') expect(saved.view.resolved).toEqual({ state: 'disabled' })
+    if (saved.state === 'available') {
+      expect(saved.view.resolved).toEqual({ state: 'disabled' })
+      expect(saved.view.generation.windowHours).toBe(48)
+    }
 
     stubInvoke(() => ({ settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false }, resolved: { state: 'agent' } }))
     expect(await dailyBriefingClient.getSettings()).toEqual({
       state: 'unavailable', failureCode: 'daily-briefing-settings-invalid'
     })
+  })
+
+  it('requires the generation block to be well formed', async () => {
+    stubInvoke(() => ({
+      settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
+      generation: { generationTime: '08:00', windowHours: '24' },
+      resolved: { state: 'disabled' }
+    }))
+    expect(await dailyBriefingClient.getSettings()).toEqual({
+      state: 'unavailable', failureCode: 'daily-briefing-settings-invalid'
+    })
+  })
+
+  it('accepts a schema-7 edition that records its window and rejects one without it', async () => {
+    const current = (): DailyBriefingDocument => ({
+      ...document(),
+      schemaVersion: 7,
+      policyVersion: 'daily-briefing.v18',
+      edition: { ...document().edition, windowHours: 48 }
+    })
+    stubInvoke(() => ({ state: 'available', document: current() }))
+    expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('available')
+
+    const missing = current()
+    const { windowHours: _windowHours, ...edition } = missing.edition
+    stubInvoke(() => ({ state: 'available', document: { ...missing, edition } }))
+    expect((await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
 
   it('lists summaries and rejects one malformed summary', async () => {

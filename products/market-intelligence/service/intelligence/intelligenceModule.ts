@@ -62,7 +62,7 @@ import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingSt
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefingAgent } from './daily-briefing/dailyBriefingAgent'
-import { registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
@@ -70,7 +70,15 @@ import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRun
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
-import { createDailyBriefingAiSettingsService, type DailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
+import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
+import {
+  createDailyBriefingGenerationSettingsJsonStorage,
+  createDailyBriefingGenerationSettingsService
+} from './daily-briefing/dailyBriefingGenerationSettingsService'
+import {
+  createDailyBriefingSettingsService,
+  type DailyBriefingSettingsService
+} from './daily-briefing/dailyBriefingSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
@@ -214,7 +222,11 @@ type IntelligenceModule = {
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
-  dailyBriefingAiSettings: DailyBriefingAiSettingsService
+  /**
+   * The daily-brief settings seam. The name predates the generation setting; the value is the
+   * composed settings service, and `dailyBriefingAiSettings` inside the module is the AI-only part.
+   */
+  dailyBriefingAiSettings: DailyBriefingSettingsService
   rawRecordStore: ReturnType<typeof createRawRecordStore>
   macroCalendarEvidenceArchive: ReturnType<typeof createMacroCalendarEvidenceArchive>
   macroCalendarEvidenceReady: boolean
@@ -252,6 +264,15 @@ type IntelligenceModule = {
 
 let intelligenceModule: IntelligenceModule | null = null
 let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
+
+/** The local wall-clock zone the brief schedule and its cutoff both use. */
+function systemLocalTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
 
 function getProductDataDir(): string {
   return join(app.getPath('userData'), 'products', PRODUCT_ID)
@@ -698,6 +719,17 @@ export function getIntelligenceModule(
       },
       applyAgentModel: applyDailyBriefAgentModel
     })
+    // The generation setting owns when the edition runs and what it covers. Saving it re-registers
+    // the same job id so the next run uses the new time; the service reads the stored value at
+    // generation time, so a change never rewrites an edition that already exists.
+    const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
+      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')),
+      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, { timeZone: systemLocalTimeZone(), generationTime: settings.generationTime })
+    })
+    const dailyBriefingSettings = createDailyBriefingSettingsService({
+      ai: dailyBriefingAiSettings,
+      generation: dailyBriefingGenerationSettings
+    })
     const dailyBriefingAgent = createDailyBriefingAgent({ invoke: structuredModelInvocation.invoke })
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
@@ -747,6 +779,7 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
+      generationSettings: () => dailyBriefingGenerationSettings.getView(),
       backfillFactory: (cutoff) => createDailyBriefBackfillExecutor({ cutoff, publicQuery: publicQueryService }),
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()
@@ -755,7 +788,12 @@ export function getIntelligenceModule(
         return ['WebSearch', 'WebFetch']
       }
     })
-    registerDailyBriefingJob(jobRuntime, { service: dailyBriefingService, getLocale: getAppLanguage })
+    registerDailyBriefingJob(jobRuntime, {
+      service: dailyBriefingService,
+      getLocale: getAppLanguage,
+      timeZone: systemLocalTimeZone,
+      getGenerationTime: async () => (await dailyBriefingGenerationSettings.getView()).generationTime
+    })
     if (hooks?.deleteAgentSessions) {
       registerDailyBriefSessionRetentionJob(jobRuntime, {
         links: dailyBriefSessionLinks,
@@ -785,7 +823,7 @@ export function getIntelligenceModule(
       sourcesService,
       publicQueryService,
       dailyBriefingService,
-      dailyBriefingAiSettings,
+      dailyBriefingAiSettings: dailyBriefingSettings,
       rawRecordStore,
       macroCalendarEvidenceArchive,
       macroCalendarEvidenceReady: macroCalendarEvidenceMigration.state !== 'unavailable',

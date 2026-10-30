@@ -6,11 +6,11 @@ import type { SourceProfileStore } from '../application/sourceProfileStore'
 import { assessMarketCalendarSurprise, toCalendarSurpriseView } from '../../../contracts/macro/marketCalendarSurprise'
 import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
-import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import { dailyBriefingPolicy, isDailyBriefingWindowHours, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSource } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
 
-const WINDOW_MS = 24 * 60 * 60 * 1_000
+const HOUR_MS = 60 * 60 * 1_000
 const DAY_MS = 24 * 60 * 60 * 1_000
 
 type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
@@ -40,24 +40,29 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   return {
     async buildPacket(input) {
       const enabled = await readEnabled(deps)
+      // The reader's statistical window decides the packet's interval; every window-scoped read
+      // below uses it instead of assuming 24 hours.
+      const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
+      const asOfMs = Date.parse(input.asOf)
+      const windowStart = new Date(asOfMs - windowHours * HOUR_MS).toISOString()
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
       const [conclusion, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
         readConclusion(deps, input.asOf),
-        readNews(deps, input.asOf),
+        readNews(deps, input.asOf, windowStart),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
-        readCalendar(deps, input.asOf, input.locale, enabled.calendar),
+        readCalendar(deps, input.asOf, input.locale, enabled.calendar, windowStart),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
         usableSnapshot(safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined), input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
       ])
-      const asOfMs = Date.parse(input.asOf)
       return Object.freeze({
         asOf: input.asOf,
-        windowStart: new Date(asOfMs - WINDOW_MS).toISOString(),
+        windowStart,
         windowEnd: input.asOf,
+        windowHours,
         locale: input.locale,
         timeZone: input.timeZone,
         conclusion,
@@ -117,10 +122,17 @@ async function readConclusion(deps: DailyBriefingSourceDeps, cutoff: string): Pr
   }
 }
 
-async function readNews(deps: DailyBriefingSourceDeps, asOf: string): Promise<DailyBriefingFactPacket['news']> {
+async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string): Promise<DailyBriefingFactPacket['news']> {
   try {
-    const view = await deps.news.query({ asOf, window: '24h', limit: 100 })
-    return Object.freeze({ state: view.state, items: view.items })
+    // The query only supports fixed horizons, so ask for the smallest one that covers the window
+    // and keep the configured interval: a 12h brief must not carry yesterday's headlines, and a 48h
+    // brief must not silently shrink back to 24h.
+    const window = Date.parse(asOf) - Date.parse(windowStart) > 24 * HOUR_MS ? '7d' as const : '24h' as const
+    const view = await deps.news.query({ asOf, window, limit: 100 })
+    return Object.freeze({
+      state: view.state,
+      items: view.items.filter((item) => item.publishedAt >= windowStart && item.publishedAt <= asOf)
+    })
   } catch {
     return Object.freeze({ state: 'unavailable' as const, items: Object.freeze([]) })
   }
@@ -130,7 +142,8 @@ async function readCalendar(
   deps: DailyBriefingSourceDeps,
   asOf: string,
   locale: DailyBriefingLocale,
-  enabled: boolean
+  enabled: boolean,
+  windowStart: string
 ): Promise<DailyBriefingFactPacket['calendar']> {
   if (!enabled) return Object.freeze({ state: 'source-disabled' as const, events: Object.freeze([]) })
   const months = calendarMonths(asOf)
@@ -172,7 +185,7 @@ async function readCalendar(
   // A later collection can omit the actual value even though an earlier collection in the same
   // release batch stored it. Ask again at the latest release instant in the window and merge the
   // actual/previous/consensus fields; no extra month is read.
-  const start = Date.parse(asOf) - 24 * 60 * 60 * 1000
+  const start = Date.parse(windowStart)
   const missing = [...events.values()]
     .filter((event) => event.importance === 'high' && event.actual === undefined)
     .filter((event) => {

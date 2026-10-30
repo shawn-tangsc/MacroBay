@@ -214,6 +214,7 @@
 .mi-daily-briefing__settings-link { margin: 10px 0 0; }
 .mi-daily-briefing__settings-link button { border: 0; background: transparent; color: var(--mi-dashboard-lime); font-size: 11px; cursor: pointer; padding: 0; }
 .mi-daily-briefing__settings-error { margin: 8px 0 0; color: var(--mi-dashboard-negative); font-size: 11px; }
+.mi-daily-briefing__settings-note { margin: 12px 0 0; color: var(--mi-dashboard-muted); font-size: 10.5px; line-height: 1.5; }
 
 .mi-daily-briefing__translation { margin-top: 4px !important; color: var(--mi-dashboard-muted) !important; font-size: 11px !important; }
 .mi-daily-briefing__translation b { margin-right: 5px; padding: 0 4px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px; color: var(--mi-dashboard-lime); font-size: 9px; font-weight: 500; }

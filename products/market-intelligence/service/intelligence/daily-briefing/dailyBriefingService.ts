@@ -4,12 +4,26 @@ import type {
   DailyBriefingListResult,
   DailyBriefingLocale
 } from '../../../contracts/dailyBriefing'
-import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
+import {
+  dailyBriefingGenerationPolicy,
+  dailyBriefingPolicy,
+  isDailyBriefingGenerationTime,
+  isDailyBriefingWindowHours
+} from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
+import { dailyBriefingCutoffMinutes, type DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
+
+/** What a generation needs from the reader's schedule setting. */
+export type DailyBriefingGeneration = Pick<DailyBriefingGenerationSettings, 'generationTime' | 'windowHours'>
+
+const defaultGeneration: DailyBriefingGeneration = Object.freeze({
+  generationTime: dailyBriefingGenerationPolicy.defaultGenerationTime,
+  windowHours: dailyBriefingGenerationPolicy.defaultWindowHours
+})
 
 /** The stored shape. The store owns the file; the service owns when a row is written. */
 export type DailyBriefingStoredEdition = Readonly<{
@@ -29,7 +43,7 @@ export type DailyBriefingStore = Readonly<{
 }>
 
 export type DailyBriefingSource = Readonly<{
-  buildPacket: (input: Readonly<{ asOf: string; locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingFactPacket>
+  buildPacket: (input: Readonly<{ asOf: string; locale: DailyBriefingLocale; timeZone: string; windowHours?: number }>) => Promise<DailyBriefingFactPacket>
 }>
 
 export type DailyBriefingTodayResult =
@@ -80,34 +94,57 @@ export function createDailyBriefingService(deps: Readonly<{
   agentAllowedTools?: () => Promise<readonly string[] | undefined>
   backfillFactory?: (cutoff: string) => DailyBriefBackfillExecutor
   editorialEnabled?: () => Promise<boolean>
+  /**
+   * The reader's generation setting, read at generation time. A change therefore applies to the
+   * next edition: an edition that already exists is returned as stored, never rebuilt with the new
+   * cutoff.
+   */
+  generationSettings?: () => Promise<DailyBriefingGeneration>
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
   const inFlight = new Map<string, Promise<DailyBriefingTodayResult>>()
 
+  async function generation(): Promise<DailyBriefingGeneration> {
+    if (!deps.generationSettings) return defaultGeneration
+    try {
+      const value = await deps.generationSettings()
+      return Object.freeze({
+        generationTime: isDailyBriefingGenerationTime(value?.generationTime)
+          ? value.generationTime
+          : defaultGeneration.generationTime,
+        windowHours: isDailyBriefingWindowHours(value?.windowHours)
+          ? value.windowHours
+          : defaultGeneration.windowHours
+      })
+    } catch {
+      return defaultGeneration
+    }
+  }
+
   async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
-    const window = briefingWindow(now(), input.timeZone)
+    const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     const key = `${window.date}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone }, false).finally(() => inFlight.delete(key))
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false).finally(() => inFlight.delete(key))
     inFlight.set(key, promise)
     return promise
   }
 
   async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
-    const window = briefingWindow(now(), input.timeZone)
+    const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    return resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone }, true)
+    return resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true)
   }
 
-  async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string }>, force: boolean): Promise<DailyBriefingTodayResult> {
+  async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
     const cached = force ? undefined : await deps.store.get(input.date, input.locale).catch(() => undefined)
     if (cached && isCurrent( cached.document)) return { state: 'available', document: cached.document }
     let packet: DailyBriefingFactPacket
     try {
-      packet = await withDeadline(deps.source.buildPacket({ asOf: input.asOf, locale: input.locale, timeZone: input.timeZone }), 15_000)
+      packet = await withDeadline(deps.source.buildPacket({ asOf: input.asOf, locale: input.locale, timeZone: input.timeZone, windowHours: input.windowHours }), 15_000)
     } catch {
       return { state: 'unavailable', failureCode: 'source-failed' }
     }
@@ -187,7 +224,7 @@ export function createDailyBriefingService(deps: Readonly<{
   }
 
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
-    const window = briefingWindow(now(), input.timeZone)
+    const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
     const today = window.date
     const dates = lastDays(today, dailyBriefingPolicy.retentionDays)
@@ -315,39 +352,59 @@ function summaryFor(
 
 /**
  * A daily edition is not a rolling read from "now": its window is
- * [previous local 08:00, current local 08:00). Generation before 08:00 belongs to the previous
- * edition; generation after 08:00 reads the same cutoff no matter when it is retried.
+ * [the previous generation time, the current generation time), both local wall-clock. The cutoff is
+ * the reader's generation setting, defaulting to 08:00, so moving the schedule moves the cutoff with
+ * it. Generation before the cutoff belongs to the previous edition; generation after it reads the
+ * same cutoff no matter when it is retried. `windowHours` only changes the start of the interval.
  */
-export type DailyBriefingWindow = Readonly<{ date: string; windowStart: string; windowEnd: string }>
+export type DailyBriefingWindow = Readonly<{ date: string; windowStart: string; windowEnd: string; windowHours: number }>
 
-export function briefingWindow(asOf: string, timeZone: string): DailyBriefingWindow | undefined {
+export function briefingWindow(
+  asOf: string,
+  timeZone: string,
+  settings: Partial<DailyBriefingGeneration> = {}
+): DailyBriefingWindow | undefined {
   const parsed = Date.parse(asOf)
   if (!Number.isFinite(parsed)) return undefined
   const zone = isValidTimeZone(timeZone) ? timeZone : 'UTC'
   const parts = localParts(parsed, zone)
   if (!parts) return undefined
-  const beforeCutoff = parts.hour < 8
-  const date = beforeCutoff ? addDays(parts.date, -1) : parts.date
-  const windowEnd = zonedIso(date, 8, zone)
+  const generationTime = isDailyBriefingGenerationTime(settings.generationTime)
+    ? settings.generationTime
+    : dailyBriefingGenerationPolicy.defaultGenerationTime
+  const windowHours = isDailyBriefingWindowHours(settings.windowHours)
+    ? settings.windowHours
+    : dailyBriefingGenerationPolicy.defaultWindowHours
+  const cutoff = dailyBriefingCutoffMinutes(generationTime)
+  const date = parts.hour * 60 + parts.minute < cutoff ? addDays(parts.date, -1) : parts.date
+  const windowEnd = zonedIso(date, Math.floor(cutoff / 60), cutoff % 60, zone)
   if (!windowEnd) return undefined
-  return Object.freeze({ date, windowEnd, windowStart: new Date(Date.parse(windowEnd) - 24 * 60 * 60 * 1000).toISOString() })
+  return Object.freeze({
+    date,
+    windowEnd,
+    windowStart: new Date(Date.parse(windowEnd) - windowHours * 60 * 60 * 1000).toISOString(),
+    windowHours
+  })
 }
 
-function localParts(value: number, timeZone: string): { date: string; hour: number } | undefined {
+function localParts(value: number, timeZone: string): { date: string; hour: number; minute: number } | undefined {
   try {
     const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
     }).formatToParts(new Date(value))
     const get = (type: string) => parts.find((part) => part.type === type)?.value
-    const year = get('year'); const month = get('month'); const day = get('day'); const hour = Number(get('hour'))
-    return year && month && day && Number.isInteger(hour) ? { date: `${year}-${month}-${day}`, hour } : undefined
+    const year = get('year'); const month = get('month'); const day = get('day')
+    const hour = Number(get('hour')); const minute = Number(get('minute'))
+    return year && month && day && Number.isInteger(hour) && Number.isInteger(minute)
+      ? { date: `${year}-${month}-${day}`, hour, minute }
+      : undefined
   } catch { return undefined }
 }
 
-function zonedIso(date: string, hour: number, timeZone: string): string | undefined {
+function zonedIso(date: string, hour: number, minute: number, timeZone: string): string | undefined {
   const [year, month, day] = date.split('-').map(Number)
   if (!year || !month || !day) return undefined
-  const target = Date.UTC(year, month - 1, day, hour)
+  const target = Date.UTC(year, month - 1, day, hour, minute)
   let guess = target
   try {
     for (let index = 0; index < 3; index++) {

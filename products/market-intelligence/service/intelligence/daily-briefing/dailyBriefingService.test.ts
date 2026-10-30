@@ -14,8 +14,13 @@ import {
 
 const asOf = '2026-10-30T00:30:00.000Z'
 
-const emptyPacket = (): DailyBriefingFactPacket => ({
-  asOf, windowStart: '2026-10-29T00:30:00.000Z', windowEnd: asOf,
+type PacketInput = Readonly<{ asOf: string; windowHours: number }>
+
+const emptyPacket = (input: PacketInput = { asOf, windowHours: 24 }): DailyBriefingFactPacket => ({
+  asOf: input.asOf,
+  windowStart: new Date(Date.parse(input.asOf) - input.windowHours * 60 * 60 * 1_000).toISOString(),
+  windowEnd: input.asOf,
+  windowHours: input.windowHours,
   locale: 'zh-CN', timeZone: 'Asia/Shanghai',
   conclusion: null,
   news: { state: 'empty', items: [] },
@@ -45,10 +50,17 @@ function memoryStore(): DailyBriefingStore & { rows: Map<string, DailyBriefingSt
   }
 }
 
-function fakeSource(packet: () => DailyBriefingFactPacket = emptyPacket): DailyBriefingSource & { calls: number } {
+function fakeSource(
+  packet: (input: PacketInput) => DailyBriefingFactPacket = (input) => emptyPacket(input)
+): DailyBriefingSource & { calls: number; lastInput?: PacketInput } {
   const source = {
     calls: 0,
-    async buildPacket() { source.calls += 1; return packet() }
+    lastInput: undefined as PacketInput | undefined,
+    async buildPacket(input: PacketInput & { locale: DailyBriefingLocale; timeZone: string }) {
+      source.calls += 1
+      source.lastInput = { asOf: input.asOf, windowHours: input.windowHours ?? 24 }
+      return packet(source.lastInput)
+    }
   }
   return source
 }
@@ -109,8 +121,92 @@ describe('daily briefing service', () => {
     expect(localDate('2026-10-29T20:00:00.000Z', 'Asia/Shanghai')).toBe('2026-10-30')
     expect(localDate('not-a-time', 'UTC')).toBeUndefined()
     expect(localDate(asOf, 'Not/AZone')).toBe('2026-10-30')
-    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-29T00:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z' })
-    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-29', windowStart: '2026-10-28T00:00:00.000Z', windowEnd: '2026-10-29T00:00:00.000Z' })
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-29T00:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z', windowHours: 24 })
+    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-29', windowStart: '2026-10-28T00:00:00.000Z', windowEnd: '2026-10-29T00:00:00.000Z', windowHours: 24 })
+  })
+
+  it('moves the cutoff with the configured generation time', () => {
+    // 08:30 local is before a 09:30 cutoff, so the open belongs to the previous edition.
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
+      date: '2026-10-29', windowStart: '2026-10-28T01:30:00.000Z', windowEnd: '2026-10-29T01:30:00.000Z', windowHours: 24
+    })
+    expect(briefingWindow('2026-10-30T02:00:00.000Z', 'Asia/Shanghai', { generationTime: '09:30' })).toEqual({
+      date: '2026-10-30', windowStart: '2026-10-29T01:30:00.000Z', windowEnd: '2026-10-30T01:30:00.000Z', windowHours: 24
+    })
+  })
+
+  it('subtracts the configured window hours from the cutoff', () => {
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { windowHours: 12 })).toEqual({
+      date: '2026-10-30', windowStart: '2026-10-29T12:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z', windowHours: 12
+    })
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { windowHours: 48, generationTime: '06:00' })).toEqual({
+      date: '2026-10-30', windowStart: '2026-10-27T22:00:00.000Z', windowEnd: '2026-10-29T22:00:00.000Z', windowHours: 48
+    })
+  })
+
+  it('generates at the configured time and records the actual window in the edition', async () => {
+    const store = memoryStore()
+    const source = fakeSource()
+    const service = createDailyBriefingService({
+      source, store,
+      now: () => '2026-10-30T02:00:00.000Z',
+      generationSettings: async () => ({ generationTime: '09:30', windowHours: 48 })
+    })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(source.lastInput).toEqual({ asOf: '2026-10-30T01:30:00.000Z', windowHours: 48 })
+    expect(result.state).toBe('available')
+    if (result.state === 'available') {
+      expect(result.document.edition).toMatchObject({
+        date: '2026-10-30',
+        windowStart: '2026-10-28T01:30:00.000Z',
+        windowEnd: '2026-10-30T01:30:00.000Z',
+        windowHours: 48
+      })
+    }
+  })
+
+  it('keeps a stored edition as generated when the settings change afterwards', async () => {
+    const store = memoryStore()
+    const source = fakeSource()
+    const later = '2026-10-30T02:00:00.000Z'
+    const first = createDailyBriefingService({
+      source, store,
+      now: () => later,
+      generationSettings: async () => ({ generationTime: '08:00', windowHours: 24 })
+    })
+    const generated = await first.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(generated.state).toBe('available')
+
+    const changed = createDailyBriefingService({
+      source, store,
+      now: () => later,
+      generationSettings: async () => ({ generationTime: '09:30', windowHours: 12 })
+    })
+    const reread = await changed.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(source.calls).toBe(1)
+    expect(reread.state).toBe('available')
+    if (generated.state === 'available' && reread.state === 'available') {
+      expect(reread.document).toEqual(generated.document)
+      expect(reread.document.edition.windowHours).toBe(24)
+      expect(reread.document.edition.windowEnd).toBe(generated.document.edition.windowEnd)
+    }
+  })
+
+  it('falls back to the default schedule when the setting cannot be read', async () => {
+    const store = memoryStore()
+    const source = fakeSource()
+    const service = createDailyBriefingService({
+      source, store,
+      now: () => asOf,
+      generationSettings: async () => { throw new Error('settings unreadable') }
+    })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result.state).toBe('available')
+    expect(source.lastInput).toEqual({ asOf: '2026-10-30T00:00:00.000Z', windowHours: 24 })
   })
 
   it('generates today once, stores it and prunes the retention window', async () => {

@@ -43,6 +43,9 @@ export function buildDailyBriefingDocument(input: Readonly<{
       generatedAt: packet.asOf,
       windowStart: packet.windowStart,
       windowEnd: packet.windowEnd,
+      // Written from the packet, never recomputed from the current setting: a later settings change
+      // must not reinterpret an edition that already exists.
+      windowHours: packet.windowHours,
       timeZone: packet.timeZone
     }),
     status: buildStatus(packet, readings),

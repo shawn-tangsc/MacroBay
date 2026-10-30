@@ -44,6 +44,16 @@ describe('daily briefing IPC', () => {
       .rejects.toThrow('daily-briefing-invalid-request')
   })
 
+  it('forwards the generation setting and rejects a malformed one', async () => {
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ generation: { generationTime: '07:30', windowHours: 48 } })
+    expect(settings.save).toHaveBeenLastCalledWith({ generation: { generationTime: '07:30', windowHours: 48 } })
+
+    for (const generation of [{}, { generationTime: 730 }, { windowHours: '48' }, { generationTime: '07:30', extra: true }, 'soon']) {
+      await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.saveSettings)!({ generation }))
+        .rejects.toThrow('daily-briefing-invalid-request')
+    }
+  })
+
   it('regenerates today from a strict query', async () => {
     await handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(service.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })

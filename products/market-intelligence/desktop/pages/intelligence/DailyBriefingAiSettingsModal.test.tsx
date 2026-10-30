@@ -4,16 +4,19 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
-import type { DailyBriefingAiSettingsView } from '../../shared/ipc/dailyBriefingClient'
+import type { DailyBriefingSettingsView } from '../../shared/ipc/dailyBriefingClient'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
-const view: DailyBriefingAiSettingsView = {
+const generation = { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' }
+const view: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '' },
+  generation,
   resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
 }
-const disabledView: DailyBriefingAiSettingsView = {
+const disabledView: DailyBriefingSettingsView = {
   settings: { editorialEnabled: false, providerId: '', modelId: '' },
+  generation,
   resolved: { state: 'disabled' }
 }
 

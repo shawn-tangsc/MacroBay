@@ -52,6 +52,8 @@ export type DailyBriefingFactPacket = Readonly<{
   asOf: string
   windowStart: string
   windowEnd: string
+  /** The statistical window the packet was read for, in hours, as configured at generation time. */
+  windowHours: number
   locale: 'zh-CN' | 'en-US'
   timeZone: string
   conclusion: DailyBriefingConclusionInput | null

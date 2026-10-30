@@ -14,8 +14,9 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * validates an incoming document, which keeps the client and the builder from drifting apart.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 6,
-  policyVersion: 'daily-briefing.v17',
+  schemaVersion: 7,
+  policyVersion: 'daily-briefing.v18',
+  /** The default statistical window. The reader's generation settings may override it per edition. */
   windowHours: 24,
   maximumBytes: 256 * 1024,
   maximumNewsItems: 200,
@@ -29,10 +30,47 @@ export const dailyBriefingPolicy = Object.freeze({
   editionDatePattern: /^\d{4}-\d{2}-\d{2}$/
 })
 
+/**
+ * When the brief is generated and what it covers.
+ *
+ * The generation time is a local wall-clock time: it is both the scheduler trigger and the edition
+ * cutoff, so the two can never drift apart. Only whole and half hours in the morning window are
+ * accepted, which keeps the cron expression readable and the cutoff reviewable.
+ */
+export const dailyBriefingGenerationPolicy = Object.freeze({
+  defaultGenerationTime: '08:00',
+  earliestGenerationHour: 6,
+  latestGenerationHour: 10,
+  generationMinuteStep: 30,
+  defaultWindowHours: 24,
+  windowHoursOptions: Object.freeze([12, 24, 48] as const)
+})
+
+/** Local generation times a reader may choose, in order: 06:00 … 10:00. */
+export const dailyBriefingGenerationTimes: readonly string[] = Object.freeze(
+  Array.from(
+    { length: ((dailyBriefingGenerationPolicy.latestGenerationHour - dailyBriefingGenerationPolicy.earliestGenerationHour) * (60 / dailyBriefingGenerationPolicy.generationMinuteStep)) + 1 },
+    (_, index) => {
+      const minutes = dailyBriefingGenerationPolicy.earliestGenerationHour * 60 + index * dailyBriefingGenerationPolicy.generationMinuteStep
+      return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+    }
+  )
+)
+
+export function isDailyBriefingGenerationTime(value: unknown): value is string {
+  return typeof value === 'string' && dailyBriefingGenerationTimes.includes(value)
+}
+
+export type DailyBriefingWindowHours = (typeof dailyBriefingGenerationPolicy.windowHoursOptions)[number]
+
+export function isDailyBriefingWindowHours(value: unknown): value is DailyBriefingWindowHours {
+  return typeof value === 'number' && (dailyBriefingGenerationPolicy.windowHoursOptions as readonly number[]).includes(value)
+}
+
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -201,6 +239,13 @@ export type DailyBriefingDocument = Readonly<{
     windowStart: string
     windowEnd: string
     timeZone: string
+    /**
+     * The statistical window this edition actually covered. It is written at generation time and
+     * never re-derived from the current settings, so changing the setting cannot reinterpret an
+     * edition that was already generated. Absent on editions built before the window was
+     * configurable; those covered the fixed 24 hours the policy then named.
+     */
+    windowHours?: number
   }>
   status: Readonly<{
     readings: readonly Readonly<{ id: DailyBriefingReadingId; state: DailyBriefingReadingState }>[]

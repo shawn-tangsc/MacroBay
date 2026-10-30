@@ -110,6 +110,7 @@ describe('daily briefing source', () => {
     const packet = await createDailyBriefingSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(packet.windowStart).toBe('2026-10-29T00:30:00.000Z')
+    expect(packet.windowHours).toBe(24)
     expect(packet.conclusion?.summary.id).toBe('mi-as-1')
     expect(packet.conclusion?.direction).toBe('bearish')
     expect(packet.news.items[0]?.itemId).toBe('n1')
@@ -123,6 +124,33 @@ describe('daily briefing source', () => {
       title: 'FOMC rate decision', lifecycleState: 'scheduled'
     })
     expect(packet.enabled).toMatchObject({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
+  })
+
+  it('reads the configured statistical window instead of assuming 24 hours', async () => {
+    const wide = await createDailyBriefingSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 48 })
+    expect(wide.windowHours).toBe(48)
+    expect(wide.windowStart).toBe('2026-10-28T00:30:00.000Z')
+
+    const narrow = await createDailyBriefingSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 12 })
+    expect(narrow.windowHours).toBe(12)
+    expect(narrow.windowStart).toBe('2026-10-29T12:30:00.000Z')
+    // The news inside a 12h window survives; the query still asked for its smallest horizon.
+    expect(narrow.news.items.map((item) => item.itemId)).toEqual(['n1'])
+  })
+
+  it('drops news published before the configured window', async () => {
+    const base = deps()
+    const news = base.news as unknown as { query: (input: unknown) => Promise<unknown> }
+    news.query = async () => ({
+      state: 'available', asOf, generatedAt: asOf, window: '24h',
+      items: [
+        { itemId: 'fresh', title: 'Fresh', sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS', publishedAt: '2026-10-30T00:00:00.000Z', scoredAt: asOf, polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'x', engine: 'rules', caveats: [] },
+        { itemId: 'stale', title: 'Stale', sourceId: 'coindesk-rss', sourceName: 'CoinDesk RSS', publishedAt: '2026-10-29T08:00:00.000Z', scoredAt: asOf, polarity: 'bearish', strength: 3, confidence: 80, symbols: ['BTC'], reasonCode: 'x', engine: 'rules', caveats: [] }
+      ],
+      caveats: []
+    })
+    const packet = await createDailyBriefingSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 12 })
+    expect(packet.news.items.map((item) => item.itemId)).toEqual(['fresh'])
   })
 
   it('re-reads the release instant when the latest collection omitted actuals', async () => {
