@@ -66,6 +66,22 @@ describe('snapshot change', () => {
     expect(change.evidenceRefsRemoved).toEqual(['ev-2'])
   })
 
+  it('records a policy repricing as a changed fact without counting its rotating evidence ref', () => {
+    const policyFact = (value: number, evidenceRefId: string): AgentFact => ({
+      ...fact('mi-fact-policy-probability', String(value), 'policy-implied-probability'),
+      sourceId: 'policy-path-market', sourceLabel: 'policy-path-market', evidenceRefId
+    })
+    const previous = snapshot({ facts: [policyFact(65, 'ev-policy-old')], evidenceRefs: [ref('ev-policy-old')] })
+    const change = computeSnapshotChange({
+      current: { facts: [policyFact(71, 'ev-policy-new')], missingDomains: [], caveats: [], evidenceRefs: [ref('ev-policy-new')] },
+      previous
+    })
+
+    expect(change.facts).toEqual([expect.objectContaining({ metric: 'policy-implied-probability', kind: 'changed', previousValue: '65', value: '71' })])
+    expect(change.evidenceRefsAdded).toEqual([])
+    expect(change.evidenceRefsRemoved).toEqual([])
+  })
+
   it('treats an identical refresh as no movement so no new conclusion is implied', () => {
     const previous = snapshot({ facts: [fact('f1', '3.2')], missingDomains: ['funding'], caveats: ['stale'] })
     const change = computeSnapshotChange({
