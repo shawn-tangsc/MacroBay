@@ -373,6 +373,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // Product-side audit lives beside the calendar but in its own file: it must not carry the
   // calendar's schema version or backup policy.
   const syncAudit = createSyncAuditStoreIfAvailable(join(getIntelligenceProductDataDir(), 'sync-audit.sqlite'))
+  // Catch-up: the decision refresh otherwise only runs while a release window is open, so a machine
+  // that was asleep on the meeting day would never collect that statement - and the policy card
+  // would keep a dash where the vote belongs.
+  void (async () => {
+    const refresh = macroCalendarBackend.fedFomcRefresh
+    if (!refresh) return
+    const now = new Date().toISOString()
+    const latest = macroCalendarBackend.repository.policyFacts.readLatestDecision(now)
+    const cutoff = new Date(Date.parse(now) - 60 * 86_400_000).toISOString().slice(0, 10)
+    if (latest && latest.meetingDate >= cutoff) return
+    await refresh.refresh({ detectedAt: now, runId: `startup-catch-up:${now}` })
+  })().catch(() => undefined)
+
   deps.registerProductDisposer?.(async () => {
     // The gold stream closes first: it must not survive the module whose store it reports against.
     await intelligenceModule.macroMarketLive.dispose()

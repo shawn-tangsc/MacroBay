@@ -58,12 +58,16 @@ export function createPolicyPathRuntime(deps: {
     const observation = await source.fetchMeeting({ slug, at })
     if (!observation) return { state: 'skipped', reason: 'no-reading' }
     deps.repository.policyObservations.append(meetingDate, observation)
-    // The projection materials are per-meeting, so they are read once and kept until the next SEP
-    // meeting; re-fetching them every ten minutes would be a second, pointless request.
-    const facts = deps.repository.policyFacts.read(meetingDate)
-    if (facts?.hasProjectionMaterials && facts.sep?.asOf !== meetingDate) {
-      const projection = await readSep(deps.fetch, meetingDate)
-      if (projection) deps.repository.policyFacts.recordSep({ meetingDate, sep: projection })
+    // The projection materials belong to the most recent meeting that published them, not to the
+    // next meeting: between meetings the published table is the September one, and reading it off
+    // the next meeting's row would leave the card empty until that meeting happens.
+    const publishedSepMeeting = deps.repository.policyFacts.listProjectionMeetings(at, 1)[0]
+    if (publishedSepMeeting) {
+      const facts = deps.repository.policyFacts.read(publishedSepMeeting)
+      if (facts?.sep?.asOf !== publishedSepMeeting) {
+        const projection = await readSep(deps.fetch, publishedSepMeeting)
+        if (projection) deps.repository.policyFacts.recordSep({ meetingDate: publishedSepMeeting, sep: projection })
+      }
     }
     return { state: 'recorded', meetingDate, at }
   }

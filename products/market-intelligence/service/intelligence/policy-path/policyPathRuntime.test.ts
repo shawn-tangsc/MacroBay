@@ -29,7 +29,12 @@ const runtimeWith = (input: { enabled?: boolean; scheduled?: string; facts?: { h
     repository: {
       listEffectiveMonthAsOf: () => input.scheduled ? [meeting(input.scheduled)] : [],
       policyObservations: { append: (meetingDate: string, observation: { at: string }) => { appended.push({ meetingDate, at: observation.at }) } },
-      policyFacts: { read: () => input.facts, recordSep: (value: { meetingDate: string }) => { sepWrites.push(value) } }
+      policyFacts: {
+        read: () => input.facts,
+        recordSep: (value: { meetingDate: string }) => { sepWrites.push(value) },
+        // The published table is the newest projection meeting at or before today.
+        listProjectionMeetings: () => (input.facts?.hasProjectionMaterials ? ['2026-09-16'] : [])
+      }
     } as never,
     fetch: input.fetch ?? (async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('public-search') ? search : event })),
     isEnabled: async () => input.enabled ?? true,
@@ -64,7 +69,7 @@ describe('policy path runtime', () => {
     const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn() }
     const scoped = createPolicyPathRuntime({
       jobRuntime,
-      repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() }, policyFacts: { read: () => undefined, recordSep: vi.fn() } } as never,
+      repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() }, policyFacts: { read: () => undefined, recordSep: vi.fn(), listProjectionMeetings: () => [] } } as never,
       fetch: async () => ({ ok: false, status: 0, text: async () => '' }),
       isEnabled: async () => true
     })
@@ -89,7 +94,7 @@ describe('policy path runtime SEP collection', () => {
       repository: {
         listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
         policyObservations: { append: vi.fn() },
-        policyFacts: { read: () => ({ hasProjectionMaterials: true }), recordSep: (value: never) => { sepWrites.push(value) } }
+        policyFacts: { read: () => ({ hasProjectionMaterials: true }), recordSep: (value: never) => { sepWrites.push(value) }, listProjectionMeetings: () => ['2026-09-16'] }
       } as never,
       fetch: async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('fomcprojtabl') ? projection : url.includes('public-search') ? search : event }),
       isEnabled: async () => true,
@@ -97,7 +102,8 @@ describe('policy path runtime SEP collection', () => {
     })
     await runtime.run()
     expect(sepWrites).toHaveLength(1)
-    expect(sepWrites[0]).toMatchObject({ meetingDate: '2026-12-09', sep: { asOf: '2026-12-09' } })
+    // The published table is September's, even though the next meeting is December's.
+    expect(sepWrites[0]).toMatchObject({ meetingDate: '2026-09-16', sep: { asOf: '2026-09-16' } })
   })
 
   it('does not re-read projections it already has', async () => {
@@ -107,7 +113,7 @@ describe('policy path runtime SEP collection', () => {
       repository: {
         listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
         policyObservations: { append: vi.fn() },
-        policyFacts: { read: () => ({ hasProjectionMaterials: true, sep: { asOf: '2026-12-09' } }), recordSep }
+        policyFacts: { read: () => ({ hasProjectionMaterials: true, sep: { asOf: '2026-09-16' } }), recordSep, listProjectionMeetings: () => ['2026-09-16'] }
       } as never,
       fetch: async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('public-search') ? search : event }),
       isEnabled: async () => true

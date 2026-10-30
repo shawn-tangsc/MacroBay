@@ -42,6 +42,10 @@ export type PolicyPathFactStore = Readonly<{
   recordSep: (input: { meetingDate: string; sep: PolicyPathSep }) => void
   /** The most recent meeting at or before `asOf` that already has a decision. */
   readLatestDecision: (asOf: string) => PolicyPathFacts | undefined
+  /** The most recent meeting at or before `asOf` that published projections and whose SEP is stored. */
+  readLatestSep: (asOf: string) => PolicyPathFacts | undefined
+  /** Projection meetings at or before `asOf`, newest first: which SEP tables are published by now. */
+  listProjectionMeetings: (asOf: string, limit: number) => readonly string[]
   read: (meetingDate: string) => PolicyPathFacts | undefined
 }>
 
@@ -77,6 +81,12 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
   )
   const selectSep = database.prepare('select sep_json from mi_policy_path_sep where meeting_date = ? limit 1')
   const select = database.prepare('select * from mi_policy_path_facts where meeting_date = ? limit 1')
+  const selectLatestSep = database.prepare(
+    'select * from mi_policy_path_facts where meeting_date <= ? and has_projection_materials = 1 order by meeting_date desc limit 1'
+  )
+  const selectProjectionMeetings = database.prepare(
+    'select meeting_date from mi_policy_path_facts where meeting_date <= ? and has_projection_materials = 1 order by meeting_date desc limit ?'
+  )
   const selectLatestDecision = database.prepare(
     'select * from mi_policy_path_facts where meeting_date <= ? and target_lower is not null order by meeting_date desc limit 1'
   )
@@ -98,6 +108,15 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
     },
     recordSep({ meetingDate, sep }) {
       upsertSep.run(meetingDate, JSON.stringify(sep), sep.asOf)
+    },
+    readLatestSep(asOf) {
+      const row = selectLatestSep.get(asOf.slice(0, 10)) as FactRow | undefined
+      if (!row) return undefined
+      return toFacts(row, parseSep((selectSep.get(String(row.meeting_date)) as { sep_json?: unknown } | undefined)?.sep_json))
+    },
+    listProjectionMeetings(asOf, limit) {
+      return (selectProjectionMeetings.all(asOf.slice(0, 10), Math.max(1, limit)) as Array<{ meeting_date: string }>)
+        .map((row) => row.meeting_date)
     },
     readLatestDecision(asOf) {
       const row = selectLatestDecision.get(asOf.slice(0, 10)) as FactRow | undefined

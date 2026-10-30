@@ -58,7 +58,7 @@ export const policyPathQueryPolicy = {
 
 export function createPolicyPathQueryService(deps: {
   calendar: Pick<MacroEconomicCalendarQueryService, 'nextFomcMeeting'>
-  facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision'>
+  facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision' | 'readLatestSep'>
   observations: Pick<PolicyPathObservationStore, 'list'>
   /**
    * The policy range as FRED already publishes it. The decision refresh only writes a fact when a
@@ -75,6 +75,9 @@ export function createPolicyPathQueryService(deps: {
       // The range, the vote and the latest SEP belong to the last meeting that has already decided;
       // the next meeting's row carries only its date and whether it will publish projections.
       const decided = facts?.targetRange ? facts : deps.facts.readLatestDecision(asOf)
+      // The projections belong to the latest SEP meeting, which is usually not the meeting that last
+      // decided; reading them off `decided` would hide a September SEP behind an October statement.
+      const sepFact = decided?.sep ? decided : deps.facts.readLatestSep(asOf)
       const daysUntilMeeting = Math.round((Date.parse(`${meetingDate}T00:00:00.000Z`) - Date.parse(asOf)) / 86_400_000)
       const series = deps.observations.list(meetingDate, policyPathQueryPolicy.seriesLookback)
       return {
@@ -84,7 +87,7 @@ export function createPolicyPathQueryService(deps: {
         ...(targetRangeOf(decided?.targetRange, deps.readTargetRange) === undefined
           ? {}
           : { targetRange: targetRangeOf(decided?.targetRange, deps.readTargetRange)! }),
-        ...(decided?.sep ? { sep: sepOf(decided.sep, decided.targetRange) } : {}),
+        ...(sepFact?.sep ? { sep: sepOf(sepFact.sep, sepFact.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
           ? { lastDecision: { ...(decided.vote ? { vote: decided.vote } : {}), ...(decided.dissents ? { dissents: decided.dissents } : {}), ...(decided.statementUrl ? { statementUrl: decided.statementUrl } : {}) } }
           : {}),

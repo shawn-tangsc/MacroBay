@@ -14,7 +14,11 @@ const service = (input: {
   series?: PolicyPathObservation[]
 }) => createPolicyPathQueryService({
   calendar: { nextFomcMeeting: () => input.meeting === null ? { state: 'unavailable', failureCode: 'meeting-not-found' } as const : { state: 'available', meeting: input.meeting! } },
-  facts: { read: () => input.facts as never, readLatestDecision: () => input.facts as never },
+  facts: {
+    read: () => input.facts as never,
+    readLatestDecision: () => input.facts as never,
+    readLatestSep: () => input.facts as never
+  },
   observations: { list: () => input.series ?? [] }
 })
 
