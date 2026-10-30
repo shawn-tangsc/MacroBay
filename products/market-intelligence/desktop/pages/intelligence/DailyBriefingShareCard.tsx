@@ -64,6 +64,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <div>
           <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
           <small>{text.macro.actual} {item.actual ?? '—'} · {text.macro.consensus} {item.consensus ?? text.macro.noConsensus} · {text.macro.surprise[item.surprise.direction]}</small>
+          {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
       </div>)}
     </section> : null}

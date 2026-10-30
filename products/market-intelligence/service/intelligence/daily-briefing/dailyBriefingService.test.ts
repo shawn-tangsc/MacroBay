@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import {
+  briefingWindow,
   createDailyBriefingService,
   localDate,
   type DailyBriefingSource,
@@ -57,6 +58,8 @@ describe('daily briefing service', () => {
     expect(localDate('2026-10-29T20:00:00.000Z', 'Asia/Shanghai')).toBe('2026-10-30')
     expect(localDate('not-a-time', 'UTC')).toBeUndefined()
     expect(localDate(asOf, 'Not/AZone')).toBe('2026-10-30')
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-29T00:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z' })
+    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-29', windowStart: '2026-10-28T00:00:00.000Z', windowEnd: '2026-10-29T00:00:00.000Z' })
   })
 
   it('generates today once, stores it and prunes the retention window', async () => {

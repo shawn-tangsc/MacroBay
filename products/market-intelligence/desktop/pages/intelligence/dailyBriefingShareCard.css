@@ -153,3 +153,5 @@
 
 .mi-brief-poster__basis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .mi-brief-poster__basis-card:only-child { grid-column: 1 / -1; }
+
+.mi-brief-poster__news-reason { display: block; margin-top: 3px; color: #5b4a35 !important; font-size: 9.5px !important; line-height: 1.45; }

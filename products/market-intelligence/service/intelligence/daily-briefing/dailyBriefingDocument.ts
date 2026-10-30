@@ -27,7 +27,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const built = buildConclusion(packet)
   return Object.freeze({
     schemaVersion: 2,
-    policyVersion: 'daily-briefing.v6',
+    policyVersion: 'daily-briefing.v7',
     edition: Object.freeze({
       date,
       locale: packet.locale,
@@ -108,7 +108,7 @@ function selectMacro(packet: DailyBriefingFactPacket): readonly BriefingMacroIte
     .filter((event) => event.lifecycleState === 'released' && event.importance === 'high' && Boolean(event.actual))
     .filter((event) => {
       const at = Date.parse(event.scheduledAt)
-      return Number.isFinite(at) && at >= start && at <= end
+      return Number.isFinite(at) && at >= start && at < end
     })
     .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
     .slice(0, dailyBriefingPolicy.maximumMacroItems)

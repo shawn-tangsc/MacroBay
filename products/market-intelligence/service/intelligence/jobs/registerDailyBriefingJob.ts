@@ -7,7 +7,7 @@ import { INTELLIGENCE_DAILY_BRIEFING_JOB } from './intelligenceJobIds'
 export const dailyBriefingJobPolicy = Object.freeze({
   productId: 'market-intelligence',
   /** Local morning edition. The service skips when the day is already generated. */
-  cronExpression: '30 7 * * *',
+  cronExpression: '5 8 * * *',
   title: 'Generate the daily briefing'
 })
 

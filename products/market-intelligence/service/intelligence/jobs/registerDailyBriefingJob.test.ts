@@ -16,7 +16,7 @@ function runtime() {
 }
 
 describe('daily briefing job', () => {
-  it('registers a local 07:30 cron and generates through the same service', async () => {
+  it('registers a local 08:05 cron and generates through the same service', async () => {
     const { runtime: jobRuntime, schedules, run } = runtime()
     const getToday = vi.fn(async () => ({
       state: 'available' as const,
@@ -26,7 +26,7 @@ describe('daily briefing job', () => {
 
     expect(schedules).toEqual([expect.objectContaining({
       id: INTELLIGENCE_DAILY_BRIEFING_JOB,
-      trigger: { kind: 'cron', expression: '30 7 * * *', timezone: 'Asia/Shanghai' }
+      trigger: { kind: 'cron', expression: '5 8 * * *', timezone: 'Asia/Shanghai' }
     })])
     expect(await run()).toBeUndefined()
     expect(getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })

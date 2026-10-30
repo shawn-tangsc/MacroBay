@@ -64,22 +64,20 @@ export function createDailyBriefingService(deps: Readonly<{
   const inFlight = new Map<string, Promise<DailyBriefingTodayResult>>()
 
   async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
-    const asOf = now()
-    const date = localDate(asOf, input.timeZone)
-    if (!date) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const key = `${date}:${input.locale}`
+    const window = briefingWindow(now(), input.timeZone)
+    if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
+    const key = `${window.date}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf, date, locale: input.locale, timeZone: input.timeZone }, false).finally(() => inFlight.delete(key))
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone }, false).finally(() => inFlight.delete(key))
     inFlight.set(key, promise)
     return promise
   }
 
   async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
-    const asOf = now()
-    const date = localDate(asOf, input.timeZone)
-    if (!date) return { state: 'unavailable', failureCode: 'time-invalid' }
-    return resolveToday({ asOf, date, locale: input.locale, timeZone: input.timeZone }, true)
+    const window = briefingWindow(now(), input.timeZone)
+    if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
+    return resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone }, true)
   }
 
   async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string }>, force: boolean): Promise<DailyBriefingTodayResult> {
@@ -127,9 +125,9 @@ export function createDailyBriefingService(deps: Readonly<{
   }
 
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
-    const asOf = now()
-    const today = localDate(asOf, input.timeZone)
-    if (!today) return { state: 'unavailable', failureCode: 'time-invalid' }
+    const window = briefingWindow(now(), input.timeZone)
+    if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
+    const today = window.date
     const dates = lastDays(today, dailyBriefingPolicy.retentionDays)
     const from = dates[0]!
     const to = dates[dates.length - 1]!
@@ -194,6 +192,60 @@ function summaryFor(
     readingsAvailable: document.status.readingsAvailable,
     windowEnd: row.windowEnd
   }
+}
+
+/**
+ * A daily edition is not a rolling read from "now": its window is
+ * [previous local 08:00, current local 08:00). Generation before 08:00 belongs to the previous
+ * edition; generation after 08:00 reads the same cutoff no matter when it is retried.
+ */
+export type DailyBriefingWindow = Readonly<{ date: string; windowStart: string; windowEnd: string }>
+
+export function briefingWindow(asOf: string, timeZone: string): DailyBriefingWindow | undefined {
+  const parsed = Date.parse(asOf)
+  if (!Number.isFinite(parsed)) return undefined
+  const zone = isValidTimeZone(timeZone) ? timeZone : 'UTC'
+  const parts = localParts(parsed, zone)
+  if (!parts) return undefined
+  const beforeCutoff = parts.hour < 8
+  const date = beforeCutoff ? addDays(parts.date, -1) : parts.date
+  const windowEnd = zonedIso(date, 8, zone)
+  if (!windowEnd) return undefined
+  return Object.freeze({ date, windowEnd, windowStart: new Date(Date.parse(windowEnd) - 24 * 60 * 60 * 1000).toISOString() })
+}
+
+function localParts(value: number, timeZone: string): { date: string; hour: number } | undefined {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'
+    }).formatToParts(new Date(value))
+    const get = (type: string) => parts.find((part) => part.type === type)?.value
+    const year = get('year'); const month = get('month'); const day = get('day'); const hour = Number(get('hour'))
+    return year && month && day && Number.isInteger(hour) ? { date: `${year}-${month}-${day}`, hour } : undefined
+  } catch { return undefined }
+}
+
+function zonedIso(date: string, hour: number, timeZone: string): string | undefined {
+  const [year, month, day] = date.split('-').map(Number)
+  if (!year || !month || !day) return undefined
+  const target = Date.UTC(year, month - 1, day, hour)
+  let guess = target
+  try {
+    for (let index = 0; index < 3; index++) {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+      }).formatToParts(new Date(guess))
+      const get = (type: string) => Number(parts.find((part) => part.type === type)?.value)
+      const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'))
+      guess += target - asUtc
+    }
+    return new Date(guess).toISOString()
+  } catch { return undefined }
+}
+
+function addDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number)
+  return new Date(Date.UTC(year!, month! - 1, day! + days)).toISOString().slice(0, 10)
 }
 
 export function localDate(asOf: string, timeZone: string): string | undefined {

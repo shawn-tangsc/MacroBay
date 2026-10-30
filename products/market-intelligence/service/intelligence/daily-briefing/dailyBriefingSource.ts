@@ -38,7 +38,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
     async buildPacket(input) {
       const enabled = await readEnabled(deps)
       const [conclusion, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates] = await Promise.all([
-        readConclusion(deps),
+        readConclusion(deps, input.asOf),
         readNews(deps, input.asOf),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
@@ -84,10 +84,14 @@ async function readEnabled(deps: DailyBriefingSourceDeps): Promise<DailyBriefing
   }
 }
 
-async function readConclusion(deps: DailyBriefingSourceDeps): Promise<DailyBriefingFactPacket['conclusion']> {
+async function readConclusion(deps: DailyBriefingSourceDeps, cutoff: string): Promise<DailyBriefingFactPacket['conclusion']> {
   try {
     const page = deps.repository.listTimeline({ limit: 50 })
-    const latest = selectLatestPublishedEntry(page.items)
+    const cutoffMs = Date.parse(cutoff)
+    const eligible = Number.isFinite(cutoffMs)
+      ? page.items.filter((item) => !item.occurredAt || Date.parse(item.occurredAt) <= cutoffMs)
+      : page.items
+    const latest = selectLatestPublishedEntry(eligible)
     if (!latest?.summaryRef) return null
     const summary: AnalysisSummary | undefined = deps.repository.getSummary(latest.summaryRef)
     if (!summary) return null
