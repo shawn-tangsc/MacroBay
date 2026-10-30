@@ -124,7 +124,7 @@ export type MarketAnalysisSourceAccess = Readonly<{
   domains: readonly AnalysisDomain[]
 }>
 
-type MarketAnalysisContextQueryService = Pick<PublicQueryService, 'queryFearGreedSnapshot' | 'queryFundingRateHistory' | 'queryCapitalConditionsSnapshot' | 'queryCrossAssetSnapshot' | 'getSourceHealth'> &
+type MarketAnalysisContextQueryService = Pick<PublicQueryService, 'queryFearGreedSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryCapitalConditionsSnapshot' | 'queryCrossAssetSnapshot' | 'getSourceHealth'> &
   Partial<Pick<PublicQueryService,
     'queryMacroEconomicCalendarMonth' | 'queryMarketCalendarMonth' | 'queryMacroMarketSnapshot' | 'queryMacroRatesSnapshot'>>
 
@@ -299,8 +299,13 @@ export async function buildMarketAnalysisContext(
   } else observations.sentiment = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('funding')) {
-    const result = await safeQuery(() => publicQueryService.queryFundingRateHistory({ asOf: input.asOf }))
-    safeProject(() => projectFunding(result, input.asOf, facts, caveats, observations), observations, 'funding')
+    // The two halves of the same source are read together: a funding rate without the open
+    // interest behind it cannot tell deleveraging from crowding, which is the whole point.
+    const [result, positioning] = await Promise.all([
+      safeQuery(() => publicQueryService.queryFundingRateHistory({ asOf: input.asOf })),
+      safeQuery(() => publicQueryService.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }))
+    ])
+    safeProject(() => projectFunding(result, positioning, input.asOf, facts, caveats, observations), observations, 'funding')
   } else observations.funding = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('cross-asset')) {

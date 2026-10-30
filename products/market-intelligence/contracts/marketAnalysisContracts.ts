@@ -26,7 +26,15 @@ export const MARKET_ANALYSIS_CONTEXT_POLICY = Object.freeze({
    * no sentiment facts at all**. Six covers the smallest domain's full series (funding holds five
    * points) plus one, and costs nothing from the volume domains beyond the budget they already had.
    */
-  minimumFactsPerDomain: 6,
+  minimumFactsPerDomain: Object.freeze({
+    /**
+     * Funding now carries two series (the rate and the open interest behind it). A single
+     * six-fact floor would let the newest of the two evict the other, and the pair is exactly
+     * what this domain exists to read together; twelve keeps both.
+     */
+    default: 6,
+    funding: 12
+  } as Readonly<Record<string, number>>),
   maximumOutputBytes: MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes,
   schemaVersion: 1
 } as const)

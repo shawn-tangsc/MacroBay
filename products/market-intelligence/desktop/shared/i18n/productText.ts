@@ -98,6 +98,7 @@ export const productText = {
               metric: {
                 'current-usd': '当前值', 'change-1d-usd': '1 日变化', 'change-7d-usd': '7 日变化', 'change-30d-usd': '30 日变化',
                 'etf-net-flow-usd': 'ETF 净流入', 'funding-rate-percent': '资金费率', 'fear-greed-index': '恐惧贪婪指数',
+                'open-interest-notional-usd': 'Binance 永续持仓名义额', 'open-interest-change-24h-pct': '持仓 24 小时变化', 'positioning-state': '持仓与费率组合态',
                 'price-return-15m': '15 分钟价格收益', 'price-return-2h': '2 小时价格收益',
                 'price-return-24h': '24 小时价格收益', 'price-return-3d': '3 天价格收益',
                 'relative-return-2h': '2 小时相对收益（BTC 相对 ETH）', 'cpi-12-month-percent': 'CPI 年率', score: '评分',
@@ -123,6 +124,10 @@ export const productText = {
               // 唯一 owner 见文件头 `registeredEventNames`。
               eventName: registeredEventNames['zh-CN'],
               lifecycleState: { scheduled: '待公布', released: '已公布', cancelled: '已取消' },
+              positioningState: {
+                'deleveraging': '去杠杆 · 多头减仓', 'short-crowded': '空头拥挤', 'long-crowded': '多头拥挤',
+                'refilling': '杠杆回补 · 未拥挤', neutral: '中性', mixed: '方向分歧'
+              },
               comparability: { comparable: '可比', 'not-comparable': '不可比' },
               caveat: {
                 'max-items-truncated': '证据条数已截断', 'source-health-unavailable': '来源健康度不可用', 'query-unavailable': '查询不可用',
@@ -1510,6 +1515,7 @@ export const productText = {
               metric: {
                 'current-usd': 'Current', 'change-1d-usd': '1 day change', 'change-7d-usd': '7 day change', 'change-30d-usd': '30 day change',
                 'etf-net-flow-usd': 'ETF net flow', 'funding-rate-percent': 'Funding rate', 'fear-greed-index': 'Fear & Greed',
+                'open-interest-notional-usd': 'Binance perpetual notional open interest', 'open-interest-change-24h-pct': 'Open interest 24h change', 'positioning-state': 'Positioning and funding state',
                 'price-return-15m': '15-minute price return', 'price-return-2h': '2-hour price return',
                 'price-return-24h': '24-hour price return', 'price-return-3d': '3-day price return',
                 'relative-return-2h': '2-hour relative return (BTC vs ETH)', 'cpi-12-month-percent': 'CPI 12-month rate', score: 'Score',
@@ -1533,6 +1539,10 @@ export const productText = {
               // 唯一 owner 见文件头 `registeredEventNames`。
               eventName: registeredEventNames['en-US'],
               lifecycleState: { scheduled: 'Scheduled', released: 'Released', cancelled: 'Cancelled' },
+              positioningState: {
+                'deleveraging': 'Deleveraging · longs cutting', 'short-crowded': 'Shorts crowded', 'long-crowded': 'Longs crowded',
+                'refilling': 'Refilling · not crowded', neutral: 'Neutral', mixed: 'Mixed'
+              },
               comparability: { comparable: 'Comparable', 'not-comparable': 'Not comparable' },
               caveat: {
                 'max-items-truncated': 'Evidence count truncated', 'source-health-unavailable': 'Source health unavailable', 'query-unavailable': 'Query unavailable',

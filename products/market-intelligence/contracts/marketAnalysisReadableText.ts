@@ -13,7 +13,7 @@
  * the identifier itself when it is not registered, so an unnamed field stays visible instead
  * of silently disappearing.
  */
-export type MarketAnalysisReadableKind = 'domain' | 'metric' | 'subject' | 'eventName' | 'lifecycleState' | 'comparability' | 'caveat' | 'term'
+export type MarketAnalysisReadableKind = 'domain' | 'metric' | 'subject' | 'eventName' | 'lifecycleState' | 'positioningState' | 'comparability' | 'caveat' | 'term'
 export type MarketAnalysisReadableLocale = 'zh-CN' | 'en-US'
 export type MarketAnalysisReadableNames = Readonly<Record<MarketAnalysisReadableKind, Readonly<Record<string, string>>>>
 
@@ -64,7 +64,7 @@ export function isSignedAnalysisMetric(metric: string): boolean {
 /** An empty vocabulary: every identifier then keeps its own name, and text is still scaled. */
 const emptyReadableNames: MarketAnalysisReadableNames = Object.freeze({
   domain: Object.freeze({}), metric: Object.freeze({}), subject: Object.freeze({}), eventName: Object.freeze({}),
-  lifecycleState: Object.freeze({}), comparability: Object.freeze({}), caveat: Object.freeze({}), term: Object.freeze({})
+  lifecycleState: Object.freeze({}), positioningState: Object.freeze({}), comparability: Object.freeze({}), caveat: Object.freeze({}), term: Object.freeze({})
 })
 
 /** The reader's name for an identifier, or the identifier itself when it is not registered. */
@@ -144,6 +144,9 @@ export function readableAnalysisFactValue(names: MarketAnalysisReadableNames, me
   if (value === null) return null
   if (typeof value === 'string' && metric === 'event-name') return readableAnalysisName(names, 'eventName', value)
   if (typeof value === 'string' && metric === 'lifecycle-state') return readableAnalysisName(names, 'lifecycleState', value)
+  // A state is a value, not an identifier the model should see raw: `deleveraging` in a Chinese
+  // conclusion is exactly the defect the vocabulary exists to prevent.
+  if (typeof value === 'string' && metric === 'positioning-state') return readableAnalysisName(names, 'positioningState', value)
   return formatReadableAnalysisValue(value, unit, locale, isSignedAnalysisMetric(metric))
 }
 

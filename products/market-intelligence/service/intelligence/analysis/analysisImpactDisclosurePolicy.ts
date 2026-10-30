@@ -35,7 +35,7 @@ export function applyReservedFacts(sorted: readonly AgentFact[], triggeredEventK
    * pushed funding and sentiment out of the context entirely, and a conclusion cannot explain a move
    * without the leverage and sentiment evidence it was told to consider.
    */
-  domainFloor = 0): readonly AgentFact[] {
+  domainFloor: number | Readonly<Record<string, number>> = 0): readonly AgentFact[] {
   if (maximum <= 0) return []
   if (sorted.length <= maximum) return sorted.slice(0, maximum)
   const kept: AgentFact[] = []
@@ -60,11 +60,12 @@ export function applyReservedFacts(sorted: readonly AgentFact[], triggeredEventK
     take(fact)
     if (kept.length > before) triggeredKept += 1
   }
-  if (domainFloor > 0) {
+  const floorFor = (domain: string): number => typeof domainFloor === 'number' ? domainFloor : (domainFloor[domain] ?? domainFloor.default ?? 0)
+  if (floorFor('*') > 0 || typeof domainFloor !== 'number') {
     const perDomain = new Map<string, number>()
     for (const fact of sorted) {
       const used = perDomain.get(fact.domain) ?? 0
-      if (used >= domainFloor) continue
+      if (used >= floorFor(fact.domain)) continue
       if (seen.has(fact)) continue
       take(fact)
       perDomain.set(fact.domain, used + 1)

@@ -25,6 +25,9 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     'change-30d-usd': '30 日变化',
     'etf-net-flow-usd': 'ETF 净流入',
     'funding-rate-percent': '资金费率',
+    'open-interest-notional-usd': 'Binance 永续持仓名义额',
+    'open-interest-change-24h-pct': '持仓 24 小时变化',
+    'positioning-state': '持仓与费率组合态',
     'fear-greed-index': '恐惧贪婪指数',
     'price-return-15m': '15 分钟价格收益',
     'price-return-2h': '2 小时价格收益',
@@ -65,6 +68,14 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     gdp: 'GDP', fomc: '美联储议息会议'
   }),
   lifecycleState: Object.freeze({ scheduled: '待公布', released: '已公布', cancelled: '已取消' }),
+  positioningState: Object.freeze({
+    'deleveraging': '去杠杆 · 多头减仓',
+    'short-crowded': '空头拥挤',
+    'long-crowded': '多头拥挤',
+    'refilling': '杠杆回补 · 未拥挤',
+    'neutral': '中性',
+    'mixed': '方向分歧'
+  }),
   comparability: Object.freeze({ comparable: '可比', 'not-comparable': '不可比' }),
   caveat: Object.freeze({
     [MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated]: '证据条数已截断',
@@ -120,7 +131,7 @@ export const analysisVocabularyRequiredIds = Object.freeze({
   metric: Object.freeze([
     ...Object.values(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics),
     'current-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'etf-net-flow-usd',
-    'funding-rate-percent', 'fear-greed-index', 'price-return-15m', 'price-return-2h', 'price-return-24h', 'price-return-3d', 'relative-return-2h',
+    'funding-rate-percent', 'open-interest-notional-usd', 'open-interest-change-24h-pct', 'positioning-state', 'fear-greed-index', 'price-return-15m', 'price-return-2h', 'price-return-24h', 'price-return-3d', 'relative-return-2h',
     // 重点舆情：每条新闻作为一条事实进入快照，模型必须认得它的名字。
     'news-sentiment', 'event-excerpt',
     // The 市场状态 block's dollar/gold row and FRED's daily rate block, which the analysis reads as

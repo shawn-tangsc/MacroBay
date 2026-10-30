@@ -1,3 +1,6 @@
+import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import { resolvePositioningState } from '../../../contracts/openInterestPositioning'
+
 import {
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENT,
   MARKET_ANALYSIS_CROSS_ASSET_REAL_INSTRUMENT,
@@ -117,7 +120,7 @@ export function projectSentiment(result: FearGreedSnapshotResult | undefined, as
   caveats.add('sentiment-not-computed-as-of')
 }
 
-export function projectFunding(result: FundingRateHistoryResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
+export function projectFunding(result: FundingRateHistoryResult | undefined, positioning: OpenInterestHistoryResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.funding = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
     return
@@ -128,6 +131,7 @@ export function projectFunding(result: FundingRateHistoryResult | undefined, asO
   }
   const points = [...result.btc.map(point => ['BTC', point] as const), ...result.eth.map(point => ['ETH', point] as const)]
   for (const [index, [asset, point]] of points.entries()) facts.push(fact('funding', asset, 'funding-rate-percent', point.ratePercent, '%', 'binance-futures-positioning', point.observedAt, asOf, 'comparable', `point-${index}`))
+  projectPositioning(positioning, result, asOf, facts)
   const state = points.length ? 'available' : 'empty'
   const freshness = points.length ? 'fresh' : 'missing'
   const pointCaveat = points.length ? [] : [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryEmpty]
@@ -417,3 +421,37 @@ function blankToUndefined(value: string): string | undefined {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
 }
+
+/**
+ * Notional open interest, its 24-hour change and the state the two series make together.
+ *
+ * Three facts per asset, not a point per bucket: the series is 672 rows, the analysis needs the
+ * level, the direction and the read. The identity is fixed (`latest`) so a moving number shows
+ * up as `changed` in the snapshot diff instead of "everything removed, everything added" every
+ * fifteen minutes.
+ */
+function projectPositioning(positioning: OpenInterestHistoryResult | undefined, funding: FundingRateHistoryResult, asOf: string, facts: AgentFact[]): void {
+  if (!positioning || positioning.state !== 'available' || funding.state !== 'available') return
+  for (const [asset, subject] of [['btc', 'BTC'], ['eth', 'ETH']] as const) {
+    const points = positioning[asset]
+    const latest = points.at(-1)
+    if (latest) {
+      facts.push(fact('funding', subject, 'open-interest-notional-usd', latest.notionalUsd, 'USD', positioningSourceId, latest.observedAt, asOf, 'comparable', 'latest', { identityFromEventOnly: true }))
+    }
+    const change = positioning.change?.[asset]
+    if (latest && change?.h24Pct !== undefined) {
+      facts.push(fact('funding', subject, 'open-interest-change-24h-pct', change.h24Pct, 'percent', positioningSourceId, latest.observedAt, asOf, 'comparable', 'latest', { identityFromEventOnly: true }))
+    }
+    const rates = funding[asset]
+    const state = resolvePositioningState({
+      notionalChange24hPct: change?.h24Pct,
+      fundingNowPct: rates.at(-1)?.ratePercent,
+      fundingAgoPct: rates.at(-4)?.ratePercent
+    })
+    if (latest && state) {
+      facts.push(fact('funding', subject, 'positioning-state', state, null, positioningSourceId, latest.observedAt, asOf, 'comparable', 'latest', { identityFromEventOnly: true }))
+    }
+  }
+}
+
+const positioningSourceId = 'binance-futures-positioning'

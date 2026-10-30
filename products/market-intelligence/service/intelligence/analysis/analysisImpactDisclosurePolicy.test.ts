@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import type { AgentFact } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_CONTEXT_POLICY } from '../../../contracts/marketAnalysisContracts'
 import { analysisImpactDisclosurePolicy, applyReservedFacts, isFactForTriggeredEvent } from './analysisImpactDisclosurePolicy'
 
 function factAt(index: number, eventKey: string | null, domain: AgentFact['domain'] = 'macro'): AgentFact {
@@ -75,4 +76,18 @@ it('cannot exceed a budget smaller than the reserve', () => {
   const facts = [factAt(0, 'US.CPI.RELEASE.2026-M09'), factAt(1, null), factAt(2, null)]
   expect(applyReservedFacts(facts, new Set(['US.CPI.RELEASE.2026-M09']), 2)).toHaveLength(2)
   expect(applyReservedFacts(facts, new Set(['US.CPI.RELEASE.2026-M09']), 0)).toEqual([])
+})
+
+it('keeps both halves of a domain whose floor is raised', () => {
+  // Funding now carries the rate series and the open interest behind it. Under one shared floor
+  // the newest series evicts the older one, so the domain floor is a map and funding asks for two
+  // series' worth.
+  const floors = MARKET_ANALYSIS_CONTEXT_POLICY.minimumFactsPerDomain as Readonly<Record<string, number>>
+  expect(floors.default).toBe(6)
+  expect(floors.funding).toBeGreaterThan(floors.default)
+
+  const funding = Array.from({ length: 30 }, (_, index) => factAt(index, null, 'funding'))
+  const others = Array.from({ length: 200 }, (_, index) => factAt(1000 + index, null, 'macro'))
+  const kept = applyReservedFacts([...others, ...funding], new Set(), 60, undefined, floors)
+  expect(kept.filter(fact => fact.domain === 'funding')).toHaveLength(floors.funding!)
 })
