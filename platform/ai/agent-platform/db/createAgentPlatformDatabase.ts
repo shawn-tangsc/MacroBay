@@ -1489,6 +1489,16 @@ const migrations: AgentPlatformMigration[] = [
       alter table agent_sessions
         add column allowed_tools_json text not null default '[]';
     `
+  },
+  {
+    id: '0045_daily_brief_editor_effort_low',
+    up: `
+      update agent_entities
+      set configuration_json = json_set(coalesce(configuration_json, '{}'), '$.effort', 'low'),
+          updated_at = '2026-10-31T00:00:00.000Z'
+      where id = 'daily-brief-editor'
+        and json_type(coalesce(configuration_json, '{}'), '$.effort') is null;
+    `
   }
 ]
 

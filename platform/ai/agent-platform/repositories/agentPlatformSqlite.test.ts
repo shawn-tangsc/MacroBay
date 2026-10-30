@@ -154,6 +154,65 @@ describe('agent platform sqlite repositories', () => {
     expect(rows[0]?.allowedTools).toEqual([])
   })
 
+  it('keeps a daily brief editor effort that was explicitly chosen before the default-effort migration', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-daily-brief-effort-'))
+    try {
+      const path = join(directory, 'agent.sqlite')
+      const database = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(database)
+      repos.agents.upsert({
+        ...agent,
+        id: 'daily-brief-editor',
+        name: 'Daily Brief Editor',
+        configuration: { permission_mode: 'plan', max_turns: 8, effort: 'max' }
+      })
+      database.connection
+        .prepare('delete from agent_platform_migrations where id = ?')
+        .run('0045_daily_brief_editor_effort_low')
+      database.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const repositories = createAgentPlatformRepositories(reopened)
+      expect(repositories.agents.get('daily-brief-editor')?.configuration?.effort).toBe('max')
+      reopened.connection.close()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('fills the low effort default for a daily brief editor that never set an effort', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-daily-brief-effort-'))
+    try {
+      const path = join(directory, 'agent.sqlite')
+      const database = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(database)
+      repos.agents.upsert({
+        ...agent,
+        id: 'daily-brief-editor',
+        name: 'Daily Brief Editor',
+        configuration: { permission_mode: 'plan', max_turns: 8, effort: 'max' }
+      })
+      database.connection
+        .prepare(`update agent_entities set configuration_json = json_remove(configuration_json, '$.effort') where id = ?`)
+        .run('daily-brief-editor')
+      database.connection
+        .prepare('delete from agent_platform_migrations where id = ?')
+        .run('0045_daily_brief_editor_effort_low')
+      database.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const repositories = createAgentPlatformRepositories(reopened)
+      expect(repositories.agents.get('daily-brief-editor')?.configuration).toMatchObject({
+        effort: 'low',
+        permission_mode: 'plan',
+        max_turns: 8
+      })
+      reopened.connection.close()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('stores only built-in tool names from the session allowlist', () => {
     const db = createAgentPlatformDatabase(':memory:')
     const repos = createAgentPlatformRepositories(db)

@@ -39,6 +39,7 @@ export function createDailyBriefEditorAgentSeed(
     configuration: {
       avatar: '📰',
       permission_mode: 'plan',
+      effort: 'low',
       max_turns: 8,
       heartbeat_enabled: false,
       productId: 'market-intelligence',
