@@ -56,7 +56,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setView({ status: 'loading' })
     setEditions([])
     void (async () => {
-      const today = await withDeadline(client.getToday({ locale, timeZone }), 45_000).catch(() => undefined)
+      const today = await withDeadline(client.getToday({ locale, timeZone }), 75_000).catch(() => undefined)
       const listed = await withDeadline(client.list({ locale, timeZone }), 8_000).catch(() => undefined)
       if (!active) return
       const rows = listed?.state === 'available' ? [...listed.result.editions] : []

@@ -44,7 +44,7 @@ export function createDailyBriefingAgent(deps: Readonly<{
         result = await deps.invoke({
           taskId: `daily-briefing:${input.document.edition.date}:${input.locale}`,
           messages,
-          timeoutMs: 20_000,
+          timeoutMs: 55_000,
           ...(input.providerId ? { providerId: input.providerId } : {}),
           ...(input.modelId ? { modelId: input.modelId } : {}),
           parse: (value) => value

@@ -8,7 +8,7 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * its window and observation time. The main process builds it; the renderer never re-derives it.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: 2,
   policyVersion: 'daily-briefing.v5',
   windowHours: 24,
   maximumBytes: 256 * 1024,
@@ -24,7 +24,7 @@ export const dailyBriefingPolicy = Object.freeze({
 })
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
-export type DailyBriefingDocumentSchemaVersion = 1
+export type DailyBriefingDocumentSchemaVersion = 1 | 2
 export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5'
 
 /** The four readings, and whether each source could answer at generation time. */

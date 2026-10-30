@@ -99,7 +99,7 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     if (deps.editorial) {
       try {
-        const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 25_000)
+        const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 60_000)
         document = editorial.document
         if (editorial.state !== 'agent') {
           document = Object.freeze({
@@ -168,7 +168,7 @@ async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<
 }
 
 function isCurrent(document: DailyBriefingDocument): boolean {
-  return document.schemaVersion === 1 && document.policyVersion === dailyBriefingPolicy.policyVersion
+  return document.schemaVersion === dailyBriefingPolicy.schemaVersion && document.policyVersion === dailyBriefingPolicy.policyVersion
 }
 
 function summaryFor(
