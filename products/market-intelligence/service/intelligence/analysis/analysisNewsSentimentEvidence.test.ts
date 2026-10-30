@@ -7,7 +7,7 @@ const asOf = '2026-10-29T12:00:00.000Z'
 
 function context(overrides: Partial<MarketAnalysisContextAvailable> = {}): MarketAnalysisContextAvailable {
   return {
-    state: 'available', schemaVersion: 1, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1',
+    state: 'available', schemaVersion: 2, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1',
     asOf, dataCutoff: asOf, snapshotId: null, snapshotHash: null, facts: [], missingDomains: [], caveats: [],
     evidenceRefs: [], sourceHealth: [], domainAccess: [], ...overrides
   } as MarketAnalysisContextAvailable

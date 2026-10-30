@@ -111,6 +111,10 @@ export const productText = {
                 'us-10y-real-yield': '美债 10 年期实际利率', 'us-10y-real-yield-change-1d': '美债 10 年期实际利率 1 日变化',
                 'us-2y-yield': '美债 2 年期收益率', 'us-2y-yield-change-1d': '美债 2 年期 1 日变化',
                 'us-10y-breakeven-inflation': '美债 10 年期盈亏平衡通胀', 'us-10y-2y-term-spread': '10Y−2Y 期限利差',
+                'policy-next-meeting-date': '下次会议日期', 'policy-implied-probability': '下次会议市场定价概率',
+                'policy-implied-probability-change-24h': '概率 24 小时变化', 'policy-target-range': '政策目标区间',
+                'policy-sep-median-current-year': 'SEP 本年中位', 'policy-sep-median-path': 'SEP 中位路径',
+                'policy-last-decision-vote': '上次决议票型',
                 'event-name': '事件', 'lifecycle-state': '生命周期', 'scheduled-date': '计划日期', 'scheduled-at': '计划时间',
                 'official-release-date': '官方发布日期', actual: '实际值', previous: '前值', consensus: '市场预期', surprise: '预期差（实际−预期）', 'event-excerpt': '事件摘要', 'news-sentiment': '新闻舆情'
               },
@@ -119,7 +123,9 @@ export const productText = {
                 'consumer-price-index': '消费者物价指数', 'employment-situation': '就业形势', fomc: '美联储议息',
                 pce: 'PCE 物价', 'core-pce': '核心 PCE', gdp: 'GDP',
                 'economic-indicator': '经济指标', 'financial-event': '金融事件', 'central-bank-activity': '央行活动',
-                'usd-index': '美元指数', gold: '黄金', 'us-treasury': '美债利率'
+                'usd-index': '美元指数', gold: '黄金', 'us-treasury': '美债利率',
+                'no-change': '维持不变', 'hike-25': '加息 25bp', 'hike-50-plus': '加息 50bp 以上',
+                'cut-25': '降息 25bp', 'cut-50-plus': '降息 50bp 以上'
               },
               // 唯一 owner 见文件头 `registeredEventNames`。
               eventName: registeredEventNames['zh-CN'],
@@ -146,7 +152,11 @@ export const productText = {
                 'us-cash-session': '仅美股现金时段', 'tokenized-index-proxy': '代币化指数代理',
                 'official-daily-close': '官方日频收盘，可能滞后数个交易日', 'synthetic-dollar-index': '合成美元指数（非官方 ICE 指数）',
                 'provider-time-series': '提供方时间序列（按提供方周期成 bar）', 'query-stale': '读数已过期，不作为当前值',
-                'macro-rates-mixed-observation-dates': '两条日频序列观察日不一致，不计算差值'
+                'macro-rates-mixed-observation-dates': '两条日频序列观察日不一致，不计算差值',
+                'policy-path-unavailable': '政策路径数据不可用', 'policy-path-facts-truncated': '政策路径事实已截断',
+                'policy-path-24h-change-unavailable': '概率 24 小时变化尚未可得', 'policy-path-sep-unavailable': 'SEP 中位数不可用',
+                'policy-path-target-range-unavailable': '政策目标区间不可用', 'policy-path-source-url-invalid': '政策路径来源链接无效',
+                'odds-are-market-pricing': '预测市场盘口，不是官方预期', 'projections-from-latest-sep-meeting': 'SEP 属最近一次发布会议'
               },
               term: { consensus: '市场预期值', actual: '实际值', previous: '前值', stablecoins: '稳定币' }
             }
@@ -1556,6 +1566,10 @@ export const productText = {
                 'us-10y-real-yield': 'US 10-year real yield', 'us-10y-real-yield-change-1d': 'US 10-year real yield 1-day change',
                 'us-2y-yield': 'US 2-year yield', 'us-2y-yield-change-1d': 'US 2-year 1-day change',
                 'us-10y-breakeven-inflation': 'US 10-year breakeven inflation', 'us-10y-2y-term-spread': '10Y-2Y term spread',
+                'policy-next-meeting-date': 'Next meeting date', 'policy-implied-probability': 'Market-implied probability for the next meeting',
+                'policy-implied-probability-change-24h': 'Probability 24-hour change', 'policy-target-range': 'Policy target range',
+                'policy-sep-median-current-year': 'SEP current-year median', 'policy-sep-median-path': 'SEP median path',
+                'policy-last-decision-vote': 'Last decision vote',
                 'event-name': 'Event', 'lifecycle-state': 'Lifecycle', 'scheduled-date': 'Scheduled date', 'scheduled-at': 'Scheduled time',
                 'official-release-date': 'Official release date', actual: 'Actual', previous: 'Previous', consensus: 'Consensus', surprise: 'Surprise (actual − consensus)', 'event-excerpt': 'Event excerpt', 'news-sentiment': 'News sentiment'
               },
@@ -1564,7 +1578,9 @@ export const productText = {
                 'consumer-price-index': 'Consumer price index', 'employment-situation': 'Employment situation', fomc: 'FOMC',
                 pce: 'PCE', 'core-pce': 'Core PCE', gdp: 'GDP',
                 'economic-indicator': 'Economic indicator', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank activity',
-                'usd-index': 'Dollar index', gold: 'Gold', 'us-treasury': 'US Treasury rates'
+                'usd-index': 'Dollar index', gold: 'Gold', 'us-treasury': 'US Treasury rates',
+                'no-change': 'No change', 'hike-25': 'Hike 25bp', 'hike-50-plus': 'Hike 50bp or more',
+                'cut-25': 'Cut 25bp', 'cut-50-plus': 'Cut 50bp or more'
               },
               // 唯一 owner 见文件头 `registeredEventNames`。
               eventName: registeredEventNames['en-US'],
@@ -1591,7 +1607,11 @@ export const productText = {
                 'us-cash-session': 'US cash session only', 'tokenized-index-proxy': 'Tokenised index proxy',
                 'official-daily-close': 'Official daily close, may lag several trading days', 'synthetic-dollar-index': 'Synthesised dollar index (not the official ICE index)',
                 'provider-time-series': 'Provider time series (bars on the provider cadence)', 'query-stale': 'Reading expired; not stated as current',
-                'macro-rates-mixed-observation-dates': 'Two daily series disagree on the observation date; no difference stated'
+                'macro-rates-mixed-observation-dates': 'Two daily series disagree on the observation date; no difference stated',
+                'policy-path-unavailable': 'Policy-path data unavailable', 'policy-path-facts-truncated': 'Policy-path facts truncated',
+                'policy-path-24h-change-unavailable': '24-hour probability change not available yet', 'policy-path-sep-unavailable': 'SEP median unavailable',
+                'policy-path-target-range-unavailable': 'Policy target range unavailable', 'policy-path-source-url-invalid': 'Policy-path source link invalid',
+                'odds-are-market-pricing': 'Prediction-market pricing, not an official expectation', 'projections-from-latest-sep-meeting': 'SEP belongs to the latest publishing meeting'
               },
               term: { consensus: 'Market consensus', actual: 'Actual', previous: 'Previous', stablecoins: 'Stablecoins' }
             }

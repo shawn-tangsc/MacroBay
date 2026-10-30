@@ -5,7 +5,7 @@ import { createEvidenceSnapshotService } from './evidenceSnapshotService'
 
 const asOf = '2026-09-27T00:00:00.000Z'
 function context(facts: MarketAnalysisContextAvailable['facts']): MarketAnalysisContextAvailable {
-  return { state: 'available', schemaVersion: 1, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotId: null, snapshotHash: null, facts, missingDomains: [], caveats: [], evidenceRefs: [], sourceHealth: [], domainAccess: [] }
+  return { state: 'available', schemaVersion: 2, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotId: null, snapshotHash: null, facts, missingDomains: [], caveats: [], evidenceRefs: [], sourceHealth: [], domainAccess: [] }
 }
 const fact = (factId: string) => ({ factId, domain: 'sentiment' as const, subject: 'market', metric: 'score', value: 50, unit: 'score', sourceId: 'source', sourceLabel: 'source', observedAt: asOf, asOf, freshness: 'fresh' as const, confidence: 1, comparability: 'comparable' as const, evidenceRefId: null })
 

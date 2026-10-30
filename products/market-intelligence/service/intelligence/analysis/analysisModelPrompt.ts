@@ -71,7 +71,7 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     // Only a session run gets these: a manual or data-driven run has no open to reason about, and
     // adding the rules there would invite the model to invent one.
     ...(session ? [analysisSessionPromptRules] : [])
-    ].join('\n') }, { role: 'user', content: JSON.stringify({ schemaVersion: 1, profileId: snapshot.profileId,
+    ].join('\n') }, { role: 'user', content: JSON.stringify({ schemaVersion: 2, profileId: snapshot.profileId,
     asOf: snapshot.asOf, dataCutoff: snapshot.dataCutoff, facts: modelFacts(snapshot.facts ?? [], references, language),
     // A sparse snapshot must still produce a prompt: this boundary used to pass a missing
     // collection straight through to JSON.stringify, and throwing here would fail the run.

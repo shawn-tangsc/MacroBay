@@ -4,7 +4,7 @@ import { appendAnalysisEventEvidence } from './analysisEventEvidence'
 
 const asOf = '2026-10-03T00:00:00.000Z'
 const publishedAt = '2026-09-22T00:00:00.000Z'
-const context: MarketAnalysisContextAvailable = { state: 'available', schemaVersion: 1, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotId: null, snapshotHash: null, facts: [], missingDomains: ['macro'], caveats: ['evidence-unavailable'], evidenceRefs: [], sourceHealth: [], domainAccess: [] }
+const context: MarketAnalysisContextAvailable = { state: 'available', schemaVersion: 2, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1', asOf, dataCutoff: asOf, snapshotId: null, snapshotHash: null, facts: [], missingDomains: ['macro'], caveats: ['evidence-unavailable'], evidenceRefs: [], sourceHealth: [], domainAccess: [] }
 const ref = { evidenceRefId: 'item-1', itemId: 'item-1', sourceId: 'alternative-fear-greed', visibleAt: publishedAt, publishedAt, detectedAt: publishedAt, excerptHash: 'a'.repeat(64) }
 const result = { evidenceRefs: [ref], data: { evidenceRef: ref, title: '情绪指标', excerpt: '恐惧贪婪指数为 80', sourceUrl: 'https://example.test/private' } }
 

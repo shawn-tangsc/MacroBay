@@ -1,5 +1,9 @@
 export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
-  schemaVersion: 1,
+  /**
+   * Bumped from 1 when the policy-path facts started carrying `sourceUrl`: new snapshots are
+   * written as 2, while a stored 1 is still a valid snapshot (the field is optional).
+   */
+  schemaVersion: 2,
   dataAccessProfileId: 'crypto-market-analysis-v1',
   outputSchemaVersion: 2,
   maximumModelFieldCharacters: 2_000,
@@ -36,7 +40,7 @@ export const MARKET_ANALYSIS_CONTEXT_POLICY = Object.freeze({
     funding: 12
   } as Readonly<Record<string, number>>),
   maximumOutputBytes: MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes,
-  schemaVersion: 1
+  schemaVersion: 2
 } as const)
 
 export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
@@ -73,7 +77,46 @@ export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
    * Two daily series disagreed about which trading day they describe, so the difference between them
    * describes no single day. The legs are still facts; their spread is not stated.
    */
-  macroRatesMixedPeriods: 'macro-rates-mixed-observation-dates'
+  macroRatesMixedPeriods: 'macro-rates-mixed-observation-dates',
+  /** The policy-path source is enabled but the read has no meeting or no usable odds. */
+  policyPathUnavailable: 'policy-path-unavailable',
+  /** The policy-path fact set hit its own fixed budget. */
+  policyPathTruncated: 'policy-path-facts-truncated',
+  /** The odds exist but the series does not reach back 24 hours yet, so no change is stated. */
+  policyPathChange24hUnavailable: 'policy-path-24h-change-unavailable',
+  /** No SEP is stored for a meeting at or before the analysis boundary. */
+  policyPathSepUnavailable: 'policy-path-sep-unavailable',
+  /** Neither a parsed statement nor FRED published a target range. */
+  policyPathRangeUnavailable: 'policy-path-target-range-unavailable',
+  /** A computed source URL was not https on an admitted host, so it was dropped. */
+  policyPathSourceUrlInvalid: 'policy-path-source-url-invalid'
+} as const)
+
+/**
+ * The policy-path facts the analysis may read.
+ *
+ * They are a *fixed share* of the context, not an open-ended feed: the odds and the projections are
+ * slow-moving facts with a meeting-level cadence, and the analysis budget belongs mostly to the
+ * domains that explain an intraday move. The cap is deliberately below 10% of the macro ceiling and
+ * well below a thousandth of the output byte limit; a read that exceeds it is truncated and says so.
+ */
+export const MARKET_ANALYSIS_POLICY_PATH_POLICY = Object.freeze({
+  sourceId: 'policy-path-market',
+  maximumFacts: 8,
+  maximumPromptCharacters: 900,
+  metrics: Object.freeze({
+    nextMeetingDate: 'policy-next-meeting-date',
+    impliedProbability: 'policy-implied-probability',
+    probabilityChange24h: 'policy-implied-probability-change-24h',
+    targetRange: 'policy-target-range',
+    sepMedianCurrentYear: 'policy-sep-median-current-year',
+    sepMedianPath: 'policy-sep-median-path',
+    lastDecisionVote: 'policy-last-decision-vote'
+  }),
+  caveats: Object.freeze({
+    oddsAreMarketPricing: 'odds-are-market-pricing',
+    projectionsFromLatestSepMeeting: 'projections-from-latest-sep-meeting'
+  })
 } as const)
 
 export const MARKET_ANALYSIS_MACRO_CALENDAR_POLICY = Object.freeze({
@@ -307,6 +350,11 @@ export type AgentFact = Readonly<{
   confidence: number
   comparability: AnalysisComparability
   evidenceRefId: string | null
+  /**
+   * The public page a reader can open to check this value. Optional because facts written before
+   * the policy path carried one stay valid; it never reaches the model prompt.
+   */
+  sourceUrl?: string
 }>
 
 export type AgentEvidenceRef = Readonly<{
@@ -320,6 +368,8 @@ export type AgentEvidenceRef = Readonly<{
   computedAt: string | null
   visibleAt: string
   excerptHash: string
+  /** The public page behind this evidence, when the projection knows one. */
+  sourceUrl?: string
 }>
 
 export type SourceHealthFlag = Readonly<{
@@ -378,7 +428,8 @@ export type SnapshotChange = Readonly<{
 
 export type EvidenceSnapshot = Readonly<{
   id: string
-  schemaVersion: 1
+  /** 1 is a snapshot written before facts carried `sourceUrl`; new snapshots are written as 2. */
+  schemaVersion: 1 | 2
   eventGroupId: string
   asOf: string
   dataCutoff: string

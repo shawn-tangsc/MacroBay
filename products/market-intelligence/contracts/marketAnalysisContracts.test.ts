@@ -14,7 +14,7 @@ import {
 describe('marketAnalysisContracts', () => {
   it('owns the schema, bounded model-output, and immutable ID policy', () => {
     expect(MARKET_ANALYSIS_CONTRACT_POLICY).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       dataAccessProfileId: 'crypto-market-analysis-v1',
       maximumModelFieldCharacters: 2_000,
       maximumModelOutputBytes: 256 * 1024
