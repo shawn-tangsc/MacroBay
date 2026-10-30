@@ -62,13 +62,17 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
   const tenYear = rates?.state === 'available' || rates?.state === 'empty'
     ? rates.readings.find((reading) => reading.metricKey === 'US_10Y_YIELD')
     : undefined
+  const realTenYear = rates?.state === 'available' || rates?.state === 'empty'
+    ? rates.readings.find((reading) => reading.metricKey === 'US_REAL_YIELD_10Y')
+    : undefined
   return [
     crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, reason: 'largest-move' }),
     crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, reason: 'largest-move' }),
     crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, reason: 'context' }),
     macroRow('dxy', dxy?.synthetic ? 'dailyBriefing.row.dxySynthetic' : 'dailyBriefing.row.dxy', dxy, packet.asOf),
     macroRow('gold', 'dailyBriefing.row.gold', gold, packet.asOf),
-    ratesRow('us10y', 'dailyBriefing.row.us10y', tenYear, packet.asOf)
+    ratesRow('us10y', 'dailyBriefing.row.us10y', tenYear, packet.asOf),
+    ratesRow('us10y-real', 'dailyBriefing.row.us10yReal', realTenYear, packet.asOf)
   ]
 }
 
@@ -149,7 +153,7 @@ function macroRow(
 }
 
 function ratesRow(
-  id: 'us10y',
+  id: 'us10y' | 'us10y-real',
   labelKey: string,
   reading: { actual: number; previous?: number; period: string } | undefined,
   asOf: string

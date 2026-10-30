@@ -59,6 +59,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
+      {doc.news.macro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
       {doc.news.macro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
         <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
         <div>

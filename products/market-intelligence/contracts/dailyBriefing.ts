@@ -9,7 +9,7 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  */
 export const dailyBriefingPolicy = Object.freeze({
   schemaVersion: 2,
-  policyVersion: 'daily-briefing.v7',
+  policyVersion: 'daily-briefing.v8',
   windowHours: 24,
   maximumBytes: 256 * 1024,
   maximumNewsItems: 3,
@@ -25,7 +25,7 @@ export const dailyBriefingPolicy = Object.freeze({
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefingDocumentSchemaVersion = 1 | 2
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7'
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -56,7 +56,7 @@ export type BriefingChangeUnit = 'pp' | 'percent' | 'bp' | 'usd'
 export type BriefingWindow = 'latest' | '24h' | '1d' | 'daily' | 'trading-day'
 
 export type BriefingMarketRow = Readonly<{
-  id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y'
+  id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real'
   labelKey: string
   importance: FactImportance
   state: DailyBriefingReadingState

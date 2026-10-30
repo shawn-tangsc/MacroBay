@@ -133,7 +133,10 @@ const packet = (overrides: Partial<DailyBriefingFactPacket> = {}): DailyBriefing
     } as unknown as MacroMarketSnapshotView,
     macroRates: {
       state: 'available',
-      readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5, previous: 4.96, period: '2026-10-29' }]
+      readings: [
+        { seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5, previous: 4.96, period: '2026-10-29' },
+        { seriesId: 'DFII10', metricKey: 'US_REAL_YIELD_10Y', actual: 1.8, previous: 1.77, period: '2026-10-29' }
+      ]
     } as unknown as MacroRatesSnapshotView
   },
   enabled: { fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true },
@@ -149,10 +152,11 @@ describe('daily briefing document', () => {
     expect(document.data.funds).toHaveLength(5)
     expect(document.data.funds.every((row) => row.importance.tier === 'must')).toBe(true)
     expect(document.data.sentiment.fearGreed?.importance.tier).toBe('must')
-    expect(document.data.market).toHaveLength(6)
+    expect(document.data.market).toHaveLength(7)
     expect(document.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
     expect(document.data.market.find((row) => row.id === 'us10y')?.importance.tier).toBe('support')
     expect(document.data.market.find((row) => row.id === 'us10y')?.change).toMatchObject({ unit: 'bp', value: 4 })
+    expect(document.data.market.find((row) => row.id === 'us10y-real')).toMatchObject({ value: { number: 1.8, format: 'yield' } })
 
     expect(document.news.items.map((item) => item.itemId)).toEqual(['n2', 'n1'])
     expect(document.news.macro.map((item) => item.eventKey)).toEqual(['US.CPI'])
@@ -228,7 +232,7 @@ describe('daily briefing document', () => {
 
   it('keeps a readable document when the market sources are absent', () => {
     const document = buildDailyBriefingDocument({ packet: packet({ market: {} }), date: '2026-10-30' })
-    expect(document.data.market).toHaveLength(6)
+    expect(document.data.market).toHaveLength(7)
     expect(document.data.market.find((row) => row.id === 'btc')).toMatchObject({
       state: 'unavailable', reason: 'query-failed'
     })

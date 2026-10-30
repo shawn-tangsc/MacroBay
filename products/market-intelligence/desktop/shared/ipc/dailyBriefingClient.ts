@@ -178,7 +178,7 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
 
 function isDocument(value: unknown): value is DailyBriefingDocument {
   if (!isRecord(value) || !isDailyBriefingDocumentWithinBudget(value)) return false
-  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7')) return false
+  if ((value.schemaVersion !== 1 && value.schemaVersion !== 2) || (value.policyVersion !== 'daily-briefing.v1' && value.policyVersion !== 'daily-briefing.v2' && value.policyVersion !== 'daily-briefing.v3' && value.policyVersion !== 'daily-briefing.v4' && value.policyVersion !== 'daily-briefing.v5' && value.policyVersion !== 'daily-briefing.v6' && value.policyVersion !== 'daily-briefing.v7' && value.policyVersion !== 'daily-briefing.v8')) return false
   if (!isEdition(value.edition) || !isStatus(value.status) || !isLede(value.lede)) return false
   if (!isNews(value.news) || !isData(value.data) || !isConclusionOrNull(value.conclusion)) return false
   if (!isNext(value.next) || !Array.isArray(value.citations) || !isProvenance(value.provenance)) return false
@@ -232,7 +232,7 @@ function isMacroItem(value: unknown): boolean {
 
 function isData(value: unknown): boolean {
   if (!isExact(value, ['market', 'funds', 'sentiment'])) return false
-  if (!Array.isArray(value.market) || value.market.length > 6) return false
+  if (!Array.isArray(value.market) || value.market.length > 7) return false
   if (!Array.isArray(value.funds) || value.funds.length > 5) return false
   if (!Array.isArray(value.market) || !value.market.every(isMarketRow)) return false
   if (!Array.isArray(value.funds) || !value.funds.every(isPulseRow)) return false
