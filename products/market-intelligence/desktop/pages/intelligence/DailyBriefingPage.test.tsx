@@ -133,6 +133,9 @@ async function renderPage(client: ReturnType<typeof fakeClient>, onBack = vi.fn(
   return container
 }
 
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-30T00:30:00.000Z')) })
+afterEach(() => { vi.useRealTimers() })
+
 describe('daily briefing page', () => {
   it('renders today, the 14-day rail and goes back to the dashboard', async () => {
     const onBack = vi.fn()
