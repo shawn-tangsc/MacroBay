@@ -154,6 +154,8 @@ export function isFundingRateHistoryRate(value: unknown): value is number {
 
 export type CapitalConditionsSnapshotQueryInput = {
   asOf: string
+  /** Daily briefing may read a stale snapshot with its observedAt; normal queries stay strict. */
+  allowStale?: boolean
 }
 
 export type EtfPublicFlow = Readonly<{

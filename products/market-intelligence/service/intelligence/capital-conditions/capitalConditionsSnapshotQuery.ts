@@ -14,7 +14,7 @@ import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 
 export const capitalConditionsSafeQueryPolicy = Object.freeze({
   ...capitalConditionsSnapshotPolicy,
-  exactInputFields: ['asOf']
+  exactInputFields: ['asOf', 'allowStale']
 })
 
 export type CapitalConditionsSnapshotQueryResult = CapitalConditionsSnapshotResult
@@ -40,10 +40,11 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
           return Object.freeze({ state: 'empty' as const, asOf: input.asOf })
         }
         const ageMs = Date.parse(input.asOf) - Date.parse(lastSuccessAt)
-        if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > capitalConditionsSafeQueryPolicy.maximumAgeMs) return unavailable()
+        if (!Number.isFinite(ageMs) || ageMs < 0) return unavailable()
+        if (!input.allowStale && ageMs > capitalConditionsSafeQueryPolicy.maximumAgeMs) return unavailable()
         if (!isValidSnapshot(snapshot)) return unavailable()
 
-        const etf = deps.etfStore ? await projectEtf(deps.etfStore, input.asOf) : Object.freeze({ state: 'unavailable' as const })
+        const etf = deps.etfStore ? await projectEtf(deps.etfStore, input.asOf, input.allowStale === true) : Object.freeze({ state: 'unavailable' as const })
         const result = Object.freeze({
           state: 'available' as const,
           asOf: input.asOf,
@@ -71,8 +72,8 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
   }
 }
 
-async function projectEtf(store: EtfCurrentStateStore, asOf: string): Promise<EtfPublicSnapshot | { state: 'unavailable' }> {
-  const available = await store.readAvailable({ asOf })
+async function projectEtf(store: EtfCurrentStateStore, asOf: string, allowStale = false): Promise<EtfPublicSnapshot | { state: 'unavailable' }> {
+  const available = await store.readAvailable({ asOf, allowStale })
   if (available.state !== 'available') return Object.freeze({ state: 'unavailable' as const })
   const { window, verifiedAt } = available
   const dto: EtfPublicSnapshot = Object.freeze({
@@ -88,9 +89,10 @@ function isExactInput(value: unknown): value is CapitalConditionsSnapshotQueryIn
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype || Object.getOwnPropertySymbols(value).length !== 0) return false
     const names = Object.getOwnPropertyNames(value)
-    if (names.length !== capitalConditionsSafeQueryPolicy.exactInputFields.length || !names.every((name) => capitalConditionsSafeQueryPolicy.exactInputFields.includes(name))) return false
+    if (!names.every((name) => capitalConditionsSafeQueryPolicy.exactInputFields.includes(name))) return false
     const descriptor = Object.getOwnPropertyDescriptor(value, 'asOf')
-    return Boolean(descriptor?.enumerable && 'value' in descriptor && isCanonicalCapitalConditionsSnapshotTime(descriptor.value))
+    const stale = Object.getOwnPropertyDescriptor(value, 'allowStale')
+    return Boolean(descriptor?.enumerable && 'value' in descriptor && isCanonicalCapitalConditionsSnapshotTime(descriptor.value) && (!stale || (stale.enumerable && 'value' in stale && typeof stale.value === 'boolean')))
   } catch {
     return false
   }

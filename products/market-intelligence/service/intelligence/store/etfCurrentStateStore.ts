@@ -94,11 +94,11 @@ export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStora
       if (readFailed) throw new Error('ETF current state is unreadable')
       return state.snapshot ? state : null
     },
-    async readAvailable(input: { asOf: string }): Promise<Readonly<{ state: 'available'; window: EtfCurrentStateWindow; verifiedAt: string }> | Readonly<{ state: 'unavailable' }>> {
+    async readAvailable(input: { asOf: string; allowStale?: boolean }): Promise<Readonly<{ state: 'available'; window: EtfCurrentStateWindow; verifiedAt: string }> | Readonly<{ state: 'unavailable' }>> {
       if (!isCanonicalUtcMillis(input.asOf)) return unavailable()
       const state = await current()
       const verifiedAt = state.snapshot?.verifiedAt
-      if (readFailed || !state.snapshot || !verifiedAt || Date.parse(input.asOf) < Date.parse(verifiedAt) || Date.parse(input.asOf) - Date.parse(verifiedAt) > etfCurrentStateStorePolicy.maximumSnapshotAgeMs) return unavailable()
+      if (readFailed || !state.snapshot || !verifiedAt || Date.parse(input.asOf) < Date.parse(verifiedAt) || !input.allowStale && Date.parse(input.asOf) - Date.parse(verifiedAt) > etfCurrentStateStorePolicy.maximumSnapshotAgeMs) return unavailable()
       return Object.freeze({ state: 'available' as const, window: state.snapshot.window, verifiedAt })
     }
   }

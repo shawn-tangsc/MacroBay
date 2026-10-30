@@ -42,7 +42,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         readNews(deps, input.asOf),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
-        safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf }), unavailableCapital()),
+        safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
         readCalendar(deps, input.asOf, input.locale, enabled.calendar),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
         safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined),
