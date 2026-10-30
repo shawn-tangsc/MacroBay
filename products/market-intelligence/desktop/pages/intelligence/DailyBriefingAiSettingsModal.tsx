@@ -25,7 +25,7 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
   onClose: () => void
 }>): React.ReactElement {
   const language = useShellLanguage()
-  const [draft, setDraft] = useState<{ editorialEnabled: boolean; providerId: string; modelId: string } | null>(null)
+  const [draft, setDraft] = useState<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } | null>(null)
   const [providers, setProviders] = useState<readonly SafeModelProvider[]>([])
   const [defaultModel, setDefaultModel] = useState<{ providerId: string; modelId: string; providerName: string; modelName: string } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -54,7 +54,9 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
       setDraft({
         editorialEnabled: settings.view.settings.editorialEnabled,
         providerId: settings.view.settings.providerId,
-        modelId: settings.view.settings.modelId
+        modelId: settings.view.settings.modelId,
+        webSearchEnabled: settings.view.settings.webSearchEnabled,
+        ...(settings.view.settings.webSearchAuthorizedAt ? { webSearchAuthorizedAt: settings.view.settings.webSearchAuthorizedAt } : {})
       })
       setProviders(modelProviders ?? [])
       setDefaultModel(await readDefaultModel(modelProviders ?? []))
@@ -104,6 +106,10 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
           <small>{text.aiSettings.enabledHint}</small>
         </div>
         <Switch checked={draft.editorialEnabled} onChange={(editorialEnabled) => setDraft((current) => current ? { ...current, editorialEnabled } : current)} />
+      </div>
+      <div className="mi-daily-briefing__settings-row">
+        <div><strong>{text.aiSettings.webSearch}</strong><small>{text.aiSettings.webSearchHint}</small></div>
+        <Switch checked={draft.webSearchEnabled} onChange={(checked) => setDraft({ ...draft, webSearchEnabled: checked, ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {}) })} />
       </div>
       {draft.editorialEnabled ? <div className="mi-daily-briefing__settings-row">
         <div>

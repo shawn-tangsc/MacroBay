@@ -11,7 +11,7 @@ import {
 import type { DailyBriefingAiSettingsStore } from './dailyBriefingAiSettingsStore'
 
 export type DailyBriefingAiSettingsView = Readonly<{
-  settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string }>
+  settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
   resolved: DailyBriefingEditorialModel
 }>
 
@@ -31,7 +31,9 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
       settings: Object.freeze({
         editorialEnabled: settings.editorialEnabled,
         providerId: settings.providerId,
-        modelId: settings.modelId
+        modelId: settings.modelId,
+        webSearchEnabled: settings.webSearchEnabled,
+        ...(settings.webSearchAuthorizedAt ? { webSearchAuthorizedAt: settings.webSearchAuthorizedAt } : {})
       }),
       resolved: await resolveDailyBriefingEditorialModel(settings, deps)
     })

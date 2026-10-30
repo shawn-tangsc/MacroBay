@@ -36,7 +36,7 @@ export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
 export type DailyBriefingAiSettingsView = Readonly<{
-  settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string }>
+  settings: Readonly<{ editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string }>
   resolved:
     | Readonly<{ state: 'disabled' }>
     | Readonly<{ state: 'agent'; providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
@@ -143,7 +143,7 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
   }
 }
 
-function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string } {
+function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } {
   return isExact(value, ['editorialEnabled', 'providerId', 'modelId']) &&
     typeof value.editorialEnabled === 'boolean' && typeof value.providerId === 'string' && typeof value.modelId === 'string'
 }
