@@ -1,0 +1,34 @@
+import { describe, expect, it, vi } from 'vitest'
+import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
+import { createDailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
+
+const deps = () => {
+  const createSession = vi.fn(async (input: { agentId: string; name: string }) => ({ id: `s-${input.name}`, name: input.name, agentId: input.agentId }))
+  const update = vi.fn(async (id: string, patch: { name?: string }) => ({ id, name: patch.name ?? id }))
+  const append = vi.fn(async () => [])
+  return {
+    links: createDailyBriefSessionLinkStore(':memory:'),
+    createSession,
+    update,
+    append,
+    send: vi.fn(async () => ({ ok: true })),
+    delete: vi.fn(async () => undefined),
+    now: () => '2026-10-30T00:00:00.000Z'
+  }
+}
+
+describe('daily brief editor session port', () => {
+  it('creates once per edition, reuses the link, renames and deletes', async () => {
+    const d = deps()
+    const port = createDailyBriefEditorSessionPort(d as never)
+    const first = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: '10-30 每日简报 · AI 编辑 · 中文', agentId: 'daily-brief-editor' })
+    const second = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'another', agentId: 'daily-brief-editor' })
+    expect(first.created).toBe(true)
+    expect(second).toEqual({ sessionId: first.sessionId, created: false })
+    expect(d.createSession).toHaveBeenCalledTimes(1)
+    await port.rename(first.sessionId, '10-30 每日简报 · 稳定币收缩 · AI 编辑 · 中文')
+    expect(d.update).toHaveBeenCalledWith(first.sessionId, { name: '10-30 每日简报 · 稳定币收缩 · AI 编辑 · 中文' })
+    await port.delete([first.sessionId])
+    expect(d.delete).toHaveBeenCalledWith([first.sessionId])
+  })
+})
