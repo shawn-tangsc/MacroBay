@@ -216,7 +216,7 @@ function needsTranslation(summary: string, locale: 'zh-CN' | 'en-US'): boolean {
 }
 
 function forbiddenContent(text: string): boolean {
-  return /https?:\/\/|www\.|```|<script|买入|卖出|做多|做空|目标价|必涨|必跌|price target|buy now|sell now|go long|go short/i.test(text)
+  return /https?:\/\/|www\.|```|<script|建议\s*(买入|卖出|做多|做空)|目标价|必涨|必跌|price target|buy now|sell now|go long|go short/i.test(text)
 }
 
 function numbersAreKnown(text: string, document: DailyBriefingDocument): boolean {
