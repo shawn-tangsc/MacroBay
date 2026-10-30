@@ -2,6 +2,7 @@ import { applyReservedFacts } from '../analysis/analysisImpactDisclosurePolicy'
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
   MARKET_ANALYSIS_CONTEXT_POLICY,
+  MARKET_ANALYSIS_POLICY_PATH_POLICY,
   MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
   type MarketAnalysisCrossAssetInstrument,
@@ -372,6 +373,12 @@ export async function buildMarketAnalysisContext(
   const keptFacts = applyReservedFacts(macroCapped.facts, internal.triggeredEventKeys ?? new Set(), maxFacts,
     undefined, MARKET_ANALYSIS_CONTEXT_POLICY.minimumFactsPerDomain)
   if (keptFacts.length < macroCapped.facts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
+  // A caller may ask for fewer facts than the macro share; say the policy set was cut rather than
+  // letting the generic truncation caveat hide which evidence went missing.
+  const policySourceId = MARKET_ANALYSIS_POLICY_PATH_POLICY.sourceId
+  const policyAvailable = macroCapped.facts.filter(fact => fact.sourceId === policySourceId).length
+  const policyKept = keptFacts.filter(fact => fact.sourceId === policySourceId).length
+  if (policyAvailable > 0 && policyKept < policyAvailable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathTruncated)
 
   const output: MarketAnalysisContextAvailable = {
     state: 'available',

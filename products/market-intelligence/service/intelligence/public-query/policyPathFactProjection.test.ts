@@ -119,6 +119,17 @@ describe('policy path analysis facts', () => {
     expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathChange24hUnavailable)
   })
 
+  it('declares the policy share when a smaller global budget cuts it', async () => {
+    const result = await buildMarketAnalysisContext(
+      { eventGroupId: 'mi-eg-policy', asOf: AS_OF, domains: ['macro'], maxFacts: 1 },
+      service(reading) as never
+    )
+
+    expect(result.state).toBe('available')
+    if (result.state !== 'available') return
+    expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathTruncated)
+  })
+
   it('omits the SEP facts and states the gap when no projection is stored', async () => {
     const { sep: _sep, ...withoutSep } = reading
     const result = await context(withoutSep)
