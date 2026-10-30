@@ -118,7 +118,9 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     !openTarget?.month || openTarget.month === economicCalendarCurrentMonth(initialQuery.asOf))
   const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
   const gridMonths = economicCalendarGridMonths(selectedMonth)
-  const market = useMarketCalendar({ month: selectedMonth, months: gridMonths, locale: text.market.locale, now })
+  // The named month leads the read: it owns the grid and is what a manual refresh targets.
+  const readMonths = [selectedMonth, ...gridMonths.filter(month => month !== selectedMonth)]
+  const market = useMarketCalendar({ months: readMonths, locale: text.market.locale, now })
   const [selectedMarket, setSelectedMarket] = useState<MarketCalendarEvent>()
   const [selectedLinkedMarket, setSelectedLinkedMarket] = useState<MarketCalendarEvent>()
   useEffect(() => { setSelectedMarket(undefined); setSelectedLinkedMarket(undefined) }, [selectedMonth, text.market.locale])

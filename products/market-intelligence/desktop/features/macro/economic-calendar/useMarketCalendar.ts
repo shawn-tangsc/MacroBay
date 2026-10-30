@@ -8,12 +8,13 @@ export const marketCalendarReadPolicy = { maximumEvents: 3000, maximumPages: 300
 /**
  * The provider's calendar for the months a grid draws.
  *
- * `month` is the month the page is named after and the one a manual refresh targets; `months` is
- * the read window, primary included. The window exists because a six-week grid draws its
- * neighbours' days: reading only `month` left those cells permanently blank.
+ * `months` is the read window with the page's own month first: that first month is the one a
+ * manual refresh targets, the rest are the days the grid's edges borrow. The window exists
+ * because a six-week grid draws its neighbours' days: reading only one month left those cells
+ * permanently blank.
  */
-export function useMarketCalendar({ month, months = [month], locale, now, client = marketCalendarClient }: {
-  month: string; months?: readonly string[]; locale: 'zh' | 'en'; now: () => Date; client?: MarketCalendarClient
+export function useMarketCalendar({ months, locale, now, client = marketCalendarClient }: {
+  months: readonly string[]; locale: 'zh' | 'en'; now: () => Date; client?: MarketCalendarClient
 }) {
   const [events, setEvents] = useState<readonly MarketCalendarEvent[]>([])
   const [sources, setSources] = useState<readonly MarketCalendarSource[]>([])
@@ -24,7 +25,7 @@ export function useMarketCalendar({ month, months = [month], locale, now, client
   const generation = useRef(0)
   const scopeGeneration = useRef(0)
   const scopeKey = `${months.join(',')}\n${locale}`
-  const scope = useRef({ month, months, locale, key: scopeKey }); scope.current = { month, months, locale, key: scopeKey }
+  const scope = useRef({ months, locale, key: scopeKey }); scope.current = { months, locale, key: scopeKey }
   const clock = useRef(now); clock.current = now
   const activeRefresh = useRef(false)
   const mounted = useRef(true)
@@ -38,10 +39,9 @@ export function useMarketCalendar({ month, months = [month], locale, now, client
     const cursors = new Set<string>()
     let sources: readonly MarketCalendarSource[] = []
     let pages = 0
-    // The named month is read first so its source status is on screen while the edges load.
-    const order = [requested.month, ...requested.months.filter(candidate => candidate !== requested.month)]
+    // The caller puts the named month first, so its source status is on screen while the edges load.
     try {
-      for (const candidate of order) {
+      for (const candidate of requested.months) {
         let cursor: string | undefined
         do {
           const page = await client.queryMonth({ month: candidate, locale: requested.locale, asOf, ...(cursor ? { cursor } : {}) })
@@ -54,7 +54,7 @@ export function useMarketCalendar({ month, months = [month], locale, now, client
           for (const event of fresh) seen.add(event.eventKey)
           if (accumulated.length + fresh.length > marketCalendarReadPolicy.maximumEvents) { setFailure(true); return }
           accumulated.push(...fresh)
-          if (candidate === requested.month) sources = page.sources
+          if (candidate === requested.months[0]) sources = page.sources
           setEvents([...accumulated]); setSources(sources)
           cursor = page.nextCursor
           if (cursor && pages >= marketCalendarReadPolicy.maximumPages) { setFailure(true); return }
@@ -80,12 +80,12 @@ export function useMarketCalendar({ month, months = [month], locale, now, client
     const isCurrent = () => mounted.current && requestedGeneration === scopeGeneration.current && requested.key === scope.current.key
     try {
       // A refresh stays one month: it is a provider request the reader asked for, not a window read.
-      const result = await client.refresh({ month: requested.month, locale: requested.locale })
+      const result = await client.refresh({ month: requested.months[0]!, locale: requested.locale })
       if (!isCurrent()) return
       setFeedback(result)
       await load()
     } catch { if (isCurrent()) setFailure(true) }
     finally { activeRefresh.current = false; if (mounted.current) setPending(false) }
   }, [client, load])
-  return { month, events, sources, loading, pending, failure, feedback, refresh }
+  return { month: months[0] ?? '', events, sources, loading, pending, failure, feedback, refresh }
 }
