@@ -196,16 +196,19 @@ function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFea
     <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.sentiment.title}</h2>
       <div className="mi-crypto-dashboard__sentiment-gauge" data-sentiment-gauge>
       {fearGreedState.state === 'available' ? <>
-        {/* The score sits inside the arc, not below it: as a grid row after the svg it hung under
-            the dial's baseline, which read as a separate figure rather than the gauge's value. */}
+        {/* The readout disc sits on the pivot and is painted after the needle, so the score can
+            own the centre again: the needle starts underneath the disc instead of crossing it. */}
         <span className="mi-crypto-dashboard__sentiment-dial">
-          <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}<g transform={`rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)} ${FearGreedGaugePresentationPolicy.needleOrigin})`}>
-            <circle className="mi-crypto-dashboard__gauge-needle"
+          <svg aria-hidden="true" viewBox={FearGreedGaugePresentationPolicy.svgViewBox}>{FearGreedGaugePresentationPolicy.arcSegments.map((segment, index) => <path key={segment.tone} className="mi-crypto-dashboard__gauge-segment" d={segment.path} data-gauge-segment={index} data-gauge-tone={segment.tone} />)}{FearGreedGaugePresentationPolicy.ticks.map((tick) => <path key={tick.score} className="mi-crypto-dashboard__gauge-tick" d={tick.path} />)}<g transform={`rotate(${FearGreedGaugePresentationPolicy.needleDegrees(fearGreedState.score)} ${FearGreedGaugePresentationPolicy.needleOrigin})`}>
+            <path className="mi-crypto-dashboard__gauge-needle"
               data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}
-              cx={FearGreedGaugePresentationPolicy.needleRing.cx} cy={FearGreedGaugePresentationPolicy.needleRing.cy}
-              r={FearGreedGaugePresentationPolicy.needleRing.radius}
-              strokeWidth={FearGreedGaugePresentationPolicy.needleRing.strokeWidth} />
-          </g></svg>
+              d={FearGreedGaugePresentationPolicy.needlePath} />
+          </g>
+          <circle className="mi-crypto-dashboard__gauge-readout"
+            data-gauge-bucket={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}
+            cx={FearGreedGaugePresentationPolicy.readout.cx} cy={FearGreedGaugePresentationPolicy.readout.cy}
+            r={FearGreedGaugePresentationPolicy.readout.radius} />
+          </svg>
           <strong>{fearGreedState.score}</strong>
         </span>
         <span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>

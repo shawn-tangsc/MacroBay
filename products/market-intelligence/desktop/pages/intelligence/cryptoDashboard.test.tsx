@@ -59,6 +59,28 @@ function cssBlock(source: string, marker: string): string {
 describe('crypto intelligence dashboard', () => {
   const text = productText['zh-CN'].pages.intelligence.portal
 
+  /** One dashboard whose only meaningful panel input is the score, for the gauge-only cases. */
+  async function renderSentimentGauge(score: number, bucket: 'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed') {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const gaugeRoot = createRoot(container)
+    await act(async () => gaugeRoot.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient({
+        state: 'available', asOf, score, bucket, observedAt: '2026-08-04T10:00:00.000Z'
+      }), fundingRateClient: fundingRateClient(), openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined,
+      onOpenCalendar: () => undefined, text: text.dashboard
+    })))
+    await flush()
+    return {
+      gauge: container.querySelector<HTMLElement>('[data-sentiment-gauge]')!,
+      dispose: async () => {
+        await act(async () => gaugeRoot.unmount())
+        container.remove()
+      }
+    }
+  }
+
   it('removes static preview dependencies and leaves only real dashboard regions', () => {
     expect(page).not.toContain('cryptoDashboardPreview')
     expect(dashboard).not.toMatch(/CryptoDashboardPreview|cryptoMarketReadIds|cryptoCheckIds|market-read|judgment|macro-card|check-step|calendar-rule|staticPreview|notAdvice|__as-of|preview/)
@@ -128,9 +150,22 @@ describe('crypto intelligence dashboard', () => {
     expect(row.querySelector('.mi-capital-conditions')).not.toBeNull()
     expect(container.querySelector('.mi-crypto-dashboard__positioning-row [data-sentiment-gauge]')).toBeNull()
     const rows = container.querySelectorAll('.mi-crypto-dashboard__positioning-row [data-funding-latest]')
-    expect(gauge.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+    const dial = gauge.querySelector('svg')!
+    expect(dial.getAttribute('aria-hidden')).toBe('true')
+    expect(dial.getAttribute('viewBox')).toBe('0 0 120 86')
     expect(gauge.querySelectorAll('[data-gauge-segment]')).toHaveLength(5)
-    expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.getAttribute('data-gauge-bucket')).toBe('extreme-fear')
+    // The needle is its own path inside the mouth; the arc segments are never rotated as a whole.
+    expect(gauge.querySelectorAll('[data-gauge-segment][transform]')).toHaveLength(0)
+    expect(dial.querySelectorAll('.mi-crypto-dashboard__gauge-tick')).toHaveLength(5)
+    const needle = dial.querySelector('.mi-crypto-dashboard__gauge-needle')!
+    expect(needle.tagName.toLowerCase()).toBe('path')
+    expect(needle.getAttribute('d')).toBe('M 60 43 L 60 18')
+    expect(needle.getAttribute('data-gauge-bucket')).toBe('extreme-fear')
+    expect(needle.parentElement?.getAttribute('transform')).toBe('rotate(-50.4 60 60)')
+    // The readout is painted after the needle: it is the mask that keeps the blade out of the digits.
+    const readout = dial.querySelector('.mi-crypto-dashboard__gauge-readout')!
+    expect(readout.getAttribute('data-gauge-bucket')).toBe('extreme-fear')
+    expect(readout.previousElementSibling).toBe(needle.parentElement)
     expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe('extreme-fear')
     expect(gauge.textContent).toContain('22')
     expect(gauge.textContent).toContain(text.dashboard.fearGreed.buckets['extreme-fear'])
@@ -141,6 +176,51 @@ describe('crypto intelligence dashboard', () => {
     expect(rows[1]?.textContent).toContain('-0.0031%')
     expect(rows[1]?.textContent).toContain(text.dashboard.positioning.paymentDirections['short-pays-long'])
     expect(row.textContent).not.toMatch(/58|conclusion|classification|https?:|sourceUrl|evidence|profile|health|credential|error/i)
+  })
+
+  it('points the needle left, straight up and right at the score extremes', async () => {
+    for (const [score, bucket, transform] of [
+      [0, 'extreme-fear', 'rotate(-90 60 60)'],
+      [50, 'neutral', 'rotate(0 60 60)'],
+      [100, 'extreme-greed', 'rotate(90 60 60)']
+    ] as const) {
+      const { gauge, dispose } = await renderSentimentGauge(score, bucket)
+      expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.getAttribute('data-gauge-bucket')).toBe(bucket)
+      expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.parentElement?.getAttribute('transform')).toBe(transform)
+      expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe(bucket)
+      await dispose()
+    }
+  })
+
+  it('keeps the needle and its bucket label on the same tone in all five bands', async () => {
+    for (const [score, bucket] of [
+      [12, 'extreme-fear'], [37, 'fear'], [50, 'neutral'], [60, 'greed'], [88, 'extreme-greed']
+    ] as const) {
+      const { gauge, dispose } = await renderSentimentGauge(score, bucket)
+      expect(gauge.querySelector('.mi-crypto-dashboard__gauge-needle')?.getAttribute('data-gauge-bucket')).toBe(bucket)
+      expect(gauge.querySelector('[data-gauge-bucket-text]')?.getAttribute('data-gauge-bucket-text')).toBe(bucket)
+      await dispose()
+    }
+  })
+
+  it('centres the score on the readout disc so the needle starts underneath it', () => {
+    const scoreRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment-dial strong {')
+    const svgRule = cssBlock(styles, '.mi-crypto-dashboard__sentiment-gauge svg {')
+    const needleRule = cssBlock(styles, '.mi-crypto-dashboard__gauge-needle {')
+    const readoutRule = cssBlock(styles, '.mi-crypto-dashboard__gauge-readout {')
+
+    expect(scoreRule).toContain('position: absolute')
+    expect(scoreRule).toContain('top: 69.77%')
+    expect(scoreRule).toContain('transform: translateY(-50%)')
+    expect(scoreRule).toContain('font-size: 17px')
+    expect(svgRule).toContain('height: 80px')
+    expect(needleRule).toContain('stroke: var(--mi-dashboard-text)')
+    expect(needleRule).toContain('stroke-width: 2.4')
+    expect(needleRule).toContain('stroke-linecap: round')
+    expect(needleRule).toContain('drop-shadow')
+    expect(readoutRule).toContain('fill: var(--mi-dashboard-surface)')
+    expect(styles).toContain('.mi-crypto-dashboard__gauge-tick { stroke: var(--mi-dashboard-text)')
+    expect(styles).toContain('--mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-fear)')
   })
 
   it('fails closed instead of crashing when a legacy funding client has no history query', async () => {

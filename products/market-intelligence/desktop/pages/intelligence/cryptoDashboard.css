@@ -182,37 +182,46 @@
 .mi-capital-conditions__chart-tooltip b { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .mi-capital-conditions__chart-ticks { display: flex; justify-content: space-between; min-width: 0; margin: 4px 0 0 var(--mi-dashboard-etf-flow-axis-width); color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1; }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
-.mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 64px; overflow: visible; }
-/* The dial is the positioning context: the score is drawn into the arc's mouth rather than
-   stacked under it, so the reading and the needle cannot look like two unrelated things. */
+.mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
+/* The dial is the positioning context: the svg renders 112x80 from a 120x86 viewBox, and the
+   score is centred on the readout disc at y=60 (69.77% down). The disc is painted after the
+   needle, so the blade only exists outside its ring. */
 .mi-crypto-dashboard__sentiment-dial { position: relative; display: grid; justify-items: center; }
 .mi-crypto-dashboard__sentiment-dial strong {
-  /* The dial renders 112x64 from a 120x68 viewBox whose baseline is y=60; the score sits just
-     inside that baseline so it reads as the gauge's value rather than a caption under it. */
-  position: absolute; right: 0; bottom: 13px; left: 0;
+  /* top 60/86 = 69.77%: the disc's centre in the rendered dial. */
+  position: absolute; top: 69.77%; right: 0; left: 0; transform: translateY(-50%);
   color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 18px; font-weight: 650; line-height: 1; text-align: center;
+  font-size: 17px; font-variant-numeric: tabular-nums; font-weight: 650; line-height: 1; text-align: center;
 }
 .mi-crypto-dashboard__gauge-segment { fill: none; stroke-width: 10; }
-.mi-crypto-dashboard__gauge-needle { fill: var(--mi-dashboard-surface); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='fear'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='neutral'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='greed'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-greed'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-greed'],
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); stroke: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__gauge-tick { stroke: var(--mi-dashboard-text); stroke-width: .8; opacity: .26; }
+/* The blade is text-coloured and only its halo takes the bucket tone: an orange needle on the
+   orange fear band dissolved into the segment it was pointing at. */
+.mi-crypto-dashboard__gauge-needle { fill: none; stroke: var(--mi-dashboard-text); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 1.8px var(--mi-gauge-glow)); }
+/* The disc is the needle's mask and the score's backdrop; its ring carries the bucket tone. */
+.mi-crypto-dashboard__gauge-readout { fill: var(--mi-dashboard-surface); stroke-width: 1.2; }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-greed'] { stroke: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-greed'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='extreme-greed'] { stroke: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-fear'] { color: var(--mi-dashboard-sentiment-extreme-fear); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='fear'] { color: var(--mi-dashboard-sentiment-fear); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='neutral'] { color: var(--mi-dashboard-sentiment-neutral); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='greed'] { color: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-needle { fill: none; stroke-width: 3; stroke-dasharray: 2 150; transform-origin: 60px 60px; }
-.mi-crypto-dashboard__sentiment-gauge > strong { margin-top: -44px; color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 25px; line-height: 1; }
-.mi-crypto-dashboard__sentiment-gauge > span { margin-top: 5px; font-size: 12px; }
+/* Only the bucket label, not the dial, takes this margin: the dial is a span too. */
+.mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] { margin-top: 5px; font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge small,
 .mi-crypto-dashboard__sentiment-gauge p { margin: 5px 0 0; color: var(--mi-dashboard-muted); font-size: 10px; }
 /*

@@ -14,16 +14,27 @@ export const dashboardFearGreedPresentationPolicy = {
 
 export const FearGreedGaugePresentationPolicy = {
   arcDegrees: 180,
-  svgViewBox: '0 0 120 68',
-  trackPath: 'M 12 60 A 48 48 0 0 1 108 60',
   /**
-   * The mark is a ring riding on the arc at the score's angle, not a needle reaching into the
-   * mouth: the dial is 112px wide and the score sits in the middle, so anything longer either
-   * ran through the number or read as a stray fleck. A thumb on the band says "the reading is
-   * here" and stays out of the way.
+   * 120x86, not 120x68: the arc keeps its 48 radius and its (60,60) centre, and the 26 units
+   * below the baseline hold the readout disc. The score sits on the disc at the pivot, and the
+   * needle starts underneath it, so the blade and the digits never share a pixel.
    */
-  needleRing: { cx: 60, cy: 12, radius: 4.2, strokeWidth: 2.4 },
+  svgViewBox: '0 0 120 86',
   needleOrigin: '60 60',
+  /** From inside the readout disc (r=17) to one unit inside the band (r=42). The disc is painted
+   *  after the needle, so only the blade outside its ring is ever visible. */
+  needlePath: 'M 60 43 L 60 18',
+  /** Sits on the pivot, masks the needle's root, and carries the score: the number can own the
+   *  centre because the disc is painted after the needle, not because the blade avoids the digits. */
+  readout: { cx: 60, cy: 60, radius: 19.5 },
+  /** Five scale ticks on the quarter marks, just inside the band (r=37..42). */
+  ticks: [
+    { score: 0, path: 'M 23 60 L 18 60' },
+    { score: 25, path: 'M 33.84 33.84 L 30.3 30.3' },
+    { score: 50, path: 'M 60 23 L 60 18' },
+    { score: 75, path: 'M 86.16 33.84 L 89.7 30.3' },
+    { score: 100, path: 'M 97 60 L 102 60' }
+  ],
   bucketTones: {
     'extreme-fear': 'extreme-fear',
     fear: 'fear',
@@ -38,7 +49,7 @@ export const FearGreedGaugePresentationPolicy = {
     { tone: 'greed', path: 'M 74.83 14.35 A 48 48 0 0 1 98.83 31.79' },
     { tone: 'extreme-greed', path: 'M 98.83 31.79 A 48 48 0 0 1 108 60' }
   ],
-  needleDegrees: (score: number): number => -90 + score / 100 * 180
+  needleDegrees: (score: number): number => -90 + score * 1.8
 } as const
 
 export const dashboardRealSourcePolicy = [
