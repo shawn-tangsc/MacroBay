@@ -1,9 +1,10 @@
+import type { AgentChatContextReference } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
 import type { DailyBriefEditorSessionPort } from './dailyBriefEditorSessionPort'
 import { dailyBriefSessionTitle } from './dailyBriefEditorSessionNaming'
 import type { DailyBriefSessionState } from './dailyBriefSessionLinks'
 
 export type DailyBriefAgentRunner = Readonly<{
-  start: (input: Readonly<{ editionKey: string; date: string; locale: 'zh-CN' | 'en-US'; prompt: string; topic?: string }>) => Promise<{ sessionId: string; created: boolean; assistantText: string }>
+  start: (input: Readonly<{ editionKey: string; date: string; locale: 'zh-CN' | 'en-US'; prompt: string; topic?: string; context?: AgentChatContextReference }>) => Promise<{ sessionId: string; created: boolean; assistantText: string }>
   continue: (sessionId: string, text: string) => Promise<string>
   finish: (editionKey: string, state: DailyBriefSessionState) => Promise<void>
 }>

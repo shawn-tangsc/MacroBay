@@ -16,7 +16,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   const prompt = buildDailyBriefingPrompt({ document: input.document, locale: input.locale })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   const editionKey = dailyBriefEditionKey(input.document.edition.date, input.locale)
-  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt })
+  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt, context: factSummary(input.document) })
   let response = started.assistantText
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
@@ -37,4 +37,18 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   }
   await input.runner.finish(editionKey, 'failed')
   return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId }
+}
+
+function factSummary(document: DailyBriefingDocument): Readonly<{ kind: string; label: string; detail: string }> {
+  const macro = document.news.macro.map((item) => `${item.title}：实际 ${item.actual ?? '—'} / 预期 ${item.consensus ?? '未收录'} / 前值 ${item.previous ?? '—'}`)
+  const news = document.news.items.map((item) => item.translatedTitle ?? item.title)
+  const data = [...document.data.market, ...document.data.funds].map((row) => `${row.id} ${row.value?.number ?? '—'}`)
+  const details = [
+    `窗口 ${document.edition.windowStart} → ${document.edition.windowEnd}`,
+    `宏观候选 ${macro.length}：${macro.join('；') || '无'}`,
+    `舆情候选 ${news.length}：${news.join('；') || '无'}`,
+    `数据：${data.join('；') || '无'}`,
+    document.conclusion ? `结论：${document.conclusion.summary.slice(0, 160)}` : '结论：无'
+  ].join('\n')
+  return Object.freeze({ kind: 'daily-briefing-facts', label: '日报输入事实', detail: details.slice(0, 1600) })
 }
