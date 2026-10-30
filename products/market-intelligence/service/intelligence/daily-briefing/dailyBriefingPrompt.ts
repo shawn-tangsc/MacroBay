@@ -162,7 +162,7 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
       'CANDIDATES:',
       JSON.stringify(candidates, null, 2),
       'Return this exact shape: {"stage":"select","focus":"<eventKey>","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}]}',
-      'Select only from the lists. Keep next/macro/news IDs exact. requests may ask for missing fields; do not invent values. List every unselected candidate in hidden with a reason.'
+      'Select only from the lists. Keep next/macro/news IDs exact. Choose at most 4 next events, 6 macro and 6 news that actually change the day; do not select everything. requests may ask for missing fields; do not invent values. List every unselected candidate in hidden with a reason.'
     ].join('\n') }
   ]
 }
