@@ -156,6 +156,17 @@ export type AgentTextWorkbench = {
       productToolPermissionDisabled: string
       productToolPermissionAllowReadOnly: string
       productToolPermissionPrompt: string
+      productToolPermissionLabel: string
+      productToolStatusAvailable: string
+      productToolStatusMissingHandler: string
+      productToolStatusNotInstalled: string
+      productToolSummary: (total: number, readOnly: number, writable: number, asOf: number) => string
+      productToolDisabledNote: string
+      productToolColumnTool: string
+      productToolColumnType: string
+      productToolColumnAsOf: string
+      productToolExpand: (count: number) => string
+      productToolCollapse: string
       staleProductToolBinding: string
       readOnlyBadge: string
       writableBadge: string
