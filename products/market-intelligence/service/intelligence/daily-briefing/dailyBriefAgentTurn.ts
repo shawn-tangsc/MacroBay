@@ -3,6 +3,7 @@ import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './d
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
+import { selectMacroFloorItem } from './dailyBriefingDocument'
 import {
   dailyBriefBackfillPolicy,
   isCanonicalDailyBriefBackfillTime,
@@ -327,6 +328,7 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown }
   const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
   const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
+  const macroCandidates = document.news.macroCandidates ?? document.news.macro
   const nextCandidates = document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
   const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
   const focusKey = typeof value.focus === 'string' ? value.focus : undefined
@@ -334,26 +336,40 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const selectedNext = nextKeys ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey) : document.next.items
   // Deterministic floor: the nearest upcoming event stays visible even if selection hid everything.
   const nextItems = selectedNext.length > 0 ? selectedNext : nextCandidates.slice(0, 1)
-  const shown = [
-    ...(newsIds ? [...newsIds] : document.news.items.map((item) => `news:${item.itemId}`)),
-    ...(macroIds ? [...macroIds] : document.news.macro.map((item) => `macro:${item.eventKey}`)),
-    ...(nextKeys ? [...nextKeys] : nextItems.map((item) => item.eventKey))
-  ]
+  const selectedNews = newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items
+  const selectedMacro = macroIds ? macroCandidates.filter((item) => macroIds.has(`macro:${item.eventKey}`)) : macroCandidates
+  // The high-impact floor is unioned into selection. Dropping every release, or selecting only
+  // lower-ranked ones, still leaves the key release for the writer to show or hide with a reason.
+  const macroFloor = selectMacroFloorItem(macroCandidates)
+  const macro = macroFloor && !selectedMacro.some((item) => item.eventKey === macroFloor.eventKey)
+    ? [macroFloor, ...selectedMacro]
+    : selectedMacro
+  const shown = [...new Set([
+    ...selectedNews.map((item) => `news:${item.itemId}`),
+    ...macro.map((item) => `macro:${item.eventKey}`),
+    ...(focus ? [focus.eventKey] : []),
+    ...nextItems.map((item) => item.eventKey)
+  ])]
   const hiddenEntries = Array.isArray((value as { hidden?: unknown }).hidden) ? (value as { hidden: unknown[] }).hidden : []
-  const hiddenReason = new Map(hiddenEntries.flatMap((entry) => entry && typeof entry === 'object' && typeof (entry as { factId?: unknown }).factId === 'string' && typeof (entry as { reason?: unknown }).reason === 'string' ? [[(entry as { factId: string }).factId, (entry as { reason: string }).reason] as const] : []))
+  const hiddenReason = new Map(hiddenEntries.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const factId = (entry as { factId?: unknown }).factId
+    const reason = (entry as { reason?: unknown }).reason
+    return typeof factId === 'string' && typeof reason === 'string' && reason.trim().length > 0 ? [[factId, reason] as const] : []
+  }))
   const allCandidates = [
     ...document.news.items.map((item) => `news:${item.itemId}`),
-    ...document.news.macro.map((item) => `macro:${item.eventKey}`),
+    ...macroCandidates.map((item) => `macro:${item.eventKey}`),
     ...nextCandidates.map((item) => item.eventKey)
   ]
-  const audit = Object.freeze({ shown: Object.freeze(shown), hidden: Object.freeze(allCandidates.filter((id) => !shown.includes(id)).map((factId) => Object.freeze({ factId, reason: hiddenReason.get(factId) ?? 'not selected' }))) })
+  const shownIds = new Set(shown)
+  const audit = Object.freeze({
+    shown: Object.freeze(shown),
+    hidden: Object.freeze(allCandidates.filter((factId) => !shownIds.has(factId)).map((factId) => Object.freeze({ factId, reason: hiddenReason.get(factId) ?? 'not selected' })))
+  })
   return Object.freeze({
     ...document,
-    news: Object.freeze({
-      ...document.news,
-      items: newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items,
-      macro: macroIds ? (document.news.macroCandidates ?? document.news.macro).filter((item) => macroIds.has(`macro:${item.eventKey}`)) : document.news.macro
-    }),
+    news: Object.freeze({ ...document.news, items: Object.freeze(selectedNews), macro: Object.freeze(macro) }),
     next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) }),
     provenance: Object.freeze({ ...document.provenance, selectionAudit: audit })
   })
