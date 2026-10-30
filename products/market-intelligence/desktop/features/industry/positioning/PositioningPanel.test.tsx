@@ -137,25 +137,25 @@ describe('funding bars per settlement period', () => {
     // overlap, which read as three bars in one band.
     const skewed: DashboardFundingRateHistoryState = {
       state: 'available',
-      btc: [{ observedAt: '2026-10-28T15:59:58.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' }],
-      eth: [{ observedAt: '2026-10-28T16:00:03.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
+      btc: [{ observedAt: '2026-10-28T23:59:58.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' }],
+      eth: [{ observedAt: '2026-10-29T00:00:02.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
     }
     const markup = render({ funding: skewed })
     const bars = [...markup.matchAll(/<rect[^>]*mi-positioning-panel__bar[^>]*>/g)]
     expect(bars).toHaveLength(2)
     // Both bars belong to the same period; flooring put one of them a day later.
     const periods = new Set(bars.map(bar => /data-settles-at="([^"]+)"/.exec(bar[0])?.[1]))
-    expect([...periods]).toEqual(['2026-10-28T16:00:00.000Z'])
+    expect([...periods]).toEqual(['2026-10-29T00:00:00.000Z'])
   })
 
   it('still draws one bar when a symbol reports twice inside the same period', () => {
     const duplicate: DashboardFundingRateHistoryState = {
       state: 'available',
       btc: [
-        { observedAt: '2026-10-28T16:00:00.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' },
-        { observedAt: '2026-10-28T16:00:02.000Z', ratePercent: 0.0071, paymentDirection: 'long-pays-short' }
+        { observedAt: '2026-10-28T23:59:58.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' },
+        { observedAt: '2026-10-29T00:00:02.000Z', ratePercent: 0.0071, paymentDirection: 'long-pays-short' }
       ],
-      eth: [{ observedAt: '2026-10-28T16:00:00.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
+      eth: [{ observedAt: '2026-10-29T00:00:00.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
     }
     expect([...render({ funding: duplicate }).matchAll(/class="mi-positioning-panel__bar"/g)].length).toBe(2)
   })

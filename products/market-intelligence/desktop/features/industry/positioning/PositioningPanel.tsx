@@ -59,7 +59,7 @@ export type PositioningPanelProps = Readonly<{
 
 // A strip above the plot belongs to the liquidation marks: a label drawn over the curves hid the
 // very movement it was pointing at.
-const VIEW = Object.freeze({ width: 800, height: 214, left: 40, right: 782, markerTop: 3, markerRow: 16, upperTop: 30, upperBottom: 112, zero: 166 })
+const VIEW = Object.freeze({ width: 800, height: 214, left: 30, right: 792, markerTop: 3, markerRow: 16, upperTop: 30, upperBottom: 112, zero: 166 })
 
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
@@ -220,7 +220,9 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   const periodMs = 8 * 3_600_000
   const fundingPoints = funding.state === 'available'
     ? [...funding.btc.map(point => ({ ...point, asset: 'btc' as const })), ...funding.eth.map(point => ({ ...point, asset: 'eth' as const }))]
-        .filter(point => Date.parse(point.observedAt) >= startMs - periodMs && Date.parse(point.observedAt) <= endMs)
+        // A settlement a few seconds after the newest reading still belongs to the last period,
+        // so the raw cut is loose and the snapped instant decides what is inside the window.
+        .filter(point => Date.parse(point.observedAt) >= startMs - periodMs && Date.parse(point.observedAt) <= endMs + periodMs)
     : []
   // One slot per funding period, not per timestamp: the two symbols settle a few seconds apart,
   // so placing a bar at each raw instant drew three and four bars inside one 8-hour band and let
@@ -231,6 +233,9 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   const slots = new Map<number, { btc?: number; eth?: number }>()
   for (const point of fundingPoints) {
     const settlesAt = Math.round(Date.parse(point.observedAt) / periodMs) * periodMs
+    // A period outside the window has no position on this axis; clamping it to an edge stacked
+    // several of them on one x, which is what looked like merged bars.
+    if (settlesAt < startMs || settlesAt > endMs) continue
     const slot = slots.get(settlesAt) ?? {}
     slot[point.asset] = point.ratePercent
     slots.set(settlesAt, slot)
