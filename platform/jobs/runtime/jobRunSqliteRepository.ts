@@ -314,11 +314,19 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
   }
 
   if (query.cursor) {
-    const cursor = db.prepare(`select id from job_runs where ${[...where, 'id = ?'].join(' and ')}`)
-      .get(...params, query.cursor)
-    if (!cursor) return []
-    where.push('id < ?')
-    params.push(query.cursor)
+    if (query.newestFirst) {
+      const cursor = db.prepare(`select id, created_at from job_runs where ${[...where, 'id = ?'].join(' and ')}`)
+        .get(...params, query.cursor) as { id: string; created_at: string } | undefined
+      if (!cursor) return []
+      where.push('(created_at < ? or (created_at = ? and id < ?))')
+      params.push(cursor.created_at, cursor.created_at, query.cursor)
+    } else {
+      const cursor = db.prepare(`select id from job_runs where ${[...where, 'id = ?'].join(' and ')}`)
+        .get(...params, query.cursor)
+      if (!cursor) return []
+      where.push('id < ?')
+      params.push(query.cursor)
+    }
   }
 
   const rows = db
@@ -329,7 +337,7 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
          progress_json, logs_json
        from job_runs
        ${where.length > 0 ? `where ${where.join(' and ')}` : ''}
-       order by id desc limit ?`
+       order by ${query.newestFirst ? 'created_at desc, id desc' : 'id desc'} limit ?`
     )
     .all(...params, limit + 1) as JobRunRow[]
   return rows

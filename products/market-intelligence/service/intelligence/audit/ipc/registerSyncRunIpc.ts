@@ -29,7 +29,7 @@ export function registerSyncRunIpc(
       const auditRows = audit
         ? audit.list({ since: sinceOf(query.window, nowMs), limit: SYNC_RUN_LIMITS.maximumLimit })
           .map(projectSyncAudit)
-          .filter((row) => query.sourceId === undefined || row.sourceId === query.sourceId)
+          .filter((row) => query.sourceId === undefined || row.sources.some((source) => source.sourceId === query.sourceId))
           .filter((row) => query.outcome === undefined || row.outcome === query.outcome)
         : []
       const rows = [...jobRows, ...auditRows].sort((left, right) => right.at.localeCompare(left.at))

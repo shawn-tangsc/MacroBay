@@ -39,19 +39,28 @@ export function sanitize(value: unknown): SyncRunResult {
 
 function readRow(value: unknown): SyncRunRow | undefined {
   if (!isObject(value) || typeof value.at !== 'string' || typeof value.runId !== 'string') return undefined
-  if (typeof value.sourceLabel !== 'string' || typeof value.handlerId !== 'string') return undefined
+  if (typeof value.taskLabel !== 'string' || typeof value.handlerId !== 'string') return undefined
   const action = value.action as SyncRunRow['action']
   if (!['collect', 'refresh', 'analysis', 'configure', 'test', 'import', 'other'].includes(action)) return undefined
   const outcome = value.outcome
   if (outcome !== 'succeeded' && outcome !== 'failed' && outcome !== 'cancelled' && outcome !== 'running') return undefined
   return {
-    at: value.at, runId: value.runId, sourceLabel: value.sourceLabel, handlerId: value.handlerId, action, outcome,
+    at: value.at, runId: value.runId, taskLabel: value.taskLabel, handlerId: value.handlerId, action, outcome,
+    sources: readSources(value.sources),
     correlationId: typeof value.correlationId === 'string' ? value.correlationId : value.runId,
-    ...(typeof value.sourceId === 'string' ? { sourceId: value.sourceId } : {}),
     ...(typeof value.durationMs === 'number' ? { durationMs: value.durationMs } : {}),
     ...(typeof value.failureCode === 'string' ? { failureCode: value.failureCode } : {}),
     ...(typeof value.detail === 'string' ? { detail: value.detail } : {})
   }
+}
+
+function readSources(value: unknown): SyncRunRow['sources'] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((entry) => isObject(entry) && typeof entry.sourceId === 'string' && typeof entry.label === 'string'
+      ? { sourceId: entry.sourceId, label: entry.label }
+      : undefined)
+    .filter((entry): entry is { sourceId: string; label: string } => entry !== undefined)
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

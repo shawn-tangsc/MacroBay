@@ -18,8 +18,15 @@ export type SyncRunRow = Readonly<{
   /** `completed_at`, else `started_at`, else `created_at`. */
   at: string
   runId: string
-  sourceId?: string
-  sourceLabel: string
+  /** The job that ran, in the reader's language ("AI 分析", "官方日历排期"). */
+  taskLabel: string
+  /**
+   * The sources this run touched, from its own payload.
+   *
+   * One task can serve many sources (`collectSource` runs once per source) and one source is read by
+   * several tasks, so a single source column would be a lie either way.
+   */
+  sources: readonly Readonly<{ sourceId: string; label: string }>[]
   handlerId: string
   action: SyncRunAction
   /** `runId` for job rows, a generated id for product-side actions; the key that ties a chain. */

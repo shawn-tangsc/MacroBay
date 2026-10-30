@@ -14,7 +14,10 @@ import './sync-run-section.css'
  */
 export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
-  columns: Readonly<Record<'time' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
+  columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
+  allTasks: string
+  /** Shown when a run reads every source (analysis, snapshots) rather than a named one. */
+  allSourcesNote: string
   allSources: string
   showing: string
   retention: string
@@ -35,6 +38,7 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   const [outcome, setOutcome] = useState<SyncRunQuery['outcome']>()
   const [state, setState] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [rows, setRows] = useState<readonly SyncRunRow[]>([])
+  const [taskFilter, setTaskFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
   const [page, setPage] = useState(0)
   const [notice, setNotice] = useState<string>()
@@ -52,9 +56,11 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
     return () => { cancelled = true }
   }, [window, outcome])
 
-  const sources = [...new Map(rows.map((row) => [row.sourceLabel, row.sourceLabel])).keys()].sort()
+  const tasks = [...new Set(rows.map((row) => row.taskLabel))].sort()
+  const sources = [...new Map(rows.flatMap((row) => row.sources).map((source) => [source.sourceId, source.label])).entries()].sort((left, right) => left[1].localeCompare(right[1]))
   const filtered = rows
-    .filter((row) => sourceFilter === '' || row.sourceLabel === sourceFilter)
+    .filter((row) => taskFilter === '' || row.taskLabel === taskFilter)
+    .filter((row) => sourceFilter === '' || row.sources.some((source) => source.sourceId === sourceFilter))
     .filter((row) => outcome === undefined || row.outcome === outcome)
   const pageSize = SYNC_RUN_PAGE_SIZE
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
@@ -82,10 +88,16 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
             {WINDOWS.map((value) => <option key={value} value={value}>{text.window[value]}</option>)}
           </select>
         </label>
+        <label>{text.columns.task}
+          <select value={taskFilter} onChange={(event) => { setTaskFilter(event.target.value); setPage(0) }}>
+            <option value="">{text.allTasks}</option>
+            {tasks.map((task) => <option key={task} value={task}>{task}</option>)}
+          </select>
+        </label>
         <label>{text.columns.source}
           <select value={sourceFilter} onChange={(event) => { setSourceFilter(event.target.value); setPage(0) }}>
             <option value="">{text.allSources}</option>
-            {sources.map((source) => <option key={source} value={source}>{source}</option>)}
+            {sources.map(([sourceId, label]) => <option key={sourceId} value={sourceId}>{label}</option>)}
           </select>
         </label>
         <label>{text.columns.outcome}
@@ -107,6 +119,7 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
           cannot lay itself out on a different grid from the body. */}
       <div className="mi-sync-run__grid mi-sync-run__grid--head" role="row">
         <span role="columnheader">{text.columns.time}</span>
+        <span role="columnheader">{text.columns.task}</span>
         <span role="columnheader">{text.columns.source}</span>
         <span role="columnheader">{text.columns.action}</span>
         <span role="columnheader">{text.columns.outcome}</span>
@@ -115,7 +128,11 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
       </div>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at)}</span>
-        <span className="mi-sync-run__source" role="cell" title={row.sourceLabel}>{row.sourceLabel}</span>
+        <span className="mi-sync-run__task" role="cell" title={row.taskLabel}>{row.taskLabel}</span>
+        <span className="mi-sync-run__source" role="cell" title={row.sources.map((source) => source.label).join(' · ')}>
+          {row.sources.length === 0 ? text.allSourcesNote : row.sources.slice(0, 2).map((source) => source.label).join(' · ')}
+          {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
+        </span>
         <span role="cell">{text.actions[row.action]}</span>
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
         <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>

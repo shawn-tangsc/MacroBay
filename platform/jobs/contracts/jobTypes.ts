@@ -93,6 +93,14 @@ export type JobRunQuery = {
   definitionIdPrefix?: string
   payload?: Record<string, unknown>
   cursor?: string | null
+  /**
+   * Order by time rather than by the run id as a string.
+   *
+   * Ids are `prefix + sequence`, so once the sequence passes 9999 the string order stops matching
+   * the time order: `…-9999` sorts above `…-19771`, and a "latest runs" query silently returns a
+   * month-old page.
+   */
+  newestFirst?: boolean
   limit?: number
 }
 
