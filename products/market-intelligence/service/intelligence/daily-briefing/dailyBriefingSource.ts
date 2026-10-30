@@ -269,11 +269,12 @@ function surpriseView(
   })
 }
 
-function calendarMonths(asOf: string): readonly [string, string] {
+function calendarMonths(asOf: string): readonly string[] {
   const month = asOf.slice(0, 7)
   const [year, index] = month.split('-').map(Number) as [number, number]
+  const previous = index === 1 ? `${year - 1}-12` : `${year}-${String(index - 1).padStart(2, '0')}`
   const next = index === 12 ? `${year + 1}-01` : `${year}-${String(index + 1).padStart(2, '0')}`
-  return [month, next]
+  return [previous, month, next]
 }
 
 async function safe<T>(read: () => Promise<T>, fallback: T): Promise<T> {
