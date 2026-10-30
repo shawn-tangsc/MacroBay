@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import { MiSideDrawer } from './MiSideDrawer'
 
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+import { conclusionView, percentOf } from './policyPathSettlementText'
 import './policyPathDrawer.css'
 
 /**
@@ -26,6 +27,11 @@ export type PolicyPathDrawerText = Readonly<{
   /** "The median is one 25bp step above the range midpoint" - the design's core question. */
   sepSteps: string; sepStepsLevel: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
+  /** The settlement section: the realised band against the price one hour before it. */
+  settlementTitle: string; settlementPricedLabel: string; settlementLeadingLabel: string
+  settlementConclusionLabel: string; previousRange: string; newTargetRange: string; voteTally: string
+  settlementActual: string; settlementPricedMissing: string
+  settlementPricedConclusion: string; settlementRelative: string; settlementConclusionMissing: string
 }>
 
 /**
@@ -45,13 +51,20 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
 }>): React.ReactElement {
   const probability = reading.probability
   const vote = reading.lastDecision?.vote
+  // On the decision day the next meeting is the one after the realised one; the calendar still
+  // returns today's meeting until the date passes, so the strip's own next meeting wins.
+  const nextMeeting = reading.settlement?.nextMeeting
+  const meetingDate = nextMeeting?.meetingDate ?? reading.meetingDate
+  const daysAway = nextMeeting?.daysUntil ?? reading.daysUntilMeeting
   return <MiSideDrawer title={text.title} closeLabel={text.close} onClose={onClose}
     meta={<>
-      <span>{text.meeting} {reading.meetingDate.slice(5)} · {text.daysAway.replace('{days}', String(reading.daysUntilMeeting))}</span>
+      <span>{text.meeting} {meetingDate.slice(5)} · {text.daysAway.replace('{days}', String(daysAway))}</span>
       {reading.hasProjectionMaterials ? <em className="mi-policy-drawer__chip">{text.projection}</em> : null}
     </>}>
 
-    <div className="mi-policy-drawer__hero">
+    {/* While the strip is up the odds below belong to a meeting that already decided; showing them
+        would put a pre-decision price under a post-decision result. */}
+    {reading.phase.kind === 'settlement' ? null : <div className="mi-policy-drawer__hero">
       <span className="mi-policy-drawer__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
       <span className="mi-policy-drawer__hero-label">{probability
         ? `${Number(reading.meetingDate.slice(5, 7))} 月${text.outcomes[probability.outcome]}`
@@ -59,7 +72,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       {probability?.changeInPp24h === undefined ? null : <span className="mi-policy-drawer__delta" data-direction={probability.changeInPp24h > 0 ? 'up' : probability.changeInPp24h < 0 ? 'down' : 'flat'}>
         {probability.changeInPp24h > 0 ? '+' : ''}{probability.changeInPp24h.toFixed(1)}pp · {text.change24h}
       </span>}
-    </div>
+    </div>}
+
+    {reading.settlement ? <SettlementSection reading={reading} text={text} /> : null}
 
     <section className="mi-policy-drawer__section">
       <h3>{text.sepPath}
@@ -118,4 +133,43 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       </dl>
     </section>
   </MiSideDrawer>
+}
+
+/**
+ * The settlement section: what the meeting did, what the market had priced an hour before it, and
+ * the gap between the two. It repeats the card's arithmetic from the same reading, so the two
+ * surfaces cannot describe the same decision differently.
+ */
+function SettlementSection({ reading, text }: Readonly<{ reading: PolicyPathReading; text: PolicyPathDrawerText }>): React.ReactElement | null {
+  const settlement = reading.settlement
+  if (!settlement) return null
+  const conclusion = conclusionView(settlement, text)
+  const vote = reading.lastDecision?.vote
+  const next = settlement.nextMeeting
+  const range = (value: Readonly<{ lowerPercent: number; upperPercent: number }> | undefined) => value
+    ? `${value.lowerPercent.toFixed(2)}–${value.upperPercent.toFixed(2)}%`
+    : '—'
+  return <section className="mi-policy-drawer__section" data-settlement>
+    <h3>{text.settlementTitle}</h3>
+    <div className="mi-policy-drawer__settle">
+      <b>{text.outcomes[settlement.actualOutcome]}</b>
+      <span>{text.settlementActual.replace('{date}', settlement.decidedMeetingDate.slice(5))}</span>
+      {conclusion ? <em className="mi-policy-drawer__conclusion" data-direction={conclusion.direction}>{conclusion.label}</em> : null}
+    </div>
+    <dl className="mi-policy-drawer__kv">
+      <div><dt>{text.settlementPricedLabel}</dt><dd>{settlement.priced === undefined
+        ? text.settlementPricedMissing
+        : percentOf(settlement.priced)}</dd></div>
+      <div><dt>{text.settlementLeadingLabel}</dt><dd>{settlement.pricedOutcome
+        ? text.outcomes[settlement.pricedOutcome]
+        : '—'}</dd></div>
+      <div><dt>{text.settlementConclusionLabel}</dt><dd>{conclusion?.label ?? text.settlementConclusionMissing}</dd></div>
+      <div><dt>{text.previousRange}</dt><dd>{range(settlement.previousTargetRange)}</dd></div>
+      <div><dt>{text.newTargetRange}</dt><dd>{range(reading.targetRange)}</dd></div>
+      <div><dt>{text.voteTally}</dt><dd>{vote ? `${vote.for}–${vote.against}` : '—'}</dd></div>
+      <div><dt>{text.meeting}</dt><dd>{next
+        ? `${next.meetingDate.slice(5)} · ${text.daysAway.replace('{days}', String(next.daysUntil))}`
+        : '—'}</dd></div>
+    </dl>
+  </section>
 }

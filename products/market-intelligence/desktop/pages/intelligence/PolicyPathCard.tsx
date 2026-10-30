@@ -2,9 +2,10 @@ import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
 
-import { formatPp, formatSignedPp } from '../../../contracts/policyPath'
+import { formatSignedPp } from '../../../contracts/policyPath'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+import { conclusionView, percentOf, settledFor } from './policyPathSettlementText'
 
 /**
  * The policy reading as a rail card.
@@ -44,9 +45,6 @@ export type PolicyPathCardText = Readonly<{
 
 const signedCount = (value: number): string => `${value > 0 ? '+' : ''}${value}`
 
-/** The share of the odds as the card writes it: whole percent, since a pp of noise is not readable. */
-const percent = (share: number): string => `${(share * 100).toFixed(0)}%`
-
 export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   reading: PolicyPathReading
   text: PolicyPathCardText
@@ -80,7 +78,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
         ? <span className="mi-policy-card__phase" data-phase="verdict">{text.phaseVerdict}</span>
         : null
 
-  const conclusion = settlement ? settlementConclusion(settlement, text) : undefined
+  const conclusion = conclusionView(settlement, text)
   const meetingValue = (date: string, days: number) => <>
     {date.slice(5)}<span className="mi-policy-card__muted"> · {text.daysAway.replace('{days}', String(days))}</span>
   </>
@@ -220,35 +218,9 @@ function SettlementBlock({ settlement, text }: Readonly<{ settlement: PolicyPath
   return <div className="mi-policy-card__upgrade">
     <b>{settlement.priced === undefined
       ? text.settlementPricedMissing
-      : text.settlementPriced.replace('{value}', percent(settlement.priced))}</b>
+      : text.settlementPriced.replace('{value}', percentOf(settlement.priced))}</b>
     <span>{settlement.pricedOutcome
       ? text.settlementOutcomeLine.replace('{actual}', actual).replace('{priced}', text.outcomes[settlement.pricedOutcome])
       : text.settlementOutcomeLineNoPricing.replace('{actual}', actual)}</span>
   </div>
-}
-
-/** "Settled 42 minutes ago" — the unit follows the elapsed time, never "2634 minutes". */
-function settledFor(minutesSinceDecision: number, text: PolicyPathCardText): string {
-  return minutesSinceDecision < 60
-    ? text.settledMinutes.replace('{minutes}', String(minutesSinceDecision))
-    : text.settledHours.replace('{hours}', String(Math.floor(minutesSinceDecision / 60)))
-}
-
-/**
- * The quantitative gap only. The direction is carried by the sign and the colour; naming a motive
- * ("dovish", "hawkish") would assert something the comparison of two bands does not contain.
- */
-function settlementConclusion(
-  settlement: PolicyPathSettlement,
-  text: PolicyPathCardText
-): Readonly<{ label: string; direction: 'hawkish' | 'dovish' | 'priced' }> | undefined {
-  const conclusion = settlement.conclusion
-  if (conclusion.kind === 'priced') return { label: text.settlementPricedConclusion, direction: 'priced' }
-  if (conclusion.kind === 'relative') {
-    return {
-      label: text.settlementRelative.replace('{value}', `${conclusion.direction === 'hawkish' ? '+' : '-'}${formatPp(conclusion.surprisePp)}`),
-      direction: conclusion.direction
-    }
-  }
-  return undefined
 }
