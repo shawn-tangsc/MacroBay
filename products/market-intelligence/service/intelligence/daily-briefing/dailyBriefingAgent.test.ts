@@ -199,5 +199,6 @@ describe('daily briefing web evidence', () => {
     if (valid.ok) expect(applyDailyBriefingEditorial(document(), valid.value, { promptVersion: 'v1', model: 'm', source: 'default' }).citations.at(-1)?.sourceLabel).toBe('BLS')
     expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence }, document(), 'zh-CN', [])).toMatchObject({ ok: false })
     expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence: [{ ...webEvidence[0], publishedAt: '2026-10-30T01:00:00.000Z' }] }, document(), 'zh-CN', tool)).toMatchObject({ ok: false })
+    expect(validateDailyBriefingEditorial({ ...validOutput, webEvidence: [{ ...webEvidence[0], field: 'actual', value: '3.4%' }] }, document(), 'zh-CN', tool)).toMatchObject({ ok: false })
   })
 })

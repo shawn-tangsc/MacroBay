@@ -90,11 +90,14 @@ export function validateDailyBriefingEditorial(
   const webEvidence: DailyBriefWebEvidenceRef[] = []
   if (raw.webEvidence !== undefined) {
     if (!Array.isArray(raw.webEvidence) || raw.webEvidence.length > 3) return fail('invalid-shape')
+    if (toolInvocations.filter((invocation) => invocation.toolName === 'WebSearch').length > 6) return fail('invalid-shape')
     const results = collectToolResults(toolInvocations)
     for (const entry of raw.webEvidence) {
       if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return fail('invalid-shape')
       if (!isText(entry.eventKey) || !isText(entry.field) || !isText(entry.value) || !isText(entry.sourceName) || !isText(entry.sourceUrl) || !isText(entry.publishedAt)) return fail('invalid-shape')
+      const macro = document.news.macro.find((item) => item.eventKey === entry.eventKey)
       if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact')
+      if (entry.field === 'actual' && macro?.actual) return fail('invalid-shape')
       if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return fail('invalid-shape')
       const result = results.get(entry.sourceUrl)
       if (!result || result.publishedAt !== entry.publishedAt) return fail('invalid-shape')
