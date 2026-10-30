@@ -56,7 +56,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
       {doc.news.items.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
         <span data-polarity={item.polarity}>{formatTime(item.publishedAt, 'minute').slice(11, 16)}</span>
         <div>
-          <p>{item.translatedTitle ?? item.title}</p>
+          <p>{item.translatedTitle ?? item.title}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
           {item.why ? <small>{item.why}</small> : null}
         </div>
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>

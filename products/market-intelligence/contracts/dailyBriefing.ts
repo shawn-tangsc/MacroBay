@@ -9,10 +9,10 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  */
 export const dailyBriefingPolicy = Object.freeze({
   schemaVersion: 3,
-  policyVersion: 'daily-briefing.v12',
+  policyVersion: 'daily-briefing.v13',
   windowHours: 24,
   maximumBytes: 256 * 1024,
-  maximumNewsItems: 3,
+  maximumNewsItems: 50,
   maximumMacroItems: 50,
   maximumNextItems: 3,
   maximumCounterEvidence: 3,
@@ -25,7 +25,7 @@ export const dailyBriefingPolicy = Object.freeze({
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12'
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'

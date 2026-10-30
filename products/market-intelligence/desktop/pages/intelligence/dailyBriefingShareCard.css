@@ -159,3 +159,5 @@
 .mi-brief-poster__macro-head { margin: 14px 0 4px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
 
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
+
+.mi-brief-poster__news-focus { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 3px; background: #f7e8c8; color: #8a5a12; font-size: 8px; font-weight: 700; vertical-align: 1px; }
