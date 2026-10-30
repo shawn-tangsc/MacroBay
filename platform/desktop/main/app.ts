@@ -2515,6 +2515,10 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       registerProductDisposer: productServiceDisposerRegistry.register,
       getAgentState: () => agentStore.getState(),
       createAgentSession: (input) => agentServices.sessions.create(input),
+      sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
+      appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
+      updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
+      deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
       invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
       invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
       assistantInvocation: assistantInvocationService
