@@ -59,7 +59,9 @@ export type PositioningPanelProps = Readonly<{
 
 // A strip above the plot belongs to the liquidation marks: a label drawn over the curves hid the
 // very movement it was pointing at.
-const VIEW = Object.freeze({ width: 800, height: 214, left: 30, right: 792, markerTop: 3, markerRow: 16, upperTop: 30, upperBottom: 112, zero: 166 })
+// The viewBox is drawn at roughly the width the card is, so the svg scales ~1:1: text keeps its
+// nominal size and the drawing is 186 units tall instead of being blown up with the container.
+const VIEW = Object.freeze({ width: 1000, height: 186, left: 32, right: 992, markerTop: 3, markerRow: 16, upperTop: 26, upperBottom: 92, zero: 142 })
 
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
@@ -241,7 +243,7 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
     slots.set(settlesAt, slot)
   }
   const maximumRate = Math.max(...[...slots.values()].flatMap(slot => [slot.btc, slot.eth]).map(value => Math.abs(value ?? 0)), 0.001)
-  const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 12)
+  const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 10)
   const rateY = (value: number) => VIEW.zero - (value / maximumRate) * barCentre
   const band = Math.max(2, (8 * 3_600_000 / span) * (VIEW.right - VIEW.left))
   // Two bars share one 8-hour band, one per asset. Drawn on the same centre they painted over

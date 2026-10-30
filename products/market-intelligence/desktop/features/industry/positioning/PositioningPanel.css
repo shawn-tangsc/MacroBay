@@ -3,7 +3,7 @@
   display: grid;
   gap: 10px;
   min-width: 0;
-  padding: 14px 0;
+  padding: 6px 0 10px;
   border-bottom: 1px solid var(--mi-dashboard-line);
 }
 
