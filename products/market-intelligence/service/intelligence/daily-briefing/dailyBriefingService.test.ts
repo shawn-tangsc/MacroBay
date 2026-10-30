@@ -323,16 +323,13 @@ describe('daily briefing service', () => {
     }
   })
 
-  it('regenerates the same day, overwrites the row and applies the editorial layer', async () => {
+  it('regenerates the same day, overwrites the row and applies the agent editorial', async () => {
     const store = memoryStore()
     const source = fakeSource()
-    let calls = 0
+    const starts: number[] = []
     const service = createDailyBriefingService({
       source, store, now: () => asOf,
-      editorial: async ({ document }) => {
-        calls += 1
-        return { document: { ...document, lede: { ...document.lede, source: 'agent', text: 'AI lede' } }, state: 'agent' }
-      }
+      agentRunner: acceptingAgentRunner(starts)
     })
     const first = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     const second = await service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
@@ -340,22 +337,30 @@ describe('daily briefing service', () => {
     expect(second.state).toBe('available')
     if (first.state === 'available' && second.state === 'available') {
       expect(first.document.lede.source).toBe('agent')
-      expect(second.document.lede.text).toBe('AI lede')
+      expect(second.document.lede.text).toBe('事实层导语。')
     }
     expect(source.calls).toBe(2)
-    expect(calls).toBe(2)
+    expect(starts).toHaveLength(2)
     expect(store.rows.size).toBe(1)
   })
 
-  it('keeps the template when the editorial layer throws', async () => {
+  it('publishes the fact layer without starting a session when the AI editor is disabled', async () => {
     const store = memoryStore()
+    const starts: number[] = []
     const service = createDailyBriefingService({
       source: fakeSource(), store, now: () => asOf,
-      editorial: async () => { throw new Error('model down') }
+      agentRunner: acceptingAgentRunner(starts),
+      editorialEnabled: async () => false
     })
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(starts).toHaveLength(0)
+    expect(store.rows.size).toBe(1)
     expect(result.state).toBe('available')
-    if (result.state === 'available') expect(result.document.lede.source).toBe('template')
+    if (result.state === 'available') {
+      expect(result.document.lede.source).toBe('template')
+      expect(result.document.provenance.editorialFailure).toBe('editorial-disabled')
+    }
   })
 
   it('coalesces concurrent opens into one generation', async () => {

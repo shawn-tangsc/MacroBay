@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
-import { createDailyBriefingAgent } from './dailyBriefingAgent'
-import { buildDailyBriefingPrompt } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 
 const document = (): DailyBriefingDocument => ({
@@ -173,66 +171,6 @@ describe('daily briefing editorial validation and application', () => {
     const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
     expect(applied.news.items[0]).toMatchObject({ itemId: 'n1', visibility: 'shown' })
     expect(applied.news.macro[0]).toMatchObject({ eventKey: 'US.CPI', visibility: 'shown' })
-  })
-})
-
-describe('daily briefing agent', () => {
-  it('turns a valid model answer into an agent edition', async () => {
-    const invoke = vi.fn(async () => ({
-      ok: true as const, output: JSON.stringify(validOutput), providerId: 'p', modelId: 'm1',
-      trace: { taskId: 't', durationMs: 1 }
-    }))
-    const agent = createDailyBriefingAgent({ invoke: invoke as never })
-    const result = await agent.generate({ document: document(), locale: 'zh-CN', providerId: 'p', modelId: 'm1', source: 'custom' })
-    expect(result.state).toBe('agent')
-    expect(result.document.lede.source).toBe('agent')
-    expect(result.document.next.focus?.why).toContain('rate decision')
-    expect(result.document.next.focus?.watch).toHaveLength(2)
-    expect(result.document.provenance.editorialMeta).toEqual({ promptVersion: 'daily-briefing.editorial.v1', model: 'm1', source: 'custom' })
-  })
-
-  it('recovers a valid object wrapped in prose', async () => {
-    const invoke = vi.fn(async () => ({
-      ok: true as const,
-      output: `Here is the briefing JSON.\n${JSON.stringify(validOutput)}\nDone.`,
-      providerId: 'p', modelId: 'm1', trace: { taskId: 't', durationMs: 1 }
-    }))
-    const agent = createDailyBriefingAgent({ invoke: invoke as never })
-    expect(await agent.generate({ document: document(), locale: 'zh-CN' })).toMatchObject({ state: 'agent' })
-  })
-
-  it('repairs a validation failure in a follow-up turn', async () => {
-    const invalid = { ...validOutput, lede: '999 是事实包外的数字。' }
-    const invoke = vi.fn()
-      .mockResolvedValueOnce({ ok: true as const, output: JSON.stringify(invalid), providerId: 'p', modelId: 'm1', trace: { taskId: 't1', durationMs: 1 } })
-      .mockResolvedValueOnce({ ok: true as const, output: JSON.stringify(validOutput), providerId: 'p', modelId: 'm1', trace: { taskId: 't2', durationMs: 1 } })
-    const agent = createDailyBriefingAgent({ invoke: invoke as never })
-    const result = await agent.generate({ document: document(), locale: 'zh-CN' })
-    expect(result.state).toBe('agent')
-    expect(invoke).toHaveBeenCalledTimes(2)
-    expect((invoke.mock.calls[1]?.[0] as { messages: unknown[] }).messages).toHaveLength(4)
-  })
-
-  it('falls back to the untouched template on an error, invalid JSON or a bad fact', async () => {
-    const template = document()
-    const failing = createDailyBriefingAgent({ invoke: vi.fn(async () => ({ ok: false as const, errorCode: 'timeout' as const, trace: { taskId: 't', durationMs: 1 } })) as never })
-    expect(await failing.generate({ document: template, locale: 'zh-CN' })).toMatchObject({ state: 'template', failureCode: 'timeout', document: template })
-
-    const invalidJson = createDailyBriefingAgent({ invoke: vi.fn(async () => ({ ok: true as const, output: '{bad', providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 } })) as never })
-    expect(await invalidJson.generate({ document: template, locale: 'zh-CN' })).toMatchObject({ state: 'template', failureCode: 'invalid-json' })
-
-    const badFact = createDailyBriefingAgent({ invoke: vi.fn(async () => ({ ok: true as const, output: JSON.stringify({ ...validOutput, items: [{ factId: 'news:nope', why: 'x' }] }), providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 } })) as never })
-    expect(await badFact.generate({ document: template, locale: 'zh-CN' })).toMatchObject({ state: 'template', failureCode: 'unknown-fact' })
-  })
-
-  it('gives the model only the frozen facts and their ids', () => {
-    const messages = buildDailyBriefingPrompt({ document: document(), locale: 'zh-CN' })
-    const text = messages.map((message) => message.content).join('\n')
-    expect(text).toContain('news:n1')
-    expect(text).toContain('macro:US.CPI')
-    expect(text).toContain('data:btc')
-    expect(text).toContain('mustFloor')
-    expect(text).not.toContain('http')
   })
 })
 

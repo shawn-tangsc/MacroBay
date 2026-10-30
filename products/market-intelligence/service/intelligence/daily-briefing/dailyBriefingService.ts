@@ -66,13 +66,6 @@ export type DailyBriefingListResultView =
   | Readonly<{ state: 'available'; result: DailyBriefingListResult }>
   | Readonly<{ state: 'unavailable'; failureCode: 'time-invalid' }>
 
-export type DailyBriefingEditorialResult = Readonly<{
-  document: DailyBriefingDocument
-  state: 'agent' | 'template'
-  failureCode?: string
-  failureDetail?: string
-}>
-
 export type DailyBriefingService = Readonly<{
   getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
   regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
@@ -83,7 +76,6 @@ export type DailyBriefingService = Readonly<{
 export function createDailyBriefingService(deps: Readonly<{
   source: DailyBriefingSource
   store: DailyBriefingStore
-  editorial?: (input: Readonly<{ document: DailyBriefingDocument; locale: DailyBriefingLocale }>) => Promise<DailyBriefingEditorialResult>
   agentRunner?: DailyBriefAgentRunner
   /**
    * The model the editor session may call, resolved at generation time. When it reports `disabled`
@@ -188,19 +180,9 @@ export function createDailyBriefingService(deps: Readonly<{
           document = markEditorialFailure(document, turn.failureCode, turn.failureDetail, turn.sessionId)
         }
       }
-    } else if (deps.editorial && editorialEnabled) {
-      try {
-        const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 120_000)
-        document = editorial.document
-        if (editorial.state !== 'agent') {
-          if (editorial.failureCode !== 'editorial-disabled') publish = false
-          document = markEditorialFailure(document, editorial.failureCode ?? 'editorial-fallback', editorial.failureDetail)
-        }
-      } catch {
-        publish = false
-        document = markEditorialFailure(document, 'editorial-timeout')
-      }
     } else if (!editorialEnabled) {
+      // AI off is the fact-layer edition: it is published, and the provenance records why no agent
+      // ran. A failed agent turn or an unavailable model keeps `publish` false and is never stored.
       document = markEditorialFailure(document, 'editorial-disabled')
     }
     if (publish) {

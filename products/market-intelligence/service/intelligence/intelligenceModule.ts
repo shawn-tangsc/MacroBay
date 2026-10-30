@@ -61,7 +61,6 @@ import { createNewsSentimentBodyTranslationService } from './news-sentiment/news
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
-import { createDailyBriefingAgent } from './daily-briefing/dailyBriefingAgent'
 import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
@@ -730,7 +729,6 @@ export function getIntelligenceModule(
       ai: dailyBriefingAiSettings,
       generation: dailyBriefingGenerationSettings
     })
-    const dailyBriefingAgent = createDailyBriefingAgent({ invoke: structuredModelInvocation.invoke })
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
     const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
       ? createDailyBriefEditorSessionPort({
@@ -764,17 +762,6 @@ export function getIntelligenceModule(
           },
         profiles: profileStore
       }),
-      editorial: async ({ document, locale }) => {
-        const view = await dailyBriefingAiSettings.getView()
-        if (view.resolved.state !== 'agent') return { document, state: 'template' as const, failureCode: view.resolved.state === 'disabled' ? 'editorial-disabled' : 'model-unavailable' }
-        return dailyBriefingAgent.generate({
-          document,
-          locale,
-          providerId: view.resolved.providerId,
-          modelId: view.resolved.modelId,
-          source: view.resolved.source
-        })
-      },
       store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite')),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),

@@ -2,8 +2,6 @@ import type { StructuredModelMessage } from '@platform/ai/invocation/structuredM
 
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 
-export const dailyBriefingPromptVersion = 'daily-briefing.editorial.v1'
-
 /**
  * The editorial prompt is bounded to the frozen document: the model may add prose and a visibility
  * ranking, never a new fact. Every fact it can name has an id in `facts`, and every number it may
