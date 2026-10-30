@@ -260,7 +260,7 @@ export type ProductServiceDependencies = {
   sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
-  deleteAgentSessions?: (sessionIds: string[]) => Promise<void>
+  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   invokeProductAgentTool?: (
     state: AgentStoreState,
     input: ProductAgentToolInvokeInput

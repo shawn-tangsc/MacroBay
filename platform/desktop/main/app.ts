@@ -5,7 +5,7 @@ import { release } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import type { AgentChatRuntimeRequest } from '../../ai/agent-platform/runtime/agentChatRuntime'
+import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/agent-platform/runtime/agentChatRuntime'
 import { AgentSessionRuntimeService } from '../../ai/agent-platform/runtime/AgentSessionRuntimeService'
 import { createAgentRuntimeConsoleTraceRecorder } from '../../ai/agent-platform/runtime/AgentRuntimeOpenTelemetryTraceRecorder'
 import { AgentRuntimeCompositionService } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
@@ -132,7 +132,7 @@ import {
   type BuiltinSeedLanguageVariant
 } from '../../ai/agent-platform/seeds'
 import type { ProductAgentSeedFactory } from '../../ai/agent-platform/seeds/mergeAgentSeeds'
-import type { AgentSessionEntity, CreateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
+import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
 import type { ProductAgentToolHandlerRegistration } from '../../ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 import {
   ProductAgentToolRegistry,
@@ -1262,6 +1262,10 @@ export type DesktopAppBootstrapOptions = {
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
     getAgentState?: () => Promise<AgentStoreState>
     createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
+    sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
+    appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
+    updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
+    deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
     invokeProductAgentTool?: (
       state: AgentStoreState,
       input: ProductAgentToolInvokeInput
