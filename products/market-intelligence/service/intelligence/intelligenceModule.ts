@@ -184,6 +184,7 @@ export type IntelligenceModulePlatformHooks = {
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
+  isWebSearchProviderReady?: () => Promise<boolean>
 }
 
 type IntelligenceModule = {
@@ -731,7 +732,9 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()
-        return view.settings.webSearchEnabled && view.settings.webSearchAuthorizedAt ? ['WebSearch', 'WebFetch'] : undefined
+        if (!view.settings.webSearchEnabled || !view.settings.webSearchAuthorizedAt) return undefined
+        if (hooks?.isWebSearchProviderReady && !await hooks.isWebSearchProviderReady()) return undefined
+        return ['WebSearch', 'WebFetch']
       }
     })
     registerDailyBriefingJob(jobRuntime, { service: dailyBriefingService, getLocale: getAppLanguage })

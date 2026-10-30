@@ -263,6 +263,7 @@ export type ProductServiceDependencies = {
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
+  isWebSearchProviderReady?: () => Promise<boolean>
   invokeProductAgentTool?: (
     state: AgentStoreState,
     input: ProductAgentToolInvokeInput

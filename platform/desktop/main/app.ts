@@ -1268,6 +1268,7 @@ export type DesktopAppBootstrapOptions = {
     updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
     deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
     updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
+    isWebSearchProviderReady?: () => Promise<boolean>
     invokeProductAgentTool?: (
       state: AgentStoreState,
       input: ProductAgentToolInvokeInput
@@ -2526,6 +2527,12 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
       deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
       updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
+      isWebSearchProviderReady: async () => {
+        const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
+        const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
+        const fetch = providers.find((provider) => provider.id === settings.defaultFetchProviderId)
+        return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
+      },
       invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
       invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
       assistantInvocation: assistantInvocationService
