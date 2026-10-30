@@ -90,6 +90,7 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dashboardSourceConnection.test' },
     { method: 'intelligence.queryImpactTimeline' },
     { method: 'intelligence.queryFundingRateHistory' },
+    { method: 'intelligence.queryOpenInterestHistory' },
     { method: 'intelligence.queryCapitalConditionsSnapshot' },
     { method: 'intelligence.queryFearGreedSnapshot' },
     { method: 'intelligence.dailyBriefing.getToday' },
@@ -135,6 +136,12 @@ export const marketIntelligenceProductManifest = {
   skills: [
     { id: 'market-analysis-skill-v1', title: '市场影响分析', description: '使用可追溯证据生成条件式市场分析。', module: './agents/skills/market-analysis' },
     {
+      id: 'daily-brief-editor-skill-v1',
+      title: '每日简报 AI 编辑',
+      description: '以交易分析师视角决定日报候选的展示与 why，缺失结论可带来源补查。',
+      module: './agents/skills/daily-brief-editor'
+    },
+    {
       id: 'intelligence-ops-skill-v1',
       title: '情报运维',
       description: '先读后写、一次一改、凭据不经过模型。',
@@ -148,7 +155,7 @@ export const marketIntelligenceProductManifest = {
       description: '基于可追溯市场证据生成条件式分析。',
       seedModule: './agents/agents/cryptoMarketAnalyst',
       seedOnStartup: true,
-      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
+      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1', 'daily-brief-editor-skill-v1'],
       toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
       workflowIds: ['market-analysis-auto-run-v1']
     }
