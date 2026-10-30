@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises'
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 import { createManagedWorkerRuntime } from '@platform/jobs'
 import type { EventBusRuntime } from '@platform/message-bus'
+import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
+import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
@@ -61,6 +63,9 @@ import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefingAgent } from './daily-briefing/dailyBriefingAgent'
 import { registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
+import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
+import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createDailyBriefingAiSettingsService, type DailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
@@ -172,6 +177,11 @@ export type IntelligenceModulePlatformHooks = {
   createPlatformWebSocket?: () => PlatformWebSocketConstructor
   /** Reconcile the automatic calendar job registry after a feed switch. */
   onCalendarEnabledChanged?: () => void | Promise<void>
+  createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
+  sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
+  appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
+  updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
+  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
 }
 
 type IntelligenceModule = {
@@ -667,6 +677,18 @@ export function getIntelligenceModule(
       ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {})
     })
     const dailyBriefingAgent = createDailyBriefingAgent({ invoke: structuredModelInvocation.invoke })
+    const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
+    const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
+      ? createDailyBriefEditorSessionPort({
+        links: dailyBriefSessionLinks,
+        createSession: hooks.createAgentSession,
+        send: hooks.sendAgentMessage,
+        append: hooks.appendAgentSessionMessages,
+        update: hooks.updateAgentSession,
+        delete: (ids) => hooks.deleteAgentSessions!(ids).then(() => undefined)
+      })
+      : undefined
+    const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -698,7 +720,8 @@ export function getIntelligenceModule(
           source: view.resolved.source
         })
       },
-      store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
+      store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite')),
+      ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {})
     })
     registerDailyBriefingJob(jobRuntime, { service: dailyBriefingService, getLocale: getAppLanguage })
     intelligenceModule = {

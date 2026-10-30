@@ -89,6 +89,11 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   secretVault?: SecretVault
   platformFetch?: typeof fetch
   getNetworkSettings?: () => Promise<NetworkSettings>
+  createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
+  sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
+  appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
+  updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
+  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
@@ -147,6 +152,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     getModelDefaults: deps.getModelDefaults,
     eventBusRuntime: deps.eventBusRuntime,
     platformFetch: deps.platformFetch,
+    createAgentSession: deps.createAgentSession,
+    sendAgentMessage: deps.sendAgentMessage,
+    appendAgentSessionMessages: deps.appendAgentSessionMessages,
+    updateAgentSession: deps.updateAgentSession,
+    deleteAgentSessions: deps.deleteAgentSessions,
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
     // once network settings are readable — so it is handed over as a thunk, never as a raw WebSocket.
     ...(deps.getNetworkSettings
