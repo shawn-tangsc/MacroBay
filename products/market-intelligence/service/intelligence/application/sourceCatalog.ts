@@ -463,7 +463,7 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     reliabilityTier: 'exchange-api',
     eventFamily: 'metric-event',
     readiness: 'live',
-    readinessNote: '默认采集 ETHUSDT、BTCUSDT funding；可在来源配置中扩展 monitoredSymbols。',
+    readinessNote: '默认采集 ETHUSDT、BTCUSDT 的资金费率与 15 分钟持仓名义额；可在来源配置中扩展 monitoredSymbols。',
     supportedImpactScopes: ['symbol', 'watchlist'],
     adapterConfig: {
       endpointUrl: 'https://fapi.binance.com/fapi/v1/fundingRate',

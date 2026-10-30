@@ -95,6 +95,9 @@ import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefres
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createFundingRateHistorySqliteStore } from './store/fundingRateHistoryStore'
+import { createPerpetualPositioningSqliteStore } from './store/perpetualPositioningStore'
+import { createBinanceOpenInterestClient } from './open-interest/binanceOpenInterestClient'
+import { createOpenInterestRefreshService } from './open-interest/openInterestRefreshService'
 import { createFundingRateHistoryRefreshService } from './funding-rate/fundingRateHistoryRefreshService'
 import { createBinanceFundingRateHistoryClient } from './funding-rate/binanceFundingRateHistoryClient'
 import { createZeroXRouterCalendarEvidenceAdmissionService } from './macro-calendar/0xrouter-calendar/zeroXRouterCalendarEvidenceAdmissionService'
@@ -353,6 +356,16 @@ export function getIntelligenceModule(
       store: fundingRateHistoryStore,
       now: () => new Date().toISOString()
     })
+    // The positioning series is the second half of the same source: a funding rate without the
+    // open interest behind it cannot tell deleveraging from crowding.
+    const perpetualPositioningStore = createPerpetualPositioningSqliteStore(join(dataDir, 'perpetual-positioning.sqlite'))
+    const openInterestClient = createBinanceOpenInterestClient({ platformFetch: (hooks?.platformFetch ?? getPlatformFetch()) as typeof fetch })
+    const openInterestRefresh = createOpenInterestRefreshService({
+      isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
+      client: openInterestClient,
+      store: perpetualPositioningStore,
+      now: () => new Date().toISOString()
+    })
     const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
     // The macro-market series (dollar, gold, offshore yuan, stablecoin peg) come from a credentialed
     // REST provider, read through the same profile/credential pair every other source uses. The real
@@ -575,6 +588,7 @@ export function getIntelligenceModule(
       capitalConditions,
       etfFlowHistory: etfCurrentStateRefresh,
       fundingRateHistory: fundingRateHistoryRefresh,
+      openInterest: openInterestRefresh,
       ...(newsSentimentEnrichment && newsSentimentScoring
         ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
         : {})
