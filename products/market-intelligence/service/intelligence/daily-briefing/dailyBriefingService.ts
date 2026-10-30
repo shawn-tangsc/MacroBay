@@ -91,7 +91,8 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     let document: DailyBriefingDocument
     try {
-      document = buildDailyBriefingDocument({ packet, date: input.date })
+      const previous = await deps.store.get(previousDateOf(input.date), input.locale).catch(() => undefined)
+      document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
     } catch {
       return { state: 'unavailable', failureCode: 'build-failed' }
     }
@@ -272,6 +273,10 @@ function isValidTimeZone(value: string): boolean {
   } catch {
     return false
   }
+}
+
+function previousDateOf(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00.000Z`) - 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
 }
 
 function lastDays(today: string, days: number): readonly string[] {

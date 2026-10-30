@@ -18,6 +18,7 @@ import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dail
 export function buildDailyBriefingDocument(input: Readonly<{
   packet: DailyBriefingFactPacket
   date: string
+  previous?: DailyBriefingDocument
 }>): DailyBriefingDocument {
   const { packet, date } = input
   const readings = buildBriefingReadingRows(packet)
@@ -25,9 +26,9 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const macro = selectMacro(packet)
   const next = selectNext(packet)
   const built = buildConclusion(packet)
-  return Object.freeze({
-    schemaVersion: 2,
-    policyVersion: 'daily-briefing.v10',
+  const document: DailyBriefingDocument = Object.freeze({
+    schemaVersion: 3,
+    policyVersion: 'daily-briefing.v11',
     edition: Object.freeze({
       date,
       locale: packet.locale,
@@ -70,6 +71,27 @@ export function buildDailyBriefingDocument(input: Readonly<{
       summaryId: packet.conclusion?.summary.id ?? null,
       readAt: packet.asOf
     })
+  })
+  return input.previous ? Object.freeze({ ...document, comparison: buildComparison(document, input.previous) }) : document
+}
+
+function buildComparison(current: DailyBriefingDocument, previous: DailyBriefingDocument): DailyBriefingDocument['comparison'] {
+  const value = (document: DailyBriefingDocument, id: string) =>
+    document.data.funds.find((row) => row.id === id)?.value?.number ?? document.data.market.find((row) => row.id === id)?.value?.number
+  const btcFunding = value(current, 'funding-btc'); const previousFunding = value(previous, 'funding-btc')
+  const stablecoin = value(current, 'stablecoin'); const previousStablecoin = value(previous, 'stablecoin')
+  const etfBtc = value(current, 'etf-btc'); const previousEtfBtc = value(previous, 'etf-btc')
+  const currentDirection = current.conclusion?.direction
+  const previousDirection = previous.conclusion?.direction
+  const previousMacro = new Set(previous.news.macro.map((item) => item.eventKey))
+  return Object.freeze({
+    previousDate: previous.edition.date,
+    directionChanged: currentDirection !== previousDirection,
+    ...(previousDirection ? { previousDirection } : {}),
+    ...(btcFunding !== undefined && previousFunding !== undefined ? { fundingBtcDelta: btcFunding - previousFunding } : {}),
+    ...(stablecoin !== undefined && previousStablecoin !== undefined ? { stablecoinDelta: stablecoin - previousStablecoin } : {}),
+    ...(etfBtc !== undefined && previousEtfBtc !== undefined ? { etfBtcDelta: etfBtc - previousEtfBtc } : {}),
+    newMacroEvents: current.news.macro.filter((item) => !previousMacro.has(item.eventKey)).length
   })
 }
 

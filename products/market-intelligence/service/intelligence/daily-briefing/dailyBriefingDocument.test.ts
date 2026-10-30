@@ -177,6 +177,24 @@ describe('daily briefing document', () => {
     expect(document.lede.text).toBe('')
   })
 
+  it('compares the edition with the previous day', () => {
+    const previous = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-29' })
+    const previousAltered = {
+      ...previous,
+      edition: { ...previous.edition, date: '2026-10-29' },
+      conclusion: previous.conclusion ? { ...previous.conclusion, direction: 'bullish' as const } : null,
+      data: {
+        ...previous.data,
+        funds: previous.data.funds.map((row) => row.id === 'stablecoin' && row.value
+          ? { ...row, value: { ...row.value, number: row.value.number + 100_000_000 } }
+          : row)
+      }
+    }
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30', previous: previousAltered })
+    expect(document.comparison).toMatchObject({ previousDate: '2026-10-29', directionChanged: true, previousDirection: 'bullish' })
+    expect(document.comparison?.stablecoinDelta).toBe(-100_000_000)
+  })
+
   it('includes a high-impact event on the seventh local day', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

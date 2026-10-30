@@ -48,6 +48,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <span className="mi-brief-poster__readings">{doc.status.readingsAvailable}/{doc.status.readingsTotal} {text.readingsUnit}</span>
       </div>
     </header>
+    {doc.comparison ? <p className="mi-brief-poster__comparison">{comparisonText(doc, text, locale)}</p> : null}
     {doc.lede.text ? <p className="mi-brief-poster__lede">{doc.lede.text}</p> : null}
 
     {hasNews ? <section className="mi-brief-poster__news-section">
@@ -176,6 +177,19 @@ function shortenEventTitle(value: string): string {
 
 function nextTime(value: string, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
   return formatTime(value, 'minute').slice(5, 16)
+}
+
+function comparisonText(doc: DailyBriefingDocument, text: DailyBriefingText, locale: 'zh-CN' | 'en-US'): string {
+  const comparison = doc.comparison
+  if (!comparison) return ''
+  const parts = [comparison.directionChanged
+    ? text.comparison.directionChanged.replace('{from}', localizedDirectionTerm(comparison.previousDirection ?? doc.conclusion?.direction ?? 'undecided', locale)).replace('{to}', localizedDirectionTerm(doc.conclusion?.direction ?? 'undecided', locale))
+    : text.comparison.sameDirection]
+  if (comparison.fundingBtcDelta !== undefined) parts.push(text.comparison.funding.replace('{value}', `${comparison.fundingBtcDelta >= 0 ? '+' : ''}${comparison.fundingBtcDelta.toFixed(4)}pp`))
+  if (comparison.stablecoinDelta !== undefined) parts.push(text.comparison.stablecoin.replace('{value}', formatBriefingValue({ number: comparison.stablecoinDelta, format: 'flow-usd' }, '—', locale)))
+  if (comparison.etfBtcDelta !== undefined) parts.push(text.comparison.etf.replace('{value}', formatBriefingValue({ number: comparison.etfBtcDelta, format: 'flow-usd' }, '—', locale)))
+  if (comparison.newMacroEvents) parts.push(text.comparison.newMacro.replace('{count}', String(comparison.newMacroEvents)))
+  return `${text.comparison.label} · ${parts.join(' · ')}`
 }
 
 function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
