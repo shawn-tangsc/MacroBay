@@ -1,4 +1,4 @@
-import { POLICY_PATH_OUTCOMES, type PolicyPathPhase } from '../../../contracts/policyPath'
+import { POLICY_PATH_OUTCOMES, type PolicyPathMarker, type PolicyPathPhase } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-path/ipc/registerPolicyPathIpc'
 
@@ -51,11 +51,13 @@ function readReading(value: unknown): PolicyPathReading | undefined {
   const sep = isObject(value.sep) && isObject(value.sep.medianPath) && typeof value.sep.sourceUrl === 'string'
     ? value.sep as NonNullable<PolicyPathReading['sep']>
     : undefined
+  const markers = readMarkers(value.markers)
   return {
     meetingDate: value.meetingDate,
     daysUntilMeeting: value.daysUntilMeeting,
     hasProjectionMaterials: value.hasProjectionMaterials,
     phase: readPhase(value.phase),
+    ...(markers ? { markers } : {}),
     ...(isObject(value.targetRange) ? { targetRange: value.targetRange as NonNullable<PolicyPathReading['targetRange']> } : {}),
     ...(lastDecision ? { lastDecision } : {}),
     ...(sep ? { sep } : {}),
@@ -79,6 +81,18 @@ function readPhase(value: unknown): PolicyPathPhase {
     return { kind: 'verdict', daysSinceDecision: value.daysSinceDecision }
   }
   return { kind: 'normal' }
+}
+
+/** A marker the card cannot name is dropped rather than rendered as an empty chip. */
+function readMarkers(value: unknown): readonly PolicyPathMarker[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const markers = value.flatMap((entry): PolicyPathMarker[] => {
+    if (!isObject(entry) || !isFiniteNumber(entry.changeInPp)) return []
+    if (entry.kind !== 'repricing' && entry.kind !== 'intraday') return []
+    if (entry.level !== 'strong' && entry.level !== 'normal') return []
+    return [{ kind: entry.kind, level: entry.level, changeInPp: entry.changeInPp }]
+  })
+  return markers.length ? markers : undefined
 }
 
 /** The vote is the only part of the previous decision the row draws; anything else is dropped. */

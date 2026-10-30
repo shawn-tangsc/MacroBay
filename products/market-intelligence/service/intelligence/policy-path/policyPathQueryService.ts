@@ -1,6 +1,6 @@
 import {
-  changeInPp, decisionInstant, leadingOutcome, phaseAt, stalenessOf, thinSeries, valueAtOrBefore,
-  type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase, type PolicyPathStaleness
+  changeInPp, decisionInstant, leadingOutcome, phaseAt, repricingMarkers, stalenessOf, thinSeries, valueAtOrBefore,
+  type PolicyPathMarker, type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase, type PolicyPathStaleness
 } from '../../../contracts/policyPath'
 import type { MacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type { PolicyPathFactStore } from './policyPathFactStore'
@@ -18,6 +18,8 @@ export type PolicyPathReading = Readonly<{
   hasProjectionMaterials: boolean
   /** The shape the block takes at the instant the reading was asked for. */
   phase: PolicyPathPhase
+  /** At most one repricing chip; absent when neither window moved enough to name. */
+  markers?: readonly PolicyPathMarker[]
   targetRange?: Readonly<{ lowerPercent: number; upperPercent: number; source?: 'statement' | 'fred' }>
   sep?: Readonly<{
     asOf: string
@@ -102,11 +104,13 @@ export function createPolicyPathQueryService(deps: {
       const series = deps.observations.list(meetingDate, policyPathQueryPolicy.seriesLookback)
         .filter((row) => !Number.isFinite(asOfMs) || Date.parse(row.at) <= asOfMs)
       const range = targetRangeOf(decided?.targetRange, deps.readTargetRange)
+      const markers = markersOf(series)
       return {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
         phase: phaseOf({ asOf, meetingDate, decidedMeetingDate: decided?.targetRange ? decided.meetingDate : undefined }),
+        ...(markers.length ? { markers } : {}),
         ...(range === undefined ? {} : { targetRange: range }),
         ...(sepFact?.sep ? { sep: sepOf(sepFact.sep, sepFact.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
@@ -116,6 +120,20 @@ export function createPolicyPathQueryService(deps: {
         staleness: series.length ? stalenessOf(series[series.length - 1]!.at, asOf) : 'unavailable'
       }
     }
+  })
+}
+
+/** Repricing markers for the bucket the card leads with: the 24h move, with the 6h fallback. */
+function markersOf(series: readonly PolicyPathObservation[]): readonly PolicyPathMarker[] {
+  const latest = series.at(-1)
+  if (!latest) return []
+  const { outcome } = leadingOutcome(latest.values)
+  const current = latest.values[outcome]
+  const previous24h = valueAtOrBefore(series, outcome, 24 * 60)
+  const previous6h = valueAtOrBefore(series, outcome, 6 * 60)
+  return repricingMarkers({
+    ...(previous24h === undefined ? {} : { change24hPp: changeInPp(current, previous24h) }),
+    ...(previous6h === undefined ? {} : { change6hPp: changeInPp(current, previous6h) })
   })
 }
 

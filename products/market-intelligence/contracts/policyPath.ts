@@ -92,6 +92,47 @@ export function thinSeries(series: readonly PolicyPathObservation[], limit: numb
 }
 
 /**
+ * A repricing move worth pointing at, sized so the chip can name it.
+ *
+ * Only one is ever reported: three chips on a 300px card would be noise, and the reader needs the
+ * strongest move, not an inventory. It is a visual hint — it changes no data and triggers nothing.
+ */
+export type PolicyPathMarker = Readonly<{
+  kind: 'repricing' | 'intraday'
+  level: 'strong' | 'normal'
+  changeInPp: number
+}>
+
+export const POLICY_PATH_MARKER_POLICY = Object.freeze({
+  /** A move this large is the card's headline; below it the chip is amber. */
+  strongRepricingPp: 8,
+  repricingPp: 5,
+  intradayPp: 3
+} as const)
+
+/**
+ * The single strongest marker for the leading bucket.
+ *
+ * The 24-hour window outranks the 6-hour one by design, not by magnitude: the daily move is what a
+ * reader means by "repriced", and the intraday row only speaks when the day did not. A series that
+ * does not reach back 24 hours falls back to the 6-hour move; a series that reaches back neither
+ * reports nothing.
+ */
+export function repricingMarkers(input: Readonly<{ change24hPp?: number; change6hPp?: number }>): readonly PolicyPathMarker[] {
+  const day = input.change24hPp
+  if (day !== undefined && Number.isFinite(day)) {
+    const size = Math.abs(day)
+    if (size >= POLICY_PATH_MARKER_POLICY.strongRepricingPp) return [{ kind: 'repricing', level: 'strong', changeInPp: day }]
+    if (size >= POLICY_PATH_MARKER_POLICY.repricingPp) return [{ kind: 'repricing', level: 'normal', changeInPp: day }]
+  }
+  const sixHours = input.change6hPp
+  if (sixHours !== undefined && Number.isFinite(sixHours) && Math.abs(sixHours) >= POLICY_PATH_MARKER_POLICY.intradayPp) {
+    return [{ kind: 'intraday', level: 'normal', changeInPp: sixHours }]
+  }
+  return []
+}
+
+/**
  * The four shapes the policy block takes, derived from the decision instant rather than stored.
  *
  * A reading is read at an instant and means something different on each side of the meeting: two

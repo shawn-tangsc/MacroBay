@@ -115,3 +115,27 @@ describe('policy path phase', () => {
     expect(normal.phase).toEqual({ kind: 'normal' })
   })
 })
+
+describe('policy path repricing markers', () => {
+  const meeting = { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' }
+
+  it('names the strongest move once, from the daily window', () => {
+    const reading = service({
+      meeting, facts: null,
+      series: [
+        observation('2026-10-29T00:00:00.000Z', 0.6),
+        observation('2026-10-30T05:00:00.000Z', 0.72),
+        observation('2026-10-30T10:00:00.000Z', 0.69)
+      ]
+    }).read({ asOf: '2026-10-30T10:10:00.000Z' })!
+    expect(reading.markers).toEqual([{ kind: 'repricing', level: 'strong', changeInPp: 9 }])
+  })
+
+  it('falls back to the six-hour move when the series is younger than a day', () => {
+    const reading = service({
+      meeting, facts: null,
+      series: [observation('2026-10-30T03:00:00.000Z', 0.7), observation('2026-10-30T10:00:00.000Z', 0.74)]
+    }).read({ asOf: '2026-10-30T10:10:00.000Z' })!
+    expect(reading.markers).toEqual([{ kind: 'intraday', level: 'normal', changeInPp: 4 }])
+  })
+})

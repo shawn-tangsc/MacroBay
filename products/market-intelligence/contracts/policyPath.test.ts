@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, phaseAt, stalenessOf, thinSeries,
-  valueAtOrBefore, verdictOf, type PolicyPathObservation
+  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, phaseAt, repricingMarkers, stalenessOf,
+  thinSeries, valueAtOrBefore, verdictOf, type PolicyPathObservation
 } from './policyPath'
 
 const observation = (at: string, noChange: number, hike25: number): PolicyPathObservation => ({
@@ -113,5 +113,32 @@ describe('policy path phase boundaries', () => {
   it('degrades to normal when either instant is unreadable', () => {
     expect(phaseAt('not-a-date', WINTER_DECISION)).toEqual({ kind: 'normal' })
     expect(phaseAt(WINTER_DECISION, 'not-a-date')).toEqual({ kind: 'normal' })
+  })
+})
+
+describe('policy path repricing markers', () => {
+  it('marks a daily move of eight points or more as strong repricing', () => {
+    expect(repricingMarkers({ change24hPp: 8.4, change6hPp: -9 })).toEqual([
+      { kind: 'repricing', level: 'strong', changeInPp: 8.4 }
+    ])
+    expect(repricingMarkers({ change24hPp: -8 })).toEqual([{ kind: 'repricing', level: 'strong', changeInPp: -8 }])
+  })
+
+  it('marks a five-to-eight point daily move as ordinary repricing', () => {
+    expect(repricingMarkers({ change24hPp: 6.2 })).toEqual([{ kind: 'repricing', level: 'normal', changeInPp: 6.2 }])
+    expect(repricingMarkers({ change24hPp: 5 })).toEqual([{ kind: 'repricing', level: 'normal', changeInPp: 5 }])
+  })
+
+  it('falls back to the intraday move only when the day stayed under five points', () => {
+    expect(repricingMarkers({ change24hPp: 4.9, change6hPp: 3.4 })).toEqual([{ kind: 'intraday', level: 'normal', changeInPp: 3.4 }])
+    // A day that did clear five points owns the chip even if the last six hours moved further.
+    expect(repricingMarkers({ change24hPp: 5.2, change6hPp: 9 })).toEqual([{ kind: 'repricing', level: 'normal', changeInPp: 5.2 }])
+    expect(repricingMarkers({ change6hPp: 3.4 })).toEqual([{ kind: 'intraday', level: 'normal', changeInPp: 3.4 }])
+  })
+
+  it('reports nothing when no window clears its threshold', () => {
+    expect(repricingMarkers({})).toEqual([])
+    expect(repricingMarkers({ change24hPp: 4.9 })).toEqual([])
+    expect(repricingMarkers({ change24hPp: 1, change6hPp: 2.9 })).toEqual([])
   })
 })
