@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { createPolicyPathFactStore, type PolicyPathFactStore } from '../policy-path/policyPathFactStore'
+import { createPolicyPathObservationStore, type PolicyPathObservationStore } from '../policy-path/policyPathObservationStore'
 import { statSync } from 'node:fs'
 
 import { MACRO_CALENDAR_SCHEMA_VERSION, type MacroCalendarRevision, type MacroCalendarValue } from './macroCalendarContracts'
@@ -21,6 +22,8 @@ export type MacroCalendarRepository = {
   inspectStorage: () => { rowCount: number; databaseBytes: number; oldestDetectedAt?: string; newestDetectedAt?: string }
   /** Official policy readings; same database, outside the revision chain. */
   policyFacts: PolicyPathFactStore
+  /** Market-implied odds per meeting, kept as a series. */
+  policyObservations: PolicyPathObservationStore
   close: () => void
 }
 
@@ -136,6 +139,7 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
       return Number(deleteExpiredBeaObservations.run(before).changes)
     },
     policyFacts: createPolicyPathFactStore(sqlite.database),
+    policyObservations: createPolicyPathObservationStore(sqlite.database),
     inspectStorage() {
       const aggregate = sqlite.database.prepare('select count(*) as count, min(detected_at) as oldest, max(detected_at) as newest from mi_macro_calendar_revisions').get() as Row
       return { rowCount: Number(aggregate.count), databaseBytes: sqlite.filePath === ':memory:' ? 0 : statSync(sqlite.filePath).size, oldestDetectedAt: aggregate.oldest ?? undefined, newestDetectedAt: aggregate.newest ?? undefined }
@@ -183,6 +187,7 @@ function migrate(database: ReturnType<typeof createMacroCalendarSqlite>['databas
     execute(`delete from mi_macro_calendar_revisions as old where old.provider_id != 'macro-calendar-fed' and exists (select 1 from mi_macro_calendar_revisions as current where current.event_key = old.event_key and ((case when current.provider_id = 'macro-calendar-bls' and current.descriptor_id = 'macro-calendar-bls-calendar-family-refresh-api-v2' and current.revision_kind in ('official-release','official-revision') then 3 when current.provider_id = 'macro-calendar-bls' and current.descriptor_id in ('macro-calendar-bls-python-schedule','macro-calendar-bls-calendar-family-refresh-api-v2') then 2 else 1 end) > (case when old.provider_id = 'macro-calendar-bls' and old.descriptor_id = 'macro-calendar-bls-calendar-family-refresh-api-v2' and old.revision_kind in ('official-release','official-revision') then 3 when old.provider_id = 'macro-calendar-bls' and old.descriptor_id in ('macro-calendar-bls-python-schedule','macro-calendar-bls-calendar-family-refresh-api-v2') then 2 else 1 end) or ((case when current.provider_id = 'macro-calendar-bls' and current.descriptor_id = 'macro-calendar-bls-calendar-family-refresh-api-v2' and current.revision_kind in ('official-release','official-revision') then 3 when current.provider_id = 'macro-calendar-bls' and current.descriptor_id in ('macro-calendar-bls-python-schedule','macro-calendar-bls-calendar-family-refresh-api-v2') then 2 else 1 end) = (case when old.provider_id = 'macro-calendar-bls' and old.descriptor_id = 'macro-calendar-bls-calendar-family-refresh-api-v2' and old.revision_kind in ('official-release','official-revision') then 3 when old.provider_id = 'macro-calendar-bls' and old.descriptor_id in ('macro-calendar-bls-python-schedule','macro-calendar-bls-calendar-family-refresh-api-v2') then 2 else 1 end) and (current.detected_at_ms > old.detected_at_ms or (current.detected_at_ms = old.detected_at_ms and (current.recorded_at > old.recorded_at or (current.recorded_at = old.recorded_at and current.revision_id > old.revision_id))))))); delete from mi_macro_calendar_revisions where provider_id = 'macro-calendar-bls' and (descriptor_id = 'macro-calendar-bls-employment-refresh-api' or (descriptor_id = 'macro-calendar-bls-ics-manual' and event_family in ('cpi','core-cpi'))); delete from mi_macro_calendar_revisions as manual where manual.provider_id = 'macro-calendar-bls' and manual.descriptor_id = 'macro-calendar-bls-ics-manual' and exists (select 1 from mi_macro_calendar_revisions as automatic where automatic.provider_id = 'macro-calendar-bls' and automatic.event_family = manual.event_family and automatic.event_name_key = manual.event_name_key and automatic.scheduled_date = manual.scheduled_date and automatic.descriptor_id in ('macro-calendar-bls-python-schedule','macro-calendar-bls-calendar-family-refresh-api-v2')); insert or ignore into mi_macro_calendar_migrations(version) values (2)`)
     execute("create table if not exists mi_bea_release_observation_state (release_group_key text primary key, schedule_fingerprint text not null, last_attempt_at text not null); create index if not exists idx_mi_bea_release_observation_attempt on mi_bea_release_observation_state(last_attempt_at); insert or ignore into mi_macro_calendar_migrations(version) values (3)")
     execute("create table if not exists mi_policy_path_facts (meeting_date text primary key, has_projection_materials integer not null default 0, target_lower real, target_upper real, vote_for integer, vote_against integer, dissents_json text, statement_url text, detected_at text not null, constraint mi_policy_path_facts_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); insert or ignore into mi_macro_calendar_migrations(version) values (4)")
+    execute("create table if not exists mi_policy_path_observations (meeting_date text not null, at text not null, values_json text not null, quote_json text, primary key (meeting_date, at), constraint mi_policy_path_observations_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); create index if not exists idx_mi_policy_path_observations_at on mi_policy_path_observations(meeting_date, at desc); insert or ignore into mi_macro_calendar_migrations(version) values (5)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }
