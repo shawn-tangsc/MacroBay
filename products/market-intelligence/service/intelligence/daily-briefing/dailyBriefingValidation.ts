@@ -227,7 +227,7 @@ function forbiddenContent(text: string): string | undefined {
 
 function unknownNumber(text: string, document: DailyBriefingDocument): string | undefined {
   const allowed = numericWhitelist(document)
-  for (const token of text.match(/-?\d+(?:\.\d+)?/g) ?? []) {
+  for (const token of text.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? []) {
     const normalized = token.replace(/,/g, '')
     if (allowed.has(normalized) || allowed.has(normalized.replace(/^-/, ''))) continue
     return token
@@ -246,7 +246,7 @@ function numericWhitelist(document: DailyBriefingDocument): Set<string> {
   const visit = (value: unknown): void => {
     if (typeof value === 'number' && Number.isFinite(value)) add(value)
     else if (typeof value === 'string') {
-      for (const token of value.match(/-?\d+(?:\.\d+)?/g) ?? []) add(Number(token.replace(/,/g, '')))
+      for (const token of value.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? []) add(Number(token.replace(/,/g, '')))
     } else if (Array.isArray(value)) value.forEach(visit)
     else if (value && typeof value === 'object') Object.values(value).forEach(visit)
   }
