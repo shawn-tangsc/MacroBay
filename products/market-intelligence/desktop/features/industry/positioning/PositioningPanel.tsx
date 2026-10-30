@@ -41,6 +41,7 @@ type Text = Readonly<{
   window24h: string
   states: Readonly<Record<PositioningState, string>>
   liquidationMore: string
+  liquidationChip: string
   liquidationFoot: string
   liquidationUnavailable: string
   noRate: string
@@ -54,7 +55,9 @@ export type PositioningPanelProps = Readonly<{
   text: Text
 }>
 
-const VIEW = Object.freeze({ width: 800, height: 196, left: 40, right: 782, upperTop: 8, upperBottom: 92, zero: 146 })
+// A strip above the plot belongs to the liquidation marks: a label drawn over the curves hid the
+// very movement it was pointing at.
+const VIEW = Object.freeze({ width: 800, height: 214, left: 40, right: 782, markerTop: 3, markerRow: 16, upperTop: 30, upperBottom: 112, zero: 166 })
 
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
@@ -256,7 +259,7 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
     <div className="mi-positioning-panel__chart">
       <svg ref={ref} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label={text.pairTitle}
         onMouseMove={pick} onMouseLeave={() => setHover(undefined)}>
-        <text x="0" y="10" className="mi-positioning-panel__lane">{text.notional}</text>
+        <text x="0" y={VIEW.upperTop - 8} className="mi-positioning-panel__lane">{text.notional}</text>
         <text x="0" y={VIEW.upperBottom + 18} className="mi-positioning-panel__lane">{text.rateLabel}</text>
         <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.upperBottom + 6} y2={VIEW.upperBottom + 6} className="mi-positioning-panel__rule" />
         <path d={linePath(positioning.btc, x, point => upperY(point.notionalUsd, positioning.btc))} className="mi-positioning-panel__line" data-series="btc" />
@@ -280,17 +283,22 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
           // Each mark says who and how much, on its own line: a header badge could only name the
           // newest one, and the instant is already readable from where the line sits.
           const crowded = index > 0 && cx - x(Date.parse(positioning.hints[index - 1]!.observedAt)) < 58
-          const label = `${text.assets[hint.asset]} ${formatDashboardChange(hint.dropPct)}`
-          // A chip behind the text: bare red glyphs over two curves were unreadable, which defeats
-          // the point of labelling the mark at all.
-          const chipWidth = Math.round(label.length * 5.2 + 12)
-          const chipY = Math.max(VIEW.upperTop, cy - 20 - (crowded ? 12 : 0))
+          // The chip says what it is, not only who: a bare "ETH −1.9%" floating over a chart reads
+          // as an unexplained number, and the reader had to guess it was the liquidation mark.
+          const label = text.liquidationChip
+            .replace('{asset}', text.assets[hint.asset])
+            .replace('{pct}', formatDashboardChange(hint.dropPct))
+          // The chip lives in the strip above the plot, never on top of it; only the rule and the
+          // dot enter the chart. Nearby marks take the second row of the strip.
+          const chipWidth = chipWidthFor(label)
+          const chipY = VIEW.markerTop + (crowded ? VIEW.markerRow : 0)
+          const chipX = Math.min(Math.max(cx - chipWidth / 2, VIEW.left), VIEW.right - chipWidth)
           return (
             <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
-              <line x1={cx} x2={cx} y1={VIEW.upperTop} y2={VIEW.height - 10} />
+              <line x1={cx} x2={cx} y1={chipY + 13} y2={VIEW.height - 10} />
               <circle cx={cx} cy={cy} r="3" />
-              <rect className="mi-positioning-panel__hint-chip" x={cx - chipWidth / 2} y={chipY} width={chipWidth} height={14} rx="3" />
-              <text x={cx} y={chipY + 10} textAnchor="middle">{label}</text>
+              <rect className="mi-positioning-panel__hint-chip" x={chipX} y={chipY} width={chipWidth} height={14} rx="3" />
+              <text x={chipX + chipWidth / 2} y={chipY + 10.5} textAnchor="middle">{label}</text>
             </g>
           )
         })}
@@ -341,4 +349,11 @@ function tooltipStyle(hover: Readonly<{ left: number; top: number; width: number
   const left = fitsRight ? hover.left + offset : Math.max(inset, hover.left - offset - width)
   const top = Math.min(Math.max(inset, hover.top - height / 2), Math.max(inset, hover.height - height - inset))
   return { left, top }
+}
+
+/** Rough advance widths: a CJK glyph is about 9px at 8.5px, latin about 5.2px. */
+function chipWidthFor(label: string): number {
+  let width = 0
+  for (const character of label) width += /[\u3000-\u9fff]/.test(character) ? 9 : 5.2
+  return Math.round(width + 12)
 }

@@ -87,7 +87,7 @@ describe('positioning panel', () => {
     // The mark names itself on the chart: asset and size, no timestamp (the axis already says
     // when) and no single header badge (it could only ever name one of several marks).
     expect(markup).toContain('data-hint="btc"')
-    expect(markup).toMatch(/BTC -1\.9%|BTC −1\.9%/)
+    expect(markup).toContain('疑似强平 BTC -1.9%')
     expect(markup).not.toContain('mi-positioning-panel__badge')
     expect(markup).toContain(text.liquidationFoot)
   })

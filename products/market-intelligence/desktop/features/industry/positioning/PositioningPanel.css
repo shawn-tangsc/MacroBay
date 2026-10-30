@@ -1,6 +1,6 @@
 .mi-positioning-panel {
   --mi-positioning-summary-width: 300px;
-  --mi-positioning-chart-height: 196px;
+  --mi-positioning-chart-height: 230px;
   display: grid;
   gap: 10px;
   min-width: 0;

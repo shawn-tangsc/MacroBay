@@ -405,6 +405,7 @@ export const productText = {
                 'mixed': '方向分歧'
               },
               liquidationMore: '更早的标记已折叠',
+              liquidationChip: '疑似强平 {asset} {pct}',
               liquidationFoot: '▲ 疑似强平为推断值，非交易所强平数据（持仓骤降 + 价格同向 + 成交量放大）',
               liquidationUnavailable: '强平标记暂不可用：成交量这一路没有采到。',
               noRate: '该时段无费率',
@@ -1820,6 +1821,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'mixed': 'Mixed'
               },
               liquidationMore: 'older marks collapsed',
+              liquidationChip: 'Suspected liquidation {asset} {pct}',
               liquidationFoot: '▲ Suspected liquidation is inferred, not exchange liquidation data (position drop + price move + volume expansion)',
               liquidationUnavailable: 'Liquidation markers unavailable: the volume leg was not collected.',
               noRate: 'No funding rate in this window',
