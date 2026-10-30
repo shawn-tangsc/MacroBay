@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { createDailyBriefingAiSettingsService } from './dailyBriefingAiSettingsService'
 import { createDailyBriefingAiSettingsStore, createInMemoryDailyBriefingAiSettingsStorage } from './dailyBriefingAiSettingsStore'
@@ -30,6 +30,17 @@ describe('daily briefing AI settings service', () => {
       settings: { editorialEnabled: true, providerId: 'p2', modelId: 'm2', webSearchEnabled: false },
       resolved: { state: 'agent', providerId: 'p2', modelId: 'm2', source: 'custom' }
     })
+  })
+
+  it('synchronizes the saved model to the editor agent', async () => {
+    const onModelSaved = vi.fn()
+    const api = createDailyBriefingAiSettingsService({
+      store: createDailyBriefingAiSettingsStore(createInMemoryDailyBriefingAiSettingsStorage(), () => '2026-10-30T01:00:00.000Z'),
+      onModelSaved,
+      ...deps
+    })
+    await api.save({ providerId: 'p2', modelId: 'm2' })
+    expect(onModelSaved).toHaveBeenCalledWith(expect.objectContaining({ providerId: 'p2', modelId: 'm2' }))
   })
 
   it('turns off into the fact layer and refuses a half-bound model', async () => {
