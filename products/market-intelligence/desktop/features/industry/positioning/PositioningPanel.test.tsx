@@ -123,3 +123,31 @@ describe('positioning panel', () => {
     }
   })
 })
+
+describe('funding bars per settlement period', () => {
+  it('draws one bar per asset per 8-hour period even when the two settle seconds apart', () => {
+    // Binance settles each symbol on its own clock; a timestamp-keyed bar drew both plus the
+    // overlap, which read as three bars in one band.
+    const skewed: DashboardFundingRateHistoryState = {
+      state: 'available',
+      btc: [{ observedAt: '2026-10-28T15:59:58.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' }],
+      eth: [{ observedAt: '2026-10-28T16:00:03.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
+    }
+    const markup = render({ funding: skewed })
+    const bars = [...markup.matchAll(/class="mi-positioning-panel__bar"/g)].length
+    expect(bars).toBe(2)
+    expect(markup).toContain('data-settles-at="2026-10-28T16:00:00.000Z"')
+  })
+
+  it('still draws one bar when a symbol reports twice inside the same period', () => {
+    const duplicate: DashboardFundingRateHistoryState = {
+      state: 'available',
+      btc: [
+        { observedAt: '2026-10-28T16:00:00.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' },
+        { observedAt: '2026-10-28T16:00:02.000Z', ratePercent: 0.0071, paymentDirection: 'long-pays-short' }
+      ],
+      eth: [{ observedAt: '2026-10-28T16:00:00.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
+    }
+    expect([...render({ funding: duplicate }).matchAll(/class="mi-positioning-panel__bar"/g)].length).toBe(2)
+  })
+})

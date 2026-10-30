@@ -197,11 +197,22 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
     return VIEW.upperBottom - ((value - min) / range) * (VIEW.upperBottom - VIEW.upperTop)
   }
 
+  const periodMs = 8 * 3_600_000
   const fundingPoints = funding.state === 'available'
     ? [...funding.btc.map(point => ({ ...point, asset: 'btc' as const })), ...funding.eth.map(point => ({ ...point, asset: 'eth' as const }))]
-        .filter(point => Date.parse(point.observedAt) >= startMs - 8 * 3_600_000 && Date.parse(point.observedAt) <= endMs)
+        .filter(point => Date.parse(point.observedAt) >= startMs - periodMs && Date.parse(point.observedAt) <= endMs)
     : []
-  const maximumRate = Math.max(...fundingPoints.map(point => Math.abs(point.ratePercent)), 0.001)
+  // One slot per funding period, not per timestamp: the two symbols settle a few seconds apart,
+  // so placing a bar at each raw instant drew three and four bars inside one 8-hour band and let
+  // the two assets paint over each other. The bar belongs to the period that charged it.
+  const slots = new Map<number, { btc?: number; eth?: number }>()
+  for (const point of fundingPoints) {
+    const settlesAt = Math.floor(Date.parse(point.observedAt) / periodMs) * periodMs + periodMs
+    const slot = slots.get(settlesAt) ?? {}
+    slot[point.asset] = point.ratePercent
+    slots.set(settlesAt, slot)
+  }
+  const maximumRate = Math.max(...[...slots.values()].flatMap(slot => [slot.btc, slot.eth]).map(value => Math.abs(value ?? 0)), 0.001)
   const barCentre = Math.min(30, VIEW.zero - VIEW.upperBottom - 12)
   const rateY = (value: number) => VIEW.zero - (value / maximumRate) * barCentre
   const band = Math.max(2, (8 * 3_600_000 / span) * (VIEW.right - VIEW.left))
@@ -247,13 +258,15 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
         <path d={linePath(positioning.btc, x, point => upperY(point.notionalUsd, positioning.btc))} className="mi-positioning-panel__line" data-series="btc" />
         <path d={linePath(positioning.eth, x, point => upperY(point.notionalUsd, positioning.eth))} className="mi-positioning-panel__line" data-series="eth" />
         <line x1={VIEW.left} x2={VIEW.right} y1={VIEW.zero} y2={VIEW.zero} className="mi-positioning-panel__zero" />
-        {fundingPoints.map(point => {
-          const y = rateY(point.ratePercent)
-          return <rect key={`${point.asset}-${point.observedAt}`} data-series={point.asset}
+        {[...slots.entries()].map(([settlesAt, slot]) => (['btc', 'eth'] as const).map(asset => {
+          const rate = slot[asset]
+          if (rate === undefined) return null
+          const y = rateY(rate)
+          return <rect key={`${asset}-${settlesAt}`} data-series={asset} data-settles-at={new Date(settlesAt).toISOString()}
             className="mi-positioning-panel__bar"
-            x={barX(x(Date.parse(point.observedAt)), point.asset)} y={Math.min(y, VIEW.zero)}
+            x={barX(x(settlesAt), asset)} y={Math.min(y, VIEW.zero)}
             width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
-        })}
+        }))}
         {positioning.hints.map(hint => {
           // Pinned to the bucket's own value. The hourly line takes the hour's last reading, so a
           // dip that recovered inside that hour is invisible on the line — without this dot the
