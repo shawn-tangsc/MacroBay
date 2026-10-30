@@ -61,6 +61,19 @@ export function createMacroMarketStore(filePath: string) {
       { at_ms: number; value: string } | undefined
     return row ? { atMs: Number(row.at_ms), value: Number(row.value) } : undefined
   }
+  /**
+   * The newest point at or before an instant — the one read a historical projection makes.
+   *
+   * It is deliberately a store query rather than "read the newest and compare": the newest point is
+   * usually *after* the instant being projected, so a caller holding only `latest` can only answer the
+   * present. `at_ms <=` is inclusive because a bar is stamped on its close, and a bar closing exactly
+   * at the instant is what a reader at that instant knows.
+   */
+  function latestAt(seriesId: string, atOrBeforeMs: number): Readonly<{ atMs: number; value: number }> | undefined {
+    const row = database.prepare('select at_ms, value from macro_market_points where series = ? and at_ms <= ? order by at_ms desc limit 1')
+      .get(seriesId, atOrBeforeMs) as { at_ms: number; value: string } | undefined
+    return row ? { atMs: Number(row.at_ms), value: Number(row.value) } : undefined
+  }
   function count(seriesId?: string): number {
     const row = seriesId
       ? database.prepare('select count(*) as n from macro_market_points where series = ?').get(seriesId)
@@ -115,7 +128,7 @@ export function createMacroMarketStore(filePath: string) {
     return Object.freeze({ thinned, deleted, oldestKeptAtMs: oldest.at_ms ?? null })
   }
 
-  return { append, series, latest, earliest, count, note, readNote, retention, close: () => database.close() }
+  return { append, series, latest, latestAt, earliest, count, note, readNote, retention, close: () => database.close() }
 }
 export type MacroMarketStore = ReturnType<typeof createMacroMarketStore>
 

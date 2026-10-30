@@ -210,6 +210,27 @@ describe('publicQueryService hindsight regressions', () => {
     expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
   })
 
+  it('reads the macro history through one late-bound reader, and fails closed when it is unwired', () => {
+    const service = createMarketIntelligencePublicQueryService({
+      pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }), listSourceDefinitions: () => []
+    })
+
+    // Unwired is "no historical answer exists in this build", not an empty store.
+    expect(service.queryMacroHistoryAsOf({ series: 'dxy', asOf: AS_OF })).toBeUndefined()
+
+    const read = vi.fn(() => ({
+      state: 'unavailable' as const, series: 'dxy', asOf: AS_OF,
+      gapCode: 'historical-as-of-unavailable' as const, detail: 'the store holds no point at or before this instant.'
+    }))
+    service.setMacroHistoryAsOfQuery({ read })
+    expect(service.queryMacroHistoryAsOf({ series: 'dxy', asOf: AS_OF }))
+      .toMatchObject({ state: 'unavailable', gapCode: 'historical-as-of-unavailable' })
+    expect(read).toHaveBeenCalledWith({ series: 'dxy', asOf: AS_OF })
+
+    service.setMacroHistoryAsOfQuery({ read: () => { throw new Error('store down') } })
+    expect(service.queryMacroHistoryAsOf({ series: 'gold', asOf: AS_OF })).toBeUndefined()
+  })
+
   it('does not return events whose detectedAt is after asOf even when publishedAt is earlier', async () => {
     const service = createMarketIntelligencePublicQueryService({
       pipeline: createMockPipeline({

@@ -3,6 +3,11 @@ import type {
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import type {
+  MacroHistoryAsOfGapCode,
+  MacroHistoryAsOfResult,
+  MacroHistoryAsOfSeries
+} from './macroHistoryAsOf'
 import type { MarketIntelligencePublicQueryService } from './publicQueryService'
 
 /**
@@ -15,10 +20,16 @@ import type { MarketIntelligencePublicQueryService } from './publicQueryService'
  * and method, or a named gap. It never estimates, never synthesises, and never reaches past its own
  * cutoff: `asOf` is validated against the edition cutoff before any store is touched.
  *
- * The three sources whose only read path is a current snapshot answer `historical-as-of-unavailable`
- * rather than a plausible-looking number. That is deliberate: a 21:00 snapshot is not the 08:00
- * market, and a backfill that "fills" a gap with it would be exactly the masquerade this tool exists
- * to prevent.
+ * Where each whitelisted metric reads from:
+ *
+ * - the crypto facts read stores that already answer as-of instants directly (capital conditions,
+ *   funding history, open-interest history);
+ * - the dollar, gold and the two 10-year yields read the product's stored history through
+ *   `macroHistory` — the macro-market points and FRED's stored daily closes. That reader answers
+ *   `historical-as-of-unavailable` whenever no stored observation exists at or before the instant,
+ *   including when no historical reader is wired at all. It never falls back to the current
+ *   snapshot: a 21:00 figure is not the 08:00 market, and a backfill that "filled" a gap with it
+ *   would be exactly the masquerade this tool exists to prevent.
  */
 
 export const dailyBriefBackfillPolicy = Object.freeze({
@@ -95,6 +106,11 @@ export type DailyBriefBackfillDeps = Readonly<{
   capital: (input: Readonly<{ asOf: string; allowStale: true }>) => Promise<CapitalConditionsSnapshotResult>
   funding: (input: Readonly<{ asOf: string }>) => Promise<FundingRateHistoryResult>
   openInterest: (input: Readonly<{ asOf: string; window: '24h' }>) => Promise<OpenInterestHistoryResult>
+  /**
+   * The stored macro history: what the dollar, gold and the two 10-year yields said at an instant.
+   * `undefined` means no such read path is wired in this build, which is a gap rather than a value.
+   */
+  macroHistory: (input: Readonly<{ series: MacroHistoryAsOfSeries; asOf: string }>) => Promise<MacroHistoryAsOfResult | undefined>
   now?: () => string
 }>
 
@@ -106,71 +122,32 @@ type Reader =
   | 'funding-eth'
   | 'open-interest-btc'
   | 'open-interest-eth'
+  | MacroReader
 
-type MetricPolicy =
-  | Readonly<{
-      source: DailyBriefBackfillSource
-      unit: DailyBriefBackfillUnit
-      reader: Reader
-      method: string
-      sourceUrl: string
-    }>
-  | Readonly<{
-      source: DailyBriefBackfillSource
-      unit: DailyBriefBackfillUnit
-      /** No as-of read path exists for this metric in this product. */
-      reader: null
-      unavailableReason: string
-    }>
+type MacroReader = 'macro-dxy' | 'macro-gold' | 'macro-us10y' | 'macro-us10y-real'
+
+type MetricPolicy = Readonly<{
+  source: DailyBriefBackfillSource
+  unit: DailyBriefBackfillUnit
+  reader: Reader
+}>
 
 const METRIC_POLICY: Readonly<Record<DailyBriefBackfillMetric, MetricPolicy>> = Object.freeze({
-  'core-stablecoin-supply-usd': Object.freeze({
-    source: 'stablecoin', unit: 'usd', reader: 'stablecoin',
-    method: 'capital-conditions-as-of-snapshot', sourceUrl: 'https://stablecoins.llama.fi/stablecoins'
-  }),
-  'etf-net-flow-btc': Object.freeze({
-    source: 'etf', unit: 'flow-usd', reader: 'etf-btc',
-    method: 'etf-current-state-as-of', sourceUrl: 'https://0xrouter.app/cexdata/etf/bitcoin/flow-history'
-  }),
-  'etf-net-flow-eth': Object.freeze({
-    source: 'etf', unit: 'flow-usd', reader: 'etf-eth',
-    method: 'etf-current-state-as-of', sourceUrl: 'https://0xrouter.app/cexdata/etf/ethereum/flow-history'
-  }),
-  'funding-rate-percent-btc': Object.freeze({
-    source: 'funding', unit: 'percent', reader: 'funding-btc',
-    method: 'funding-rate-history-as-of', sourceUrl: 'https://fapi.binance.com/fapi/v1/fundingRate'
-  }),
-  'funding-rate-percent-eth': Object.freeze({
-    source: 'funding', unit: 'percent', reader: 'funding-eth',
-    method: 'funding-rate-history-as-of', sourceUrl: 'https://fapi.binance.com/fapi/v1/fundingRate'
-  }),
-  'open-interest-usd-btc': Object.freeze({
-    source: 'open-interest', unit: 'usd', reader: 'open-interest-btc',
-    method: 'perpetual-positioning-as-of', sourceUrl: 'https://fapi.binance.com/futures/data/openInterestHist'
-  }),
-  'open-interest-usd-eth': Object.freeze({
-    source: 'open-interest', unit: 'usd', reader: 'open-interest-eth',
-    method: 'perpetual-positioning-as-of', sourceUrl: 'https://fapi.binance.com/futures/data/openInterestHist'
-  }),
-  // The dollar and gold are read from one in-memory current snapshot whose window returns are
-  // computed at read time, and FRED's daily closes are published as the current snapshot only.
-  // None of the three exposes a stored as-of series to this layer, so the honest answer is a gap.
-  'dxy-level': Object.freeze({
-    source: 'dxy', unit: 'level', reader: null,
-    unavailableReason: 'the macro-market snapshot is a current read; no stored as-of series is exposed to the backfill tool.'
-  }),
-  'gold-level-usd': Object.freeze({
-    source: 'gold', unit: 'level', reader: null,
-    unavailableReason: 'the macro-market snapshot is a current read; no stored as-of series is exposed to the backfill tool.'
-  }),
-  'us10y-yield-percent': Object.freeze({
-    source: 'treasury', unit: 'percent', reader: null,
-    unavailableReason: 'FRED daily closes are published as the current rates snapshot; no stored as-of series is exposed to the backfill tool.'
-  }),
-  'us10y-real-yield-percent': Object.freeze({
-    source: 'treasury', unit: 'percent', reader: null,
-    unavailableReason: 'FRED daily closes are published as the current rates snapshot; no stored as-of series is exposed to the backfill tool.'
-  })
+  'core-stablecoin-supply-usd': Object.freeze({ source: 'stablecoin', unit: 'usd', reader: 'stablecoin' }),
+  'etf-net-flow-btc': Object.freeze({ source: 'etf', unit: 'flow-usd', reader: 'etf-btc' }),
+  'etf-net-flow-eth': Object.freeze({ source: 'etf', unit: 'flow-usd', reader: 'etf-eth' }),
+  'funding-rate-percent-btc': Object.freeze({ source: 'funding', unit: 'percent', reader: 'funding-btc' }),
+  'funding-rate-percent-eth': Object.freeze({ source: 'funding', unit: 'percent', reader: 'funding-eth' }),
+  'open-interest-usd-btc': Object.freeze({ source: 'open-interest', unit: 'usd', reader: 'open-interest-btc' }),
+  'open-interest-usd-eth': Object.freeze({ source: 'open-interest', unit: 'usd', reader: 'open-interest-eth' }),
+  // The four macro facts project stored history rather than the current snapshot: the macro-market
+  // store keeps five-minute points for the newest eight days and hourly ones to thirty, and FRED's
+  // daily closes accumulate in the metric-event store, so an earlier instant of the same edition is
+  // answerable without a single new request.
+  'dxy-level': Object.freeze({ source: 'dxy', unit: 'level', reader: 'macro-dxy' }),
+  'gold-level-usd': Object.freeze({ source: 'gold', unit: 'level', reader: 'macro-gold' }),
+  'us10y-yield-percent': Object.freeze({ source: 'treasury', unit: 'percent', reader: 'macro-us10y' }),
+  'us10y-real-yield-percent': Object.freeze({ source: 'treasury', unit: 'percent', reader: 'macro-us10y-real' })
 })
 
 export function listDailyBriefBackfillMetrics(): readonly Readonly<{ source: DailyBriefBackfillSource; metric: DailyBriefBackfillMetric }>[] {
@@ -232,9 +209,6 @@ export async function backfillDailyBriefFact(
     return gap(requested, 'unknown-metric', `no backfill source answers ${requested.source}:${requested.metric}.`)
   }
   const policy = METRIC_POLICY[requested.metric]
-  if (!policy.reader) {
-    return gap(requested, 'historical-as-of-unavailable', policy.unavailableReason)
-  }
   try {
     const read = await readMetric(policy.reader, asOf, deps)
     if (read.state === 'unavailable') return gap(requested, read.gapCode, read.detail)
@@ -251,8 +225,8 @@ export async function backfillDailyBriefFact(
       value,
       unit: policy.unit,
       observedAt: read.observedAt,
-      sourceUrl: policy.sourceUrl,
-      method: policy.method
+      sourceUrl: read.sourceUrl,
+      method: read.method
     })
     return fact
   } catch {
@@ -264,7 +238,7 @@ export async function backfillDailyBriefFact(
 export function createDailyBriefBackfillExecutor(input: Readonly<{
   cutoff: string
   publicQuery: Pick<MarketIntelligencePublicQueryService,
-    'queryCapitalConditionsSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory'>
+    'queryCapitalConditionsSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryMacroHistoryAsOf'>
   now?: () => string
 }>): (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult> {
   const deps: DailyBriefBackfillDeps = {
@@ -272,14 +246,54 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
     capital: (query) => input.publicQuery.queryCapitalConditionsSnapshot(query),
     funding: (query) => input.publicQuery.queryFundingRateHistory(query),
     openInterest: (query) => input.publicQuery.queryOpenInterestHistory(query),
+    macroHistory: async (query) => input.publicQuery.queryMacroHistoryAsOf(query),
     ...(input.now ? { now: input.now } : {})
   }
   return (request) => backfillDailyBriefFact(request, deps)
 }
 
 type ReadResult =
-  | Readonly<{ state: 'available'; value: number; observedAt: string }>
+  | Readonly<{ state: 'available'; value: number; observedAt: string; method: string; sourceUrl: string }>
   | Readonly<{ state: 'unavailable'; gapCode: DailyBriefBackfillGapCode; detail: string }>
+
+/**
+ * How a reader describes itself in the answer. The tool prints these beside the value, so a fact's
+ * provenance is written by the reader that actually read it rather than by the metric list.
+ */
+const READER_PROVENANCE = Object.freeze({
+  stablecoin: Object.freeze({
+    method: 'capital-conditions-as-of-snapshot', sourceUrl: 'https://stablecoins.llama.fi/stablecoins'
+  }),
+  etfBtc: Object.freeze({
+    method: 'etf-current-state-as-of', sourceUrl: 'https://0xrouter.app/cexdata/etf/bitcoin/flow-history'
+  }),
+  etfEth: Object.freeze({
+    method: 'etf-current-state-as-of', sourceUrl: 'https://0xrouter.app/cexdata/etf/ethereum/flow-history'
+  }),
+  funding: Object.freeze({
+    method: 'funding-rate-history-as-of', sourceUrl: 'https://fapi.binance.com/fapi/v1/fundingRate'
+  }),
+  openInterest: Object.freeze({
+    method: 'perpetual-positioning-as-of', sourceUrl: 'https://fapi.binance.com/futures/data/openInterestHist'
+  })
+})
+
+const MACRO_SERIES: Readonly<Record<MacroReader, MacroHistoryAsOfSeries>> = Object.freeze({
+  'macro-dxy': 'dxy', 'macro-gold': 'gold', 'macro-us10y': 'us10y', 'macro-us10y-real': 'us10y-real'
+})
+
+/**
+ * The historical reader's gap vocabulary, mapped onto this tool's. Its `unknown-series` cannot occur
+ * from a whitelisted metric; it is mapped rather than passed through so no unrecognised code reaches
+ * the editor.
+ */
+const MACRO_GAP_CODES: Readonly<Record<MacroHistoryAsOfGapCode, DailyBriefBackfillGapCode>> = Object.freeze({
+  'invalid-as-of': 'invalid-as-of',
+  'future-as-of': 'future-as-of',
+  'unknown-series': 'unknown-metric',
+  'historical-as-of-unavailable': 'historical-as-of-unavailable',
+  'query-unavailable': 'query-unavailable'
+})
 
 async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
   switch (reader) {
@@ -287,7 +301,10 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
       const result = await deps.capital({ asOf, allowStale: true })
       if (result.state === 'empty') return missing('the capital store holds no snapshot at or before this instant.')
       if (result.state !== 'available') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
-      return { state: 'available', value: result.coreStablecoins.currentUsd, observedAt: result.coreStablecoins.observedAt }
+      return {
+        state: 'available', value: result.coreStablecoins.currentUsd, observedAt: result.coreStablecoins.observedAt,
+        ...READER_PROVENANCE.stablecoin
+      }
     }
     case 'etf-btc':
     case 'etf-eth': {
@@ -300,7 +317,10 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
         .sort((left, right) => left.tradingDate.localeCompare(right.tradingDate))
       const latest = rows.at(-1)
       return latest
-        ? { state: 'available', value: latest.netFlowUsd, observedAt: latest.observedAt }
+        ? {
+          state: 'available', value: latest.netFlowUsd, observedAt: latest.observedAt,
+          ...(reader === 'etf-btc' ? READER_PROVENANCE.etfBtc : READER_PROVENANCE.etfEth)
+        }
         : missing('no ETF flow row was observed at or before this instant.')
     }
     case 'funding-btc':
@@ -311,7 +331,7 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
       const points = (reader === 'funding-btc' ? result.btc : result.eth).filter((point) => point.observedAt <= asOf)
       const latest = points.at(-1)
       return latest
-        ? { state: 'available', value: latest.ratePercent, observedAt: latest.observedAt }
+        ? { state: 'available', value: latest.ratePercent, observedAt: latest.observedAt, ...READER_PROVENANCE.funding }
         : missing('no funding point was observed at or before this instant.')
     }
     case 'open-interest-btc':
@@ -322,8 +342,22 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
       const points = (reader === 'open-interest-btc' ? result.btc : result.eth).filter((point) => point.observedAt <= asOf)
       const latest = points.at(-1)
       return latest
-        ? { state: 'available', value: latest.notionalUsd, observedAt: latest.observedAt }
+        ? { state: 'available', value: latest.notionalUsd, observedAt: latest.observedAt, ...READER_PROVENANCE.openInterest }
         : missing('no open-interest bar was observed at or before this instant.')
+    }
+    case 'macro-dxy':
+    case 'macro-gold':
+    case 'macro-us10y':
+    case 'macro-us10y-real': {
+      const read = await deps.macroHistory({ series: MACRO_SERIES[reader], asOf })
+      if (!read) {
+        return unavailable('historical-as-of-unavailable', 'no stored historical read path is wired for the macro series in this build.')
+      }
+      if (read.state === 'unavailable') {
+        return unavailable(MACRO_GAP_CODES[read.gapCode] ?? 'query-unavailable', read.detail)
+      }
+      // The projection's own provenance, so a synthetic dollar can never inherit the licensed method.
+      return { state: 'available', value: read.value, observedAt: read.observedAt, method: read.method, sourceUrl: read.sourceUrl }
     }
   }
 }

@@ -59,6 +59,11 @@ import { buildQueryResultHash } from './resultHash'
 import { buildSourceCoverageAsOf, summarizeSourceCoverage } from './sourceCoverageAsOf'
 import type { createCapitalConditionsSnapshotQueryService } from '../capital-conditions/capitalConditionsSnapshotQuery'
 import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEconomicCalendarQueryService'
+import type {
+  MacroHistoryAsOfQuery,
+  MacroHistoryAsOfRequest,
+  MacroHistoryAsOfResult
+} from './macroHistoryAsOf'
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
 import type { MacroRatesSnapshot } from '../macro-rates/macroRatesSnapshotQuery'
 import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendarQueryContracts'
@@ -118,6 +123,16 @@ export type MarketIntelligencePublicQueryService = {
   queryMacroRatesSnapshot: () => MacroRatesSnapshot | undefined
   setMacroRatesSnapshotQuery: (query: Pick<MacroRatesSnapshotQuery, 'snapshot'> | undefined) => void
   /**
+   * The dollar, gold and the two 10-year yields as they stood at an instant: the one historical read
+   * of those series, and the reader the daily brief's backfill tool is built on.
+   *
+   * Late-bound and synchronous for the same reasons as the two snapshots above. `undefined` means no
+   * historical reader is wired in this build — a caller has to report that as unavailable, never as
+   * an empty store and never by substituting the current snapshot.
+   */
+  queryMacroHistoryAsOf: (input: MacroHistoryAsOfRequest) => MacroHistoryAsOfResult | undefined
+  setMacroHistoryAsOfQuery: (query: Pick<MacroHistoryAsOfQuery, 'read'> | undefined) => void
+  /**
    * The policy path the analysis reads: the next FOMC meeting, the market's odds for it, the target
    * range, the latest SEP and the last vote. Late-bound like the rate blocks because the policy
    * query is created in bootstrap; the implementation also checks the source switch, so a disabled
@@ -166,6 +181,7 @@ export function createMarketIntelligencePublicQueryService(
   let crossAssetQuery: CrossAssetQuery | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
   let macroRatesSnapshotQuery: MacroRatesSnapshotQuery | undefined
+  let macroHistoryAsOfQuery: Pick<MacroHistoryAsOfQuery, 'read'> | undefined
   let policyPathContextQuery: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined
 
   return {
@@ -333,6 +349,18 @@ export function createMarketIntelligencePublicQueryService(
     },
     setMacroRatesSnapshotQuery(query) {
       macroRatesSnapshotQuery = query
+    },
+    // Fail closed to `undefined` like the two snapshots: an unwired reader is "no historical answer
+    // exists in this build", which the caller reports as a gap rather than as a stored zero.
+    queryMacroHistoryAsOf(input) {
+      try {
+        return macroHistoryAsOfQuery?.read(input)
+      } catch {
+        return undefined
+      }
+    },
+    setMacroHistoryAsOfQuery(query) {
+      macroHistoryAsOfQuery = query
     },
     async queryPolicyPath(input) {
       if (!policyPathContextQuery) return { state: 'unavailable' as const }

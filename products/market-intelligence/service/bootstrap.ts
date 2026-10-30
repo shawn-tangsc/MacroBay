@@ -59,6 +59,7 @@ import { createMacroCalendarWriteActions } from './intelligence/macro-calendar/m
 import { registerMacroMarketIpc, registerDashboardFeedStatusIpc } from './intelligence/macro-market/ipc/registerMacroMarketIpc'
 import { createMacroMarketSnapshotQuery } from './intelligence/macro-market/macroMarketSnapshotQuery'
 import { registerMacroRatesIpc } from './intelligence/macro-rates/ipc/registerMacroRatesIpc'
+import { createMacroHistoryAsOfQuery } from './intelligence/public-query/macroHistoryAsOf'
 import { registerProvenanceIpc } from './intelligence/provenance/registerProvenanceIpc'
 import { createMacroRatesSnapshotQuery } from './intelligence/macro-rates/macroRatesSnapshotQuery'
 import { createDashboardSourceConnectionService } from './intelligence/application/dashboardSourceConnectionService'
@@ -564,6 +565,13 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // daily closes, so every reading carries its observation date and the `official-daily-close` caveat.
   const macroRatesSnapshot = createMacroRatesSnapshotQuery({ listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents() })
   registerMacroRatesIpc(register, { snapshot: macroRatesSnapshot.snapshot })
+  // The daily brief's backfill tool reads those same two stores as of an earlier instant — the stored
+  // macro-market points for the dollar and gold, and the stored FRED closes for the two 10-year yields.
+  // A projection can only answer from what was already collected; this wiring adds no request.
+  const macroHistoryAsOf = createMacroHistoryAsOfQuery({
+    macroMarket: intelligenceModule.macroMarket.store,
+    listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents()
+  })
   // 口径查询：只读、无依赖（内核是纯函数），agent 侧按需问"这个数从哪来"用。
   registerProvenanceIpc(register)
   // The analysis reads the same two snapshots the panel reads, through the public query service rather
@@ -571,6 +579,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // from the table the reader is looking at.
   intelligenceModule.publicQueryService.setMacroMarketSnapshotQuery({ snapshot: macroMarketSnapshot.snapshot })
   intelligenceModule.publicQueryService.setMacroRatesSnapshotQuery({ snapshot: macroRatesSnapshot.snapshot })
+  intelligenceModule.publicQueryService.setMacroHistoryAsOfQuery(macroHistoryAsOf)
   // Start only now that the socket constructor is bound: a first reconcile before this would fail
   // once and then sit in backoff for a whole profile-check interval.
   void intelligenceModule.macroMarketLive.reconcile().catch(() => undefined)

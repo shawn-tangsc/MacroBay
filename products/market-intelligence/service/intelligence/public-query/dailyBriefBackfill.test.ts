@@ -8,6 +8,7 @@ import {
   isDailyBriefBackfillResult,
   type DailyBriefBackfillDeps
 } from './dailyBriefBackfill'
+import type { MacroHistoryAsOfReading, MacroHistoryAsOfSeries } from './macroHistoryAsOf'
 
 const cutoff = '2026-10-30T00:00:00.000Z'
 
@@ -75,12 +76,60 @@ function openInterest(): OpenInterestHistoryResult {
   }
 }
 
+/** The 08:00 edition's own macro levels — what the stores held at the cutoff. */
+const MACRO_AT_CUTOFF: Readonly<Record<MacroHistoryAsOfSeries, Omit<MacroHistoryAsOfReading, 'state' | 'series' | 'asOf'>>> = {
+  dxy: {
+    seriesId: 'dxy-real', value: 100.2, observedAt: '2026-10-29T23:55:00.000Z',
+    method: 'dxy-store-as-of', sourceUrl: 'https://api.realmarketapi.com/api/v1/price'
+  },
+  gold: {
+    seriesId: 'xau-usd', value: 4150.25, observedAt: '2026-10-29T23:50:00.000Z',
+    method: 'gold-store-as-of', sourceUrl: 'https://api.realmarketapi.com/api/v1/price'
+  },
+  us10y: {
+    seriesId: 'DGS10', value: 4.15, observedAt: '2026-10-29T00:00:00.000Z', period: '2026-10-29',
+    method: 'fred-daily-close-as-of', sourceUrl: 'https://fred.stlouisfed.org/series/DGS10'
+  },
+  'us10y-real': {
+    seriesId: 'DFII10', value: 1.85, observedAt: '2026-10-29T00:00:00.000Z', period: '2026-10-29',
+    method: 'fred-daily-close-as-of', sourceUrl: 'https://fred.stlouisfed.org/series/DFII10'
+  }
+}
+
+/**
+ * The stored history as the projection answers it: the cutoff instant gets the 08:00 levels, and any
+ * instant after it gets the evening's — so a backfill that read "now" instead of `asOf` would state a
+ * number this fixture can tell apart.
+ */
+function macroLevelAt(input: Readonly<{ series: MacroHistoryAsOfSeries; asOf: string }>): MacroHistoryAsOfReading {
+  const level = MACRO_AT_CUTOFF[input.series]
+  const afterCutoff = input.asOf > cutoff
+  return {
+    state: 'available',
+    series: input.series,
+    asOf: input.asOf,
+    ...level,
+    ...(afterCutoff ? { value: level.value + 1, observedAt: '2026-10-30T12:55:00.000Z' } : {})
+  }
+}
+
+/** The async reader the tool takes. */
+function macroHistory() {
+  return vi.fn(async (input: Readonly<{ series: MacroHistoryAsOfSeries; asOf: string }>) => macroLevelAt(input))
+}
+
+/** The synchronous read the public query service exposes. */
+function macroHistoryQuery() {
+  return vi.fn((input: Readonly<{ series: MacroHistoryAsOfSeries; asOf: string }>) => macroLevelAt(input))
+}
+
 function deps(overrides: Partial<DailyBriefBackfillDeps> = {}): DailyBriefBackfillDeps {
   return {
     cutoff,
     capital: vi.fn(async () => capital()),
     funding: vi.fn(async () => funding()),
     openInterest: vi.fn(async () => openInterest()),
+    macroHistory: macroHistory(),
     now: () => '2026-10-30T13:00:00.000Z',
     ...overrides
   }
@@ -97,6 +146,7 @@ describe('daily brief backfill', () => {
     expect(d.capital).not.toHaveBeenCalled()
     expect(d.funding).not.toHaveBeenCalled()
     expect(d.openInterest).not.toHaveBeenCalled()
+    expect(d.macroHistory).not.toHaveBeenCalled()
   })
 
   it('returns the stablecoin level as it stood at the cutoff, with its observation time and method', async () => {
@@ -133,19 +183,48 @@ describe('daily brief backfill', () => {
       .resolves.toMatchObject({ state: 'available', value: 800_000_000, observedAt: '2026-10-29T23:45:00.000Z', unit: 'usd' })
   })
 
-  it('answers a named gap, without inventing a number, for metrics with no as-of read path', async () => {
+  it('answers the dollar, gold and both 10-year yields from stored history at the cutoff', async () => {
     const d = deps()
+    const dxy = await backfillDailyBriefFact({ source: 'dxy', metric: 'dxy-level', asOf: cutoff }, d)
+    expect(dxy).toEqual({
+      state: 'available', source: 'dxy', metric: 'dxy-level', asOf: cutoff, value: 100.2, unit: 'level',
+      observedAt: '2026-10-29T23:55:00.000Z', method: 'dxy-store-as-of',
+      sourceUrl: 'https://api.realmarketapi.com/api/v1/price'
+    })
+    expect(isDailyBriefBackfillResult(dxy)).toBe(true)
+    await expect(backfillDailyBriefFact({ source: 'gold', metric: 'gold-level-usd', asOf: cutoff }, d))
+      .resolves.toMatchObject({ state: 'available', value: 4150.25, unit: 'level', method: 'gold-store-as-of' })
+    await expect(backfillDailyBriefFact({ source: 'treasury', metric: 'us10y-yield-percent', asOf: cutoff }, d))
+      .resolves.toMatchObject({ state: 'available', value: 4.15, unit: 'percent', observedAt: '2026-10-29T00:00:00.000Z' })
+    await expect(backfillDailyBriefFact({ source: 'treasury', metric: 'us10y-real-yield-percent', asOf: cutoff }, d))
+      .resolves.toMatchObject({ state: 'available', value: 1.85, unit: 'percent' })
+    // The four requests read the store at the requested instant, never at "now".
+    expect(d.macroHistory).toHaveBeenCalledWith({ series: 'dxy', asOf: cutoff })
+    expect(d.capital).not.toHaveBeenCalled()
+  })
+
+  it('answers historical-as-of-unavailable, not the current snapshot, when no stored history exists', async () => {
+    // No historical reader in this build at all.
+    const unwired = deps({ macroHistory: async () => undefined })
+    const missingReader = await backfillDailyBriefFact({ source: 'dxy', metric: 'dxy-level', asOf: cutoff }, unwired)
+    expect(missingReader).toMatchObject({ state: 'unavailable', gapCode: 'historical-as-of-unavailable' })
+    expect('value' in missingReader).toBe(false)
+
+    // A reader that is wired but holds nothing at or before the instant says the same thing.
+    const empty = deps({ macroHistory: async (input) => ({
+      state: 'unavailable' as const, series: input.series, asOf: input.asOf,
+      gapCode: 'historical-as-of-unavailable' as const, detail: 'the store holds no point at or before this instant.'
+    }) })
     for (const [source, metric] of [
       ['dxy', 'dxy-level'],
       ['gold', 'gold-level-usd'],
       ['treasury', 'us10y-yield-percent'],
       ['treasury', 'us10y-real-yield-percent']
     ] as const) {
-      const result = await backfillDailyBriefFact({ source, metric, asOf: cutoff }, d)
+      const result = await backfillDailyBriefFact({ source, metric, asOf: cutoff }, empty)
       expect(result).toMatchObject({ state: 'unavailable', source, metric, gapCode: 'historical-as-of-unavailable' })
       expect('value' in result).toBe(false)
     }
-    expect(d.capital).not.toHaveBeenCalled()
   })
 
   it('refuses an observation newer than the requested instant', async () => {
@@ -175,7 +254,8 @@ describe('daily brief backfill', () => {
     const publicQuery = {
       queryCapitalConditionsSnapshot: vi.fn(async () => capital()),
       queryFundingRateHistory: vi.fn(async () => funding()),
-      queryOpenInterestHistory: vi.fn(async () => openInterest())
+      queryOpenInterestHistory: vi.fn(async () => openInterest()),
+      queryMacroHistoryAsOf: macroHistoryQuery()
     }
     const execute = createDailyBriefBackfillExecutor({ cutoff, publicQuery, now: () => '2026-10-30T13:00:00.000Z' })
     await expect(execute({ source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: cutoff }))
@@ -184,5 +264,28 @@ describe('daily brief backfill', () => {
       .resolves.toMatchObject({ state: 'unavailable', gapCode: 'future-as-of' })
     expect(publicQuery.queryCapitalConditionsSnapshot).toHaveBeenCalledTimes(1)
     expect(publicQuery.queryCapitalConditionsSnapshot).toHaveBeenCalledWith({ asOf: cutoff, allowStale: true })
+  })
+
+  it('fills an 08:00 edition generated at 21:00 with the 08:00 macro level, not the evening one', async () => {
+    const publicQuery = {
+      queryCapitalConditionsSnapshot: vi.fn(async () => capital()),
+      queryFundingRateHistory: vi.fn(async () => funding()),
+      queryOpenInterestHistory: vi.fn(async () => openInterest()),
+      queryMacroHistoryAsOf: macroHistoryQuery()
+    }
+    // 08:00 Asia/Shanghai = 00:00Z; 21:00 the same day = 13:00Z.
+    const execute = createDailyBriefBackfillExecutor({ cutoff, publicQuery, now: () => '2026-10-30T13:00:00.000Z' })
+
+    const backfilled = await execute({ source: 'dxy', metric: 'dxy-level', asOf: cutoff })
+    expect(backfilled).toMatchObject({
+      state: 'available', value: 100.2, observedAt: '2026-10-29T23:55:00.000Z'
+    })
+    expect(publicQuery.queryMacroHistoryAsOf).toHaveBeenCalledWith({ series: 'dxy', asOf: cutoff })
+
+    // Asking for the evening instant is refused by the cutoff, so the market the edition never saw
+    // cannot be imported into it — the fixture's evening level (+1) is unreachable through this tool.
+    await expect(execute({ source: 'dxy', metric: 'dxy-level', asOf: '2026-10-30T12:55:00.000Z' }))
+      .resolves.toMatchObject({ state: 'unavailable', gapCode: 'future-as-of' })
+    expect(publicQuery.queryMacroHistoryAsOf).toHaveBeenCalledTimes(1)
   })
 })
