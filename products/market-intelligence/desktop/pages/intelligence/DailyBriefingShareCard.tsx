@@ -119,6 +119,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <div className="mi-brief-poster__next-values">
           {focusEvent.consensus ? `${text.next.expected} ${focusEvent.consensus}` : ''}
           {focusEvent.previous ? `${focusEvent.consensus ? ' · ' : ''}${text.next.previous} ${focusEvent.previous}` : ''}
+          {!focusEvent.consensus && !focusEvent.previous ? text.next.noExpected : ''}
         </div>
         <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
       </div> : null}
