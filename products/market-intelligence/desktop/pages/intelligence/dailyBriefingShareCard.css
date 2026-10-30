@@ -158,8 +158,8 @@
 
 .mi-brief-poster__news-reason { display: block; margin-top: 3px; color: #5b4a35 !important; font-size: 9.5px !important; line-height: 1.45; }
 
-.mi-brief-poster__macro { display: grid; grid-template-columns: 96px 1fr; gap: 0 14px; padding: 9px 0; border-top: 1px solid #e7ddcd; }
-.mi-brief-poster__macro > span { color: #8b8475; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.mi-brief-poster__macro { display: grid; grid-template-columns: 112px 1fr; gap: 0 18px; padding: 9px 0; border-top: 1px solid #e7ddcd; }
+.mi-brief-poster__macro > span { color: #8b8475; font-size: 10.5px; line-height: 1.55; white-space: nowrap; }
 .mi-brief-poster__macro > div > p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
 .mi-brief-poster__macro > div > small { display: block; margin-top: 4px; color: #625f55; font-size: 12px; line-height: 1.5; }
 .mi-brief-poster__macro-head { margin: 14px 0 4px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
