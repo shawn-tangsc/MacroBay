@@ -21,19 +21,21 @@ const event = JSON.stringify([{ markets: [
   { groupItemTitle: '50+ bps decrease', outcomePrices: '["0.0025","0.9975"]', bestBid: 0, bestAsk: 0 }
 ] }])
 
-const runtimeWith = (input: { enabled?: boolean; scheduled?: string; fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }> }) => {
+const runtimeWith = (input: { enabled?: boolean; scheduled?: string; facts?: { hasProjectionMaterials: boolean; sep?: { asOf: string } }; fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }> }) => {
   const appended: Array<{ meetingDate: string; at: string }> = []
+  const sepWrites: Array<{ meetingDate: string }> = []
   const runtime = createPolicyPathRuntime({
     jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn() },
     repository: {
       listEffectiveMonthAsOf: () => input.scheduled ? [meeting(input.scheduled)] : [],
-      policyObservations: { append: (meetingDate: string, observation: { at: string }) => { appended.push({ meetingDate, at: observation.at }) } }
+      policyObservations: { append: (meetingDate: string, observation: { at: string }) => { appended.push({ meetingDate, at: observation.at }) } },
+      policyFacts: { read: () => input.facts, recordSep: (value: { meetingDate: string }) => { sepWrites.push(value) } }
     } as never,
     fetch: input.fetch ?? (async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('public-search') ? search : event })),
     isEnabled: async () => input.enabled ?? true,
     now: () => '2026-11-25T13:10:00.000Z'
   })
-  return { runtime, appended }
+  return { runtime, appended, sepWrites }
 }
 
 describe('policy path runtime', () => {
@@ -62,7 +64,7 @@ describe('policy path runtime', () => {
     const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn() }
     const scoped = createPolicyPathRuntime({
       jobRuntime,
-      repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() } } as never,
+      repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() }, policyFacts: { read: () => undefined, recordSep: vi.fn() } } as never,
       fetch: async () => ({ ok: false, status: 0, text: async () => '' }),
       isEnabled: async () => true
     })
@@ -70,5 +72,47 @@ describe('policy path runtime', () => {
     expect(jobRuntime.registerHandler).toHaveBeenCalledTimes(1)
     expect(jobRuntime.setSchedule).toHaveBeenCalledTimes(1)
     void runtime
+  })
+})
+
+describe('policy path runtime SEP collection', () => {
+  const projection = `<table>
+<tr><th>Variable</th><th>2026</th><th>2027</th><th>2028</th><th>2029</th><th>Longer run</th><th>2026</th><th>2027</th><th>2028</th><th>2029</th><th>Longer run</th><th>2026</th><th>2027</th><th>2028</th><th>2029</th><th>Longer run</th></tr>
+<tr><td>Federal funds rate</td><td>4.1</td><td>4.1</td><td>3.9</td><td>3.6</td><td>3.2</td><td>4.1–4.4</td><td>3.6–4.4</td><td>3.1–4.1</td><td>3.1–3.6</td><td>3.0–3.6</td><td>3.9–4.4</td><td>3.1–4.4</td><td>3.1–4.1</td><td>2.9–3.9</td><td>2.9–3.9</td></tr>
+<tr><td>June projection</td><td>3.8</td><td>3.6</td><td>3.4</td><td>—</td><td>3.1</td><td>3.6–4.1</td><td>3.1–3.9</td><td>3.1–3.6</td><td>—</td><td>3.0–3.5</td><td>3.4–4.4</td><td>2.9–4.4</td><td>2.9–3.9</td><td>—</td><td>2.9–3.9</td></tr>
+</table>`
+
+  it('reads the projections once for a meeting that publishes them', async () => {
+    const sepWrites: Array<{ meetingDate: string; sep: { asOf: string } }> = []
+    const runtime = createPolicyPathRuntime({
+      jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn() },
+      repository: {
+        listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
+        policyObservations: { append: vi.fn() },
+        policyFacts: { read: () => ({ hasProjectionMaterials: true }), recordSep: (value: never) => { sepWrites.push(value) } }
+      } as never,
+      fetch: async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('fomcprojtabl') ? projection : url.includes('public-search') ? search : event }),
+      isEnabled: async () => true,
+      now: () => '2026-11-25T13:10:00.000Z'
+    })
+    await runtime.run()
+    expect(sepWrites).toHaveLength(1)
+    expect(sepWrites[0]).toMatchObject({ meetingDate: '2026-12-09', sep: { asOf: '2026-12-09' } })
+  })
+
+  it('does not re-read projections it already has', async () => {
+    const recordSep = vi.fn()
+    const runtime = createPolicyPathRuntime({
+      jobRuntime: { registerHandler: vi.fn(), setSchedule: vi.fn() },
+      repository: {
+        listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
+        policyObservations: { append: vi.fn() },
+        policyFacts: { read: () => ({ hasProjectionMaterials: true, sep: { asOf: '2026-12-09' } }), recordSep }
+      } as never,
+      fetch: async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('public-search') ? search : event }),
+      isEnabled: async () => true
+    })
+    await runtime.run()
+    expect(recordSep).not.toHaveBeenCalled()
   })
 })

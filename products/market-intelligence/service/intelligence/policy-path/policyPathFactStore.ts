@@ -1,4 +1,5 @@
 import type { createMacroCalendarSqlite } from '../macro-calendar/macroCalendarSqlite'
+import type { PolicyPathSep } from '../../../contracts/policyPath'
 
 /**
  * Policy facts are the official readings behind the policy-path block: when the next meeting is,
@@ -31,12 +32,14 @@ export type PolicyPathFacts = Readonly<{
   vote?: Readonly<{ for: number; against: number }>
   dissents?: ReadonlyArray<Readonly<{ name: string; preferred: 'raise' | 'lower' | 'maintain' }>>
   statementUrl?: string
+  sep?: PolicyPathSep
   detectedAt: string
 }>
 
 export type PolicyPathFactStore = Readonly<{
   recordSchedule: (facts: PolicyPathScheduleFact) => void
   recordDecision: (facts: PolicyPathDecisionFact) => void
+  recordSep: (input: { meetingDate: string; sep: PolicyPathSep }) => void
   read: (meetingDate: string) => PolicyPathFacts | undefined
 }>
 
@@ -65,6 +68,12 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
        statement_url = excluded.statement_url,
        detected_at = excluded.detected_at`
   )
+  const upsertSep = database.prepare(
+    `insert into mi_policy_path_sep (meeting_date, sep_json, detected_at)
+     values (?, ?, ?)
+     on conflict(meeting_date) do update set sep_json = excluded.sep_json, detected_at = excluded.detected_at`
+  )
+  const selectSep = database.prepare('select sep_json from mi_policy_path_sep where meeting_date = ? limit 1')
   const select = database.prepare('select * from mi_policy_path_facts where meeting_date = ? limit 1')
   return Object.freeze({
     recordSchedule(facts) {
@@ -82,19 +91,26 @@ export function createPolicyPathFactStore(database: Database): PolicyPathFactSto
         facts.detectedAt
       )
     },
+    recordSep({ meetingDate, sep }) {
+      upsertSep.run(meetingDate, JSON.stringify(sep), sep.asOf)
+    },
     read(meetingDate) {
       const row = select.get(meetingDate) as FactRow | undefined
-      return row ? toFacts(row) : undefined
+      const sepRow = selectSep.get(meetingDate) as { sep_json?: unknown } | undefined
+      const sep = parseSep(sepRow?.sep_json)
+      if (!row) return undefined
+      return toFacts(row, sep)
     }
   })
 }
 
-function toFacts(row: FactRow): PolicyPathFacts {
+function toFacts(row: FactRow, sep: PolicyPathSep | undefined): PolicyPathFacts {
   const lower = row.target_lower === null || row.target_lower === undefined ? undefined : Number(row.target_lower)
   const upper = row.target_upper === null || row.target_upper === undefined ? undefined : Number(row.target_upper)
   const voteFor = row.vote_for === null || row.vote_for === undefined ? undefined : Number(row.vote_for)
   const voteAgainst = row.vote_against === null || row.vote_against === undefined ? undefined : Number(row.vote_against)
   const dissents = typeof row.dissents_json === 'string' ? parseDissents(row.dissents_json) : undefined
+
   return {
     meetingDate: String(row.meeting_date),
     hasProjectionMaterials: Number(row.has_projection_materials) === 1,
@@ -102,8 +118,26 @@ function toFacts(row: FactRow): PolicyPathFacts {
     ...(voteFor !== undefined && voteAgainst !== undefined ? { vote: { for: voteFor, against: voteAgainst } } : {}),
     ...(dissents ? { dissents } : {}),
     ...(typeof row.statement_url === 'string' ? { statementUrl: row.statement_url } : {}),
+    ...(sep ? { sep } : {}),
     detectedAt: String(row.detected_at)
   }
+}
+
+function parseJson(value: unknown): unknown {
+  if (typeof value !== 'string') return undefined
+  try {
+    return JSON.parse(value)
+  } catch {
+    return undefined
+  }
+}
+
+function parseSep(value: unknown): PolicyPathSep | undefined {
+  const parsed = parseJson(value)
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const row = parsed as Partial<PolicyPathSep>
+  if (typeof row.asOf !== 'string' || typeof row.sourceUrl !== 'string' || !row.medianPath) return undefined
+  return row as PolicyPathSep
 }
 
 function parseDissents(value: string): PolicyPathFacts['dissents'] {

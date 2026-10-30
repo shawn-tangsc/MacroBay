@@ -17,6 +17,16 @@ export type PolicyPathReading = Readonly<{
   daysUntilMeeting: number
   hasProjectionMaterials: boolean
   targetRange?: Readonly<{ lowerPercent: number; upperPercent: number }>
+  sep?: Readonly<{
+    asOf: string
+    medianPath?: Readonly<Record<string, number>>
+    medianCurrentYear?: number
+    previousMedian?: number
+    rangeCurrentYear?: Readonly<{ low: number; high: number }>
+    /** What the median still implies against the current midpoint, in 25bp steps. */
+    stepsFromCurrent?: number
+    sourceUrl: string
+  }>
   lastDecision?: Readonly<{
     vote?: Readonly<{ for: number; against: number }>
     dissents?: ReadonlyArray<Readonly<{ name: string; preferred: 'raise' | 'lower' | 'maintain' }>>
@@ -64,6 +74,7 @@ export function createPolicyPathQueryService(deps: {
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
         ...(facts?.targetRange ? { targetRange: facts.targetRange } : {}),
+        ...(facts?.sep ? { sep: sepOf(facts.sep, facts.targetRange) } : {}),
         ...(facts && (facts.vote || facts.dissents || facts.statementUrl)
           ? { lastDecision: { ...(facts.vote ? { vote: facts.vote } : {}), ...(facts.dissents ? { dissents: facts.dissents } : {}), ...(facts.statementUrl ? { statementUrl: facts.statementUrl } : {}) } }
           : {}),
@@ -72,6 +83,27 @@ export function createPolicyPathQueryService(deps: {
       }
     }
   })
+}
+
+function sepOf(
+  sep: NonNullable<import('./policyPathFactStore').PolicyPathFacts['sep']>,
+  targetRange: { lowerPercent: number; upperPercent: number } | undefined
+): NonNullable<PolicyPathReading['sep']> {
+  const year = sep.asOf.slice(0, 4)
+  const medianCurrentYear = (sep.medianPath as Record<string, number | undefined>)[`y${year}`]
+  const midpoint = targetRange ? (targetRange.lowerPercent + targetRange.upperPercent) / 2 : undefined
+  const stepsFromCurrent = medianCurrentYear !== undefined && midpoint !== undefined
+    ? Math.round((medianCurrentYear - midpoint) / 0.25)
+    : undefined
+  return {
+    asOf: sep.asOf,
+    medianPath: sep.medianPath as Record<string, number>,
+    ...(medianCurrentYear === undefined ? {} : { medianCurrentYear }),
+    ...(sep.previousMedian === undefined ? {} : { previousMedian: sep.previousMedian }),
+    ...(sep.rangeCurrentYear ? { rangeCurrentYear: sep.rangeCurrentYear } : {}),
+    ...(stepsFromCurrent === undefined ? {} : { stepsFromCurrent }),
+    sourceUrl: sep.sourceUrl
+  }
 }
 
 function probabilityOf(series: readonly PolicyPathObservation[], asOf: string): NonNullable<PolicyPathReading['probability']> {

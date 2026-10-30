@@ -28,6 +28,7 @@ import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapsh
 import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { PolicyPathStrip } from './PolicyPathStrip'
 import { policyPathMonth } from './policyPathMonth'
 import { usePolicyPathReading } from './usePolicyPathReading'
@@ -89,6 +90,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // The policy row reads one assembled object: the meeting date, the official facts and the odds
   // history are joined in the main process, so this dashboard never builds a second opinion.
   const policyPath = usePolicyPathReading(true)
+  const [policyDrawerOpen, setPolicyDrawerOpen] = useState(false)
   // The panel's copy, plus the calendar's title vocabulary when the page handed one down. Memoized
   // because the panel keys its calendar read off `eventTitles`: a fresh object every render would
   // make it re-query the calendar on every render of this dashboard.
@@ -154,7 +156,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         onSelectEvent={onSelectChartEvent}
         text={crossAssetText} /> : null}
       {policyPath?.state === 'available' ? <PolicyPathStrip reading={policyPath.reading} text={text.policyPath}
-        month={policyPathMonth(policyPath.reading.meetingDate, locale)} /> : null}
+        month={policyPathMonth(policyPath.reading.meetingDate, locale)} onOpen={() => setPolicyDrawerOpen(true)} /> : null}
+      {policyDrawerOpen && policyPath?.state === 'available' ? <PolicyPathDrawer reading={policyPath.reading}
+        text={text.policyPath} onClose={() => setPolicyDrawerOpen(false)} /> : null}
       <div className="mi-crypto-dashboard__capital-positioning-row">
         <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
           onRefresh={collectCapitalConditionsSources ? () => void refreshCapitalConditions() : undefined}

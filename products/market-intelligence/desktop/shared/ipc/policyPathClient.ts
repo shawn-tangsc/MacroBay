@@ -43,12 +43,16 @@ function readReading(value: unknown): PolicyPathReading | undefined {
     ? { ...value.probability } as PolicyPathReading['probability']
     : undefined
   const lastDecision = readLastDecision(value.lastDecision)
+  const sep = isObject(value.sep) && typeof value.sep.medianCurrentYear === 'number' && typeof value.sep.sourceUrl === 'string'
+    ? value.sep as NonNullable<PolicyPathReading['sep']>
+    : undefined
   return {
     meetingDate: value.meetingDate,
     daysUntilMeeting: value.daysUntilMeeting,
     hasProjectionMaterials: value.hasProjectionMaterials,
     ...(isObject(value.targetRange) ? { targetRange: value.targetRange as NonNullable<PolicyPathReading['targetRange']> } : {}),
     ...(lastDecision ? { lastDecision } : {}),
+    ...(sep ? { sep } : {}),
     ...(probability ? { probability } : {}),
     staleness: value.staleness
   }

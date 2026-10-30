@@ -3,6 +3,7 @@ import type { JobRuntime } from '@platform/jobs'
 import { createMacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type { MacroCalendarRepository } from '../macro-calendar/macroCalendarRepository'
 import { createPolicyPathMarketSource, type PolicyPathMarketResponse } from './policyPathMarketSource'
+import { parsePolicyPathSep } from './policyPathSepParser'
 
 /**
  * Collects one meeting's implied odds and appends them to the series.
@@ -37,7 +38,7 @@ type FetchLike = (url: string) => Promise<{ ok: boolean; status: number; text: (
 
 export function createPolicyPathRuntime(deps: {
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule'>
-  repository: Pick<MacroCalendarRepository, 'policyObservations' | 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
+  repository: Pick<MacroCalendarRepository, 'policyObservations' | 'policyFacts' | 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
   fetch: FetchLike
   isEnabled: () => Promise<boolean>
   now?: () => string
@@ -57,6 +58,13 @@ export function createPolicyPathRuntime(deps: {
     const observation = await source.fetchMeeting({ slug, at })
     if (!observation) return { state: 'skipped', reason: 'no-reading' }
     deps.repository.policyObservations.append(meetingDate, observation)
+    // The projection materials are per-meeting, so they are read once and kept until the next SEP
+    // meeting; re-fetching them every ten minutes would be a second, pointless request.
+    const facts = deps.repository.policyFacts.read(meetingDate)
+    if (facts?.hasProjectionMaterials && facts.sep?.asOf !== meetingDate) {
+      const projection = await readSep(deps.fetch, meetingDate)
+      if (projection) deps.repository.policyFacts.recordSep({ meetingDate, sep: projection })
+    }
     return { state: 'recorded', meetingDate, at }
   }
 
@@ -112,6 +120,17 @@ async function discoverSlug(fetchImpl: FetchLike, meetingDate: string): Promise<
   })
   candidates.sort((left, right) => Number(right.matchesMonth) - Number(left.matchesMonth) || left.distance - right.distance)
   return candidates[0]?.slug
+}
+
+async function readSep(fetchImpl: FetchLike, meetingDate: string) {
+  const sourceUrl = `https://www.federalreserve.gov/monetarypolicy/fomcprojtabl${meetingDate.replaceAll('-', '')}.htm`
+  try {
+    const response = await fetchImpl(sourceUrl)
+    if (!response.ok) return undefined
+    return parsePolicyPathSep({ body: await response.text(), sourceUrl })
+  } catch {
+    return undefined
+  }
 }
 
 function monthName(date: string): string {

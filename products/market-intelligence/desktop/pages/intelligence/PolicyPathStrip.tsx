@@ -11,7 +11,7 @@ import type { PolicyPathReading } from '../../../service/intelligence/policy-pat
  */
 export type PolicyPathText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
-  probability: string; probabilityLabel: string; lastVote: string; unchanged: string; detail: string
+  probability: string; probabilityLabel: string; lastVote: string; unchanged: string; detail: string; sepMedian: string
   live: string; delayed: string; stale: string; unavailable: string; loading: string
 }>
 
@@ -45,6 +45,11 @@ export function PolicyPathStrip({ reading, text, month, onOpen }: Readonly<{
             <Direction aria-hidden="true" size={12} />{Math.abs(change).toFixed(1)}</span>}
         </dd>
       </div> : null}
+      {reading.sep?.medianCurrentYear === undefined ? null : <div className="mi-policy-path__item">
+        <dt>{text.sepMedian}</dt>
+        <dd>{reading.sep.medianCurrentYear.toFixed(1)}%
+          <span className="mi-policy-path__muted">（{reading.sep.asOf.slice(5)}）</span></dd>
+      </div>}
       {reading.lastDecision?.vote ? <div className="mi-policy-path__item">
         <dt>{text.lastVote}</dt>
         <dd>{text.unchanged} {reading.lastDecision.vote.for}–{reading.lastDecision.vote.against}</dd>
