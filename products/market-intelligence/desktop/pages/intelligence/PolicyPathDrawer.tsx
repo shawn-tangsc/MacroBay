@@ -75,7 +75,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
     </section>
 
     <section className="mi-policy-drawer__section">
-      <h3>{text.basis}</h3>
+      <h3>{text.basis}
+        <a href="https://fred.stlouisfed.org/series/DFEDTARU" rel="noreferrer" target="_blank">FRED · DFEDTARU<ExternalLink aria-hidden="true" size={11} /></a>
+      </h3>
       <dl className="mi-policy-drawer__kv">
         {probability ? <>
           <div><dt>{text.change24h}</dt><dd>{probability.changeInPp24h === undefined ? '—' : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}</dd></div>
@@ -86,11 +88,6 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         <div><dt>{text.range}</dt><dd>{reading.targetRange ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%` : '—'}</dd></div>
         {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{probability.asOf.replace('T', ' ').slice(0, 19)}</dd></div> : null}
       </dl>
-      <p className="mi-policy-drawer__links">
-        <a href="https://fred.stlouisfed.org/series/DFEDTARU" rel="noreferrer" target="_blank">FRED · DFEDTARU<ExternalLink aria-hidden="true" size={11} /></a>
-        {reading.sep ? <a href={reading.sep.sourceUrl} rel="noreferrer" target="_blank">SEP 表<ExternalLink aria-hidden="true" size={11} /></a> : null}
-        {reading.lastDecision?.statementUrl ? <a href={reading.lastDecision.statementUrl} rel="noreferrer" target="_blank">声明原文<ExternalLink aria-hidden="true" size={11} /></a> : null}
-      </p>
     </section>
   </MiSideDrawer>
 }
