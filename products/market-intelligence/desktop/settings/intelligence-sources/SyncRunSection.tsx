@@ -18,12 +18,17 @@ export type SyncRunText = Readonly<{
   allSources: string
   showing: string
   retention: string
+  page: string
+  previous: string
+  next: string
   empty: string; unavailable: string; loading: string; exportCsv: string; exported: string; exportFailed: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   outcomes: Readonly<Record<'succeeded' | 'failed' | 'cancelled' | 'running', string>>
 }>
 
 const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
+/** Thirty rows a page: one screen of recent history without a wall of scroll. */
+const SYNC_RUN_PAGE_SIZE = 30
 
 export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React.ReactElement {
   const [window, setWindow] = useState<SyncRunWindow>('24h')
@@ -31,6 +36,7 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   const [state, setState] = useState<'loading' | 'available' | 'unavailable'>('loading')
   const [rows, setRows] = useState<readonly SyncRunRow[]>([])
   const [sourceFilter, setSourceFilter] = useState('')
+  const [page, setPage] = useState(0)
   const [notice, setNotice] = useState<string>()
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
@@ -47,9 +53,13 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   }, [window, outcome])
 
   const sources = [...new Map(rows.map((row) => [row.sourceLabel, row.sourceLabel])).keys()].sort()
-  const visible = rows
+  const filtered = rows
     .filter((row) => sourceFilter === '' || row.sourceLabel === sourceFilter)
     .filter((row) => outcome === undefined || row.outcome === outcome)
+  const pageSize = SYNC_RUN_PAGE_SIZE
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
+  const currentPage = Math.min(page, pageCount - 1)
+  const visible = filtered.slice(currentPage * pageSize, currentPage * pageSize + pageSize)
 
   const exportCsv = async () => {
     const result = await syncRunClient.exportCsv(query)
@@ -68,18 +78,18 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
       <h2>{text.title}</h2>
       <div className="mi-sync-run__filters">
         <label>{text.columns.time}
-          <select value={window} onChange={(event) => setWindow(event.target.value as SyncRunWindow)}>
+          <select value={window} onChange={(event) => { setWindow(event.target.value as SyncRunWindow); setPage(0) }}>
             {WINDOWS.map((value) => <option key={value} value={value}>{text.window[value]}</option>)}
           </select>
         </label>
         <label>{text.columns.source}
-          <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}>
+          <select value={sourceFilter} onChange={(event) => { setSourceFilter(event.target.value); setPage(0) }}>
             <option value="">{text.allSources}</option>
             {sources.map((source) => <option key={source} value={source}>{source}</option>)}
           </select>
         </label>
         <label>{text.columns.outcome}
-          <select value={outcome ?? ''} onChange={(event) => setOutcome((event.target.value || undefined) as SyncRunQuery['outcome'])}>
+          <select value={outcome ?? ''} onChange={(event) => { setOutcome((event.target.value || undefined) as SyncRunQuery['outcome']); setPage(0) }}>
             <option value="">{text.outcome.any}</option>
             {(['succeeded', 'failed', 'running'] as const).map((value) => <option key={value} value={value}>{text.outcome[value]}</option>)}
           </select>
@@ -92,23 +102,38 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
     {state === 'unavailable' ? <p className="mi-sync-run__empty">{text.unavailable}</p> : null}
     {state === 'available' && rows.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
     {state === 'available' && rows.length > 0 && visible.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
-    {state === 'available' && visible.length > 0 ? <div className="mi-sync-run__scroll"><table className="mi-sync-run__table">
-      <colgroup><col style={{ width: 96 }} /><col style={{ width: 232 }} /><col style={{ width: 84 }} /><col style={{ width: 72 }} /><col style={{ width: 72 }} /><col /></colgroup>
-      <thead><tr>
-        <th>{text.columns.time}</th><th>{text.columns.source}</th><th>{text.columns.action}</th>
-        <th>{text.columns.outcome}</th><th>{text.columns.duration}</th><th>{text.columns.detail}</th>
-      </tr></thead>
-      <tbody>{visible.map((row) => <tr key={row.runId} data-outcome={row.outcome}>
-        <td className="mi-sync-run__time">{formatTime(row.at)}</td>
-        <td>{row.sourceLabel}</td>
-        <td>{text.actions[row.action]}</td>
-        <td><span data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span></td>
-        <td className="mi-sync-run__duration">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</td>
-        <td className="mi-sync-run__detail">{row.failureCode ? <code>{row.failureCode}</code> : null}{row.detail ? <span>{row.detail}</span> : null}</td>
-      </tr>)}</tbody>
-    </table></div> : null}
-    {state === 'available' && visible.length > 0
-      ? <footer className="mi-sync-run__foot">{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(rows.length))} · {text.retention}</footer>
+    {state === 'available' && visible.length > 0 ? <div className="mi-sync-run__scroll" role="table" aria-label={text.title}>
+      {/* A grid, not a table: the header and every row share one column template, so a sticky header
+          cannot lay itself out on a different grid from the body. */}
+      <div className="mi-sync-run__grid mi-sync-run__grid--head" role="row">
+        <span role="columnheader">{text.columns.time}</span>
+        <span role="columnheader">{text.columns.source}</span>
+        <span role="columnheader">{text.columns.action}</span>
+        <span role="columnheader">{text.columns.outcome}</span>
+        <span role="columnheader">{text.columns.duration}</span>
+        <span role="columnheader">{text.columns.detail}</span>
+      </div>
+      {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
+        <span className="mi-sync-run__time" role="cell">{formatTime(row.at)}</span>
+        <span className="mi-sync-run__source" role="cell" title={row.sourceLabel}>{row.sourceLabel}</span>
+        <span role="cell">{text.actions[row.action]}</span>
+        <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
+        <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>
+        <span className="mi-sync-run__detail" role="cell">
+          {row.failureCode ? <code>{row.failureCode}</code> : null}
+          {row.detail ? <span>{row.detail}</span> : null}
+        </span>
+      </div>)}
+    </div> : null}
+    {state === 'available' && filtered.length > 0
+      ? <footer className="mi-sync-run__foot">
+        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))} · {text.retention}</span>
+        {pageCount > 1 ? <span className="mi-sync-run__pager">
+          <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} type="button">{text.previous}</button>
+          <span>{text.page.replace('{page}', String(currentPage + 1)).replace('{pages}', String(pageCount))}</span>
+          <button disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)} type="button">{text.next}</button>
+        </span> : null}
+      </footer>
       : null}
   </section>
 }

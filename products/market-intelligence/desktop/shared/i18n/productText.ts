@@ -1115,7 +1115,8 @@ export const productText = {
           exportFailed: '无法写入剪贴板，请重试',
           allSources: '全部来源',
           showing: '显示 {shown} 条，共 {total} 条',
-          retention: '明细保留 30 天，更早的只留每日汇总'
+          retention: '明细保留 30 天，更早的只留每日汇总',
+          page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页'
         },
 
         sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
@@ -2482,7 +2483,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           exportFailed: 'Could not write to the clipboard',
           allSources: 'All sources',
           showing: 'Showing {shown} of {total}',
-          retention: 'Details are kept 30 days; older runs only survive as daily counts'
+          retention: 'Details are kept 30 days; older runs only survive as daily counts',
+          page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next'
         },
 
         sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },
