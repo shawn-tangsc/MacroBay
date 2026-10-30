@@ -111,6 +111,7 @@ export function validateDailyBriefingEditorial(
       if (duplicate && duplicate.value === ref.value && duplicate.sourceUrl === ref.sourceUrl) return fail('invalid-shape')
       webEvidence.push(duplicate ? Object.freeze({ ...ref, sourceConflict: true }) : ref)
     }
+    webEvidence.sort((left, right) => Number(isOfficialSource(right.sourceUrl)) - Number(isOfficialSource(left.sourceUrl)))
   }
   const importance: Array<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }> = []
   for (const entry of raw.importance) {
@@ -355,4 +356,11 @@ function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]):
   }
   for (const invocation of invocations) walk(invocation.output)
   return results
+}
+
+function isOfficialSource(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    return host.endsWith('.gov') || ['federalreserve.gov', 'ecb.europa.eu', 'bis.org', 'imf.org', 'oecd.org'].some((domain) => host === domain || host.endsWith(`.${domain}`))
+  } catch { return false }
 }
