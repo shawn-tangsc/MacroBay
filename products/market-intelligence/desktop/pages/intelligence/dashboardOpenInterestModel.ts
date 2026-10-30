@@ -92,12 +92,6 @@ export function positioningStateFor(
   })
 }
 
-/** The newest reading either asset has, for the card's "observed at" line. */
-export function latestPositioningInstant(value: OpenInterestHistoryResult): string | undefined {
-  if (value.state !== 'available') return undefined
-  return value.btc.at(-1)?.observedAt ?? value.eth.at(-1)?.observedAt
-}
-
 export function formatDashboardNotional(value: number): string {
   if (!Number.isFinite(value)) return ''
   const billion = value / 1e9
