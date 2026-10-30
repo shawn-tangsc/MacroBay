@@ -194,7 +194,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
-        {webSearchEnabled === false ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
+        {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <button type="button" onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</button>
         </div> : null}
