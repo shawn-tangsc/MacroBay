@@ -1,6 +1,6 @@
 import {
-  changeInPp, leadingOutcome, stalenessOf, thinSeries, valueAtOrBefore,
-  type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathStaleness
+  changeInPp, decisionInstant, leadingOutcome, phaseAt, stalenessOf, thinSeries, valueAtOrBefore,
+  type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase, type PolicyPathStaleness
 } from '../../../contracts/policyPath'
 import type { MacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type { PolicyPathFactStore } from './policyPathFactStore'
@@ -16,6 +16,8 @@ export type PolicyPathReading = Readonly<{
   meetingDate: string
   daysUntilMeeting: number
   hasProjectionMaterials: boolean
+  /** The shape the block takes at the instant the reading was asked for. */
+  phase: PolicyPathPhase
   targetRange?: Readonly<{ lowerPercent: number; upperPercent: number; source?: 'statement' | 'fred' }>
   sep?: Readonly<{
     asOf: string
@@ -88,7 +90,8 @@ export function createPolicyPathQueryService(deps: {
       const facts = deps.facts.read(meetingDate)
       // The range, the vote and the latest SEP belong to the last meeting that has already decided;
       // the next meeting's row carries only its date and whether it will publish projections.
-      const decided = facts?.targetRange ? facts : deps.facts.readLatestDecision(asOf)
+      const latestDecision = deps.facts.readLatestDecision(asOf)
+      const decided = facts?.targetRange ? facts : latestDecision
       // The projections belong to the latest SEP meeting, which is usually not the meeting that last
       // decided; reading them off `decided` would hide a September SEP behind an October statement.
       const sepFact = decided?.sep ? decided : deps.facts.readLatestSep(asOf)
@@ -103,6 +106,7 @@ export function createPolicyPathQueryService(deps: {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
+        phase: phaseOf({ asOf, meetingDate, decidedMeetingDate: decided?.targetRange ? decided.meetingDate : undefined }),
         ...(range === undefined ? {} : { targetRange: range }),
         ...(sepFact?.sep ? { sep: sepOf(sepFact.sep, sepFact.targetRange) } : {}),
         ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
@@ -113,6 +117,21 @@ export function createPolicyPathQueryService(deps: {
       }
     }
   })
+}
+
+/**
+ * The shape of the block at `asOf`.
+ *
+ * A meeting that just decided keeps the card through its settlement window and its three verdict
+ * days, even after the calendar has moved on to the next meeting; outside those windows the next
+ * meeting's own decision instant decides between the normal shape and the pre-meeting countdown.
+ */
+function phaseOf(input: Readonly<{ asOf: string; meetingDate: string; decidedMeetingDate?: string }>): PolicyPathPhase {
+  const decidedAt = input.decidedMeetingDate ? decisionInstant(input.decidedMeetingDate) : undefined
+  const decidedPhase = decidedAt ? phaseAt(decidedAt, input.asOf) : undefined
+  if (decidedPhase?.kind === 'settlement' || decidedPhase?.kind === 'verdict') return decidedPhase
+  const nextAt = decisionInstant(input.meetingDate)
+  return nextAt ? phaseAt(nextAt, input.asOf) : { kind: 'normal' }
 }
 
 /** The parsed statement wins; the published series fills in when no decision has been parsed. */

@@ -1,4 +1,4 @@
-import { POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
+import { POLICY_PATH_OUTCOMES, type PolicyPathPhase } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { POLICY_PATH_IPC_METHODS } from '../../../service/intelligence/policy-path/ipc/registerPolicyPathIpc'
 
@@ -55,12 +55,30 @@ function readReading(value: unknown): PolicyPathReading | undefined {
     meetingDate: value.meetingDate,
     daysUntilMeeting: value.daysUntilMeeting,
     hasProjectionMaterials: value.hasProjectionMaterials,
+    phase: readPhase(value.phase),
     ...(isObject(value.targetRange) ? { targetRange: value.targetRange as NonNullable<PolicyPathReading['targetRange']> } : {}),
     ...(lastDecision ? { lastDecision } : {}),
     ...(sep ? { sep } : {}),
     ...(probability ? { probability } : {}),
     staleness: value.staleness
   }
+}
+
+/**
+ * The phase is derived on the service side so two machines cannot disagree about the time zone. A
+ * payload that lost it (or carries a shape this build does not know) degrades to the normal block,
+ * never to a broken one.
+ */
+function readPhase(value: unknown): PolicyPathPhase {
+  if (!isObject(value)) return { kind: 'normal' }
+  if (value.kind === 'pre-meeting' && isFiniteNumber(value.daysLeft)) return { kind: 'pre-meeting', daysLeft: value.daysLeft }
+  if (value.kind === 'settlement' && isFiniteNumber(value.minutesSinceDecision)) {
+    return { kind: 'settlement', minutesSinceDecision: value.minutesSinceDecision }
+  }
+  if (value.kind === 'verdict' && isFiniteNumber(value.daysSinceDecision)) {
+    return { kind: 'verdict', daysSinceDecision: value.daysSinceDecision }
+  }
+  return { kind: 'normal' }
 }
 
 /** The vote is the only part of the previous decision the row draws; anything else is dropped. */
@@ -87,6 +105,10 @@ function readLastDecision(value: unknown): PolicyPathReading['lastDecision'] | u
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function unavailable(failureCode: string): PolicyPathReadResult {

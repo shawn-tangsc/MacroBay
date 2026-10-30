@@ -89,3 +89,29 @@ describe('policy path reading windows', () => {
     expect(reading.probability?.asOf).toBe('2026-10-28T00:00:00.000Z')
   })
 })
+
+describe('policy path phase', () => {
+  const meeting = { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' }
+  const decidedFact = {
+    meetingDate: '2026-12-09', hasProjectionMaterials: true,
+    targetRange: { lowerPercent: 4, upperPercent: 4.25 }, vote: { for: 9, against: 3 },
+    detectedAt: '2026-12-09T19:05:00.000Z'
+  }
+
+  it('upgrades to the countdown once the meeting is inside fourteen days', () => {
+    const reading = service({ meeting, facts: null }).read({ asOf: '2026-12-03T19:00:00.000Z' })!
+    expect(reading.phase).toEqual({ kind: 'pre-meeting', daysLeft: 6 })
+  })
+
+  it('keeps the meeting that just decided through settlement and its verdict days', () => {
+    const settlement = service({ meeting, facts: decidedFact }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+    expect(settlement.phase).toEqual({ kind: 'settlement', minutesSinceDecision: 60 })
+
+    const verdict = service({ meeting, facts: decidedFact }).read({ asOf: '2026-12-10T20:00:00.000Z' })!
+    expect(verdict.phase).toEqual({ kind: 'verdict', daysSinceDecision: 1 })
+
+    // Three days after the decision the card belongs to the next meeting again.
+    const normal = service({ meeting, facts: decidedFact }).read({ asOf: '2026-12-12T20:00:00.000Z' })!
+    expect(normal.phase).toEqual({ kind: 'normal' })
+  })
+})

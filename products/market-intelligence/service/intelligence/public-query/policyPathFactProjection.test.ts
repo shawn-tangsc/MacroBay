@@ -13,6 +13,7 @@ const reading: PolicyPathReading = {
   meetingDate: '2026-11-04',
   daysUntilMeeting: 40,
   hasProjectionMaterials: false,
+  phase: { kind: 'normal' },
   targetRange: { lowerPercent: 3.75, upperPercent: 4 },
   sep: {
     asOf: '2026-09-16',

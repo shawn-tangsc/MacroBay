@@ -18,5 +18,9 @@ export async function handleGetPolicyPath(input: unknown, deps: ReadHandlerDeps)
   const caveats = ['odds-are-market-pricing']
   if (reading.sep) caveats.push('projections-from-latest-sep-meeting')
   if (reading.probability && reading.probability.changeInPp24h === undefined) caveats.push('twenty-four-hour-change-not-yet-available')
-  return { state: 'available', asOf, meetingDate: reading.meetingDate, reading, caveats }
+  // The panel's shape and its transient conclusions are excluded from the analysis snapshot by
+  // design: the same sentence would mean something else a day later, so the model gets the facts
+  // (the meeting, the range, the odds) and none of the clock-derived panel state.
+  const { phase: _phase, ...facts } = reading
+  return { state: 'available', asOf, meetingDate: reading.meetingDate, reading: facts, caveats }
 }
