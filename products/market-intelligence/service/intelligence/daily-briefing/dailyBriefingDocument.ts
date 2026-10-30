@@ -39,8 +39,8 @@ export function buildDailyBriefingDocument(input: Readonly<{
     status: buildStatus(packet, readings),
     lede: Object.freeze({
       source: 'template' as const,
-      text: buildLedeTitles(macro, news),
-      factCount: news.length + macro.length,
+      text: '',
+      factCount: 0,
       generatedAt: packet.asOf
     }),
     news: Object.freeze({
@@ -317,12 +317,6 @@ function localDate(instant: string, timeZone: string): string {
 function addDays(date: string, days: number): string {
   const parsed = Date.parse(`${date}T00:00:00.000Z`)
   return Number.isFinite(parsed) ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10) : date
-}
-
-function buildLedeTitles(macro: readonly BriefingMacroItem[], news: readonly BriefingNewsItem[]): string {
-  const titles = [...macro.map((item) => item.title), ...news.map((item) => item.translatedTitle ?? item.title)]
-  const unique = [...new Set(titles.filter(Boolean))]
-  return unique.slice(0, 3).join(' · ')
 }
 
 function newsEmptyCode(packet: DailyBriefingFactPacket): string {

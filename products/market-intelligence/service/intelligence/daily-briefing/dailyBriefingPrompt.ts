@@ -98,6 +98,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- There is no required number of items or importance rows. Empty arrays are valid.',
         '- conclusionTranslation: only when the conclusion summary is in a different language from LOCALE.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
+        '- The lede is a takeaway and its tension, never a list of the news headlines shown below; do not enumerate them again.',
         '- nextFocus: only for the next event list. Explain why the focus matters, then 2-3 if/then implications. Use only numbers in FACTS.'
       ].join('\n')
     }

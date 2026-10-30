@@ -170,7 +170,7 @@ describe('daily briefing document', () => {
     expect(document.citations[0]).toMatchObject({ sourceLabel: 'ETF flows', observedAt: '2026-10-28T00:00:00.000Z', statement: 'ETF flows confirm.' })
     expect(document.conclusion?.invalidations).toHaveLength(1)
     expect(document.lede.source).toBe('template')
-    expect(document.lede.text).toContain('CPI')
+    expect(document.lede.text).toBe('')
   })
 
   it('includes a high-impact event on the seventh local day', () => {
