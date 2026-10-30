@@ -134,10 +134,7 @@ async function readCalendar(
       () => deps.publicQuery.queryMacroEconomicCalendarMonth({ month, asOf, maxEvents: 100 }),
       undefined
     )
-    const market = safeSync(
-      () => deps.publicQuery.queryMarketCalendarMonth({ month, locale: locale === 'en-US' ? 'en' : 'zh', asOf }),
-      undefined
-    )
+    const market = readMarketCalendar(deps, month, locale, asOf)
     if (official?.state === 'available') {
       available = true
       for (const event of official.events) {
@@ -179,10 +176,7 @@ async function readCalendar(
   const latest = missing.at(-1)
   if (latest) {
     const fallbackAsOf = new Date(Date.parse(latest.scheduledAt) + 60 * 60 * 1000).toISOString()
-    const refreshed = safeSync(
-      () => deps.publicQuery.queryMarketCalendarMonth({ month: latest.scheduledAt.slice(0, 7), locale: locale === 'en-US' ? 'en' : 'zh', asOf: fallbackAsOf }),
-      undefined
-    )
+    const refreshed = readMarketCalendar(deps, latest.scheduledAt.slice(0, 7), locale, fallbackAsOf)
     if (refreshed?.state === 'available') {
       for (const event of refreshed.events) {
         const existing = events.get(event.eventKey)
@@ -194,6 +188,26 @@ async function readCalendar(
     state: available ? 'available' as const : 'unavailable' as const,
     events: Object.freeze([...events.values()])
   })
+}
+
+function readMarketCalendar(
+  deps: DailyBriefingSourceDeps,
+  month: string,
+  locale: DailyBriefingLocale,
+  asOf: string
+): Extract<ReturnType<MarketIntelligencePublicQueryService['queryMarketCalendarMonth']>, { state: 'available' }> | undefined {
+  const localeCode = locale === 'en-US' ? 'en' as const : 'zh' as const
+  const first = safeSync(() => deps.publicQuery.queryMarketCalendarMonth({ month, locale: localeCode, asOf }), undefined)
+  if (!first || first.state !== 'available') return undefined
+  const events = [...first.events]
+  let cursor = first.nextCursor
+  for (let page = 0; cursor && page < 8; page++) {
+    const next = safeSync(() => deps.publicQuery.queryMarketCalendarMonth({ month, locale: localeCode, asOf, cursor }), undefined)
+    if (!next || next.state !== 'available') break
+    events.push(...next.events)
+    cursor = next.nextCursor
+  }
+  return Object.freeze({ ...first, events: Object.freeze(events), nextCursor: undefined })
 }
 
 function officialEvent(
