@@ -9,6 +9,8 @@ export type DailyBriefingAiSettings = Readonly<{
   editorialEnabled: boolean
   providerId: string
   modelId: string
+  webSearchEnabled: boolean
+  webSearchAuthorizedAt?: string
   updatedAt: string
 }>
 
@@ -16,6 +18,8 @@ export type DailyBriefingAiSettingsPatch = Readonly<{
   editorialEnabled?: boolean
   providerId?: string
   modelId?: string
+  webSearchEnabled?: boolean
+  webSearchAuthorizedAt?: string
 }>
 
 export const dailyBriefingAiSettingsPolicy = Object.freeze({
@@ -24,7 +28,7 @@ export const dailyBriefingAiSettingsPolicy = Object.freeze({
 })
 
 export function createDefaultDailyBriefingAiSettings(now = new Date().toISOString()): DailyBriefingAiSettings {
-  return { editorialEnabled: dailyBriefingAiSettingsPolicy.defaultEditorialEnabled, providerId: '', modelId: '', updatedAt: now }
+  return { editorialEnabled: dailyBriefingAiSettingsPolicy.defaultEditorialEnabled, providerId: '', modelId: '', webSearchEnabled: false, updatedAt: now }
 }
 
 export function normalizeDailyBriefingAiSettings(
@@ -36,6 +40,8 @@ export function normalizeDailyBriefingAiSettings(
     editorialEnabled: typeof input?.editorialEnabled === 'boolean' ? input.editorialEnabled : defaults.editorialEnabled,
     providerId: typeof input?.providerId === 'string' ? input.providerId.trim() : '',
     modelId: typeof input?.modelId === 'string' ? input.modelId.trim() : '',
+    webSearchEnabled: typeof input?.webSearchEnabled === 'boolean' ? input.webSearchEnabled : false,
+    ...(typeof input?.webSearchAuthorizedAt === 'string' && input.webSearchAuthorizedAt ? { webSearchAuthorizedAt: input.webSearchAuthorizedAt } : {}),
     updatedAt: typeof input?.updatedAt === 'string' && input.updatedAt ? input.updatedAt : defaults.updatedAt
   }
 }
@@ -58,6 +64,8 @@ export function applyDailyBriefingAiSettingsPatch(
     editorialEnabled: patch.editorialEnabled ?? current.editorialEnabled,
     providerId: patch.providerId ?? current.providerId,
     modelId: patch.modelId ?? current.modelId,
+    webSearchEnabled: patch.webSearchEnabled ?? current.webSearchEnabled,
+    ...(patch.webSearchAuthorizedAt ?? current.webSearchAuthorizedAt ? { webSearchAuthorizedAt: patch.webSearchAuthorizedAt ?? current.webSearchAuthorizedAt } : {}),
     updatedAt: now
   }, now)
   if (hasHalfBoundDailyBriefingModel(next)) throw new Error(dailyBriefingAiSettingsPolicy.halfBoundError)
