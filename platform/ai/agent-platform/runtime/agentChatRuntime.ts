@@ -62,6 +62,8 @@ export type AgentChatRuntimeResult = {
   state: AgentStoreState
   userMessage: AgentSessionMessageEntity
   assistantMessage: AgentSessionMessageEntity
+  /** Tool calls completed during this turn; null when the runtime did not expose any. */
+  toolInvocations?: readonly import('./runtimeTypes').AgentRuntimeToolInvocation[]
 }
 
 export type AgentChatRuntime = {

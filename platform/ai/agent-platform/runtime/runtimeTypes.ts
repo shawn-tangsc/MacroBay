@@ -333,3 +333,11 @@ export type AgentRuntimeControl = Pick<AgentRuntimeDriver, 'sendMessage' | 'canc
   resolveToolApproval?: (approvalId: string, decision: ToolApprovalDecision) => AgentSessionRuntimeSnapshot
   emitChunk?: (chunk: AgentRuntimeSessionChunk) => void
 }
+
+export type AgentRuntimeToolInvocation = {
+  toolCallId: string
+  toolName: string
+  input?: unknown
+  output?: unknown
+  errorText?: string
+}

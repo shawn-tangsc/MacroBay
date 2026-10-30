@@ -294,6 +294,7 @@ export class AgentSessionRuntimeService {
         this.emitSnapshot()
 
         const result = await resultPromise
+        const toolInvocations = this.collectToolInvocations(request.sessionId)
         this.setTurnPhase(entry, 'finishing')
         entry.lastResumeToken = result.assistantMessage.runtimeResumeToken
         entry.lastResumeTokenSource = result.assistantMessage.runtimeResumeToken ? 'runtime' : null
@@ -304,7 +305,7 @@ export class AgentSessionRuntimeService {
           resumeToken: entry.lastResumeToken
         })
         traceSpan = null
-        return result
+        return toolInvocations.length > 0 ? { ...result, toolInvocations } : result
       } catch (error) {
         entry.lastTerminalStatus = isRuntimeAbortError(error) ? 'paused' : 'error'
         entry.lastStopReason =
@@ -576,6 +577,23 @@ export class AgentSessionRuntimeService {
       default:
         return
     }
+  }
+
+  private collectToolInvocations(sessionId: string): import('./runtimeTypes').AgentRuntimeToolInvocation[] {
+    const chunks = this.getSnapshot().chunksBySessionId[sessionId] ?? []
+    const byId = new Map<string, import('./runtimeTypes').AgentRuntimeToolInvocation>()
+    for (const chunk of chunks) {
+      if (chunk.type === 'tool-input-available') {
+        byId.set(chunk.toolCallId, { toolCallId: chunk.toolCallId, toolName: chunk.toolName, input: chunk.input })
+      } else if (chunk.type === 'tool-output-available') {
+        const current = byId.get(chunk.toolCallId)
+        if (current) byId.set(chunk.toolCallId, { ...current, output: chunk.output })
+      } else if (chunk.type === 'tool-output-error') {
+        const current = byId.get(chunk.toolCallId)
+        if (current) byId.set(chunk.toolCallId, { ...current, errorText: chunk.errorText })
+      }
+    }
+    return [...byId.values()]
   }
 
   private requestQueuedTurnInterrupt(entry: RuntimeEntry): void {
