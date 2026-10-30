@@ -16,7 +16,8 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   const prompt = buildDailyBriefingPrompt({ document: input.document, locale: input.locale })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   const editionKey = dailyBriefEditionKey(input.document.edition.date, input.locale)
-  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt, context: factSummary(input.document) })
+  const summary = factSummary(input.document)
+  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt, displayText: `${summary.detail}\n\n任务：从候选中决定展示项，并写导语、why 与焦点情景。`, context: summary })
   let response = started.assistantText
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
