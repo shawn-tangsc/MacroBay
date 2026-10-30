@@ -100,7 +100,7 @@ export function validateDailyBriefingEditorial(
       if (entry.field === 'actual' && macro?.actual) return fail('invalid-shape')
       if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return fail('invalid-shape')
       const result = results.get(entry.sourceUrl)
-      if (!result || result.publishedAt !== entry.publishedAt) return fail('invalid-shape')
+      if (!result || (result.publishedAt !== undefined && result.publishedAt !== entry.publishedAt)) return fail('invalid-shape')
       const ref: DailyBriefWebEvidenceRef = Object.freeze({
         evidenceRefId: `web:${entry.eventKey}:${entry.field}:${webEvidence.length + 1}`,
         eventKey: entry.eventKey, field: entry.field as DailyBriefWebEvidenceField, value: entry.value,
@@ -341,18 +341,18 @@ export function isLedePattern(value: unknown): value is import('../../../contrac
   return value === 'event-shock' || value === 'surprise-gap' || value === 'tension' || value === 'structure' || value === 'setup' || value === 'outlier' || value === 'falsification'
 }
 
-function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]): Map<string, { title: string; publishedAt: string }> {
-  const results = new Map<string, { title: string; publishedAt: string }>()
-  for (const invocation of invocations) {
-    if (!invocation.output || typeof invocation.output !== 'object') continue
-    const candidate = invocation.output as { results?: unknown }
-    if (!Array.isArray(candidate.results)) continue
-    for (const item of candidate.results) {
-      if (!item || typeof item !== 'object') continue
-      const row = item as { title?: unknown; url?: unknown; publishedAt?: unknown }
-      if (typeof row.url !== 'string' || typeof row.publishedAt !== 'string') continue
-      results.set(row.url, { title: typeof row.title === 'string' ? row.title : row.url, publishedAt: row.publishedAt })
+function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]): Map<string, { title: string; publishedAt?: string }> {
+  const results = new Map<string, { title: string; publishedAt?: string }>()
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) { for (const item of value) walk(item); return }
+    if (!value || typeof value !== 'object') return
+    const row = value as { title?: unknown; url?: unknown; publishedAt?: unknown; content?: unknown; results?: unknown }
+    if (typeof row.url === 'string') {
+      results.set(row.url, { title: typeof row.title === 'string' ? row.title : row.url, ...(typeof row.publishedAt === 'string' ? { publishedAt: row.publishedAt } : {}) })
     }
+    if (row.content !== undefined) walk(row.content)
+    if (row.results !== undefined) walk(row.results)
   }
+  for (const invocation of invocations) walk(invocation.output)
   return results
 }
