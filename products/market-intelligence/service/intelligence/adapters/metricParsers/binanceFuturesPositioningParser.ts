@@ -8,12 +8,6 @@ type FundingRateEntry = {
   fundingTime?: number
 }
 
-type OpenInterestEntry = {
-  symbol?: string
-  openInterest?: string
-  time?: number
-}
-
 export function parseBinanceFundingRatePayload(
   payload: unknown,
   config: IntelligenceSourceConfig
@@ -53,32 +47,3 @@ export function parseBinanceFundingRatePayload(
   return drafts
 }
 
-export function parseBinanceOpenInterestPayload(
-  payload: unknown,
-  config: IntelligenceSourceConfig
-): MetricIntelligenceEventDraft[] {
-  const entry = payload as OpenInterestEntry
-  const symbol = String(entry.symbol ?? config.adapterConfig.symbol ?? '')
-  const actual = Number(entry.openInterest)
-  if (!symbol || !Number.isFinite(actual)) {
-    throw new Error('binance-futures-positioning: missing open interest')
-  }
-
-  const releaseTime = entry.time ? new Date(entry.time).toISOString() : new Date().toISOString()
-
-  return [
-    {
-      sourceId: config.sourceId,
-      metricKey: `${symbol}_OPEN_INTEREST`,
-      metricName: `${extractBaseAsset(symbol)} Open Interest`,
-      metricKind: 'open-interest',
-      actual,
-      unit: 'contracts',
-      period: releaseTime.slice(0, 13),
-      releaseTime,
-      comparisonBasis: 'level',
-      surpriseDirection: 'unknown',
-      rawValueJson: JSON.stringify({ symbol })
-    }
-  ]
-}

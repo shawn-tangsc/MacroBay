@@ -7,10 +7,7 @@ import { resolveMetricFetchTargets, type MetricFetchTarget } from './resolveMetr
 import type { MetricIntelligenceEventDraft } from '../schema/intelligenceMetricEvent'
 import type { IntelligenceSourceConfig } from '../schema/intelligenceSource'
 import { parseAlternativeFearGreedPayload } from './metricParsers/alternativeFearGreedParser'
-import {
-  parseBinanceFundingRatePayload,
-  parseBinanceOpenInterestPayload
-} from './metricParsers/binanceFuturesPositioningParser'
+import { parseBinanceFundingRatePayload } from './metricParsers/binanceFuturesPositioningParser'
 import { parseBinanceSpotMarketPayload } from './metricParsers/binanceSpotMarketParser'
 import { parseBeaEconomicSeriesPayload } from './metricParsers/beaEconomicSeriesParser'
 import { parseBlsEconomicSeriesPayload } from './metricParsers/blsEconomicSeriesParser'
@@ -152,10 +149,19 @@ function parsePayloadMeta(payloadMetaJson?: string): { metricKey?: string; serie
   }
 }
 
+/**
+ * Only funding rates travel this path.
+ *
+ * Open interest used to be parsed here from `/fapi/v1/openInterest` — a single point in
+ * contracts with no consumer. It is replaced by the 15-minute notional history that
+ * `open-interest` collects as its own time series, so this branch is now explicit about
+ * what it refuses: an `adapterConfig.metricType` naming anything else fails loudly here
+ * instead of being silently parsed as funding.
+ */
 function parseMetricPositioningPayload(payload: unknown, config: IntelligenceSourceConfig) {
   const metricType = String(config.adapterConfig.metricType ?? 'funding-rate')
-  if (metricType === 'open-interest') {
-    return parseBinanceOpenInterestPayload(payload, config)
+  if (metricType !== 'funding-rate') {
+    throw new Error(`binance-futures-positioning: unsupported metric type ${metricType}`)
   }
   return parseBinanceFundingRatePayload(payload, config)
 }
