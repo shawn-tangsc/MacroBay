@@ -137,9 +137,11 @@ describe('funding bars per settlement period', () => {
       eth: [{ observedAt: '2026-10-28T16:00:03.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
     }
     const markup = render({ funding: skewed })
-    const bars = [...markup.matchAll(/class="mi-positioning-panel__bar"/g)].length
-    expect(bars).toBe(2)
-    expect(markup).toContain('data-settles-at="2026-10-28T16:00:00.000Z"')
+    const bars = [...markup.matchAll(/<rect[^>]*mi-positioning-panel__bar[^>]*>/g)]
+    expect(bars).toHaveLength(2)
+    // Both bars belong to the same period; flooring put one of them a day later.
+    const periods = new Set(bars.map(bar => /data-settles-at="([^"]+)"/.exec(bar[0])?.[1]))
+    expect([...periods]).toEqual(['2026-10-28T16:00:00.000Z'])
   })
 
   it('still draws one bar when a symbol reports twice inside the same period', () => {

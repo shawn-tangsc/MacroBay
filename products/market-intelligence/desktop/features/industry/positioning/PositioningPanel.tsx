@@ -200,9 +200,12 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   // One slot per funding period, not per timestamp: the two symbols settle a few seconds apart,
   // so placing a bar at each raw instant drew three and four bars inside one 8-hour band and let
   // the two assets paint over each other. The bar belongs to the period that charged it.
+  // Snap to the nearest 8-hour boundary, not the one before it: the two symbols settle a few
+  // seconds apart, and flooring sent 15:59:58 and 16:00:03 into different periods — two slots a
+  // pixel apart, four bars in one spot, one of them nominally a day later.
   const slots = new Map<number, { btc?: number; eth?: number }>()
   for (const point of fundingPoints) {
-    const settlesAt = Math.floor(Date.parse(point.observedAt) / periodMs) * periodMs + periodMs
+    const settlesAt = Math.round(Date.parse(point.observedAt) / periodMs) * periodMs
     const slot = slots.get(settlesAt) ?? {}
     slot[point.asset] = point.ratePercent
     slots.set(settlesAt, slot)
@@ -310,7 +313,7 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
             )
           })}
           {hoveredSlot
-            ? <small>{text.settledAt} {formatTime(new Date(Math.floor(Date.parse(hovered.observedAt) / periodMs) * periodMs).toISOString())}</small>
+            ? <small>{text.settledAt} {formatTime(new Date(Math.round(Date.parse(hovered.observedAt) / periodMs) * periodMs).toISOString())}</small>
             : null}
         </div>
       ) : null}
