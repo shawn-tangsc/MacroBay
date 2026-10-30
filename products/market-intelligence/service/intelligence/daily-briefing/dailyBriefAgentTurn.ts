@@ -5,8 +5,8 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey } from './dailyBriefEditorSessionNaming'
 
 export type DailyBriefAgentTurnResult =
-  | Readonly<{ state: 'accepted'; document: DailyBriefingDocument; sessionId: string }>
-  | Readonly<{ state: 'failed'; failureCode: string; failureDetail?: string; sessionId: string }>
+  | Readonly<{ state: 'accepted'; document: DailyBriefingDocument; sessionId: string; toolInvocations: readonly import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] }>
+  | Readonly<{ state: 'failed'; failureCode: string; failureDetail?: string; sessionId: string; toolInvocations: readonly import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] }>
 
 export async function runDailyBriefAgentTurn(input: Readonly<{
   runner: DailyBriefAgentRunner
@@ -20,6 +20,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   const summary = factSummary(input.document)
   const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt, displayText: `${summary.detail}\n\n任务：从候选中决定展示项，并写导语、why 与焦点情景。`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}) })
   let response = started.assistantText
+  const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -30,15 +31,19 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
       if (validation.ok) {
         const document = applyDailyBriefingEditorial(input.document, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
         await input.runner.finish(editionKey, 'accepted')
-        return { state: 'accepted', document, sessionId: started.sessionId }
+        return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
       }
       failureCode = validation.failureCode
       failureDetail = validation.detail
     }
-    if (attempt < 2) response = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`)
+    if (attempt < 2) {
+      const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`)
+      response = repair.assistantText
+      toolInvocations.push(...repair.toolInvocations)
+    }
   }
   await input.runner.finish(editionKey, 'failed')
-  return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId }
+  return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId, toolInvocations }
 }
 
 function factSummary(document: DailyBriefingDocument): Readonly<{ kind: string; label: string; detail: string }> {

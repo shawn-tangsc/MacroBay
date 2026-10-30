@@ -86,8 +86,8 @@ describe('daily briefing service', () => {
     const service = createDailyBriefingService({
       source: fakeSource(), store, now: () => asOf,
       agentRunner: {
-        async start() { return { sessionId: 's', created: true, assistantText: '{}' } },
-        async continue() { return '{}' },
+        async start() { return { sessionId: 's', created: true, assistantText: '{}', toolInvocations: [] } },
+        async continue() { return { assistantText: '{}', toolInvocations: [] } },
         async finish() {}
       }
     })
