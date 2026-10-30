@@ -604,7 +604,7 @@ export function getIntelligenceModule(
         { limit: 500 }
       ).catch(() => undefined)
     }
-    const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore })
+    const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore, perpetualPositioningStore })
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
     const marketAnalysisSettingsService = createMarketAnalysisSettingsService({

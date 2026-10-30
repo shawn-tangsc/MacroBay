@@ -27,6 +27,14 @@ import {
   isWithinCapitalConditionsSnapshotDtoBudget,
   toEtfPublicSnapshot
 } from '../../../contracts/intelligenceQueryContracts'
+import {
+  isCanonicalOpenInterestTime,
+  isOpenInterestHistoryResult,
+  isOpenInterestWindow,
+  openInterestHistoryPolicy,
+  type OpenInterestHistoryResult,
+  type OpenInterestWindow
+} from '../../../contracts/openInterestHistory'
 import { getIntelligenceModule } from '../intelligenceModule'
 
 const PRODUCT_ID = 'market-intelligence'
@@ -98,6 +106,15 @@ export function registerIntelligencePublicQueryIpc(
     } catch { return fundingRateHistoryUnavailable() }
   })
 
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryOpenInterestHistory, async (payload) => {
+    try {
+      const input = asOpenInterestHistoryInput(payload)
+      if (!input) return openInterestUnavailable()
+      const value = await publicQueryService().queryOpenInterestHistory(input)
+      return isOpenInterestHistoryResult(value, input.asOf, input.window) ? value : openInterestUnavailable()
+    } catch { return openInterestUnavailable() }
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {
     try {
       const input = asCapitalConditionsSnapshotInput(payload)
@@ -123,6 +140,11 @@ function snapshotResult(value: unknown, input: FearGreedSnapshotQueryInput): Fea
   if (isExactDataRecord(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === input.asOf) return { state: 'empty', asOf: value.asOf }
   if (isExactDataRecord(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === snapshotPolicy.unavailableFailureCode) return snapshotUnavailable()
   return snapshotUnavailable()
+}
+
+function asOpenInterestHistoryInput(value: unknown): { asOf: string; window: OpenInterestWindow } | undefined {
+  if (!isExactDataRecord(value, ['asOf', 'window'])) return undefined
+  return isCanonicalOpenInterestTime(value.asOf) && isOpenInterestWindow(value.window) ? { asOf: value.asOf, window: value.window } : undefined
 }
 
 function asFundingRateHistoryInput(value: unknown): FundingRateHistoryQueryInput | undefined {
@@ -214,6 +236,10 @@ function isExactDataRecord(value: unknown, fields: readonly string[]): value is 
 
 function snapshotUnavailable(): Extract<FearGreedSnapshotResult, { state: 'unavailable' }> {
   return { state: 'unavailable', failureCode: snapshotPolicy.unavailableFailureCode }
+}
+
+function openInterestUnavailable(): Extract<OpenInterestHistoryResult, { state: 'unavailable' }> {
+  return { state: 'unavailable', failureCode: openInterestHistoryPolicy.unavailableFailureCode }
 }
 
 function fundingRateHistoryUnavailable(): Extract<FundingRateHistoryResult, { state: 'unavailable' }> {

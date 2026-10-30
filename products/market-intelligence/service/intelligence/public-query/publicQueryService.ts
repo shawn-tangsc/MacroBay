@@ -50,7 +50,10 @@ import {
 } from './queryContracts'
 import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
+import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
+import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import type { FundingRateHistoryStore } from '../store/fundingRateHistoryStore'
+import type { PerpetualPositioningStore } from '../store/perpetualPositioningStore'
 import { impactMatchesScope, itemMatchesScope, normalizeQueryScope, type ResolvedQueryScope } from './queryScopeResolver'
 import { buildQueryResultHash } from './resultHash'
 import { buildSourceCoverageAsOf, summarizeSourceCoverage } from './sourceCoverageAsOf'
@@ -81,6 +84,7 @@ export type MarketIntelligencePublicQueryService = {
   ) => Promise<MarketIntelligenceQueryResult<EvidenceExcerptResult>>
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
+  queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -139,6 +143,7 @@ export type CreateMarketIntelligencePublicQueryServiceInput = {
   listSourceDefinitions?: () => IntelligenceSourceDefinition[]
   capitalConditionsQuery?: ReturnType<typeof createCapitalConditionsSnapshotQueryService>
   fundingRateHistoryStore?: Pick<FundingRateHistoryStore, 'read'>
+  perpetualPositioningStore?: Pick<PerpetualPositioningStore, 'read'>
   macroEconomicCalendarQuery?: Pick<MacroEconomicCalendarQuery, 'queryMonth'>
   marketCalendarQuery?: Pick<MarketCalendarQuery, 'queryMonth'>
 }
@@ -267,6 +272,9 @@ export function createMarketIntelligencePublicQueryService(
     queryFundingRateHistory: async (queryInput) => input.fundingRateHistoryStore
       ? queryFundingRateHistoryAsync({ ...queryInput, store: input.fundingRateHistoryStore })
       : { state: 'unavailable', failureCode: 'funding-rate-history-query-unavailable' },
+    queryOpenInterestHistory: async (queryInput) => input.perpetualPositioningStore
+      ? queryOpenInterestHistoryAsync({ ...queryInput, store: input.perpetualPositioningStore })
+      : openInterestUnavailable(),
     queryCapitalConditionsSnapshot: async (queryInput) => input.capitalConditionsQuery?.query(queryInput) ?? ({
       state: 'unavailable', failureCode: 'capital-conditions-query-unavailable'
     }),

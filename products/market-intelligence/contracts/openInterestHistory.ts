@@ -1,5 +1,3 @@
-import type { PositioningState } from './openInterestPositioning'
-
 /**
  * The wire contract for notional open interest.
  *
@@ -55,7 +53,6 @@ export type OpenInterestHistoryResult =
       btc: readonly OpenInterestPoint[]
       eth: readonly OpenInterestPoint[]
       change?: Readonly<Record<'btc' | 'eth', OpenInterestChange>>
-      positioning?: Readonly<Record<'btc' | 'eth', PositioningState>>
       liquidationHints?: readonly OpenInterestLiquidationHint[]
       liquidationHintsTruncated?: boolean
       /**
@@ -101,4 +98,54 @@ export function isOpenInterestSeries(value: unknown, asOf: string): value is rea
     previous = record.observedAt
   }
   return true
+}
+
+/**
+ * The single validator both the IPC handler and the renderer client call.
+ *
+ * One implementation, because a second one drifts: the handler would accept a shape the client
+ * then rejects, and the card would go blank with no failing test.
+ */
+export function isOpenInterestHistoryResult(value: unknown, asOf: string, window: OpenInterestWindow): value is OpenInterestHistoryResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  if (record.state === 'empty') return record.asOf === asOf && record.window === window && Object.keys(record).length === 3
+  if (record.state === 'unavailable') {
+    return record.failureCode === openInterestHistoryPolicy.unavailableFailureCode && Object.keys(record).length === 2
+  }
+  if (record.state !== 'available' || record.asOf !== asOf || record.window !== window) return false
+  if (!isOpenInterestSeries(record.btc, asOf) || !isOpenInterestSeries(record.eth, asOf)) return false
+
+  if (record.change !== undefined) {
+    if (!isPlainRecord(record.change)) return false
+    for (const asset of ['btc', 'eth'] as const) {
+      const entry = (record.change as Record<string, unknown>)[asset]
+      if (entry === undefined) continue
+      if (!isPlainRecord(entry)) return false
+      for (const key of ['h1Pct', 'h24Pct'] as const) {
+        const amount = (entry as Record<string, unknown>)[key]
+        if (amount !== undefined && !isOpenInterestChange(amount)) return false
+      }
+    }
+  }
+
+  if (record.liquidationHints !== undefined) {
+    if (!Array.isArray(record.liquidationHints) || record.liquidationHints.length > openInterestHistoryPolicy.maximumLiquidationHints) return false
+    for (const hint of record.liquidationHints) {
+      if (!isPlainRecord(hint)) return false
+      const entry = hint as Record<string, unknown>
+      if (!isCanonicalOpenInterestTime(entry.observedAt) || entry.observedAt > asOf) return false
+      if (entry.asset !== 'btc' && entry.asset !== 'eth') return false
+      if (typeof entry.dropPct !== 'number' || !Number.isFinite(entry.dropPct) || entry.dropPct > 0) return false
+      if (typeof entry.volumeMultiple !== 'number' || !Number.isFinite(entry.volumeMultiple) || entry.volumeMultiple < 0) return false
+    }
+  }
+
+  if (record.liquidationHintsTruncated !== undefined && typeof record.liquidationHintsTruncated !== 'boolean') return false
+  if (record.liquidationHintsState !== 'available' && record.liquidationHintsState !== 'unavailable') return false
+  return true
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
 }
