@@ -37,7 +37,8 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
     const answer = await input.runner.continue(started.sessionId, `FIELD RESPONSE:\n${fieldResponse(input.document, requests)}\nReturn the next selection JSON if you need to adjust; otherwise continue.`)
     toolInvocations.push(...answer.toolInvocations)
   }
-  const prompt = buildDailyBriefingPrompt({ document: input.document, locale: input.locale, selection })
+  const selectedDocument = selectDocument(input.document, selection)
+  const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   const written = await input.runner.continue(started.sessionId, prompt)
   response = written.assistantText
@@ -48,9 +49,9 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
     let parsed: unknown
     try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
     if (parsed) {
-      const validation = validateDailyBriefingEditorial(parsed, input.document, input.locale, toolInvocations)
+      const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations)
       if (validation.ok) {
-        const document = applyDailyBriefingEditorial(input.document, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
+        const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
         await input.runner.finish(started.sessionId, 'accepted')
         return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
       }
@@ -101,4 +102,24 @@ function fieldResponse(document: DailyBriefingDocument, requests: readonly unkno
     lines.push(`${request.factId}: ${fields.map((field) => `${field}=${record && field in record ? String(record[field]) : '未收录'}`).join(' · ')}`)
   }
   return lines.length > 0 ? lines.join('\n') : '未命名请求，未收录。'
+}
+
+function selectDocument(document: DailyBriefingDocument, selection: unknown): DailyBriefingDocument {
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown }
+  const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
+  const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
+  const nextCandidates = document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
+  const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
+  const focusKey = typeof value.focus === 'string' ? value.focus : undefined
+  const focus = focusKey ? nextCandidates.find((item) => item.eventKey === focusKey) : document.next.focus
+  const nextItems = nextKeys ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey) : document.next.items
+  return Object.freeze({
+    ...document,
+    news: Object.freeze({
+      ...document.news,
+      items: newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items,
+      macro: macroIds ? (document.news.macroCandidates ?? document.news.macro).filter((item) => macroIds.has(`macro:${item.eventKey}`)) : document.news.macro
+    }),
+    next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) })
+  })
 }

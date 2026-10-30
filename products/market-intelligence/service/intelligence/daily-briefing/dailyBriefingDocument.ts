@@ -23,8 +23,10 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const { packet, date } = input
   const readings = buildBriefingReadingRows(packet)
   const news = selectNews(packet)
-  const macro = selectMacro(packet)
-  const next = selectNext(packet)
+  const macroCandidates = selectMacroCandidates(packet)
+  const macro = selectMacro(packet, macroCandidates)
+  const nextCandidates = selectNextCandidates(packet)
+  const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
   const document: DailyBriefingDocument = Object.freeze({
     // Read from the policy rather than repeating the literals: a version bump that updates only one
@@ -50,6 +52,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
     news: Object.freeze({
       items: news,
       macro,
+      ...(macroCandidates.length > 0 ? { macroCandidates } : {}),
       notes: Object.freeze({
         ...(news.length > 0 ? {} : { newsEmpty: newsEmptyCode(packet) }),
         ...(macro.length > 0 ? {} : { macroEmpty: macroEmptyCode(packet) })
@@ -67,6 +70,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
     next: Object.freeze({
       items: next.items,
       ...(next.focus ? { focus: next.focus } : {}),
+      ...(nextCandidates.length > 0 ? { candidates: nextCandidates } : {}),
       ...(next.items.length > 0 || next.focus ? {} : { note: nextEmptyCode(packet) })
     }),
     citations: built.citations,
@@ -125,7 +129,7 @@ function selectNews(packet: DailyBriefingFactPacket): readonly BriefingNewsItem[
     })))
 }
 
-function selectMacro(packet: DailyBriefingFactPacket): readonly BriefingMacroItem[] {
+function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly BriefingMacroItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([])
   const start = Date.parse(packet.windowStart)
   const end = Date.parse(packet.windowEnd)
@@ -136,8 +140,11 @@ function selectMacro(packet: DailyBriefingFactPacket): readonly BriefingMacroIte
       return Number.isFinite(at) && at >= start && at < end
     })
     .sort((left, right) => surpriseMagnitude(right) - surpriseMagnitude(left) || right.scheduledAt.localeCompare(left.scheduledAt))
-    .slice(0, dailyBriefingPolicy.maximumMacroItems)
     .map((event) => toMacroItem(event)))
+}
+
+function selectMacro(packet: DailyBriefingFactPacket, candidates: readonly BriefingMacroItem[]): readonly BriefingMacroItem[] {
+  return Object.freeze(candidates.slice(0, dailyBriefingPolicy.maximumMacroItems))
 }
 
 function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
@@ -154,8 +161,8 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
   })
 }
 
-function selectNext(packet: DailyBriefingFactPacket): Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem }> {
-  if (packet.calendar.state !== 'available') return Object.freeze({ items: Object.freeze([]) })
+function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
+  if (packet.calendar.state !== 'available') return Object.freeze([] as const)
   const today = localDate(packet.windowEnd, packet.timeZone)
   const horizon = addDays(today, 7)
   const candidates = packet.calendar.events
@@ -177,8 +184,11 @@ function selectNext(packet: DailyBriefingFactPacket): Readonly<{ items: readonly
       ...(event.consensus ? { consensus: event.consensus } : {}),
       ...(event.previous ? { previous: event.previous } : {})
     }))
-  const focusOrder = ['nonfarm-payrolls', 'fomc', 'cpi', 'pce', 'gdp', 'unemployment', 'average-hourly-earnings']
-  const focus = focusOrder.map((key) => candidates.find((item) => item.titleKey === key)).find(Boolean) ?? candidates[0]
+  return Object.freeze(candidates)
+}
+
+function selectNext(packet: DailyBriefingFactPacket, candidates: readonly BriefingNextItem[]): Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem }> {
+  const focus = candidates[0]
   const items = candidates.filter((item) => item.eventKey !== focus?.eventKey).slice(0, dailyBriefingPolicy.maximumNextItems)
   return Object.freeze({ items: Object.freeze(items), ...(focus ? { focus } : {}) })
 }

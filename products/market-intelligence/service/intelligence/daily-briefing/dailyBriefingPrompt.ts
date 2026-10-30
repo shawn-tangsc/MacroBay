@@ -34,7 +34,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       strength: item.strength,
       confidence: item.confidence
     })),
-    macro: document.news.macro.map((item) => ({
+    macro: (document.news.macroCandidates ?? document.news.macro).map((item) => ({
       factId: `macro:${item.eventKey}`,
       title: item.title,
       actual: item.actual ?? null,
@@ -150,8 +150,8 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
   const { document, locale } = input
   const candidates = {
     news: document.news.items.map((item) => ({ factId: `news:${item.itemId}`, title: item.translatedTitle ?? item.title, source: item.sourceName })),
-    macro: document.news.macro.map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
-    next: [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null }))
+    macro: (document.news.macroCandidates ?? document.news.macro).map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
+    next: (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null }))
   }
   return [
     { role: 'system', content: 'You are the editor of a frozen daily market brief. Select, do not write prose yet. Return one JSON object and nothing else.' },

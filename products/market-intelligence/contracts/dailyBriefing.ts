@@ -212,6 +212,7 @@ export type DailyBriefingDocument = Readonly<{
   news: Readonly<{
     items: readonly BriefingNewsItem[]
     macro: readonly BriefingMacroItem[]
+    macroCandidates?: readonly BriefingMacroItem[]
     notes: Readonly<{ newsEmpty?: string; macroEmpty?: string }>
   }>
   data: Readonly<{
@@ -223,7 +224,7 @@ export type DailyBriefingDocument = Readonly<{
     }>
   }>
   conclusion: BriefingConclusion | null
-  next: Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem; note?: string }>
+  next: Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem; candidates?: readonly BriefingNextItem[]; note?: string }>
   comparison?: BriefingComparison
   editorial?: Readonly<{ dataNote?: string; invalidationNote?: string }>
   citations: readonly Readonly<{

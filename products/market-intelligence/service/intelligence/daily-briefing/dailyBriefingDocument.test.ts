@@ -232,7 +232,7 @@ describe('daily briefing document', () => {
     expect(document.data.market.find((row) => row.id === 'eth')).toMatchObject({ state: 'stale', value: { number: -1.21, format: 'percent' } })
   })
 
-  it('focuses nonfarm payrolls over average hourly earnings at the same release', () => {
+  it('keeps all same-release candidates for the agent to choose', () => {
     const event = (eventKey: string, titleKey: string) => ({
       eventKey, title: titleKey, titleKey, scheduledAt: '2026-11-06T12:30:00.000Z', importance: 'high' as const,
       lifecycleState: 'scheduled' as const, category: 'economic-indicator' as const,
@@ -245,7 +245,7 @@ describe('daily briefing document', () => {
       }),
       date: '2026-10-30'
     })
-    expect(document.next.focus?.titleKey).toBe('nonfarm-payrolls')
+    expect(document.next.candidates?.map((item) => item.eventKey)).toEqual(['US.AHE', 'US.NFP'])
   })
 
   it('keeps a readable document when the market sources are absent', () => {
