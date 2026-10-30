@@ -100,28 +100,34 @@ export function createDailyBriefingService(deps: Readonly<{
     } catch {
       return { state: 'unavailable', failureCode: 'build-failed' }
     }
+    let publish = true
     if (deps.agentRunner) {
       const turn = await runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale })
       if (turn.state === 'accepted') document = turn.document
-      else document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, aiSessionId: turn.sessionId, editorialFailure: turn.failureCode, ...(turn.failureDetail ? { editorialFailureDetail: turn.failureDetail } : {}) }) })
+      else {
+        publish = false
+        document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, aiSessionId: turn.sessionId, editorialFailure: turn.failureCode, ...(turn.failureDetail ? { editorialFailureDetail: turn.failureDetail } : {}) }) })
+      }
     } else if (deps.editorial) {
       try {
         const editorial = await withDeadline(deps.editorial({ document, locale: input.locale }), 120_000)
         document = editorial.document
         if (editorial.state !== 'agent') {
+          if (editorial.failureCode !== 'editorial-disabled') publish = false
           document = Object.freeze({
             ...document,
             provenance: Object.freeze({ ...document.provenance, editorialFailure: editorial.failureCode ?? 'editorial-fallback', ...(editorial.failureDetail ? { editorialFailureDetail: editorial.failureDetail } : {}) })
           })
         }
       } catch {
+        publish = false
         document = Object.freeze({
           ...document,
           provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-timeout' })
         })
       }
     }
-    await deps.store.put({
+    if (publish) await deps.store.put({
       date: input.date,
       locale: input.locale,
       generatedAt: document.edition.generatedAt,
