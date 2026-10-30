@@ -237,6 +237,7 @@ export function applyDailyBriefingEditorial(
         : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })))
     }),
     data: Object.freeze({
+      ...document.data,
       market: Object.freeze(document.data.market.map(applyRow)),
       funds: Object.freeze(document.data.funds.map(applyRow)),
       sentiment: Object.freeze({

@@ -45,10 +45,12 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
   lines.push(`> ${labels.window.replace('{time}', options.formatTime(document.edition.windowEnd))} · ${labels.edition.replace('{time}', options.formatTime(document.edition.generatedAt))} · ${readingsLabel(document, labels)}`)
   if (document.lede.text) lines.push('', escapeMarkdown(document.lede.text))
 
-  if (document.news.items.length > 0 || document.news.macro.length > 0) {
+  const visibleNews = document.news.items.filter((item) => item.visibility !== 'hidden')
+  const visibleMacro = document.news.macro.filter((item) => item.visibility !== 'hidden')
+  if (visibleNews.length > 0 || visibleMacro.length > 0) {
     lines.push('', `## ${labels.sections.news}`)
-    for (const item of document.news.items) lines.push('', newsLine(item, options))
-    for (const item of document.news.macro) lines.push('', macroLine(item, options))
+    for (const item of visibleNews) lines.push('', newsLine(item, options))
+    for (const item of visibleMacro) lines.push('', macroLine(item, options))
   }
 
   const rows = dataRows(document)

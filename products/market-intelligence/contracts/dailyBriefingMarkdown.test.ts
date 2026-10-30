@@ -74,7 +74,7 @@ describe('daily briefing markdown', () => {
   it('exports a text edition with rows, conclusion and citations', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     expect(markdown).toContain('# 每日简报 — 2026-10-30')
-    expect(markdown).toContain('## 今日要闻')
+    expect(markdown).toContain('## 过去 24 小时要闻')
     expect(markdown).toContain('JPMorgan says AI labels no longer win lenders')
     expect(markdown).toContain('## 一天的数据')
     expect(markdown).toContain('### 重点')
@@ -84,7 +84,7 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('Stablecoin contraction pulls bids away.')
     expect(markdown).toContain('什么会推翻它')
     expect(markdown).toContain('[1]')
-    expect(markdown).toContain('## 接下来')
+    expect(markdown).toContain('## 接下来 7 日关注')
     expect(markdown).toContain('fomc')
     expect(markdown).toContain('证据')
     expect(markdown).toContain('DefiLlama')
@@ -107,9 +107,9 @@ describe('daily briefing markdown', () => {
     })
     const markdown = dailyBriefingToMarkdown(empty, options)
     expect(markdown).toContain('四个读数都读不到')
-    expect(markdown).not.toContain('## 今日要闻')
+    expect(markdown).not.toContain('## 过去 24 小时要闻')
     expect(markdown).not.toContain('## 结论')
-    expect(markdown).not.toContain('## 接下来')
+    expect(markdown).not.toContain('## 接下来 7 日关注')
   })
 
   it('escapes markdown punctuation in titles', () => {

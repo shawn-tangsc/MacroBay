@@ -144,8 +144,8 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
 }
 
 function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } {
-  return isExact(value, ['editorialEnabled', 'providerId', 'modelId']) &&
-    typeof value.editorialEnabled === 'boolean' && typeof value.providerId === 'string' && typeof value.modelId === 'string'
+  return isExact(value, ['editorialEnabled', 'providerId', 'modelId', 'webSearchEnabled'], ['webSearchAuthorizedAt']) &&
+    typeof value.editorialEnabled === 'boolean' && typeof value.providerId === 'string' && typeof value.modelId === 'string' && typeof value.webSearchEnabled === 'boolean' && (value.webSearchAuthorizedAt === undefined || typeof value.webSearchAuthorizedAt === 'string')
 }
 
 function isResolvedModel(value: unknown): value is DailyBriefingAiSettingsView['resolved'] {
@@ -211,7 +211,7 @@ function isLede(value: unknown): boolean {
 }
 
 function isNews(value: unknown): boolean {
-  if (!isExact(value, ['items', 'macro', 'notes'], ['items', 'macro', 'notes'])) return false
+  if (!isExact(value, ['items', 'macro', 'notes'], ['macroCandidates'])) return false
   if (!Array.isArray(value.items) || value.items.length > dailyBriefingPolicy.maximumNewsItems) return false
   if (!Array.isArray(value.macro) || value.macro.length > dailyBriefingPolicy.maximumMacroItems) return false
   if (!Array.isArray(value.items) || !value.items.every(isNewsItem)) return false
@@ -231,7 +231,7 @@ function isMacroItem(value: unknown): boolean {
 }
 
 function isData(value: unknown): boolean {
-  if (!isExact(value, ['market', 'funds', 'sentiment'])) return false
+  if (!isExact(value, ['market', 'funds', 'sentiment'], ['leverage', 'policyPath'])) return false
   if (!Array.isArray(value.market) || value.market.length > 7) return false
   if (!Array.isArray(value.funds) || value.funds.length > 5) return false
   if (!Array.isArray(value.market) || !value.market.every(isMarketRow)) return false

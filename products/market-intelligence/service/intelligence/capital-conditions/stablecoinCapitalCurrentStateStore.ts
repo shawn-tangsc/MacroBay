@@ -119,6 +119,7 @@ export function createCapitalConditionsCurrentStateStore(deps: { storage: Capita
       const next = Object.freeze({
         schemaVersion: stablecoinCapitalCurrentStatePolicy.schemaVersion,
         ...(previous.snapshot ? { snapshot: previous.snapshot } : {}),
+        ...(previous.history ? { history: previous.history } : {}),
         health: Object.freeze({
           status: 'degraded' as const,
           lastAttemptAt: input.attemptedAt,

@@ -35,19 +35,21 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
   })
 }
 
-function readPatch(payload: unknown): Readonly<{ editorialEnabled?: boolean; providerId?: string; modelId?: string }> {
+function readPatch(payload: unknown): Readonly<{ editorialEnabled?: boolean; providerId?: string; modelId?: string; webSearchEnabled?: boolean; webSearchAuthorizedAt?: string }> {
   if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
   const keys = Object.keys(payload)
-  if (keys.some((key) => !['editorialEnabled', 'providerId', 'modelId'].includes(key))) throw new Error('daily-briefing-invalid-request')
+  if (keys.some((key) => !['editorialEnabled', 'providerId', 'modelId', 'webSearchEnabled', 'webSearchAuthorizedAt'].includes(key))) throw new Error('daily-briefing-invalid-request')
   if (payload.editorialEnabled !== undefined && typeof payload.editorialEnabled !== 'boolean') throw new Error('daily-briefing-invalid-request')
-  for (const key of ['providerId', 'modelId'] as const) {
+  for (const key of ['providerId', 'modelId', 'webSearchAuthorizedAt'] as const) {
     const value = payload[key]
     if (value !== undefined && (typeof value !== 'string' || value.length > 256)) throw new Error('daily-briefing-invalid-request')
   }
   return {
     ...(typeof payload.editorialEnabled === 'boolean' ? { editorialEnabled: payload.editorialEnabled } : {}),
     ...(typeof payload.providerId === 'string' ? { providerId: payload.providerId } : {}),
-    ...(typeof payload.modelId === 'string' ? { modelId: payload.modelId } : {})
+    ...(typeof payload.modelId === 'string' ? { modelId: payload.modelId } : {}),
+    ...(typeof payload.webSearchEnabled === 'boolean' ? { webSearchEnabled: payload.webSearchEnabled } : {}),
+    ...(typeof payload.webSearchAuthorizedAt === 'string' ? { webSearchAuthorizedAt: payload.webSearchAuthorizedAt } : {})
   }
 }
 
