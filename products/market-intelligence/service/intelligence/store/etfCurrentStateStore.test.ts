@@ -49,6 +49,20 @@ describe('ETF current-state store', () => {
     await expect(store.readAvailable({ asOf: '2026-08-31T00:00:00.001Z' })).resolves.toEqual({ state: 'unavailable' })
   })
 
+  it('refuses to answer a cutoff with rows the provider observed after it', async () => {
+    const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    // The window closed on 08-30, but the provider only published the flows at 05:00Z on 08-31 — after
+    // the 08:00 Beijing (00:00Z) cutoff the edition asks about. The window is not a 08:00 reading.
+    await store.replace({
+      window: windowWithObservedAt(firstWindow, '2026-08-31T05:00:00.000Z'),
+      verifiedAt: '2026-08-31T05:00:00.000Z'
+    })
+
+    await expect(store.readAvailable({ asOf: '2026-08-31T00:00:00.000Z' })).resolves.toEqual({ state: 'unavailable' })
+    // Once the cutoff is after the observation, the same window is a legitimate as-of answer.
+    await expect(store.readAvailable({ asOf: '2026-08-31T05:00:00.000Z' })).resolves.toMatchObject({ state: 'available' })
+  })
+
   it('renews verifiedAt without replacing material state when only fetchedAt changes', async () => {
     const store = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
     const initial = identifiedWindow(windowWithFetchedAt(firstWindow, '2026-08-29T00:00:00.000Z'), 'revision-1')
@@ -154,6 +168,14 @@ function windowWithFetchedAt(window: ReturnType<typeof windowFor>, fetchedAt: st
     ...window,
     btc: window.btc.map((flow) => ({ ...flow, fetchedAt })),
     eth: window.eth.map((flow) => ({ ...flow, fetchedAt }))
+  }
+}
+
+function windowWithObservedAt(window: ReturnType<typeof windowFor>, observedAt: string) {
+  return {
+    ...window,
+    btc: window.btc.map((flow) => ({ ...flow, observedAt })),
+    eth: window.eth.map((flow) => ({ ...flow, observedAt }))
   }
 }
 

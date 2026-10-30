@@ -99,8 +99,13 @@ export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStora
       const state = await current()
       const verifiedAt = state.snapshot?.verifiedAt
       if (readFailed || !state.snapshot || !verifiedAt) return unavailable()
+      // A flow row is a fact only from its own observation time. Refreshing the window later does not
+      // make the rows it contains known earlier, so a window holding one row observed after the
+      // cutoff cannot stand in for an as-of read at that cutoff.
+      if (!rowsObservedBy(state.snapshot.window, input.asOf)) return unavailable()
       if (Date.parse(input.asOf) < Date.parse(verifiedAt)) {
-        // A later refresh may contain only flows through the previous trading day; those were known at the cutoff.
+        // A refresh that arrived after the cutoff may still hold a window that had already closed
+        // before it; those rows were observed before the cutoff and are answered as such.
         if (state.snapshot.window.windowEnd < input.asOf.slice(0, 10)) return Object.freeze({ state: 'available' as const, window: state.snapshot.window, verifiedAt })
         return unavailable()
       }
@@ -206,6 +211,11 @@ function materialWindow(window: EtfCurrentStateWindow): MaterialEtfCurrentStateW
 
 function mayReplaceRevision(previous: EtfCurrentStateWindow, next: EtfCurrentStateWindow): boolean {
   return !!previous.revision && !!next.revision && previous.revision.providerCurrentStateId !== next.revision.providerCurrentStateId
+}
+
+/** Every row's own provider observation time must be at or before the instant being answered. */
+function rowsObservedBy(window: EtfCurrentStateWindow, asOf: string): boolean {
+  return [...window.btc, ...window.eth].every((flow) => flow.observedAt <= asOf)
 }
 
 function isSafeRevisionIdentity(value: EtfCurrentStateWindow['revision']): boolean {

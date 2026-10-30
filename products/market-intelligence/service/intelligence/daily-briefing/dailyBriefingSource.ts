@@ -11,6 +11,7 @@ import type { DailyBriefingSource } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
 
 const WINDOW_MS = 24 * 60 * 60 * 1_000
+const DAY_MS = 24 * 60 * 60 * 1_000
 
 type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
 
@@ -49,7 +50,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         readCalendar(deps, input.asOf, input.locale, enabled.calendar),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
         usableSnapshot(safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined), input.asOf),
-        safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined),
+        ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
       ])
       const asOfMs = Date.parse(input.asOf)
@@ -309,4 +310,33 @@ function usableSnapshot<T extends { asOf?: string }>(value: T | undefined, cutof
   if (!value) return undefined
   if (!value.asOf || !Number.isFinite(Date.parse(value.asOf))) return value
   return value.asOf <= cutoff ? value : undefined
+}
+
+/**
+ * FRED publishes one close per trading day, stamped with that day rather than an instant, so the
+ * snapshot's own `asOf` (the read time) cannot decide visibility. A daily close for day D is the
+ * close of D: it is known once D has ended in UTC, and never before.
+ *
+ * Generating a 08:00 edition at 21:00 therefore keeps D-1's close and drops D's, instead of either
+ * dropping the whole block (which loses a figure that really was known) or publishing the current
+ * snapshot as if it had been read at 08:00 (which is the masquerade this guards against). A block
+ * with no visible close stays `empty`, not "available with old numbers".
+ */
+function ratesAsOf(
+  snapshot: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroRatesSnapshot']>> | undefined,
+  cutoff: string
+): NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroRatesSnapshot']>> | undefined {
+  if (!snapshot || snapshot.state === 'unavailable') return snapshot
+  const cutoffMs = Date.parse(cutoff)
+  if (!Number.isFinite(cutoffMs)) return undefined
+  const readings = snapshot.readings.filter((reading) => {
+    const dayEndMs = Date.parse(`${reading.period}T00:00:00.000Z`) + DAY_MS
+    return Number.isFinite(dayEndMs) && dayEndMs <= cutoffMs
+  })
+  return Object.freeze({
+    ...snapshot,
+    asOf: cutoff,
+    state: readings.length > 0 ? 'available' as const : 'empty' as const,
+    readings: Object.freeze(readings)
+  })
 }

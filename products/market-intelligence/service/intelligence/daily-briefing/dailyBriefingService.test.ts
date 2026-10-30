@@ -53,6 +53,28 @@ function fakeSource(packet: () => DailyBriefingFactPacket = emptyPacket): DailyB
   return source
 }
 
+/** A session that returns a valid selection and then a minimal accepted editorial. */
+function acceptingAgentRunner(starts: number[] = []) {
+  return {
+    async start() {
+      starts.push(1)
+      return {
+        sessionId: 's1',
+        created: true,
+        assistantText: JSON.stringify({ stage: 'select', news: [], macro: [], next: [] }),
+        toolInvocations: []
+      }
+    },
+    async continue() {
+      return {
+        assistantText: JSON.stringify({ lede: '事实层导语。', ledePattern: 'event-shock', items: [], hidden: [], importance: [] }),
+        toolInvocations: []
+      }
+    },
+    async finish() {}
+  }
+}
+
 const newsCandidate = (index: number): NewsSentimentItemView => ({
   itemId: `n${index}`,
   title: `Headline ${index}`,
@@ -123,6 +145,86 @@ describe('daily briefing service', () => {
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(result.state).toBe('available')
     expect(store.rows.size).toBe(0)
+  })
+
+  it('runs the agent on the platform default and records the fallback when the custom model is unavailable', async () => {
+    const store = memoryStore()
+    const starts: number[] = []
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: acceptingAgentRunner(starts),
+      agentModel: async () => ({ state: 'agent', providerId: 'p', modelId: 'm', source: 'default', fallback: 'custom-unavailable' })
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(starts).toHaveLength(1)
+    expect(store.rows.size).toBe(1)
+    expect(result.state).toBe('available')
+    if (result.state === 'available') {
+      expect(result.document.lede.source).toBe('agent')
+      expect(result.document.provenance.editorialMeta).toEqual({
+        promptVersion: 'daily-briefing.agent.v1',
+        model: 'p:m',
+        source: 'default',
+        fallback: 'custom-unavailable'
+      })
+    }
+  })
+
+  it('keeps the accepted custom model unchanged in the provenance', async () => {
+    const store = memoryStore()
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: acceptingAgentRunner(),
+      agentModel: async () => ({ state: 'agent', providerId: 'p2', modelId: 'm2', source: 'custom' })
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    if (result.state === 'available') {
+      expect(result.document.provenance.editorialMeta).toEqual({
+        promptVersion: 'daily-briefing.agent.v1',
+        model: 'p2:m2',
+        source: 'custom'
+      })
+    }
+  })
+
+  it('keeps the fact layer without starting a session when no model can be called', async () => {
+    const store = memoryStore()
+    const starts: number[] = []
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: acceptingAgentRunner(starts),
+      agentModel: async () => ({ state: 'unavailable', reason: 'default-unavailable' })
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(starts).toHaveLength(0)
+    expect(store.rows.size).toBe(0)
+    expect(result.state).toBe('available')
+    if (result.state === 'available') {
+      expect(result.document.lede.source).toBe('template')
+      expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
+      expect(result.document.provenance.editorialFailureDetail).toBe('default-unavailable')
+    }
+  })
+
+  it('fails closed without starting a session when model readiness cannot be resolved', async () => {
+    const store = memoryStore()
+    const starts: number[] = []
+    const service = createDailyBriefingService({
+      source: fakeSource(), store, now: () => asOf,
+      agentRunner: acceptingAgentRunner(starts),
+      agentModel: async () => { throw new Error('provider state unavailable') }
+    })
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(starts).toHaveLength(0)
+    expect(store.rows.size).toBe(0)
+    if (result.state === 'available') {
+      expect(result.document.provenance.editorialFailure).toBe('model-unavailable')
+    }
   })
 
   it('regenerates the same day, overwrites the row and applies the editorial layer', async () => {

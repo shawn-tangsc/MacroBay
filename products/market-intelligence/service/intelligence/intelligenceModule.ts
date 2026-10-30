@@ -678,6 +678,11 @@ export function getIntelligenceModule(
         await translationStorage.writeSettings(createDefaultTranslationSettings(await getAppLanguage()))
       }
     })().catch(() => undefined)
+    // The daily brief settings own the editor agent's model: saving and a generation-time
+    // re-resolution both write the same choice through this one update.
+    const applyDailyBriefAgentModel = async (model: string): Promise<void> => {
+      await hooks?.updateAgent?.('daily-brief-editor', { model })
+    }
     const dailyBriefingAiSettings = createDailyBriefingAiSettingsService({
       store: createDailyBriefingAiSettingsStore(
         createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
@@ -688,8 +693,9 @@ export function getIntelligenceModule(
       onModelSaved: async (settings) => {
         if (!hooks?.updateAgent) return
         const model = settings.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : 'unconfigured:default-chat-model'
-        await hooks.updateAgent('daily-brief-editor', { model })
-      }
+        await applyDailyBriefAgentModel(model)
+      },
+      applyAgentModel: applyDailyBriefAgentModel
     })
     const dailyBriefingAgent = createDailyBriefingAgent({ invoke: structuredModelInvocation.invoke })
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
@@ -738,6 +744,7 @@ export function getIntelligenceModule(
       },
       store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite')),
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
+      agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()

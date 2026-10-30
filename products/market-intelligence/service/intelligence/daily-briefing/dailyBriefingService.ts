@@ -9,6 +9,7 @@ import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
+import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 
 /** The stored shape. The store owns the file; the service owns when a row is written. */
 export type DailyBriefingStoredEdition = Readonly<{
@@ -70,6 +71,12 @@ export function createDailyBriefingService(deps: Readonly<{
   store: DailyBriefingStore
   editorial?: (input: Readonly<{ document: DailyBriefingDocument; locale: DailyBriefingLocale }>) => Promise<DailyBriefingEditorialResult>
   agentRunner?: DailyBriefAgentRunner
+  /**
+   * The model the editor session may call, resolved at generation time. When it reports `disabled`
+   * or `unavailable` the agent turn is not started: a session on a stale model would fail (or
+   * worse, be retried as if it were a normal editorial failure).
+   */
+  agentModel?: () => Promise<DailyBriefingEditorialModel>
   agentAllowedTools?: () => Promise<readonly string[] | undefined>
   editorialEnabled?: () => Promise<boolean>
   now?: () => string
@@ -116,17 +123,32 @@ export function createDailyBriefingService(deps: Readonly<{
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
     if (deps.agentRunner && editorialEnabled) {
-      let turn: Awaited<ReturnType<typeof runDailyBriefAgentTurn>>
-      try {
-        turn = await withDeadline(runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}) }), 120_000)
-      } catch {
+      // The editor runs as an agent session, so the model must be resolved before the session
+      // opens: a stored custom choice that stopped being callable would otherwise fail the whole
+      // turn after the request was already sent. `ensureAgentModel` also moves the agent onto the
+      // resolved model, so settings stay the single model choice.
+      const model = deps.agentModel
+        ? await deps.agentModel().catch(() => Object.freeze({ state: 'unavailable' as const, reason: 'default-unavailable' as const }))
+        : undefined
+      if (model?.state === 'unavailable') {
         publish = false
-        turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: 'unknown', toolInvocations: [] }
-      }
-      if (turn.state === 'accepted') document = turn.document
-      else {
-        publish = false
-        document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, aiSessionId: turn.sessionId, editorialFailure: turn.failureCode, ...(turn.failureDetail ? { editorialFailureDetail: turn.failureDetail } : {}) }) })
+        document = markEditorialFailure(document, 'model-unavailable', model.reason)
+      } else if (model?.state === 'disabled') {
+        document = markEditorialFailure(document, 'editorial-disabled')
+      } else {
+        let turn: Awaited<ReturnType<typeof runDailyBriefAgentTurn>>
+        try {
+          turn = await withDeadline(runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}) }), 120_000)
+        } catch {
+          publish = false
+          turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: 'unknown', toolInvocations: [] }
+        }
+        if (turn.state === 'accepted') {
+          document = model?.state === 'agent' ? withEditorialModel(turn.document, model) : turn.document
+        } else {
+          publish = false
+          document = markEditorialFailure(document, turn.failureCode, turn.failureDetail, turn.sessionId)
+        }
       }
     } else if (deps.editorial && editorialEnabled) {
       try {
@@ -134,20 +156,14 @@ export function createDailyBriefingService(deps: Readonly<{
         document = editorial.document
         if (editorial.state !== 'agent') {
           if (editorial.failureCode !== 'editorial-disabled') publish = false
-          document = Object.freeze({
-            ...document,
-            provenance: Object.freeze({ ...document.provenance, editorialFailure: editorial.failureCode ?? 'editorial-fallback', ...(editorial.failureDetail ? { editorialFailureDetail: editorial.failureDetail } : {}) })
-          })
+          document = markEditorialFailure(document, editorial.failureCode ?? 'editorial-fallback', editorial.failureDetail)
         }
       } catch {
         publish = false
-        document = Object.freeze({
-          ...document,
-          provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-timeout' })
-        })
+        document = markEditorialFailure(document, 'editorial-timeout')
       }
     } else if (!editorialEnabled) {
-      document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-disabled' }) })
+      document = markEditorialFailure(document, 'editorial-disabled')
     }
     if (publish) {
       try {
@@ -194,6 +210,47 @@ export function createDailyBriefingService(deps: Readonly<{
   }
 
   return { getToday, regenerate, list, get }
+}
+
+/**
+ * The model the agent session actually ran. `editorialMeta` is what a reader (and the history
+ * rail) can audit, so it names the concrete `providerId:modelId` rather than "agent-session", and
+ * carries the fallback reason when the stored custom choice was not callable.
+ */
+function withEditorialModel(
+  document: DailyBriefingDocument,
+  model: Readonly<{ providerId: string; modelId: string; source: 'default' | 'custom'; fallback?: 'custom-unavailable' }>
+): DailyBriefingDocument {
+  const meta = document.provenance.editorialMeta
+  return Object.freeze({
+    ...document,
+    provenance: Object.freeze({
+      ...document.provenance,
+      editorialMeta: Object.freeze({
+        promptVersion: meta?.promptVersion ?? 'daily-briefing.agent.v1',
+        model: `${model.providerId}:${model.modelId}`,
+        source: model.source,
+        ...(model.fallback ? { fallback: model.fallback } : {})
+      })
+    })
+  })
+}
+
+function markEditorialFailure(
+  document: DailyBriefingDocument,
+  failureCode: string,
+  failureDetail?: string,
+  sessionId?: string
+): DailyBriefingDocument {
+  return Object.freeze({
+    ...document,
+    provenance: Object.freeze({
+      ...document.provenance,
+      ...(sessionId ? { aiSessionId: sessionId } : {}),
+      editorialFailure: failureCode,
+      ...(failureDetail ? { editorialFailureDetail: failureDetail } : {})
+    })
+  })
 }
 
 /**

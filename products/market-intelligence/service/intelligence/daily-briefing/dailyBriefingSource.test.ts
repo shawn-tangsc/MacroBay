@@ -35,6 +35,8 @@ function deps(overrides: {
   profiles?: readonly { sourceId: string; enabled: boolean }[] | 'throw'
   failReadings?: boolean
   failCalendar?: boolean
+  macroMarket?: unknown
+  macroRates?: unknown
 } = {}): DailyBriefingSourceDeps {
   return {
     repository: {
@@ -69,8 +71,8 @@ function deps(overrides: {
         conclusion: 'partial'
       }),
       queryCrossAssetSnapshot: async () => undefined,
-      queryMacroMarketSnapshot: () => undefined,
-      queryMacroRatesSnapshot: () => undefined,
+      queryMacroMarketSnapshot: () => overrides.macroMarket,
+      queryMacroRatesSnapshot: () => overrides.macroRates,
       queryMacroEconomicCalendarMonth: async () => overrides.failCalendar
         ? { state: 'unavailable', failureCode: 'calendar-query-unavailable' }
         : { state: 'available', asOf, events: [officialEvent] },
@@ -158,5 +160,43 @@ describe('daily briefing source', () => {
     const unknown = await createDailyBriefingSource(deps({ profiles: 'throw' }))
       .buildPacket({ asOf, locale: 'zh-CN', timeZone: 'UTC' })
     expect(unknown.enabled).toEqual({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
+  })
+
+  it('does not let a 21:00 snapshot stand in for the 08:00 cutoff', async () => {
+    // The edition cutoff is 08:00 Beijing (00:00Z); the app was opened at 21:00 the same day, so the
+    // product-wide snapshots it can read are hours newer than the instant the edition describes.
+    const cutoff = '2026-10-30T00:00:00.000Z'
+    const packet = await createDailyBriefingSource(deps({
+      macroMarket: {
+        state: 'available', asOf: '2026-10-30T13:00:00.000Z', caveats: [],
+        readings: [{ seriesId: 'xau-usd', level: 4_000, atMs: Date.parse('2026-10-30T12:00:00.000Z'), returns: {} }]
+      },
+      macroRates: {
+        state: 'available', asOf: '2026-10-30T13:00:00.000Z', caveats: ['official-daily-close'],
+        readings: [
+          { seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.1, period: '2026-10-29' },
+          { seriesId: 'DFII10', metricKey: 'US_REAL_YIELD_10Y', actual: 1.9, period: '2026-10-30' }
+        ]
+      }
+    })).buildPacket({ asOf: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    // The dollar/gold snapshot is a single current read with no stored as-of window: it is dropped
+    // rather than published as if read at 08:00.
+    expect(packet.market.macroMarket).toBeUndefined()
+    // FRED's closes are stamped by trading day: D-1's close was known at 08:00, D's was not.
+    expect(packet.market.macroRates).toMatchObject({
+      state: 'available', asOf: cutoff, readings: [{ seriesId: 'DGS10', period: '2026-10-29' }]
+    })
+  })
+
+  it('keeps the rates block empty instead of showing only post-cutoff closes', async () => {
+    const packet = await createDailyBriefingSource(deps({
+      macroRates: {
+        state: 'available', asOf: '2026-10-30T13:00:00.000Z', caveats: ['official-daily-close'],
+        readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.2, period: '2026-10-30' }]
+      }
+    })).buildPacket({ asOf: '2026-10-30T00:00:00.000Z', locale: 'en-US', timeZone: 'Asia/Shanghai' })
+
+    expect(packet.market.macroRates).toMatchObject({ state: 'empty', readings: [] })
   })
 })
