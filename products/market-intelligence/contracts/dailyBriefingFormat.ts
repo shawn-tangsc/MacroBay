@@ -9,7 +9,7 @@ export function formatBriefingValue(
   if (!value) return fallback
   switch (value.format) {
     case 'score': return String(Math.round(value.number))
-    case 'percent': return `${value.number > 0 ? '+' : ''}${value.number.toFixed(2)}%`
+    case 'percent': return `${value.number > 0 ? '+' : ''}${value.number.toFixed(percentDigits(value.number))}%`
     case 'usd': return compactUsd(value.number, locale)
     case 'flow-usd': return compactUsd(value.number, locale, true)
     case 'yield': return `${value.number.toFixed(2)}%`
@@ -25,10 +25,15 @@ export function formatBriefingChange(
   const sign = change.value > 0 ? '+' : ''
   switch (change.unit) {
     case 'pp': return `${sign}${change.value.toFixed(4)}pp`
-    case 'percent': return `${sign}${change.value.toFixed(2)}%`
+    case 'percent': return `${sign}${change.value.toFixed(percentDigits(change.value))}%`
     case 'bp': return `${sign}${Math.round(change.value)}bp`
     case 'usd': return compactUsd(change.value, locale, true)
   }
+}
+
+function percentDigits(value: number): number {
+  // Funding rates are quoted in hundredths of a basis point; two decimals would print 0.00%.
+  return value !== 0 && Math.abs(value) < 0.01 ? 4 : 2
 }
 
 function compactUsd(value: number, _locale: string, signed = false): string {
