@@ -5,6 +5,7 @@ import type {
   BriefingNewsItem,
   BriefingNewsSummary,
   BriefingNextItem,
+  BriefingPulseRow,
   BriefingTopSignal,
   DailyBriefingDocument,
   DailyBriefingReadingId,
@@ -61,6 +62,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
     data: Object.freeze({
       market: readings.market,
       funds: readings.funds,
+      ...(buildLeverage(packet, readings.funds) ? { leverage: buildLeverage(packet, readings.funds) } : {}),
       sentiment: Object.freeze({
         fearGreed: readings.fearGreed,
         news: newsSummary(packet)
@@ -380,4 +382,23 @@ function surpriseMagnitude(event: DailyBriefingCalendarEvent): number {
 
 function normalizeTitle(value: string): string {
   return value.trim().toLowerCase().replace(/[\s\p{P}]+/gu, '')
+}
+
+function buildLeverage(
+  packet: DailyBriefingFactPacket,
+  funds: readonly BriefingPulseRow[]
+): NonNullable<DailyBriefingDocument['data']['leverage']> | undefined {
+  const positioning = packet.positioning
+  if (!positioning || positioning.state !== 'available') return positioning?.state === 'empty' ? Object.freeze({ state: 'unavailable' as const, btc: {}, eth: {} }) : undefined
+  const funding = (id: string) => {
+    const row = funds.find((candidate) => candidate.id === id)
+    return row?.value?.number
+  }
+  const last = (rows: readonly { notionalUsd: number }[]) => rows.at(-1)?.notionalUsd
+  return Object.freeze({
+    state: 'available' as const,
+    observedAt: positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt,
+    btc: Object.freeze({ ...(funding('funding-btc') !== undefined ? { fundingRate: funding('funding-btc') } : {}), ...(last(positioning.btc) !== undefined ? { openInterestUsd: last(positioning.btc) } : {}), ...(positioning.change?.btc.h1Pct !== undefined ? { change1hPct: positioning.change.btc.h1Pct } : {}), ...(positioning.change?.btc.h24Pct !== undefined ? { change24hPct: positioning.change.btc.h24Pct } : {}) }),
+    eth: Object.freeze({ ...(funding('funding-eth') !== undefined ? { fundingRate: funding('funding-eth') } : {}), ...(last(positioning.eth) !== undefined ? { openInterestUsd: last(positioning.eth) } : {}), ...(positioning.change?.eth.h1Pct !== undefined ? { change1hPct: positioning.change.eth.h1Pct } : {}), ...(positioning.change?.eth.h24Pct !== undefined ? { change24hPct: positioning.change.eth.h24Pct } : {}) })
+  })
 }

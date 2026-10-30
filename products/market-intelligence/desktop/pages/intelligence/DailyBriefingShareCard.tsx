@@ -86,6 +86,11 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
           <small>{keyMeta(row, text, locale, formatTime)}</small>
         </div>)}
       </div>
+      {doc.data.leverage ? <div className="mi-brief-poster__leverage">
+        <span>杠杆</span>
+        <b>BTC OI {doc.data.leverage.btc.openInterestUsd !== undefined ? `$${(doc.data.leverage.btc.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.btc.change24hPct !== undefined ? `${doc.data.leverage.btc.change24hPct.toFixed(1)}%` : '—'}</b>
+        <b>ETH OI {doc.data.leverage.eth.openInterestUsd !== undefined ? `$${(doc.data.leverage.eth.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.eth.change24hPct !== undefined ? `${doc.data.leverage.eth.change24hPct.toFixed(1)}%` : '—'}</b>
+      </div> : null}
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
         {metricRows.map((row) => <div key={row.id} data-tone={toneFor(row)}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
       </div> : null}

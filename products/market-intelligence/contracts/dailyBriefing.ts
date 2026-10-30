@@ -217,6 +217,12 @@ export type DailyBriefingDocument = Readonly<{
   }>
   data: Readonly<{
     market: readonly BriefingMarketRow[]
+    leverage?: Readonly<{
+      state: 'available' | 'stale' | 'unavailable'
+      observedAt?: string
+      btc: Readonly<{ fundingRate?: number; openInterestUsd?: number; change1hPct?: number; change24hPct?: number }>
+      eth: Readonly<{ fundingRate?: number; openInterestUsd?: number; change1hPct?: number; change24hPct?: number }>
+    }>
     funds: readonly BriefingPulseRow[]
     sentiment: Readonly<{
       fearGreed: BriefingPulseRow | null

@@ -1,4 +1,5 @@
 import type { CrossAssetSnapshot } from '../../../contracts/crossAssetObservationContracts'
+import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import type {
   CapitalConditionsSnapshotResult,
   FearGreedSnapshotResult,
@@ -67,6 +68,7 @@ export type DailyBriefingFactPacket = Readonly<{
     funding: FundingRateHistoryResult
     capital: CapitalConditionsSnapshotResult
   }>
+  positioning?: OpenInterestHistoryResult
   market: Readonly<{
     crossAsset?: CrossAssetSnapshot
     macroMarket?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroMarketSnapshot']>>

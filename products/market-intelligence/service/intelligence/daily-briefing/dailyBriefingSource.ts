@@ -20,6 +20,7 @@ export type DailyBriefingSourceDeps = Readonly<{
     | 'queryFearGreedSnapshot'
     | 'queryFundingRateHistory'
     | 'queryCapitalConditionsSnapshot'
+    | 'queryOpenInterestHistory'
     | 'queryCrossAssetSnapshot'
     | 'queryMacroMarketSnapshot'
     | 'queryMacroRatesSnapshot'
@@ -37,7 +38,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   return {
     async buildPacket(input) {
       const enabled = await readEnabled(deps)
-      const [conclusion, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates] = await Promise.all([
+      const [conclusion, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
         readConclusion(deps, input.asOf),
         readNews(deps, input.asOf),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
@@ -46,7 +47,8 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         readCalendar(deps, input.asOf, input.locale, enabled.calendar),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
         safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined),
-        safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined)
+        safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined),
+        safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
       ])
       const asOfMs = Date.parse(input.asOf)
       return Object.freeze({
@@ -59,6 +61,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         news,
         calendar,
         readings: Object.freeze({ fearGreed, funding, capital }),
+        ...(positioning ? { positioning } : {}),
         market: Object.freeze({
           ...(crossAsset ? { crossAsset } : {}),
           ...(macroMarket ? { macroMarket } : {}),
@@ -224,7 +227,7 @@ function officialEvent(
     scheduledAt,
     importance: event.importance,
     lifecycleState: event.lifecycleState,
-    category: event.eventType,
+    category: 'economic-indicator' as const,
     ...(event.actual ? { actual: event.actual.displayValue } : {}),
     ...(event.previous ? { previous: event.previous.displayValue } : {}),
     ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),
@@ -245,7 +248,7 @@ function marketEvent(
     scheduledAt: event.scheduledAt,
     importance: event.importance,
     lifecycleState: event.providerActual ? 'released' as const : 'scheduled' as const,
-    category: event.eventType,
+    category: 'economic-indicator' as const,
     ...(event.providerActual ? { actual: event.providerActual.displayValue } : {}),
     ...(event.providerPrevious ? { previous: event.providerPrevious.displayValue } : {}),
     ...(event.consensus ? { consensus: event.consensus.displayValue } : {}),

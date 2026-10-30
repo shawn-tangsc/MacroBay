@@ -43,6 +43,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       surprise: item.surprise.direction
     })),
     data: dataFacts(document),
+    ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
     mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId),
     next: [document.next.focus, ...document.next.items].filter(Boolean).map((item) => ({
       eventKey: item!.eventKey,
