@@ -2,6 +2,7 @@ import type { JobRuntime } from '@platform/jobs'
 
 import { createMacroEconomicCalendarQueryService } from '../macro-calendar/macroEconomicCalendarQueryService'
 import type { MacroCalendarRepository } from '../macro-calendar/macroCalendarRepository'
+import type { PolicyPathSep } from '../../../contracts/policyPath'
 import { createPolicyPathMarketSource, type PolicyPathMarketResponse } from './policyPathMarketSource'
 import { parsePolicyPathSep } from './policyPathSepParser'
 
@@ -41,6 +42,8 @@ export function createPolicyPathRuntime(deps: {
   repository: Pick<MacroCalendarRepository, 'policyObservations' | 'policyFacts' | 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
   fetch: FetchLike
   isEnabled: () => Promise<boolean>
+  /** Why a SEP read ended as it did: the run record is the only place a silent parse failure shows. */
+  noteSep?: (input: { meetingDate: string; outcome: 'stored' | 'fetch-failed' | 'parse-empty' }) => void
   now?: () => string
 }): PolicyPathRuntime {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -65,8 +68,9 @@ export function createPolicyPathRuntime(deps: {
     if (publishedSepMeeting) {
       const facts = deps.repository.policyFacts.read(publishedSepMeeting)
       if (facts?.sep?.asOf !== publishedSepMeeting) {
-        const projection = await readSep(deps.fetch, publishedSepMeeting)
+        const { projection, outcome } = await readSep(deps.fetch, publishedSepMeeting)
         if (projection) deps.repository.policyFacts.recordSep({ meetingDate: publishedSepMeeting, sep: projection })
+        deps.noteSep?.({ meetingDate: publishedSepMeeting, outcome: projection ? 'stored' : outcome })
       }
     }
     return { state: 'recorded', meetingDate, at }
@@ -126,14 +130,15 @@ async function discoverSlug(fetchImpl: FetchLike, meetingDate: string): Promise<
   return candidates[0]?.slug
 }
 
-async function readSep(fetchImpl: FetchLike, meetingDate: string) {
+async function readSep(fetchImpl: FetchLike, meetingDate: string): Promise<{ projection?: PolicyPathSep; outcome: 'stored' | 'fetch-failed' | 'parse-empty' }> {
   const sourceUrl = `https://www.federalreserve.gov/monetarypolicy/fomcprojtabl${meetingDate.replaceAll('-', '')}.htm`
   try {
     const response = await fetchImpl(sourceUrl)
-    if (!response.ok) return undefined
-    return parsePolicyPathSep({ body: await response.text(), sourceUrl })
+    if (!response.ok) return { outcome: 'fetch-failed' }
+    const projection = parsePolicyPathSep({ body: await response.text(), sourceUrl })
+    return projection ? { projection, outcome: 'stored' } : { outcome: 'parse-empty' }
   } catch {
-    return undefined
+    return { outcome: 'fetch-failed' }
   }
 }
 
