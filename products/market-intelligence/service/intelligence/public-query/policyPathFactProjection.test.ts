@@ -98,6 +98,14 @@ describe('policy path analysis facts', () => {
       .toEqual(expect.arrayContaining([MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.oddsAreMarketPricing]))
   })
 
+  it('falls back to the official SEP table when the stored link is not an admitted URL', async () => {
+    const result = await context({ ...reading, sep: { ...reading.sep!, sourceUrl: 'http://insecure.example/sep' } })
+    const sepFact = policyFacts(result).find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianCurrentYear)
+
+    expect(sepFact?.sourceUrl).toBe('https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm')
+    expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathSourceUrlInvalid)
+  })
+
   it('keeps the probability and names the gap when the 24-hour change is not available yet', async () => {
     const { probability, ...withoutProbability } = reading
     const result = await context({

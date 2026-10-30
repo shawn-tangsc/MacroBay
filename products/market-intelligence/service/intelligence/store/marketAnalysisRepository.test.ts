@@ -115,6 +115,32 @@ describe('marketAnalysisRepository', () => {
     repository.close()
   })
 
+  it('accepts a schema-2 snapshot whose facts and evidence carry a source URL', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    const base = snapshot('mi-es-S2', 'mi-eg-0001', 'A')
+    const facts = [{ ...base.facts[0]!, sourceUrl: 'https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm' }]
+    const evidenceRefs = [{ ...base.evidenceRefs[0]!, sourceUrl: facts[0]!.sourceUrl }]
+    const withUrls: EvidenceSnapshot = {
+      ...base,
+      schemaVersion: 2,
+      facts,
+      evidenceRefs,
+      snapshotHash: buildAnalysisSnapshotHash({
+        profileId: 'crypto-market-analysis-v1', asOf: base.asOf, dataCutoff: base.dataCutoff,
+        facts, missingDomains: [], caveats: [], evidenceRefs
+      })
+    }
+
+    expect(() => repository.appendSnapshot(withUrls)).not.toThrow()
+    expect(repository.getSnapshot('mi-es-S2')).toMatchObject({
+      schemaVersion: 2,
+      facts: [expect.objectContaining({ sourceUrl: facts[0]!.sourceUrl })],
+      evidenceRefs: [expect.objectContaining({ sourceUrl: facts[0]!.sourceUrl })]
+    })
+    repository.close()
+  })
+
   it('finds an open group across adjacent release buckets using the stable merge key', () => {
     const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
     const value = { ...group('mi-eg-bucket'), mergeKey: 'macro|official|US|2026-08|CPI|100' }

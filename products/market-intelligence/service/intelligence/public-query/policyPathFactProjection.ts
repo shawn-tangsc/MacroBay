@@ -93,7 +93,7 @@ export function projectPolicyPath(
     observedAt: asOf, sourceUrl: POLICY_PATH_SOURCE_URLS.calendar, suffix: reading.meetingDate
   })
   const statementUrl = safeUrl(reading.lastDecision?.statementUrl, caveats)
-  const decisionDate = decisionDateOf(reading, asOf)
+  const decisionDate = decisionDateOf(reading, statementUrl, asOf)
   if (reading.targetRange) {
     add({
       metric: METRICS.targetRange, subject: 'fomc',
@@ -110,8 +110,8 @@ export function projectPolicyPath(
   if (reading.sep) {
     caveats.add(MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.projectionsFromLatestSepMeeting)
     const sep = reading.sep
-    const sepDate = `${sep.asOf}T00:00:00.000Z`
-    const sepUrl = safeUrl(sep.sourceUrl, caveats)
+    const sepDate = `${sep.asOf.slice(0, 10)}T00:00:00.000Z`
+    const sepUrl = safeUrl(sep.sourceUrl, caveats) ?? safeUrl(sepTableUrl(sep.asOf), caveats) ?? POLICY_PATH_SOURCE_URLS.calendar
     const median = sep.medianCurrentYear
     if (median !== undefined) {
       add({
@@ -185,10 +185,18 @@ function percent(value: number): number {
   return Math.round(value * 100)
 }
 
-function decisionDateOf(reading: PolicyPathReading, asOf: string): string {
-  const match = reading.lastDecision?.statementUrl
-    ? /monetary(\d{4})(\d{2})(\d{2})a\.htm/.exec(reading.lastDecision.statementUrl)
-    : null
+/** The official table URL is derived from the publishing meeting when the stored link is unusable. */
+function sepTableUrl(asOf: string): string | undefined {
+  const day = asOf.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(day)
+    ? `https://www.federalreserve.gov/monetarypolicy/fomcprojtabl${day.replaceAll('-', '')}.htm`
+    : undefined
+}
+
+function decisionDateOf(reading: PolicyPathReading, statementUrl: string | undefined, asOf: string): string {
+  // Only a URL that passed the host check may date the decision; an arbitrary string that happens
+  // to contain `monetaryYYYYMMDDa.htm` is not evidence.
+  const match = statementUrl ? /monetary(\d{4})(\d{2})(\d{2})a\.htm/.exec(statementUrl) : null
   return match ? `${match[1]}-${match[2]}-${match[3]}T00:00:00.000Z` : reading.probability?.asOf ?? asOf
 }
 

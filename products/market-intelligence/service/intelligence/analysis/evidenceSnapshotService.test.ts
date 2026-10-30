@@ -16,6 +16,8 @@ describe('evidenceSnapshotService', () => {
     const right = service.freeze({ eventGroupId: 'mi-eg-1', context: context([fact('a'), fact('z')]) })
     expect(left.facts.map(item => item.factId)).toEqual(['a', 'z'])
     expect(left.snapshotHash).toBe(right.snapshotHash)
+    // New snapshots are written with the schema that carries an optional `sourceUrl`.
+    expect(left.schemaVersion).toBe(2)
   })
 
   it('freezes the snapshot so later source mutation cannot change it', () => {
