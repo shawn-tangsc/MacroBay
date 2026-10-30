@@ -240,7 +240,7 @@ function summaryFor(
     .flat()
     .filter((candidate) => candidate.date === date)
     .map((candidate) => candidate.locale)
-  if (!row) return { date, locale, availableLocales: [...new Set(availableLocales)], state: 'missing' }
+  if (!row || row.locale !== locale) return { date, locale, availableLocales: [...new Set(availableLocales)], state: 'missing' }
   const document = row.document
   return {
     date,
