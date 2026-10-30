@@ -44,6 +44,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
     })),
     data: dataFacts(document),
     ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
+    ...(document.data.policyPath ? { policyPath: document.data.policyPath } : {}),
     mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId),
     next: [document.next.focus, ...document.next.items].filter(Boolean).map((item) => ({
       eventKey: item!.eventKey,

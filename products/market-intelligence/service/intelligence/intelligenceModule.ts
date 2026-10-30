@@ -67,6 +67,7 @@ import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBrief
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
+import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createDailyBriefingAiSettingsService, type DailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
@@ -187,6 +188,8 @@ export type IntelligenceModulePlatformHooks = {
   isWebSearchProviderReady?: () => Promise<boolean>
 }
 
+let briefingPolicyPathQuery: PolicyPathQueryService | undefined
+
 type IntelligenceModule = {
   pipeline: ReturnType<typeof createIntelligencePipeline>
   sourcesService: ReturnType<typeof createIntelligenceSourcesService>
@@ -239,6 +242,7 @@ type IntelligenceModule = {
    * cross-asset rows actually read. Read-only, and the credential leaves as a boolean.
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
+  setPolicyPathQuery: (query: PolicyPathQueryService) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
@@ -701,6 +705,7 @@ export function getIntelligenceModule(
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
         publicQuery: publicQueryService,
+        policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
         news: newsSentimentQuery
           ? { query: (input) => newsSentimentQuery.query(input) }
           : {
@@ -793,7 +798,8 @@ export function getIntelligenceModule(
         return { enabled: profile.enabled === true, hasCredential: Boolean(credential?.apiKey) }
       },
       macroMarketLive,
-      dashboardFeedStatus
+      dashboardFeedStatus,
+      setPolicyPathQuery: (query: PolicyPathQueryService) => { briefingPolicyPathQuery = query }
     }
   }
   return intelligenceModule

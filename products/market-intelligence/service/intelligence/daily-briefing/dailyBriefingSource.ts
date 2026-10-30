@@ -28,6 +28,7 @@ export type DailyBriefingSourceDeps = Readonly<{
     | 'queryMarketCalendarMonth'>
   news: NewsQuery
   profiles: Pick<SourceProfileStore, 'listProfiles'>
+  policyPathQuery?: { read: (input: { asOf: string }) => import('../policy-path/policyPathQueryService').PolicyPathReading | undefined }
 }>
 
 /**
@@ -38,6 +39,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
   return {
     async buildPacket(input) {
       const enabled = await readEnabled(deps)
+      const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
       const [conclusion, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
         readConclusion(deps, input.asOf),
         readNews(deps, input.asOf),
@@ -62,6 +64,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         calendar,
         readings: Object.freeze({ fearGreed, funding, capital }),
         ...(positioning ? { positioning } : {}),
+        ...(policyPath ? { policyPath } : {}),
         market: Object.freeze({
           ...(crossAsset ? { crossAsset } : {}),
           ...(macroMarket ? { macroMarket } : {}),

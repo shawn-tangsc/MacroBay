@@ -209,6 +209,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     // only current source of the range.
     readTargetRange: () => readPublishedTargetRange(intelligenceModule.pipeline.listMetricEvents())
   })
+  intelligenceModule.setPolicyPathQuery(policyPathQueryService)
   policyPathRuntime.start()
   const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
   let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined

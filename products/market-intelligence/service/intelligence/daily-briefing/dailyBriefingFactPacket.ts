@@ -69,6 +69,7 @@ export type DailyBriefingFactPacket = Readonly<{
     capital: CapitalConditionsSnapshotResult
   }>
   positioning?: OpenInterestHistoryResult
+  policyPath?: import('../policy-path/policyPathQueryService').PolicyPathReading
   market: Readonly<{
     crossAsset?: CrossAssetSnapshot
     macroMarket?: NonNullable<ReturnType<MarketIntelligencePublicQueryService['queryMacroMarketSnapshot']>>

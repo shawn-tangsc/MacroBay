@@ -217,6 +217,7 @@ export type DailyBriefingDocument = Readonly<{
   }>
   data: Readonly<{
     market: readonly BriefingMarketRow[]
+    policyPath?: Readonly<{ state: 'available'; meetingDate: string; outcome: string; probability: number; observedAt: string; targetLower?: number; targetUpper?: number }>
     leverage?: Readonly<{
       state: 'available' | 'stale' | 'unavailable'
       observedAt?: string
