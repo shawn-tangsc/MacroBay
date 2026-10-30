@@ -31,6 +31,7 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [webSearchBlocked, setWebSearchBlocked] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -78,6 +79,11 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
     if (!draft) return
     setSaving(true)
     setFailed(false)
+    if (draft.webSearchEnabled && !(await webSearchReady())) {
+      setWebSearchBlocked(true)
+      setSaving(false)
+      return
+    }
     try {
       const result = await client.saveSettings(draft)
       if (result.state === 'available') onClose()
@@ -109,7 +115,10 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
       </div>
       <div className="mi-daily-briefing__settings-row">
         <div><strong>{text.aiSettings.webSearch}</strong><small>{text.aiSettings.webSearchHint}</small></div>
-        <Switch checked={draft.webSearchEnabled} onChange={(checked) => setDraft({ ...draft, webSearchEnabled: checked, ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {}) })} />
+        <div className="mi-daily-briefing-ai__websearch">
+          <Switch checked={draft.webSearchEnabled} onChange={(checked) => { setWebSearchBlocked(false); setDraft({ ...draft, webSearchEnabled: checked, ...(checked && !draft.webSearchAuthorizedAt ? { webSearchAuthorizedAt: new Date().toISOString() } : {}) }) }} />
+          {webSearchBlocked ? <small className="mi-daily-briefing-ai__error">{text.aiSettings.webSearchNeedsSetup}</small> : null}
+        </div>
       </div>
       {draft.editorialEnabled ? <div className="mi-daily-briefing__settings-row">
         <div>
@@ -158,4 +167,16 @@ async function readDefaultModel(providers: readonly SafeModelProvider[]): Promis
   } catch {
     return null
   }
+}
+
+async function webSearchReady(): Promise<boolean> {
+  const api = window.platform?.webSearch
+  if (!api) return false
+  try {
+    const [settings, providers] = await Promise.all([api.getSettings(), api.listProviders()])
+    const rows = providers as Array<{ id: string; enabled: boolean; hasApiKey: boolean }>
+    const search = rows.find((row) => row.id === settings.defaultSearchProviderId)
+    const fetch = rows.find((row) => row.id === settings.defaultFetchProviderId)
+    return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
+  } catch { return false }
 }
