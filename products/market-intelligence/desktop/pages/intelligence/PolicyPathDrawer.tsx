@@ -21,6 +21,8 @@ export type PolicyPathDrawerText = Readonly<{
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
   change24hPending: string
+  /** Short enough to sit beside the dash, so the reader is not left guessing. */
+  change24hPendingShort: string
   /** "The median is one 25bp step above the range midpoint" - the design's core question. */
   sepSteps: string; sepStepsLevel: string
   outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
@@ -103,7 +105,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       <dl className="mi-policy-drawer__kv">
         {probability ? <>
           <div><dt>{text.change24h}</dt><dd title={probability.changeInPp24h === undefined ? text.change24hPending : undefined}>
-            {probability.changeInPp24h === undefined ? '—' : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}
+            {probability.changeInPp24h === undefined
+              ? <><span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPendingShort}）</span></>
+              : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}
           </dd></div>
           <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${(probability.range30d.min * 100).toFixed(0)}–${(probability.range30d.max * 100).toFixed(0)}%` : '—'}</dd></div>
           <div><dt>{text.quote}</dt><dd>{probability.quote ? `${(probability.quote.bid * 100).toFixed(0)} / ${(probability.quote.ask * 100).toFixed(0)}` : '—'}</dd></div>

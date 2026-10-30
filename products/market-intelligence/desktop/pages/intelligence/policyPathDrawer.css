@@ -98,3 +98,7 @@
   line-height: 1.6;
   color: var(--mi-text-muted, #8b8d94);
 }
+
+/* A dash with a reason reads as "not yet", not as "broken". */
+.mi-policy-drawer__muted { color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__muted + .mi-policy-drawer__muted { margin-left: 4px; font-size: 10px; }
