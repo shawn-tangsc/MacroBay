@@ -67,6 +67,7 @@ import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBrief
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
 import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
+import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createDailyBriefingAiSettingsService, type DailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
@@ -746,6 +747,7 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
+      backfillFactory: (cutoff) => createDailyBriefBackfillExecutor({ cutoff, publicQuery: publicQueryService }),
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()
         if (!view.settings.webSearchEnabled || !view.settings.webSearchAuthorizedAt) return undefined

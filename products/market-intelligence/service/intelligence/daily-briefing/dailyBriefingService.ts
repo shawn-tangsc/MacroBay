@@ -8,7 +8,7 @@ import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
-import { runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
+import { runDailyBriefAgentTurn, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 
 /** The stored shape. The store owns the file; the service owns when a row is written. */
@@ -78,6 +78,7 @@ export function createDailyBriefingService(deps: Readonly<{
    */
   agentModel?: () => Promise<DailyBriefingEditorialModel>
   agentAllowedTools?: () => Promise<readonly string[] | undefined>
+  backfillFactory?: (cutoff: string) => DailyBriefBackfillExecutor
   editorialEnabled?: () => Promise<boolean>
   now?: () => string
 }>): DailyBriefingService {
@@ -138,7 +139,7 @@ export function createDailyBriefingService(deps: Readonly<{
       } else {
         let turn: Awaited<ReturnType<typeof runDailyBriefAgentTurn>>
         try {
-          turn = await withDeadline(runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}) }), 120_000)
+          turn = await withDeadline(runDailyBriefAgentTurn({ runner: deps.agentRunner, document, locale: input.locale, ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}), ...(deps.backfillFactory ? { backfill: deps.backfillFactory(document.edition.windowEnd) } : {}) }), 120_000)
         } catch {
           publish = false
           turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: 'unknown', toolInvocations: [] }
