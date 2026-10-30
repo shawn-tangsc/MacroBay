@@ -404,7 +404,6 @@ export const productText = {
                 'neutral': '中性',
                 'mixed': '方向分歧'
               },
-              liquidationBadge: '疑似强平 · {time} · {asset} {pct}',
               liquidationMore: '更早的标记已折叠',
               liquidationFoot: '▲ 疑似强平为推断值，非交易所强平数据（持仓骤降 + 价格同向 + 成交量放大）',
               liquidationUnavailable: '强平标记暂不可用：成交量这一路没有采到。',
@@ -1144,11 +1143,13 @@ export const productText = {
           exported: '已复制到剪贴板',
           exportFailed: '无法写入剪贴板，请重试',
           allTasks: '全部任务',
-          allSourcesNote: '全部来源',
+          allSourcesNote: '—',
+          noSourceHint: '该任务不直接读取某个来源：它读已存记录，或一次读全部来源',
           allSources: '全部来源',
           showing: '显示 {shown} 条，共 {total} 条',
           retention: '明细保留 30 天，更早的只留每日汇总',
-          page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页'
+          page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页',
+          csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明']
         },
 
         sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
@@ -1818,7 +1819,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'neutral': 'Neutral',
                 'mixed': 'Mixed'
               },
-              liquidationBadge: 'Suspected liquidation · {time} · {asset} {pct}',
               liquidationMore: 'older marks collapsed',
               liquidationFoot: '▲ Suspected liquidation is inferred, not exchange liquidation data (position drop + price move + volume expansion)',
               liquidationUnavailable: 'Liquidation markers unavailable: the volume leg was not collected.',
@@ -2544,11 +2544,13 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           exported: 'Copied to the clipboard',
           exportFailed: 'Could not write to the clipboard',
           allTasks: 'All tasks',
-          allSourcesNote: 'All sources',
+          allSourcesNote: '—',
+          noSourceHint: 'This task names no single source: it reads stored records or all sources at once',
           allSources: 'All sources',
           showing: 'Showing {shown} of {total}',
           retention: 'Details are kept 30 days; older runs only survive as daily counts',
-          page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next'
+          page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next',
+          csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail']
         },
 
         sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },

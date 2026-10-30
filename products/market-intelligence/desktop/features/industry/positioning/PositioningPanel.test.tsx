@@ -84,9 +84,12 @@ describe('positioning panel', () => {
     const markup = render({
       positioning: { ...positioning, hints: [{ observedAt: at(30), asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, notionalUsd: 8.8e9 }] }
     })
-    expect(markup).toContain('mi-positioning-panel__badge')
+    // The mark names itself on the chart: asset and size, no timestamp (the axis already says
+    // when) and no single header badge (it could only ever name one of several marks).
+    expect(markup).toContain('data-hint="btc"')
+    expect(markup).toMatch(/BTC -1\.9%|BTC −1\.9%/)
+    expect(markup).not.toContain('mi-positioning-panel__badge')
     expect(markup).toContain(text.liquidationFoot)
-    expect(markup).toContain('▲')
   })
 
   it('says the marks are unavailable instead of implying there were none', () => {

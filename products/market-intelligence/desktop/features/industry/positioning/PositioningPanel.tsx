@@ -40,7 +40,6 @@ type Text = Readonly<{
   window7d: string
   window24h: string
   states: Readonly<Record<PositioningState, string>>
-  liquidationBadge: string
   liquidationMore: string
   liquidationFoot: string
   liquidationUnavailable: string
@@ -71,7 +70,6 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const ethRate = funding.state === 'available' ? funding.eth : []
   const available = positioning.state === 'available'
   const latest = available ? positioning.btc.at(-1)?.observedAt ?? positioning.eth.at(-1)?.observedAt : undefined
-  const lastHint = available ? positioning.hints.at(-1) : undefined
   const status = (positioning.state === 'loading' || funding.state === 'loading')
     ? <LoadingState label={text.loading} minHeight={140} />
     : <p className="mi-positioning-panel__status">{positioning.state === 'empty' ? text.empty : text.unavailable}</p>
@@ -81,15 +79,6 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       data-stale={available && positioning.staleSince ? 'true' : undefined}>
       {header(
         <>
-          {lastHint ? (
-            <span className="mi-positioning-panel__badge">
-              {text.liquidationBadge
-                .replace('{time}', formatTime(lastHint.observedAt))
-                .replace('{asset}', text.assets[lastHint.asset])
-                .replace('{pct}', formatDashboardChange(lastHint.dropPct))}
-              {available && positioning.hintsTruncated ? ` · ${text.liquidationMore}` : ''}
-            </span>
-          ) : null}
           {latest
             ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(latest)}{available && positioning.staleSince ? ` · ${text.stale}` : ''}</small>
             : null}
@@ -108,6 +97,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
                 <p className="mi-positioning-panel__foot" data-hints-state={positioning.hintsState}>
                   {positioning.hintsState === 'unavailable' ? text.liquidationUnavailable : text.liquidationFoot}
+                  {positioning.hintsState === 'available' && positioning.hintsTruncated ? ` · ${text.liquidationMore}` : ''}
                 </p>
               </>
             : status}
@@ -278,16 +268,21 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
             x={barX(x(settlesAt), asset)} y={Math.min(y, VIEW.zero)}
             width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
         }))}
-        {positioning.hints.map(hint => {
+        {positioning.hints.map((hint, index) => {
           // Pinned to the bucket's own value. The hourly line takes the hour's last reading, so a
           // dip that recovered inside that hour is invisible on the line — without this dot the
           // mark would sit beside a flat stretch with nothing to explain it.
+          const cx = x(Date.parse(hint.observedAt))
           const cy = upperY(hint.notionalUsd, positioning[hint.asset])
+          // Each mark says who and how much, on its own line: a header badge could only name the
+          // newest one, and the instant is already readable from where the line sits.
+          const crowded = index > 0 && cx - x(Date.parse(positioning.hints[index - 1]!.observedAt)) < 58
+          const labelY = Math.max(VIEW.upperTop + 9, cy - 10 - (crowded ? 11 : 0))
           return (
             <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
-              <line x1={x(Date.parse(hint.observedAt))} x2={x(Date.parse(hint.observedAt))} y1={VIEW.upperTop} y2={VIEW.height - 10} />
-              <circle cx={x(Date.parse(hint.observedAt))} cy={cy} r="3" />
-              <text x={x(Date.parse(hint.observedAt)) + 5} y={VIEW.upperTop + 8}>▲</text>
+              <line x1={cx} x2={cx} y1={VIEW.upperTop} y2={VIEW.height - 10} />
+              <circle cx={cx} cy={cy} r="3" />
+              <text x={cx} y={labelY} textAnchor="middle">{text.assets[hint.asset]} {formatDashboardChange(hint.dropPct)}</text>
             </g>
           )
         })}
