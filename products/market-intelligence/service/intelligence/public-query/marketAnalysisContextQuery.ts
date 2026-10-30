@@ -24,6 +24,7 @@ import type { MarketIntelligencePublicQueryService as PublicQueryService } from 
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
 import { projectMacroMarket } from './macroMarketFactProjection'
 import { projectMacroRates } from './macroRatesFactProjection'
+import { applyMacroFactCap } from './macroFactBudget'
 import { projectPolicyPath } from './policyPathFactProjection'
 import {
   compareObservedAt,
@@ -363,19 +364,14 @@ export async function buildMarketAnalysisContext(
     .sort((left, right) => CONTEXT_FACT_DOMAIN_ORDER.indexOf(left.domain) - CONTEXT_FACT_DOMAIN_ORDER.indexOf(right.domain) || compareObservedAt(left, right) || left.factId.localeCompare(right.factId))
   // Cap the macro share before the global budget, so one provider's routine rows can never
   // evict the other domains: the model needs capital, sentiment and funding to explain a move.
-  const macroFacts = sortedFacts.filter(fact => fact.domain === 'macro')
-  if (macroFacts.length > MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts) {
-    const keptMacro = new Set(macroFacts.slice(0, MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts).map(fact => fact.factId))
-    for (let index = sortedFacts.length - 1; index >= 0; index -= 1) {
-      if (sortedFacts[index]!.domain === 'macro' && !keptMacro.has(sortedFacts[index]!.factId)) sortedFacts.splice(index, 1)
-    }
-    caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
-  }
+  // The cap protects the policy path's fixed share; a busy month must not drop the SEP or the vote.
+  const macroCapped = applyMacroFactCap(sortedFacts, MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts)
+  if (macroCapped.truncated) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
   // The reserve reorders inside the budget so the facts explaining a triggered change survive
-  // truncation; with no triggers this is exactly `sortedFacts.slice(0, maxFacts)`.
-  const keptFacts = applyReservedFacts(sortedFacts, internal.triggeredEventKeys ?? new Set(), maxFacts,
+  // truncation; with no triggers this is exactly `macroCapped.facts.slice(0, maxFacts)`.
+  const keptFacts = applyReservedFacts(macroCapped.facts, internal.triggeredEventKeys ?? new Set(), maxFacts,
     undefined, MARKET_ANALYSIS_CONTEXT_POLICY.minimumFactsPerDomain)
-  if (keptFacts.length < sortedFacts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
+  if (keptFacts.length < macroCapped.facts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
 
   const output: MarketAnalysisContextAvailable = {
     state: 'available',
