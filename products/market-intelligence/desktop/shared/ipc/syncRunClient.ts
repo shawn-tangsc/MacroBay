@@ -2,20 +2,10 @@ import { SYNC_RUN_IPC_METHODS, type SyncRunQuery, type SyncRunResult, type SyncR
 
 const productId = 'market-intelligence'
 
-export type SyncRunCsvResult =
-  | Readonly<{ state: 'available'; csv: string }>
-  | Readonly<{ state: 'unavailable'; failureCode: string }>
-
 export const syncRunClient = {
   async list(query: SyncRunQuery): Promise<SyncRunResult> {
     return sanitize(await invoke(SYNC_RUN_IPC_METHODS.list, query))
   },
-  async exportCsv(query: SyncRunQuery): Promise<SyncRunCsvResult> {
-    const value = await invoke(SYNC_RUN_IPC_METHODS.exportCsv, query)
-    if (!isObject(value)) return { state: 'unavailable', failureCode: 'malformed' }
-    if (value.state === 'available' && typeof value.csv === 'string') return { state: 'available', csv: value.csv }
-    return { state: 'unavailable', failureCode: typeof value.failureCode === 'string' ? value.failureCode : 'unavailable' }
-  }
 }
 
 async function invoke(method: string, payload: unknown): Promise<unknown> {

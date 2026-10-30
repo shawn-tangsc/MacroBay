@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { LoadingState } from '@platform/ui/components/loading'
 
 import type { SyncRunQuery, SyncRunRow, SyncRunWindow } from '../../../contracts/syncRunRecords'
+import { syncRunsCsv } from '../../../contracts/syncRunRecords'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
 import './sync-run-section.css'
 
@@ -16,14 +17,16 @@ export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
   columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
   allTasks: string
-  /** Shown when a run reads every source (analysis, snapshots) rather than a named one. */
+  /** Shown when a run names no source: it reads stored records or every source at once. */
   allSourcesNote: string
+  noSourceHint: string
   allSources: string
   showing: string
   retention: string
   page: string
   previous: string
   next: string
+  csvHeader: readonly string[]
   empty: string; unavailable: string; loading: string; exportCsv: string; exported: string; exportFailed: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
   outcomes: Readonly<Record<'succeeded' | 'failed' | 'cancelled' | 'running', string>>
@@ -68,10 +71,10 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   const visible = filtered.slice(currentPage * pageSize, currentPage * pageSize + pageSize)
 
   const exportCsv = async () => {
-    const result = await syncRunClient.exportCsv(query)
-    if (result.state !== 'available') return
+    // Export exactly what the filters produced, not the unfiltered window the IPC read returned.
+    const csv = syncRunsCsv(filtered, text.csvHeader)
     try {
-      await navigator.clipboard.writeText(result.csv)
+      await navigator.clipboard.writeText(csv)
       setNotice(text.exported)
     } catch {
       // A clipboard the shell refuses is not a reason to claim success.
@@ -127,10 +130,10 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
         <span role="columnheader">{text.columns.detail}</span>
       </div>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
-        <span className="mi-sync-run__time" role="cell">{formatTime(row.at)}</span>
+        <span className="mi-sync-run__time" role="cell">{formatTime(row.at, window)}</span>
         <span className="mi-sync-run__task" role="cell" title={row.taskLabel}>{row.taskLabel}</span>
         <span className="mi-sync-run__source" role="cell" title={row.sources.map((source) => source.label).join(' · ')}>
-          {row.sources.length === 0 ? text.allSourcesNote : row.sources.slice(0, 2).map((source) => source.label).join(' · ')}
+          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map((source) => source.label).join(' · ')}
           {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
@@ -155,7 +158,11 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   </section>
 }
 
-function formatTime(at: string): string {
+/** A time alone is only unambiguous inside one day; wider windows carry the date. */
+function formatTime(at: string, window: SyncRunWindow): string {
   const parsed = new Date(at)
-  return Number.isNaN(parsed.getTime()) ? at : parsed.toLocaleTimeString(undefined, { hour12: false })
+  if (Number.isNaN(parsed.getTime())) return at
+  const time = parsed.toLocaleTimeString(undefined, { hour12: false })
+  if (window === '24h') return time
+  return `${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')} ${time}`
 }

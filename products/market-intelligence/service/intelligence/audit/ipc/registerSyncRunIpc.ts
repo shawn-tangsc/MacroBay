@@ -5,7 +5,7 @@ import {
   SYNC_RUN_IPC_METHODS, SYNC_RUN_LIMITS,
   type SyncRunQuery, type SyncRunResult, type SyncRunWindow
 } from '../../../../contracts/syncRunRecords'
-import { projectSyncAudit, projectSyncRuns, syncRunsCsv } from '../syncRunProjection'
+import { projectSyncAudit, projectSyncRuns } from '../syncRunProjection'
 import type { SyncAuditStore } from '../syncAuditStore'
 
 const productId = 'market-intelligence'
@@ -15,7 +15,6 @@ export function registerSyncRunIpc(
   register: ProductIpcRegistrar,
   jobRuntime: Pick<JobRuntime, 'listRuns'>,
   now: () => string = () => new Date().toISOString(),
-  csvHeader: readonly string[] = ['time', 'source', 'action', 'outcome', 'durationMs', 'failureCode', 'correlationId', 'detail'],
   audit?: Pick<SyncAuditStore, 'list'>
 ): void {
   const read = (payload: unknown): SyncRunResult => {
@@ -40,12 +39,6 @@ export function registerSyncRunIpc(
     }
   }
   register(productId, SYNC_RUN_IPC_METHODS.list, async (payload) => read(payload))
-  register(productId, SYNC_RUN_IPC_METHODS.exportCsv, async (payload) => {
-    const result = read(payload)
-    return result.state === 'available'
-      ? { state: 'available' as const, csv: syncRunsCsv(result.rows, csvHeader) }
-      : result
-  })
 }
 
 function sinceOf(window: SyncRunWindow, nowMs: number): string {

@@ -11,6 +11,7 @@ import {
   type SyncRunRow,
   type SyncRunWindow
 } from '../../../contracts/syncRunRecords'
+export { syncRunsCsv } from '../../../contracts/syncRunRecords'
 
 type CatalogEntry = Readonly<{
   /** What ran, in the reader's language. */
@@ -39,7 +40,7 @@ export const syncRunHandlerCatalog: Readonly<Record<string, CatalogEntry>> = {
   'market-intelligence.refreshMarketCalendar.financial-events': { taskLabel: '市场日历 · 金融事件', action: 'collect', sourceId: 'macro-calendar-0xrouter-financial-events', sourceLabel: '市场日历 · 金融事件' },
   'market-intelligence.refreshMarketCalendar.central-bank-activities': { taskLabel: '市场日历 · 央行活动', action: 'collect', sourceId: 'macro-calendar-0xrouter-central-bank-activities', sourceLabel: '市场日历 · 央行活动' },
   'market-intelligence.collect-macro-market': { taskLabel: '宏观行情', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
-  'market-intelligence.collect-cross-asset-index': { taskLabel: '纳指指数', action: 'collect' },
+  'market-intelligence.collect-cross-asset-index': { taskLabel: '纳指指数', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
   'market-intelligence.collect-realmarketapi-dxy': { taskLabel: '美元指数', action: 'collect', sourceId: 'realmarketapi-market', sourceLabel: 'RealMarketAPI 宏观行情' },
   'market-intelligence.collect-policy-path': { taskLabel: 'Fed 决议盘口', action: 'collect', sourceId: 'policy-path-market', sourceLabel: 'Fed 决议盘口' },
   'market-intelligence.runMarketAnalysis': { taskLabel: 'AI 分析', action: 'analysis' },
@@ -94,7 +95,7 @@ export function projectSyncAudit(entry: SyncAuditEntry): SyncRunRow {
     correlationId: entry.id,
     taskLabel: auditActionLabels[entry.action] ?? entry.action,
     // The target is always a source or provider id, even when no job describes it yet.
-    sources: [{ sourceId: entry.target, label: sourceLabel(entry.target) ?? described?.sourceLabel ?? entry.target }],
+    sources: [{ sourceId: entry.target, label: described?.sourceLabel ?? sourceLabel(entry.target) ?? entry.target }],
     handlerId: entry.action,
     action: entry.action,
     outcome: entry.outcome,
@@ -114,16 +115,6 @@ export function projectSyncRuns(runs: readonly JobRunRecord[], query: SyncRunQue
     .slice(0, Math.min(Math.max(query.limit, 1), SYNC_RUN_LIMITS.maximumLimit))
 }
 
-/** The CSV the reader can hand to someone else; the same columns the page shows. */
-export function syncRunsCsv(rows: readonly SyncRunRow[], header: readonly string[]): string {
-  const escape = (value: string) => /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
-  return [header.map(escape).join(','), ...rows.map((row) => [
-    row.at, row.taskLabel, row.sources.map((source) => source.label).join(' / '), row.action, row.outcome,
-    row.durationMs === undefined ? '' : String(row.durationMs),
-    row.failureCode ?? '', row.correlationId, row.detail ?? ''
-  ].map(escape).join(','))].join('\n')
-}
-
 /**
  * Source ids are read from the payload, not guessed from the handler: the batch collector runs once
  * per source and the run itself says which one.
@@ -139,7 +130,9 @@ function sourcesOf(row: JobRunRecord, entry: CatalogEntry | undefined): SyncRunR
   if (Array.isArray(many)) for (const value of many) if (typeof value === 'string' && value) ids.push(value)
   const unique = [...new Set(ids)]
   if (unique.length === 0 && entry?.sourceId) unique.push(entry.sourceId)
-  return unique.map((sourceId) => ({ sourceId, label: sourceLabel(sourceId) ?? entry?.sourceLabel ?? sourceId }))
+  // The catalogue's label is curated for this column; the registry name is the fallback for sources
+  // it has never heard of.
+  return unique.map((sourceId) => ({ sourceId, label: entry?.sourceLabel ?? sourceLabel(sourceId) ?? sourceId }))
 }
 
 function sourceLabel(sourceId: string): string | undefined {

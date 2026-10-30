@@ -6,8 +6,7 @@
  * every collection was skipped.
  */
 export const SYNC_RUN_IPC_METHODS = {
-  list: 'intelligence.syncRuns.list',
-  exportCsv: 'intelligence.syncRuns.exportCsv'
+  list: 'intelligence.syncRuns.list'
 } as const
 
 export type SyncRunAction = 'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other'
@@ -69,3 +68,13 @@ export const SYNC_RUN_LIMITS = {
   detailMaxLength: 160,
   windowMs: { '24h': 24 * 60 * 60 * 1_000, '7d': 7 * 24 * 60 * 60 * 1_000 }
 } as const
+
+/** One CSV, built from the rows on screen, so an export never disagrees with the table. */
+export function syncRunsCsv(rows: readonly SyncRunRow[], header: readonly string[]): string {
+  const escape = (value: string) => /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+  return [header.map(escape).join(','), ...rows.map((row) => [
+    row.at, row.taskLabel, row.sources.map((source) => source.label).join(' / '), row.action, row.outcome,
+    row.durationMs === undefined ? '' : String(row.durationMs),
+    row.failureCode ?? '', row.correlationId, row.detail ?? ''
+  ].map(escape).join(','))].join('\n')
+}

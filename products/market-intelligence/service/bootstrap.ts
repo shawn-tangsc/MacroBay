@@ -522,7 +522,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
-  registerSyncRunIpc(register, deps.jobRuntime, undefined, undefined, syncAudit)
+  registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit)
   registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
