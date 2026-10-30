@@ -119,6 +119,7 @@ describe('agent platform sqlite repositories', () => {
       const path = join(dir, 'agent.sqlite')
       const db = createAgentPlatformDatabase(path)
       const repos = createAgentPlatformRepositories(db)
+      repos.agents.upsert({ ...agent, configuration: { requireSessionToolAllowlist: true } })
       repos.workspaces.upsert(workspace)
       repos.sessions.upsert({
         ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Brief' }),
@@ -127,10 +128,10 @@ describe('agent platform sqlite repositories', () => {
       db.connection.close()
 
       const reopened = createAgentPlatformDatabase(path)
-      const rows = createAgentPlatformRepositories(reopened).sessions.listAll(
-        new Map([[workspace.id, workspace]])
-      )
+      const repositories = createAgentPlatformRepositories(reopened)
+      const rows = repositories.sessions.listAll(new Map([[workspace.id, workspace]]))
       expect(rows[0]?.allowedTools).toEqual(['WebSearch', 'WebFetch'])
+      expect(repositories.agents.listAll()[0]?.configuration?.requireSessionToolAllowlist).toBe(true)
       reopened.connection.close()
     } finally {
       rmSync(dir, { recursive: true, force: true })

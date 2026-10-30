@@ -118,6 +118,33 @@ describe('agent runtime composition service', () => {
     expect(composition.sessionAllowedTools).toEqual([])
   })
 
+  it('carries the agent session-allowlist switch and defaults it to false', async () => {
+    const toolRegistry = new ToolRegistry()
+    const mcpRuntime = new McpRuntimeService({ toolRegistry })
+    const skillsRuntime = new SkillsRuntimeService({ getSkillTools: () => [] })
+
+    const strictState = createAgentStoreState({
+      agents: [{ ...agent, configuration: { ...agent.configuration, requireSessionToolAllowlist: true } }],
+      sessions: [session],
+      workspaces: [workspace]
+    })
+    const legacyState = createAgentStoreState({ agents: [agent], sessions: [session], workspaces: [workspace] })
+
+    const strict = await new AgentRuntimeCompositionService({ toolRegistry, mcpRuntime, skillsRuntime }).compose({
+      state: strictState,
+      agentId: 'agent-1',
+      sessionId: 'session-1'
+    })
+    const legacy = await new AgentRuntimeCompositionService({ toolRegistry, mcpRuntime, skillsRuntime }).compose({
+      state: legacyState,
+      agentId: 'agent-1',
+      sessionId: 'session-1'
+    })
+
+    expect(strict.requireSessionToolAllowlist).toBe(true)
+    expect(legacy.requireSessionToolAllowlist).toBe(false)
+  })
+
   it('builds a driver-ready runtime snapshot from agent/session/store state', async () => {
     const toolRegistry = new ToolRegistry()
     const mcpRuntime = new McpRuntimeService({ toolRegistry })

@@ -30,6 +30,10 @@ export type AgentRuntimeComposition = {
    * 行为与改动前完全一致。消费者只能"加白"，deny（tools.disabled）永远优先。
    */
   sessionAllowedTools?: string[]
+  /**
+   * agent 级开关：为 true 时 prompt 类 builtin 不进基线 allowedTools，只有会话白名单能放行。
+   */
+  requireSessionToolAllowlist?: boolean
   agentType: AgentStoreState['agents'][number]['type']
   instructions: string | null
   modelId: string | null
@@ -109,6 +113,7 @@ export class AgentRuntimeCompositionService {
       agentId: agent.id,
       sessionId: session.id,
       sessionAllowedTools: normalizeSessionAllowedTools(session.allowedTools),
+      requireSessionToolAllowlist: agent.configuration?.requireSessionToolAllowlist === true,
       agentType: agent.type,
       instructions: agent.instructions?.trim() || null,
       modelId: effectiveModel?.model ?? agent.model,

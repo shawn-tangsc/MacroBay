@@ -33,6 +33,11 @@ export type AgentConfiguration = {
   scheduler_last_run?: string
   heartbeat_enabled?: boolean
   heartbeat_interval?: number
+  /**
+   * true = 这个 agent 的 prompt 类 builtin（WebSearch/WebFetch/Bash…）默认不预授权，
+   * 只有会话显式传 allowedTools 时才放行；缺省 false，保持历史行为。
+   */
+  requireSessionToolAllowlist?: boolean
 } & Record<string, unknown>
 
 export type AgentBase = {
@@ -88,7 +93,8 @@ const booleanKeys = new Set<keyof AgentConfiguration>([
   'soul_enabled',
   'bootstrap_completed',
   'scheduler_enabled',
-  'heartbeat_enabled'
+  'heartbeat_enabled',
+  'requireSessionToolAllowlist'
 ])
 
 export function isAgentPermissionMode(value: unknown): value is AgentPermissionMode {

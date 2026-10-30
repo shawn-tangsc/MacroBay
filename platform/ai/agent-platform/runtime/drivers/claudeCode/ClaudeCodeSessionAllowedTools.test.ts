@@ -97,3 +97,102 @@ describe('session-scoped allowed tools', () => {
     expect(withoutField.disallowedTools).toEqual(base.disallowedTools)
   })
 })
+
+describe('agents that require a session allowlist', () => {
+  function requireAgent(overrides: Partial<AgentRuntimeComposition> = {}): AgentRuntimeComposition {
+    return composition({
+      requireSessionToolAllowlist: true,
+      tools: {
+        all: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt'), builtin('WebFetch', 'prompt')],
+        enabled: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt'), builtin('WebFetch', 'prompt')],
+        disabled: []
+      },
+      ...overrides
+    })
+  }
+
+  it('keeps prompt-approval builtins unapproved when the session carries no allowlist', () => {
+    const settings = buildClaudeCodeSettingsFromComposition(requireAgent())
+    const policy = buildClaudeCodeToolPolicyFromSettings(settings)
+
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(policy.canUseTool('WebSearch')).toEqual({ kind: 'prompt', toolName: 'WebSearch' })
+    expect(policy.canUseTool('WebFetch')).toEqual({ kind: 'prompt', toolName: 'WebFetch' })
+    expect(policy.canUseTool('Read')).toEqual({ kind: 'allow', toolName: 'Read' })
+  })
+
+  it('lets that session opt the builtin back in', () => {
+    const settings = buildClaudeCodeSettingsFromComposition({
+      ...requireAgent(),
+      sessionAllowedTools: ['WebSearch']
+    })
+
+    expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+    expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
+      kind: 'allow',
+      toolName: 'WebSearch'
+    })
+  })
+
+  it('still denies a disabled tool even when the session allows it', () => {
+    const settings = buildClaudeCodeSettingsFromComposition({
+      ...requireAgent({
+        tools: {
+          all: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt')],
+          enabled: [builtin('Read', 'auto')],
+          disabled: [builtin('WebSearch', 'prompt')]
+        }
+      }),
+      sessionAllowedTools: ['WebSearch']
+    })
+
+    expect(settings.allowedTools).not.toContain('WebSearch')
+    expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
+      kind: 'deny',
+      toolName: 'WebSearch',
+      reason: 'tool-disabled'
+    })
+  })
+
+  it('leaves MCP tools pre-approved when the flag is on', () => {
+    const mcpTool = {
+      id: 'mcp__filesystem__readFile',
+      name: 'readFile',
+      origin: 'mcp' as const,
+      approval: 'auto' as const,
+      sourceId: 'mcp-files'
+    }
+    const settings = buildClaudeCodeSettingsFromComposition({
+      ...requireAgent(),
+      tools: {
+        all: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt'), mcpTool],
+        enabled: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt'), mcpTool],
+        disabled: []
+      }
+    })
+
+    expect(settings.allowedTools).toEqual(['Read', 'mcp__filesystem__readFile'])
+  })
+
+  it('keeps the previous pre-approval when the flag is false or missing', () => {
+    const enabledComposition = composition({
+      tools: {
+        all: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt')],
+        enabled: [builtin('Read', 'auto'), builtin('WebSearch', 'prompt')],
+        disabled: []
+      }
+    })
+
+    for (const flag of [false, undefined]) {
+      const settings = buildClaudeCodeSettingsFromComposition({
+        ...enabledComposition,
+        ...(flag === undefined ? {} : { requireSessionToolAllowlist: flag })
+      })
+      expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+      expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
+        kind: 'allow',
+        toolName: 'WebSearch'
+      })
+    }
+  })
+})

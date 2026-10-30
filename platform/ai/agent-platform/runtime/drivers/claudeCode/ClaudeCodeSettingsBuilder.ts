@@ -45,7 +45,7 @@ export function buildClaudeCodeSettingsFromComposition(
     permissionMode: composition.permissionMode,
     effort: composition.effort,
     allowedTools: uniqueStrings([
-      ...uniqueToolIds(composition.tools.enabled),
+      ...resolveBaseAllowedTools(composition),
       ...resolveSessionAllowedTools(composition)
     ]),
     disallowedTools: uniqueToolIds(composition.tools.disabled),
@@ -60,6 +60,27 @@ export function buildClaudeCodeSettingsFromComposition(
     runtimeMcpApprovalByName: buildRuntimeMcpApprovalByName(composition),
     skillContext: buildClaudeCodeSkillContext(composition.skills.skills)
   }
+}
+
+/**
+ * 基线的预授权集合。默认就是所有 enabled 工具（历史行为）；当 agent 打开
+ * `requireSessionToolAllowlist` 时，prompt 类 builtin 不再预授权，交给会话白名单决定。
+ * MCP / Skill 工具不受影响。
+ */
+function resolveBaseAllowedTools(composition: AgentRuntimeComposition): string[] {
+  const enabled = uniqueToolIds(composition.tools.enabled)
+  if (composition.requireSessionToolAllowlist !== true) return enabled
+
+  const builtinApprovalById = new Map(
+    composition.tools.all
+      .filter((tool) => tool.origin === 'builtin')
+      .map((tool) => [tool.id, tool.approval] as const)
+  )
+  return enabled.filter((toolId) => {
+    const approval = builtinApprovalById.get(toolId)
+    // 不在 all 里的 id（skill/MCP 注册表工具）保持预授权，开关只对 builtin 生效。
+    return approval === undefined || approval !== 'prompt'
+  })
 }
 
 /**
