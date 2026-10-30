@@ -27,7 +27,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
   const keyIds = ['btc', 'eth', 'stablecoin', 'etf-btc'] as const
   const keyRows = keyIds.map((id) => chosen.find((row) => row.id === id)).filter((row): row is NonNullable<typeof row> => Boolean(row))
   const keySet = new Set(keyRows.map((row) => row.id))
-  const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support]
+  const reference = rows.filter((row) => row.importance.tier === 'reference')
+  const metricRows = [...chosen.filter((row) => !keySet.has(row.id)), ...support, ...reference]
   const etfRows = doc.data.funds.filter((row) => row.id === 'etf-btc' || row.id === 'etf-eth')
   const focusEvent = doc.next.focus ?? doc.next.items[0]
   const otherEvents = doc.next.items.filter((item) => item.eventKey !== focusEvent?.eventKey)
