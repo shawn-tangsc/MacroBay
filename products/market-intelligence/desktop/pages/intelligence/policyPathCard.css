@@ -1,16 +1,22 @@
-/* A rail card, not a full-width strip: same tokens as the calendar card beside it. */
+/* A card, not a band: it must read as a different object from the list underneath it. A tinted
+   surface, a rounded border and an accent edge do that without shouting. */
 .mi-policy-card {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
   flex: none;
-  padding: 10px 12px 8px;
-  border-bottom: 1px solid var(--border, #22252d);
-  background: var(--surface, #0f1116);
+  margin: 10px 10px 12px;
+  padding: 12px 13px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent, #b7cf52) 24%, var(--border, #22252d));
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent, #b7cf52) 7%, var(--surface, #0f1116)), var(--surface, #0f1116));
+  box-shadow: 0 10px 24px -18px rgb(0 0 0 / 80%);
   color: var(--text, #e8e9ec);
 }
 .mi-policy-card__head { display: flex; align-items: center; gap: 8px; }
-.mi-policy-card__head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
+.mi-policy-card__head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--muted, #8b8d94); }
 .mi-policy-card__chip {
   margin-left: auto;
   font-size: 9.5px;
@@ -21,7 +27,7 @@
   padding: 0 4px;
 }
 .mi-policy-card__lead { display: flex; align-items: baseline; gap: 8px; margin: 0; }
-.mi-policy-card__value { font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.mi-policy-card__value { font-size: 30px; font-weight: 650; line-height: 1.05; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .mi-policy-card__outcome { font-size: 11px; color: var(--muted, #8b8d94); }
 .mi-policy-card__delta { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
 .mi-policy-card__delta[data-direction='up'] { color: #e0524c; }
