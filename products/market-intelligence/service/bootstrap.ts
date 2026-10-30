@@ -42,6 +42,8 @@ import { createMacroCalendarScheduleBackend } from './intelligence/macro-calenda
 import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
 import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
 import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
+import { createSyncAuditStore } from './intelligence/audit/syncAuditStore'
+import { withSyncAudit } from './intelligence/audit/syncAuditRecorder'
 import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
@@ -350,6 +352,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       return beaOfficialReleaseJobs?.initialize()
     })
     .catch(() => undefined)
+  // Product-side audit lives beside the calendar but in its own file: it must not carry the
+  // calendar's schema version or backup policy.
+  const syncAudit = createSyncAuditStore(join(getIntelligenceProductDataDir(), 'sync-audit.sqlite'))
   deps.registerProductDisposer?.(async () => {
     // The gold stream closes first: it must not survive the module whose store it reports against.
     await intelligenceModule.macroMarketLive.dispose()
@@ -363,6 +368,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     macroCalendarJobs.dispose()
     macroCalendarBackend.dispose()
     intelligenceModule.marketAnalysisRuntime.dispose()
+    syncAudit.close()
   })
   deps.registerProductCache('market-intelligence', {
     cacheId: 'market-intelligence.translation-records',
@@ -464,9 +470,13 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     }
   })
 
+  // Audit the reader's own actions on the IPC seam: one place sees the payload, the duration and
+  // the failure, so no service has to grow a logging dependency for it.
+  const auditedRegister = withSyncAudit(register, syncAudit)
+
   registerIntelligenceIpc(register, deps.jobRuntime)
   registerIntelligencePublicQueryIpc(register, deps.jobRuntime)
-  registerIntelligenceSourcesIpc(register, deps.jobRuntime)
+  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
   registerIntelligenceTranslationIpc(register, deps.jobRuntime)
   registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
@@ -496,8 +506,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
   registerPolicyPathIpc(register, policyPathQueryService)
-  registerSyncRunIpc(register, deps.jobRuntime)
-  registerMacroEconomicCalendarIpc(register, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
+  registerSyncRunIpc(register, deps.jobRuntime, undefined, undefined, syncAudit)
+  registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
     releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore

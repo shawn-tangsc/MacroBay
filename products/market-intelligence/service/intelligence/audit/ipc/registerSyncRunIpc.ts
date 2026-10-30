@@ -5,7 +5,8 @@ import {
   SYNC_RUN_IPC_METHODS, SYNC_RUN_LIMITS,
   type SyncRunQuery, type SyncRunResult, type SyncRunWindow
 } from '../../../../contracts/syncRunRecords'
-import { projectSyncRuns, syncRunsCsv } from '../syncRunProjection'
+import { projectSyncAudit, projectSyncRuns, syncRunsCsv } from '../syncRunProjection'
+import type { SyncAuditStore } from '../syncAuditStore'
 
 const productId = 'market-intelligence'
 
@@ -14,13 +15,23 @@ export function registerSyncRunIpc(
   register: ProductIpcRegistrar,
   jobRuntime: Pick<JobRuntime, 'listRuns'>,
   now: () => string = () => new Date().toISOString(),
-  csvHeader: readonly string[] = ['time', 'source', 'action', 'outcome', 'durationMs', 'failureCode', 'detail']
+  csvHeader: readonly string[] = ['time', 'source', 'action', 'outcome', 'durationMs', 'failureCode', 'correlationId', 'detail'],
+  audit?: Pick<SyncAuditStore, 'list'>
 ): void {
   const read = (payload: unknown): SyncRunResult => {
     const query = parseQuery(payload)
     if (!query) return { state: 'unavailable', failureCode: 'query-invalid' }
     try {
-      const rows = projectSyncRuns(jobRuntime.listRuns({ productId, limit: SYNC_RUN_LIMITS.maximumLimit }), query, Date.parse(now()))
+      const nowMs = Date.parse(now())
+      const jobRows = projectSyncRuns(jobRuntime.listRuns({ productId, limit: SYNC_RUN_LIMITS.maximumLimit }), query, nowMs)
+      const auditRows = audit
+        ? audit.list({ since: sinceOf(query.window, nowMs), limit: SYNC_RUN_LIMITS.maximumLimit })
+          .map(projectSyncAudit)
+          .filter((row) => query.sourceId === undefined || row.sourceId === query.sourceId)
+          .filter((row) => query.outcome === undefined || row.outcome === query.outcome)
+        : []
+      const rows = [...jobRows, ...auditRows].sort((left, right) => right.at.localeCompare(left.at))
+        .slice(0, Math.min(Math.max(query.limit, 1), SYNC_RUN_LIMITS.maximumLimit))
       return { state: 'available', rows }
     } catch {
       return { state: 'unavailable', failureCode: 'runs-unavailable' }
@@ -33,6 +44,11 @@ export function registerSyncRunIpc(
       ? { state: 'available' as const, csv: syncRunsCsv(result.rows, csvHeader) }
       : result
   })
+}
+
+function sinceOf(window: SyncRunWindow, nowMs: number): string {
+  if (window === 'all') return new Date(0).toISOString()
+  return new Date(nowMs - SYNC_RUN_LIMITS.windowMs[window]).toISOString()
 }
 
 function parseQuery(payload: unknown): SyncRunQuery | undefined {

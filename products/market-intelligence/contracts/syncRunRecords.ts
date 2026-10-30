@@ -10,7 +10,7 @@ export const SYNC_RUN_IPC_METHODS = {
   exportCsv: 'intelligence.syncRuns.exportCsv'
 } as const
 
-export type SyncRunAction = 'collect' | 'refresh' | 'analysis' | 'other'
+export type SyncRunAction = 'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other'
 export type SyncRunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'running'
 export type SyncRunWindow = '24h' | '7d' | 'all'
 
@@ -22,10 +22,25 @@ export type SyncRunRow = Readonly<{
   sourceLabel: string
   handlerId: string
   action: SyncRunAction
+  /** `runId` for job rows, a generated id for product-side actions; the key that ties a chain. */
+  correlationId: string
   outcome: SyncRunOutcome
   durationMs?: number
   /** The stable code a failure carries, when one can be read out of the error text. */
   failureCode?: string
+  detail?: string
+}>
+
+/** One product-side action: a switch, a connection test, a manual refresh, an import. */
+export type SyncAuditEntry = Readonly<{
+  id: string
+  at: string
+  actor: 'schedule' | 'user' | 'agent' | 'startup'
+  action: Exclude<SyncRunAction, 'analysis' | 'other'>
+  target: string
+  outcome: SyncRunOutcome
+  failureCode?: string
+  durationMs?: number
   detail?: string
 }>
 

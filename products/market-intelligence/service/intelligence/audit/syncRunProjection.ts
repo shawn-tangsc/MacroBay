@@ -2,6 +2,7 @@ import type { JobRunRecord } from '@platform/jobs'
 
 import {
   SYNC_RUN_LIMITS,
+  type SyncAuditEntry,
   type SyncRunAction,
   type SyncRunOutcome,
   type SyncRunQuery,
@@ -39,6 +40,7 @@ export function projectSyncRun(row: JobRunRecord): SyncRunRow {
   return {
     at,
     runId: row.id,
+    correlationId: row.id,
     ...(entry?.sourceId ? { sourceId: entry.sourceId } : {}),
     sourceLabel: entry?.sourceLabel ?? row.handlerId,
     handlerId: row.handlerId,
@@ -47,6 +49,24 @@ export function projectSyncRun(row: JobRunRecord): SyncRunRow {
     ...(durationOf(row) === undefined ? {} : { durationMs: durationOf(row) }),
     ...(failureCodeOf(row.lastError) === undefined ? {} : { failureCode: failureCodeOf(row.lastError) }),
     ...(detail ? { detail } : {})
+  }
+}
+
+/** A product-side action, dressed as the same row so one table can show both. */
+export function projectSyncAudit(entry: SyncAuditEntry): SyncRunRow {
+  const label = Object.values(syncRunHandlerCatalog).find((candidate) => candidate.sourceId === entry.target)?.sourceLabel
+  return {
+    at: entry.at,
+    runId: entry.id,
+    correlationId: entry.id,
+    ...(entry.target.startsWith('macro-calendar-') || entry.target === 'policy-path-market' ? { sourceId: entry.target } : {}),
+    sourceLabel: label ?? entry.target,
+    handlerId: entry.action,
+    action: entry.action,
+    outcome: entry.outcome,
+    ...(entry.durationMs === undefined ? {} : { durationMs: entry.durationMs }),
+    ...(entry.failureCode === undefined ? {} : { failureCode: entry.failureCode }),
+    ...(entry.detail === undefined ? {} : { detail: entry.detail })
   }
 }
 
@@ -66,7 +86,7 @@ export function syncRunsCsv(rows: readonly SyncRunRow[], header: readonly string
   return [header.map(escape).join(','), ...rows.map((row) => [
     row.at, row.sourceLabel, row.action, row.outcome,
     row.durationMs === undefined ? '' : String(row.durationMs),
-    row.failureCode ?? '', row.detail ?? ''
+    row.failureCode ?? '', row.correlationId, row.detail ?? ''
   ].map(escape).join(','))].join('\n')
 }
 
