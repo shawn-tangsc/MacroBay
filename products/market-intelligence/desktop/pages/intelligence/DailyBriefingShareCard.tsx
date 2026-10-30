@@ -67,8 +67,8 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <span className="mi-brief-poster__news-source">{item.sourceName}</span>
       </div>)}
       {visibleMacro.length > 0 ? <h3 className="mi-brief-poster__macro-head">{text.sections.macro}</h3> : null}
-      {visibleMacro.map((item) => <div className="mi-brief-poster__news" key={item.eventKey}>
-        <span data-polarity="macro">{formatTime(item.scheduledAt, 'minute')}</span>
+      {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey}>
+        <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
           <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
           <small>{text.macro.actual} {item.actual ?? '—'} · {item.consensus ? `${text.macro.consensus} ${item.consensus}` : text.macro.noConsensus}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}</small>
@@ -79,7 +79,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
 
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
-      <div className="mi-brief-poster__numbers">
+      <div className="mi-brief-poster__numbers" data-count={keyRows.length}>
         {keyRows.map((row) => <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)}>
           <span>{rowLabel(text, row.labelKey)}</span>
           <strong>{formatBriefingValue(row.value, text.noValue, locale)}</strong>
@@ -289,4 +289,9 @@ function watchLabel(condition: string, text: { next: { watchHigher: string; watc
   if (normalized === 'higher than expected') return text.next.watchHigher
   if (normalized === 'lower than expected') return text.next.watchLower
   return condition
+}
+
+function macroTime(value: string, formatTime: (value: string, precision: 'minute') => string): React.ReactNode {
+  const [date, ...rest] = formatTime(value, 'minute').split(' ')
+  return <>{date}<br />{rest.join(' ')}</>
 }

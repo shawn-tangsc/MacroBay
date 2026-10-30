@@ -34,8 +34,8 @@
 .mi-brief-poster__news > span { color: #8a877b; font-size: 11px; line-height: 1.5; }
 .mi-brief-poster__news > span[data-polarity="bearish"] { color: #9f2d21; }
 .mi-brief-poster__news > span[data-polarity="bullish"] { color: #2f6b3c; }
-.mi-brief-poster__news p { margin: 0; color: #1b1d18; font-size: 17px; font-weight: 600; line-height: 1.42; }
-.mi-brief-poster__news small { display: block; margin-top: 4px; color: #625f55; font-size: 13px; line-height: 1.5; }
+.mi-brief-poster__news p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
+.mi-brief-poster__news small { display: block; margin-top: 4px; color: #625f55; font-size: 12px; line-height: 1.5; }
 .mi-brief-poster__empty { margin: 0; color: #777368; font-size: 13px; }
 
 .mi-brief-poster__numbers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
@@ -78,6 +78,8 @@
 
 .mi-brief-poster__news-section, .mi-brief-poster__data-section { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
 .mi-brief-poster__numbers { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mi-brief-poster__numbers[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.mi-brief-poster__numbers[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mi-brief-poster__metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 20px; margin-top: 10px; border-top: 1px solid #ded4c2; }
 .mi-brief-poster__metrics div { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-bottom: 1px solid #ebdfcf; color: #6b695f; font-size: 11px; }
 .mi-brief-poster__metrics b { color: #1b1d18; font-weight: 700; }
@@ -156,6 +158,10 @@
 
 .mi-brief-poster__news-reason { display: block; margin-top: 3px; color: #5b4a35 !important; font-size: 9.5px !important; line-height: 1.45; }
 
+.mi-brief-poster__macro { display: grid; grid-template-columns: 96px 1fr; gap: 0 14px; padding: 9px 0; border-top: 1px solid #e7ddcd; }
+.mi-brief-poster__macro > span { color: #8b8475; font-size: 11px; line-height: 1.5; white-space: nowrap; }
+.mi-brief-poster__macro > div > p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
+.mi-brief-poster__macro > div > small { display: block; margin-top: 4px; color: #625f55; font-size: 12px; line-height: 1.5; }
 .mi-brief-poster__macro-head { margin: 14px 0 4px; color: #8a5a35; font-size: 10px; letter-spacing: .08em; }
 
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
