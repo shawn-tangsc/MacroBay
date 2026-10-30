@@ -33,7 +33,15 @@ export type DailyBriefingSource = Readonly<{
 
 export type DailyBriefingTodayResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
-  | Readonly<{ state: 'unavailable'; failureCode: 'time-invalid' | 'source-failed' | 'build-failed' }>
+  | Readonly<{
+    state: 'unavailable'
+    /**
+     * `candidate-overflow`: one class held more candidates than the policy budget, so nothing was
+     * generated or stored. `store-failed`: the edition was built but not persisted, so it is not
+     * returned as if it were today's stored edition.
+     */
+    failureCode: 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
+  }>
 
 export type DailyBriefingGetResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
@@ -102,6 +110,9 @@ export function createDailyBriefingService(deps: Readonly<{
     } catch {
       return { state: 'unavailable', failureCode: 'build-failed' }
     }
+    // A pool above the per-class budget fails before any editorial work or write: the builder caps
+    // its rendered sections, and a capped selection would silently stand in for the whole day.
+    if (candidateOverflow(packet, document)) return { state: 'unavailable', failureCode: 'candidate-overflow' }
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
     if (deps.agentRunner && editorialEnabled) {
@@ -138,14 +149,22 @@ export function createDailyBriefingService(deps: Readonly<{
     } else if (!editorialEnabled) {
       document = Object.freeze({ ...document, provenance: Object.freeze({ ...document.provenance, editorialFailure: 'editorial-disabled' }) })
     }
-    if (publish) await deps.store.put({
-      date: input.date,
-      locale: input.locale,
-      generatedAt: document.edition.generatedAt,
-      windowStart: document.edition.windowStart,
-      windowEnd: document.edition.windowEnd,
-      document
-    }).catch(() => undefined)
+    if (publish) {
+      try {
+        await deps.store.put({
+          date: input.date,
+          locale: input.locale,
+          generatedAt: document.edition.generatedAt,
+          windowStart: document.edition.windowStart,
+          windowEnd: document.edition.windowEnd,
+          document
+        })
+      } catch {
+        // Returning the document here would report a stored edition that does not exist; the next
+        // read would fall back to a different generation, so surface the write failure instead.
+        return { state: 'unavailable', failureCode: 'store-failed' }
+      }
+    }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
     return { state: 'available', document }
   }
@@ -175,6 +194,22 @@ export function createDailyBriefingService(deps: Readonly<{
   }
 
   return { getToday, regenerate, list, get }
+}
+
+/**
+ * The renderer validates a document against the same two budgets, so the service must never build
+ * an edition whose candidate pool is larger than the document can carry. News candidates are the
+ * directional rows the builder would select; title duplicates are collapsed during selection but
+ * still count against the input budget, so a duplicate flood fails instead of shrinking silently.
+ * Macro candidates are the builder's own released/high/actual list, which the document keeps whole
+ * in `macroCandidates` so the count here reads the same implementation the writer saw.
+ */
+function candidateOverflow(packet: DailyBriefingFactPacket, document: DailyBriefingDocument): boolean {
+  const newsCandidates = packet.news.items.filter((item) =>
+    item.polarity !== 'neutral' && item.strength >= 2 && item.confidence >= 50).length
+  const macroCandidates = document.news.macroCandidates?.length ?? 0
+  return newsCandidates > dailyBriefingPolicy.maximumNewsItems ||
+    macroCandidates > dailyBriefingPolicy.maximumMacroItems
 }
 
 async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<T> {

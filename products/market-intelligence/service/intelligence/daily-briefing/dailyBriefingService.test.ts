@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
+import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import {
   briefingWindow,
   createDailyBriefingService,
@@ -51,6 +52,34 @@ function fakeSource(packet: () => DailyBriefingFactPacket = emptyPacket): DailyB
   }
   return source
 }
+
+const newsCandidate = (index: number): NewsSentimentItemView => ({
+  itemId: `n${index}`,
+  title: `Headline ${index}`,
+  sourceId: 'coindesk-rss',
+  sourceName: 'CoinDesk RSS',
+  publishedAt: '2026-10-30T00:00:00.000Z',
+  scoredAt: '2026-10-30T00:05:00.000Z',
+  polarity: 'bearish',
+  strength: 3,
+  confidence: 78,
+  symbols: ['BTC'],
+  reasonCode: 'news.exploit.v1',
+  engine: 'rules',
+  caveats: []
+})
+
+const macroCandidate = (index: number): DailyBriefingCalendarEvent => ({
+  eventKey: `US.TEST.${index}`,
+  title: 'test-event',
+  scheduledAt: '2026-10-29T12:00:00.000Z',
+  importance: 'high',
+  lifecycleState: 'released',
+  category: 'economic-indicator',
+  actual: '3.4%',
+  consensus: '3.2%',
+  surprise: { direction: 'beat', value: 0.2, unit: 'pp' }
+})
 
 describe('daily briefing service', () => {
   it('derives the local edition date from the requested zone', () => {
@@ -178,6 +207,62 @@ describe('daily briefing service', () => {
     const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
     expect(await service.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
       state: 'unavailable', failureCode: 'source-failed'
+    })
+  })
+
+  it('fails without generating when the news candidate pool exceeds 200', async () => {
+    const store = memoryStore()
+    const source = fakeSource(() => ({
+      ...emptyPacket(),
+      news: { state: 'available', items: Array.from({ length: 201 }, (_, index) => newsCandidate(index)) }
+    }))
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+
+    await expect(service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toEqual({
+      state: 'unavailable', failureCode: 'candidate-overflow'
+    })
+    expect(store.rows.size).toBe(0)
+  })
+
+  it('fails without generating when the macro candidate pool exceeds 200', async () => {
+    const store = memoryStore()
+    const source = fakeSource(() => ({
+      ...emptyPacket(),
+      calendar: { state: 'available', events: Array.from({ length: 201 }, (_, index) => macroCandidate(index)) }
+    }))
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+
+    await expect(service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toEqual({
+      state: 'unavailable', failureCode: 'candidate-overflow'
+    })
+    expect(store.rows.size).toBe(0)
+  })
+
+  it('accepts exactly the 200-candidate budget', async () => {
+    const store = memoryStore()
+    const source = fakeSource(() => ({
+      ...emptyPacket(),
+      news: { state: 'available', items: Array.from({ length: 200 }, (_, index) => newsCandidate(index)) },
+      calendar: { state: 'available', events: Array.from({ length: 200 }, (_, index) => macroCandidate(index)) }
+    }))
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result.state).toBe('available')
+    expect(store.rows.size).toBe(1)
+  })
+
+  it('does not return an edition when the store write fails', async () => {
+    const store: DailyBriefingStore = {
+      async get() { return undefined },
+      async put() { throw new Error('disk full') },
+      async list() { return [] },
+      async prune() {}
+    }
+    const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
+
+    await expect(service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toEqual({
+      state: 'unavailable', failureCode: 'store-failed'
     })
   })
 

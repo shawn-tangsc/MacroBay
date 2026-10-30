@@ -6,14 +6,20 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * This is the one shape the renderer, the Markdown serializer and the stored edition share. It is
  * data only: labels are keys, prose is the published conclusion's own text, and every number keeps
  * its window and observation time. The main process builds it; the renderer never re-derives it.
+ *
+ * `maximumNewsItems` and `maximumMacroItems` are the per-class candidate budget: one edition may
+ * carry at most 200 news candidates and 200 macro candidates. A larger pool is a generation
+ * failure (`candidate-overflow`) rather than a silent truncation, so an edition never pretends a
+ * dropped tail was the day's full selection. The renderer reads the same numbers from here when it
+ * validates an incoming document, which keeps the client and the builder from drifting apart.
  */
 export const dailyBriefingPolicy = Object.freeze({
   schemaVersion: 6,
   policyVersion: 'daily-briefing.v17',
   windowHours: 24,
   maximumBytes: 256 * 1024,
-  maximumNewsItems: 50,
-  maximumMacroItems: 50,
+  maximumNewsItems: 200,
+  maximumMacroItems: 200,
   maximumNextItems: 3,
   maximumCounterEvidence: 3,
   maximumConditions: 5,

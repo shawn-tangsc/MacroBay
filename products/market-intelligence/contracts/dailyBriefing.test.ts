@@ -46,8 +46,10 @@ const minimalDocument: DailyBriefingDocument = {
 
 describe('daily briefing contract', () => {
   it('pins the document caps the product promises', () => {
-    expect(dailyBriefingPolicy.maximumNewsItems).toBe(50)
-    expect(dailyBriefingPolicy.maximumMacroItems).toBe(50)
+    // 200 per class is the candidate budget: the service fails with `candidate-overflow` instead of
+    // silently storing a truncated selection.
+    expect(dailyBriefingPolicy.maximumNewsItems).toBe(200)
+    expect(dailyBriefingPolicy.maximumMacroItems).toBe(200)
     expect(dailyBriefingPolicy.maximumNextItems).toBe(3)
     expect(dailyBriefingPolicy.maximumCounterEvidence).toBe(3)
     expect(dailyBriefingPolicy.maximumConditions).toBe(5)
