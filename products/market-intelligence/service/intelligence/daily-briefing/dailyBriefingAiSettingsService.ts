@@ -23,6 +23,7 @@ export type DailyBriefingAiSettingsService = Readonly<{
 export function createDailyBriefingAiSettingsService(deps: Readonly<{
   store: DailyBriefingAiSettingsStore
   now?: () => string
+  onModelSaved?: (settings: DailyBriefingAiSettings) => Promise<void> | void
 }> & DailyBriefingModelResolverDeps): DailyBriefingAiSettingsService {
   const now = deps.now ?? (() => new Date().toISOString())
 
@@ -46,7 +47,9 @@ export function createDailyBriefingAiSettingsService(deps: Readonly<{
     async save(patch) {
       const current = await deps.store.getSettings()
       const next = applyDailyBriefingAiSettingsPatch(current, patch, now())
-      return view(await deps.store.save(next))
+      const saved = await deps.store.save(next)
+      await deps.onModelSaved?.(saved)
+      return view(saved)
     }
   }
 }

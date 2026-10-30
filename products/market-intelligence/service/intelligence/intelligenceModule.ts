@@ -183,6 +183,7 @@ export type IntelligenceModulePlatformHooks = {
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
 }
 
 type IntelligenceModule = {
@@ -675,7 +676,12 @@ export function getIntelligenceModule(
         () => new Date().toISOString()
       ),
       ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
-      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {})
+      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
+      onModelSaved: async (settings) => {
+        if (!hooks?.updateAgent) return
+        const model = settings.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : 'unconfigured:default-chat-model'
+        await hooks.updateAgent('daily-brief-editor', { model })
+      }
     })
     const dailyBriefingAgent = createDailyBriefingAgent({ invoke: structuredModelInvocation.invoke })
     const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))

@@ -133,6 +133,7 @@ import {
 } from '../../ai/agent-platform/seeds'
 import type { ProductAgentSeedFactory } from '../../ai/agent-platform/seeds/mergeAgentSeeds'
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
+import type { AgentEntity, UpdateAgentDto } from '../../ai/agent-platform/schemas/agentSchemas'
 import type { ProductAgentToolHandlerRegistration } from '../../ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 import {
   ProductAgentToolRegistry,
@@ -1266,6 +1267,7 @@ export type DesktopAppBootstrapOptions = {
     appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
     updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
     deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+    updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
     invokeProductAgentTool?: (
       state: AgentStoreState,
       input: ProductAgentToolInvokeInput
@@ -2523,6 +2525,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
       updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
       deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
+      updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
       invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
       invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
       assistantInvocation: assistantInvocationService

@@ -229,6 +229,7 @@ import type { EventBusRuntime } from '@platform/message-bus'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import type { AgentEntity, UpdateAgentDto } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
 import type {
   ProductAgentToolInvokeInput,
@@ -261,6 +262,7 @@ export type ProductServiceDependencies = {
   appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
   updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+  updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
   invokeProductAgentTool?: (
     state: AgentStoreState,
     input: ProductAgentToolInvokeInput

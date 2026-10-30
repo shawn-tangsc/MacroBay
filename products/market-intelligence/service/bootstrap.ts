@@ -95,6 +95,7 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
   updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<import('@platform/ai/agent-platform/schemas/agentSchemas').AgentEntity>
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
@@ -158,6 +159,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     appendAgentSessionMessages: deps.appendAgentSessionMessages,
     updateAgentSession: deps.updateAgentSession,
     deleteAgentSessions: deps.deleteAgentSessions,
+    updateAgent: deps.updateAgent,
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
     // once network settings are readable — so it is handed over as a thunk, never as a raw WebSocket.
     ...(deps.getNetworkSettings
