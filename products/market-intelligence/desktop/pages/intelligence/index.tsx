@@ -12,6 +12,7 @@ import { useCryptoActivation } from './useCryptoActivation'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
 import { DailyBriefingPage } from './DailyBriefingPage'
+import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
 import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
@@ -111,7 +112,14 @@ function IntelligencePageBody(): React.ReactElement {
   return (
     <div className="mi-sample-surface">
       {sample.state.active ? <SampleWatermark text={sampleText.watermark} /> : null}
-      {/* 横幅只属于看板：门户是入口页，不该挂一条状态条。 */}
+      {/*
+        「今日简报已生成」在页面顶部。示例模式回放历史数据、简报不可用；简报页自己就显示生成状态，
+        两处都不挂这条提示。
+      */}
+      {!sample.state.active && activeView !== 'briefing' ? (
+        <DailyBriefingGeneratedBanner locale={language} text={text.dailyBriefingGeneratedBanner} />
+      ) : null}
+      {/* 示例模式横幅只属于看板：门户是入口页，不该挂一条状态条。 */}
       {sample.state.active && activeView === 'dashboard' ? (
         <SampleModeBanner
           busy={sample.busy}

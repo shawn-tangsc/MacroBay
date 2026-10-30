@@ -49,6 +49,11 @@ export const productText = {
               connect: '接入真实数据'
             }
           },
+          dailyBriefingGeneratedBanner: {
+            title: '今日简报已生成',
+            generatedAt: '生成时间 {time}',
+            dismiss: '知道了'
+          },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
             crypto: { name: '数字货币市场解读员', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 个静态情报源' },
@@ -1509,6 +1514,11 @@ export const productText = {
               exit: 'Exit sample',
               connect: 'Connect real data'
             }
+          },
+          dailyBriefingGeneratedBanner: {
+            title: 'Today’s brief is ready',
+            generatedAt: 'Generated at {time}',
+            dismiss: 'Got it'
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
           agents: {
