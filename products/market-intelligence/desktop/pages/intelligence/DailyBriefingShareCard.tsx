@@ -59,7 +59,7 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
     {hasNews ? <section className="mi-brief-poster__news-section">
       <h2>{text.sections.news}</h2>
       {visibleNews.map((item) => <div className="mi-brief-poster__news" key={item.itemId}>
-        <span data-polarity={item.polarity}>{formatTime(item.publishedAt, 'minute').slice(11, 16)}</span>
+        <span data-polarity={item.polarity}>{clockWithZone(item.publishedAt, formatTime)}</span>
         <div>
           <p>{item.translatedTitle ?? item.title}{item.why ? <span className="mi-brief-poster__news-focus">{text.newsFocus}</span> : null}</p>
           {item.why ? <small>{item.why}</small> : null}
@@ -294,4 +294,9 @@ function watchLabel(condition: string, text: { next: { watchHigher: string; watc
 function macroTime(value: string, formatTime: (value: string, precision: 'minute') => string): React.ReactNode {
   const [date, ...rest] = formatTime(value, 'minute').split(' ')
   return <>{date}<br />{rest.join(' ')}</>
+}
+
+function clockWithZone(value: string, formatTime: (value: string, precision: 'minute') => string): string {
+  const parts = formatTime(value, 'minute').split(' ')
+  return [parts[1], ...parts.slice(2)].filter(Boolean).join(' ')
 }

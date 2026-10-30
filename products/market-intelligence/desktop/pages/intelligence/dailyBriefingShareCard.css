@@ -30,8 +30,8 @@
 .mi-brief-poster__columns { display: grid; grid-template-columns: 1.08fr 1fr; gap: 46px; }
 .mi-brief-poster h2 { margin: 0 0 12px; color: #8a5a35; font-size: 12px; font-weight: 700; letter-spacing: .16em; }
 
-.mi-brief-poster__news { display: grid; grid-template-columns: 50px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid #d8cfbd; }
-.mi-brief-poster__news > span { color: #8a877b; font-size: 11px; line-height: 1.5; }
+.mi-brief-poster__news { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid #d8cfbd; }
+.mi-brief-poster__news > span { color: #8a877b; font-size: 10.5px; line-height: 1.5; white-space: nowrap; }
 .mi-brief-poster__news > span[data-polarity="bearish"] { color: #9f2d21; }
 .mi-brief-poster__news > span[data-polarity="bullish"] { color: #2f6b3c; }
 .mi-brief-poster__news p { margin: 0; color: #1b1d18; font-size: 15px; font-weight: 600; line-height: 1.42; }
