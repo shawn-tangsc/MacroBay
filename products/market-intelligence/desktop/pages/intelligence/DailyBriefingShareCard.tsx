@@ -123,11 +123,10 @@ export function DailyBriefingShareCard({ document: doc, text, locale, eventTitle
         <p>{text.next.importance[focusEvent.importance]}{nextCountry(focusEvent, locale) ? ` · ${nextCountry(focusEvent, locale)}` : ''}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
         {focusEvent.watch && focusEvent.watch.length > 0 ? <div className="mi-brief-poster__next-watch-grid">{focusEvent.watch.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{watchLabel(entry.condition, text)}</span><b>{entry.implication}</b></div>)}</div> : null}
-        <div className="mi-brief-poster__next-values">
+        {focusEvent.consensus || focusEvent.previous ? <div className="mi-brief-poster__next-values">
           {focusEvent.consensus ? `${text.next.expected} ${focusEvent.consensus}` : ''}
           {focusEvent.previous ? `${focusEvent.consensus ? ' · ' : ''}${text.next.previous} ${focusEvent.previous}` : ''}
-          {!focusEvent.consensus && !focusEvent.previous ? text.next.noExpected : ''}
-        </div>
+        </div> : null}
         <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
       </div> : null}
       {otherEvents.length > 0 ? <div className="mi-brief-poster__next-rows">
