@@ -118,7 +118,22 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
   const focusKey = typeof value.focus === 'string' ? value.focus : undefined
   const focus = focusKey ? nextCandidates.find((item) => item.eventKey === focusKey) : document.next.focus
-  const nextItems = nextKeys ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey) : document.next.items
+  const selectedNext = nextKeys ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey) : document.next.items
+  // Deterministic floor: the nearest upcoming event stays visible even if selection hid everything.
+  const nextItems = selectedNext.length > 0 ? selectedNext : nextCandidates.slice(0, 1)
+  const shown = [
+    ...(newsIds ? [...newsIds] : document.news.items.map((item) => `news:${item.itemId}`)),
+    ...(macroIds ? [...macroIds] : document.news.macro.map((item) => `macro:${item.eventKey}`)),
+    ...(nextKeys ? [...nextKeys] : nextItems.map((item) => item.eventKey))
+  ]
+  const hiddenEntries = Array.isArray((value as { hidden?: unknown }).hidden) ? (value as { hidden: unknown[] }).hidden : []
+  const hiddenReason = new Map(hiddenEntries.flatMap((entry) => entry && typeof entry === 'object' && typeof (entry as { factId?: unknown }).factId === 'string' && typeof (entry as { reason?: unknown }).reason === 'string' ? [[(entry as { factId: string }).factId, (entry as { reason: string }).reason] as const] : []))
+  const allCandidates = [
+    ...document.news.items.map((item) => `news:${item.itemId}`),
+    ...document.news.macro.map((item) => `macro:${item.eventKey}`),
+    ...nextCandidates.map((item) => item.eventKey)
+  ]
+  const audit = Object.freeze({ shown: Object.freeze(shown), hidden: Object.freeze(allCandidates.filter((id) => !shown.includes(id)).map((factId) => Object.freeze({ factId, reason: hiddenReason.get(factId) ?? 'not selected' }))) })
   return Object.freeze({
     ...document,
     news: Object.freeze({
@@ -126,6 +141,7 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
       items: newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items,
       macro: macroIds ? (document.news.macroCandidates ?? document.news.macro).filter((item) => macroIds.has(`macro:${item.eventKey}`)) : document.news.macro
     }),
-    next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) })
+    next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) }),
+    provenance: Object.freeze({ ...document.provenance, selectionAudit: audit })
   })
 }

@@ -255,6 +255,7 @@ export type DailyBriefingDocument = Readonly<{
     /** Present when the fact layer shipped because the editorial layer did not run. */
     editorialFailure?: string
     editorialFailureDetail?: string
+    selectionAudit?: Readonly<{ shown: readonly string[]; hidden: readonly Readonly<{ factId: string; reason: string }>[] }>
   }>
 }>
 
