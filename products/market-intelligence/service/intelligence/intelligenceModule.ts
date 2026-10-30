@@ -60,7 +60,7 @@ import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
-import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefingAgent } from './daily-briefing/dailyBriefingAgent'
 import { registerDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
@@ -729,7 +729,10 @@ export function getIntelligenceModule(
       registerDailyBriefSessionRetentionJob(jobRuntime, {
         links: dailyBriefSessionLinks,
         deleteSessions: (ids) => hooks.deleteAgentSessions!(ids),
-        today: () => new Date().toISOString().slice(0, 10),
+        today: () => {
+          const zone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
+          return localDate(new Date().toISOString(), zone) ?? new Date().toISOString().slice(0, 10)
+        },
         timeZone: () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } }
       })
     }
