@@ -7,13 +7,19 @@
 .mi-sync-run__filters button { border: 1px solid var(--border, #22252d); background: none; color: inherit; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
 .mi-sync-run__notice { color: var(--accent, #b7cf52); }
 .mi-sync-run__empty { color: var(--text-secondary); font-size: 12px; margin: 12px 0; }
-.mi-sync-run__table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-.mi-sync-run__table th { text-align: left; font-weight: 400; color: var(--text-secondary); font-size: 10.5px; padding: 6px 8px; border-bottom: 1px solid var(--border, #22252d); }
+/* Sticky headers and collapsed borders do not mix: Chromium lays the header and body out with
+   different column widths and the table visibly shears. Fixed layout plus separate borders keeps
+   the two halves on the same grid. */
+.mi-sync-run__table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 11.5px; }
+.mi-sync-run__table th { text-align: left; font-weight: 400; color: var(--text-secondary); font-size: 10.5px; padding: 6px 8px; border-bottom: 1px solid var(--border, #22252d); white-space: nowrap; }
 .mi-sync-run__table td { padding: 6px 8px; border-bottom: 1px solid var(--border, #1c1f26); vertical-align: top; }
 .mi-sync-run__time, .mi-sync-run__duration { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
+/* A handler id is one long token; without a clamp it widens the fixed column and pushes the whole
+   table sideways, which reads as a second kind of misalignment. */
+.mi-sync-run__table td:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-sync-run__detail { display: flex; gap: 8px; align-items: baseline; }
 .mi-sync-run__detail code { color: #d9a441; background: rgb(217 164 65 / 12%); border-radius: 3px; padding: 0 4px; }
-.mi-sync-run__detail span { color: var(--text-secondary); }
+.mi-sync-run__detail span { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-sync-run__table tr[data-outcome='failed'] td:nth-child(4) span { color: #e0524c; }
 .mi-sync-run__table tr[data-outcome='succeeded'] td:nth-child(4) span { color: #3fbf6f; }
 

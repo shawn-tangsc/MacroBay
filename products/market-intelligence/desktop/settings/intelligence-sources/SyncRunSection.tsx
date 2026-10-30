@@ -93,6 +93,7 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
     {state === 'available' && rows.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
     {state === 'available' && rows.length > 0 && visible.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
     {state === 'available' && visible.length > 0 ? <div className="mi-sync-run__scroll"><table className="mi-sync-run__table">
+      <colgroup><col style={{ width: 96 }} /><col style={{ width: 232 }} /><col style={{ width: 84 }} /><col style={{ width: 72 }} /><col style={{ width: 72 }} /><col /></colgroup>
       <thead><tr>
         <th>{text.columns.time}</th><th>{text.columns.source}</th><th>{text.columns.action}</th>
         <th>{text.columns.outcome}</th><th>{text.columns.duration}</th><th>{text.columns.detail}</th>
