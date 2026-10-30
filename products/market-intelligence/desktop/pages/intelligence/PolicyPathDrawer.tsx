@@ -11,7 +11,7 @@ import './policyPathDrawer.css'
  */
 export type PolicyPathDrawerText = Readonly<{
   title: string; sepPath: string; decision: string; basis: string; close: string; openSource: string
-  median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string
+  median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
 }>
 
 export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
@@ -49,6 +49,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       {reading.targetRange ? <p className="mi-policy-drawer__row">
         <a href="https://fred.stlouisfed.org/series/DFEDTARU" rel="noreferrer" target="_blank">FRED · DFEDTARU<ExternalLink aria-hidden="true" size={11} /></a>
       </p> : null}
+      {!reading.sep && !reading.lastDecision?.vote && !reading.probability ? <p className="mi-policy-drawer__row">{text.empty}</p> : null}
     </section>
   </aside>
 }

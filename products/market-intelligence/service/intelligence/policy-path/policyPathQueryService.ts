@@ -58,7 +58,7 @@ export const policyPathQueryPolicy = {
 
 export function createPolicyPathQueryService(deps: {
   calendar: Pick<MacroEconomicCalendarQueryService, 'nextFomcMeeting'>
-  facts: Pick<PolicyPathFactStore, 'read'>
+  facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision'>
   observations: Pick<PolicyPathObservationStore, 'list'>
 }): PolicyPathQueryService {
   return Object.freeze({
@@ -67,16 +67,19 @@ export function createPolicyPathQueryService(deps: {
       if (next.state !== 'available') return undefined
       const meetingDate = next.meeting.scheduledDate
       const facts = deps.facts.read(meetingDate)
+      // The range, the vote and the latest SEP belong to the last meeting that has already decided;
+      // the next meeting's row carries only its date and whether it will publish projections.
+      const decided = facts?.targetRange ? facts : deps.facts.readLatestDecision(asOf)
       const daysUntilMeeting = Math.round((Date.parse(`${meetingDate}T00:00:00.000Z`) - Date.parse(asOf)) / 86_400_000)
       const series = deps.observations.list(meetingDate, policyPathQueryPolicy.seriesLookback)
       return {
         meetingDate,
         daysUntilMeeting,
         hasProjectionMaterials: facts?.hasProjectionMaterials ?? false,
-        ...(facts?.targetRange ? { targetRange: facts.targetRange } : {}),
-        ...(facts?.sep ? { sep: sepOf(facts.sep, facts.targetRange) } : {}),
-        ...(facts && (facts.vote || facts.dissents || facts.statementUrl)
-          ? { lastDecision: { ...(facts.vote ? { vote: facts.vote } : {}), ...(facts.dissents ? { dissents: facts.dissents } : {}), ...(facts.statementUrl ? { statementUrl: facts.statementUrl } : {}) } }
+        ...(decided?.targetRange ? { targetRange: decided.targetRange } : {}),
+        ...(decided?.sep ? { sep: sepOf(decided.sep, decided.targetRange) } : {}),
+        ...(decided && (decided.vote || decided.dissents || decided.statementUrl)
+          ? { lastDecision: { ...(decided.vote ? { vote: decided.vote } : {}), ...(decided.dissents ? { dissents: decided.dissents } : {}), ...(decided.statementUrl ? { statementUrl: decided.statementUrl } : {}) } }
           : {}),
         ...(series.length ? { probability: probabilityOf(series, asOf) } : {}),
         staleness: series.length ? stalenessOf(series[series.length - 1]!.at, asOf) : 'unavailable'

@@ -55,7 +55,9 @@ export function PolicyPathStrip({ reading, text, month, onOpen }: Readonly<{
         <dd>{text.unchanged} {reading.lastDecision.vote.for}–{reading.lastDecision.vote.against}</dd>
       </div> : null}
     </dl>
-    <span className="mi-policy-path__freshness" data-staleness={reading.staleness}>{freshness}</span>
+    {/* The freshness word describes the quote; with no quote there is nothing to age, and
+        "unavailable" would read as if the whole row had failed. */}
+    {probability ? <span className="mi-policy-path__freshness" data-staleness={reading.staleness}>{freshness}</span> : null}
     {onOpen ? <button className="mi-policy-path__open" onClick={onOpen} type="button">
       {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
     </button> : null}
