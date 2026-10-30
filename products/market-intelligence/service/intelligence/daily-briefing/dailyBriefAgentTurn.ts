@@ -32,6 +32,11 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
     await input.runner.finish(started.sessionId, 'failed')
     return { state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection', sessionId: started.sessionId, toolInvocations }
   }
+  const requests = (selection as { requests?: unknown }).requests
+  if (Array.isArray(requests) && requests.length > 0) {
+    const answer = await input.runner.continue(started.sessionId, `FIELD RESPONSE:\n${fieldResponse(input.document, requests)}\nReturn the next selection JSON if you need to adjust; otherwise continue.`)
+    toolInvocations.push(...answer.toolInvocations)
+  }
   const prompt = buildDailyBriefingPrompt({ document: input.document, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   const written = await input.runner.continue(started.sessionId, prompt)
@@ -77,4 +82,23 @@ function factSummary(document: DailyBriefingDocument): Readonly<{ kind: string; 
     `今日要看的：${next.join('；') || '无'}`
   ].join('\n')
   return Object.freeze({ kind: 'daily-briefing-facts', label: '日报输入事实', detail: details.slice(0, 1600) })
+}
+
+function fieldResponse(document: DailyBriefingDocument, requests: readonly unknown[]): string {
+  const lines: string[] = []
+  for (const raw of requests) {
+    if (!raw || typeof raw !== 'object') continue
+    const request = raw as { factId?: unknown; fields?: unknown }
+    if (typeof request.factId !== 'string' || !Array.isArray(request.fields)) continue
+    const fields = request.fields.filter((field): field is string => typeof field === 'string')
+    const [kind, id] = request.factId.split(':')
+    const item = kind === 'macro'
+      ? document.news.macro.find((candidate) => candidate.eventKey === id)
+      : kind === 'news'
+        ? document.news.items.find((candidate) => candidate.itemId === id)
+        : undefined
+    const record = item as Record<string, unknown> | undefined
+    lines.push(`${request.factId}: ${fields.map((field) => `${field}=${record && field in record ? String(record[field]) : '未收录'}`).join(' · ')}`)
+  }
+  return lines.length > 0 ? lines.join('\n') : '未命名请求，未收录。'
 }
