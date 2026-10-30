@@ -45,7 +45,7 @@ export async function runDailyBriefAgentTurn(input: Readonly<{
   const selectedDocument = selectDocument(input.document, selection)
   const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
-  const written = await input.runner.continue(started.sessionId, prompt)
+  const written = await input.runner.continue(started.sessionId, prompt, '任务 2/2：基于已选事件写导语、why、watch。')
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
   let failureCode = 'invalid-json'
@@ -80,17 +80,12 @@ function factSummary(document: DailyBriefingDocument, locale: DailyBriefingLocal
     title: item.title, actual: item.actual ?? '—', consensus: item.consensus ?? copy.missing, previous: item.previous ?? '—'
   }))
   const news = document.news.items.map((item) => item.translatedTitle ?? item.title)
-  const data = [...document.data.market, ...document.data.funds].map((row) => `${row.id} ${row.value?.number ?? '—'}`)
   const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item))
     .map((item) => fill(copy.nextFact, { title: item.title, at: item.at, country: item.countryName ? ` · ${item.countryName}` : '' }))
   const details = [
     fill(copy.window, { start: document.edition.windowStart, end: document.edition.windowEnd }),
     fill(copy.macroCandidates, { count: String(macro.length), items: macro.join(copy.listSeparator) || copy.empty }),
     fill(copy.newsCandidates, { count: String(news.length), items: news.join(copy.listSeparator) || copy.empty }),
-    fill(copy.data, { items: data.join(copy.listSeparator) || copy.empty }),
-    ...(document.data.leverage ? [fill(copy.leverage, { btc: String(document.data.leverage.btc.openInterestUsd ?? '—'), eth: String(document.data.leverage.eth.openInterestUsd ?? '—') })] : []),
-    ...(document.data.policyPath ? [fill(copy.policyPath, { probability: String(Math.round(document.data.policyPath.probability)), outcome: document.data.policyPath.outcome, meetingDate: document.data.policyPath.meetingDate })] : []),
-    fill(copy.conclusion, { summary: document.conclusion ? document.conclusion.summary.slice(0, 160) : copy.empty }),
     fill(copy.next, { items: next.join(copy.listSeparator) || copy.empty })
   ].join('\n')
   return Object.freeze({ kind: 'daily-briefing-facts', label: copy.factsLabel, detail: details.slice(0, 1600) })
