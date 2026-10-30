@@ -285,14 +285,24 @@ describe('market analysis data-access matrix', () => {
       'get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'
     ])
     expect(marketIntelligenceProductManifest.skills.map(skill => skill.id)).toEqual([
-      'market-analysis-skill-v1', 'intelligence-ops-skill-v1'
+      'market-analysis-skill-v1', 'daily-brief-editor-skill-v1', 'intelligence-ops-skill-v1'
     ])
-    expect(marketIntelligenceProductManifest.agents).toEqual([expect.objectContaining({
-      id: 'crypto-market-analyst',
-      toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
-      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
-      workflowIds: ['market-analysis-auto-run-v1']
-    })])
+    // Two seeded agents: the analyst that answers questions, and the brief editor that only curates
+    // a draft. The editor intentionally has no tools or workflows of its own.
+    expect(marketIntelligenceProductManifest.agents).toEqual([
+      expect.objectContaining({
+        id: 'crypto-market-analyst',
+        toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
+        skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
+        workflowIds: ['market-analysis-auto-run-v1']
+      }),
+      expect.objectContaining({
+        id: 'daily-brief-editor',
+        toolIds: [],
+        skillIds: ['daily-brief-editor-skill-v1'],
+        workflowIds: []
+      })
+    ])
     expect(marketIntelligenceProductManifest.workflows.map(workflow => workflow.id)).toEqual(['market-analysis-auto-run-v1'])
     expect(compareMarketAnalysisAgentToolRegistration(manifestToolNames, handlerIds)).toEqual({
       registeredToolCount: intelligenceAgentCapabilities.length,
