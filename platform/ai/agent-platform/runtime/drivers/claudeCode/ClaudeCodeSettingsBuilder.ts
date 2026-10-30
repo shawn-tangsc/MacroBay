@@ -11,6 +11,14 @@ import {
 import { buildProductAgentToolRuntimeName } from '../../../productTools/productAgentToolRuntimeNames'
 import type { ToolApproval } from '../../../schemas/toolSchemas'
 import { normalizeSessionAllowedTools } from '../../../tools/sessionAllowedTools'
+import {
+  ANTHROPIC_SERVER_WEB_TOOL_NAMES,
+  isAnthropicServerWebToolName
+} from '../../../../providers/providerServerTools'
+import {
+  isPlatformWebSearchSessionToolName,
+  platformWebSearchRuntimeName
+} from '../../../tools/platformWebTools'
 
 export type ClaudeCodeCompositionSettings = {
   cwd: string | null
@@ -30,12 +38,27 @@ export type ClaudeCodeCompositionSettings = {
 
 export type ClaudeCodeSettingsBuilderOptions = {
   defaultEnv?: Record<string, string>
+  /**
+   * 当前 provider 能否承载 Anthropic server-side web tools（WebSearch/WebFetch）。
+   *
+   * `false` = 明确不支持：从 allowedTools 剔除，并加入 disallowedTools —— 只删 allowed 不够，
+   * `allowedTools` 只是免审批列表，工具仍会出现在模型上下文里（会被调用后 prompt/400）。
+   * `undefined` = 调用方无法判断（例如单测/嵌入方）：保持改动前的行为。
+   */
+  serverWebToolsSupported?: boolean
 }
 
 export function buildClaudeCodeSettingsFromComposition(
   composition: AgentRuntimeComposition,
   options: ClaudeCodeSettingsBuilderOptions = {}
 ): ClaudeCodeCompositionSettings {
+  const requestedAllowedTools = uniqueStrings([
+    ...resolveBaseAllowedTools(composition),
+    ...resolveSessionAllowedTools(composition).map(toRuntimeSessionToolName)
+  ])
+  const requestedDisallowedTools = uniqueToolIds(composition.tools.disabled)
+  const serverWebToolsUnsupported = options.serverWebToolsSupported === false
+
   return {
     cwd: composition.workspacePath,
     env: {
@@ -44,11 +67,12 @@ export function buildClaudeCodeSettingsFromComposition(
     },
     permissionMode: composition.permissionMode,
     effort: composition.effort,
-    allowedTools: uniqueStrings([
-      ...resolveBaseAllowedTools(composition),
-      ...resolveSessionAllowedTools(composition)
-    ]),
-    disallowedTools: uniqueToolIds(composition.tools.disabled),
+    allowedTools: serverWebToolsUnsupported
+      ? requestedAllowedTools.filter((toolName) => !isAnthropicServerWebToolName(toolName))
+      : requestedAllowedTools,
+    disallowedTools: serverWebToolsUnsupported
+      ? uniqueStrings([...requestedDisallowedTools, ...ANTHROPIC_SERVER_WEB_TOOL_NAMES])
+      : requestedDisallowedTools,
     mcpSources: composition.mcp.sources.map((source) => ({ ...source })),
     mcpServers: buildClaudeCodeMcpServerConfigs({
       servers: composition.mcp.servers,
@@ -90,6 +114,11 @@ function resolveBaseAllowedTools(composition: AgentRuntimeComposition): string[]
 function resolveSessionAllowedTools(composition: AgentRuntimeComposition): string[] {
   const disabled = new Set(composition.tools.disabled.map((tool) => tool.id))
   return normalizeSessionAllowedTools(composition.sessionAllowedTools).filter((toolName) => !disabled.has(toolName))
+}
+
+/** 平台只读 web 工具的会话名在 SDK 里必须换成 MCP 运行时名。 */
+function toRuntimeSessionToolName(name: string): string {
+  return isPlatformWebSearchSessionToolName(name) ? platformWebSearchRuntimeName : name
 }
 
 function uniqueStrings(values: readonly string[]): string[] {

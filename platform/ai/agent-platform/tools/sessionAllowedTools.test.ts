@@ -24,6 +24,12 @@ describe('normalizeSessionAllowedTools', () => {
     ])
   })
 
+  it('accepts the read-only platform web_search tool without making it a builtin', () => {
+    expect(normalizeSessionAllowedTools(['web_search', 'WebSearch'])).toEqual(['web_search', 'WebSearch'])
+    expect(isBuiltinToolName('web_search')).toBe(false)
+    expect(isSessionAllowableToolName('web_search')).toBe(true)
+  })
+
   it('rejects write and execute built-ins even when they lead the list', () => {
     expect(
       normalizeSessionAllowedTools([
