@@ -49,7 +49,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         readCalendar(deps, input.asOf, input.locale, enabled.calendar),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
         usableSnapshot(safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined), input.asOf),
-        usableSnapshot(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
+        safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
       ])
       const asOfMs = Date.parse(input.asOf)
