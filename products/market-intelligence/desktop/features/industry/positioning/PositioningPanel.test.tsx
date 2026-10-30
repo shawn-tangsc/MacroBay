@@ -176,3 +176,19 @@ describe('hover readout', () => {
     act(() => root.unmount())
   })
 })
+
+describe('bars at the axis edge', () => {
+  it('keeps the newest pair apart instead of clamping both onto the same x', () => {
+    // The last period settles at the window end, so both bars wanted to sit on the right edge.
+    const edge: DashboardFundingRateHistoryState = {
+      state: 'available',
+      btc: [{ observedAt: '2026-10-29T00:00:00.000Z', ratePercent: 0.0062, paymentDirection: 'long-pays-short' }],
+      eth: [{ observedAt: '2026-10-29T00:00:00.000Z', ratePercent: -0.0031, paymentDirection: 'short-pays-long' }]
+    }
+    const markup = render({ funding: edge })
+    const xs = [...markup.matchAll(/<rect[^>]*mi-positioning-panel__bar[^>]*>/g)]
+      .map(match => Number(/ x="([\d.]+)"/.exec(match[0])?.[1]))
+    expect(xs).toHaveLength(2)
+    expect(Math.abs(xs[0]! - xs[1]!)).toBeGreaterThan(1)
+  })
+})

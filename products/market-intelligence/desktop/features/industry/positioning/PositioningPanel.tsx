@@ -226,11 +226,14 @@ function PositioningChart({ positioning, funding, text }: Readonly<{
   // the lower lane looked pink instead of showing two series.
   const barWidth = Math.max(1.6, Math.min(band * 0.36, 8))
   const barGap = Math.max(0.8, barWidth * 0.18)
-  const barX = (centre: number, asset: 'btc' | 'eth') => {
-    const half = barWidth + barGap / 2
-    const offset = asset === 'btc' ? -half : barGap / 2
-    return Math.min(Math.max(centre + offset, VIEW.left), VIEW.right - barWidth)
-  }
+  const groupWidth = barWidth * 2 + barGap
+  /**
+   * The pair moves together and is clamped as a unit. Clamping each bar on its own pushed both
+   * of them to `right - barWidth` for the newest period — a slot whose instant sits on the axis
+   * edge — and the two painted over each other again, which is the merge this replaces.
+   */
+  const groupLeft = (centre: number) => Math.min(Math.max(centre - groupWidth / 2, VIEW.left), VIEW.right - groupWidth)
+  const barX = (centre: number, asset: 'btc' | 'eth') => groupLeft(centre) + (asset === 'btc' ? 0 : barWidth + barGap)
 
   const hovered = hover === undefined ? undefined : rows[hover.index]
   // The rate that applies at the pointed instant: the period it falls in, not "the last point
