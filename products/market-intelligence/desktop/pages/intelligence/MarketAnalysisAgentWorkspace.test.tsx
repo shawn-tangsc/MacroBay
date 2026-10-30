@@ -161,13 +161,17 @@ function stubPlatform(options: {
   return { platform, state, createSession, sendMessage }
 }
 
-it('puts a rail header above the card in the same grid row', async () => {
+it('puts a rail header above the split, not inside the calendar row', async () => {
   const panel = await renderPanel({ railHeader: createElement('p', { 'data-rail-header': true }, '利率路径') }, false)
-  const row = panel.querySelector('.mi-analysis-agent-workspace__card')
-  expect(row).not.toBeNull()
-  // The header must not become a sibling of the card: the aside's grid gives the card its own row
-  // and a fourth child would land in the news column.
-  expect([...row!.children].map(child => child.hasAttribute('data-rail-header') ? 'header' : 'card')).toEqual(['header', 'card'])
+  const aside = panel.querySelector('aside')!
+  const header = aside.querySelector('[data-rail-header]')
+  const panes = aside.querySelector('.mi-analysis-agent-workspace__panes')
+  expect(header).not.toBeNull()
+  expect(panes).not.toBeNull()
+  // The header is a sibling of the split so the calendar and the news share what is left below it;
+  // inside the row it would eat the calendar's height instead.
+  expect(header!.nextElementSibling).toBe(panes)
+  expect(panes!.querySelector('[data-card]')).not.toBeNull()
 })
 
 async function renderPanel(props: Record<string, unknown> = {}, openPanel = true): Promise<HTMLElement> {

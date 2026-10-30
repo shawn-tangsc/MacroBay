@@ -59,7 +59,9 @@
 @keyframes mi-analysis-drawer-in { from { transform: translateX(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .mi-analysis-drawer { animation: none; } }
 .mi-analysis-dashboard-layout__switch { display: none; padding: var(--mi-agent-gap); }
-.mi-analysis-agent-workspace { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
+/* The column is a flex stack: the policy card sits above the split, which owns the rest. */
+.mi-analysis-agent-workspace { display: flex; flex-direction: column;
+ min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .mi-analysis-chat { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 /* The calendar card takes the conversation's grid row, so it inherits the same sizing. */
 .mi-analysis-agent-workspace__card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -297,3 +299,7 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Below the policy card the calendar and the news split the remaining height evenly; the divider
+   still drags the split, so it starts at half rather than at the old 52%. */
+.mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); flex: 1; min-height: 0; }

@@ -1,6 +1,6 @@
 /** 产品右侧工作区布局：由产品设计维护，组件键盘及 CSS 回归保护。 */
 export const analysisWorkspaceLayoutPolicy = Object.freeze({
-  initialChatPercent: 52,
+  initialChatPercent: 50,
   minChatPercent: 25,
   maxChatPercent: 75,
   keyboardStepPercent: 5,

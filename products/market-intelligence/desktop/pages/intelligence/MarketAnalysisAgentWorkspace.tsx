@@ -77,6 +77,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
   const selectionBlocked = selectionState === 'loading' || selectionState === 'unavailable'
   const [chatPercent, setChatPercent] = useState<number>(layout.initialChatPercent)
   const container = useRef<HTMLElement>(null)
+  const panes = useRef<HTMLDivElement>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [selectedNews, setSelectedNews] = useState<{ itemId: string; title: string }>()
 
@@ -179,17 +180,18 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       </section>
 
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title} style={{ '--mi-chat-percent': `${chatPercent}%` } as CSSProperties}>
-    {/* One grid row holds both the rail header and the card: a second child here would push the
-        divider and the news column out of their declared rows. */}
+    {/* The policy card keeps its own row; the calendar and the news share what is left in half. */}
+    {railHeader}
+
+    <div className="mi-analysis-agent-workspace__panes" ref={panes}>
     <div className="mi-analysis-agent-workspace__card">
-      {railHeader}
       {card}
     </div>
 
     <div className="mi-analysis-agent-workspace__divider" role="separator" tabIndex={0} aria-label={t.resize} aria-orientation="horizontal" aria-valuemin={layout.minChatPercent} aria-valuemax={layout.maxChatPercent} aria-valuenow={chatPercent}
       onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); resize(chatPercent + (event.key === 'ArrowDown' ? layout.keyboardStepPercent : -layout.keyboardStepPercent)) } }}
       onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId) }}
-      onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = container.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
+      onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = panes.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
     <NewsSentimentFeature
@@ -197,6 +199,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       text={text.newsSentiment}
       onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
     />
+    </div>
     <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
   </aside>
 }
