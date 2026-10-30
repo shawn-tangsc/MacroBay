@@ -39,6 +39,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const timeZone = useShellTimeZone()
   const formatTime = useShellTimeFormat()
   const requestRef = useRef(0)
+  const emptyGenerateRef = useRef(false)
   const [editions, setEditions] = useState<readonly DailyBriefingEditionSummary[]>([])
   const [view, setView] = useState<ViewState>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
@@ -68,8 +69,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         setView({ status: 'ready', document: today.document, kind: 'today' })
       } else {
         setView({ status: 'unavailable' })
+        if (emptyGenerateRef.current) setRegenerateFailed(true)
       }
+      emptyGenerateRef.current = false
       setEditions(rows.slice(0, 14))
+      setRegenerating(false)
     })()
     return () => { active = false }
   }, [locale, timeZone, client, reloadKey])
@@ -201,7 +205,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           </>}
           <div className="mi-daily-briefing-page__empty-actions">
             {onConfigureSources ? <button type="button" className="mi-daily-briefing-page__primary" onClick={onConfigureSources}>{text.configureSources}</button> : null}
-            <button type="button" onClick={() => setReloadKey((key) => key + 1)}>{text.generateNow}</button>
+            <button type="button" disabled={regenerating} onClick={() => { emptyGenerateRef.current = true; setRegenerateFailed(false); setRegenerating(true); setReloadKey((key) => key + 1) }}>{regenerating ? text.regenerating : text.generateNow}</button>
           </div>
         </div> : null}
         {regenerateFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.regenerateFailed}</p> : null}
