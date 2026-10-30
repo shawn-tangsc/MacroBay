@@ -1,16 +1,15 @@
 .mi-policy-drawer {
-  /* Fixed to the window, not to the page column: the card that opens it lives in the right rail, and
-     an absolutely-positioned drawer stopped at the rail's left edge - it looked like it slid in from
-     the middle of the screen. */
+  /* Fixed to the window's left edge: the card lives in the right rail, so the reading opens on the
+     opposite side and leaves the rail in view. */
   position: fixed;
   top: 0;
-  right: 0;
+  left: 0;
   width: 420px;
   height: 100vh;
   overflow: auto;
   background: var(--mi-surface, #14171e);
-  border-left: 1px solid var(--mi-border, #22252d);
-  box-shadow: -18px 0 32px rgb(0 0 0 / 38%);
+  border-right: 1px solid var(--mi-border, #22252d);
+  box-shadow: 18px 0 32px rgb(0 0 0 / 38%);
   z-index: 900;
   color: var(--mi-text, #e8e9ec);
 }

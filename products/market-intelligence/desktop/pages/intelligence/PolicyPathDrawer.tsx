@@ -12,6 +12,7 @@ import './policyPathDrawer.css'
 export type PolicyPathDrawerText = Readonly<{
   title: string; sepPath: string; decision: string; basis: string; close: string; openSource: string
   median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
+  sepMissing: string; decisionMissing: string
   odds: string; change24h: string; range30d: string; quote: string
 }>
 
@@ -26,7 +27,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       <h2>{text.title}</h2>
       <button aria-label={text.close} onClick={onClose} type="button"><X aria-hidden="true" size={14} /></button>
     </header>
-    {reading.sep ? <section className="mi-policy-drawer__section">
+    <section className="mi-policy-drawer__section">
+      <h3>{text.sepPath}</h3>
+      {reading.sep ? <>
       <h3>{text.sepPath}<a href={reading.sep.sourceUrl} rel="noreferrer" target="_blank">{text.openSource}<ExternalLink aria-hidden="true" size={11} /></a></h3>
       <table>
         <thead><tr>{years.map((year) => <th key={year}>{year === 'longerRun' ? 'LR' : year.slice(1)}</th>)}</tr></thead>
@@ -35,14 +38,17 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       <p className="mi-policy-drawer__meta">{text.asOf} {reading.sep.asOf}
         {reading.sep.rangeCurrentYear ? <span> · {text.sepRange} {reading.sep.rangeCurrentYear.low}–{reading.sep.rangeCurrentYear.high}%</span> : null}
         {reading.sep.previousMedian === undefined ? null : <span> · {text.previous} {reading.sep.previousMedian}%</span>}</p>
-    </section> : null}
-    {reading.lastDecision?.vote ? <section className="mi-policy-drawer__section">
-      <h3>{text.decision}{reading.lastDecision.statementUrl
+      </> : <p className="mi-policy-drawer__row">{text.sepMissing}</p>}
+    </section>
+    <section className="mi-policy-drawer__section">
+      <h3>{text.decision}{reading.lastDecision?.statementUrl
         ? <a href={reading.lastDecision.statementUrl} rel="noreferrer" target="_blank">{text.openSource}<ExternalLink aria-hidden="true" size={11} /></a>
         : null}</h3>
-      <p className="mi-policy-drawer__row">{text.vote} {reading.lastDecision.vote.for}–{reading.lastDecision.vote.against}</p>
-      <p className="mi-policy-drawer__row">{text.dissents} {(reading.lastDecision.dissents ?? []).map((row) => row.name).join('、') || '—'}</p>
-    </section> : null}
+      {reading.lastDecision?.vote ? <>
+        <p className="mi-policy-drawer__row">{text.vote} {reading.lastDecision.vote.for}–{reading.lastDecision.vote.against}</p>
+        <p className="mi-policy-drawer__row">{text.dissents} {(reading.lastDecision.dissents ?? []).map((row) => row.name).join('、') || '—'}</p>
+      </> : <p className="mi-policy-drawer__row">{text.decisionMissing}</p>}
+    </section>
     <section className="mi-policy-drawer__section">
       <h3>{text.basis}</h3>
       {reading.probability ? <>
