@@ -29,7 +29,9 @@ export function buildDailyBriefingDocument(input: Readonly<{
   const nextCandidates = selectNextCandidates(packet)
   const next = selectNext(packet, nextCandidates)
   const built = buildConclusion(packet)
-  const policyPath = packet.policyPath?.probability ? packet.policyPath : undefined
+  const policyPath = packet.policyPath
+  const policyProbability = policyPath?.probability
+  const policyPathData = policyPath && policyProbability ? Object.freeze({ state: 'available' as const, meetingDate: policyPath.meetingDate, outcome: policyProbability.outcome, probability: policyProbability.value <= 1 ? policyProbability.value * 100 : policyProbability.value, observedAt: policyProbability.asOf, ...(policyPath.targetRange ? { targetLower: policyPath.targetRange.lowerPercent, targetUpper: policyPath.targetRange.upperPercent } : {}) }) : undefined
   const document: DailyBriefingDocument = Object.freeze({
     // Read from the policy rather than repeating the literals: a version bump that updates only one
     // of the two makes every read look stale, and the brief is regenerated on every poll.
@@ -64,7 +66,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
       market: readings.market,
       funds: readings.funds,
       ...(buildLeverage(packet, readings.funds) ? { leverage: buildLeverage(packet, readings.funds) } : {}),
-      ...(policyPath ? { policyPath: Object.freeze({ state: 'available' as const, meetingDate: policyPath.meetingDate, outcome: policyPath.probability.outcome, probability: policyPath.probability.value <= 1 ? policyPath.probability.value * 100 : policyPath.probability.value, observedAt: policyPath.probability.asOf, ...(policyPath.targetRange ? { targetLower: policyPath.targetRange.lowerPercent, targetUpper: policyPath.targetRange.upperPercent } : {}) }) } : {}),
+      ...(policyPathData ? { policyPath: policyPathData } : {}),
       sentiment: Object.freeze({
         fearGreed: readings.fearGreed,
         news: newsSummary(packet)
