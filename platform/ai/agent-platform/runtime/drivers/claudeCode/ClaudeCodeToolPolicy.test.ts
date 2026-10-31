@@ -169,8 +169,38 @@ describe('Claude Code tool policy', () => {
     })
   })
 
-  it('returns prompt decisions as approval requests that can later bridge to ToolApprovalRegistry', () => {
+  it('allows policy-only approvals without putting them in the SDK bare allowlist', () => {
     const policy = buildClaudeCodeToolPolicyFromSettings({
+      ...baseSettings,
+      allowedTools: ['Read'],
+      policyAllowedTools: ['Task', 'mcp__macrobay_web__web_search'],
+      disallowedTools: []
+    })
+
+    expect(policy.allowedTools).toEqual(['Read'])
+    expect(policy.canUseTool('Task')).toEqual({ kind: 'allow', toolName: 'Task' })
+    expect(policy.preToolUse({ toolName: 'mcp__macrobay_web__web_search' })).toEqual({
+      kind: 'allow',
+      toolName: 'mcp__macrobay_web__web_search'
+    })
+  })
+
+  it('keeps an explicit deny above a policy-only approval', () => {
+    const policy = buildClaudeCodeToolPolicyFromSettings({
+      ...baseSettings,
+      allowedTools: ['Read'],
+      policyAllowedTools: ['Task'],
+      disallowedTools: ['Task']
+    })
+
+    expect(policy.canUseTool('Task')).toEqual({
+      kind: 'deny',
+      toolName: 'Task',
+      reason: 'tool-disabled'
+    })
+  })
+
+  it('returns prompt decisions as approval requests that can later bridge to ToolApprovalRegistry', () => {    const policy = buildClaudeCodeToolPolicyFromSettings({
       ...baseSettings,
       allowedTools: ['Read'],
       disallowedTools: []

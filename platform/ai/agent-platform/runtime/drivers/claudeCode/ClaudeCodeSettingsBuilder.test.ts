@@ -100,7 +100,8 @@ describe('Claude Code settings builder', () => {
         FOO: 'bar'
       },
       permissionMode: 'acceptEdits',
-      allowedTools: ['Read', 'Edit', 'mcp__filesystem__readFile'],
+      allowedTools: ['Read'],
+      policyAllowedTools: ['Edit', 'mcp__filesystem__readFile'],
       disallowedTools: ['Bash', 'mcp__filesystem__writeFile'],
       mcpSources: [
         {
@@ -189,7 +190,8 @@ describe('Claude Code settings builder', () => {
     })
 
     expect(settings.cwd).toBeNull()
-    expect(settings.allowedTools).toEqual(['Read', 'Edit', 'mcp__filesystem__readFile'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['Edit', 'mcp__filesystem__readFile'])
     expect(settings.disallowedTools).toEqual(['Bash', 'mcp__filesystem__writeFile'])
   })
 

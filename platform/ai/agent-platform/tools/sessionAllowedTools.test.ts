@@ -4,7 +4,9 @@ import { claudeCodeBuiltinTools } from './builtinClaudeTools'
 import {
   isBuiltinToolName,
   isSessionAllowableToolName,
+  isSessionBarePreApprovedToolName,
   normalizeSessionAllowedTools,
+  sessionBarePreApprovedBuiltinTools,
   sessionBlockedBuiltinTools,
   sessionReadOnlyBuiltinTools
 } from './sessionAllowedTools'
@@ -98,9 +100,28 @@ describe('normalizeSessionAllowedTools', () => {
   })
 })
 
+describe('SDK bare pre-approval surface', () => {
+  it('only marks read-only auto builtins as safe for a bare allowedTools entry', () => {
+    expect(sessionBarePreApprovedBuiltinTools).toEqual(['Read', 'Glob', 'Grep', 'NotebookRead'])
+
+    for (const name of sessionBarePreApprovedBuiltinTools) {
+      expect(isSessionBarePreApprovedToolName(name)).toBe(true)
+    }
+    for (const name of ['Task', 'TodoWrite', 'WebSearch', 'WebFetch', 'Bash', 'web_search']) {
+      expect(isSessionBarePreApprovedToolName(name)).toBe(false)
+    }
+  })
+
+  it('never overlaps the session-blocked list', () => {
+    const blocked = new Set<string>(sessionBlockedBuiltinTools)
+    for (const name of sessionBarePreApprovedBuiltinTools) {
+      expect(blocked.has(name)).toBe(false)
+    }
+  })
+})
+
 describe('claudeCodeBuiltinTools coverage', () => {
-  it('accounts for every built-in tool as either read-only or explicitly blocked', () => {
-    const classified = new Set<string>([...sessionReadOnlyBuiltinTools, ...sessionBlockedBuiltinTools])
+  it('accounts for every built-in tool as either read-only or explicitly blocked', () => {    const classified = new Set<string>([...sessionReadOnlyBuiltinTools, ...sessionBlockedBuiltinTools])
     for (const tool of claudeCodeBuiltinTools) {
       expect(classified.has(tool.id)).toBe(true)
     }

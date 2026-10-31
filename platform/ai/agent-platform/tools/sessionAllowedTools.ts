@@ -34,6 +34,28 @@ export const sessionBlockedBuiltinTools = [
 
 const readOnlyToolNames: ReadonlySet<string> = new Set(sessionReadOnlyBuiltinTools)
 const blockedToolNames: ReadonlySet<string> = new Set(sessionBlockedBuiltinTools)
+const autoApprovedBuiltinNames: ReadonlySet<string> = new Set(
+  claudeCodeBuiltinTools.filter((tool) => tool.approval === 'auto').map((tool) => tool.id)
+)
+
+/**
+ * 允许以 bare name 直接写进 SDK `allowedTools` 的 builtin。
+ *
+ * 只读（sessionReadOnlyBuiltinTools）、默认自动批准、且不是会话拒绝名单里的工具：
+ * Read / Glob / Grep / NotebookRead。这类工具没有审批或能力门控，预授权只影响顺序；
+ * 其余工具即使已批准也不能进 SDK `allowedTools` —— bare name 会让 SDK 自动放行整个工具，
+ * canUseTool 不再被调用（`CLAUDE_SDK_CAN_USE_TOOL_SHADOWED`）。Task/TodoWrite 虽然 catalog
+ * 标记 auto，但 Task 会派生 sub-agent、TodoWrite 改计划状态，仍必须经过运行时策略。
+ */
+export const sessionBarePreApprovedBuiltinTools = sessionReadOnlyBuiltinTools.filter(
+  (name) => autoApprovedBuiltinNames.has(name) && !blockedToolNames.has(name)
+)
+const barePreApprovedToolNames: ReadonlySet<string> = new Set(sessionBarePreApprovedBuiltinTools)
+
+/** 该名字是否可以 bare 形式进入 SDK `allowedTools`（而不是只进运行时策略白名单）。 */
+export function isSessionBarePreApprovedToolName(name: string): boolean {
+  return barePreApprovedToolNames.has(name)
+}
 
 /**
  * 会话级工具白名单只接受 **只读** 工具名：

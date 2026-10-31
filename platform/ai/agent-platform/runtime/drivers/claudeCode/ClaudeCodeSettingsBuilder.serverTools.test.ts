@@ -38,6 +38,7 @@ describe('provider-gated Anthropic server-side web tools', () => {
     })
 
     expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual([])
     expect(settings.disallowedTools).toEqual(['WebSearch', 'WebFetch'])
 
     const policy = buildClaudeCodeToolPolicyFromSettings(settings)
@@ -59,7 +60,8 @@ describe('provider-gated Anthropic server-side web tools', () => {
       serverWebToolsSupported: true
     })
 
-    expect(settings.allowedTools).toEqual(['Read', 'WebSearch', 'WebFetch'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['WebSearch', 'WebFetch'])
     expect(settings.disallowedTools).toEqual([])
     expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
       kind: 'allow',
@@ -70,7 +72,8 @@ describe('provider-gated Anthropic server-side web tools', () => {
   it('keeps the pre-change behavior when the caller cannot determine provider capability', () => {
     const settings = buildClaudeCodeSettingsFromComposition(composition())
 
-    expect(settings.allowedTools).toEqual(['Read', 'WebSearch', 'WebFetch'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['WebSearch', 'WebFetch'])
     expect(settings.disallowedTools).toEqual([])
   })
 
@@ -108,7 +111,8 @@ describe('provider-gated Anthropic server-side web tools', () => {
       sessionAllowedTools: ['web_search']
     }, { serverWebToolsSupported: false })
 
-    expect(settings.allowedTools).toEqual(['Read', 'mcp__macrobay_web__web_search'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['mcp__macrobay_web__web_search'])
     expect(settings.disallowedTools).toEqual(['WebSearch', 'WebFetch'])
     expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('mcp__macrobay_web__web_search')).toEqual({
       kind: 'allow',

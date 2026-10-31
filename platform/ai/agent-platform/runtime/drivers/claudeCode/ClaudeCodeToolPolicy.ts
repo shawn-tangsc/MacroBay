@@ -41,11 +41,12 @@ export type ClaudeCodeToolPolicy = {
 
 export function buildClaudeCodeToolPolicyFromSettings(settings: ClaudeCodeCompositionSettings): ClaudeCodeToolPolicy {
   const allowedTools = dedupe(settings.allowedTools)
+  const policyAllowedTools = dedupe(settings.policyAllowedTools ?? [])
   const disallowedTools = dedupe(settings.disallowedTools)
   const skillToolIds = dedupe(settings.skillToolIds)
   const runtimeMcpToolNames = dedupe(settings.runtimeMcpToolNames ?? [])
   const runtimeMcpApprovalByName = settings.runtimeMcpApprovalByName ?? {}
-  const allowedToolSet = new Set(allowedTools)
+  const allowedToolSet = new Set([...allowedTools, ...policyAllowedTools])
   const disallowedToolSet = new Set(disallowedTools)
   const skillToolSet = new Set(skillToolIds)
   const runtimeMcpToolSet = new Set(runtimeMcpToolNames)

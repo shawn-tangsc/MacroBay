@@ -42,7 +42,8 @@ describe('session-scoped allowed tools', () => {
       sessionAllowedTools: ['WebSearch', 'WebFetch']
     })
 
-    expect(settings.allowedTools).toEqual(['Read', 'WebSearch', 'WebFetch'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['WebSearch', 'WebFetch'])
     expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
       kind: 'allow',
       toolName: 'WebSearch'
@@ -86,7 +87,8 @@ describe('session-scoped allowed tools', () => {
       sessionAllowedTools: ['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebSearch']
     })
 
-    expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['WebSearch'])
     expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('Bash')).toEqual({
       kind: 'prompt',
       toolName: 'Bash'
@@ -99,7 +101,8 @@ describe('session-scoped allowed tools', () => {
       sessionAllowedTools: ['WebSearch', 'WebSearch', 'mcp__filesystem__readFile', 'NotATool', '   ']
     })
 
-    expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['WebSearch'])
   })
 
   it('keeps the agent allowlist byte-identical when the session carries no tools', () => {
@@ -140,7 +143,8 @@ describe('agents that require a session allowlist', () => {
       sessionAllowedTools: ['WebSearch']
     })
 
-    expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['WebSearch'])
     expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
       kind: 'allow',
       toolName: 'WebSearch'
@@ -184,7 +188,8 @@ describe('agents that require a session allowlist', () => {
       }
     })
 
-    expect(settings.allowedTools).toEqual(['Read', 'mcp__filesystem__readFile'])
+    expect(settings.allowedTools).toEqual(['Read'])
+    expect(settings.policyAllowedTools).toEqual(['mcp__filesystem__readFile'])
   })
 
   it('keeps the previous pre-approval when the flag is false or missing', () => {
@@ -201,7 +206,8 @@ describe('agents that require a session allowlist', () => {
         ...enabledComposition,
         ...(flag === undefined ? {} : { requireSessionToolAllowlist: flag })
       })
-      expect(settings.allowedTools).toEqual(['Read', 'WebSearch'])
+      expect(settings.allowedTools).toEqual(['Read'])
+      expect(settings.policyAllowedTools).toEqual(['WebSearch'])
       expect(buildClaudeCodeToolPolicyFromSettings(settings).canUseTool('WebSearch')).toEqual({
         kind: 'allow',
         toolName: 'WebSearch'
