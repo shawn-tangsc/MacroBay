@@ -199,7 +199,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.2.2`). macOS is the verified platform. A **sample mode** ships with the app:
+MacroBay is **alpha** (`0.3.0`). macOS is the verified platform. A **sample mode** ships with the app:
 with no key and no network you can open the full dashboard and one published analysis, replayed from a
 real recorded week. Live panels still need your own provider credentials. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified

@@ -126,8 +126,8 @@ git push --force-with-lease
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
-git push origin v0.2.2
+git tag -a vX.Y.Z -m "MacroBay X.Y.Z (alpha)"
+git push origin vX.Y.Z
 ```
 
 推送该 tag 会触发 `.github/workflows/release.yml`，由它构建 macOS dmg 和 Windows 安装器并据此创建

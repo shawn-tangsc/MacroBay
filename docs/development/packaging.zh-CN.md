@@ -21,8 +21,8 @@ typecheck、test、`pnpm build`。它不打包，所以日常 PR 不会为了一
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
-git push origin v0.2.2
+git tag -a vX.Y.Z -m "MacroBay X.Y.Z (alpha)"
+git push origin vX.Y.Z
 ```
 
 它在 `macos-latest` 上产出 `release/MacroBay-arm64.dmg`、在 `windows-latest` 上产出 NSIS
