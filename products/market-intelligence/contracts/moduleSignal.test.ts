@@ -35,6 +35,7 @@ describe('module signal contract', () => {
   it('accepts a signal a rule would publish', () => {
     expect(isModuleSignal(signal())).toBe(true)
     expect(isModuleSignal(signal({ asset: null, moduleId: 'macro-calendar', cadence: daily, ruleId: 'macro-surprise' }))).toBe(true)
+    expect(isModuleSignal(signal({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', cadence: daily, values: { netFlowUsd: -4.8e8, coveredDays: 3, requiredDays: 3 } }))).toBe(true)
   })
 
   it('refuses a shape the reader could not interpret', () => {
@@ -61,7 +62,18 @@ describe('module signal contract', () => {
   it('refuses a per-asset rule that cannot name its asset', () => {
     // `null` is unreachable for a single-asset rule: it is not "the whole market", it is a question.
     expect(isModuleSignal(signal({ asset: null }))).toBe(false)
-    expect(isModuleSignal(signal({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: null }))).toBe(false)
+    expect(isModuleSignal(signal({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', asset: null, cadence: daily }))).toBe(false)
+  })
+
+  it('refuses a windowed rule that does not say how much it covered', () => {
+    // The failure this prevents: a two-day window passing for a three-day one with every test green.
+    const windowed = signal({ moduleId: 'etf-flows', ruleId: 'etf-outflow-3d', cadence: daily, values: { netFlowUsd: -4.8e8 } })
+    expect(isModuleSignal(windowed)).toBe(false)
+    expect(isModuleSignal({ ...windowed, values: { netFlowUsd: -4.8e8, coveredDays: 2 } })).toBe(false)
+    expect(isModuleSignal({ ...windowed, values: { netFlowUsd: -4.8e8, coveredDays: 2, requiredDays: 0 } })).toBe(false)
+    expect(isModuleSignal({ ...windowed, values: { netFlowUsd: -4.8e8, coveredDays: 2.5, requiredDays: 3 } })).toBe(false)
+    // A point event has no window, so it is not asked for one.
+    expect(isModuleSignal(signal({ moduleId: 'macro-calendar', ruleId: 'macro-surprise', asset: null, cadence: daily }))).toBe(true)
   })
 
   it('keeps values numeric: completeness is two numbers, not a boolean', () => {
@@ -146,8 +158,14 @@ describe('dedupe bucket', () => {
 describe('coverage', () => {
   it('reads completeness from the two numbers, never from a flag', () => {
     expect(isCoverageComplete({ coveredDays: 3, requiredDays: 3 })).toBe(true)
+    expect(isCoverageComplete({ coveredDays: 4, requiredDays: 3 })).toBe(true)
     expect(isCoverageComplete({ coveredDays: 2, requiredDays: 3 })).toBe(false)
-    // A rule with no coverage contract has nothing to be short of.
-    expect(isCoverageComplete({ dropPct: -1.8 })).toBe(true)
+  })
+
+  it('answers incomplete when it was not told how much was covered', () => {
+    // Silence is not completeness: this is the same "absent is not true" rule as elsewhere.
+    expect(isCoverageComplete({ dropPct: -1.8 })).toBe(false)
+    expect(isCoverageComplete({ coveredDays: 3 })).toBe(false)
+    expect(isCoverageComplete({ requiredDays: 3 })).toBe(false)
   })
 })
