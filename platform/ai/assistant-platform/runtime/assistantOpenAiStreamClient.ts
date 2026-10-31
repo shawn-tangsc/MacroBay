@@ -70,7 +70,8 @@ export async function streamOpenAiCompatibleChatCompletion(input: {
   messages: ChatCompletionMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入 `platformFetch`。 */
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   tools?: ChatCompletionTool[]
   executeTool?: (call: AssistantToolCall) => Promise<AssistantToolExecutionResult>
@@ -131,11 +132,12 @@ async function requestChatCompletion(input: {
   messages: ChatCompletionMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入 `platformFetch`。 */
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   tools?: ChatCompletionTool[]
 }): Promise<AssistantStreamResult & { toolCalls: AssistantToolCall[] }> {
-  const response = await (input.fetch ?? fetch)(buildChatCompletionsUrl(input.baseUrl), {
+  const response = await input.fetch(buildChatCompletionsUrl(input.baseUrl), {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.apiKey}`,
