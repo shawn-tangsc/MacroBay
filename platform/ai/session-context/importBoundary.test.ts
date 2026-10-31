@@ -5,65 +5,67 @@ import { describe, expect, it } from 'vitest'
 
 const CONTEXT_DIR = __dirname
 
-/** 契约目录只能依赖自己与标准库类型；碰到下面任何一个都说明分层被穿透了。 */
-const FORBIDDEN_IMPORT_FRAGMENTS = [
-  'assistant-platform',
-  'agent-platform',
-  'platform/settings',
-  '@platform/settings',
-  'electron',
-  'node:sqlite',
-  'better-sqlite3',
-  'db/'
-]
+type ImportedFile = { file: string; source: string }
 
-function readContextSources(): Array<{ file: string; source: string }> {
+/**
+ * 三种导入形态都要扫：静态 `from '…'`、动态 `import('…')`、`require('…')`。
+ * 只匹配第一种的话，后两种能整条穿过去。
+ */
+function scanImportSpecifiers(source: string): string[] {
+  const specifiers: string[] = []
+  for (const match of source.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)) specifiers.push(match[1] ?? '')
+  for (const match of source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specifiers.push(match[1] ?? '')
+  for (const match of source.matchAll(/\brequire\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specifiers.push(match[1] ?? '')
+  return specifiers.filter((specifier) => specifier.length > 0)
+}
+
+/** 契约目录只许引用自己目录里的文件：`./…` 且解析后仍在目录内。 */
+function findViolations(sources: readonly ImportedFile[]): string[] {
+  const violations: string[] = []
+  for (const { file, source } of sources) {
+    for (const specifier of scanImportSpecifiers(source)) {
+      const isLocal = specifier.startsWith('./')
+      const escapes = !isLocal || !resolve(CONTEXT_DIR, specifier).startsWith(CONTEXT_DIR)
+      if (escapes) violations.push(`${file}: ${specifier}`)
+    }
+  }
+  return violations
+}
+
+function readContextSources(): ImportedFile[] {
   return readdirSync(CONTEXT_DIR)
     .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
     .map((file) => ({ file, source: readFileSync(join(CONTEXT_DIR, file), 'utf8') }))
 }
 
-function importsOf(source: string): string[] {
-  const matches = source.matchAll(/from\s+'([^']+)'/g)
-  return [...matches].map((match) => match[1] ?? '')
-}
-
 describe('session-context import boundary', () => {
-  it('only imports itself and the runtime builtins', () => {
+  it('imports nothing but files inside its own directory', () => {
     const sources = readContextSources()
     expect(sources.length).toBeGreaterThan(0)
 
-    for (const { file, source } of sources) {
-      for (const specifier of importsOf(source)) {
-        const isLocal = specifier.startsWith('./')
-        const forbidden = FORBIDDEN_IMPORT_FRAGMENTS.some((fragment) => specifier.includes(fragment))
-        expect({ file, specifier, ok: isLocal }).toEqual({ file, specifier, ok: true })
-        expect({ file, specifier, forbidden }).toEqual({ file, specifier, forbidden: false })
-      }
-    }
+    expect(findViolations(sources)).toEqual([])
   })
 
-  it('rejects the boundary check when a forbidden import is injected', () => {
-    // 反向用例：守卫本身必须会红。故意造一条违规导入，走同一套判定。
-    const injected = "import { createAssistantChatRuntimeService } from '@platform/ai/assistant-platform/runtime/AssistantChatRuntimeService'"
-    const violations = importsOf(injected).filter(
-      (specifier) => !specifier.startsWith('./') || FORBIDDEN_IMPORT_FRAGMENTS.some((fragment) => specifier.includes(fragment))
-    )
+  it('flags all three import forms when a forbidden specifier is injected', () => {
+    const injected: ImportedFile[] = [
+      {
+        file: 'static.ts',
+        source: "import { x } from '@platform/ai/assistant-platform/runtime/AssistantChatRuntimeService'"
+      },
+      { file: 'dynamic.ts', source: "const x = await import('@platform/ai/agent-platform/runtime/agentChatRuntime')" },
+      { file: 'require.ts', source: "const fs = require('node:fs')" }
+    ]
 
-    expect(violations).toEqual(['@platform/ai/assistant-platform/runtime/AssistantChatRuntimeService'])
+    expect(findViolations(injected)).toEqual([
+      'static.ts: @platform/ai/assistant-platform/runtime/AssistantChatRuntimeService',
+      'dynamic.ts: @platform/ai/agent-platform/runtime/agentChatRuntime',
+      'require.ts: node:fs'
+    ])
   })
 
-  it('does not reach outside its own directory for relative imports', () => {
-    for (const { file, source } of readContextSources()) {
-      for (const specifier of importsOf(source)) {
-        if (!specifier.startsWith('.')) continue
-        const resolved = resolve(CONTEXT_DIR, specifier)
-        expect({ file, specifier, inside: resolved.startsWith(CONTEXT_DIR) }).toEqual({
-          file,
-          specifier,
-          inside: true
-        })
-      }
-    }
+  it('flags a relative import that walks out of the directory', () => {
+    const injected: ImportedFile[] = [{ file: 'escape.ts', source: "import { x } from '../agent-platform/store/agentStore'" }]
+
+    expect(findViolations(injected)).toEqual(['escape.ts: ../agent-platform/store/agentStore'])
   })
 })
