@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  changeInPp, decisionInstant, directionShares, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
-  POLICY_PATH_OUTCOME_ORDER, repricingMarkers, settlementConclusion, stalenessOf, thinSeries,
+  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
+  POLICY_PATH_OUTCOME_ORDER, namedOutcomes, repricingMarkers, settlementConclusion, stalenessOf, thinSeries,
   valueAtOrBefore, verdictOf, type PolicyPathObservation
 } from './policyPath'
 
@@ -175,16 +175,14 @@ describe('policy path settlement', () => {
   })
 })
 
-describe('direction shares', () => {
-  it('sums the two hike buckets and the two cut buckets separately from the hold', () => {
-    const shares = directionShares({ 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 })
-    expect(shares.hike).toBeCloseTo(0.7055, 10)
-    expect(shares.hold).toBeCloseTo(0.285, 10)
-    expect(shares.cut).toBeCloseTo(0.012, 10)
+describe('share floor', () => {
+  it('names only the buckets above five percent', () => {
+    const values = { 'no-change': 0.282, 'hike-25': 0.689, 'hike-50-plus': 0.017, 'cut-25': 0.007, 'cut-50-plus': 0.004 }
+    expect(namedOutcomes(values)).toEqual(['no-change', 'hike-25'])
   })
 
-  it('adds back to one, so the three labels are comparable', () => {
-    const shares = directionShares({ 'no-change': 0.2, 'hike-25': 0.5, 'hike-50-plus': 0.1, 'cut-25': 0.15, 'cut-50-plus': 0.05 })
-    expect(shares.hike + shares.hold + shares.cut).toBeCloseTo(1, 10)
+  it('treats exactly five percent as not worth naming', () => {
+    const values = { 'no-change': 0.05, 'hike-25': 0.9, 'hike-50-plus': 0.02, 'cut-25': 0.02, 'cut-50-plus': 0.01 }
+    expect(namedOutcomes(values)).toEqual(['hike-25'])
   })
 })

@@ -39,8 +39,8 @@ export type PolicyPathCardText = Readonly<{
   upgradeCompare: string; upgradeCompareNoPrevious: string
   upgradeQuote: string; upgradeQuoteOnly: string
   /** The settlement strip: the realised band, the price before it, and the gap. */
-  settlementActual: string; settlementPriced: string; settlementPricedMissing: string
-  settlementOutcomeLine: string; settlementOutcomeLineNoPricing: string
+  settlementActual: string; settlementPriced: string
+  settlementOutcomeLine: string
   settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
   settlementConclusionMissing: string
   /** The verdict line under the facts: what the last decision was, against what was priced. */
@@ -274,14 +274,14 @@ function PreMeetingBlock({ reading, text }: Readonly<{ reading: PolicyPathReadin
 }
 
 /** The strip under the realised band: what it was priced at, and which band was leading instead. */
-function SettlementBlock({ settlement, text }: Readonly<{ settlement: PolicyPathSettlement; text: PolicyPathCardText }>): React.ReactElement {
-  const actual = text.outcomes[settlement.actualOutcome]
+function SettlementBlock({ settlement, text }: Readonly<{ settlement: PolicyPathSettlement; text: PolicyPathCardText }>): React.ReactElement | null {
+  // The strip only mounts when the settlement has a conclusion, and a conclusion needs both numbers;
+  // the guard keeps the type honest instead of carrying copy for a state that cannot happen.
+  if (settlement.priced === undefined || settlement.pricedOutcome === undefined) return null
   return <div className="mi-policy-card__upgrade">
-    <b>{settlement.priced === undefined
-      ? text.settlementPricedMissing
-      : text.settlementPriced.replace('{value}', percentOf(settlement.priced))}</b>
-    <span>{settlement.pricedOutcome
-      ? text.settlementOutcomeLine.replace('{actual}', actual).replace('{priced}', text.outcomes[settlement.pricedOutcome])
-      : text.settlementOutcomeLineNoPricing.replace('{actual}', actual)}</span>
+    <b>{text.settlementPriced.replace('{value}', percentOf(settlement.priced))}</b>
+    <span>{text.settlementOutcomeLine
+      .replace('{actual}', text.outcomes[settlement.actualOutcome])
+      .replace('{priced}', text.outcomes[settlement.pricedOutcome])}</span>
   </div>
 }

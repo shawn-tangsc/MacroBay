@@ -38,7 +38,7 @@ export type PolicyPathDrawerText = Readonly<{
   settlementActualLabel: string
   /** The fallback baseline, labelled with the hours since the decision. */
   settlementPricingAfter: string
-  settlementActual: string; settlementPricedMissing: string
+  settlementActual: string
   settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
   settlementConclusionMissing: string
   /** Every bucket at one instant, not just the one the card leads with. */

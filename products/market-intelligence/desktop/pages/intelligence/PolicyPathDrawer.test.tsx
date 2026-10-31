@@ -86,7 +86,8 @@ describe('policy path drawer settlement', () => {
     const section = rendered.querySelector('[data-settlement]')
     // The reason lives here, in the drawer - the card does not carry a strip that cannot answer.
     expect(section?.textContent).toContain(text.settlementConclusionMissing)
-    expect(section?.textContent).not.toContain(text.settlementPricedBefore)
+    // No pre-decision price row: the section says the conclusion is missing instead of quoting a baseline.
+    expect(section?.textContent).not.toContain(text.settlementPricingBefore)
   })
 })
 

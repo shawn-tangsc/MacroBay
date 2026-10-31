@@ -160,7 +160,7 @@ describe('policy path card shapes', () => {
     expect(rendered.querySelectorAll('.mi-policy-card__facts > div')).toHaveLength(3)
   })
 
-  it('drops the conclusion, not the strip, when there was no price before the decision', async () => {
+  it('shows neither conclusion nor pricing strip when there was no price before the decision', async () => {
     const rendered = await render({
       ...reading,
       phase: { kind: 'settlement', minutesSinceDecision: 300 },
@@ -175,9 +175,8 @@ describe('policy path card shapes', () => {
     })
 
     expect(rendered.querySelector('.mi-policy-card__verdict')).toBeNull()
-    expect(rendered.textContent).toContain('决议前 1 小时没有观测，结算结论不出')
-    expect(rendered.textContent).toContain('实际落在 加息 25bp 档 · 决议前定价不可得')
-    expect(rendered.textContent).toContain('结算后 5 小时')
+    // The strip body carries the price it settled against; without one it must not render at all.
+    expect(rendered.querySelector('.mi-policy-card__upgrade')).toBeNull()
   })
 
   it('keeps the normal body in the verdict and remembers the gap in one clickable grey line', async () => {
