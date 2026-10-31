@@ -47,6 +47,11 @@ function needsJob(source: SourceView): boolean {
     || source.kind === 'market-calendar'
 }
 
+/** The one rule for the probe button, so a test can hold it without rendering the pane. */
+export function offersConnectionTest(provider: { credential: string; sources: ReadonlyArray<{ capabilities?: { testConnection?: boolean } }> }): boolean {
+  return provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities?.testConnection === true)
+}
+
 export function ProviderDetail({ labels, provider, onChanged, onSelectSource, showSourceDetails, sourceDetailLabels, translation }: {
   labels: ProviderDetailLabels
   provider: ProviderView
@@ -227,7 +232,7 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
         {provider.signupUrl ? <Button onClick={() => window.open(provider.signupUrl, '_blank', 'noopener,noreferrer')}>{labels.signup}</Button> : null}
         {/* A provider whose sources declare no probe has nothing to test; offering the button
             only produces a red error for an action that was never supported. */}
-        {provider.credential !== 'api-key' && provider.sources.some((source) => source.capabilities.testConnection)
+        {offersConnectionTest(provider)
           ? <Button disabled={testingConnection} loading={testingConnection} onClick={() => void testConnection()}>{labels.testConnection}</Button>
           : null}
         {connectionFeedback ? <Alert
