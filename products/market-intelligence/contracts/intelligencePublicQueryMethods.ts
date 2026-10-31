@@ -11,6 +11,7 @@ export const INTELLIGENCE_PUBLIC_QUERY_METHODS = {
   queryFearGreedSnapshot: 'intelligence.queryFearGreedSnapshot',
   queryFundingRateHistory: 'intelligence.queryFundingRateHistory',
   queryOpenInterestHistory: 'intelligence.queryOpenInterestHistory',
+  queryMarketDivergence: 'intelligence.queryMarketDivergence',
   queryCapitalConditionsSnapshot: 'intelligence.queryCapitalConditionsSnapshot',
   getSourceHealth: 'intelligence.getSourceHealth',
   getEvidenceExcerpt: 'intelligence.getEvidenceExcerpt'
