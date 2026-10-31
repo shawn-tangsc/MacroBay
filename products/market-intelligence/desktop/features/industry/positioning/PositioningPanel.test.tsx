@@ -87,7 +87,7 @@ describe('positioning panel', () => {
     // The mark names itself on the chart: asset and size, no timestamp (the axis already says
     // when) and no single header badge (it could only ever name one of several marks).
     expect(markup).toContain('data-hint="btc"')
-    expect(markup).toContain('疑似强平 BTC -1.9% · 3.4×')
+    expect(markup).toContain('疑似强平 BTC -1.9% · 量 3.4×')
     expect(markup).not.toContain('mi-positioning-panel__badge')
     // The caveat is no longer a permanent line: it lives in the help popover, which also says
     // what the two series mean together — the part a reader cannot infer from the numbers.
@@ -245,5 +245,14 @@ describe('line-end readings', () => {
 describe('what the mark does not cover', () => {
   it('says that only a 15-minute collapse is marked, not a slow decline', () => {
     expect(text.helpLines.some(line => line.includes('只标 15 分钟内的骤降'))).toBe(true)
+  })
+})
+
+describe('the liquidation multiple', () => {
+  it('names what the multiple measures, on the mark and in the help', () => {
+    const markup = render()
+    // A bare "14.4×" over a chart said nothing about what was multiplied.
+    expect(markup).toContain('量 3.4×')
+    expect(text.helpLines.some(line => line.includes('相对过去 24 小时同长度桶均量的倍数'))).toBe(true)
   })
 })
