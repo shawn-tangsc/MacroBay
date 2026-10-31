@@ -74,7 +74,9 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
     const escalated = shouldEscalate(legs, result)
     const withFlag = { ...result, escalated }
     return isWithinUtf8JsonBudget(withFlag, divergencePolicy.maximumDtoBytes) ? withFlag : divergenceUnavailable('too-large', missing)
-  } catch {
+  } catch (error) {
+    // One line, no credentials: a thrown read is a fault, and silence about it cost a day.
+    console.error('[divergence] query threw:', error instanceof Error ? `${error.name}: ${error.message}` : String(error))
     return divergenceUnavailable('query-failed')
   }
 }

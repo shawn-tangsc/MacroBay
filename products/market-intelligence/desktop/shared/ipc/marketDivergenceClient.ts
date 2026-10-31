@@ -21,7 +21,7 @@ export const marketDivergenceClient = {
         INTELLIGENCE_PUBLIC_QUERY_METHODS.queryMarketDivergence,
         { asOf: input.asOf }
       )
-      return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable()
+      return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable('bad-answer')
     } catch {
       return divergenceUnavailable()
     }

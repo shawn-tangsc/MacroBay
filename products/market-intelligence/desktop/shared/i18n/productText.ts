@@ -461,7 +461,9 @@ export const productText = {
                 'all-legs-missing': '六个数据源一个都没返回',
                 'query-failed': '查询出错，和有没有数据无关',
                 'invalid-clock': '系统时间格式不对，属于程序问题',
-                'too-large': '结果太大，超出了这张卡的容量'
+                'too-large': '结果太大，超出了这张卡的容量',
+                'bad-payload': '请求参数不合法（程序问题，不是数据问题）',
+                'bad-answer': '后端返回的格式不符合约定（程序问题）'
               },
               nothingCompared: '三对都没能比：缺的数据没凑齐，今天不给结论',
               missingLegs: '还缺：{legs}',
@@ -2159,7 +2161,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'all-legs-missing': 'all six sources came back empty',
                 'query-failed': 'the query failed, independently of the data',
                 'invalid-clock': 'the clock value was malformed, a program fault',
-                'too-large': 'the answer was too large for this card'
+                'too-large': 'the answer was too large for this card',
+                'bad-payload': 'the request was malformed (a program fault, not a data one)',
+                'bad-answer': 'the answer did not match the agreed shape (a program fault)'
               },
               nothingCompared: 'None of the three pairs could be compared: the missing figures were not available',
               missingLegs: 'Still missing: {legs}',

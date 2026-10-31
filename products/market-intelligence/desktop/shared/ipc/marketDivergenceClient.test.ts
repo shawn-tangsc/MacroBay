@@ -47,7 +47,7 @@ describe('divergence renderer client', () => {
     ['a mismatched asOf', { ...available, asOf: '2026-10-30T13:00:00.000Z' }]
   ])('refuses %s', async (_name, value) => {
     bridge(value)
-    await expect(marketDivergenceClient.query({ asOf })).resolves.toEqual({ state: 'unavailable', failureCode: 'market-divergence-query-unavailable', reason: 'query-failed', missing: [] })
+    await expect(marketDivergenceClient.query({ asOf })).resolves.toEqual({ state: 'unavailable', failureCode: 'market-divergence-query-unavailable', reason: 'bad-answer', missing: [] })
   })
 
   it('refuses a non-canonical instant without calling the bridge', async () => {

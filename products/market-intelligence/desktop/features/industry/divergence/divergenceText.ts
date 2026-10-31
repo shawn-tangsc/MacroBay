@@ -9,7 +9,7 @@ export type DivergencePanelText = Readonly<{
   withheldGroup: string
   retry: string
   /** When we cannot even name a reading, say why in one short sentence. */
-  unavailableWhy: Readonly<Record<'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large', string>>
+  unavailableWhy: Readonly<Record<'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer', string>>
   /** Every pair withheld: nothing was compared, which is not the same as no divergence. */
   nothingCompared: string
   /** "Missing: {legs}" — the legs that made the whole card unavailable. */

@@ -94,7 +94,8 @@ export type MarketDivergenceResult =
   | Readonly<{
       state: 'unavailable'
       failureCode: 'market-divergence-query-unavailable'
-      reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large'
+      /** Named by layer: a payload the route refused is not the same fault as a service that threw. */
+      reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer'
       missing: readonly DivergenceLegId[]
     }>
 
@@ -252,7 +253,8 @@ export function isMarketDivergenceResult(value: unknown, asOf: string): value is
   const record = value as Record<string, unknown>
   if (record.state === 'unavailable') {
     if (record.failureCode !== divergencePolicy.unavailableFailureCode) return false
-    if (record.reason !== 'all-legs-missing' && record.reason !== 'query-failed' && record.reason !== 'invalid-clock' && record.reason !== 'too-large') return false
+    const reasons = ['all-legs-missing', 'query-failed', 'invalid-clock', 'too-large', 'bad-payload', 'bad-answer']
+  if (!reasons.includes(String(record.reason))) return false
     return Array.isArray(record.missing) && record.missing.every(entry => typeof entry === 'string')
   }
   if (!isCanonicalDivergenceTime(record.asOf) || record.asOf !== asOf) return false

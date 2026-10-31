@@ -4,7 +4,7 @@ import { isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 /** What the card renders: the rows it may show, and the pairs it had to refuse. */
 export type DashboardDivergenceViewState =
   | Readonly<{ state: 'loading' }>
-  | Readonly<{ state: 'unavailable'; reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large'; missing: readonly DivergenceLeg['id'][] }>
+  | Readonly<{ state: 'unavailable'; reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer'; missing: readonly DivergenceLeg['id'][] }>
   | Readonly<{ state: 'empty'; withheld: readonly DivergenceWithheldView[] }>
   | Readonly<{ state: 'available'; rows: readonly DivergenceRowView[]; withheld: readonly DivergenceWithheldView[] }>
 

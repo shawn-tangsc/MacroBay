@@ -119,10 +119,11 @@ export function registerIntelligencePublicQueryIpc(
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryMarketDivergence, async (payload) => {
     try {
       const input = asMarketDivergenceInput(payload)
-      if (!input) return divergenceUnavailable()
+      // The three faults are kept apart so a reader (and a developer) can tell which layer refused.
+      if (!input) return divergenceUnavailable('bad-payload')
       const value = await publicQueryService().queryMarketDivergence(input)
-      return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable()
-    } catch { return divergenceUnavailable() }
+      return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable('bad-answer')
+    } catch { return divergenceUnavailable('query-failed') }
   })
 
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {
