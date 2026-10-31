@@ -8,14 +8,12 @@ const at = (hoursAgo: number) => new Date(Date.parse(asOf) - hoursAgo * 3_600_00
 const available = {
   state: 'available', asOf,
   rows: [{
-    pairId: 'liquidity-leverage', direction: 'bearish',
+    pairId: 'liquidity-leverage', direction: 'bearish', judgedBy: 'ai', mechanism: '弹药减少而空头加仓。', invalidation: '稳定币转正。',
     legs: [
       { id: 'stablecoin', value: -1.2, unit: 'percent', observedAt: at(2) },
       { id: 'open-interest', value: 3.4, unit: 'percent', observedAt: at(1) },
       { id: 'funding', value: -0.0032, unit: 'percent-per-8h', observedAt: at(1) }
     ],
-    mechanismKey: 'divergence.liquidity-leverage.mechanism',
-    invalidationKey: 'divergence.liquidity-leverage.invalidation'
   }],
   withheld: []
 }

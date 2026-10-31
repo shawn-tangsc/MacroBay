@@ -1,69 +1,103 @@
+import { Tooltip } from 'antd'
+import { Info } from 'lucide-react'
+
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import type { DashboardDivergenceViewState } from '../../../pages/intelligence/dashboardDivergenceModel'
+import type { DashboardDivergenceViewState, DivergenceWithheldView } from '../../../pages/intelligence/dashboardDivergenceModel'
 import type { DivergencePanelText } from './divergenceText'
 
+import './DivergencePanel.css'
+
 /**
- * The one card that reads two others.
+ * A conclusion about the card above it.
  *
- * It shows divergences and nothing else: agreement is the default state of these legs, and a row
- * saying "they agree" would restate three cards the reader has already seen. A pair that could not
- * be compared is named at the bottom — "nothing diverged" and "we could not compare" must not look
- * the same.
+ * Only readings are on the card: the "why this was judged, and by whom" prose lives behind the `?`
+ * before the title, because a reader who came for the readings should not have to step over four
+ * lines of explanation to reach them.
  */
-export function DivergencePanel({ state, text }: Readonly<{
+export function DivergencePanel({ state, text, onRetry }: Readonly<{
   state: DashboardDivergenceViewState
   text: DivergencePanelText
+  /** Only offered on a quiet day: asking the model for a second opinion costs a request. */
+  onRetry?: () => void
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
-  const when = (value: string) => formatTime(value.replace('T', ' ').slice(0, 19) + 'Z')
+  const judgedBy = state.state === 'available' && state.rows.every(row => row.judgedBy === 'ai') ? 'ai' : 'rules'
+  const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
 
   return (
     <section className="mi-divergence" aria-labelledby="mi-divergence-heading" data-state={state.state}>
-      {/* A banner, not a paragraph: the block is a conclusion drawn from the card above, and it has
-          to look like one without being mistaken for another chart section. */}
-      <header className="mi-divergence__banner-head">
-        <span className="mi-divergence__kicker">{text.kicker}</span>
+      <header className="mi-divergence__head">
+        <Tooltip title={<span className="mi-divergence__help-body">{text.helpLines.map(line => <b key={line}>{line}</b>)}</span>}
+          trigger={['hover', 'focus', 'click']}>
+          <button type="button" className="mi-divergence__help" aria-label={text.helpLabel}>
+            <Info size={11} aria-hidden="true" />
+          </button>
+        </Tooltip>
         <h2 id="mi-divergence-heading">{text.title}</h2>
+        {state.state === 'available' ? <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span> : null}
+        {onRetry ? <button type="button" className="mi-divergence__retry" onClick={onRetry}>{text.judgeAgain}</button> : null}
       </header>
-      <div className="mi-divergence__banner">
-      {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={48} /> : null}
-      {state.state === 'unavailable' ? <p className="mi-divergence__note" data-tone="muted">{text.unavailable}</p> : null}
-      {state.state === 'empty' ? <p className="mi-divergence__note" data-tone="muted">{text.empty}</p> : null}
+
+      {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
+      {state.state === 'unavailable' ? <p className="mi-divergence__note">{text.unavailable}</p> : null}
+      {state.state === 'empty' ? <p className="mi-divergence__note">{text.empty}</p> : null}
+
       {state.state === 'available' ? (
         <ul className="mi-divergence__rows">
           {state.rows.map(row => (
-            <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}>
-              <div className="mi-divergence__head">
+            <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
+              title={row.invalidation ? `${text.invalidationLabel}：${row.invalidation}` : undefined}>
+              <div className="mi-divergence__line">
                 <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
-                <span className="mi-divergence__legs">
-                  {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
-                </span>
+                {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
               </div>
-              <p className="mi-divergence__mechanism">{text.pairs[row.pairId as keyof DivergencePanelText['pairs']].mechanism}</p>
-              <p className="mi-divergence__invalidation">
-                {text.invalidationLabel}：{text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}
-              </p>
+              {row.mechanism ? <p className="mi-divergence__mechanism">{row.mechanism}</p> : null}
             </li>
           ))}
         </ul>
       ) : null}
-      </div>
-      <p className="mi-divergence__basis">{text.basis}</p>
+
       {withheld.length > 0 ? (
-        <div className="mi-divergence__withheld" data-withheld={withheld.length}>
+        <p className="mi-divergence__withheld">
           <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
-          {withheld.map(entry => (
-            <span key={`${entry.pairId}-${entry.leg}`} className="mi-divergence__withheld-item" data-reason={entry.reason}>
-              {text.withheldReasons[entry.reason]
-                .replace('{leg}', text.legs[entry.leg])
-                .replace('{at}', entry.observedAt ? when(entry.observedAt) : '—')}
+          {groupWithheld(withheld).map(group => (
+            <span key={group.key} className="mi-divergence__withheld-item" data-reason={group.reason}>
+              {text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')}
+              {group.count > 1 ? text.withheldGroup.replace('{count}', String(group.count)) : ''}
             </span>
           ))}
-        </div>
+        </p>
       ) : null}
     </section>
   )
+}
+
+/**
+ * One entry per reason, not per pair: two pairs held back for the same missing leg is one fact
+ * about the data, and printing it twice reads like a rendering fault.
+ */
+export function groupWithheld(entries: readonly DivergenceWithheldView[]): readonly Readonly<{
+  key: string
+  reason: DivergenceWithheldView['reason']
+  leg: DivergenceWithheldView['leg']
+  observedAt?: string
+  count: number
+}>[] {
+  const groups = new Map<string, { key: string; reason: DivergenceWithheldView['reason']; leg: DivergenceWithheldView['leg']; observedAt?: string; count: number }>()
+  for (const entry of entries) {
+    const key = `${entry.reason}:${entry.leg}:${entry.observedAt ?? ''}`
+    const existing = groups.get(key)
+    if (existing) existing.count += 1
+    else {
+      groups.set(key, {
+        key, reason: entry.reason, leg: entry.leg,
+        ...(entry.observedAt ? { observedAt: entry.observedAt } : {}),
+        count: 1
+      })
+    }
+  }
+  return [...groups.values()]
 }

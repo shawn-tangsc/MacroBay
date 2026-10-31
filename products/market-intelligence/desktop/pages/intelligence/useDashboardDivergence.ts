@@ -8,10 +8,11 @@ import { projectDashboardDivergence, type DashboardDivergenceViewState } from '.
  * every render would risk legs from two instants being compared.
  */
 export function useDashboardDivergence(input: Readonly<{
-  client: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> } | undefined
+  client: { query: (input: { asOf: string; mode?: 'auto' | 'manual' }) => Promise<MarketDivergenceResult> } | undefined
   now: () => Date
-}>): DashboardDivergenceViewState {
+}>): Readonly<{ state: DashboardDivergenceViewState; reload: () => void }> {
   const [state, setState] = useState<DashboardDivergenceViewState>({ state: 'loading' })
+  const [attempt, setAttempt] = useState(0)
   const [mountInput] = useState(() => input)
 
   useEffect(() => {
@@ -22,13 +23,13 @@ export function useDashboardDivergence(input: Readonly<{
       return () => { active = false }
     }
     setState({ state: 'loading' })
-    void mountInput.client.query({ asOf })
+    void mountInput.client.query({ asOf, ...(attempt > 0 ? { mode: 'manual' as const } : {}) })
       .then((result) => { if (active) setState(projectDashboardDivergence(result, asOf)) })
       .catch(() => { if (active) setState({ state: 'unavailable' }) })
     return () => { active = false }
-  }, [mountInput])
+  }, [mountInput, attempt])
 
-  return state
+  return { state, reload: () => setAttempt(value => value + 1) }
 }
 
 /** The clock must not re-read on every render: one instant per mount. */

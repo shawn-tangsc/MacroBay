@@ -53,7 +53,7 @@ import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
-import { bearishShare, queryMarketDivergenceAsync, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import { bearishShare, queryMarketDivergenceAsync, type DivergenceJudge, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import type { FundingRateHistoryStore } from '../store/fundingRateHistoryStore'
@@ -95,7 +95,7 @@ export type MarketIntelligencePublicQueryService = {
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
-  queryMarketDivergence: (input: { asOf: string }) => Promise<MarketDivergenceResult>
+  queryMarketDivergence: (input: { asOf: string; mode?: 'auto' | 'manual' }) => Promise<MarketDivergenceResult>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -112,6 +112,8 @@ export type MarketIntelligencePublicQueryService = {
   setCrossAssetQuery: (query: Pick<CrossAssetQuery, 'query'> | undefined) => void
   /** The scored-headline reader the news page and the analysis already share. */
   setNewsSentimentQuery: (query: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined) => void
+  /** The assistant model's judgement; absent means the threshold table answers alone. */
+  setDivergenceJudge: (judge: DivergenceJudge | undefined) => void
   /**
    * The macro snapshot the 市场状态 block reads: the dollar row (licensed `dxy-real`, or the labelled
    * `dxy-synthetic` fallback) and gold's stored level with its window returns.
@@ -187,6 +189,7 @@ export function createMarketIntelligencePublicQueryService(
   let marketCalendarQuery = input.marketCalendarQuery
   let crossAssetQuery: CrossAssetQuery | undefined
   let newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined
+  let divergenceJudgement: DivergenceJudge | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
   let macroRatesSnapshotQuery: MacroRatesSnapshotQuery | undefined
   let macroHistoryAsOfQuery: Pick<MacroHistoryAsOfQuery, 'read'> | undefined
@@ -339,6 +342,9 @@ export function createMarketIntelligencePublicQueryService(
     setNewsSentimentQuery(query) {
       newsSentimentQuery = query
     },
+    setDivergenceJudge(judge) {
+      divergenceJudgement = judge
+    },
     // Fail closed to `undefined` exactly like the cross-asset read: an unwired or throwing snapshot
     // must leave the domain unavailable, never empty — "no data" and "no answer" are different facts.
     queryMacroMarketSnapshot() {
@@ -390,7 +396,9 @@ export function createMarketIntelligencePublicQueryService(
   // "what the dashboard already knows", and the divergence rule never sees a second view of it.
   service.queryMarketDivergence = async (queryInput) => queryMarketDivergenceAsync({
     asOf: queryInput.asOf,
-    read: divergenceReader(service, queryInput.asOf, newsSentimentQuery)
+    mode: queryInput.mode ?? 'auto',
+    read: divergenceReader(service, queryInput.asOf, newsSentimentQuery),
+    ...(divergenceJudgement ? { judge: divergenceJudgement } : {})
   })
   return service
 }

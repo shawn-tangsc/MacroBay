@@ -4,24 +4,48 @@
   min-width: 0;
   padding: 8px 0 2px;
 }
-.mi-divergence__banner-head {
+.mi-divergence__head {
   display: flex;
-  align-items: baseline;
-  gap: 7px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
-/* The word "结论" as a bordered label: a reader has to see at a glance that this block is a
-   judgement about the card above, not another reading. */
-.mi-divergence__kicker {
+/* The `?` sits before the title: the explanation is an aside to the heading, not content. */
+.mi-divergence__help {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mi-dashboard-muted);
+  cursor: help;
+}
+.mi-divergence__help:hover { color: var(--mi-dashboard-text); }
+.mi-divergence__help-body { display: grid; gap: 5px; max-width: 360px; font-size: 11px; line-height: 1.55; }
+.mi-divergence__help-body b { font-weight: 400; }
+.mi-divergence__help-body b:first-child { color: var(--mi-dashboard-text); }
+.mi-divergence__retry {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.mi-divergence__retry:hover { color: var(--mi-dashboard-text); }
+.mi-divergence__judge {
   padding: 1px 5px;
   border: 1px solid var(--mi-dashboard-line);
   border-radius: 3px;
-  color: var(--mi-dashboard-text);
+  color: var(--mi-dashboard-muted);
   font-size: 9px;
-  font-weight: 650;
-  letter-spacing: 0.06em;
   line-height: 1.4;
 }
+.mi-divergence__judge[data-judged-by='ai'] { color: var(--mi-dashboard-text); border-color: color-mix(in srgb, var(--mi-dashboard-text) 30%, transparent); }
+/* The word "结论" as a bordered label: a reader has to see at a glance that this block is a
+   judgement about the card above, not another reading. */
 .mi-divergence h2 {
   margin: 0;
   color: var(--mi-dashboard-muted);
@@ -61,11 +85,11 @@
 .mi-divergence__row[data-direction='bearish'] { border-left-color: var(--mi-dashboard-negative); }
 .mi-divergence__row[data-direction='bullish'] { border-left-color: var(--mi-dashboard-positive); }
 .mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-caution); }
-.mi-divergence__head {
+.mi-divergence__line {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 4px 12px;
   min-width: 0;
 }
 .mi-divergence__direction { font-size: 11px; font-weight: 650; }
@@ -98,7 +122,8 @@
   font-size: 9px;
   opacity: 0.8;
 }
-.mi-divergence__basis {
+/* retired: the basis moved behind the help icon */
+.mi-divergence__retired {
   margin: 0;
   padding-left: 2px;
   color: var(--mi-dashboard-muted);

@@ -20,6 +20,10 @@ export type DivergenceRowView = Readonly<{
   pairId: string
   direction: 'bearish' | 'bullish' | 'unpriced'
   legs: readonly Readonly<{ id: DivergenceLeg['id']; text: string }>[]
+  judgedBy: 'ai' | 'rules'
+  /** The model's sentence; absent when the rules decided. */
+  mechanism?: string
+  invalidation?: string
 }>
 
 /**
@@ -44,7 +48,10 @@ export function projectDashboardDivergence(value: unknown, asOf: string): Dashbo
     rows: value.rows.map(row => ({
       pairId: row.pairId,
       direction: row.direction,
-      legs: row.legs.map(leg => ({ id: leg.id, text: formatLeg(leg) }))
+      legs: row.legs.map(leg => ({ id: leg.id, text: formatLeg(leg) })),
+      judgedBy: row.judgedBy,
+      ...(row.mechanism ? { mechanism: row.mechanism } : {}),
+      ...(row.invalidation ? { invalidation: row.invalidation } : {})
     })),
     withheld
   }

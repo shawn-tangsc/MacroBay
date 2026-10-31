@@ -61,6 +61,11 @@ export type DivergenceRow = Readonly<{
   pairId: DivergencePairId
   direction: DivergenceDirection
   legs: readonly DivergenceLeg[]
+  /** Who decided the row: the assistant model, or the threshold table when it could not answer. */
+  judgedBy: 'ai' | 'rules'
+  /** Written by the model; absent when the rules decided. */
+  mechanism?: string
+  invalidation?: string
 }>
 
 export type DivergenceWithheld = Readonly<{
@@ -207,7 +212,7 @@ function fundingLeg(input: Readonly<{ ratePercent: number; observedAt: string }>
 function freezeRow(pairId: DivergencePairId, direction: DivergenceDirection, legs: readonly DivergenceLeg[]): DivergenceRow {
   // The pair id is the name: the card and the analysis both look their sentence up by it, so
   // there is no second identifier to keep in step.
-  return Object.freeze({ pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))) })
+  return Object.freeze({ pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))), judgedBy: 'rules' as const })
 }
 
 export function isCanonicalDivergenceTime(value: unknown): value is string {
@@ -238,6 +243,8 @@ function isRow(value: unknown): boolean {
   const row = value as Record<string, unknown>
   if (!divergencePolicy.pairs.includes(row.pairId as never)) return false
   if (row.direction !== 'bearish' && row.direction !== 'bullish' && row.direction !== 'unpriced') return false
+  if (row.judgedBy !== 'ai' && row.judgedBy !== 'rules') return false
+  if (row.judgedBy === 'ai' && (typeof row.mechanism !== 'string' || typeof row.invalidation !== 'string')) return false
   if (!Array.isArray(row.legs) || row.legs.length < 2 || row.legs.length > 3) return false
   return row.legs.every(isLeg)
 }

@@ -57,6 +57,7 @@ import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './ne
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
+import { createDivergenceJudgementService } from './divergence/divergenceJudgementService'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
@@ -665,6 +666,15 @@ export function getIntelligenceModule(
     // headlines the news page and the analysis read, not the sentiment aggregate (which only
     // exists for market-wide scopes).
     publicQueryService.setNewsSentimentQuery(newsSentimentQuery ? { query: input => newsSentimentQuery.query(input) } : undefined)
+    // The divergence card's sentence comes from the assistant's default model. It is asked only
+    // when the rules found something to explain, or when the reader asks for a second opinion.
+    publicQueryService.setDivergenceJudge(structuredModelInvocation
+      ? createDivergenceJudgementService({
+          invoke: structuredModelInvocation.invoke,
+          ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
+          ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {})
+        }).judge
+      : undefined)
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
     const marketAnalysisSettingsService = createMarketAnalysisSettingsService({

@@ -1,3 +1,5 @@
+import { rowsFromJudgements } from './divergenceJudgementService'
+import type { DivergenceJudgementResult } from './divergenceJudgementService'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import {
@@ -33,9 +35,22 @@ export type DivergenceLegReader = Readonly<{
   sentiment: () => Promise<Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }> | undefined>
 }>
 
+export type DivergenceJudge = (input: Readonly<{
+  asOf: string
+  pairs: readonly Readonly<{ pairId: import('../../../contracts/marketDivergence').DivergencePairId; legs: readonly import('../../../contracts/marketDivergence').DivergenceLeg[]; ruleVerdict: 'divergence' | 'agreement' }>[]
+}>) => Promise<import('./divergenceJudgementService').DivergenceJudgementResult>
+
 export async function queryMarketDivergenceAsync(input: Readonly<{
   asOf: string
   read: DivergenceLegReader
+  /** The assistant model's reading of the same legs. Absent means the rules answer alone. */
+  judge?: DivergenceJudge
+  /**
+   * `auto` asks the model only when the rules found at least one divergence — there is nothing to
+   * explain otherwise, and a quiet day must not cost a request every time the dashboard opens.
+   * `manual` is the reader pressing "AI 复核": they asked, so it runs even on a quiet day.
+   */
+  mode?: 'auto' | 'manual'
 }>): Promise<MarketDivergenceResult> {
   if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable()
   try {
@@ -54,9 +69,10 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
       ...(price ? { price } : {}),
       ...(sentiment ? { sentiment } : {})
     }
-    const result = detectDivergences(legs)
-    if (result.state === 'unavailable') return result
-    return isWithinUtf8JsonBudget(result, divergencePolicy.maximumDtoBytes) ? result : divergenceUnavailable()
+    const ruleResult = detectDivergences(legs)
+    if (ruleResult.state === 'unavailable') return ruleResult
+    const judged = await judgeRows(input, legs, ruleResult)
+    return isWithinUtf8JsonBudget(judged, divergencePolicy.maximumDtoBytes) ? judged : divergenceUnavailable()
   } catch {
     return divergenceUnavailable()
   }
@@ -80,6 +96,72 @@ export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePe
   }
 }
 
+/**
+ * Hands the same legs to the model and swaps in its verdict.
+ *
+ * The rules still decide which pairs exist (their legs) and still answer when the model cannot —
+ * a provider that is off must not blank a dashboard. What the model changes is the judgement and
+ * the sentence; the readings it was shown are the ones that get drawn.
+ */
+async function judgeRows(
+  input: Readonly<{ asOf: string; judge?: DivergenceJudge; mode?: 'auto' | 'manual' }>,
+  legs: DivergenceInputs,
+  ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
+): Promise<MarketDivergenceResult> {
+  if (!input.judge) return ruleResult
+  // Auto: nothing diverged, so there is no sentence to write. The reader can still ask.
+  if ((input.mode ?? 'auto') === 'auto' && ruleResult.state !== 'available') return ruleResult
+  const pairs = buildPairs(legs, ruleResult)
+  if (pairs.length === 0) return ruleResult
+  const outcome = await input.judge({ asOf: input.asOf, pairs })
+  if (outcome.state !== 'judged') return ruleResult
+  const rows = rowsFromJudgements(outcome.judgements, pairs)
+  return rows.length > 0
+    ? { state: 'available', asOf: input.asOf, rows, withheld: ruleResult.withheld }
+    : { state: 'empty', asOf: input.asOf, withheld: ruleResult.withheld }
+}
+
+/** Every pair that has all its legs, plus the rule engine's own verdict as a hint. */
+function buildPairs(
+  legs: DivergenceInputs,
+  ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
+) {
+  const divergent = new Set((ruleResult.state === 'available' ? ruleResult.rows : []).map(row => row.pairId))
+  const pairs: Array<{ pairId: import('../../../contracts/marketDivergence').DivergencePairId; legs: readonly import('../../../contracts/marketDivergence').DivergenceLeg[]; ruleVerdict: 'divergence' | 'agreement' }> = []
+  if (legs.stablecoin && legs.openInterest && legs.funding) {
+    pairs.push({ pairId: 'liquidity-leverage', ruleVerdict: divergent.has('liquidity-leverage') ? 'divergence' : 'agreement', legs: [
+      { id: 'stablecoin', value: legs.stablecoin.change7dPercent, unit: 'percent', observedAt: legs.stablecoin.observedAt },
+      { id: 'open-interest', value: legs.openInterest.change24hPct, unit: 'percent', observedAt: legs.openInterest.observedAt },
+      { id: 'funding', value: legs.funding.ratePercent, unit: 'percent-per-8h', observedAt: legs.funding.observedAt }
+    ] })
+  }
+  const sessions = legs.etf ? lastSessions(legs.etf.rows, divergencePolicy.thresholds.etfWindowSessions) : []
+  if (sessions.length === divergencePolicy.thresholds.etfWindowSessions && legs.openInterest && legs.price) {
+    const net = sessions.reduce((total, row) => total + row.netFlowUsd, 0)
+    pairs.push({ pairId: 'flows-price', ruleVerdict: divergent.has('flows-price') ? 'divergence' : 'agreement', legs: [
+      { id: 'etf', value: net, unit: 'usd', observedAt: `${sessions.at(-1)!.tradingDate}T21:00:00.000Z` },
+      { id: 'open-interest', value: legs.openInterest.change24hPct, unit: 'percent', observedAt: legs.openInterest.observedAt },
+      { id: 'price', value: legs.price.return24hPercent, unit: 'percent', observedAt: legs.price.observedAt }
+    ] })
+  }
+  if (legs.sentiment && legs.price && legs.openInterest) {
+    pairs.push({ pairId: 'narrative-price', ruleVerdict: divergent.has('narrative-price') ? 'divergence' : 'agreement', legs: [
+      { id: 'sentiment', value: legs.sentiment.bearishSharePercent, unit: 'percent', observedAt: legs.sentiment.observedAt },
+      { id: 'price', value: legs.price.return24hPercent, unit: 'percent', observedAt: legs.price.observedAt },
+      { id: 'open-interest', value: legs.openInterest.change24hPct, unit: 'percent', observedAt: legs.openInterest.observedAt }
+    ] })
+  }
+  return pairs
+}
+
 async function safe<T>(read: () => Promise<T | undefined>): Promise<T | undefined> {
   try { return await read() } catch { return undefined }
+}
+
+/** Newest N sessions, oldest first: the ETF leg is a window sum, not a single day. */
+function lastSessions(rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[], count: number) {
+  return [...rows]
+    .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.tradingDate) && Number.isFinite(row.netFlowUsd))
+    .sort((left, right) => left.tradingDate.localeCompare(right.tradingDate))
+    .slice(-count)
 }

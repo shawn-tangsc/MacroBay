@@ -11,6 +11,7 @@ const dto = {
   rows: [{
     pairId: 'liquidity-leverage' as const,
     direction: 'bearish' as const,
+    judgedBy: 'rules' as const,
     legs: [
       { id: 'stablecoin' as const, value: -1.21, unit: 'percent' as const, observedAt: at(2) },
       { id: 'open-interest' as const, value: 3.4, unit: 'percent' as const, observedAt: at(1) },

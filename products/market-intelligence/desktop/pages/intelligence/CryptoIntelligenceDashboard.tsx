@@ -84,7 +84,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   // the liquidation lookback belong to the query, so switching windows is one more read.
   const [positioningWindow, setPositioningWindow] = useState<OpenInterestWindow>('7d')
   const positioningState = useDashboardOpenInterest({ client: openInterestClient, now, window: positioningWindow })
-  const divergenceState = useDashboardDivergence({ client: divergenceClient, now })
+  const divergence = useDashboardDivergence({ client: divergenceClient, now })
   // 刷新 re-collects the sources before re-reading: re-reading the stored snapshot only ever
   // shows the reader the state they are already looking at.
   const [capitalReloadKey, setCapitalReloadKey] = useState(0)
@@ -191,7 +191,8 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
             as an unrelated module. */}
-        <DivergencePanel state={divergenceState} text={text.divergence} />
+        <DivergencePanel state={divergence.state} text={text.divergence}
+          onRetry={divergence.state.state === 'empty' ? divergence.reload : undefined} />
       </div>
 
       <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />
