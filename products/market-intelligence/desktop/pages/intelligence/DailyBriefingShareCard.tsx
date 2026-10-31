@@ -5,6 +5,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { hasChangeToShow } from '../../../contracts/dailyBriefingMarkdown'
 import { withWindowHours } from './dailyBriefingWindowText'
+import { shortenEventTitle } from './dailyBriefingEventTitle'
 
 /**
  * The image edition. It deliberately drops the app chrome and the rail: a reader posts one page,
@@ -148,7 +149,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           <span className="mi-brief-poster__next-tag">{text.next.focus}</span>
           <time>{nextTime(focusEvent.at, formatTime)}</time>
         </div>
-        <h3>{nextTitle(focusEvent, eventTitles)}</h3>
+        <h3>{nextTitle(focusEvent, eventTitles, locale)}</h3>
         <p className="mi-brief-poster__next-meta">{nextMeta(focusEvent, text)}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
         {watchScenarios.length > 0 || watchBaseline ? <div className="mi-brief-poster__next-watch-block">
@@ -167,7 +168,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         {otherEvents.map((item) => <div className="mi-brief-poster__next-row" key={item.eventKey}>
           <time>{nextTime(item.at, formatTime)}</time>
           <div>
-            <b>{nextCountry(item, text) ? `${nextCountry(item, text)} · ` : ''}{nextTitle(item, eventTitles)}</b>
+            <b>{nextCountry(item, text) ? `${nextCountry(item, text)} · ` : ''}{nextTitle(item, eventTitles, locale)}</b>
             <span className="mi-brief-poster__next-pill">{text.next.importance[item.importance]}</span>
           </div>
           <span>{[item.consensus ? `${text.next.expected} ${item.consensus}` : '', item.previous ? `${text.next.previous} ${item.previous}` : ''].filter(Boolean).join(' · ')}</span>
@@ -207,13 +208,9 @@ function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingT
   return change || (row.observedAt ? formatTime(row.observedAt, 'minute') : '')
 }
 
-function shortenEventTitle(value: string): string {
-  return value
-    .replace(/制造业采购经理人指数/g, '制造业 PMI')
-    .replace(/采购经理人指数/g, 'PMI')
-    .replace(/消费者物价指数/g, 'CPI')
-    .replace(/生产者物价指数/g, 'PPI')
-    .replace(/非农就业人口变动/g, '非农就业')
+function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles: Record<string, string> | undefined, locale: 'zh-CN' | 'en-US'): string {
+  const raw = eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
+  return shortenEventTitle(raw, locale)
 }
 
 function nextTime(value: string, formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
@@ -232,11 +229,6 @@ function comparisonText(doc: DailyBriefingDocument, text: DailyBriefingText, loc
   if (comparison.etfBtcDelta !== undefined) parts.push(text.comparison.etf.replace('{value}', formatBriefingValue({ number: comparison.etfBtcDelta, format: 'flow-usd' }, '—', locale)))
   if (comparison.newMacroEvents) parts.push(text.comparison.newMacro.replace('{count}', String(comparison.newMacroEvents)))
   return `${text.comparison.label} · ${parts.join(' · ')}`
-}
-
-function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
-  const raw = eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
-  return shortenEventTitle(raw)
 }
 
 function macroCountry(item: DailyBriefingDocument['news']['macro'][number], text: DailyBriefingText): string {
