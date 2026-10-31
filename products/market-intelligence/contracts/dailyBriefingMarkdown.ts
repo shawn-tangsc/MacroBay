@@ -105,7 +105,12 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
 function dataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
   // The copy must agree with the screen: hidden data rows are audited, not rendered.
   return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
-    .filter((row) => row.visibility !== 'hidden')
+    .filter((row) => row.visibility !== 'hidden' && hasChangeToShow(row))
+}
+
+/** A change-led row with no comparable earlier value is omitted, never shown as a bare level. */
+export function hasChangeToShow(row: BriefingMarketRow | BriefingPulseRow): boolean {
+  return row.id !== 'stablecoin' && row.id !== 'fear-greed' ? true : row.change !== null
 }
 
 /**

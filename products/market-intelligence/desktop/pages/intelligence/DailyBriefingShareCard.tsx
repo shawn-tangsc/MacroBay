@@ -3,6 +3,7 @@ import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
+import { hasChangeToShow } from '../../../contracts/dailyBriefingMarkdown'
 import { withWindowHours } from './dailyBriefingWindowText'
 
 /**
@@ -21,7 +22,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
   // The data region is a selection, not a dump: a row the editor did not include stays out of the
   // poster even when its value is present, and a hidden row's reason lives only in the audit.
-  const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])]
+  const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])].filter(hasChangeToShow)
     .filter((row) => row.visibility !== 'hidden')
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
