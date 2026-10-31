@@ -160,3 +160,49 @@ function okxConfig(sourceId: 'okx-latest-announcements' | 'okx-api-announcements
     hasCredential: false
   }).config
 }
+
+describe('Polymarket connectivity probe', () => {
+  const config = (): IntelligenceSourceConfig => ({
+    sourceId: 'policy-path-market',
+    sourceName: 'FOMC decision market',
+    sourceGroup: 'macro-regulation',
+    adapterType: 'rest-api-poller',
+    executionMode: 'polling',
+    enabled: true,
+    category: 'macro',
+    trustLevel: 'high',
+    language: 'en',
+    endpointUrl: 'https://gamma-api.polymarket.com',
+    parserStrategy: 'policy-path-market-v1',
+    authMode: 'none',
+    supportsRunNow: false,
+    supportsCredentialTest: false,
+    defaultScopePolicy: 'all',
+    scopePolicy: 'all',
+    defaultCollectionPreset: 'manual',
+    collectionPreset: 'manual',
+    adapterConfig: { endpointUrl: 'https://gamma-api.polymarket.com' },
+    requestGovernance: undefined
+  } as never)
+
+  it('passes only when the search endpoint answers with Fed events', async () => {
+    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: JSON.stringify({ events: [{ slug: 'fed-decision-in-december' }] }) } as never)
+    const ok = await probeIntelligenceSourceConnection(config())
+    expect(ok.ok).toBe(true)
+    expect(ok.message).toContain('1 Fed events')
+
+    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: JSON.stringify({ events: [] }) } as never)
+    expect((await probeIntelligenceSourceConnection(config())).ok).toBe(false)
+
+    mockedHttpRequest.mockResolvedValueOnce({ status: 403, bodyText: '' } as never)
+    expect((await probeIntelligenceSourceConnection(config())).ok).toBe(false)
+  })
+
+  it('probes the search endpoint, not the API root', async () => {
+    mockedHttpRequest.mockResolvedValueOnce({ status: 200, bodyText: JSON.stringify({ events: [{}] }) } as never)
+    await probeIntelligenceSourceConnection(config())
+    expect(mockedHttpRequest.mock.calls.at(-1)?.[0]).toMatchObject({
+      url: expect.stringContaining('/public-search?q=fed%20decision')
+    })
+  })
+})

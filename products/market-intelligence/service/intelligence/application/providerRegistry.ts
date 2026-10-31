@@ -141,7 +141,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
       displayName: 'FOMC decision market',
       panels: ['dashboard'],
       collection: 'none',
-      capabilities: { runNow: 'none', testConnection: false },
+      capabilities: { runNow: 'none', testConnection: true },
       adapterRef: 'policy-path-market'
     })]
   }),
