@@ -535,6 +535,7 @@ export const productText = {
               settlementDovish: '相对定价偏鸽 -{value}pp',
               settlementConclusionMissing: '结算结论不可得（决议前 1 小时无观测）',
               judgedLabel: '已判定 · 上次相对定价',
+              judgedUnavailableLabel: '上次决议 · 结算结论',
               judgedPriced: '已定价',
               judgedHawkish: '偏鹰 +{value}pp',
               judgedDovish: '偏鸽 -{value}pp',
@@ -720,6 +721,18 @@ export const productText = {
                   keepRunning: '保持应用在生成时间运行；错过时会在下次打开补生成。',
                   system: '重新生成；若反复失败，检查本地存储和运行状态。'
                 }
+              },
+              generationTrace: {
+                title: '生成阶段',
+                completed: '已完成',
+                failed: '失败',
+                attempt: '本次尝试',
+                duration: '耗时 {duration}',
+                failedAt: '失败于：{stage}',
+                notRecorded: '未记录',
+                states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录' },
+                stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '字段响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
+                durationUnits: { milliseconds: '{count} ms', seconds: '{count} 秒', minutes: '{count} 分 {seconds} 秒' }
               },
               failurePanel: {
                 editorialTitle: 'AI 编辑失败，日报未生成',
@@ -2168,6 +2181,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               settlementDovish: 'vs. pricing: dovish -{value}pp',
               settlementConclusionMissing: 'No conclusion (no observation in the hour before)',
               judgedLabel: 'Assessed · last decision vs. pricing',
+              judgedUnavailableLabel: 'Last decision · settlement',
               judgedPriced: 'Priced in',
               judgedHawkish: 'hawkish +{value}pp',
               judgedDovish: 'dovish -{value}pp',
@@ -2353,6 +2367,18 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   keepRunning: 'Keep the app running at the generation time; a missed run is caught up on the next open.',
                   system: 'Regenerate; if it keeps failing, check local storage and runtime status.'
                 }
+              },
+              generationTrace: {
+                title: 'Generation stages',
+                completed: 'Completed',
+                failed: 'Failed',
+                attempt: 'This attempt',
+                duration: 'Took {duration}',
+                failedAt: 'Failed at: {stage}',
+                notRecorded: 'Not recorded',
+                states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded' },
+                stages: { source: 'Data collection', candidates: 'Candidate pool', selection: 'AI selection', 'field-backfill': 'Field response/backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', store: 'Store/publish' },
+                durationUnits: { milliseconds: '{count} ms', seconds: '{count} s', minutes: '{count} min {seconds} s' }
               },
               failurePanel: {
                 editorialTitle: 'AI editing failed, so the brief was not generated',

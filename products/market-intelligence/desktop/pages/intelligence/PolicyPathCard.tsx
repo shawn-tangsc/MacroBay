@@ -2,7 +2,7 @@ import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
 
-import { POLICY_PATH_OUTCOME_ORDER, formatSignedPp } from '../../../contracts/policyPath'
+import { POLICY_PATH_OUTCOME_ORDER, namedOutcomes, formatSignedPp } from '../../../contracts/policyPath'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { conclusionView, judgedView, percentOf, settledFor } from './policyPathSettlementText'
@@ -45,14 +45,13 @@ export type PolicyPathCardText = Readonly<{
   settlementConclusionMissing: string
   /** The verdict line under the facts: what the last decision was, against what was priced. */
   judgedLabel: string; judgedPriced: string; judgedHawkish: string; judgedDovish: string
+  /** The prefix when there is no conclusion to state: "已判定" would promise one. */
+  judgedUnavailableLabel: string
   newTargetRange: string; voteTally: string
   settledMinutes: string; settledHours: string
   /** The last decision's direction, for the "last" row when the settlement knows it. */
   decisionHike: string; decisionCut: string
 }>
-
-/** At or below this share a bucket is folded into "其他": naming a 5% band costs a line and adds nothing. */
-const POLICY_PATH_CARD_SHARE_FLOOR = 0.05
 
 const signedCount = (value: number): string => `${value > 0 ? '+' : ''}${value}`
 
@@ -93,8 +92,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   // card says "hike or hold" without turning into a table. The full ramp lives in the drawer.
   const named = distribution === undefined
     ? undefined
-    : [...POLICY_PATH_OUTCOME_ORDER]
-      .filter((outcome) => distribution[outcome] > POLICY_PATH_CARD_SHARE_FLOOR)
+    : namedOutcomes(distribution)
       // The leading answer comes first; ties keep the dovish-to-hawkish reading order.
       .sort((left, right) => distribution[right] - distribution[left])
       .map((outcome) => ({ outcome, share: distribution[outcome] }))
@@ -196,6 +194,14 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
           </span>}
         </p>}
 
+    {named === undefined || strip ? null : <span className="mi-policy-card__bar" aria-hidden="true">
+      {/* Left to right by share, then everything folded away as one grey block at the end: the bar
+          and the line under it say the same thing in the same order. */}
+      {named.map(({ outcome, share }) => <i key={outcome} data-outcome={outcome}
+        style={{ width: `${share * 100}%` }} />)}
+      {rest > 0 ? <i data-outcome="other" style={{ width: `${rest * 100}%` }} /> : null}
+    </span>}
+
     {named === undefined || strip ? null : <p className="mi-policy-card__mix">
       {named.map(({ outcome, share }) => <span key={outcome} data-outcome={outcome}>
         <em>{text.shortOutcomes[outcome]}</em> <b>{percentOf(share)}</b>
@@ -218,7 +224,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     {/* The verdict survives the strip as one clickable grey line: the full explanation lives in the
         drawer, so the card keeps the normal reading position and only adds a memory. */}
     {phase.kind === 'verdict' && judged ? <button type="button" className="mi-policy-card__judged" onClick={onOpen}>
-      <span>{text.judgedLabel}</span>
+      <span>{judged.direction === 'missing' ? text.judgedUnavailableLabel : text.judgedLabel}</span>
       <b data-direction={judged.direction}>{judged.label}</b>
     </button> : null}
 
