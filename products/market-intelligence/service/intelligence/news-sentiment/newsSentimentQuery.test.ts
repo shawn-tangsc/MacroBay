@@ -107,6 +107,43 @@ describe('newsSentimentQuery', () => {
   })
 })
 
+describe('seven-day window', () => {
+  // Regression: '7d' is not a sentiment horizon, so the aggregate filtered every signal out and
+  // reported "0 directional / score 0 / neutral" for a window full of directional items. The query
+  // now publishes no summary at all for windows it cannot express — absence, not a fake zero.
+  it('returns the items but publishes no summary it cannot compute', async () => {
+    const store = seed()
+    store.upsertSentiment({
+      itemId: 'item-3d',
+      sourceId: 'coindesk-rss',
+      publishedAt: '2026-10-21T12:00:00.000Z',
+      scoredAt: '2026-10-21T12:05:00.000Z',
+      polarity: 'bearish',
+      strength: 5,
+      confidence: 80,
+      symbols: ['BTC'],
+      reasonCode: 'exploit',
+      engine: 'model',
+      modelRef: 'p:m',
+      promptVersion: 'news-polarity-v1',
+      caveats: []
+    })
+    const view = await createNewsSentimentQuery({
+      store,
+      pipeline: { listItems: () => [...ITEMS, { itemId: 'item-3d', sourceId: 'coindesk-rss', title: 'Exchange exploit', publishedAt: '2026-10-21T12:00:00.000Z' }] as never },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '7d' })
+    expect(view.state).toBe('available')
+    expect(view.items.map((item) => item.itemId)).toContain('item-3d')
+    expect(view.summary).toBeUndefined()
+  })
+
+  it('still summarizes the windows that have a real horizon', async () => {
+    const view = await query(seed()).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+    expect(view.summary?.directionalCount).toBeGreaterThan(0)
+  })
+})
+
 describe('all-time window', () => {
   it('returns rows older than seven days', async () => {
     const store = seed()

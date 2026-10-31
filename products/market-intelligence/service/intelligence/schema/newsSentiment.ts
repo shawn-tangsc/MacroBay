@@ -51,6 +51,23 @@ export const OKX_SENTIMENT_ANN_TYPES = [
 
 export const NEWS_SENTIMENT_WINDOWS: readonly NewsSentimentWindow[] = ['1h', '4h', '24h', '7d']
 
+/**
+ * 只有这三个窗口能产出汇总分：既有情绪聚合（`aggregateSentimentSignals`）的 horizon 只有
+ * `15m/1h/4h/24h`，7d 与 all 没有对应 horizon。7d 曾被原样当成 horizon 传进去，聚合按
+ * `ageMs <= undefined` 把每条信号都滤掉——于是「7 天里有 66 条方向性标题」被写成
+ * `directionalCount: 0` / `score: 0` / `label: neutral`。这不是「今天平静」，是把「算不了」
+ * 说成了 0（170 §2「缺失必须具名、不补零」）。宁可没有 summary，也不给假读数。
+ */
+export const NEWS_SENTIMENT_AGGREGATE_WINDOWS = ['1h', '4h', '24h'] as const
+
+export type NewsSentimentAggregateWindow = (typeof NEWS_SENTIMENT_AGGREGATE_WINDOWS)[number]
+
+export function isNewsSentimentAggregateWindow(
+  window: NewsSentimentWindow
+): window is NewsSentimentAggregateWindow {
+  return (NEWS_SENTIMENT_AGGREGATE_WINDOWS as readonly string[]).includes(window)
+}
+
 export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, number>> = {
   '1h': 60 * 60 * 1000,
   '4h': 4 * 60 * 60 * 1000,

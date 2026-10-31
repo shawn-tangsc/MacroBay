@@ -1,11 +1,13 @@
 import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 import { aggregateSentimentSignals } from '../application/sentimentScoring'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
-import type { IntelligenceSentimentHorizon, SentimentSignalInput } from '../schema/intelligenceSentiment'
+import type { SentimentSignalInput } from '../schema/intelligenceSentiment'
 import {
   NEWS_SENTIMENT_CAVEATS,
   NEWS_SENTIMENT_WINDOW_MS,
+  isNewsSentimentAggregateWindow,
   type NewsPolarity,
+  type NewsSentimentAggregateWindow,
   type NewsSentimentQuery,
   type NewsSentimentRecord,
   type NewsSentimentSymbol,
@@ -130,7 +132,11 @@ export function createNewsSentimentQuery(deps: {
             bodyTranslationState: (body?.state === 'translated' || body?.state === 'failed' ? body.state : 'missing') as NewsSentimentItemView['bodyTranslationState']
           }
         })
-        const aggregate = window === 'all' ? undefined : aggregateView(visible, itemsById, input, asOf)
+        // Only windows the existing aggregate can express get a summary. 7d and all have no
+        // horizon, and guessing one would publish a number the list contradicts.
+        const aggregate = isNewsSentimentAggregateWindow(window)
+          ? aggregateView(visible, itemsById, input, asOf, window)
+          : undefined
         const caveats = [...new Set(visible.flatMap((row) => row.caveats))]
 
         return {
@@ -191,13 +197,14 @@ function aggregateView(
   rows: NewsSentimentRecord[],
   itemsById: Map<string, { sourceCategory?: string; sourceTrust?: string }>,
   input: NewsSentimentQuery,
-  asOf: string
+  asOf: string,
+  window: NewsSentimentAggregateWindow
 ) : { label: NonNullable<NewsSentimentView['summary']>['label']; score: number; directionalCount: number; sourceBreakdown: Record<string, number> } {
   const scopeType = input.scope === 'BTC' || input.scope === 'ETH' ? 'symbol' : 'crypto-market'
   const scopeKey = scopeType === 'symbol' ? input.scope! : 'global'
-  const signals = rows.map((row) => toSignal(row, itemsById.get(row.itemId), scopeType, scopeKey, input.window))
+  const signals = rows.map((row) => toSignal(row, itemsById.get(row.itemId), scopeType, scopeKey, window))
   const aggregate = aggregateSentimentSignals(
-    { scopeType, scopeKey, horizon: input.window as IntelligenceSentimentHorizon, signals },
+    { scopeType, scopeKey, horizon: window, signals },
     Date.parse(asOf)
   )
   return {
@@ -213,14 +220,14 @@ function toSignal(
   item: { sourceCategory?: string; sourceTrust?: string } | undefined,
   scopeType: 'crypto-market' | 'symbol',
   scopeKey: string,
-  window: NewsSentimentWindow
+  window: NewsSentimentAggregateWindow
 ): SentimentSignalInput {
   return {
     signalId: `news:${row.itemId}:${scopeType}:${scopeKey}:${window}`,
     itemId: row.itemId,
     scopeType,
     scopeKey,
-    horizon: (window === 'all' ? '24h' : window) as IntelligenceSentimentHorizon,
+    horizon: window,
     sourceGroup: item?.sourceCategory ?? row.sourceId,
     sentimentLabel: polarityToLabel(row.polarity),
     strength: row.strength,
