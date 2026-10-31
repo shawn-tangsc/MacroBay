@@ -164,12 +164,13 @@ it at 21:00 should produce two different, defensible answers — not one answer 
 
 ## Data sources
 
-30+ curated sources, chosen because crypto is where free and low-cost data is actually good enough:
-exchange announcements and API changes (Binance, OKX), venue, chain status and release feeds
-(Coinbase, Kraken, Solana, GitHub releases), market data (Binance spot and futures, CoinGecko,
-DeFiLlama stablecoins and TVL, ETF flows, Fear & Greed), news and calendars (CoinDesk, CryptoPanic,
-CoinMarketCal, Ethereum Foundation), and the macro layer that sets the regime (FRED, BLS, BEA,
-Treasury, SEC, CFTC, Federal Reserve).
+Curated sources across crypto-native, market data, news and the macro layer, chosen because crypto is
+where free and low-cost data is actually good enough: exchange announcements and API changes (Binance,
+OKX), venue, chain status and release feeds (Coinbase, Kraken, Solana, GitHub releases), market data
+(Binance spot and futures, CoinGecko, DeFiLlama stablecoins and TVL, ETF flows, Fear & Greed), news
+(mainstream industry media and project official blogs, each enabled in settings as needed), and the
+macro layer that sets the regime (FRED, SEC, CFTC, Federal
+Reserve, plus the official BLS, BEA and Fed release schedules behind the calendar).
 
 Some sources need your own account, key, or network access, and coverage varies by source. Anything
 you have not enabled appears as an explicit gap — never as a neutral placeholder value.

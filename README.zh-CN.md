@@ -150,11 +150,11 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 
 ## 数据来源
 
-30 多个经过筛选的来源，选它们的理由很简单：加密恰好是免费和低成本数据足够好的领域。交易所
-公告与 API 变更（Binance、OKX）、交易所与链的状态和发布（Coinbase、Kraken、Solana、GitHub
-Releases）、市场数据（Binance 现货与合约、CoinGecko、DeFiLlama 稳定币与 TVL、ETF 流向、
-恐惧贪婪指数）、新闻与日历（CoinDesk、CryptoPanic、CoinMarketCal、Ethereum Foundation），
-以及决定大类资产环境的宏观层（FRED、BLS、BEA、Treasury、SEC、CFTC、美联储）。
+经过筛选的来源，覆盖加密原生、市场数据、新闻与宏观层，选它们的理由很简单：加密恰好是免费和低成本
+数据足够好的领域。交易所公告与 API 变更（Binance、OKX）、交易所与链的状态和发布（Coinbase、Kraken、
+Solana、GitHub Releases）、市场数据（Binance 现货与合约、CoinGecko、DeFiLlama 稳定币与 TVL、
+ETF 流向、恐惧贪婪指数）、新闻（主流行业媒体与项目官方博客，具体来源在设置里按需开启），以及决定大类资产环境的宏观层
+（FRED、SEC、CFTC、美联储，日历背后是 BLS、BEA 与美联储的官方发布日程）。
 
 部分来源需要你自己的账号、Key 或网络访问，覆盖范围也因来源而异。没有启用的来源会以明确的缺口
 呈现，绝不会被填成一个中性的占位值。
