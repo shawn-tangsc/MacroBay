@@ -258,6 +258,8 @@ export type BriefingMacroItem = Readonly<{
   titleKey?: string
   scheduledAt: string
   importance: 'high' | 'medium' | 'low'
+  countryCode?: string
+  countryName?: string
   actual?: string
   previous?: string
   consensus?: string

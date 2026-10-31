@@ -232,6 +232,8 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
     ...(event.titleKey ? { titleKey: event.titleKey } : {}),
     scheduledAt: event.scheduledAt,
     importance: event.importance,
+    ...(event.countryCode ? { countryCode: event.countryCode } : {}),
+    ...(event.countryName ? { countryName: event.countryName } : {}),
     ...(event.actual === undefined ? {} : { actual: event.actual }),
     ...(event.previous === undefined ? {} : { previous: event.previous }),
     ...(event.consensus === undefined ? {} : { consensus: event.consensus }),

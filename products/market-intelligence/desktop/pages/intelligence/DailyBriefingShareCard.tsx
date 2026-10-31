@@ -82,7 +82,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       {visibleMacro.map((item) => <div className="mi-brief-poster__macro" key={item.eventKey}>
         <span data-polarity="macro">{macroTime(item.scheduledAt, formatTime)}</span>
         <div>
-          <p>{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
+          <p>{macroCountry(item, text) ? `${macroCountry(item, text)} · ` : ''}{eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title}</p>
           <small>{text.macro.actual} {item.actual ?? '—'} · {item.consensus ? `${text.macro.consensus} ${item.consensus}` : text.macro.noConsensus}{item.previous ? ` · ${text.macro.previous} ${item.previous}` : ''}{item.surprise.direction !== 'consensus-unavailable' ? ` · ${text.macro.surprise[item.surprise.direction]}` : ''}</small>
           {item.why ? <small className="mi-brief-poster__news-reason">{item.why}</small> : null}
         </div>
@@ -238,6 +238,11 @@ function comparisonText(doc: DailyBriefingDocument, text: DailyBriefingText, loc
 function nextTitle(item: DailyBriefingDocument['next']['items'][number], eventTitles?: Record<string, string>): string {
   const raw = eventTitles && item.titleKey ? eventTitles[item.titleKey] ?? item.title : item.title
   return shortenEventTitle(raw)
+}
+
+function macroCountry(item: DailyBriefingDocument['news']['macro'][number], text: DailyBriefingText): string {
+  const code = item.countryCode ?? ''
+  return (text.countries as Record<string, string>)[code] ?? item.countryName ?? ''
 }
 
 function nextCountry(item: DailyBriefingDocument['next']['items'][number], text: DailyBriefingText): string {
