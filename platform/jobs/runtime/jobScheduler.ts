@@ -117,7 +117,31 @@ function scheduleCronTimeout(
 
   entry.timeout = setTimeout(() => {
     void handleCronTimeout(definitionId, entry, nextRunAtMs, deps)
-  }, Math.max(0, nextRunAtMs - Date.now()))
+  }, cronTimerDelayMs(nextRunAtMs, Date.now()))
+}
+
+/**
+ * `setTimeout` stores its delay in a 32-bit signed integer: anything above {@link MAX_TIMER_DELAY_MS}
+ * is clamped to 1 ms by the runtime. A monthly or yearly cron is further out than that, so handing
+ * the raw difference over would fire the job immediately — at the wrong time — and the re-arm below
+ * would fire it again and again. Capping the delay turns that into "wake up early, wait for the slot".
+ */
+export const MAX_TIMER_DELAY_MS = 2_147_483_647
+
+export function cronTimerDelayMs(nextRunAtMs: number, nowMs: number): number {
+  return Math.min(MAX_TIMER_DELAY_MS, Math.max(0, nextRunAtMs - nowMs))
+}
+
+/**
+ * Where the search for the following slot starts after one slot fired.
+ *
+ * Normally that is a minute past the slot that just ran. If the process was asleep or blocked for
+ * longer than the cadence, every slot in between is already missed: replaying them would dispatch
+ * hundreds of runs back to back (a five-minute cron after a three-day sleep is 864 runs), so the
+ * search restarts at the wake-up time and only one run happens.
+ */
+export function nextCronSearchStartMs(scheduledAtMs: number, firedAtMs: number): number {
+  return Math.max(scheduledAtMs + 60_000, firedAtMs)
 }
 
 async function handleCronTimeout(
@@ -127,9 +151,16 @@ async function handleCronTimeout(
   deps: SchedulerDependencies
 ): Promise<void> {
   if (entry.definition.trigger.kind !== 'cron') return
+  const firedAtMs = Date.now()
+  if (firedAtMs < scheduledAtMs) {
+    // Woke at the delay cap, not at the slot: re-arm for the same slot and enqueue nothing.
+    scheduleCronTimeout(definitionId, entry, scheduledAtMs, deps)
+    return
+  }
   await maybeEnqueueCron(entry.definition, deps)
-  scheduleCronTimeout(definitionId, entry, scheduledAtMs + 60_000, deps)
+  scheduleCronTimeout(definitionId, entry, nextCronSearchStartMs(scheduledAtMs, Date.now()), deps)
 }
+
 
 async function maybeEnqueueCron(definition: JobDefinition, deps: SchedulerDependencies): Promise<void> {
   if (definition.trigger.kind !== 'cron') return
