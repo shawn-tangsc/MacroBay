@@ -65,7 +65,6 @@ export const divergencePolicy = Object.freeze({
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 })
 
-export const divergencePairIds = divergencePolicy.pairs
 export type DivergencePairId = (typeof divergencePolicy.pairs)[number]
 
 export type DivergenceLegId = 'stablecoin' | 'etf' | 'open-interest' | 'funding' | 'price' | 'sentiment'

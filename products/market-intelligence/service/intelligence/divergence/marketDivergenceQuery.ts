@@ -157,11 +157,3 @@ export function readSentimentLeg(view: NewsSentimentView): DivergenceSentimentLe
     headlines
   }
 }
-
-/** Newest N sessions, oldest first: the ETF leg is a window sum, not a single day. */
-function lastSessions(rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number }>[], count: number) {
-  return [...rows]
-    .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.tradingDate) && Number.isFinite(row.netFlowUsd))
-    .sort((left, right) => left.tradingDate.localeCompare(right.tradingDate))
-    .slice(-count)
-}
