@@ -371,7 +371,7 @@ export const productText = {
                 'btc-funding-rate': { name: 'Binance Futures Positioning', description: 'BTC / ETH 永续资金费率', status: '来源设置' },
                 'stablecoin-capital-conditions': { name: 'DeFiLlama 稳定币资金面', description: '已验证的美元稳定币资金面', status: '来源设置' },
                 'zero-x-router-aggregate-provider': { name: '0xRouter', description: '聚合数据供应商配置', status: '来源设置' },
-                'policy-path-market': { name: 'Fed 决议盘口', description: '预测市场对下一次 FOMC 会议各结果档的定价；只存衍生读数与链接。', status: '来源设置' },
+                'policy-path-market': { name: 'FOMC 决议市场', description: 'Polymarket 对下一次 FOMC 会议各结果档的定价；只存衍生读数与链接。', status: '来源设置' },
                 'twelve-data-market': { name: 'Twelve Data', description: '美元（ICE 篮子合成）、黄金、离岸人民币与稳定币溢价；免费额度 8 次/分钟、800 次/天。', status: '来源设置' },
                 'realmarketapi-market': { name: 'RealMarketAPI', description: '真实 ICE 美元指数（DXY）；每 5 分钟采集一次，未配置或数据失效时回退到 ICE 篮子合成值。', status: '来源设置' }
               }
@@ -1290,13 +1290,13 @@ export const productText = {
           'macro-calendar-0xrouter-financial-events': '0xRouter 财经事件',
           'macro-calendar-0xrouter-central-bank-activities': '0xRouter 央行活动',
           'realmarketapi-market': 'RealMarketAPI 美元指数', 'twelve-data-market': 'Twelve Data 宏观行情',
-          'policy-path-market': 'Fed 决议盘口（Polymarket）',
+          'policy-path-market': 'FOMC 决议市场',
           'coinbase-status': 'Coinbase 运行状态', 'kraken-status': 'Kraken 运行状态',
           'kraken-system-status': 'Kraken 系统状态', 'solana-status': 'Solana 运行状态',
           'github-releases': 'GitHub 版本发布'
         },
         providerNames: {
-          fed: '美联储', bea: '美国经济分析局', bls: '美国劳工统计局', fred: 'FRED',
+          fed: '美联储', bea: '美国经济分析局', bls: '美国劳工统计局', fred: 'FRED', 'policy-path': 'Polymarket',
           treasury: '美国财政部', sec: '美国证监会', cftc: '美国商品期货交易委员会',
           binance: '币安', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
           'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': '以太坊基金会',
@@ -1905,7 +1905,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'btc-funding-rate': { name: 'Binance Futures Positioning', description: 'BTC / ETH perpetual funding rates', status: 'Source settings' },
                 'stablecoin-capital-conditions': { name: 'DeFiLlama Stablecoin Capital Conditions', description: 'Verified USD stablecoin capital conditions', status: 'Source settings' },
                 'zero-x-router-aggregate-provider': { name: '0xRouter', description: 'Aggregate data provider configuration', status: 'Source settings' },
-                'policy-path-market': { name: 'Fed decision markets', description: 'Implied odds for the next FOMC meeting; only derived readings and links are stored.', status: 'Source settings' },
+                'policy-path-market': { name: 'FOMC decision market', description: 'Polymarket prices for each outcome of the next FOMC meeting; only derived readings and links are stored.', status: 'Source settings' },
                 'twelve-data-market': { name: 'Twelve Data', description: 'Synthetic dollar index (ICE basket), gold, offshore yuan and the stablecoin peg; free tier 8 requests/minute, 800/day.', status: 'Source settings' },
                 'realmarketapi-market': { name: 'RealMarketAPI (real DXY)', description: 'The real ICE dollar index (DXY), collected every 5 minutes; falls back to the ICE-basket synthesis when unconfigured or stale.', status: 'Source settings' }
               }
@@ -2810,13 +2810,13 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           'macro-calendar-0xrouter-financial-events': '0xRouter financial events',
           'macro-calendar-0xrouter-central-bank-activities': '0xRouter central bank activities',
           'realmarketapi-market': 'RealMarketAPI dollar index', 'twelve-data-market': 'Twelve Data macro market data',
-          'policy-path-market': 'Fed decision markets (Polymarket)',
+          'policy-path-market': 'FOMC decision market',
           'coinbase-status': 'Coinbase status', 'kraken-status': 'Kraken status',
           'kraken-system-status': 'Kraken system status', 'solana-status': 'Solana status',
           'github-releases': 'GitHub releases'
         },
         providerNames: {
-          fed: 'Federal Reserve', bea: 'Bureau of Economic Analysis', bls: 'Bureau of Labor Statistics', fred: 'FRED',
+          fed: 'Federal Reserve', bea: 'Bureau of Economic Analysis', bls: 'Bureau of Labor Statistics', fred: 'FRED', 'policy-path': 'Polymarket',
           treasury: 'US Treasury', sec: 'US SEC', cftc: 'US CFTC',
           binance: 'Binance', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
           'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': 'Ethereum Foundation',

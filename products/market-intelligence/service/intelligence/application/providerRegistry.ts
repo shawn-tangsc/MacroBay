@@ -131,14 +131,14 @@ const providerDefinitions: readonly ProviderDefinition[] = [
   }),
   provider({
     providerId: 'policy-path',
-    displayName: 'Fed 决议盘口',
+    displayName: 'Polymarket',
     category: 'macro',
     credential: 'none',
     // The odds are collected by the product's own ten-minute job; the generic adapter must not arm a
     // second poller, and there is nothing for the reader to test.
     sources: [src({
       sourceId: 'policy-path-market',
-      displayName: 'Fed decision markets',
+      displayName: 'FOMC decision market',
       panels: ['dashboard'],
       collection: 'none',
       capabilities: { runNow: 'none', testConnection: false },
