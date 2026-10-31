@@ -189,6 +189,7 @@ export function validateDailyBriefingEditorial(
       ? watchRaw.filter((entry): entry is { condition: string; implication: string } => isExact(entry, ['condition', 'implication']) && isText(entry.condition) && isText(entry.implication))
       : []
     if (focusKey && raw.nextFocus.eventKey === focusKey && isText(raw.nextFocus.why) && raw.nextFocus.why.length <= 200 &&
+      hasBriefingNextTransmission(raw.nextFocus.why) &&
       watch.length === watchCount && watch.every((entry) => entry.condition.length <= 80 && entry.implication.length <= 160)) {
       nextFocus = Object.freeze({ eventKey: raw.nextFocus.eventKey, why: raw.nextFocus.why, watch: Object.freeze(watch.map((entry) => Object.freeze(entry))) })
     }
@@ -243,6 +244,12 @@ export function applyDailyBriefingEditorial(
   })
   const macroFloor = selectMacroFloorItem(document.news.macro)
   const highImpactShown = document.news.macro.some((item) => item.importance === 'high' && macroWhy.has(item.eventKey))
+  // Missing consensus is a data gap, not a visibility decision: a high-impact release without a
+  // consensus stays shown even if the editor tried to hide it, so the limits section can record
+  // "consensus not collected" while the reader still sees the actual and previous values.
+  const noConsensusHighImpact = new Set(document.news.macro
+    .filter((item) => item.importance === 'high' && item.consensus === undefined)
+    .map((item) => item.eventKey))
   const citations = [...document.citations, ...(editorial.webEvidence ?? []).map((ref) => Object.freeze({
     index: document.citations.length + (editorial.webEvidence ?? []).indexOf(ref) + 1,
     refId: ref.evidenceRefId,
@@ -300,6 +307,7 @@ export function applyDailyBriefingEditorial(
         : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`news:${item.itemId}`) ? { visibilityReason: hiddenReason.get(`news:${item.itemId}`)! } : {}) }))),
       macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => {
         if (macroWhy.has(item.eventKey)) return Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
+        if (noConsensusHighImpact.has(item.eventKey)) return Object.freeze({ ...item, visibility: 'shown' as const })
         // The floor is a floor: if the editorial would hide every high-impact release, the key
         // release stays visible even though the model listed it in `hidden` with a reason.
         if (!highImpactShown && macroFloor?.eventKey === item.eventKey) return Object.freeze({ ...item, visibility: 'shown' as const })
@@ -396,6 +404,15 @@ function isText(value: unknown): value is string {
 
 export function isLedePattern(value: unknown): value is import('../../../contracts/dailyBriefing').DailyBriefLedePattern {
   return value === 'event-shock' || value === 'surprise-gap' || value === 'tension' || value === 'structure' || value === 'setup' || value === 'outlier' || value === 'falsification'
+}
+
+/**
+ * A next-focus rationale has to name a transmission channel into the crypto book, not just say the
+ * event is important or imminent. The vocabulary is deliberately broad (assets and channels) so a
+ * correct sentence is not rejected for wording, while "it is the next event" is.
+ */
+export function hasBriefingNextTransmission(text: string): boolean {
+  return /\b(?:btc|eth|bitcoin|ether|crypto|stablecoins?|etfs?|on-chain|liquidity|dollar|dxy|yields?|rates?|risk assets?|risk appetite)\b|比特币|以太坊|加密|稳定币|流动性|美元|收益率|利率|风险资产|链上/i.test(text)
 }
 
 function collectToolResults(invocations: readonly AgentRuntimeToolInvocation[]): Map<string, { title: string; publishedAt?: string }> {

@@ -6,6 +6,8 @@ import type {
   BriefingNewsItem,
   BriefingNewsSummary,
   BriefingNextItem,
+  BriefingNextRelevance,
+  BriefingNextRelevanceRole,
   BriefingPulseRow,
   BriefingTopSignal,
   DailyBriefingDocument,
@@ -214,6 +216,69 @@ function toMacroItem(event: DailyBriefingCalendarEvent): BriefingMacroItem {
   })
 }
 
+const nextRelevanceByRole: Readonly<Record<BriefingNextRelevanceRole, Readonly<{ score: number; reasonCode: string }>>> = Object.freeze({
+  // A crypto desk prices policy first: the fed funds path sets the discount rate and the dollar for
+  // both assets. Inflation, ETF flows and stablecoin supply are the next direct channels; regional
+  // growth (China PMI) and commodity supply (OPEC) only transmit through a second step.
+  'rate-policy': Object.freeze({ score: 100, reasonCode: 'policy-rate-path' }),
+  'exchange-risk': Object.freeze({ score: 98, reasonCode: 'exchange-counterparty-risk' }),
+  inflation: Object.freeze({ score: 94, reasonCode: 'inflation-discount-rate' }),
+  etf: Object.freeze({ score: 92, reasonCode: 'etf-flow' }),
+  stablecoin: Object.freeze({ score: 90, reasonCode: 'stablecoin-liquidity' }),
+  labor: Object.freeze({ score: 88, reasonCode: 'labor-wage-growth' }),
+  regulation: Object.freeze({ score: 86, reasonCode: 'crypto-regulation' }),
+  liquidity: Object.freeze({ score: 78, reasonCode: 'dollar-liquidity' }),
+  'asia-risk': Object.freeze({ score: 45, reasonCode: 'asia-growth-spillover' }),
+  commodity: Object.freeze({ score: 40, reasonCode: 'commodity-inflation-spillover' })
+})
+
+type NextRelevanceInput = Readonly<{
+  eventKey: string
+  title: string
+  titleKey?: string
+  countryCode?: string
+}>
+
+/**
+ * The deterministic crypto-relevance read of one scheduled event.
+ *
+ * Matching is on the provider's English key, not on display prose, so a translated title does not
+ * change the ranking. The role is the event's transmission channel; the score orders the next list
+ * and is the fallback focus when the editor does not choose one.
+ */
+export function scoreBriefingNextRelevance(event: NextRelevanceInput): BriefingNextRelevance {
+  const text = `${event.eventKey} ${event.titleKey ?? ''} ${event.title}`.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+  const role = classifyNextEvent(text, event.countryCode)
+  const weights = nextRelevanceByRole[role]
+  return Object.freeze({ role, score: weights.score, reasonCode: weights.reasonCode })
+}
+
+function classifyNextEvent(text: string, countryCode: string | undefined): BriefingNextRelevanceRole {
+  if (/(?:^| )etfs?(?: |$)|spot bitcoin|spot ether|spot crypto|grayscale|ishares/.test(text)) return 'etf'
+  if (/stablecoin|usdt|usdc|tether|depeg|circle/.test(text)) return 'stablecoin'
+  if (/exchange hack|hacked|exploit|insolven|bankrupt|withdrawal (?:halt|freeze)|outage|delist|binance|coinbase|kraken|okx|bybit/.test(text)) return 'exchange-risk'
+  if (/(?:^| )sec(?: |$)|cftc|regulat|lawsuit|enforcement|crypto (?:bill|law)|legislation|(?:^| )ban(?: |$)/.test(text)) return 'regulation'
+  if (/(?:^| )fomc(?: |$)|federal reserve|(?:^| )fed(?: |$)|rate decision|interest rate|rate hike|rate cut|ecb|bank of japan|(?:^| )boj(?: |$)|bank of england|(?:^| )boe(?: |$)|美联储|利率|议息/.test(text)) return 'rate-policy'
+  // PMI alone is not automatically Asian: US ISM PMI transmits through the dollar like any other
+  // growth print. China (and the region's own policy/credit events) is the `asia-risk` role.
+  if (countryCode === 'CN' || /(?:^| )china(?: |$)|(?:^| )cn(?: |$)|caixin|pboc|hong kong|taiwan|evergrande|中国|采购经理/.test(text)) return 'asia-risk'
+  if (/(?:^| )cpi(?: |$)|(?:^| )pce(?: |$)|inflation|consumer price|producer price|(?:^| )ppi(?: |$)|hicp|通胀|物价/.test(text)) return 'inflation'
+  if (/non ?farm|payroll|unemployment|jobless|employment|average hourly|wage|(?:^| )adp(?: |$)|jolts|非农|就业|失业|时薪/.test(text)) return 'labor'
+  if (/treasury (?:auction|refunding)|(?:^| )(?:note|bond) auction(?: |$)|auction|debt ceiling|(?:^| )repo(?: |$)|balance sheet|(?:^| )qt(?: |$)|(?:^| )qe(?: |$)|(?:^| )tga(?: |$)|liquidity|流动性|拍卖/.test(text)) return 'liquidity'
+  if (/(?:^| )opec|crude|(?:^| )oil(?: |$)|natural gas|commodit|欧佩克|石油|原油/.test(text)) return 'commodity'
+  return 'liquidity'
+}
+
+/**
+ * Relevance first, then the nearest event. Equal relevance and equal time fall back to the event
+ * key so the list is stable across runs instead of depending on provider row order.
+ */
+export function compareBriefingNextRelevance(left: BriefingNextItem, right: BriefingNextItem): number {
+  const score = (right.relevance?.score ?? 0) - (left.relevance?.score ?? 0)
+  if (score !== 0) return score
+  return left.at.localeCompare(right.at) || left.eventKey.localeCompare(right.eventKey)
+}
+
 function selectNextCandidates(packet: DailyBriefingFactPacket): readonly BriefingNextItem[] {
   if (packet.calendar.state !== 'available') return Object.freeze([] as const)
   const today = localDate(packet.windowEnd, packet.timeZone)
@@ -225,7 +290,6 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
       const day = localDate(event.scheduledAt, packet.timeZone)
       return Number.isFinite(at) && at > Date.parse(packet.windowEnd) && day <= horizon
     })
-    .sort((left, right) => left.scheduledAt.localeCompare(right.scheduledAt))
     .map((event) => Object.freeze({
       eventKey: event.eventKey,
       title: event.title,
@@ -236,14 +300,23 @@ function selectNextCandidates(packet: DailyBriefingFactPacket): readonly Briefin
       ...(event.countryCode ? { countryCode: event.countryCode } : {}),
       ...(event.countryName ? { countryName: event.countryName } : {}),
       ...(event.consensus ? { consensus: event.consensus } : {}),
-      ...(event.previous ? { previous: event.previous } : {})
+      ...(event.previous ? { previous: event.previous } : {}),
+      relevance: scoreBriefingNextRelevance(event)
     }))
+    .sort(compareBriefingNextRelevance)
   return Object.freeze(candidates)
 }
 
+/**
+ * The deterministic focus is the most crypto-relevant event, never the nearest. The editor may
+ * still choose a lower-ranked event in the selection round, but only with a stated BTC/ETH
+ * transmission; otherwise this relevance order stands.
+ */
 function selectNext(packet: DailyBriefingFactPacket, candidates: readonly BriefingNextItem[]): Readonly<{ items: readonly BriefingNextItem[]; focus?: BriefingNextItem }> {
-  const focus = candidates[0]
-  const items = candidates.filter((item) => item.eventKey !== focus?.eventKey).slice(0, dailyBriefingPolicy.maximumNextItems)
+  const ordered = [...candidates].sort(compareBriefingNextRelevance)
+  const focus = ordered[0]
+  // `maximumNextItems` caps the events after the focus, so the rendered list is focus + 3 = 4.
+  const items = ordered.filter((item) => item.eventKey !== focus?.eventKey).slice(0, dailyBriefingPolicy.maximumNextItems)
   return Object.freeze({ items: Object.freeze(items), ...(focus ? { focus } : {}) })
 }
 

@@ -164,6 +164,25 @@ const policyPath = (
   staleness: 'live'
 })
 
+const scheduledEvent = (overrides: Readonly<{
+  eventKey: string
+  title: string
+  scheduledAt: string
+  category?: 'economic-indicator' | 'financial-event' | 'central-bank-activity'
+  countryCode?: string
+  countryName?: string
+}>) => ({
+  eventKey: overrides.eventKey,
+  title: overrides.title,
+  scheduledAt: overrides.scheduledAt,
+  importance: 'high' as const,
+  lifecycleState: 'scheduled' as const,
+  category: overrides.category ?? 'economic-indicator' as const,
+  ...(overrides.countryCode ? { countryCode: overrides.countryCode } : {}),
+  ...(overrides.countryName ? { countryName: overrides.countryName } : {}),
+  surprise: { direction: 'consensus-unavailable' as const }
+})
+
 describe('daily briefing document', () => {
   it('builds the six readings, market rows, news, macro, next and conclusion', () => {
     const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
@@ -205,6 +224,30 @@ describe('daily briefing document', () => {
     expect(document.conclusion?.invalidations).toHaveLength(1)
     expect(document.lede.source).toBe('template')
     expect(document.lede.text).toBe('')
+  })
+
+  it('keeps a released high-impact event without consensus in the macro list', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [{
+            eventKey: 'US.PPI', title: 'ppi', scheduledAt: '2026-10-29T12:30:00.000Z', importance: 'high',
+            lifecycleState: 'released', category: 'economic-indicator', actual: '0.4%', previous: '0.2%',
+            surprise: { direction: 'consensus-unavailable' }
+          }]
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    // No consensus must not remove or downgrade the release: it stays a high-impact macro fact the
+    // limits section can report as a consensus gap.
+    expect(document.news.macro).toHaveLength(1)
+    expect(document.news.macro[0]).toMatchObject({ eventKey: 'US.PPI', importance: 'high', actual: '0.4%', previous: '0.2%' })
+    expect(document.news.macro[0]?.consensus).toBeUndefined()
+    expect(document.news.macro[0]?.surprise.direction).toBe('consensus-unavailable')
+    expect(document.news.macro[0]?.visibility).toBeUndefined()
   })
 
   it('records the packet window that generation actually read', () => {
@@ -365,6 +408,111 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
     expect(document.next.candidates?.map((item) => item.eventKey)).toEqual(['US.AHE', 'US.NFP'])
+  })
+
+  it('gives every next candidate a crypto transmission role and ranks policy over regional growth', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [
+            scheduledEvent({ eventKey: 'US.FOMC', title: 'FOMC rate decision', scheduledAt: '2026-11-02T18:00:00.000Z', category: 'central-bank-activity' }),
+            scheduledEvent({ eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-11-03T12:30:00.000Z' }),
+            scheduledEvent({ eventKey: 'US.NONFARM_PAYROLLS', title: 'Nonfarm payrolls', scheduledAt: '2026-11-06T12:30:00.000Z' }),
+            scheduledEvent({ eventKey: 'US.10Y_AUCTION', title: '10-year Treasury auction', scheduledAt: '2026-11-04T17:00:00.000Z', category: 'financial-event' }),
+            scheduledEvent({ eventKey: 'US.SPOT_BITCOIN_ETF', title: 'Spot Bitcoin ETF decision', scheduledAt: '2026-11-05T20:00:00.000Z', category: 'financial-event' }),
+            scheduledEvent({ eventKey: 'US.SEC_CRYPTO_RULE', title: 'SEC crypto rule', scheduledAt: '2026-11-05T21:00:00.000Z', category: 'financial-event' }),
+            scheduledEvent({ eventKey: 'US.STABLECOIN_BILL', title: 'Stablecoin regulation bill', scheduledAt: '2026-11-04T15:00:00.000Z', category: 'financial-event' }),
+            scheduledEvent({ eventKey: 'GLOBAL.EXCHANGE_HACK', title: 'Major exchange hack', scheduledAt: '2026-11-03T08:00:00.000Z', category: 'financial-event' }),
+            scheduledEvent({ eventKey: 'CN.NBS_PMI', title: 'China NBS Manufacturing PMI', scheduledAt: '2026-10-31T01:00:00.000Z', countryCode: 'CN', countryName: 'China' }),
+            scheduledEvent({ eventKey: 'GLOBAL.OPEC_MEETING', title: 'OPEC+ meeting', scheduledAt: '2026-11-01T10:00:00.000Z', category: 'financial-event' })
+          ]
+        }
+      }),
+      date: '2026-10-30'
+    })
+    const role = (eventKey: string) => document.next.candidates?.find((item) => item.eventKey === eventKey)?.relevance
+    const score = (eventKey: string) => role(eventKey)?.score ?? 0
+
+    expect(role('US.FOMC')?.role).toBe('rate-policy')
+    expect(role('US.CPI')?.role).toBe('inflation')
+    expect(role('US.NONFARM_PAYROLLS')?.role).toBe('labor')
+    expect(role('US.10Y_AUCTION')?.role).toBe('liquidity')
+    expect(role('US.SPOT_BITCOIN_ETF')?.role).toBe('etf')
+    expect(role('US.SEC_CRYPTO_RULE')?.role).toBe('regulation')
+    expect(role('US.STABLECOIN_BILL')?.role).toBe('stablecoin')
+    expect(role('GLOBAL.EXCHANGE_HACK')?.role).toBe('exchange-risk')
+    expect(role('CN.NBS_PMI')?.role).toBe('asia-risk')
+    expect(role('GLOBAL.OPEC_MEETING')?.role).toBe('commodity')
+    // Policy, inflation, labor, auctions, ETF, regulation and stablecoins all outrank the regional
+    // spillovers; the earliest event (China PMI) is not the focus.
+    for (const key of ['US.FOMC', 'US.CPI', 'US.NONFARM_PAYROLLS', 'US.10Y_AUCTION', 'US.SPOT_BITCOIN_ETF', 'US.SEC_CRYPTO_RULE', 'US.STABLECOIN_BILL']) {
+      expect(score(key), key).toBeGreaterThan(score('CN.NBS_PMI'))
+      expect(score(key), key).toBeGreaterThan(score('GLOBAL.OPEC_MEETING'))
+    }
+    expect(score('US.FOMC')).toBeGreaterThan(score('US.CPI'))
+    expect(score('US.CPI')).toBeGreaterThan(score('US.NONFARM_PAYROLLS'))
+    expect(document.next.focus?.eventKey).toBe('US.FOMC')
+  })
+
+  it('keeps the most relevant event as focus when a regional event is earlier', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [
+            scheduledEvent({ eventKey: 'CN.NBS_PMI', title: 'China NBS Manufacturing PMI', scheduledAt: '2026-10-31T01:00:00.000Z', countryCode: 'CN', countryName: 'China' }),
+            scheduledEvent({ eventKey: 'US.FOMC', title: 'FOMC', scheduledAt: '2026-11-02T18:00:00.000Z', category: 'central-bank-activity' })
+          ]
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.next.focus?.eventKey).toBe('US.FOMC')
+    expect(document.next.candidates?.map((item) => item.eventKey)).toEqual(['US.FOMC', 'CN.NBS_PMI'])
+    expect(document.next.items.map((item) => item.eventKey)).toEqual(['CN.NBS_PMI'])
+  })
+
+  it('takes the nearest event when two candidates share a relevance score', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [
+            scheduledEvent({ eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-11-03T12:30:00.000Z' }),
+            scheduledEvent({ eventKey: 'US.CORE_CPI', title: 'Core CPI', scheduledAt: '2026-11-02T12:30:00.000Z' })
+          ]
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.next.candidates?.map((item) => item.eventKey)).toEqual(['US.CORE_CPI', 'US.CPI'])
+    expect(document.next.focus?.eventKey).toBe('US.CORE_CPI')
+  })
+
+  it('caps the focus plus the next list at four events, ordered by relevance then time', () => {
+    const document = buildDailyBriefingDocument({
+      packet: packet({
+        calendar: {
+          state: 'available',
+          events: [
+            scheduledEvent({ eventKey: 'CN.NBS_PMI', title: 'China NBS Manufacturing PMI', scheduledAt: '2026-10-31T01:00:00.000Z', countryCode: 'CN', countryName: 'China' }),
+            scheduledEvent({ eventKey: 'GLOBAL.OPEC_MEETING', title: 'OPEC+ meeting', scheduledAt: '2026-11-01T10:00:00.000Z', category: 'financial-event' }),
+            scheduledEvent({ eventKey: 'US.FOMC', title: 'FOMC', scheduledAt: '2026-11-02T18:00:00.000Z', category: 'central-bank-activity' }),
+            scheduledEvent({ eventKey: 'US.CPI', title: 'CPI', scheduledAt: '2026-11-03T12:30:00.000Z' }),
+            scheduledEvent({ eventKey: 'US.NONFARM_PAYROLLS', title: 'Nonfarm payrolls', scheduledAt: '2026-11-06T12:30:00.000Z' })
+          ]
+        }
+      }),
+      date: '2026-10-30'
+    })
+
+    expect(document.next.focus?.eventKey).toBe('US.FOMC')
+    expect(document.next.items.map((item) => item.eventKey)).toEqual(['US.CPI', 'US.NONFARM_PAYROLLS', 'CN.NBS_PMI'])
+    expect([document.next.focus, ...document.next.items]).toHaveLength(4)
+    expect(document.next.candidates?.map((item) => item.eventKey)).toContain('GLOBAL.OPEC_MEETING')
   })
 
   it('keeps a readable document when the market sources are absent', () => {

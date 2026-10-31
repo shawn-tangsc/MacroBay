@@ -273,6 +273,27 @@ export type BriefingMacroItem = Readonly<{
   visibilityReason?: string
 }>
 
+/**
+ * The transmission channel a scheduled event uses to reach BTC/ETH. Policy, inflation, labor,
+ * liquidity, ETF flows, regulation, stablecoins and exchange risk are the channels a crypto desk
+ * trades; `asia-risk` and `commodity` are regional spillovers that only matter when the read names
+ * that transmission, so they rank below the crypto-native channels by default.
+ */
+export const briefingNextRelevanceRoles = [
+  'rate-policy', 'inflation', 'labor', 'liquidity', 'etf', 'regulation',
+  'stablecoin', 'exchange-risk', 'asia-risk', 'commodity'
+] as const
+
+export type BriefingNextRelevanceRole = (typeof briefingNextRelevanceRoles)[number]
+
+export type BriefingNextRelevance = Readonly<{
+  /** 0-100: higher means the event transmits more directly to BTC/ETH. */
+  score: number
+  role: BriefingNextRelevanceRole
+  /** Stable machine code for the channel; reader copy is written by the editor, never this. */
+  reasonCode: string
+}>
+
 export type BriefingNextItem = Readonly<{
   eventKey: string
   title: string
@@ -284,6 +305,11 @@ export type BriefingNextItem = Readonly<{
   countryName?: string
   consensus?: string
   previous?: string
+  /**
+   * Why this event ranks where it does for a crypto reader. Optional because editions stored before
+   * the ranking existed carry no relevance, and those must keep rendering.
+   */
+  relevance?: BriefingNextRelevance
   /** Editorial: why this event is the focus, and what each surprise would imply. */
   why?: string
   watch?: readonly Readonly<{ condition: string; implication: string }>[]

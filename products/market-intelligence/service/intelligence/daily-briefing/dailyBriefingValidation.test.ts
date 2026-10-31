@@ -289,6 +289,16 @@ describe('daily briefing editorial validation and application', () => {
     expect(applied.next.focus?.eventKey).toBe('US.FOMC')
   })
 
+  it('does not apply a next-focus rationale that never reaches BTC/ETH', () => {
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      nextFocus: { ...validOutput.nextFocus, why: 'It is the next event on the calendar.' }
+    }, document(), 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    expect(validated.value.nextFocus).toBeUndefined()
+  })
+
   it('lifts an immaterial context row only when the agent includes it', () => {
     const source = document()
     const omitted = validateDailyBriefingEditorial({ ...validOutput, importance: [] }, source, 'zh-CN')

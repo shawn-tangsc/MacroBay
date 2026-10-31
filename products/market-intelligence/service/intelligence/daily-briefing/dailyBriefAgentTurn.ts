@@ -1,9 +1,10 @@
-import type { BriefingMarketRow, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
+import type { BriefingMarketRow, BriefingNextItem, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
+import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
-import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
+import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
-import { selectMacroFloorItem } from './dailyBriefingDocument'
+import { compareBriefingNextRelevance, selectMacroFloorItem } from './dailyBriefingDocument'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
   dailyBriefBackfillPolicy,
@@ -400,25 +401,40 @@ function fieldResponse(document: DailyBriefingDocument, requests: readonly unkno
 }
 
 function selectDocument(document: DailyBriefingDocument, selection: unknown): DailyBriefingDocument {
-  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; data?: unknown; hiddenData?: unknown }
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; focusWhy?: unknown; data?: unknown; hiddenData?: unknown }
   const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
   const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
   const macroCandidates = document.news.macroCandidates ?? document.news.macro
   const nextCandidates = document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
   const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
-  const focusKey = typeof value.focus === 'string' ? value.focus : undefined
-  const focus = focusKey ? nextCandidates.find((item) => item.eventKey === focusKey) : document.next.focus
-  const selectedNext = nextKeys ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey) : document.next.items
-  // Deterministic floor: the nearest upcoming event stays visible even if selection hid everything.
-  const nextItems = selectedNext.length > 0 ? selectedNext : nextCandidates.slice(0, 1)
+  // The editor may move the focus off the default relevance leader, but only by naming a BTC/ETH
+  // transmission. A missing key, an unknown key, or a why with no channel falls back to relevance.
+  const selectedFocus = selectedNextFocus(value, nextCandidates)
+  const relevanceOrder = [...nextCandidates].sort(compareBriefingNextRelevance)
+  const focus = selectedFocus ?? relevanceOrder[0] ?? document.next.focus
+  const selectedNext = nextKeys
+    ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey)
+    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey)
+  const orderedNext = [...selectedNext].sort(compareBriefingNextRelevance)
+  // Deterministic floor: when the editor hid every other event, the next most relevant one stays
+  // visible. `maximumNextItems` excludes the focus, so the rendered list is focus + 3 = 4.
+  const nextItems = (orderedNext.length > 0
+    ? orderedNext
+    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1))
+    .slice(0, dailyBriefingPolicy.maximumNextItems)
   const selectedNews = newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items
   const selectedMacro = macroIds ? macroCandidates.filter((item) => macroIds.has(`macro:${item.eventKey}`)) : macroCandidates
   // The high-impact floor is unioned into selection. Dropping every release, or selecting only
   // lower-ranked ones, still leaves the key release for the writer to show or hide with a reason.
+  // A high-impact release without consensus is unioned too: missing consensus is a data gap, not a
+  // reason to hide the event, so the writer always gets the chance to explain actual vs previous.
   const macroFloor = selectMacroFloorItem(macroCandidates)
-  const macro = macroFloor && !selectedMacro.some((item) => item.eventKey === macroFloor.eventKey)
-    ? [macroFloor, ...selectedMacro]
-    : selectedMacro
+  const noConsensusFloor = macroCandidates.filter((item) => item.importance === 'high' && item.consensus === undefined)
+  const forcedMacro = [...new Map([...(macroFloor ? [macroFloor] : []), ...noConsensusFloor].map((item) => [item.eventKey, item])).values()]
+  const macro = [
+    ...forcedMacro.filter((item) => !selectedMacro.some((selected) => selected.eventKey === item.eventKey)),
+    ...selectedMacro
+  ]
   const shown = [...new Set([
     ...selectedNews.map((item) => `news:${item.itemId}`),
     ...macro.map((item) => `macro:${item.eventKey}`),
@@ -464,13 +480,23 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   })
 }
 
+function selectedNextFocus(
+  value: Readonly<{ focus?: unknown; focusWhy?: unknown }>,
+  candidates: readonly BriefingNextItem[]
+): BriefingNextItem | undefined {
+  const eventKey = typeof value.focus === 'string' ? value.focus : undefined
+  const why = typeof value.focusWhy === 'string' ? value.focusWhy.trim() : ''
+  if (!eventKey || !why || why.length > 200 || !hasBriefingNextTransmission(why)) return undefined
+  const candidate = candidates.find((item) => item.eventKey === eventKey)
+  return candidate ? Object.freeze({ ...candidate, why }) : undefined
+}
+
 function unknownSelection(selection: unknown, document: DailyBriefingDocument): string | undefined {
-  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; data?: unknown; hiddenData?: unknown }
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; data?: unknown; hiddenData?: unknown }
   const nextKeys = new Set((document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))).map((item) => item.eventKey))
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
   const macroIds = new Set((document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
   const dataIds = new Set(briefingDataFactIds(document))
-  if (typeof value.focus === 'string' && !nextKeys.has(value.focus)) return value.focus
   for (const key of ['news', 'macro', 'next', 'data'] as const) {
     const list = value[key]
     if (!Array.isArray(list)) continue

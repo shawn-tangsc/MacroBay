@@ -52,8 +52,14 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       at: item!.at,
       country: item!.countryName ?? item!.countryCode ?? null,
       consensus: item!.consensus ?? null,
-      previous: item!.previous ?? null
-    }))
+      previous: item!.previous ?? null,
+      ...(item!.relevance ? { relevance: item!.relevance } : {}),
+      focus: item!.eventKey === document.next.focus?.eventKey
+    })),
+    nextFocus: document.next.focus ? {
+      eventKey: document.next.focus.eventKey,
+      ...(document.next.focus.relevance ? { relevance: document.next.focus.relevance } : {})
+    } : null
   }
   return [
     {
@@ -98,8 +104,8 @@ export function buildDailyBriefingPrompt(input: Readonly<{
           invalidationNote: 'one sentence about what would change the read, at most 240 characters',
           conclusionTranslation: 'translate the conclusion summary only, or omit',
           nextFocus: {
-            eventKey: 'the focus eventKey from FACTS.next',
-            why: 'why this event matters for the current read, at most 200 characters',
+            eventKey: 'FACTS.nextFocus.eventKey',
+            why: 'the BTC/ETH transmission of this event and why it, not the nearest event, is the focus, at most 200 characters',
             watch: [
               { condition: 'higher than expected', implication: 'what follows for rates, dollar and BTC/ETH' },
               { condition: 'lower than expected', implication: 'what follows for rates, dollar and BTC/ETH' }
@@ -118,8 +124,9 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
         '- webEvidence is optional; only add entries actually seen in this turn’s WebSearch/WebFetch results. The URL and publishedAt must match a tool result; never invent a source. Local official actual overrides a web value.',
         '- items are shown facts with why; hidden contains every other candidate with a reason. items + hidden must cover every news and macro candidate exactly once.',
+        '- A high-impact macro fact without consensus is still shown. Never put it in hidden or lower its tier because consensus is missing; its why explains actual vs previous, and the limits section records the missing consensus as a data gap.',
         '- The lede is event-first: lead with the dominant event/tension and its transmission, not with a direction or a data recital. Never enumerate the news headlines or the data rows. Avoid generic openers such as “market sentiment is cautious” or “mixed signals”.',
-        '- nextFocus: only for the next event list. Explain why the focus matters, then 2-3 if/then implications. Use only numbers in FACTS.'
+        '- nextFocus: the focus was chosen in the selection stage. Keep its eventKey and explain its transmission to BTC/ETH, not merely that it is scheduled or important; then give 2-3 if/then implications. Use only numbers in FACTS.'
       ].join('\n')
     }
   ]
@@ -200,7 +207,7 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
     })),
     ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
     ...(document.data.policyPath ? { policyPath: document.data.policyPath } : {}),
-    next: (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null }))
+    next: (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null, ...(item.relevance ? { relevance: item.relevance } : {}) }))
   }
   return [
     { role: 'system', content: 'You are the editor of a frozen daily market brief. Select, do not write prose yet. Return one JSON object and nothing else.' },
@@ -208,8 +215,11 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
       `LOCALE: ${locale}`,
       'CANDIDATES:',
       JSON.stringify(candidates, null, 2),
-      'Return this exact shape: {"stage":"select","focus":"<eventKey>","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"data":["data:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}],"hiddenData":[{"factId":"data:<id>","reason":"why not shown"}]}',
-      'Select only from the lists. Keep next/macro/news/data IDs exact. Choose at most 4 next events, 6 macro and 6 news that actually change the day; do not select everything. data: show only rows with a material change or an explanatory role; leverage and policy-path are selectable only when materiality.material is true, and floor rows (must=true) are always shown. requests may ask for missing fields; do not invent values. List every unselected news/macro/next candidate in hidden with a reason; list a material data row you deliberately leave out in hiddenData with a reason (immaterial rows are already hidden by the rule).'
+      'Return this exact shape: {"stage":"select","focus":"<next eventKey>","focusWhy":"why it transmits to BTC/ETH","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"data":["data:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}],"hiddenData":[{"factId":"data:<id>","reason":"why not shown"}]}',
+      'Select only from the lists. Keep next/macro/news/data IDs exact. Choose one next focus plus at most 3 other next events, 6 macro and 6 news that actually change the day; do not select everything. data: show only rows with a material change or an explanatory role; leverage and policy-path are selectable only when materiality.material is true, and floor rows (must=true) are always shown. requests may ask for missing fields; do not invent values. List every unselected news/macro/next candidate in hidden with a reason; list a material data row you deliberately leave out in hiddenData with a reason (immaterial rows are already hidden by the rule).',
+      'NO CONSENSUS IS NOT A HIDING REASON: a high-impact released event with an actual but no consensus stays selected. Missing consensus is a data gap (consensus not collected), never a reason to unselect, hide or downgrade the event; its why uses actual vs previous, and the limits section records the gap.',
+      'NEXT FOCUS: choose the candidate whose transmission to BTC/ETH is strongest today, not simply the nearest event. The relevance field gives the channel and its default weight (rate-policy, inflation, labor, liquidity, ETF flows, regulation, stablecoins, exchange risk rank above Asia/commodity spillovers). A lower-ranked event such as China PMI or OPEC is allowed only when focusWhy states the concrete Asia or commodity transmission to BTC/ETH. focusWhy is required with focus and must name the channel or asset; a missing/unknown eventKey or a why with no BTC/ETH transmission is ignored and the deterministic relevance ranking becomes the focus.',
+      'NEXT LIST: after the focus, choose at most 3 other events, ordered by relevance then time. Do not fill the list chronologically; the list is relevance-first. The focus plus those 3 is the 4-event cap.'
     ].join('\n') }
   ]
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import type { BriefingNextItem, DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { DailyBriefTurnAbortedError, runDailyBriefAgentTurn } from './dailyBriefAgentTurn'
 
 const CJK = /[\u4e00-\u9fff]/
@@ -64,6 +64,76 @@ const document = (locale: DailyBriefingLocale): DailyBriefingDocument => ({
   citations: [],
   provenance: { summaryId: 's1', readAt: '2026-10-30T00:30:00.000Z' }
 })
+
+const relevantNext = (): { fomc: BriefingNextItem; pmi: BriefingNextItem } => ({
+  fomc: {
+    eventKey: 'US.FOMC', title: 'FOMC decision', at: '2026-11-02T18:00:00.000Z',
+    importance: 'high', category: 'central-bank-activity', countryCode: 'US', countryName: 'United States', consensus: '4.25%',
+    relevance: { score: 100, role: 'rate-policy', reasonCode: 'policy-rate-path' }
+  },
+  pmi: {
+    eventKey: 'CN.NBS_PMI', title: 'China NBS Manufacturing PMI', at: '2026-10-31T01:00:00.000Z',
+    importance: 'high', category: 'economic-indicator', countryCode: 'CN', countryName: 'China',
+    relevance: { score: 45, role: 'asia-risk', reasonCode: 'asia-growth-spillover' }
+  }
+})
+
+const withNextCandidates = (): DailyBriefingDocument => {
+  const base = document('en-US')
+  const { fomc, pmi } = relevantNext()
+  return { ...base, next: { focus: fomc, items: [], candidates: [fomc, pmi] } }
+}
+
+const withNoConsensusMacro = (): DailyBriefingDocument => {
+  const base = withNextCandidates()
+  const ppi = {
+    eventKey: 'US.PPI', title: 'PPI', scheduledAt: '2026-10-29T13:30:00.000Z',
+    importance: 'high' as const, actual: '0.4%', previous: '0.2%',
+    surprise: { direction: 'consensus-unavailable' as const }
+  }
+  return { ...base, news: { ...base.news, macro: [...base.news.macro, ppi], macroCandidates: [...base.news.macro, ppi] } }
+}
+
+const editorial = (focusKey: string, focusWhy: string) => ({
+  lede: 'Stablecoin contraction keeps the read defensive.',
+  ledePattern: 'structure',
+  items: [
+    { factId: 'news:n1', why: 'Stablecoin supply keeps shrinking and pulls bids away.' },
+    { factId: 'macro:US.CPI', why: 'The CPI beat keeps the discount rate higher for longer.' }
+  ],
+  hidden: [],
+  importance: [],
+  nextFocus: {
+    eventKey: focusKey,
+    why: focusWhy,
+    watch: [
+      { condition: 'Higher than expected', implication: 'Yields rise and BTC/ETH lose bid support.' },
+      { condition: 'Lower than expected', implication: 'Rate-cut odds improve and BTC/ETH catch a bid.' }
+    ]
+  }
+})
+
+function scriptedRunner(selection: unknown, written: unknown) {
+  const starts: { displayText?: string; prompt?: string; context?: { label: string } }[] = []
+  const continues: string[] = []
+  let rounds = 0
+  return {
+    starts,
+    continues,
+    runner: {
+      start: vi.fn(async (input: { displayText?: string; prompt?: string; context?: { label: string } }) => {
+        starts.push(input)
+        return { sessionId: 's1', created: true, assistantText: JSON.stringify(selection), toolInvocations: [] }
+      }),
+      continue: vi.fn(async (_sessionId: string, text: string) => {
+        continues.push(text)
+        rounds += 1
+        return { assistantText: rounds === 1 ? JSON.stringify(written) : '{}', toolInvocations: [] }
+      }),
+      finish: vi.fn(async () => undefined)
+    }
+  }
+}
 
 function fakeRunner(selection: unknown = { stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [], requests: [{ factId: 'macro:US.CPI', fields: ['actual', 'translation'] }] }) {
   const starts: { displayText?: string; prompt?: string; context?: { label: string } }[] = []
@@ -143,5 +213,89 @@ describe('daily brief agent turn copy', () => {
     const field = continues.find((text) => text.startsWith('FIELD RESPONSE'))
     expect(field).toContain('actual=3.4%')
     expect(field).toContain('translation=未收录')
+  })
+
+  it('lets the editor move the focus to a lower-ranked event with a BTC/ETH transmission', async () => {
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      focus: 'CN.NBS_PMI',
+      focusWhy: 'China growth surprises transmit to BTC/ETH through Asia risk appetite and the dollar.'
+    }
+    const { continues, runner } = scriptedRunner(selection, editorial(
+      'CN.NBS_PMI',
+      'China growth surprises transmit to BTC/ETH through Asia risk appetite and the dollar.'
+    ))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    expect(result.document.next.focus?.eventKey).toBe('CN.NBS_PMI')
+    expect(result.document.next.focus?.why).toContain('BTC/ETH')
+    const writing = continues.find((text) => text.includes('Write this exact JSON shape')) ?? ''
+    expect(writing).toContain('"eventKey": "CN.NBS_PMI"')
+    expect(writing).toContain('"focus": true')
+  })
+
+  it('falls back to the relevance leader when the chosen focus has no BTC/ETH transmission', async () => {
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      focus: 'CN.NBS_PMI',
+      focusWhy: 'It is the first event on the calendar.'
+    }
+    const { continues, runner } = scriptedRunner(selection, editorial(
+      'US.FOMC',
+      'The policy path sets the discount rate on BTC and ETH.'
+    ))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    expect(result.document.next.focus?.eventKey).toBe('US.FOMC')
+    expect(result.document.next.focus?.why).toContain('BTC and ETH')
+    const writing = continues.find((text) => text.includes('Write this exact JSON shape')) ?? ''
+    expect(writing).toContain('"eventKey": "US.FOMC"')
+  })
+
+  it('ignores an unknown focus key instead of failing the edition', async () => {
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      focus: 'XX.UNKNOWN',
+      focusWhy: 'It changes the dollar and BTC/ETH liquidity.'
+    }
+    const { runner } = scriptedRunner(selection, editorial(
+      'US.FOMC',
+      'The policy path sets the discount rate on BTC and ETH.'
+    ))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNextCandidates(), locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    expect(result.document.next.focus?.eventKey).toBe('US.FOMC')
+  })
+
+  it('keeps a high-impact event without consensus shown even when the editor hides it', async () => {
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      focus: 'US.FOMC',
+      focusWhy: 'The policy path sets the discount rate for BTC and ETH.'
+    }
+    const written = {
+      ...editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.'),
+      hidden: [{ factId: 'macro:US.PPI', reason: 'No consensus was published, so it is not actionable.' }]
+    }
+    const { runner } = scriptedRunner(selection, written)
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNoConsensusMacro(), locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    const ppi = result.document.news.macro.find((item) => item.eventKey === 'US.PPI')
+    // Missing consensus is a data gap for the limits section, never a visibility decision.
+    expect(ppi).toMatchObject({ importance: 'high', actual: '0.4%', previous: '0.2%', visibility: 'shown' })
+    expect(ppi?.consensus).toBeUndefined()
+    expect(result.document.provenance.selectionAudit?.shown).toContain('macro:US.PPI')
   })
 })
