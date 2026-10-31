@@ -125,10 +125,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
-        <div className="mi-brief-poster__summary-row" data-direction={conclusion.direction}>
-          <span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>
-          <p className="mi-brief-poster__summary">{conclusion.summary}</p>
-        </div>
+        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{conclusion.summary}</p>
         {conclusion.translation ? <p className="mi-brief-poster__translation">{text.translated} · {conclusion.translation}</p> : null}
         {conclusion.invalidations[0] ? <p className="mi-brief-poster__invalidate">{text.conclusion.invalidation}{text.labelSeparator}{conclusion.invalidations[0].text}</p> : null}
     </section> : null}

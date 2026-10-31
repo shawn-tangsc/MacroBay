@@ -47,9 +47,7 @@
 .mi-brief-poster__news-summary { margin: 16px 0 0; color: #777368; font-size: 11px; line-height: 1.5; }
 
 .mi-brief-poster__conclusion { margin-top: 28px; padding-top: 18px; border-top: 2px solid #1b1d18; }
-.mi-brief-poster__summary-row { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: start; gap: 10px; }
-.mi-brief-poster__summary-row .mi-brief-poster__summary { margin: 0; }
-.mi-brief-poster__direction { display: inline-block; margin-bottom: 0; padding: 3px 9px; border-radius: 3px; background: #1b1d18; color: #f4efe4; font-size: 12px; font-weight: 700; }
+.mi-brief-poster__direction { display: inline-block; margin: 0 7px 0 0; padding: 1px 7px; vertical-align: 1px; border-radius: 3px; background: #1b1d18; color: #f4efe4; font-size: 12px; font-weight: 700; }
 .mi-brief-poster__direction[data-direction="bullish"] { background: #2f6b3c; }
 .mi-brief-poster__direction[data-direction="bearish"] { background: #9f2d21; }
 .mi-brief-poster__direction[data-direction="range"], .mi-brief-poster__direction[data-direction="mixed"] { background: #8a5a35; }
