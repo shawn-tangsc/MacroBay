@@ -39,3 +39,24 @@ describe('redactText', () => {
     expect(() => JSON.parse(result.text)).not.toThrow()
   })
 })
+
+describe('redactText keeps surrounding structure', () => {
+  it('leaves the delimiter after a bearer token so lines and words do not merge', () => {
+    const result = redactText('header: Bearer abcdefghijklmnop 后面还有字\n下一行')
+
+    expect(result.redacted).toBe(true)
+    expect(result.text).toBe('header: [REDACTED] 后面还有字\n下一行')
+  })
+
+  it('passes benign outbound content through byte for byte', () => {
+    // Same rule as the inbound guard: a transform may only fire on an exact pattern, never tidy up.
+    for (const text of [
+      '今日 BTC 上涨 2.3%，情绪偏温和。',
+      '家庭 👨‍👩‍👧 与国旗 🇨🇳',
+      '| 指标 | 值 |\n| --- | --- |\n| 涨跌 | +2.3% |',
+      'Token: 这是中文解释，不是密钥'
+    ]) {
+      expect(redactText(text)).toEqual({ text, redacted: false })
+    }
+  })
+})

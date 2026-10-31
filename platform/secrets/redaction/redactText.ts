@@ -15,7 +15,9 @@ const SECRET_PATTERNS: Array<{ name: string; re: RegExp }> = [
     name: 'aws-secret-key',
     re: /(?<=aws_secret_access_key\s*[=:]\s*)[A-Za-z0-9/+=]{40}/gi
   },
-  { name: 'bearer-token', re: /Bearer\s+[A-Za-z0-9_\-.~+/]+=*(?:\s|$)/g },
+  // The delimiter is a lookahead on purpose: consuming it merged the next word into the
+  // placeholder (`[REDACTED]下一行`), which silently breaks a markdown line break in outbound text.
+  { name: 'bearer-token', re: /\bBearer\s+[A-Za-z0-9_\-.~+/]+=*(?=\s|$)/g },
   {
     name: 'key-value-secret',
     re: /(?:api[_-]?key|api[_-]?secret|secret[_-]?key|password|passwd|token|access[_-]?token|client[_-]?secret)\s*[=:]\s*['"]?([^\s'"]{16,})['"]?/gi
