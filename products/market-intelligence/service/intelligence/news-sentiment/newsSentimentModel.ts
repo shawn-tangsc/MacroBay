@@ -79,7 +79,9 @@ export function parseNewsPolarityModelOutput(raw: unknown, body: string): Parsed
       confidence: confidence as number,
       symbols,
       reasonCode,
-      ...(evidenceQuote ? { evidenceQuote: truncate(evidenceQuote, NEWS_SENTIMENT_LIMITS.evidenceQuoteChars) } : {}),
+      // Truncate without an ellipsis: the stored quote must stay a verbatim substring of the
+      // article, which is the same rule the parser just checked it against.
+      ...(evidenceQuote ? { evidenceQuote: evidenceQuote.slice(0, NEWS_SENTIMENT_LIMITS.evidenceQuoteChars) } : {}),
       caveats: []
     }
   }
@@ -102,10 +104,6 @@ function containsQuote(body: string, quote: string): boolean {
 
 function normalize(value: string): string {
   return value.replace(/\s+/g, ' ').trim()
-}
-
-function truncate(value: string, max: number): string {
-  return value.length <= max ? value : `${value.slice(0, max - 1)}…`
 }
 
 function invalid(): ParsedNewsPolarity {
