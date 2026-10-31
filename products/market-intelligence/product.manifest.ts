@@ -1,5 +1,7 @@
 import type { ProductManifest } from '../../platform/product-manifest'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
+import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
+import { GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './service/intelligence/jobs/marketAnalysisJobIds'
 
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
@@ -215,7 +217,21 @@ export const marketIntelligenceProductManifest = {
     'market-intelligence.sentiment.updated',
     'market-intelligence.source.health.changed'
   ],
-  eventConsumers: [],
+  /**
+   * 本产品**消费**的话题（`MI-11-R22` A1）。运行时从这里读，不再手写第二份数组——
+   * 声明与实现因此不可能漂移。话题本身必须出现在本 manifest 的 `eventTopics` 里（生成期守卫）。
+   */
+  eventConsumers: [
+    {
+      id: 'market-intelligence.market-analysis-trigger',
+      topics: [
+        INTELLIGENCE_EVENT_TOPICS.itemCreated,
+        INTELLIGENCE_EVENT_TOPICS.impactCreated,
+        INTELLIGENCE_EVENT_TOPICS.sentimentUpdated
+      ],
+      handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB
+    }
+  ],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest

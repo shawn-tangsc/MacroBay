@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { marketIntelligenceProductManifest } from './product.manifest'
+import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
 
 describe('market-intelligence product manifest', () => {
   it('localizes the module display name shown by the shell', () => {
@@ -107,5 +108,36 @@ describe('market-intelligence product manifest', () => {
     const withoutApprovedClients = page.split('\n').filter(line => !approvedClients.some(client => line.includes(client))).join('\n')
     expect(withoutApprovedClients).not.toMatch(/intelligenceSourcesClient|window\.platform|service\/|\/service|ipc\/|node:|\bfetch\(|axios|WebSocket|require\s*\(/)
     expect(portalSources).not.toMatch(/intelligenceSourcesClient|window\.platform|service\/|\/service|ipc\/|\bfetch\(|axios|WebSocket/)
+  })
+})
+
+/**
+ * `MI-11-R22` A1 守卫 1：产品自己的发布常量必须全部出现在自己的 `eventTopics` 里。
+ * 这是「加了话题忘了声明」的唯一防线——忘了声明的表现是任务建得成、永远不触发，
+ * 不报错、不报警，只有这条守卫能立刻发现。
+ */
+describe('market-intelligence publishable event topics', () => {
+  it('declares every topic the product publishes', () => {
+    const declared = new Set(marketIntelligenceProductManifest.eventTopics ?? [])
+
+    for (const topic of Object.values(INTELLIGENCE_EVENT_TOPICS)) {
+      expect(declared.has(topic)).toBe(true)
+    }
+  })
+
+  it('declares exactly the consumers it registers, consuming only topics it publishes', () => {
+    const declared = new Set(marketIntelligenceProductManifest.eventTopics ?? [])
+    const consumers = marketIntelligenceProductManifest.eventConsumers ?? []
+
+    expect(consumers).toHaveLength(1)
+    expect(consumers[0].id).toBe('market-intelligence.market-analysis-trigger')
+    expect([...consumers[0].topics]).toEqual([
+      INTELLIGENCE_EVENT_TOPICS.itemCreated,
+      INTELLIGENCE_EVENT_TOPICS.impactCreated,
+      INTELLIGENCE_EVENT_TOPICS.sentimentUpdated
+    ])
+    for (const topic of consumers[0].topics) {
+      expect(declared.has(topic)).toBe(true)
+    }
   })
 })

@@ -2,10 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { JobContext, JobRuntime } from '@platform/jobs'
 
-import {
-  INTELLIGENCE_EVENT_TOPICS,
-} from '../schema/intelligenceEvents'
 import { MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
 import { crossAssetAnalysisWindowPolicy, type CrossAssetPriceHorizon } from '../cross-asset/crossAssetAnalysisWindows'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
@@ -61,6 +59,22 @@ export function formatMarketAnalysisContextDiagnostic(input: Readonly<{
 }
 
 const MARKET_ANALYSIS_CONSUMER_ID = 'market-intelligence.market-analysis-trigger'
+
+/**
+ * 订阅话题与处理函数名都从 manifest 读（`MI-11-R22` A1）：手写第二份数组就是漂移的源头，
+ * 之前 manifest 写着 `eventConsumers: []` 而这里实注册 3 个 topic，就是这么来的。
+ */
+function marketAnalysisConsumerRegistration(): { topics: readonly string[]; handlerId: string } {
+  const registration = marketIntelligenceProductManifest.eventConsumers?.find(
+    (consumer) => consumer.id === MARKET_ANALYSIS_CONSUMER_ID
+  )
+  if (!registration) {
+    throw new Error(
+      `market-intelligence manifest does not declare the "${MARKET_ANALYSIS_CONSUMER_ID}" event consumer.`
+    )
+  }
+  return registration
+}
 
 export function resolveMarketAnalysisSeverity(item: import('../schema/intelligenceRecord').IntelligenceItem): 'low' | 'medium' | 'high' | 'critical' {
   const labels = safeJson(item.processingLabelsJson)
@@ -376,12 +390,13 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
 
   if (input.eventBusRuntime) {
+    const consumerRegistration = marketAnalysisConsumerRegistration()
     input.eventBusRuntime.registerConsumer(
       {
         consumerId: MARKET_ANALYSIS_CONSUMER_ID,
         owner: 'product',
         productId: 'market-intelligence',
-        topics: [INTELLIGENCE_EVENT_TOPICS.itemCreated, INTELLIGENCE_EVENT_TOPICS.impactCreated, INTELLIGENCE_EVENT_TOPICS.sentimentUpdated],
+        topics: [...consumerRegistration.topics],
         retryPolicy: { maxAttempts: 3, backoff: 'exponential', baseDelayMs: 1_000, maxDelayMs: 30_000 }
       },
       async (event) => {
