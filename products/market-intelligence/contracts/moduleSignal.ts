@@ -216,7 +216,7 @@ export function isModuleSignal(value: unknown): value is ModuleSignal {
   if (!isCanonicalSignalTime(value.observedAt)) return false
   if (!isCadence(value.cadence)) return false
   if (!isValues(value.values)) return false
-  if (!hasCoverageNumbers(value.values, value.cadence, value.moduleId)) return false
+  if (!isCoverageWellFormed(value.values, value.cadence, value.moduleId)) return false
   if (typeof value.dedupeKey !== 'string' || value.dedupeKey.length === 0 || value.dedupeKey.length > moduleSignalPolicy.maximumDedupeKeyLength) return false
   if (!moduleSignalPolicy.readiness.includes(value.readiness as SignalReadiness)) return false
   return typeof value.triggerOwner === 'string' && value.triggerOwner.length > 0
@@ -230,23 +230,30 @@ function isCadence(value: unknown): value is SignalCadence {
 }
 
 /**
- * A windowed module must publish both coverage numbers, as whole days with a positive requirement.
+ * Whether a signal's coverage numbers are well formed, and whether it was allowed to omit them.
  *
- * Checked here rather than left to the consumer so the failure mode is "the rule cannot produce a
- * signal" instead of "the rule produced a signal that overstates its window", which no screenshot
- * would reveal.
+ * Two independent rules, deliberately not fused into one condition:
+ *
+ * - A module whose rule sums a multi-day window **must** publish both numbers.
+ * - Anything that publishes either number **is** subject to the same check, listed module or not.
+ *
+ * The second rule is why the list cannot rot into a single point of failure: a future windowed rule
+ * that forgets to register itself still cannot publish half a coverage figure or put day coverage on
+ * an intraday bucket. The list only decides "may this rule stay silent", never "is this number
+ * allowed to be wrong".
  */
-function hasCoverageNumbers(
+function isCoverageWellFormed(
   values: Readonly<Record<string, number>>,
   cadence: SignalCadence,
   moduleId: unknown
 ): boolean {
-  if (!moduleSignalPolicy.coverageRequiredModules.includes(moduleId as never)) return true
+  const publishesCoverage = values.coveredDays !== undefined || values.requiredDays !== undefined
+  if (!publishesCoverage && !moduleSignalPolicy.coverageRequiredModules.includes(moduleId as never)) return true
   const covered = values.coveredDays
   const required = values.requiredDays
   if (!Number.isInteger(covered) || covered < 0) return false
   if (!Number.isInteger(required) || required < moduleSignalPolicy.minimumRequiredDays) return false
-  // A windowed rule that speaks on a bucket smaller than its own window is a second window.
+  // Day coverage on a bucket smaller than a day is a second window for the same reading.
   return cadence.kind === 'trading-day'
 }
 

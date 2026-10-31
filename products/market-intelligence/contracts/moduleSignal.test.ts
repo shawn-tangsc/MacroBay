@@ -76,8 +76,20 @@ describe('module signal contract', () => {
     expect(isModuleSignal(signal({ moduleId: 'macro-calendar', ruleId: 'macro-surprise', asset: null, cadence: daily }))).toBe(true)
   })
 
+  it('checks coverage numbers even when the module was never registered as windowed', () => {
+    // Collecting the keys is what subjects a rule to the check: half a coverage figure, or day
+    // coverage on an intraday bucket, is not a shape any rule may publish.
+    const calendar = signal({ moduleId: 'macro-calendar', ruleId: 'macro-surprise', asset: null, cadence: daily })
+    expect(isModuleSignal({ ...calendar, values: { coveredDays: 2, requiredDays: 3 } })).toBe(true)
+    expect(isModuleSignal({ ...calendar, values: { coveredDays: 2 } })).toBe(false)
+    expect(isModuleSignal({ ...calendar, values: { requiredDays: 3 } })).toBe(false)
+    expect(isModuleSignal({ ...calendar, values: { coveredDays: 2, requiredDays: 3 }, cadence: intraday })).toBe(false)
+    expect(isModuleSignal({ ...calendar, values: { coveredDays: -1, requiredDays: 3 } })).toBe(false)
+    expect(isModuleSignal({ ...calendar, values: { coveredDays: 2, requiredDays: 0 } })).toBe(false)
+  })
+
   it('keeps values numeric: completeness is two numbers, not a boolean', () => {
-    expect(isModuleSignal(signal({ values: { coveredDays: 2, requiredDays: 3 } }))).toBe(true)
+    expect(isModuleSignal(signal({ moduleId: 'macro-calendar', ruleId: 'macro-surprise', asset: null, cadence: daily, values: { coveredDays: 2, requiredDays: 3 } }))).toBe(true)
     expect(isModuleSignal(signal({ values: { complete: 1 } }))).toBe(true)
     expect(isModuleSignal(signal({ values: { complete: true } as never }))).toBe(false)
     expect(isModuleSignal(signal({ values: { dropPct: '2' } as never }))).toBe(false)
