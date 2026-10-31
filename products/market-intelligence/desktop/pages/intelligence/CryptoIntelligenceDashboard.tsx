@@ -185,14 +185,13 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
           onRefresh={collectCapitalConditionsSources ? () => void refreshCapitalConditions() : undefined}
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} />
       </div>
-      {/* Reads two cards the reader has already seen: it sits between the money band and the
-          leverage band, where the two legs live. */}
-      <div className="mi-crypto-dashboard__divergence-row">
-        <DivergencePanel state={divergenceState} text={text.divergence} />
-      </div>
       <div className="mi-crypto-dashboard__positioning-row">
         <PositioningPanel funding={fundingRateState} positioning={positioningState} window={positioningWindow}
           onWindowChange={setPositioningWindow} text={text.positioning} />
+        {/* A conclusion about the card above it, not another section: the reader asks "so what do
+            these two legs mean together" while looking at the chart, and a band of its own read
+            as an unrelated module. */}
+        <DivergencePanel state={divergenceState} text={text.divergence} />
       </div>
 
       <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />

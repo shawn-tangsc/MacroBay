@@ -107,15 +107,6 @@
   display: grid;
   grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation));
   min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-.mi-crypto-dashboard__divergence-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-  margin-top: 16px;
-  padding: var(--mi-dashboard-band-block-padding) 0;
-  border-top: 1px solid var(--mi-dashboard-line);
-  border-bottom: 1px solid var(--mi-dashboard-line);
-}
 .mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
@@ -245,6 +236,7 @@
  */
 /* 并排形态的装饰（区内边距、列间分隔线）写在基础规则里，堆叠分支再把它们撤掉。 */
 .mi-crypto-dashboard__positioning-row > .mi-positioning-panel { padding-left: 0; border-left: 0; }
+.mi-crypto-dashboard__positioning-row > .mi-divergence { padding: 8px var(--mi-dashboard-band-zone-inline) 0 0; border-top: 1px solid var(--mi-dashboard-line); }
 
 .mi-crypto-dashboard__source-region { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__source-region > header { grid-column: 1 / -1; }

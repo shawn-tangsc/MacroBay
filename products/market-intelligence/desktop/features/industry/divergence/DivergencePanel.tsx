@@ -46,7 +46,7 @@ export function DivergencePanel({ state, text }: Readonly<{
       ) : null}
       {withheld.length > 0 ? (
         <div className="mi-divergence__withheld" data-withheld={withheld.length}>
-          <span className="mi-divergence__withheld-title">{text.withheldTitle}</span>
+          <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
           {withheld.map(entry => (
             <span key={`${entry.pairId}-${entry.leg}`} className="mi-divergence__withheld-item" data-reason={entry.reason}>
               {text.withheldReasons[entry.reason]

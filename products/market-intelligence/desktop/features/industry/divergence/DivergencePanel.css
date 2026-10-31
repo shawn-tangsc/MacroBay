@@ -1,13 +1,16 @@
 .mi-divergence {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 6px 0 10px;
+  padding: 8px 0 2px;
 }
+/* A footnote to the card above, not a section of its own: the heading is small, lower-case weight
+   and sits on the same line as its result. */
 .mi-divergence h2 {
-  color: var(--mi-dashboard-text);
-  font-size: 12px;
-  font-weight: 650;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 .mi-divergence__note {
   margin: 0;
@@ -70,12 +73,11 @@
   opacity: 0.8;
 }
 .mi-divergence__withheld {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
+  display: block;
   color: var(--mi-dashboard-muted);
   font-size: 9px;
+  line-height: 1.5;
 }
 .mi-divergence__withheld-title { font-weight: 650; }
+.mi-divergence__withheld-item + .mi-divergence__withheld-item::before { content: '、'; }
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }

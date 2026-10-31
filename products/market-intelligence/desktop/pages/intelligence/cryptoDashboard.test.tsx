@@ -705,7 +705,8 @@ describe('crypto intelligence dashboard', () => {
     const capital = row.querySelector<HTMLElement>('.mi-capital-conditions')!
     expect([...row.children].map((child) => child.className || child.tagName)).toEqual(['mi-crypto-dashboard__sentiment', 'mi-capital-conditions'])
     const positioning = container.querySelector<HTMLElement>('.mi-crypto-dashboard__positioning-row')!
-    expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-positioning-panel'])
+        // The perpetual card keeps the second band to itself, with the divergence footnote under it.
+    expect([...positioning.children].map((child) => child.className || child.tagName)).toEqual(['mi-positioning-panel', 'mi-divergence'])
     expect([...capital.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions__content-row'])
     expect([...capital.firstElementChild!.children].map((child) => child.className || child.tagName)).toEqual(['mi-capital-conditions__summary', 'mi-capital-conditions__etf-flow'])
     const headerBandRule = cssBlock(styles, '.mi-capital-conditions__header-band {')
