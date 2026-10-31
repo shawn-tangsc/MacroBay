@@ -130,6 +130,9 @@ export type MarketAnalysisSourceAccess = Readonly<{
 }>
 
 type MarketAnalysisContextQueryService = Pick<PublicQueryService, 'queryFearGreedSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryCapitalConditionsSnapshot' | 'queryCrossAssetSnapshot' | 'getSourceHealth'> &
+  // Optional so a test double or an older wiring still compiles; the projection treats an absent
+  // reader exactly like an unavailable answer.
+  Partial<Pick<PublicQueryService, 'queryMarketDivergence'>> &
   Partial<Pick<PublicQueryService,
     'queryMacroEconomicCalendarMonth' | 'queryMarketCalendarMonth' | 'queryMacroMarketSnapshot' | 'queryMacroRatesSnapshot' | 'queryPolicyPath'>>
 
@@ -310,14 +313,20 @@ export async function buildMarketAnalysisContext(
     }
   } else observations.macro = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
+  // Read once: both the capital and the sentiment projections consume it, and the reading is
+  // as-of a single instant by construction.
+  const divergence = (requestedDomains.includes('capital') || requestedDomains.includes('sentiment')) && publicQueryService.queryMarketDivergence
+    ? await safeQuery(() => publicQueryService.queryMarketDivergence!({ asOf: input.asOf }))
+    : undefined
+
   if (requestedDomains.includes('capital')) {
     const result = await safeQuery(() => publicQueryService.queryCapitalConditionsSnapshot({ asOf: input.asOf }))
-    safeProject(() => projectCapital(result, input.asOf, facts, caveats, observations), observations, 'capital')
+    safeProject(() => projectCapital(result, divergence, input.asOf, facts, caveats, observations), observations, 'capital')
   } else observations.capital = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('sentiment')) {
     const result = await safeQuery(() => publicQueryService.queryFearGreedSnapshot({ asOf: input.asOf }))
-    safeProject(() => projectSentiment(result, input.asOf, facts, caveats, observations), observations, 'sentiment')
+    safeProject(() => projectSentiment(result, divergence, input.asOf, facts, caveats, observations), observations, 'sentiment')
   } else observations.sentiment = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('funding')) {

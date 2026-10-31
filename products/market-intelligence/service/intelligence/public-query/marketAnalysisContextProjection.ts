@@ -1,3 +1,4 @@
+import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { resolvePositioningState } from '../../../contracts/openInterestPositioning'
 
@@ -75,7 +76,7 @@ export function normalizeContextMaxFacts(value: number | undefined): number | un
   return Number.isSafeInteger(value) && value > 0 ? Math.min(value, MARKET_ANALYSIS_CONTEXT_POLICY.defaultMaxFacts) : undefined
 }
 
-export function projectCapital(result: CapitalConditionsSnapshotResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
+export function projectCapital(result: CapitalConditionsSnapshotResult | undefined, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.capital = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
     return
@@ -99,10 +100,13 @@ export function projectCapital(result: CapitalConditionsSnapshotResult | undefin
   const caveat = result.etf.state === 'unavailable' ? 'etf-unavailable' : undefined
   if (caveat) caveats.add(caveat)
   const etfFactCount = result.etf.state === 'available' ? result.etf.btc.rows.length + result.etf.eth.rows.length : 0
-  observations.capital = observation('available', 'fresh', rows.length + etfFactCount, 0, caveat ? [caveat] : [])
+  // A divergence is a combination of legs that are already facts. It enters the domain of its
+  // slowest leg, so the card and the model look the same sentence up in the same place.
+  const divergenceFactCount = pushDivergenceFacts('capital', divergence, asOf, facts, ['liquidity-leverage', 'flows-price'])
+  observations.capital = observation('available', 'fresh', rows.length + etfFactCount + divergenceFactCount, 0, caveat ? [caveat] : [])
 }
 
-export function projectSentiment(result: FearGreedSnapshotResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
+export function projectSentiment(result: FearGreedSnapshotResult | undefined, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.sentiment = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
     return
@@ -113,7 +117,7 @@ export function projectSentiment(result: FearGreedSnapshotResult | undefined, as
   }
   if ('score' in result && typeof result.score === 'number') {
     facts.push(fact('sentiment', 'market', 'fear-greed-index', result.score, 'score', 'alternative-fear-greed', result.observedAt, asOf, 'comparable'))
-    observations.sentiment = observation('available', 'fresh', 1, 0, [])
+    observations.sentiment = observation('available', 'fresh', 1 + pushDivergenceFacts('sentiment', divergence, asOf, facts, ['narrative-price']), 0, [])
     return
   }
   observations.sentiment = observation('missing', 'missing', 0, 0, ['sentiment-not-computed-as-of'])
@@ -456,3 +460,29 @@ function projectPositioning(positioning: OpenInterestHistoryResult | undefined, 
 }
 
 const positioningSourceId = 'binance-futures-positioning'
+
+const divergenceAnchorSource: Readonly<Record<string, string>> = {
+  'liquidity-leverage': 'defillama-stablecoins',
+  'flows-price': '0xrouter',
+  'narrative-price': 'fear-greed'
+}
+
+/**
+ * One fact per diverging pair, in the domain of the leg that defines its window.
+ *
+ * The value is the pair's direction (`bearish` / `bullish` / `unpriced`), not a number: the two
+ * readings that produced it are already facts of their own, and the new information is that they
+ * point opposite ways. `identityFromEventOnly` keeps a re-run of the same day from reading as a
+ * new fact each time.
+ */
+function pushDivergenceFacts(domain: AnalysisDomain, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], pairs: readonly string[]): number {
+  if (!divergence || divergence.state !== 'available') return 0
+  let count = 0
+  for (const row of divergence.rows) {
+    if (!pairs.includes(row.pairId)) continue
+    const oldest = row.legs.reduce<string>((instant, leg) => (leg.observedAt < instant ? leg.observedAt : instant), row.legs[0]!.observedAt)
+    facts.push(fact(domain, 'divergence', `divergence-${row.pairId}`, row.direction, null, divergenceAnchorSource[row.pairId] ?? 'market-divergence', oldest, asOf, 'comparable', row.pairId, { identityFromEventOnly: true }))
+    count += 1
+  }
+  return count
+}

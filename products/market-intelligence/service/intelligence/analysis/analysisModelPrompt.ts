@@ -44,6 +44,10 @@ export function buildAnalysisMessages(snapshot: EvidenceSnapshot, significanceSi
     ...((snapshot.facts ?? []).some(fact => fact.metric === 'positioning-state') ? [
       '输入里 metric 为「持仓与费率组合态」的事实，是按固定阈值给出的档位，不是因果判断：引用它时必须同时给出「持仓名义额」与「资金费率」两个数，不得只写档位名称，也不得把它当作结论的原因。持仓数据只代表 Binance USDT-M 永续单一交易所，禁止写成「全网」「全市场」；持仓下降 + 费率回落才是去杠杆，持仓上升 + 费率转负才是空头拥挤，两者不得混用。'
     ] : []),
+    // 背离只在事实存在时出现：没有背离事实时，模型不得自行推断两张卡互相矛盾。
+    ...((snapshot.facts ?? []).some(fact => String(fact.metric).startsWith('divergence-')) ? [
+      '输入里 metric 以「背离」开头的事实，是两条腿方向相反的**组合判断**，不是预测：引用它必须同时给出参与比较的两个读数与各自时刻，并写清哪一侧在向反方向走；不得只写「出现背离」，也不得在没有这类事实时自行推断背离。背离的阈值是固定常量，不得改写或推测其它阈值。'
+    ] : []),
     // 重点舆情是本次新增的输入：只在真的有这类事实时才出现，免得模型围绕一个空段落编造。
     ...((snapshot.facts ?? []).some(fact => fact.metric === 'news-sentiment') ? [
       '输入里 metric 为「新闻舆情」的事实，是上次分析之后新增的重点舆情（已排除中性条目）。必须指出这些舆情与当前判断是相互支持还是相反，把它们和资金面、资金费率、跨资产反应一起权衡；舆情只能解释判断，不能当作行情证据，marketReaction 仍然只能引用 marketReactionFactRefs 里的 factRef。'
