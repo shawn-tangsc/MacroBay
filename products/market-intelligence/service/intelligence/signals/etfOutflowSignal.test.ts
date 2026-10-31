@@ -60,6 +60,19 @@ describe('ETF outflow signal', () => {
     expect(signal.dedupeKey).toBe('etf-flows:etf-outflow-3d:btc:2026-10-28')
   })
 
+  it('buckets a flow that only arrived the next day on the day it describes, not the day it landed', () => {
+    // The third day's flow reaches the store two days late. The card and the conclusion must still
+    // date it as that trading day: the bucket is the data's own date, so the next day's arrival
+    // does not invent a second bucket for the same three days.
+    const rows = flows([threshold, threshold, threshold]).map((row, index) =>
+      index === 2 ? { ...row, observedAt: '2026-10-30T03:00:00.000Z' } : row)
+    const signal = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-10-30T04:00:00.000Z' })!
+
+    expect(signal.observedAt).toBe('2026-10-28T00:00:00.000Z')
+    expect(signal.dedupeKey).toBe('etf-flows:etf-outflow-3d:btc:2026-10-28')
+    expect(signal.dedupeKey).not.toContain('2026-10-30')
+  })
+
   it('keys each asset separately', () => {
     expect(signalFor([threshold, threshold, threshold], 'eth')!.dedupeKey).toContain(':eth:')
   })
