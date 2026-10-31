@@ -241,3 +241,9 @@ describe('line-end readings', () => {
     expect(text.helpLines.some(line => line.includes('不能直接比较'))).toBe(true)
   })
 })
+
+describe('what the mark does not cover', () => {
+  it('says that only a 15-minute collapse is marked, not a slow decline', () => {
+    expect(text.helpLines.some(line => line.includes('只标 15 分钟内的骤降'))).toBe(true)
+  })
+})
