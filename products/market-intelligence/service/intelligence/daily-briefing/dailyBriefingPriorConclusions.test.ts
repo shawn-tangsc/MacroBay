@@ -122,6 +122,26 @@ describe('prior conclusions', () => {
     })
   })
 
+  it('drops conclusions that were written after the cutoff even when their window is inside it', () => {
+    const lateAnalysis = collectAnalysisPriorConclusions({
+      entries: [entry()],
+      windowStart,
+      asOf,
+      readSummary: () => summary({ createdAt: '2026-10-30T01:00:00.000Z' })
+    })
+    const lateBrief = collectBriefingPriorConclusions({
+      editions: [{
+        date: '2026-10-29',
+        document: briefDocument({ generatedAt: '2026-10-30T01:00:00.000Z', synthesis: 'agent' })
+      }],
+      windowStart,
+      asOf
+    })
+
+    expect(lateAnalysis).toEqual([])
+    expect(lateBrief).toEqual([])
+  })
+
   it('merges oldest first, deduplicates, and keeps the newest when capped', () => {
     const many = Array.from({ length: priorConclusionPolicy.maximumItems + 3 }, (_, index) => prior({
       id: `analysis:${index}`,

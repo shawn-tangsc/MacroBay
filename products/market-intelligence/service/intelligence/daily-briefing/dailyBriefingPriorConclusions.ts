@@ -61,6 +61,10 @@ export function collectAnalysisPriorConclusions(input: Readonly<{
     seen.add(entry.summaryRef)
     const summary = input.readSummary(entry.summaryRef)
     if (!summary) continue
+    // A node can be stamped inside the window while its conclusion was written after the cutoff
+    // (a backfill, a re-run). Only what existed at the cutoff may enter the packet.
+    const createdAt = Date.parse(summary.createdAt)
+    if (Number.isFinite(createdAt) && createdAt > end) continue
     const structured = summary.conclusion
     const summaryText = clipText(structured?.summary ?? summary.eventAssessment ?? '', priorConclusionPolicy.maximumSummaryLength)
     if (!summaryText) continue
@@ -109,6 +113,12 @@ export function collectBriefingPriorConclusions(input: Readonly<{
     if (conclusion.synthesis === 'fallback') continue
     const windowEnd = Date.parse(document.edition.windowEnd)
     if (!Number.isFinite(windowEnd) || windowEnd < start || windowEnd >= end) continue
+    const observedAt = isInstant(document.edition.generatedAt)
+      ? document.edition.generatedAt
+      : isInstant(edition.generatedAt ?? '') ? edition.generatedAt! : document.edition.windowEnd
+    // A late generation for an earlier window was not available at this edition's cutoff; using it
+    // would let the brief "remember" a verdict that did not exist yet.
+    if (Date.parse(observedAt) > end) continue
     const summary = clipText(conclusion.summary, priorConclusionPolicy.maximumSummaryLength)
     if (!summary) continue
     const coreTension = conclusion.synthesisDetail?.coreTension
@@ -123,9 +133,7 @@ export function collectBriefingPriorConclusions(input: Readonly<{
     conclusions.push(Object.freeze({
       id: `daily-brief:${edition.date}:${document.edition.locale}`,
       source: 'daily-brief' as const,
-      observedAt: isInstant(document.edition.generatedAt)
-        ? document.edition.generatedAt
-        : isInstant(edition.generatedAt ?? '') ? edition.generatedAt! : document.edition.windowEnd,
+      observedAt,
       asOf: document.edition.windowEnd,
       direction: conclusion.direction,
       confidence: briefingConfidence(conclusion.synthesisDetail?.confidence ?? conclusion.topSignal?.confidence),
