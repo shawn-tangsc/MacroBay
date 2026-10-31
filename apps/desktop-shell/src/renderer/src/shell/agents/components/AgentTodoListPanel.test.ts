@@ -88,7 +88,7 @@ describe('AgentTodoListPanel view model', () => {
     })
   })
 
-  it('switches the responding step to the still-waiting copy after 90 seconds', () => {
+  it('keeps counting the wait instead of replacing the number with copy', () => {
     const messages = [
       message({
         id: 'user-1',
@@ -111,8 +111,8 @@ describe('AgentTodoListPanel view model', () => {
     })
 
     const label = items.find((item) => item.id === 'runtime')?.label ?? ''
-    expect(label).toBe(`${todosText.agentResponding} · ${todosText.stillWaiting}`)
-    expect(label).not.toContain('已用')
+    expect(label).toBe(`${todosText.agentResponding} · ${todosText.elapsed('2 分 0 秒')}`)
+    expect(label).not.toContain('still')
   })
 
   it('leaves the completed responding step without elapsed copy', () => {

@@ -10,7 +10,6 @@ import { LoadingSpinner } from '@platform/ui/components/loading'
 import type { AgentText } from '../agentText'
 import { useAgentLanguage, useAgentText } from '../agentTextProvider'
 import { formatAgentElapsed } from '../agentElapsedText'
-import { AGENT_STILL_WAITING_THRESHOLD_MS } from '../agentRuntimePhaseText'
 import { sortAgentSessionMessages } from '@platform/ui/agent-chat'
 
 type AgentTodoListPanelProps = {
@@ -144,10 +143,10 @@ function buildRespondingLabel(
   elapsedMs: number | undefined,
   language: AppLanguage
 ): string {
+  // The elapsed time is the whole point of this row: the "still waiting" wording belongs to the
+  // transcript placeholder, which already switches to it. Replacing the number here would make the
+  // row say the same thing twice and hide how long the wait has actually been.
   if (elapsedMs === undefined) return text.agentResponding
-  if (elapsedMs >= AGENT_STILL_WAITING_THRESHOLD_MS) {
-    return `${text.agentResponding} · ${text.stillWaiting}`
-  }
   return `${text.agentResponding} · ${text.elapsed(formatAgentElapsed(elapsedMs, language))}`
 }
 

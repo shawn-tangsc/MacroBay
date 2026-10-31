@@ -18,7 +18,6 @@ export type AgentTextWorkbench = {
     waitingAgentResponse: string
     /** Appended to the responding row while a pending assistant message is timed. */
     elapsed: (duration: string) => string
-    stillWaiting: string
   }
   taskCenter: {
     title: string
