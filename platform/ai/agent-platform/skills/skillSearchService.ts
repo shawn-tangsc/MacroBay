@@ -1,3 +1,4 @@
+import { getPlatformFetch } from '../../../network/platformFetch'
 import type { SkillSearchResult, SkillSearchSource } from '../schemas/skillSchemas'
 
 const claudePluginsApi = 'https://claude-plugins.dev/api/skills'
@@ -142,7 +143,7 @@ async function fetchJsonWithTimeout(url: string): Promise<unknown> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), requestTimeoutMs)
   try {
-    const response = await fetch(url, { signal: controller.signal })
+    const response = await getPlatformFetch()(url, { signal: controller.signal })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     return await response.json()
   } finally {
