@@ -1,4 +1,4 @@
-import { computeEtfCumulativeFlow } from '../../../contracts/etfCumulativeFlow'
+import { computeEtfCumulativeFlow, etfFlowPolicy } from '../../../contracts/etfFlows'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { resolvePositioningState } from '../../../contracts/openInterestPositioning'
@@ -106,7 +106,7 @@ function projectEtfDailyFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Read
  * the model is not asked to notice that `coveredDays` fell short.
  */
 function projectEtfCumulativeFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number; observedAt: string }>[] }, sourceId: string, asOf: string, facts: AgentFact[]): number {
-  const windows = computeEtfCumulativeFlow(asset.rows)
+  const windows = computeEtfCumulativeFlow(asset.rows, etfFlowPolicy.cumulativeWindows)
   const newest = asset.rows.at(-1)
   if (!windows || !newest) return 0
   let projected = 0

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from 'antd'
 
-import { etfCumulativeFlowPolicy } from '../../../../contracts/etfCumulativeFlow'
+import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -115,7 +115,7 @@ function EtfTable({ etf, text }: { etf: AvailableState['etf']; text: Text }): Re
     <thead><tr>
       <th scope="col">{text.asset}</th>
       <th scope="col">{text.latest}</th>
-      {etfCumulativeFlowPolicy.windows.map((days) => {
+      {etfFlowPolicy.cumulativeWindows.map((days) => {
         const windowCoverage = coverage?.find((candidate) => candidate.windowDays === days)
         return <th scope="col" key={days}>
           {format(text.windowDays, { days })}

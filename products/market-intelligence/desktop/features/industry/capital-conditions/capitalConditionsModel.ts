@@ -1,4 +1,4 @@
-import { computeEtfCumulativeFlow } from '../../../../contracts/etfCumulativeFlow'
+import { computeEtfCumulativeFlow, etfFlowPolicy } from '../../../../contracts/etfFlows'
 import {
   capitalConditionsDailyFlowPolicy,
   capitalConditionsSnapshotPolicy,
@@ -177,7 +177,7 @@ function projectEtfAsset(value: EtfPublicAssetSnapshot): DashboardEtfFlowAsset |
  * closed when a window cannot be represented as a display number.
  */
 function projectEtfCumulativeWindows(value: EtfPublicAssetSnapshot): readonly DashboardEtfCumulativeWindow[] | undefined {
-  const windows = computeEtfCumulativeFlow(value.rows)
+  const windows = computeEtfCumulativeFlow(value.rows, etfFlowPolicy.cumulativeWindows)
   if (!windows) return undefined
   const projected: DashboardEtfCumulativeWindow[] = []
   for (const window of windows) {
