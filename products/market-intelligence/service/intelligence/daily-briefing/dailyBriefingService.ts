@@ -73,6 +73,16 @@ export type DailyBriefingService = Readonly<{
   get: (input: Readonly<{ date: string; locale: DailyBriefingLocale }>) => Promise<DailyBriefingGetResult>
 }>
 
+/**
+ * Wall-clock budget for one editorial generation, measured from the first agent round to the last
+ * repair. One generation is up to five rounds (select, field answer, write, two repairs), and the
+ * platform caps every single round at `DEFAULT_AGENT_TURN_TIMEOUT_MS` (120 s), so a smaller budget
+ * would guarantee a timeout on any edition that needs more than the select round. Five minutes is
+ * the ceiling the acceptance criteria promise the reader; a generation that cannot make it fails
+ * with `editorial-timeout` and its session is abandoned instead of running on.
+ */
+export const DAILY_BRIEF_GENERATION_BUDGET_MS = 300_000
+
 export function createDailyBriefingService(deps: Readonly<{
   source: DailyBriefingSource
   store: DailyBriefingStore
@@ -178,7 +188,7 @@ export function createDailyBriefingService(deps: Readonly<{
             ...(deps.backfillFactory ? { backfill: deps.backfillFactory(document.edition.windowEnd) } : {}),
             signal: controller.signal,
             onSession: (id) => { sessionId = id }
-          }), 120_000, () => controller.abort())
+          }), DAILY_BRIEF_GENERATION_BUDGET_MS, () => controller.abort())
         } catch {
           publish = false
           turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: sessionId ?? 'unknown', toolInvocations: [] }

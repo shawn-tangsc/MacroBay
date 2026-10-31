@@ -10,6 +10,7 @@ import { createDailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import {
   briefingWindow,
   createDailyBriefingService,
+  DAILY_BRIEF_GENERATION_BUDGET_MS,
   localDate,
   type DailyBriefingSource,
   type DailyBriefingStore,
@@ -266,7 +267,7 @@ describe('daily briefing service', () => {
       })
 
       const pending = service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(DAILY_BRIEF_GENERATION_BUDGET_MS)
       const result = await pending
 
       expect(cancelAgentSession).toHaveBeenCalledWith('s-timeout')
@@ -296,7 +297,7 @@ describe('daily briefing service', () => {
       })
 
       const pending = service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
-      await vi.advanceTimersByTimeAsync(120_000)
+      await vi.advanceTimersByTimeAsync(DAILY_BRIEF_GENERATION_BUDGET_MS)
       const result = await pending
 
       expect(finish).not.toHaveBeenCalled()
