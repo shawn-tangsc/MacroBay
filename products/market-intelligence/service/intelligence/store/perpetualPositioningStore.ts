@@ -20,6 +20,10 @@ export const perpetualPositioningStoragePolicy = Object.freeze({
 
 export type PositioningAsset = typeof perpetualPositioningStoragePolicy.assets[number]
 
+/**
+ * Every stored instant is epoch milliseconds in UTC — one representation, never a local time and
+ * never a mix. The bucket start is the source's own 15-minute label.
+ */
 export type PositioningRow = Readonly<{
   observedMs: number
   notionalUsd: number

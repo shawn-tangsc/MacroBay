@@ -10,6 +10,10 @@ export const fundingRateHistoryStoragePolicy = Object.freeze({
 })
 
 export type FundingRateHistoryAsset = typeof fundingRateHistoryStoragePolicy.assets[number]
+/**
+ * `fundingTimeMs` is epoch milliseconds in UTC — the settlement instant the exchange reported.
+ * One representation only: nothing converts it to a local time on the way in or out of here.
+ */
 export type FundingRateHistoryPoint = Readonly<{ asset: FundingRateHistoryAsset; fundingTimeMs: number; ratePercent: number }>
 export type FundingRateHistoryReadResult =
   | Readonly<{ state: 'available'; btc: readonly Readonly<{ observedAt: string; ratePercent: number }>[]; eth: readonly Readonly<{ observedAt: string; ratePercent: number }>[] }>
