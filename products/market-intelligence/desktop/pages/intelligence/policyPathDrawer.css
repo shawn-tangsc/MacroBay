@@ -144,5 +144,13 @@
 .mi-policy-drawer__distribution tbody tr[data-leading='true'] th,
 .mi-policy-drawer__distribution tbody tr[data-leading='true'] td:first-of-type { color: var(--mi-text, #e8e9ec); font-weight: 600; }
 .mi-policy-drawer__distribution-bar { display: block; width: 54px; height: 4px; border-radius: 2px; background: #1b1f27; overflow: hidden; flex: none; }
-.mi-policy-drawer__distribution-bar i { display: block; height: 100%; border-radius: 2px; background: #39404c; }
-.mi-policy-drawer__distribution tbody tr[data-leading='true'] .mi-policy-drawer__distribution-bar i { background: var(--mi-accent, #b7cf52); }
+.mi-policy-drawer__distribution-bar i { display: block; height: 100%; border-radius: 2px; }
+/* Each row keeps its direction's colour; the leading row is brighter, not a different hue - a green
+   bar on a hike reads as a dovish signal, which is the opposite of what the row says. */
+.mi-policy-drawer__distribution tbody tr[data-outcome='hike-25'] .mi-policy-drawer__distribution-bar i { background: #e0524c; }
+.mi-policy-drawer__distribution tbody tr[data-outcome='hike-50-plus'] .mi-policy-drawer__distribution-bar i { background: #8f3b37; }
+.mi-policy-drawer__distribution tbody tr[data-outcome='no-change'] .mi-policy-drawer__distribution-bar i { background: #4a5260; }
+.mi-policy-drawer__distribution tbody tr[data-outcome='cut-25'] .mi-policy-drawer__distribution-bar i { background: #3fbf6f; }
+.mi-policy-drawer__distribution tbody tr[data-outcome='cut-50-plus'] .mi-policy-drawer__distribution-bar i { background: #2c7a49; }
+.mi-policy-drawer__distribution tbody tr:not([data-leading='true']) .mi-policy-drawer__distribution-bar i { opacity: .55; }
+.mi-policy-drawer__distribution tbody tr[data-leading='true'] .mi-policy-drawer__distribution-bar { width: 62px; height: 6px; }

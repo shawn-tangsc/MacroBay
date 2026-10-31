@@ -2,7 +2,7 @@ import { ExternalLink } from 'lucide-react'
 
 import { MiSideDrawer } from './MiSideDrawer'
 
-import { POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
+import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { conclusionView, percentOf } from './policyPathSettlementText'
 import './policyPathDrawer.css'
@@ -97,9 +97,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
           <th scope="col">{''}</th><th scope="col">{text.compareNow}</th>
           <th scope="col">{text.compareDay}</th><th scope="col">{text.compareWeek}</th>
         </tr></thead>
-        <tbody>{[...POLICY_PATH_OUTCOMES].reverse().map((outcome) => {
+        <tbody>{POLICY_PATH_OUTCOME_ORDER.map((outcome) => {
           const share = probability.distribution?.[outcome] ?? 0
-          return <tr key={outcome} data-leading={outcome === probability.outcome ? 'true' : undefined}>
+          return <tr key={outcome} data-outcome={outcome} data-leading={outcome === probability.outcome ? 'true' : undefined}>
             <th scope="row">
               <span className="mi-policy-drawer__distribution-bar" aria-hidden="true"><i style={{ width: `${Math.max(share * 100, share > 0 ? 2 : 0)}%` }} /></span>
               {text.shortOutcomes[outcome]}

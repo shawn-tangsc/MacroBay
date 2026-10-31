@@ -249,8 +249,8 @@ describe('policy path card markers', () => {
   })
 })
 
-describe('policy path card directions', () => {
-  it('shows hike, hold and cut together instead of only the leading band', async () => {
+describe('policy path card mix', () => {
+  it('names only the buckets above 5% and folds the rest into one label', async () => {
     const rendered = await render({
       ...reading,
       probability: {
@@ -258,16 +258,30 @@ describe('policy path card directions', () => {
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
-    const legend = rendered.querySelector('.mi-policy-card__direction-legend')
-    expect(legend).not.toBeNull()
-    // 69.0 + 1.55 = 70.55 → 70.6%; the two cut buckets add to 1.2%.
-    expect(legend?.textContent).toContain('70.6%')
-    expect(legend?.textContent).toContain('28.5%')
-    expect(legend?.textContent).toContain('1.2%')
+    const named = [...rendered.querySelectorAll('.mi-policy-card__mix > span:not(.mi-policy-card__mix-rest)')]
+    expect(named).toHaveLength(2)
+    expect(named[0]?.textContent).toContain('69.0%')
+    expect(named[1]?.textContent).toContain('28.5%')
+    // 1.55 + 0.8 + 0.4 = 2.75 → 2.8%, all at or below 5%.
+    expect(rendered.querySelector('.mi-policy-card__mix-rest')?.textContent).toContain('2.8%')
   })
 
   it('drops the line when the payload has no distribution', async () => {
     const rendered = await render(reading)
-    expect(rendered.querySelector('.mi-policy-card__direction-legend')).toBeNull()
+    expect(rendered.querySelector('.mi-policy-card__mix')).toBeNull()
   })
 })
+
+describe('policy path card markers', () => {
+  it('does not carry a repricing chip into the settlement strip', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'settlement', minutesSinceDecision: 42 },
+      markers: [{ kind: 'repricing', level: 'strong', changeInPp: 8.4 }],
+      settlement
+    })
+    // The series behind that marker is the next meeting's; on the strip it would read as the verdict.
+    expect(rendered.querySelector('.mi-policy-card__marker')).toBeNull()
+  })
+})
+

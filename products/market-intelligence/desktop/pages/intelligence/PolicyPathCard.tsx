@@ -2,7 +2,7 @@ import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
 
-import { directionShares, formatSignedPp } from '../../../contracts/policyPath'
+import { POLICY_PATH_OUTCOME_ORDER, formatSignedPp } from '../../../contracts/policyPath'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { conclusionView, judgedView, percentOf, settledFor } from './policyPathSettlementText'
@@ -31,7 +31,9 @@ export type PolicyPathCardText = Readonly<{
   phasePreMeeting: string; phaseSettlement: string
   /** The single repricing chip, and the two ways it can read. */
   markerRepricing: string; markerIntraday: string
-  directions: Readonly<{ hike: string; hold: string; cut: string }>
+  /** Bucket names for the two highest shares, and the remainder label. */
+  topRest: string
+  shortOutcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
   /** The pre-meeting block: what the median implies and what the venue quotes. */
   upgradeGapAbove: string; upgradeGapBelow: string; upgradeGapLevel: string
   upgradeCompare: string; upgradeCompareNoPrevious: string
@@ -48,6 +50,9 @@ export type PolicyPathCardText = Readonly<{
   /** The last decision's direction, for the "last" row when the settlement knows it. */
   decisionHike: string; decisionCut: string
 }>
+
+/** At or below this share a bucket is folded into "其他": naming a 5% band costs a line and adds nothing. */
+const POLICY_PATH_CARD_SHARE_FLOOR = 0.05
 
 const signedCount = (value: number): string => `${value > 0 ? '+' : ''}${value}`
 
@@ -83,9 +88,23 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   // The strip is the settlement body; the verdict keeps the normal body and only remembers the
   // conclusion in its footer, which is why the two uses are kept apart.
   const settlement = reading.settlement
-  // One band answers "which way"; the other four live in the drawer. The three-way line is the
-  // smallest form that still says how much sits on hold and on a cut.
-  const shares = probability?.distribution ? directionShares(probability.distribution) : undefined
+  const distribution = probability?.distribution
+  // One line, and only the buckets worth naming: anything under 5% is folded into "其他" so the
+  // card says "hike or hold" without turning into a table. The full ramp lives in the drawer.
+  const named = distribution === undefined
+    ? undefined
+    : [...POLICY_PATH_OUTCOME_ORDER]
+      .filter((outcome) => distribution[outcome] > POLICY_PATH_CARD_SHARE_FLOOR)
+      // The leading answer comes first; ties keep the dovish-to-hawkish reading order.
+      .sort((left, right) => distribution[right] - distribution[left])
+      .map((outcome) => ({ outcome, share: distribution[outcome] }))
+  // The remainder is the sum of the buckets that were folded away, not `1 - named`: the two agree
+  // on normalised data, and summing keeps the line honest when a payload does not add to exactly 1.
+  const rest = distribution === undefined || named === undefined
+    ? 0
+    : POLICY_PATH_OUTCOME_ORDER
+      .filter((outcome) => !named.some((item) => item.outcome === outcome))
+      .reduce((sum, outcome) => sum + distribution[outcome], 0)
   const strip = phase.kind === 'settlement' ? settlement : undefined
   const nextMeeting = strip?.nextMeeting
 
@@ -177,18 +196,14 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
           </span>}
         </p>}
 
-    {shares === undefined || strip ? null : <div className="mi-policy-card__directions">
-      <span className="mi-policy-card__direction-bar" aria-hidden="true">
-        <i data-direction="hike" style={{ width: `${shares.hike * 100}%` }} />
-        <i data-direction="hold" style={{ width: `${shares.hold * 100}%` }} />
-        <i data-direction="cut" style={{ width: `${shares.cut * 100}%` }} />
-      </span>
-      <span className="mi-policy-card__direction-legend">
-        <span data-direction="hike">{text.directions.hike} <b>{percentOf(shares.hike)}</b></span>
-        <span data-direction="hold">{text.directions.hold} <b>{percentOf(shares.hold)}</b></span>
-        <span data-direction="cut">{text.directions.cut} <b>{percentOf(shares.cut)}</b></span>
-      </span>
-    </div>}
+    {named === undefined || strip ? null : <p className="mi-policy-card__mix">
+      {named.map(({ outcome, share }) => <span key={outcome} data-outcome={outcome}>
+        <em>{text.shortOutcomes[outcome]}</em> <b>{percentOf(share)}</b>
+      </span>)}
+      {rest > 0 ? <span className="mi-policy-card__mix-rest">
+        {text.topRest.replace('{value}', percentOf(rest))}
+      </span> : null}
+    </p>}
 
     {phase.kind === 'pre-meeting' ? <PreMeetingBlock reading={reading} text={text} /> : null}
     {strip ? <SettlementBlock settlement={strip} text={text} /> : null}
