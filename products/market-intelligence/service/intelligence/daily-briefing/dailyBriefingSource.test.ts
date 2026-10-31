@@ -35,7 +35,7 @@ function deps(overrides: {
   profiles?: readonly { sourceId: string; enabled: boolean }[] | 'throw'
   failReadings?: boolean
   failCalendar?: boolean
-  macroMarket?: unknown
+  macroHistory?: (input: { series: 'dxy' | 'gold'; asOf: string }) => unknown
   macroRates?: unknown
 } = {}): DailyBriefingSourceDeps {
   return {
@@ -71,7 +71,7 @@ function deps(overrides: {
         conclusion: 'partial'
       }),
       queryCrossAssetSnapshot: async () => undefined,
-      queryMacroMarketSnapshot: () => overrides.macroMarket,
+      queryMacroHistoryAsOf: (input) => overrides.macroHistory?.(input),
       queryMacroRatesSnapshot: () => overrides.macroRates,
       queryMacroEconomicCalendarMonth: async () => overrides.failCalendar
         ? { state: 'unavailable', failureCode: 'calendar-query-unavailable' }
@@ -190,15 +190,40 @@ describe('daily briefing source', () => {
     expect(unknown.enabled).toEqual({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
   })
 
-  it('does not let a 21:00 snapshot stand in for the 08:00 cutoff', async () => {
-    // The edition cutoff is 08:00 Beijing (00:00Z); the app was opened at 21:00 the same day, so the
-    // product-wide snapshots it can read are hours newer than the instant the edition describes.
+  it('reads the dollar and gold at the 08:00 cutoff instead of the 21:00 current snapshot', async () => {
     const cutoff = '2026-10-30T00:00:00.000Z'
     const packet = await createDailyBriefingSource(deps({
-      macroMarket: {
-        state: 'available', asOf: '2026-10-30T13:00:00.000Z', caveats: [],
-        readings: [{ seriesId: 'xau-usd', level: 4_000, atMs: Date.parse('2026-10-30T12:00:00.000Z'), returns: {} }]
-      },
+      macroHistory: (input) => input.series === 'dxy'
+        ? {
+          state: 'available', series: 'dxy', seriesId: 'dxy-synthetic', asOf: input.asOf,
+          value: 100.5, observedAt: '2026-10-29T23:45:00.000Z', method: 'dxy-basket-synthesis-as-of',
+          sourceUrl: 'https://api.twelvedata.com', synthetic: true, returns: { '24h': 0.25 }
+        }
+        : {
+          state: 'available', series: 'gold', seriesId: 'xau-usd', asOf: input.asOf,
+          value: 4_150.25, observedAt: '2026-10-29T23:50:00.000Z', method: 'gold-store-as-of',
+          sourceUrl: 'https://api.realmarketapi.com/api/v1/price', returns: { '24h': -1.5 }
+        }
+    })).buildPacket({ asOf: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(packet.market.macroMarket?.asOf).toBe(cutoff)
+    expect(packet.market.macroMarket?.readings).toMatchObject([
+      { seriesId: 'dxy-synthetic', level: 100.5, synthetic: true, returns: { '24h': 0.25 } },
+      { seriesId: 'xau-usd', level: 4_150.25, returns: { '24h': -1.5 } }
+    ])
+    expect(packet.market.macroMarket?.readings[0]?.atMs).toBe(Date.parse('2026-10-29T23:45:00.000Z'))
+  })
+
+  it('does not let a reading observed after the cutoff stand in for the 08:00 edition', async () => {
+    // The edition cutoff is 08:00 Beijing (00:00Z); the app was opened at 21:00 the same day. A
+    // projection that answers with the later bar is refused rather than published as the cutoff.
+    const cutoff = '2026-10-30T00:00:00.000Z'
+    const packet = await createDailyBriefingSource(deps({
+      macroHistory: (input) => ({
+        state: 'available', series: input.series, seriesId: input.series === 'dxy' ? 'dxy-real' : 'xau-usd',
+        asOf: input.asOf, value: 4_000, observedAt: '2026-10-30T12:00:00.000Z',
+        method: 'store', sourceUrl: 'https://example.com', returns: { '24h': 1 }
+      }),
       macroRates: {
         state: 'available', asOf: '2026-10-30T13:00:00.000Z', caveats: ['official-daily-close'],
         readings: [
@@ -208,13 +233,29 @@ describe('daily briefing source', () => {
       }
     })).buildPacket({ asOf: cutoff, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    // The dollar/gold snapshot is a single current read with no stored as-of window: it is dropped
-    // rather than published as if read at 08:00.
     expect(packet.market.macroMarket).toBeUndefined()
     // FRED's closes are stamped by trading day: D-1's close was known at 08:00, D's was not.
     expect(packet.market.macroRates).toMatchObject({
       state: 'available', asOf: cutoff, readings: [{ seriesId: 'DGS10', period: '2026-10-29' }]
     })
+  })
+
+  it('keeps a capital snapshot from after the cutoff out of the packet', async () => {
+    const base = deps()
+    const publicQuery = base.publicQuery as unknown as { queryCapitalConditionsSnapshot: () => unknown }
+    publicQuery.queryCapitalConditionsSnapshot = async () => ({
+      state: 'available', asOf: '2026-10-30T13:00:00.000Z', etf: { state: 'unavailable' },
+      coreStablecoins: {
+        observedAt: '2026-10-30T12:00:00.000Z', verifiedAt: '2026-10-30T13:00:00.000Z',
+        currentUsd: 9, change1dUsd: 1, change1dPercent: 0.1,
+        change7dUsd: 1, change7dPercent: 0.1, change30dUsd: 1, change30dPercent: 0.1
+      },
+      conclusion: 'partial'
+    })
+    const packet = await createDailyBriefingSource(base)
+      .buildPacket({ asOf: '2026-10-30T00:00:00.000Z', locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(packet.readings.capital).toEqual({ state: 'empty', asOf: '2026-10-30T00:00:00.000Z' })
   })
 
   it('keeps the rates block empty instead of showing only post-cutoff closes', async () => {

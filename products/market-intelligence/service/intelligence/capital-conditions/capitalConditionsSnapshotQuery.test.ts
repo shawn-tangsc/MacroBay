@@ -153,6 +153,86 @@ describe('capital conditions snapshot query', () => {
     await expect(service.query({ asOf: '2026-08-11T00:00:00.000Z' })).resolves.toEqual({ state: 'empty', asOf: '2026-08-11T00:00:00.000Z' })
   })
 
+  it('answers an 08:00 cutoff from capital history, never from the later current snapshot', async () => {
+    // The edition cutoff is 08:00 Beijing (00:00Z); it is generated at 21:00 the same day. The store
+    // has a snapshot from the evening before the cutoff and a newer one from after it.
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const store = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
+    await store.recordSuccess({ snapshot: { ...snapshot, coreCurrentUsd: 300, change1dPercent: 1 }, verifiedAt: '2026-10-30T23:00:00.000Z' })
+    await store.recordSuccess({ snapshot: { ...snapshot, coreCurrentUsd: 900, change1dPercent: 9 }, verifiedAt: '2026-10-31T11:00:00.000Z' })
+    const service = createCapitalConditionsSnapshotQueryService({ store })
+
+    await expect(service.query({ asOf: cutoff, allowStale: true })).resolves.toMatchObject({
+      state: 'available',
+      asOf: cutoff,
+      coreStablecoins: {
+        currentUsd: 300,
+        change1dPercent: 1,
+        observedAt: '2026-10-30T23:00:00.000Z',
+        verifiedAt: '2026-10-30T23:00:00.000Z'
+      }
+    })
+  })
+
+  it('returns an ETF window whose rows were observed at the cutoff, not the refreshed current window', async () => {
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const stablecoinStore = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
+    await stablecoinStore.recordSuccess({ snapshot, verifiedAt: '2026-10-30T23:00:00.000Z' })
+    const etfStore = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    // Six trading days, but the provider observed the newest day only at 11:00Z — after the cutoff.
+    // The five rows from before the cutoff are the as-of answer; the refreshed row is not.
+    const dates = ['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30']
+    const rows = (asset: 'BTC' | 'ETH') => dates.map((tradingDate, index) => ({
+      asset, tradingDate, netFlowUsd: asset === 'BTC' ? index + 1 : -(index + 1),
+      observedAt: index === dates.length - 1 ? '2026-10-31T11:00:00.000Z' : '2026-10-30T23:00:00.000Z',
+      fetchedAt: '2026-10-31T11:00:00.000Z', source: '0xrouter' as const
+    }))
+    const built = buildEtfCurrentStateWindow({
+      asOf: '2026-10-31T11:00:00.000Z', completeThrough: '2026-10-30', completeDates: dates,
+      btc: rows('BTC'), eth: rows('ETH')
+    })
+    if (built.state !== 'available') throw new Error('test window must be available')
+    await etfStore.replace({ window: built.window, verifiedAt: '2026-10-31T11:00:00.000Z' })
+    const service = createCapitalConditionsSnapshotQueryService({ store: stablecoinStore, etfStore })
+
+    const result = await service.query({ asOf: cutoff, allowStale: true })
+    expect(result).toMatchObject({
+      state: 'available',
+      etf: {
+        state: 'available',
+        windowEnd: '2026-10-29',
+        verifiedAt: '2026-10-30T23:00:00.000Z',
+        btc: { rows: expect.not.arrayContaining([expect.objectContaining({ tradingDate: '2026-10-30' })]) }
+      }
+    })
+    expect(result.state === 'available' && result.etf.state === 'available' ? result.etf.btc.rows.map((row) => row.tradingDate) : [])
+      .toEqual(['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29'])
+  })
+
+  it('reports the ETF gap when every row was observed after the cutoff', async () => {
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const stablecoinStore = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
+    await stablecoinStore.recordSuccess({ snapshot, verifiedAt: '2026-10-30T23:00:00.000Z' })
+    const etfStore = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    const dates = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30']
+    const rows = (asset: 'BTC' | 'ETH') => dates.map((tradingDate, index) => ({
+      asset, tradingDate, netFlowUsd: index + 1, observedAt: '2026-10-31T11:00:00.000Z',
+      fetchedAt: '2026-10-31T11:00:00.000Z', source: '0xrouter' as const
+    }))
+    const built = buildEtfCurrentStateWindow({
+      asOf: '2026-10-31T11:00:00.000Z', completeThrough: '2026-10-30', completeDates: dates,
+      btc: rows('BTC'), eth: rows('ETH')
+    })
+    if (built.state !== 'available') throw new Error('test window must be available')
+    await etfStore.replace({ window: built.window, verifiedAt: '2026-10-31T11:00:00.000Z' })
+    const service = createCapitalConditionsSnapshotQueryService({ store: stablecoinStore, etfStore })
+
+    await expect(service.query({ asOf: cutoff, allowStale: true })).resolves.toMatchObject({
+      state: 'available',
+      etf: { state: 'unavailable' }
+    })
+  })
+
   it('fails closed exactly beyond the six-hour freshness boundary and on unsafe input', async () => {
     const store = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
     await store.recordSuccess({ snapshot, verifiedAt })

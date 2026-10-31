@@ -1,6 +1,8 @@
 import type { AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
+import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
 import type { MarketAnalysisRepository } from '../store/marketAnalysisRepository'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
+import type { MacroHistoryAsOfReading, MacroHistoryAsOfSeries } from '../public-query/macroHistoryAsOf'
 import type { createNewsSentimentQuery } from '../news-sentiment/newsSentimentQuery'
 import type { SourceProfileStore } from '../application/sourceProfileStore'
 import { assessMarketCalendarSurprise, toCalendarSurpriseView } from '../../../contracts/macro/marketCalendarSurprise'
@@ -23,7 +25,7 @@ export type DailyBriefingSourceDeps = Readonly<{
     | 'queryCapitalConditionsSnapshot'
     | 'queryOpenInterestHistory'
     | 'queryCrossAssetSnapshot'
-    | 'queryMacroMarketSnapshot'
+    | 'queryMacroHistoryAsOf'
     | 'queryMacroRatesSnapshot'
     | 'queryMacroEconomicCalendarMonth'
     | 'queryMarketCalendarMonth'>
@@ -54,7 +56,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
         readCalendar(deps, input.asOf, input.locale, enabled.calendar, windowStart),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
-        usableSnapshot(safeSync(() => deps.publicQuery.queryMacroMarketSnapshot(), undefined), input.asOf),
+        buildMacroMarketAsOf(deps, input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
         safe(() => deps.publicQuery.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }), undefined)
       ])
@@ -68,7 +70,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         conclusion,
         news,
         calendar,
-        readings: Object.freeze({ fearGreed, funding, capital }),
+        readings: Object.freeze({ fearGreed, funding, capital: capitalAsOf(capital, input.asOf) }),
         ...(positioning ? { positioning } : {}),
         ...(policyPath ? { policyPath } : {}),
         market: Object.freeze({
@@ -319,10 +321,82 @@ function unavailableCapital() {
   return { state: 'unavailable' as const, failureCode: 'capital-conditions-query-unavailable' as const }
 }
 
-function usableSnapshot<T extends { asOf?: string }>(value: T | undefined, cutoff: string): T | undefined {
-  if (!value) return undefined
-  if (!value.asOf || !Number.isFinite(Date.parse(value.asOf))) return value
-  return value.asOf <= cutoff ? value : undefined
+/**
+ * The dollar and gold as they stood at the cutoff.
+ *
+ * The product-wide macro snapshot is a single *current* read: it carries the 21:00 market, so using
+ * it for an 08:00 edition either prints the wrong instant or — when its own `asOf` is checked — drops
+ * the row to `—` while the conclusion still cites the same series. Both are the masquerade this
+ * builder removes. The stored history answers the cutoff itself, so the card, the conclusion and the
+ * backfill tool all read one projection at one instant.
+ *
+ * The projection's own `returns` travel with the level: a window the store cannot answer at the
+ * cutoff stays absent, and the row prints a level rather than a change measured over whatever bar
+ * happened to be stored. A synthesised dollar keeps its `synthetic` tag, which is what the row label
+ * reads.
+ */
+function buildMacroMarketAsOf(
+  deps: DailyBriefingSourceDeps,
+  cutoff: string
+): DailyBriefingFactPacket['market']['macroMarket'] {
+  const dxy = macroReadingAsOf(deps, 'dxy', cutoff)
+  const gold = macroReadingAsOf(deps, 'gold', cutoff)
+  const readings = [dxy, gold]
+    .filter((reading): reading is MacroHistoryAsOfReading => reading !== undefined)
+    .map((reading) => Object.freeze({
+      seriesId: reading.seriesId,
+      level: reading.value,
+      atMs: Date.parse(reading.observedAt),
+      returns: Object.freeze({ ...(reading.returns ?? {}) }),
+      ...(reading.synthetic ? { synthetic: true as const } : {})
+    }))
+  if (readings.length === 0) return undefined
+  return Object.freeze({
+    state: 'available' as const,
+    asOf: cutoff,
+    readings: Object.freeze(readings),
+    caveats: Object.freeze(readings.some((reading) => 'synthetic' in reading)
+      ? ['synthetic-dollar-index' as const]
+      : [])
+  })
+}
+
+function macroReadingAsOf(
+  deps: DailyBriefingSourceDeps,
+  series: Extract<MacroHistoryAsOfSeries, 'dxy' | 'gold'>,
+  cutoff: string
+): MacroHistoryAsOfReading | undefined {
+  const reading = safeSync(() => deps.publicQuery.queryMacroHistoryAsOf({ series, asOf: cutoff }), undefined)
+  if (!reading || reading.state !== 'available') return undefined
+  // The reader already refuses a point after the instant; repeating the gate here means a miswired
+  // or future-dated projection can never become a card value.
+  if (reading.asOf !== cutoff) return undefined
+  if (!Number.isFinite(reading.value) || !Number.isFinite(Date.parse(reading.observedAt))) return undefined
+  return reading.observedAt <= cutoff ? reading : undefined
+}
+
+/**
+ * The packet's last as-of gate for the capital rows.
+ *
+ * The capital query prefers stored history at or before the instant and fails closed otherwise, but
+ * a stale slice of the packet must never carry a snapshot verified after the cutoff: that is the
+ * current state, not the cutoff's fact. A late core snapshot becomes a stated empty reading (the
+ * row prints a gap), and a late ETF window becomes `unavailable` rather than a card that disagrees
+ * with the conclusion.
+ */
+function capitalAsOf(result: CapitalConditionsSnapshotResult, cutoff: string): CapitalConditionsSnapshotResult {
+  if (result.state !== 'available') return result
+  const core = result.coreStablecoins
+  if (core.observedAt > cutoff || core.verifiedAt > cutoff) {
+    return Object.freeze({ state: 'empty' as const, asOf: cutoff })
+  }
+  if (result.etf.state !== 'available') return result
+  const etf = result.etf
+  const late = etf.verifiedAt > cutoff ||
+    [...etf.btc.rows, ...etf.eth.rows].some((row) => row.observedAt > cutoff)
+  return late
+    ? Object.freeze({ ...result, etf: Object.freeze({ state: 'unavailable' as const }) })
+    : result
 }
 
 /**

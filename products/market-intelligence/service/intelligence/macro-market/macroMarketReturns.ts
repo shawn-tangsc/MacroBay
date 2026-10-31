@@ -67,11 +67,28 @@ export function macroMarketReturn(store: MacroMarketStore, seriesId: string, win
   // Anchored on the newest bar rather than on "now": a series collected a few minutes ago would
   // otherwise be unable to answer its own shortest window, even though the change is right there in
   // the data. How fresh the series is shows up separately, as the last update time.
-  const target = latest.atMs - windowMs[window]
+  return macroMarketReturnAt(store, seriesId, window, latest)
+}
+
+/**
+ * The same window arithmetic, anchored on an explicit bar instead of the newest one.
+ *
+ * The daily brief needs a return for a past instant (its cutoff), and the store already holds the
+ * bar that was newest then. Sharing this function keeps one definition of "a window it can honestly
+ * answer": the older bar must sit within half a window of the window start, so a hidden gap becomes
+ * `insufficient` rather than a change measured over whatever happened to be stored.
+ */
+export function macroMarketReturnAt(
+  store: Pick<MacroMarketStore, 'series'>,
+  seriesId: string,
+  window: MacroMarketWindow,
+  anchor: Readonly<{ atMs: number; value: number }>
+): MacroMarketReturn {
   // The bar we compare against has to sit close to the window start; half a window is the margin
   // that still means "this is the change over the window" rather than "over whatever we had".
+  const target = anchor.atMs - windowMs[window]
   const tolerance = windowMs[window] / 2
   const older = [...store.series(seriesId, target - tolerance, target + tolerance)].sort((a, b) => Math.abs(a.atMs - target) - Math.abs(b.atMs - target))[0]
-  if (!older || latest.atMs <= older.atMs || older.value === 0) return { state: 'unavailable', reason: 'insufficient' }
-  return { state: 'available', percent: (latest.value / older.value - 1) * 100 }
+  if (!older || anchor.atMs <= older.atMs || older.value === 0) return { state: 'unavailable', reason: 'insufficient' }
+  return { state: 'available', percent: (anchor.value / older.value - 1) * 100 }
 }

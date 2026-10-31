@@ -1,7 +1,8 @@
-import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
+import { macroMarketSnapshotPublicPolicy, type MacroMarketWindow } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketPolicy } from '../macro-market/macroMarketPolicy'
 import { realMarketApiPolicy } from '../macro-market/realMarketApiPolicy'
+import { macroMarketReturnAt, macroMarketWindows } from '../macro-market/macroMarketReturns'
 import type { MacroMarketStore } from '../macro-market/macroMarketStore'
 import type { MetricIntelligenceEvent } from '../schema/intelligenceMetricEvent'
 
@@ -61,6 +62,12 @@ export type MacroHistoryAsOfReading = Readonly<{
   sourceUrl: string
   /** Set only when the dollar row is answered by this product's own basket rather than ICE's index. */
   synthetic?: true
+  /**
+   * The windows the stored series could answer *at this instant*, using the same ladder and the same
+   * tolerance rule as the current snapshot. Absent windows are holes, not flat markets; a caller that
+   * prints a change must not substitute the change since whenever the last point happened to land.
+   */
+  returns?: Readonly<Partial<Record<MacroMarketWindow, number>>>
   /** A daily series carries the day it closes: `YYYY-MM-DD`. Absent for an intraday point. */
   period?: string
 }>
@@ -95,7 +102,7 @@ export const macroHistoryAsOfPolicy = Object.freeze({
 
 export type MacroHistoryAsOfDeps = Readonly<{
   /** The macro-market store, or `undefined` when it is not part of this build. */
-  macroMarket?: Pick<MacroMarketStore, 'latestAt'>
+  macroMarket?: Pick<MacroMarketStore, 'latestAt' | 'series'>
   /** The pipeline's stored metric events, or `undefined` when that store is not wired. */
   listMetricEvents?: () => readonly MetricIntelligenceEvent[]
   now?: () => number
@@ -135,10 +142,10 @@ function dollarReading(deps: MacroHistoryAsOfDeps, asOf: string, asOfMs: number)
   // The panel's rule, applied to what existed at the instant: the synthesis answers only while it is
   // newer than the licensed series it replaces, so an expired fallback never displaces a real one.
   if (licensed && (!synthesized || synthesized.atMs <= licensed.atMs)) {
-    return pointReading('dxy', licensedId, asOf, licensed, macroHistoryAsOfPolicy.method.dollarIndex, macroHistoryAsOfPolicy.sourceUrl.dollarIndex)
+    return pointReading(deps, 'dxy', licensedId, asOf, licensed, macroHistoryAsOfPolicy.method.dollarIndex, macroHistoryAsOfPolicy.sourceUrl.dollarIndex)
   }
   if (synthesized) {
-    return pointReading('dxy', synthesizedId, asOf, synthesized, macroHistoryAsOfPolicy.method.dollarIndexSynthetic, macroHistoryAsOfPolicy.sourceUrl.dollarIndexSynthetic, true)
+    return pointReading(deps, 'dxy', synthesizedId, asOf, synthesized, macroHistoryAsOfPolicy.method.dollarIndexSynthetic, macroHistoryAsOfPolicy.sourceUrl.dollarIndexSynthetic, true)
   }
   return unwired('dxy', asOf, `the store holds no ${licensedId} or ${synthesizedId} point at or before this instant.`)
 }
@@ -149,7 +156,7 @@ function goldReading(deps: MacroHistoryAsOfDeps, asOf: string, asOfMs: number): 
   const seriesId = macroMarketSnapshotPublicPolicy.series.gold
   const point = store.latestAt(seriesId, asOfMs)
   if (!point) return unwired('gold', asOf, `the store holds no ${seriesId} point at or before this instant.`)
-  return pointReading('gold', seriesId, asOf, point, macroHistoryAsOfPolicy.method.gold, macroHistoryAsOfPolicy.sourceUrl.gold)
+  return pointReading(deps, 'gold', seriesId, asOf, point, macroHistoryAsOfPolicy.method.gold, macroHistoryAsOfPolicy.sourceUrl.gold)
 }
 
 function rateReading(deps: MacroHistoryAsOfDeps, series: 'us10y' | 'us10y-real', asOf: string, asOfMs: number): MacroHistoryAsOfResult {
@@ -211,6 +218,7 @@ function ratePeriod(event: MetricIntelligenceEvent | undefined, metricKey: strin
 }
 
 function pointReading(
+  deps: MacroHistoryAsOfDeps,
   series: MacroHistoryAsOfSeries,
   seriesId: string,
   asOf: string,
@@ -235,8 +243,26 @@ function pointReading(
     observedAt,
     method,
     sourceUrl,
+    // Returns are anchored on the point that answered, so the 21:00 bar can neither become the
+    // level nor move a percentage that belongs to the cutoff.
+    returns: Object.freeze(returnsAt(deps.macroMarket, seriesId, point)),
     ...(synthetic ? { synthetic: true as const } : {})
   })
+}
+
+/** The windows the stored series could answer at the anchored instant; holes stay absent. */
+function returnsAt(
+  store: Pick<MacroMarketStore, 'series'> | undefined,
+  seriesId: string,
+  anchor: Readonly<{ atMs: number; value: number }>
+): Partial<Record<MacroMarketWindow, number>> {
+  if (!store) return {}
+  const returns: Partial<Record<MacroMarketWindow, number>> = {}
+  for (const window of macroMarketWindows) {
+    const value = macroMarketReturnAt(store, seriesId, window, anchor)
+    if (value.state === 'available') returns[window] = value.percent
+  }
+  return returns
 }
 
 function unwired(series: MacroHistoryAsOfSeries, asOf: string, detail: string): MacroHistoryAsOfGap {

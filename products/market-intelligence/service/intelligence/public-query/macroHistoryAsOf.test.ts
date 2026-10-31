@@ -16,14 +16,15 @@ const NOW_MS = Date.parse(GENERATED_AT)
 type Point = Readonly<{ series: string; atMs: number; value: number }>
 
 /** The store's as-of read, over a fixture: newest point at or before the instant, per series. */
-function store(points: readonly Point[]): Pick<MacroMarketStore, 'latestAt'> {
+function store(points: readonly Point[]): Pick<MacroMarketStore, 'latestAt' | 'series'> {
+  const sorted = [...points].sort((left, right) => left.atMs - right.atMs)
   return {
     latestAt: (seriesId, atOrBeforeMs) => {
-      const rows = points.filter((point) => point.series === seriesId && point.atMs <= atOrBeforeMs)
-        .sort((left, right) => left.atMs - right.atMs)
-      const latest = rows.at(-1)
+      const latest = sorted.filter((point) => point.series === seriesId && point.atMs <= atOrBeforeMs).at(-1)
       return latest ? { atMs: latest.atMs, value: latest.value } : undefined
-    }
+    },
+    series: (seriesId, fromMs, toMs) => sorted
+      .filter((point) => point.series === seriesId && point.atMs >= fromMs && point.atMs <= toMs)
   }
 }
 
@@ -69,7 +70,23 @@ describe('macro history as-of projection', () => {
       value: 100.2,
       observedAt: '2026-10-29T23:55:00.000Z',
       method: 'dxy-store-as-of',
-      sourceUrl: 'https://api.realmarketapi.com/api/v1/price'
+      sourceUrl: 'https://api.realmarketapi.com/api/v1/price',
+      // No bar sits near 24h before the answering point in this fixture, so the window stays absent.
+      returns: {}
+    })
+  })
+
+  it('computes the 24h return from the bar that answered, not from the newest stored bar', () => {
+    const withHistory: readonly Point[] = [
+      ...points,
+      { series: 'dxy-real', atMs: Date.parse('2026-10-29T00:00:00.000Z'), value: 100 },
+      // A bar after the cutoff that would move the return if it were used as the anchor.
+      { series: 'dxy-real', atMs: Date.parse('2026-10-30T12:00:00.000Z'), value: 120 }
+    ]
+    const result = query({ macroMarket: store(withHistory) }).read({ series: 'dxy', asOf: CUTOFF })
+    expect(result).toMatchObject({
+      state: 'available', value: 100.2, observedAt: '2026-10-29T23:55:00.000Z',
+      returns: { '24h': (100.2 / 100 - 1) * 100 }
     })
   })
 
@@ -188,7 +205,10 @@ describe('macro history as-of projection', () => {
   })
 
   it('turns a throwing store into a named gap instead of a failed read', () => {
-    const throwing = { latestAt: () => { throw new Error('store down') } }
+    const throwing = {
+      latestAt: () => { throw new Error('store down') },
+      series: () => { throw new Error('store down') }
+    }
     expect(query({ macroMarket: throwing }).read({ series: 'gold', asOf: CUTOFF }))
       .toMatchObject({ state: 'unavailable', gapCode: 'query-unavailable' })
   })

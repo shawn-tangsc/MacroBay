@@ -2,7 +2,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync } from 'node:fs'
 
-import { isValidEtfCurrentStateWindow, type EtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
+import { etfCurrentStateWindowPolicy, isValidEtfCurrentStateWindow, type EtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
 import { etfPublicSnapshotPolicy } from '../../../contracts/intelligenceQueryContracts'
 
 export const etfCurrentStateStorePolicy = Object.freeze({
@@ -100,19 +100,52 @@ export function createEtfCurrentStateStore(deps: { storage: EtfCurrentStateStora
       const verifiedAt = state.snapshot?.verifiedAt
       if (readFailed || !state.snapshot || !verifiedAt) return unavailable()
       // A flow row is a fact only from its own observation time. Refreshing the window later does not
-      // make the rows it contains known earlier, so a window holding one row observed after the
-      // cutoff cannot stand in for an as-of read at that cutoff.
-      if (!rowsObservedBy(state.snapshot.window, input.asOf)) return unavailable()
-      if (Date.parse(input.asOf) < Date.parse(verifiedAt)) {
-        // A refresh that arrived after the cutoff may still hold a window that had already closed
-        // before it; those rows were observed before the cutoff and are answered as such.
-        if (state.snapshot.window.windowEnd < input.asOf.slice(0, 10)) return Object.freeze({ state: 'available' as const, window: state.snapshot.window, verifiedAt })
-        return unavailable()
-      }
-      if (!input.allowStale && Date.parse(input.asOf) - Date.parse(verifiedAt) > etfCurrentStateStorePolicy.maximumSnapshotAgeMs) return unavailable()
-      return Object.freeze({ state: 'available' as const, window: state.snapshot.window, verifiedAt })
+      // make the rows it contains known earlier, so this read keeps only the rows the provider had
+      // already observed at the instant and drops the rest. The returned window ends at the last kept
+      // trading day: a card built from it shows the as-of read, never today's refresh wearing the
+      // cutoff's timestamp. When no row survives, the answer is a gap rather than the current window.
+      const window = windowObservedBy(state.snapshot.window, input.asOf)
+      if (!window) return unavailable()
+      // A later refresh may still have been verified after the cutoff while all kept rows were
+      // observed before it. The rows are the facts that existed then, so the answer is dated by the
+      // newest kept observation: "known by" cannot be later than the instant being projected.
+      const knownAt = Date.parse(verifiedAt) <= Date.parse(input.asOf)
+        ? verifiedAt
+        : newestObservation(window)
+      if (!input.allowStale && Date.parse(input.asOf) - Date.parse(knownAt) > etfCurrentStateStorePolicy.maximumSnapshotAgeMs) return unavailable()
+      return Object.freeze({ state: 'available' as const, window, verifiedAt: knownAt })
     }
   }
+}
+
+/**
+ * The window restricted to rows each observed at or before the instant.
+ *
+ * A row may only answer for instants at or after its own observation; older rows stay valid because
+ * they were known then. Both assets have to keep the same trading days or the public DTO would
+ * describe two different windows, and the remaining window ends at its newest kept day.
+ */
+function windowObservedBy(window: EtfCurrentStateWindow, asOf: string): EtfCurrentStateWindow | undefined {
+  const cutoffDate = asOf.slice(0, 10)
+  const observedBy = (row: EtfCurrentStateWindow['btc'][number]) => row.observedAt <= asOf && row.tradingDate <= cutoffDate
+  const btc = window.btc.filter(observedBy)
+  const eth = window.eth.filter(observedBy)
+  if (btc.length === 0 || eth.length === 0) return undefined
+  const sameDays = btc.length === eth.length && btc.every((row, index) => row.tradingDate === eth[index]?.tradingDate)
+  if (!sameDays) return undefined
+  const windowEnd = btc.at(-1)!.tradingDate
+  const capitalConclusionDates = btc.slice(-etfCurrentStateWindowPolicy.capitalConclusionRows).map((row) => row.tradingDate)
+  return Object.freeze({
+    btc: Object.freeze(btc.map((row) => Object.freeze({ ...row }))),
+    eth: Object.freeze(eth.map((row) => Object.freeze({ ...row }))),
+    windowEnd,
+    capitalConclusionDates: Object.freeze(capitalConclusionDates),
+    ...(window.revision ? { revision: Object.freeze({ ...window.revision }) } : {})
+  })
+}
+
+function newestObservation(window: EtfCurrentStateWindow): string {
+  return [...window.btc, ...window.eth].reduce((newest, row) => row.observedAt > newest ? row.observedAt : newest, '1970-01-01T00:00:00.000Z')
 }
 
 export function createInMemoryEtfCurrentStateStorage(initial?: EtfCurrentState): EtfCurrentStateStorage {
@@ -211,11 +244,6 @@ function materialWindow(window: EtfCurrentStateWindow): MaterialEtfCurrentStateW
 
 function mayReplaceRevision(previous: EtfCurrentStateWindow, next: EtfCurrentStateWindow): boolean {
   return !!previous.revision && !!next.revision && previous.revision.providerCurrentStateId !== next.revision.providerCurrentStateId
-}
-
-/** Every row's own provider observation time must be at or before the instant being answered. */
-function rowsObservedBy(window: EtfCurrentStateWindow, asOf: string): boolean {
-  return [...window.btc, ...window.eth].every((flow) => flow.observedAt <= asOf)
 }
 
 function isSafeRevisionIdentity(value: EtfCurrentStateWindow['revision']): boolean {

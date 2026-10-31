@@ -133,11 +133,10 @@ function crossRow(
 function macroRow(
   id: 'dxy' | 'gold',
   labelKey: string,
-  reading: { level: number; atMs: number; returns: Readonly<Partial<Record<string, number>>> } | undefined,
+  reading: { level: number; atMs: number; returns?: Readonly<Partial<Record<string, number>>> } | undefined,
   asOf: string
 ): BriefingMarketRow {
-  const value = reading?.returns['24h']
-  if (!reading || typeof value !== 'number' || !Number.isFinite(value)) {
+  if (!reading || !Number.isFinite(reading.level)) {
     return Object.freeze({
       id, labelKey, importance: context, state: 'unavailable' as const,
       value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
@@ -145,10 +144,20 @@ function macroRow(
   }
   const observedAt = new Date(reading.atMs).toISOString()
   const stale = age(asOf, observedAt) > marketStaleAfterMs
+  const value = reading.returns?.['24h']
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Object.freeze({
+      id, labelKey, importance: context, state: stale ? 'stale' as const : 'available' as const,
+      value: Object.freeze({ number: normalize(value), format: 'percent' as const }),
+      change: null, window: '24h' as const, observedAt
+    })
+  }
+  // The stored history answered the as-of level but not its 24h window. Printing the level keeps the
+  // fact the conclusion cites; a dash here would say "no data" about a number that is in hand.
   return Object.freeze({
     id, labelKey, importance: context, state: stale ? 'stale' as const : 'available' as const,
-    value: Object.freeze({ number: normalize(value), format: 'percent' as const }),
-    change: null, window: '24h' as const, observedAt
+    value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
+    change: null, window: 'latest' as const, observedAt
   })
 }
 
