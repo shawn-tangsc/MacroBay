@@ -52,6 +52,8 @@ import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
+import { queryMarketDivergenceAsync, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
 import type { FundingRateHistoryStore } from '../store/fundingRateHistoryStore'
 import type { PerpetualPositioningStore } from '../store/perpetualPositioningStore'
 import { impactMatchesScope, itemMatchesScope, normalizeQueryScope, type ResolvedQueryScope } from './queryScopeResolver'
@@ -91,6 +93,7 @@ export type MarketIntelligencePublicQueryService = {
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
+  queryMarketDivergence: (input: { asOf: string }) => Promise<MarketDivergenceResult>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -184,7 +187,7 @@ export function createMarketIntelligencePublicQueryService(
   let macroHistoryAsOfQuery: Pick<MacroHistoryAsOfQuery, 'read'> | undefined
   let policyPathContextQuery: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined
 
-  return {
+  const service = {
     querySentimentSnapshot: (queryInput) =>
       executeQuery({
         queryType: MARKET_INTELLIGENCE_QUERY_TYPES.sentimentSnapshot,
@@ -372,6 +375,55 @@ export function createMarketIntelligencePublicQueryService(
     },
     setPolicyPathQuery(query) {
       policyPathContextQuery = query
+    }
+  } as MarketIntelligencePublicQueryService
+
+  // Reads the service's own legs rather than reaching into stores again: one implementation of
+  // "what the dashboard already knows", and the divergence rule never sees a second view of it.
+  service.queryMarketDivergence = async (queryInput) => queryMarketDivergenceAsync({
+    asOf: queryInput.asOf,
+    read: divergenceReader(service, queryInput.asOf)
+  })
+  return service
+}
+
+function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string): DivergenceLegReader {
+  return {
+    stablecoin: async () => {
+      const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
+      return snapshot.state === 'available'
+        ? { change7dPercent: snapshot.coreStablecoins.change7dPercent, observedAt: snapshot.coreStablecoins.observedAt }
+        : undefined
+    },
+    etf: async () => {
+      const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
+      if (snapshot.state !== 'available' || snapshot.etf === undefined || !('btc' in snapshot.etf)) return undefined
+      return { rows: snapshot.etf.btc.rows }
+    },
+    openInterest: async () => {
+      const result = await service.queryOpenInterestHistory({ asOf, window: '24h' })
+      const latest = result.state === 'available' ? result.btc.at(-1) : undefined
+      const change = result.state === 'available' ? result.change?.btc.h24Pct : undefined
+      return latest && change !== undefined ? { change24hPct: change, observedAt: latest.observedAt } : undefined
+    },
+    funding: async () => {
+      const result = await service.queryFundingRateHistory({ asOf })
+      const latest = result.state === 'available' ? result.btc.at(-1) : undefined
+      return latest ? { ratePercent: latest.ratePercent, observedAt: latest.observedAt } : undefined
+    },
+    price: async () => {
+      const snapshot = await service.queryCrossAssetSnapshot({ range: '24h', asOf })
+      const metric = snapshot?.closedReturns.btc['24h']
+      if (!snapshot || !metric || metric.state !== 'available') return undefined
+      return { return24hPercent: metric.value, observedAt: snapshot.analysisEnd }
+    },
+    sentiment: async () => {
+      // 24h on purpose: the pair asks whether a day of news moved a day of price, and the
+      // builder defaults to 1h.
+      const envelope = await service.querySentimentSnapshot({ asOf, scope: { asset: 'BTC' }, filters: { horizon: '24h' } })
+      const data = envelope.data
+      if (!data || data.status !== 'available' || !data.label) return undefined
+      return { label: data.label, computedAt: data.computedAt ?? asOf }
     }
   }
 }

@@ -217,3 +217,48 @@ export function isCanonicalDivergenceTime(value: unknown): value is string {
   if (typeof value !== 'string' || !divergencePolicy.canonicalUtcMillisPattern.test(value)) return false
   try { return new Date(value).toISOString() === value } catch { return false }
 }
+
+/**
+ * The one validator the IPC handler and the renderer client both call.
+ *
+ * A second copy would drift: the handler would accept a shape the client refuses, and the card
+ * would go blank with no failing test. Same lesson as the open-interest DTO.
+ */
+export function isMarketDivergenceResult(value: unknown, asOf: string): value is MarketDivergenceResult {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const record = value as Record<string, unknown>
+  if (record.state === 'unavailable') return record.failureCode === divergencePolicy.unavailableFailureCode
+  if (!isCanonicalDivergenceTime(record.asOf) || record.asOf !== asOf) return false
+  if (!Array.isArray(record.withheld) || !record.withheld.every(isWithheld)) return false
+  if (record.state === 'empty') return Object.keys(record).length === 3
+  if (record.state !== 'available' || !Array.isArray(record.rows)) return false
+  if (record.rows.length > divergencePolicy.pairs.length) return false
+  return record.rows.every(isRow)
+}
+
+function isRow(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const row = value as Record<string, unknown>
+  if (!divergencePolicy.pairs.includes(row.pairId as never)) return false
+  if (row.direction !== 'bearish' && row.direction !== 'bullish' && row.direction !== 'unpriced') return false
+  if (typeof row.mechanismKey !== 'string' || typeof row.invalidationKey !== 'string') return false
+  if (!Array.isArray(row.legs) || row.legs.length < 2 || row.legs.length > 3) return false
+  return row.legs.every(isLeg)
+}
+
+function isLeg(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const leg = value as Record<string, unknown>
+  if (typeof leg.id !== 'string' || typeof leg.value !== 'number' || !Number.isFinite(leg.value)) return false
+  if (leg.unit !== 'percent' && leg.unit !== 'usd' && leg.unit !== 'percent-per-8h') return false
+  if (!isCanonicalDivergenceTime(leg.observedAt)) return false
+  return leg.label === undefined || typeof leg.label === 'string'
+}
+
+function isWithheld(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const entry = value as Record<string, unknown>
+  if (!divergencePolicy.pairs.includes(entry.pairId as never)) return false
+  if (entry.reason !== 'window-mismatch' && entry.reason !== 'leg-missing' && entry.reason !== 'leg-stale') return false
+  return typeof entry.leg === 'string'
+}

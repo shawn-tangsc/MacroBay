@@ -27,6 +27,7 @@ import {
   isWithinCapitalConditionsSnapshotDtoBudget,
   toEtfPublicSnapshot
 } from '../../../contracts/intelligenceQueryContracts'
+import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 import {
   isCanonicalOpenInterestTime,
   isOpenInterestHistoryResult,
@@ -115,6 +116,15 @@ export function registerIntelligencePublicQueryIpc(
     } catch { return openInterestUnavailable() }
   })
 
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryMarketDivergence, async (payload) => {
+    try {
+      const input = asMarketDivergenceInput(payload)
+      if (!input) return divergenceUnavailable()
+      const value = await publicQueryService().queryMarketDivergence(input)
+      return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable()
+    } catch { return divergenceUnavailable() }
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {
     try {
       const input = asCapitalConditionsSnapshotInput(payload)
@@ -140,6 +150,11 @@ function snapshotResult(value: unknown, input: FearGreedSnapshotQueryInput): Fea
   if (isExactDataRecord(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === input.asOf) return { state: 'empty', asOf: value.asOf }
   if (isExactDataRecord(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === snapshotPolicy.unavailableFailureCode) return snapshotUnavailable()
   return snapshotUnavailable()
+}
+
+function asMarketDivergenceInput(value: unknown): { asOf: string } | undefined {
+  if (!isExactDataRecord(value, ['asOf'])) return undefined
+  return isCanonicalDivergenceTime(value.asOf) ? { asOf: value.asOf } : undefined
 }
 
 function asOpenInterestHistoryInput(value: unknown): { asOf: string; window: OpenInterestWindow } | undefined {
