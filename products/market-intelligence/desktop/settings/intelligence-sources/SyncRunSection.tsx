@@ -16,6 +16,8 @@ import './sync-run-section.css'
 export type SyncRunText = Readonly<{
   title: string; window: Record<SyncRunWindow, string>; outcome: Record<'any' | 'succeeded' | 'failed' | 'running', string>
   columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
+  /** The separator between two names on one line, so a locale can pick its own glyph. */
+  joiner: string
   allTasks: string
   /** Shown when a run names no source: it reads stored records or every source at once. */
   allSourcesNote: string
@@ -151,8 +153,8 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, window)}</span>
         <span className="mi-sync-run__task" role="cell" title={taskLabelOf(row)}>{taskLabelOf(row)}</span>
-        <span className="mi-sync-run__source" role="cell" title={row.sources.map(sourceLabelOf).join(' · ')}>
-          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map(sourceLabelOf).join(' · ')}
+        <span className="mi-sync-run__source" role="cell" title={row.sources.map(sourceLabelOf).join(text.joiner)}>
+          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
           {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
@@ -166,7 +168,7 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
     </div> : null}
     {state === 'available' && filtered.length > 0
       ? <footer className="mi-sync-run__foot">
-        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))} · {text.retention}</span>
+        <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}{text.joiner}{text.retention}</span>
         {pageCount > 1 ? <span className="mi-sync-run__pager">
           <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} type="button">{text.previous}</button>
           <span>{text.page.replace('{page}', String(currentPage + 1)).replace('{pages}', String(pageCount))}</span>

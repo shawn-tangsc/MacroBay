@@ -46,6 +46,12 @@ export function TranslationPreferencesSection(props: {
     failedCount: string
     translatedCount: string
     lastJobAt: string
+    /** Punctuation comes from the text layer: a fullwidth bracket on an English screen is a typo. */
+    joiner: string
+    labelSep: string
+    parenOpen: string
+    parenClose: string
+    modelPathSep: string
     followModelServiceDefault: string
     defaultModelNotConfigured: string
     defaultModelUnavailable: string
@@ -95,12 +101,12 @@ export function TranslationPreferencesSection(props: {
   )
   const followDefaultLabel =
     !settings?.defaultModelId.trim()
-      ? `${props.labels.followModelServiceDefault}（${props.labels.defaultModelNotConfigured}）`
+      ? `${props.labels.followModelServiceDefault}${props.labels.parenOpen}${props.labels.defaultModelNotConfigured}${props.labels.parenClose}`
       : props.modelProviders.length === 0
         ? props.labels.followModelServiceDefault
         : defaultModel.ok
-          ? `${props.labels.followModelServiceDefault} · ${defaultModel.providerName} / ${defaultModel.modelName}`
-          : `${props.labels.followModelServiceDefault}（${props.labels.defaultModelUnavailable}）`
+          ? `${props.labels.followModelServiceDefault}${props.labels.joiner}${defaultModel.providerName}${props.labels.modelPathSep}${defaultModel.modelName}`
+          : `${props.labels.followModelServiceDefault}${props.labels.parenOpen}${props.labels.defaultModelUnavailable}${props.labels.parenClose}`
   const pickerValue =
     settings?.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : null
 
@@ -204,7 +210,7 @@ export function TranslationPreferencesSection(props: {
       <div className="intelligence-translation-meta">
         {props.moduleStatus ? (
           <small>
-            {props.labels.moduleStatus}: {props.labels.pendingCount} {counts.pendingCount} ·{' '}
+            {props.labels.moduleStatus}{props.labels.labelSep}{props.labels.pendingCount} {counts.pendingCount}{props.labels.joiner}
             {props.labels.failedCount} {counts.failedCount}
           </small>
         ) : null}
