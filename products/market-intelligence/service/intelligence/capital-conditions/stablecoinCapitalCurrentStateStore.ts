@@ -12,7 +12,21 @@ export const stablecoinCapitalCurrentStatePolicy = Object.freeze({
   maximumHealthBytes: 4 * 1024,
   maximumStateBytes: 256 * 1024,
   maximumAtomicDiskBytes: 512 * 1024,
-  maximumCounter: Number.MAX_SAFE_INTEGER
+  maximumCounter: Number.MAX_SAFE_INTEGER,
+  // The edition freezes at its 08:00 Beijing cutoff (00:00Z) and is generated hours later, so a
+  // 24-poll window (four hours at ten-minute cadence) has already rolled past the cutoff. History
+  // is therefore kept by age, not by count: it covers the cutoff-to-generation gap with room for a
+  // late run. Past the dense span the series is thinned to one point per hour; the dense span keeps
+  // every poll. The physical horizon is the coverage plus one thinning bucket, because bucket
+  // thinning keeps a bucket's latest point and would otherwise end the series up to an hour short of
+  // the coverage. Both layers are capped and byte-trimmed so the file stays far inside
+  // `maximumStateBytes`.
+  historyCoverageMs: 30 * 60 * 60 * 1_000,
+  historyDenseMs: 8 * 60 * 60 * 1_000,
+  historyDenseMaximumEntries: 60,
+  maximumHistoryEntries: 96,
+  historyThinningMs: 60 * 60 * 1_000,
+  historyByteBudget: 256 * 1024 - 8 * 1024
 })
 
 export type CapitalConditionsSnapshotState = Readonly<StablecoinCapitalSnapshot & {
@@ -61,10 +75,11 @@ export function createCapitalConditionsCurrentStateStore(deps: { storage: Capita
   }
 
   async function replace(next: CapitalConditionsCurrentState): Promise<boolean> {
-    if (readFailed || !isSafeState(next)) return false
+    const trimmed = trimHistoryToBudget(next)
+    if (readFailed || !isSafeState(trimmed)) return false
     try {
-      await deps.storage.write(next)
-      cached = next
+      await deps.storage.write(trimmed)
+      cached = trimmed
       return true
     } catch {
       return false
@@ -99,7 +114,9 @@ export function createCapitalConditionsCurrentStateStore(deps: { storage: Capita
       const next = Object.freeze({
         schemaVersion: stablecoinCapitalCurrentStatePolicy.schemaVersion,
         snapshot,
-        history: Object.freeze([...(previous.history ?? []), snapshot].slice(-24)),
+        // A state written before history existed still holds the last known point; seeding it keeps
+        // that point visible to a cutoff query instead of dropping it on the first new poll.
+        history: retainHistory([...(previous.history ?? (previous.snapshot ? [previous.snapshot] : [])), snapshot], input.verifiedAt),
         health: Object.freeze({
           status: 'healthy' as const,
           lastAttemptAt: input.verifiedAt,
@@ -180,6 +197,66 @@ function emptyState(): CapitalConditionsCurrentState {
       responseBodyTooLargeCount: 0
     })
   })
+}
+
+/**
+ * History retained by age instead of entry count.
+ *
+ * Every point inside the dense span is kept (so the cutoff usually lands on a ten-minute point);
+ * older points collapse to one per bucket, keeping the latest point in it so the series never ends
+ * before an instant it could answer. Entries without a canonical `verifiedAt`, in the future, or
+ * older than the retention horizon are dropped. Both layers are capped; overflowing dense entries
+ * fall through to the bucketed layer instead of being discarded, which preserves coverage.
+ */
+function retainHistory(history: readonly CapitalConditionsSnapshotState[], now: string): readonly CapitalConditionsSnapshotState[] {
+  const nowMs = Date.parse(now)
+  const seen = new Set<string>()
+  const ascending = history
+    .filter((entry) => {
+      const at = Date.parse(entry.verifiedAt)
+      if (!Number.isFinite(at) || at > nowMs || nowMs - at > stablecoinCapitalCurrentStatePolicy.historyCoverageMs + stablecoinCapitalCurrentStatePolicy.historyThinningMs || seen.has(entry.verifiedAt)) return false
+      seen.add(entry.verifiedAt)
+      return true
+    })
+    .sort((left, right) => left.verifiedAt.localeCompare(right.verifiedAt))
+  const denseFloor = nowMs - stablecoinCapitalCurrentStatePolicy.historyDenseMs
+  const buckets = new Set<number>()
+  const retained: CapitalConditionsSnapshotState[] = []
+  let denseCount = 0
+  for (let index = ascending.length - 1; index >= 0; index -= 1) {
+    const entry = ascending[index]!
+    const at = Date.parse(entry.verifiedAt)
+    if (at >= denseFloor && denseCount < stablecoinCapitalCurrentStatePolicy.historyDenseMaximumEntries) {
+      denseCount += 1
+      retained.push(entry)
+      continue
+    }
+    const bucket = Math.floor(at / stablecoinCapitalCurrentStatePolicy.historyThinningMs)
+    if (buckets.has(bucket)) continue
+    buckets.add(bucket)
+    retained.push(entry)
+  }
+  retained.reverse()
+  if (retained.length > stablecoinCapitalCurrentStatePolicy.maximumHistoryEntries) {
+    retained.splice(0, retained.length - stablecoinCapitalCurrentStatePolicy.maximumHistoryEntries)
+  }
+  return Object.freeze(retained)
+}
+
+/** Drop the oldest retained points until the encoded state fits the history budget. */
+function trimHistoryToBudget(state: CapitalConditionsCurrentState): CapitalConditionsCurrentState {
+  const history = state.history
+  if (!history || history.length === 0) return state
+  const withoutHistory = Buffer.byteLength(JSON.stringify({ ...state, history: [] }), 'utf8')
+  const costs = history.map((entry) => Buffer.byteLength(JSON.stringify(entry), 'utf8') + 1)
+  let total = withoutHistory + costs.reduce((sum, cost) => sum + cost, 0)
+  let keepFrom = 0
+  while (keepFrom < costs.length && total > stablecoinCapitalCurrentStatePolicy.historyByteBudget) {
+    total -= costs[keepFrom]!
+    keepFrom += 1
+  }
+  if (keepFrom === 0) return state
+  return Object.freeze({ ...state, history: Object.freeze(history.slice(keepFrom)) })
 }
 
 function sameCanonicalSnapshot(previous: CapitalConditionsSnapshotState, next: StablecoinCapitalSnapshot): boolean {

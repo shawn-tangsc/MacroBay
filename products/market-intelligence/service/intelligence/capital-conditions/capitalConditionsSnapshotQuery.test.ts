@@ -233,6 +233,63 @@ describe('capital conditions snapshot query', () => {
     })
   })
 
+  it('answers a cutoff from the retained thirty-hour history at the nearest point at or before it', async () => {
+    // Ten-minute polling for forty hours: the older span is thinned to hourly points, so the nearest
+    // retained point at or before the cutoff is the crossing point of its bucket, never a later one.
+    const end = Date.parse('2026-10-31T13:00:00.000Z')
+    const store = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
+    for (let at = end - 40 * 60 * 60 * 1_000; at <= end; at += 10 * 60 * 1_000) {
+      await store.recordSuccess({ snapshot: { ...snapshot, coreCurrentUsd: at }, verifiedAt: new Date(at).toISOString() })
+    }
+    const service = createCapitalConditionsSnapshotQueryService({ store })
+
+    const at = (verifiedAt: string) => ({ verifiedAt, currentUsd: Date.parse(verifiedAt) })
+    // The cutoff sits in the 00:00Z bucket, whose latest retained point (00:50Z) is after it, so the
+    // newest retained point known at the cutoff is 23:50Z the evening before.
+    await expect(service.query({ asOf: '2026-10-31T00:00:00.000Z' })).resolves.toMatchObject({
+      state: 'available', asOf: '2026-10-31T00:00:00.000Z',
+      coreStablecoins: at('2026-10-30T23:50:00.000Z')
+    })
+    await expect(service.query({ asOf: '2026-10-31T01:00:00.000Z' })).resolves.toMatchObject({
+      state: 'available', coreStablecoins: at('2026-10-31T00:50:00.000Z')
+    })
+    await expect(service.query({ asOf: '2026-10-30T23:49:00.000Z' })).resolves.toMatchObject({
+      state: 'available', coreStablecoins: at('2026-10-30T22:50:00.000Z')
+    })
+  })
+
+  it('answers the ETF cutoff from the archived window after the current window was observed later', async () => {
+    const cutoff = '2026-10-31T00:00:00.000Z'
+    const stablecoinStore = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
+    await stablecoinStore.recordSuccess({ snapshot, verifiedAt: '2026-10-30T23:50:00.000Z' })
+    const etfStore = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
+    // Three refreshes, each describing rows it observed at that instant; the newest one is well past
+    // the cutoff, so only the archived 00:00Z window can answer what was known at the cutoff.
+    for (const [verifiedAt, offset] of [['2026-10-30T23:00:00.000Z', 1], ['2026-10-31T00:00:00.000Z', 2], ['2026-10-31T11:00:00.000Z', 3]] as const) {
+      const dates = ['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30']
+      const rows = (asset: 'BTC' | 'ETH') => dates.map((tradingDate, index) => ({
+        asset, tradingDate, netFlowUsd: (asset === 'BTC' ? 1 : -1) * (offset + index),
+        observedAt: verifiedAt, fetchedAt: verifiedAt, source: '0xrouter' as const
+      }))
+      const built = buildEtfCurrentStateWindow({
+        asOf: verifiedAt, completeThrough: '2026-10-30', completeDates: dates,
+        btc: rows('BTC'), eth: rows('ETH')
+      })
+      if (built.state !== 'available') throw new Error('test window must be available')
+      await etfStore.replace({ window: { ...built.window, revision: { providerCurrentStateId: `revision-${offset}` } }, verifiedAt })
+    }
+    const service = createCapitalConditionsSnapshotQueryService({ store: stablecoinStore, etfStore })
+
+    const result = await service.query({ asOf: cutoff })
+    expect(result).toMatchObject({
+      state: 'available',
+      etf: { state: 'available', verifiedAt: cutoff, windowEnd: '2026-10-30' }
+    })
+    const rows = result.state === 'available' && result.etf.state === 'available' ? result.etf.btc.rows : []
+    expect(rows.every((row) => row.observedAt === cutoff)).toBe(true)
+    expect(rows[0]?.netFlowUsd).toBe(2)
+  })
+
   it('fails closed exactly beyond the six-hour freshness boundary and on unsafe input', async () => {
     const store = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
     await store.recordSuccess({ snapshot, verifiedAt })

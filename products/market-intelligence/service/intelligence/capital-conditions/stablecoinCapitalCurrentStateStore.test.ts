@@ -122,6 +122,97 @@ describe('capital conditions current state store', () => {
     expect(Buffer.byteLength(JSON.stringify(state), 'utf8') * 2).toBeLessThanOrEqual(stablecoinCapitalCurrentStatePolicy.maximumAtomicDiskBytes)
   })
 
+  it('keeps thirty hours of points by age and drops anything older', async () => {
+    const storage = createInMemoryCapitalConditionsStateStorage()
+    const store = createCapitalConditionsCurrentStateStore({ storage })
+    const end = Date.parse('2026-10-31T13:00:00.000Z')
+    const start = end - 40 * 60 * 60 * 1_000
+
+    for (let at = start; at <= end; at += tenMinutesMs) {
+      await store.recordSuccess({ snapshot: { ...snapshot, coreCurrentUsd: at / 1_000 }, verifiedAt: new Date(at).toISOString() })
+    }
+
+    const history = await store.readHistory()
+    const first = Date.parse(history[0]!.verifiedAt)
+    // A point at or before the thirty-hour mark is still there; the physical horizon adds one
+    // thinning bucket so bucket thinning cannot shorten the promised coverage.
+    expect(history.some((entry) => Date.parse(entry.verifiedAt) <= end - 30 * 60 * 60 * 1_000)).toBe(true)
+    expect(end - first).toBeGreaterThanOrEqual(30 * 60 * 60 * 1_000)
+    expect(end - first).toBeLessThanOrEqual(31 * 60 * 60 * 1_000)
+    // Nothing older than the physical horizon survives.
+    expect(history.every((entry) => end - Date.parse(entry.verifiedAt) <= 31 * 60 * 60 * 1_000)).toBe(true)
+  })
+
+  it('thins the span older than the dense window to one point per hour', async () => {
+    const storage = createInMemoryCapitalConditionsStateStorage()
+    const store = createCapitalConditionsCurrentStateStore({ storage })
+    const end = Date.parse('2026-10-31T13:00:00.000Z')
+
+    for (let at = end - 40 * 60 * 60 * 1_000; at <= end; at += tenMinutesMs) {
+      await store.recordSuccess({ snapshot, verifiedAt: new Date(at).toISOString() })
+    }
+
+    const history = await store.readHistory()
+    const denseFloor = end - stablecoinCapitalCurrentStatePolicy.historyDenseMs
+    const older = history.filter((entry) => Date.parse(entry.verifiedAt) < denseFloor)
+    const buckets = new Map<number, number>()
+    for (const entry of older) {
+      const bucket = Math.floor(Date.parse(entry.verifiedAt) / (60 * 60 * 1_000))
+      buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1)
+    }
+    // 31h physical horizon minus the 8h dense span leaves 23 hourly buckets.
+    expect(older.length).toBe(23)
+    expect([...buckets.values()].every((count) => count === 1)).toBe(true)
+  })
+
+  it('keeps a maximum-size snapshot history inside the state byte budget', async () => {
+    const storage = createInMemoryCapitalConditionsStateStorage()
+    const store = createCapitalConditionsCurrentStateStore({ storage })
+    const end = Date.parse('2026-10-31T13:00:00.000Z')
+    const heavy = { ...snapshot, coreCurrentUsd: 123456789012.345, usdStablecoinSupplyUsd: 123456789012.345, dailyFlows: maximalDailyFlows() }
+
+    for (let at = end - 40 * 60 * 60 * 1_000; at <= end; at += tenMinutesMs) {
+      await store.recordSuccess({ snapshot: heavy, verifiedAt: new Date(at).toISOString() })
+    }
+
+    const state = await storage.read()
+    const bytes = Buffer.byteLength(JSON.stringify(state), 'utf8')
+    expect(bytes).toBeLessThanOrEqual(stablecoinCapitalCurrentStatePolicy.maximumStateBytes)
+    expect(bytes * 2).toBeLessThanOrEqual(stablecoinCapitalCurrentStatePolicy.maximumAtomicDiskBytes)
+    // The budget is met by thinning and trimming, not by losing the thirty-hour window.
+    const history = await store.readHistory()
+    expect(end - Date.parse(history[0]!.verifiedAt)).toBeGreaterThanOrEqual(30 * 60 * 60 * 1_000)
+  })
+
+  it('reads a state file written before history existed and keeps its snapshot', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'capital-conditions-legacy-'))
+    const filePath = join(directory, 'capital-conditions-state.json')
+    const legacySnapshot = { ...snapshot, observedAt: '2026-10-30T23:50:00.000Z', verifiedAt: '2026-10-30T23:50:00.000Z' }
+    await writeFile(filePath, JSON.stringify({
+      schemaVersion: 1,
+      snapshot: legacySnapshot,
+      health: {
+        status: 'healthy', lastAttemptAt: '2026-10-30T23:50:00.000Z', lastSuccessAt: '2026-10-30T23:50:00.000Z',
+        consecutiveFailures: 0, snapshotReplaceCount: 1, snapshotNoWriteCount: 0, rejectionCount: 0, responseBodyTooLargeCount: 0
+      }
+    }), 'utf8')
+
+    // The old shape is read as the old behaviour: the current snapshot is present and queryable.
+    await expect(createCapitalConditionsCurrentStateStore({ storage: createCapitalConditionsStateJsonStorage(filePath) }).read())
+      .resolves.toHaveProperty('snapshot', legacySnapshot)
+    const upgraded = createCapitalConditionsCurrentStateStore({ storage: createCapitalConditionsStateJsonStorage(filePath) })
+    await expect(upgraded.recordSuccess({ snapshot: { ...snapshot, coreCurrentUsd: 320 }, verifiedAt: '2026-10-31T13:00:00.000Z' }))
+      .resolves.toEqual({ state: 'updated' })
+
+    // The first write after the upgrade seeds the legacy point into history so a cutoff can still
+    // read it, and the file stays readable on the next cold load.
+    const history = await upgraded.readHistory()
+    expect(history.map((entry) => entry.verifiedAt)).toEqual(['2026-10-30T23:50:00.000Z', '2026-10-31T13:00:00.000Z'])
+    await expect(createCapitalConditionsCurrentStateStore({ storage: createCapitalConditionsStateJsonStorage(filePath) }).read())
+      .resolves.toHaveProperty('snapshot.verifiedAt', '2026-10-31T13:00:00.000Z')
+    await rm(directory, { recursive: true, force: true })
+  })
+
   it('measures cold read and atomic write p95 within the current-state budget', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'capital-conditions-performance-'))
     const filePath = join(directory, 'capital-conditions-state.json')
@@ -162,4 +253,15 @@ async function measureCurrentStateIo(filePath: string): Promise<{ coldReadP95: n
 
 function p95(samples: readonly number[]): number {
   return [...samples].sort((left, right) => left - right)[Math.ceil(samples.length * 0.95) - 1]!
+}
+
+const tenMinutesMs = 10 * 60 * 1_000
+
+/** The largest daily-flow series the contract accepts, so a history point is at its byte ceiling. */
+function maximalDailyFlows(): readonly { tradingDate: string; netFlowUsd: number }[] {
+  const firstDay = Date.parse('2026-09-01T00:00:00.000Z')
+  return Array.from({ length: 30 }, (_, index) => ({
+    tradingDate: new Date(firstDay + index * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10),
+    netFlowUsd: -1234567890.123456
+  }))
 }

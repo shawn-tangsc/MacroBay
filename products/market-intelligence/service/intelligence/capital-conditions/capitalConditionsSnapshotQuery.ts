@@ -33,7 +33,7 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
         const history = await deps.store.readHistory?.() ?? []
         const currentSnapshot = state?.snapshot
         const historical = input.asOf < (currentSnapshot?.verifiedAt ?? '')
-          ? [...history].filter((entry) => entry.verifiedAt <= input.asOf).sort((left, right) => right.verifiedAt.localeCompare(left.verifiedAt))[0]
+          ? newestSnapshotAtOrBefore(history, input.asOf)
           : undefined
         const snapshot = historical ?? currentSnapshot
         const lastSuccessAt = snapshot?.verifiedAt ?? state?.health.lastSuccessAt
@@ -105,6 +105,24 @@ function isExactInput(value: unknown): value is CapitalConditionsSnapshotQueryIn
 
 export function isCanonicalCapitalConditionsTime(value: unknown): value is string {
   return isCanonicalCapitalConditionsSnapshotTime(value)
+}
+
+/**
+ * The newest retained point that was already known at the instant.
+ *
+ * A point may answer for an instant only when it was observed and verified by then, so both
+ * timestamps are checked and an entry carrying a malformed one is skipped rather than allowed to
+ * win the comparison. Retention is age-based, so the winner can be a thinned point hours older than
+ * the instant; the caller's freshness gate decides whether that age is acceptable.
+ */
+function newestSnapshotAtOrBefore(history: readonly CapitalConditionsSnapshotState[], asOf: string): CapitalConditionsSnapshotState | undefined {
+  let newest: CapitalConditionsSnapshotState | undefined
+  for (const entry of history) {
+    if (!isCanonicalCapitalConditionsSnapshotTime(entry.verifiedAt) || !isCanonicalCapitalConditionsSnapshotTime(entry.observedAt)) continue
+    if (entry.verifiedAt > asOf || entry.observedAt > asOf) continue
+    if (!newest || entry.verifiedAt > newest.verifiedAt || (entry.verifiedAt === newest.verifiedAt && entry.observedAt > newest.observedAt)) newest = entry
+  }
+  return newest
 }
 
 function isValidSnapshot(snapshot: CapitalConditionsSnapshotState): boolean {
