@@ -274,11 +274,11 @@ function reading(value: unknown, range: string): value is CrossAssetReading {
 }
 
 /**
- * 曲线网格步长（毫秒）：窗口的 5 分钟网格 ÷ 该窗口曲线上的点数（7d 2017/169 → 每小时，30d 8641/181 → 每 4 小时）。
+ * 曲线网格步长（毫秒）：窗口的 5 分钟网格 ÷ 该窗口曲线上的点数（7d 2017/169 → 每小时）。
  *
- * 这是网格规则的**唯一**推导处：契约校验、服务侧画宏观线、渲染侧算步长都读它。评审发现服务侧仍在用
- * `range === '7d' ? hour : 5min` 的三元，于是 30d 的宏观线落在 5 分钟网格上、被契约自己拒收——整包快照
- * 因此非法（界面上就是「行情暂不可用」）。
+ * 这是网格规则的**唯一**推导处：契约校验、服务侧画宏观线、渲染侧算步长都读它。曾经服务侧自己写
+ * `range === '7d' ? hour : 5min` 的三元，于是长窗口的宏观线落在 5 分钟网格上、被契约自己拒收——整包
+ * 快照因此非法（界面上就是「行情暂不可用」）。
  */
 export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
   return crossAssetContractPolicy.intervalMs *

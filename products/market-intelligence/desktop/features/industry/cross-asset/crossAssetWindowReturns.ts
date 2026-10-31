@@ -15,9 +15,9 @@ export type CrossAssetWindow = '15m' | '1h' | '24h' | '7d'
 export const crossAssetWindows: readonly CrossAssetWindow[] = Object.freeze(['15m', '1h', '24h', '7d'])
 
 /**
- * Curve point spacing per admitted range: every five minutes on the two short ranges, hourly on `7d`,
- * four-hourly on `30d` (the retention cold tier keeps one bar an hour out there, so a finer stride would
- * only draw the same value twice). Deriving the stride from the range keeps the label honest in each case.
+ * Curve point spacing per admitted range: every five minutes on the two short ranges, hourly on `7d`
+ * (that curve carries 169 points where its window has 2017). Deriving the stride from the range keeps
+ * the label honest in each case.
  */
 export const crossAssetCurveStrideMs: Readonly<Record<CrossAssetRange, number>> = Object.freeze(
   // 网格规则只有一处推导（契约），这里不再自行算一遍。

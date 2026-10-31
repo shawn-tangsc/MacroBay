@@ -5,9 +5,9 @@ import { crossAssetMarketEventSources, officialEventKeysInWindow } from './cross
 /**
  * The window's high-importance calendar events, reduced to the lines the chart draws.
  *
- * Read by the calendar's own month route, because that is the only query it has; two calls at most,
- * since the chart's window was at most eight days. **现在不再成立**：`30d` 被准入后，一个窗口可以跨三个
- * 自然月，而下面只枚举首尾两个月的话，中间那个月的事件**根本读不到**（评审 be5e5e55 的 ⑥）。
+ * Read by the calendar's own month route, because that is the only query it has: one call per calendar
+ * month the window crosses, enumerated below rather than assumed to be "first and last". 那个假设只在
+ * 窗口不跨第三个月时成立；一旦成立不了，被跳过的那一个月的事件会被静默丢掉（评审 be5e5e55 的 ⑥）。
  * costs the lines and nothing else — the curves are already on screen, and a calendar that did not
  * answer must never take them away.
  *
@@ -122,8 +122,8 @@ export function useCrossAssetEventLines({ calendar, readMarketEvents, eventTitle
 /**
  * 窗口跨过的**每一个**自然月（含首尾）。
  *
- * 用"首尾两个月"是 7 天窗口时代的写法；`30d` 准入后，2026-01-30 → 2026-03-01 这样的窗口跨三个自然月，
- * 只枚举首尾就会漏掉中间那个月——那一个月的事件竖线会整段消失，而且没有任何提示。
+ * 按窗口逐个枚举，而不是"首尾两个月"：后者只在窗口不跨第三个月时成立，一旦成立不了，被跳过的那
+ * 一个月的事件竖线会整段消失，而且没有任何提示。
  */
 export function calendarMonthsBetween(fromIso: string, toIso: string): readonly string[] {
   const months: string[] = []

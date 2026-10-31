@@ -44,7 +44,7 @@ function livePriceText(price: string): string {
 import './CrossAssetObservationPanel.css'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-/** The windows the chart offers, from the contract that defines them: a hand-copied list missed `30d`. */
+/** The windows the chart offers, from the contract that defines them: a hand-copied list drifts. */
 const crossAssetRanges = crossAssetContractPolicy.ranges
 type CrossAssetRange = typeof crossAssetRanges[number]
 

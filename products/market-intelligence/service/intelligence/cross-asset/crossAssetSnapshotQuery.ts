@@ -51,8 +51,8 @@ const iso = (value: number) => new Date(value).toISOString()
  */
 /**
  * How much history a read asks for: the longer of the longest printed window (the table's 7d column) and
- * this range's own window. A thirty-day curve needs thirty days of closes, and the short ranges still need
- * seven days so the 7d column beside them stays answerable from one analysis.
+ * this range's own window. The short ranges still need seven days so the 7d column beside them stays
+ * answerable from one analysis.
  */
 const historyIngestMs = (range: CrossAssetRange): number =>
   // 每个准入窗口都在热层内、都取精确同一时刻，所以不需要"锚点回看量"那一段（那是跨冷层窗口才要的，
