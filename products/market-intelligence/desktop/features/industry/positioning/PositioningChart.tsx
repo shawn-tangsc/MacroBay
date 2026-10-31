@@ -134,12 +134,15 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
           if (!last) return null
           const cx = x(Date.parse(last.observedAt))
           const cy = upperY(last.notionalUsd, asset === 'btc' ? btcScale : ethScale)
+          // One label above its line, one below: the two ends are often a few units apart, and
+          // both above collided exactly when the reader most wants to compare them.
           const flip = cx > VIEW.right - 64
+          const dy = asset === 'btc' ? -8 : 12
           return (
             <text key={asset} data-line-end={asset} data-series={asset}
               className="mi-positioning-panel__end"
               x={flip ? cx - 4 : cx + 4}
-              y={Math.max(VIEW.upperTop + 12, Math.min(cy - 6, VIEW.upperBottom - 2))}
+              y={Math.max(VIEW.upperTop + 12, Math.min(cy + dy, VIEW.upperBottom + 4))}
               textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
           )
         })}

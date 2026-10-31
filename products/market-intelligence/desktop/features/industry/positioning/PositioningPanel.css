@@ -86,7 +86,12 @@
 .mi-positioning-panel__bar[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); opacity: .5; }
 .mi-positioning-panel__hint line { stroke: var(--mi-dashboard-negative); stroke-width: 1; stroke-dasharray: 2 2; opacity: .9; }
 .mi-positioning-panel__hint circle { fill: var(--mi-dashboard-negative); }
-.mi-positioning-panel__end { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+.mi-positioning-panel__end {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px;
+  /* A halo in the surface colour: the label sits where the line ends, and the line runs through
+     it on the way there. */
+  paint-order: stroke; stroke: var(--mi-dashboard-surface); stroke-width: 3px; stroke-linejoin: round;
+}
 .mi-positioning-panel__end[data-series='btc'] { fill: var(--mi-dashboard-etf-btc); }
 .mi-positioning-panel__end[data-series='eth'] { fill: var(--mi-dashboard-etf-eth); }
 .mi-positioning-panel__hint-chip {
