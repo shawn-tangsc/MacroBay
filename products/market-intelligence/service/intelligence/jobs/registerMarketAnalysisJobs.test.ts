@@ -82,7 +82,7 @@ describe('registerMarketAnalysisJobs', () => {
     const freezeDefinition = enqueueDefinition.mock.calls.find(([definition]) => definition.handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)?.[0]
     expect(freezeDefinition?.redact?.({ eventGroupId: 'mi-eg-1', triggerKey: 'safe', prompt: 'secret' })).toEqual({ eventGroupId: 'mi-eg-1', triggerKey: 'safe' })
     expect(freezeDefinition).toEqual(expect.objectContaining({ handlerId: FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB }))
-    await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z' }, { jobRunId: 'job-2', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) })
+    await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z', attemptLedgerId: 'mi-ledger-1' }, { jobRunId: 'job-2', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) })
     const runDefinition = enqueueDefinition.mock.calls.find(([definition]) => definition.handlerId === RUN_MARKET_ANALYSIS_JOB)?.[0]
     expect(runDefinition?.redact?.({ analysisRunId: 'mi-ar-1', eventGroupId: 'mi-eg-1', prompt: 'secret', providerBody: 'secret' })).toEqual({ analysisRunId: 'mi-ar-1' })
     expect(runDefinition).toEqual(expect.objectContaining({
@@ -137,4 +137,38 @@ describe('registerMarketAnalysisJobs', () => {
     await expect(handlers.get(RUN_MARKET_ANALYSIS_JOB)!({ analysisRunId: 'mi-ar-1', injected: 'x' }, context)).rejects.toThrow('analysis-invalid-job-payload')
     await expect(handlers.get(RUN_MARKET_ANALYSIS_JOB)!({ analysisRunId: 'mi-ar-1', significanceSignals: 7 }, context)).rejects.toThrow('analysis-invalid-job-payload')
   })
+
+  it('refuses an item-line freeze that lost its attempt row, rather than running it unaccounted', async () => {
+    const handlers = new Map<string, JobHandler>()
+    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler) } as JobRuntime
+    // No run id: the handler stops after the freeze, so this test needs no enqueue surface.
+    const freezeSnapshot = vi.fn(async () => undefined)
+    registerMarketAnalysisJobs(runtime, { groupChange: vi.fn(), freezeSnapshot, runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn() })
+    const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
+    for (const triggerKey of ['macro.actual.first-confirmed', 'market-reaction.15m']) {
+      await expect(handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey, analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z' }, context))
+        .rejects.toThrow('analysis-missing-attempt-ledger-row')
+    }
+    // A line with no attempt row of its own still passes: the calendar and the opens never had one.
+    await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', analysisPhase: 'correction', asOf: '2026-09-27T00:00:00.000Z' }, context)
+    await handlers.get(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)!({ eventGroupId: 'mi-eg-1', triggerKey: 'schedule.asia.open', analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z' }, context)
+    expect(freezeSnapshot).toHaveBeenCalledTimes(2)
+    expect(freezeSnapshot).not.toHaveBeenCalledWith(expect.objectContaining({ triggerKey: 'macro.actual.first-confirmed' }), expect.anything())
+  })
+
+  it('carries the attempt row id from the trigger stage into the freeze payload', async () => {
+    const handlers = new Map<string, JobHandler>()
+    const enqueueDefinition = vi.fn(async (definition: { id: string }) => ({ id: definition.id }))
+    const runtime = { registerHandler: (id: string, handler: JobHandler) => handlers.set(id, handler), enqueueDefinition, enqueueStartup: vi.fn(async (definitionId: string) => ({ id: definitionId })), setSchedule: vi.fn() } as unknown as JobRuntime
+    const groupChange = vi.fn(async () => ({ eventGroupId: 'mi-eg-1', shouldFreeze: true, triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial' as const, asOf: '2026-09-27T00:00:00.000Z', attemptLedgerId: 'mi-ledger-9' }))
+    registerMarketAnalysisJobs(runtime, { groupChange, freezeSnapshot: vi.fn(), runAnalysis: vi.fn(), verifyPredictions: vi.fn(), recoverRuns: vi.fn() })
+    const context = { jobRunId: 'job-1', signal: new AbortController().signal, log: vi.fn(async () => undefined), progress: vi.fn(async () => undefined) }
+    await handlers.get(GROUP_MARKET_ANALYSIS_CHANGE_JOB)!({ changeId: 'c1', eventRef: 'e1' }, context)
+    const freeze = enqueueDefinition.mock.calls.map(([definition]) => definition).find(definition => definition.handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB)
+    expect(freeze?.payload).toEqual(expect.objectContaining({ attemptLedgerId: 'mi-ledger-9' }))
+    // The id survives redaction: the refusal later in the pipeline needs it.
+    expect(freeze?.redact?.({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z', attemptLedgerId: 'mi-ledger-9', prompt: 'secret' }))
+      .toEqual({ eventGroupId: 'mi-eg-1', triggerKey: 'macro.actual.first-confirmed', analysisPhase: 'initial', asOf: '2026-09-27T00:00:00.000Z', attemptLedgerId: 'mi-ledger-9' })
+  })
+
 })

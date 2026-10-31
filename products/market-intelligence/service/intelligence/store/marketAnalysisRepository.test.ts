@@ -12,6 +12,7 @@ import type {
 } from '../../../contracts/marketAnalysisContracts'
 import { buildAnalysisSnapshotHash } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository } from './marketAnalysisRepository'
+import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 
 const asOf = '2026-09-25T08:30:00.000Z'
 const later = '2026-09-25T08:31:00.000Z'
@@ -372,6 +373,46 @@ describe('marketAnalysisRepository', () => {
     const last = repository.retention({ conclusionCutoffIso: '2027-04-01T00:00:00.000Z', ledgerCutoffIso: '2027-03-01T00:00:00.000Z' })
     expect(last.ledgerDeleted).toBe(1)
     expect(repository.listPredictionLedger()).toEqual([])
+    repository.close()
+  })
+})
+
+describe('marketAnalysisRepository trigger ledger rows', () => {
+  const ledgerRow = (id: string, changeHash: string, overrides: Record<string, unknown> = {}) => ({
+    id, eventGroupId: 'mi-eg-0001', triggerKey: 'macro.actual.first-confirmed', changeHash,
+    decision: 'queued', reasonCode: 'severity-confirmed', snapshotHash: null, analysisRunId: null, createdAt: asOf, ...overrides
+  })
+
+  it('answers a repeated attempt with the row id already stored, not the one just generated', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    const first = repository.appendTriggerLedger(ledgerRow('mi-ledger-1', 'hash-a'))
+    // Same (group, key, change hash): the conflict target keeps the first row, so the second write
+    // must answer with that id — the caller flips it later.
+    const second = repository.appendTriggerLedger(ledgerRow('mi-ledger-2', 'hash-a', { decision: 'skipped', reasonCode: 'hour-budget-exhausted' }))
+    expect(first).toBe('mi-ledger-1')
+    expect(second).toBe('mi-ledger-1')
+    expect(repository.listTriggerLedger('mi-eg-0001')).toHaveLength(1)
+    repository.close()
+  })
+
+  it('rewrites only the row named by id, leaving a same-key attempt alone', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-1', 'hash-a'))
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-2', 'hash-b'))
+    expect(countAnalysisRuns(repository, asOf).dayRuns).toBe(2)
+
+    // By id, never by (group, key): that pair repeats, and flipping the older row would rewrite an
+    // attempt that really ran as one that never did.
+    repository.updateTriggerLedgerDecision('mi-ledger-2', 'skipped', 'hour-budget-exhausted')
+
+    const rows = repository.listTriggerLedger('mi-eg-0001')
+    expect(rows.map(row => [row.id, row.decision, row.reasonCode])).toEqual([
+      ['mi-ledger-1', 'queued', 'severity-confirmed'],
+      ['mi-ledger-2', 'skipped', 'hour-budget-exhausted']
+    ])
+    expect(countAnalysisRuns(repository, asOf).dayRuns).toBe(1)
     repository.close()
   })
 })

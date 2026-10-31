@@ -16,7 +16,7 @@ import { createAnalysisSignificanceGate } from '../analysis/analysisSignificance
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
 import { analysisSchedulePolicy, triggerKeyForSlot } from '../analysis/analysisSchedulePolicy'
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
-import { analysisTriggerSourcePolicy, isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
+import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
 import type { SignificanceSignal } from '../analysis/significanceChangeMatcher'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
@@ -478,11 +478,6 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
 
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
     const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string }
-    // The trigger line owns the attempt row; without its id a later refusal cannot be recorded
-    // against that attempt, so the work is refused rather than run and counted unmarked.
-    if ((analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(value.triggerKey) && !value.attemptLedgerId) {
-      throw new Error('analysis-missing-attempt-ledger-row')
-    }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
     // Decided before anything is built: a skipped evaluation must not leave a snapshot or a run.
     const gate = await significanceGate.evaluate({

@@ -31,13 +31,14 @@ function snapshot(value: string) {
 
 function gate(overrides: Record<string, unknown> = {}, routeOfficial: readonly unknown[] = [event()]) {
   const recordDecision = vi.fn()
+  const updateDecision = vi.fn()
   const queryMacroRoute = vi.fn(async () => route(routeOfficial))
   const instance = createAnalysisSignificanceGate({
-    now: () => asOf, queryMacroRoute, recordDecision,
+    now: () => asOf, queryMacroRoute, recordDecision, updateDecision,
     countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0 }),
     lastAutoRunAt: () => null, ...overrides
   } as never)
-  return { instance, recordDecision, queryMacroRoute }
+  return { instance, recordDecision, updateDecision, queryMacroRoute }
 }
 
 it('decides and records a real change, and names the events that triggered it', async () => {
@@ -138,4 +139,27 @@ it('stays quiet for a routine provider release even though its actual is new to 
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: null })
   expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'significance-below-threshold', triggeredEventKeys: new Set() })
   expect(recordDecision).toHaveBeenCalledWith(expect.objectContaining({ decision: 'skipped', reasonCode: 'significance-below-threshold' }))
+})
+
+it('rewrites the attempt row it was given instead of adding a second decision row', async () => {
+  const { instance, recordDecision, updateDecision } = gate({
+    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 3, scheduledRunsToday: 0 })
+  })
+  const outcome = await instance.evaluate({
+    eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%'), attemptLedgerId: 'mi-ledger-7'
+  })
+  expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  // One attempt, one row: the refusal lands on the row the trigger line already wrote.
+  expect(updateDecision).toHaveBeenCalledWith('mi-ledger-7', 'skipped', 'hour-budget-exhausted')
+  expect(recordDecision).not.toHaveBeenCalled()
+})
+
+it('records its own decision for a line that has no attempt row', async () => {
+  const { instance, recordDecision, updateDecision } = gate({
+    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 3, scheduledRunsToday: 0 })
+  })
+  const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
+  expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  expect(updateDecision).not.toHaveBeenCalled()
+  expect(recordDecision).toHaveBeenCalledTimes(1)
 })
