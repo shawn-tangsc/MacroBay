@@ -83,6 +83,18 @@ export type DailyBriefingService = Readonly<{
  */
 export const DAILY_BRIEF_GENERATION_BUDGET_MS = 300_000
 
+/**
+ * The deterministic core-fact pass runs after the packet/document is built and before any model
+ * call. It is bounded because it may touch a provider's history: a slow reader leaves the gaps for
+ * the Agent protocol instead of holding the whole generation hostage.
+ */
+export const DAILY_BRIEF_FACT_ENSURE_BUDGET_MS = 20_000
+
+/** The service contract for the deterministic pass; the module binds it to the shared ensure. */
+export type DailyBriefCoreFactEnsure = (
+  input: Readonly<{ document: DailyBriefingDocument; cutoff: string }>
+) => Promise<DailyBriefingDocument>
+
 export function createDailyBriefingService(deps: Readonly<{
   source: DailyBriefingSource
   store: DailyBriefingStore
@@ -95,6 +107,12 @@ export function createDailyBriefingService(deps: Readonly<{
   agentModel?: () => Promise<DailyBriefingEditorialModel>
   agentAllowedTools?: () => Promise<readonly string[] | undefined>
   backfillFactory?: (cutoff: string) => DailyBriefBackfillExecutor
+  /**
+   * Deterministic core-fact fill, called after the document is built and before the editorial
+   * turn. Optional: a build without a historian keeps today's behaviour, and a failing or slow pass
+   * leaves the document's named gaps for the Agent backfill protocol.
+   */
+  coreFactEnsure?: DailyBriefCoreFactEnsure
   editorialEnabled?: () => Promise<boolean>
   /**
    * The reader's generation setting, read at generation time. A change therefore applies to the
@@ -160,6 +178,19 @@ export function createDailyBriefingService(deps: Readonly<{
     // A pool above the per-class budget fails before any editorial work or write: the builder caps
     // its rendered sections, and a capped selection would silently stand in for the whole day.
     if (candidateOverflow(packet, document)) return { state: 'unavailable', failureCode: 'candidate-overflow' }
+    // The deterministic pass owns the core numeric rows; the Agent protocol below sees only what is
+    // still missing. It is deliberately before the editorial switch: the fact-layer edition benefits
+    // from the same fill, and a failure here must not fail the generation.
+    if (deps.coreFactEnsure) {
+      try {
+        document = await withDeadline(
+          deps.coreFactEnsure({ document, cutoff: document.edition.windowEnd }),
+          DAILY_BRIEF_FACT_ENSURE_BUDGET_MS
+        )
+      } catch {
+        // Keep the gaps. The Agent backfill protocol and the named gap rows remain the fallback.
+      }
+    }
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
     if (deps.agentRunner && editorialEnabled) {

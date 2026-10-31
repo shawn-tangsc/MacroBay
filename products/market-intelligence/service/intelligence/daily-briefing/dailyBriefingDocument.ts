@@ -362,6 +362,16 @@ function buildStatus(
 }
 
 function combine(states: readonly DailyBriefingReadingState[]): DailyBriefingReadingState {
+  return combineDailyBriefingReadingStates(states)
+}
+
+/**
+ * The same union rule `buildStatus` uses, exported so a later deterministic amendment of the data
+ * rows (the core-fact ensure) cannot invent a second, disagreeing reading summary.
+ */
+export function combineDailyBriefingReadingStates(
+  states: readonly DailyBriefingReadingState[]
+): DailyBriefingReadingState {
   if (states.length === 0) return 'unavailable'
   if (states.every((state) => state === 'source-disabled')) return 'source-disabled'
   if (states.some((state) => state === 'available')) return 'available'

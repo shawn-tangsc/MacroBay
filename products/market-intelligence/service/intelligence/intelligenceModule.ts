@@ -61,6 +61,10 @@ import { createNewsSentimentBodyTranslationService } from './news-sentiment/news
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
 import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
+import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
+import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
+import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
 import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
@@ -225,6 +229,8 @@ type IntelligenceModule = {
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
   dailyBriefingService: DailyBriefingService
+  /** The deterministic core-fact pass, exposed for logs and focused verification. */
+  dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
   /**
    * The daily-brief settings seam. The name predates the generation setting; the value is the
    * composed settings service, and `dailyBriefingAiSettings` inside the module is the AI-only part.
@@ -695,10 +701,12 @@ export function getIntelligenceModule(
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
     const ensureDefaultSources = seedDefaultEnabledSources(profileStore).catch(() => undefined)
-    void ensureDefaultSources
+    const startupReady = ensureDefaultSources
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
+      .then(() => undefined, () => undefined)
+    void startupReady
     // Best-effort seed: `readSettings` already falls back to defaults when the file is absent, so
     // a failed write during shutdown must not surface as an unhandled rejection.
     void (async () => {
@@ -749,6 +757,89 @@ export function getIntelligenceModule(
       })
       : undefined
     const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined
+    const dailyBriefingStore = createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
+    const isSourceEnabled = async (sourceId: string): Promise<boolean | undefined> => {
+      try {
+        return (await profileStore.resolveProfile(sourceId)).enabled
+      } catch {
+        return undefined
+      }
+    }
+    // The ETF and core-stablecoin readers are memoised per cutoff, not per process: the same cutoff
+    // owns one downloaded series (startup ensure, generation ensure and the Agent backfill share
+    // it), while a new cutoff must read again because a daily source's newest row is not final
+    // until its day ends. The persistent ensure cache still prevents a later launch from asking for
+    // the same editionDate|metric|asOf at all.
+    const backfillReaders = new Map<string, Readonly<{
+      etfHistory: ReturnType<typeof createEtfHistoryAsOf>
+      stablecoinHistory: ReturnType<typeof createStablecoinHistoryAsOf>
+    }>>()
+    const backfillReadersFor = (cutoff: string) => {
+      const existing = backfillReaders.get(cutoff)
+      if (existing) return existing
+      const created = Object.freeze({
+        etfHistory: createEtfHistoryAsOf({
+          requestWindow: async () => {
+            // The same two gates the refresh applies: a switched-off source is not read around, and
+            // a missing key is a missing interface rather than a failed request.
+            const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
+            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
+            const credential = await zeroXRouterCredential()
+            if (!credential?.apiKey) return Object.freeze({ state: 'not-configured' as const })
+            return etfFlowHistoryClient.requestWindow(credential.apiKey)
+          }
+        }),
+        stablecoinHistory: createStablecoinHistoryAsOf({
+          requestAssetHistory: async (assetId) => {
+            // A switched-off stablecoin source is a missing interface, not a reason to bypass it.
+            const profile = await profileStore.resolveProfile(DAILY_BRIEFING_SOURCE_IDS.stablecoin)
+            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
+            return capitalConditionsAssetHistoryHttp.requestStablecoinAssetHistoryPayload(assetId)
+          }
+        })
+      })
+      if (backfillReaders.size >= 2) {
+        const oldest = backfillReaders.keys().next().value
+        if (oldest) backfillReaders.delete(oldest)
+      }
+      backfillReaders.set(cutoff, created)
+      return created
+    }
+    const backfillFactory = (cutoff: string) => {
+      const readers = backfillReadersFor(cutoff)
+      return createDailyBriefBackfillExecutor({
+        cutoff,
+        publicQuery: publicQueryService,
+        // The outer gate is what keeps a cached series from outliving a reader's "off": the reader
+        // cache answers by asset, so a switch flipped after a successful read would otherwise still
+        // be bypassed.
+        etfHistory: async (request) => (await isSourceEnabled(zeroXRouterSourcePolicy.sourceId)) === true
+          ? readers.etfHistory.read(request)
+          : Object.freeze({
+            state: 'unavailable' as const,
+            asset: request.asset,
+            asOf: request.asOf,
+            gapCode: 'historical-api-unavailable' as const,
+            detail: 'the ETF source is switched off; the gap stays.'
+          }),
+        stablecoinHistory: async (request) => (await isSourceEnabled(DAILY_BRIEFING_SOURCE_IDS.stablecoin)) === true
+          ? readers.stablecoinHistory.read(request)
+          : Object.freeze({
+            state: 'unavailable' as const,
+            asOf: request.asOf,
+            gapCode: 'historical-api-unavailable' as const,
+            detail: 'the stablecoin source is switched off; the gap stays.'
+          }),
+        now: () => new Date().toISOString()
+      })
+    }
+    const dailyBriefFactEnsure = createDailyBriefFactEnsure({
+      backfillFor: backfillFactory,
+      cache: createDailyBriefFactEnsureJsonCache(join(dataDir, 'daily-brief-fact-ensure.json')),
+      isSourceEnabled,
+      now: () => new Date().toISOString(),
+      onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
+    })
     const dailyBriefingService = createDailyBriefingService({
       source: createDailyBriefingSource({
         repository: marketAnalysisRuntime.repository,
@@ -770,43 +861,14 @@ export function getIntelligenceModule(
           },
         profiles: profileStore
       }),
-      store: createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite')),
+      store: dailyBriefingStore,
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       generationSettings: () => dailyBriefingGenerationSettings.getView(),
-      // The ETF and core-stablecoin rows may be answered by the providers' own history when the
-      // machine was not awake at the cutoff. Each reader is built per edition so a later edition
-      // cannot inherit yesterday's cached series. The stablecoin reader asks DefiLlama for USDT and
-      // USDC separately and returns nothing unless both answered; it never reads the wider
-      // aggregate series, which measures every USD-pegged asset rather than the card's core level.
-      backfillFactory: (cutoff) => {
-        const etfHistory = createEtfHistoryAsOf({
-          requestWindow: async () => {
-            // The same two gates the refresh applies: a switched-off source is not read around, and
-            // a missing key is a missing interface rather than a failed request.
-            const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
-            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
-            const credential = await zeroXRouterCredential()
-            if (!credential?.apiKey) return Object.freeze({ state: 'not-configured' as const })
-            return etfFlowHistoryClient.requestWindow(credential.apiKey)
-          }
-        })
-        const stablecoinHistory = createStablecoinHistoryAsOf({
-          requestAssetHistory: async (assetId) => {
-            // A switched-off stablecoin source is a missing interface, not a reason to bypass it.
-            const profile = await profileStore.resolveProfile('defillama-stablecoins')
-            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
-            return capitalConditionsAssetHistoryHttp.requestStablecoinAssetHistoryPayload(assetId)
-          }
-        })
-        return createDailyBriefBackfillExecutor({
-          cutoff,
-          publicQuery: publicQueryService,
-          etfHistory: (request) => etfHistory.read(request),
-          stablecoinHistory: (request) => stablecoinHistory.read(request)
-        })
-      },
+      backfillFactory,
+      coreFactEnsure: async ({ document, cutoff }) =>
+        (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,
       agentAllowedTools: async () => {
         const view = await dailyBriefingAiSettings.getView()
         const providerReady = hooks?.isWebSearchProviderReady
@@ -826,6 +888,19 @@ export function getIntelligenceModule(
       timeZone: systemLocalTimeZone,
       getGenerationTime: async () => (await dailyBriefingGenerationSettings.getView()).generationTime
     })
+    // The deterministic pass runs once per module start, after the default sources exist and the
+    // source runtime is up: a fresh install would otherwise look as if every source were switched
+    // off. It is fire-and-forget so the renderer is never held; the latest stored edition is the
+    // only document it may amend.
+    void startupReady
+      .then(() => ensureDailyBriefFactsAtStartup({
+        store: dailyBriefingStore,
+        ensure: dailyBriefFactEnsure.ensure,
+        locale: getAppLanguage,
+        now: () => new Date().toISOString(),
+        onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
+      }))
+      .catch(() => undefined)
     if (hooks?.deleteAgentSessions) {
       registerDailyBriefSessionRetentionJob(jobRuntime, {
         links: dailyBriefSessionLinks,
@@ -855,6 +930,7 @@ export function getIntelligenceModule(
       sourcesService,
       publicQueryService,
       dailyBriefingService,
+      dailyBriefFactEnsure,
       dailyBriefingAiSettings: dailyBriefingSettings,
       rawRecordStore,
       macroCalendarEvidenceArchive,

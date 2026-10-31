@@ -552,4 +552,115 @@ describe('daily briefing service', () => {
     expect((await service.get({ date: '2026-10-30', locale: 'en-US' })).state).toBe('missing')
     expect((await service.get({ date: '2026-10-30', locale: 'zh-CN' as DailyBriefingLocale })).state).toBe('available')
   })
+
+  it('runs the core-fact ensure after building the packet and before the editorial turn', async () => {
+    const events: string[] = []
+    const cutoffs: string[] = []
+    const store = memoryStore()
+    const source = fakeSource((input) => { events.push('packet'); return emptyPacket(input) })
+    const runner = {
+      async start() {
+        events.push('agent')
+        return {
+          sessionId: 's1',
+          created: true,
+          assistantText: JSON.stringify({ stage: 'select', news: [], macro: [], next: [] }),
+          toolInvocations: []
+        }
+      },
+      async continue() {
+        return {
+          assistantText: JSON.stringify({ lede: '事实层导语。', ledePattern: 'event-shock', items: [], hidden: [], importance: [] }),
+          toolInvocations: []
+        }
+      },
+      async finish() {}
+    }
+    const service = createDailyBriefingService({
+      source, store, agentRunner: runner, now: () => asOf,
+      coreFactEnsure: async ({ document, cutoff }) => {
+        events.push('ensure')
+        cutoffs.push(cutoff)
+        return document
+      }
+    })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    expect(events).toEqual(['packet', 'ensure', 'agent'])
+    expect(cutoffs).toEqual(['2026-10-30T00:00:00.000Z'])
+  })
+
+  it('still generates the edition when the core-fact ensure fails', async () => {
+    const store = memoryStore()
+    const runner = {
+      async start() {
+        return {
+          sessionId: 's1',
+          created: true,
+          assistantText: JSON.stringify({ stage: 'select', news: [], macro: [], next: [] }),
+          toolInvocations: []
+        }
+      },
+      async continue() {
+        return {
+          assistantText: JSON.stringify({ lede: '事实层导语。', ledePattern: 'event-shock', items: [], hidden: [], importance: [] }),
+          toolInvocations: []
+        }
+      },
+      async finish() {}
+    }
+    const service = createDailyBriefingService({
+      source: fakeSource(),
+      store,
+      agentRunner: runner,
+      now: () => asOf,
+      coreFactEnsure: async () => { throw new Error('reader down') }
+    })
+
+    const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(result.state).toBe('available')
+    expect(store.rows.size).toBe(1)
+  })
+
+  it('re-checks the new cutoff on the next generation', async () => {
+    let currentNow = asOf
+    const cutoffs: string[] = []
+    const store = memoryStore()
+    const runner = {
+      async start() {
+        return {
+          sessionId: 's1',
+          created: true,
+          assistantText: JSON.stringify({ stage: 'select', news: [], macro: [], next: [] }),
+          toolInvocations: []
+        }
+      },
+      async continue() {
+        return {
+          assistantText: JSON.stringify({ lede: '事实层导语。', ledePattern: 'event-shock', items: [], hidden: [], importance: [] }),
+          toolInvocations: []
+        }
+      },
+      async finish() {}
+    }
+    const service = createDailyBriefingService({
+      source: fakeSource(),
+      store,
+      agentRunner: runner,
+      now: () => currentNow,
+      coreFactEnsure: async ({ document, cutoff }) => {
+        cutoffs.push(cutoff)
+        return document
+      }
+    })
+
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    currentNow = '2026-10-31T00:30:00.000Z'
+    await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(cutoffs).toEqual(['2026-10-30T00:00:00.000Z', '2026-10-31T00:00:00.000Z'])
+  })
 })

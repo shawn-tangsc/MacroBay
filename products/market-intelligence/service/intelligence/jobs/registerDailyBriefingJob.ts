@@ -45,6 +45,11 @@ export function scheduleDailyBriefingJob(
  * the reader's generation time, which is also the edition cutoff. A day that already exists is a
  * successful no-op; a failed source read throws so the run is visible, and the service has written
  * nothing.
+ *
+ * The service itself runs the deterministic core-fact ensure after building the packet/document
+ * and before the editorial turn (see `createDailyBriefingService`), so this job needs no second
+ * fetch step: it only asks for the edition, and the Agent backfill protocol remains the fallback
+ * for whatever gap the deterministic pass could not fill.
  */
 export function registerDailyBriefingJob(
   jobRuntime: JobRuntime,

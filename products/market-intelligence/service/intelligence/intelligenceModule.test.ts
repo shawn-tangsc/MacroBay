@@ -347,6 +347,12 @@ describe('intelligence module calendar evidence composition', () => {
     expect(module.rawRecordStore.getRawRecord('raw-1')?.payloadBody).toBe(body)
     expect(module.pipeline).toBeTruthy()
   })
+
+  it('exposes the deterministic daily-brief core-fact ensure service', () => {
+    const module = getIntelligenceModule(createJobRuntime())
+
+    expect(typeof module.dailyBriefFactEnsure.ensure).toBe('function')
+  })
 })
 
 async function writePersistedFearGreedRawRecord(input: { processingState: 'received' | 'parsed' | 'normalized' }): Promise<string> {
