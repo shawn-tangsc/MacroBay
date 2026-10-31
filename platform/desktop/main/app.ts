@@ -23,6 +23,7 @@ import {
   ChannelInboundExecutionRunner,
   ChannelInboundRepository,
   ChannelInboundService,
+  createChannelInboundContentGuard,
   ChannelDeliveryMaintenance,
   ChannelDeliveryRepository,
   ChannelDeliveryService,
@@ -724,6 +725,10 @@ channelInboundService = new ChannelInboundService({
     discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
     exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
   },
+  // Untrusted external text is wrapped and narrowly screened before it is encrypted and stored.
+  contentGuard: createChannelInboundContentGuard({
+    channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
+  }),
   onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
 })
 const telegramRuntimeManager = new TelegramRuntimeManager({
