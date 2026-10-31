@@ -212,4 +212,26 @@ describe('analysisTimelineService group identity', () => {
 
     expect(service.listTimeline({}).items[0]).toMatchObject({ groupType: null, groupSubject: null, safeExcerpt: '偏空。' })
   })
+
+  it('reads one event group once per page, however many of its rows are shown', () => {
+    const getEventGroup = vi.fn((id: string) => groups[id])
+    const service = createAnalysisTimelineService({
+      repository: {
+        listTimeline: () => ({
+          items: [
+            entry('mi-tl-3', 'mi-eg-news', '2026-10-31T13:36:23.000Z'),
+            entry('mi-tl-2', 'mi-eg-news', '2026-10-31T13:11:58.000Z'),
+            entry('mi-tl-1', 'mi-eg-macro', '2026-10-31T12:55:53.000Z')
+          ],
+          nextCursor: null
+        }),
+        getEventGroup,
+        getSummary: () => undefined, getRun: () => undefined, listPredictions: () => []
+      } as never
+    })
+
+    expect(service.listTimeline({}).items.map(item => item.groupSubject))
+      .toEqual(['A Nasdaq-listed company may sell $450 million bitcoin', 'A Nasdaq-listed company may sell $450 million bitcoin', 'Fed Funds Target Range Upper'])
+    expect(getEventGroup).toHaveBeenCalledTimes(2)
+  })
 })

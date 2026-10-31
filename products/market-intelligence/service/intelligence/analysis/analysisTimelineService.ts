@@ -81,7 +81,17 @@ export function createAnalysisTimelineService(deps: Readonly<{
 }> {
   function listTimeline(input: { eventGroupId?: string; cursor?: string | null; limit?: number }): RendererTimelinePage {
     const page = deps.repository.listTimeline(input)
-    return { schemaVersion: 1, items: page.items.map(entry => toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry), readGroup(deps, entry.eventGroupId))), nextCursor: page.nextCursor }
+    // One group can own several rows on a page (an analysis and its review, an event and its
+    // update), and the name is read per row: without this the same group row was read once per row.
+    const groups = new Map<string, { groupType: string | null; groupSubject: string | null }>()
+    const groupFor = (eventGroupId: string) => {
+      const cached = groups.get(eventGroupId)
+      if (cached) return cached
+      const resolved = readGroup(deps, eventGroupId)
+      groups.set(eventGroupId, resolved)
+      return resolved
+    }
+    return { schemaVersion: 1, items: page.items.map(entry => toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry), groupFor(entry.eventGroupId))), nextCursor: page.nextCursor }
   }
 
   function getTimelineEntry(id: string): RendererTimelineEntry {
