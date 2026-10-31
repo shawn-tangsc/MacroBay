@@ -8,12 +8,15 @@ import { AssistantTemplateRegistry } from '../../ai/assistant-platform/library/A
 import { AssistantLibraryService } from '../../ai/assistant-platform/library/AssistantLibraryService'
 import { createAssistantIpcHandlers } from './assistantIpcHandlers'
 
+const fetchStub = (() => Promise.reject(new Error('unexpected network call in test'))) as unknown as typeof fetch
+
 describe('createAssistantIpcHandlers', () => {
   it('lists assistants and creates topics through IPC handlers', () => {
     const db = createAssistantPlatformDatabase(':memory:')
     const repos = createAssistantPlatformRepositories(db)
     repos.assistants.create(createDefaultAssistantSeed())
     const runtime = createAssistantChatRuntimeService({
+      fetch: fetchStub,
       repos,
       getProviderState: async () => ({ providers: [] })
     })
@@ -29,6 +32,7 @@ describe('createAssistantIpcHandlers', () => {
     const db = createAssistantPlatformDatabase(':memory:')
     const repos = createAssistantPlatformRepositories(db)
     const runtime = createAssistantChatRuntimeService({
+      fetch: fetchStub,
       repos,
       getProviderState: async () => ({ providers: [] })
     })

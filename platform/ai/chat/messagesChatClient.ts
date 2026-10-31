@@ -35,7 +35,7 @@ type MessagesPayload = {
 }
 
 export async function requestMessagesChatCompletion(input: MessagesChatRequest): Promise<ChatProtocolResult> {
-  const response = await (input.fetch ?? fetch)(buildMessagesUrl(input.baseUrl), {
+  const response = await input.fetch(buildMessagesUrl(input.baseUrl), {
     method: 'POST',
     headers: {
       'x-api-key': input.apiKey,

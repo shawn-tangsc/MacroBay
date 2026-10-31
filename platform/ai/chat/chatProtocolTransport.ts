@@ -34,7 +34,8 @@ export type ConfiguredChatProtocolRequest = {
   messages: ChatProtocolMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  /** 出网通道，必传；缺了就在编译期失败，而不是在运行时静默回退到全局 fetch。 */
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   /** 只有 `responses` 会消费工具；其余协议保持不发 tools。 */
   tools?: ChatProtocolTool[]
@@ -67,7 +68,7 @@ export async function requestConfiguredChatProtocolCompletion(
     messages: input.messages,
     ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
     ...(input.signal ? { signal: input.signal } : {}),
-    ...(input.fetch ? { fetch: input.fetch } : {}),
+    fetch: input.fetch,
     ...(input.onDelta ? { onDelta: input.onDelta } : {})
   }
 

@@ -76,7 +76,7 @@ export type AgentChatRuntimeDependencies = {
   getAgentState: () => Promise<AgentStoreState>
   saveAgentState: (state: AgentStoreState, options?: { mergeSessionId?: string }) => Promise<void>
   getProviderState: ProviderStateAccessor
-  fetch?: typeof fetch
+  fetch: typeof fetch
   aiNaming?: AgentSessionAiNamingHook
   resolveNamingModelId?: (input: {
     agentModelId: string | null
@@ -367,7 +367,7 @@ async function runProviderChatCompletion(input: {
   session: AgentSessionEntity
   text: string
   signal?: AbortSignal
-  fetch?: typeof fetch
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
 }): Promise<{
   text: string
@@ -402,7 +402,7 @@ async function runProviderChatCompletion(input: {
     messages: buildRuntimeMessages(input.state, input.session.id, input.agent, input.text),
     temperature: 0.2,
     ...(input.signal ? { signal: input.signal } : {}),
-    ...(input.fetch ? { fetch: input.fetch } : {}),
+    fetch: input.fetch,
     ...(input.onDelta ? { onDelta: input.onDelta } : {})
   })
   if (configuredProtocol) {
@@ -419,7 +419,7 @@ async function runProviderChatCompletion(input: {
     }
   }
 
-  const response = await (input.fetch ?? fetch)(buildChatCompletionsUrl(provider.baseUrl), {
+  const response = await input.fetch(buildChatCompletionsUrl(provider.baseUrl), {
     method: 'POST',
     headers: mergeProviderHeaders({
       authorization: `Bearer ${provider.apiKey?.trim() ?? ''}`,

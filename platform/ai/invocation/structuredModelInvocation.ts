@@ -15,7 +15,8 @@ export type StructuredModelInvocationService = ReturnType<typeof createStructure
 
 export function createStructuredModelInvocationService(deps: {
   getProviderState: ProviderStateAccessor
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入。 */
+  fetch: typeof fetch
   defaultTimeoutMs?: number
   maxConcurrent?: number
 }) {

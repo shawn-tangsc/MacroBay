@@ -6,6 +6,8 @@ import { createDefaultAssistantSeed } from '../seeds/defaultAssistantSeed'
 import { createAssistantChatRuntimeService } from './AssistantChatRuntimeService'
 import { ASSISTANT_INVOCATION_FAILURE_EVIDENCE_V1 } from './assistantInvocationFailureEvidence'
 
+const fetchStub = (() => Promise.reject(new Error('unexpected network call in test'))) as unknown as typeof fetch
+
 describe('createAssistantChatRuntimeService', () => {
   it('opens a submit-message stream and persists assistant output', async () => {
     const db = createAssistantPlatformDatabase(':memory:')
@@ -729,6 +731,7 @@ describe('createAssistantChatRuntimeService', () => {
     })
 
     const runtime = createAssistantChatRuntimeService({
+      fetch: fetchStub,
       repos,
       getProviderState: async () => ({ providers: [] })
     })

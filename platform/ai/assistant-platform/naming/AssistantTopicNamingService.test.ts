@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AssistantTopicNamingService } from './AssistantTopicNamingService'
 
+const fetchStub = (() => Promise.reject(new Error('unexpected network call in test'))) as unknown as typeof fetch
+
 describe('AssistantTopicNamingService', () => {
   it('skips naming when preference is disabled', async () => {
     const service = new AssistantTopicNamingService({
+      fetch: fetchStub,
       isEnabled: async () => false,
       getLanguage: async () => 'en-US',
       getNamingModelId: async () => 'openai:gpt-test',
@@ -26,6 +29,7 @@ describe('AssistantTopicNamingService', () => {
 
   it('skips naming for manually edited topics', async () => {
     const service = new AssistantTopicNamingService({
+      fetch: fetchStub,
       isEnabled: async () => true,
       getLanguage: async () => 'en-US',
       getNamingModelId: async () => 'openai:gpt-test',

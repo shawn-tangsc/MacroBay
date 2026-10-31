@@ -55,7 +55,11 @@ export type ChatProtocolClientInput = {
   messages: ChatProtocolMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  /**
+   * 出网通道，**必传**。允许它缺席就等于允许一个静默回退到全局 `fetch` 的绕过口，
+   * 而那会把「忘了注入」变成运行时才发现的 bug。由组合根统一注入 `platformFetch`。
+   */
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   tools?: ChatProtocolTool[]
   executeTool?: (call: ChatProtocolToolCall) => Promise<ChatProtocolToolResult>
