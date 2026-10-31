@@ -38,8 +38,10 @@ free-form message.
 
 ## Are channels available?
 
-No. Telegram, Slack, Lark, Discord, QQ, and WeChat integrations exist in the platform code but are
-not exposed in this release. Their UI and tests are disabled together.
+No. Telegram, Slack, Lark, Discord, QQ, and WeChat integrations exist in the platform code, and the
+channel settings page is visible, so channels can be created and credentials stored. But no adapter
+is enabled in this release, so nothing is sent or received. See
+[Status and limitations](./status-and-limitations.md).
 
 ## Does it work on Windows or Linux?
 

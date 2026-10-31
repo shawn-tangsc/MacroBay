@@ -28,9 +28,10 @@ without rendering or IPC; use the heavier tests for integration seams.
 
 ## Channel suites
 
-Channel integrations are not exposed in this release. Their tests are excluded from the default
-run so the visible feature set and the green suite agree. If channels are re-enabled, their UI and
-tests must be restored together; do not leave a permanently excluded red suite.
+The channel test suites run in the default suite. A green run covers them, but passing tests do not
+mean channels are usable: no adapter is enabled in this release
+(see [Status and limitations](../reference/status-and-limitations.md)). When an adapter is enabled,
+update that page in the same change.
 
 ## Writing a test
 
