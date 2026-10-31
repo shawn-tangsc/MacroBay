@@ -90,6 +90,15 @@ export function createDailyBriefFactEnsureJsonCache(filePath: string): DailyBrie
     await writeFile(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
   }
 
+  async function enqueueWrite(entries: Map<string, DailyBriefFactEnsureEntry>): Promise<void> {
+    // A single process owns the file; serialising writes keeps the last update from an earlier
+    // metric from overwriting a later one. The chain itself must survive a failed write: `put`
+    // reports the failure to its caller, and the next write still runs.
+    const next = writing.then(() => persist(entries))
+    writing = next.catch(() => undefined)
+    await next
+  }
+
   return {
     async get(key) {
       return (await map()).get(key)
@@ -97,10 +106,7 @@ export function createDailyBriefFactEnsureJsonCache(filePath: string): DailyBrie
     async put(entry) {
       const entries = await map()
       entries.set(dailyBriefFactEnsureKey(entry), entry)
-      // A single process owns the file; serialising writes keeps the last update from an earlier
-      // metric from overwriting a later one.
-      writing = writing.then(() => persist(entries))
-      await writing
+      await enqueueWrite(entries)
     },
     async prune(beforeDate) {
       const entries = await map()
@@ -112,8 +118,7 @@ export function createDailyBriefFactEnsureJsonCache(filePath: string): DailyBrie
         }
       }
       if (!changed) return
-      writing = writing.then(() => persist(entries))
-      await writing
+      await enqueueWrite(entries)
     },
     async entries() {
       return Object.freeze([...(await map()).values()])

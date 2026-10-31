@@ -104,4 +104,16 @@ describe('daily brief fact ensure cache', () => {
     expect(stored).toMatchObject({ state: 'unavailable', attempts: 2, gapCode: 'historical-api-unavailable' })
     expect(stored?.value).toBeUndefined()
   })
+
+  it('recovers after a failed write instead of poisoning the write chain', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'daily-brief-ensure-'))
+    directories.push(directory)
+    const blocker = join(directory, 'not-a-directory')
+    await writeFile(blocker, 'x', 'utf8')
+    const cache = createDailyBriefFactEnsureJsonCache(join(blocker, 'nested', 'cache.json'))
+
+    await expect(cache.put(entry())).rejects.toThrow()
+    await rm(blocker, { force: true })
+    await expect(cache.put(entry())).resolves.toBeUndefined()
+  })
 })
