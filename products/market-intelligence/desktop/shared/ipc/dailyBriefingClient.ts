@@ -1,9 +1,11 @@
 import {
   dailyBriefingPolicy,
+  isBriefingGenerationTrace,
   isDailyBriefingDocumentWithinBudget,
   isDailyBriefingLocale,
   isDailyBriefingReadingState,
   isFactImportanceTier,
+  type BriefingGenerationTrace,
   type DailyBriefingDocument,
   type DailyBriefingEditionSummary,
   type DailyBriefingListResult
@@ -24,7 +26,7 @@ export type DailyBriefingClientGetInput = Readonly<{ date: string; locale: 'zh-C
 
 export type DailyBriefingClientTodayResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
-  | Readonly<{ state: 'unavailable'; failureCode: string }>
+  | Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }>
 
 export type DailyBriefingClientListResult =
   | Readonly<{ state: 'available'; result: DailyBriefingListResult }>
@@ -80,9 +82,7 @@ export const dailyBriefingClient: DailyBriefingClient = {
   async getToday(input) {
     try {
       const value = await invoke(METHODS.getToday, input)
-      if (isRecord(value) && value.state === 'unavailable' && isText(value.failureCode)) {
-        return { state: 'unavailable', failureCode: value.failureCode }
-      }
+      if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
         return { state: 'available', document: value.document }
       }
@@ -110,6 +110,7 @@ export const dailyBriefingClient: DailyBriefingClient = {
       if (isRecord(value) && value.state === 'available' && isDocument(value.document)) {
         return { state: 'available', document: value.document }
       }
+      if (isRecord(value) && value.state === 'unavailable') return unavailableWithTrace(value)
       return unavailable()
     } catch {
       return unavailable()
@@ -143,6 +144,13 @@ async function invoke(method: string, payload: unknown): Promise<unknown> {
 
 function unavailable(): Readonly<{ state: 'unavailable'; failureCode: string }> {
   return { state: 'unavailable', failureCode: 'daily-briefing-request-failed' }
+}
+
+/** A failed attempt keeps its readable code and, when the service stored it, its stage trace. */
+function unavailableWithTrace(value: Record<string, unknown>): Readonly<{ state: 'unavailable'; failureCode: string; generationTrace?: BriefingGenerationTrace }> {
+  const failureCode = isText(value.failureCode) ? value.failureCode : 'daily-briefing-request-failed'
+  const generationTrace = isBriefingGenerationTrace(value.generationTrace) ? value.generationTrace : undefined
+  return { state: 'unavailable', failureCode, ...(generationTrace ? { generationTrace } : {}) }
 }
 
 async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefingSettingsResult> {

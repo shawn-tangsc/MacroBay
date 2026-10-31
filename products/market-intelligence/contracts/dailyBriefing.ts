@@ -430,7 +430,42 @@ export type DailyBriefingDocument = Readonly<{
     editorialFailure?: string
     editorialFailureDetail?: string
     selectionAudit?: Readonly<{ shown: readonly string[]; hidden: readonly Readonly<{ factId: string; reason: string }>[] }>
+    /** Absent on editions generated before the stage trace existed. */
+    generationTrace?: BriefingGenerationTrace
   }>
+}>
+
+/** The fixed generation stages, in the order a successful generation runs them. */
+export const briefingGenerationStageIds = [
+  'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair-1', 'repair-2', 'store'
+] as const
+
+export type BriefingGenerationStageId = (typeof briefingGenerationStageIds)[number]
+export type BriefingGenerationStageState = 'success' | 'failed' | 'skipped' | 'pending'
+
+export type BriefingGenerationStage = Readonly<{
+  id: BriefingGenerationStageId
+  state: BriefingGenerationStageState
+  startedAt?: string
+  finishedAt?: string
+  durationMs?: number
+  failureCode?: string
+  failureDetail?: string
+}>
+
+/**
+ * What one generation attempt did, stage by stage.
+ *
+ * A successful attempt is stored with its document (`provenance.generationTrace`); a failed
+ * attempt has no document, so the service stores the trace next to the edition key and returns it
+ * with `unavailable`. The shape is optional so editions built before the trace existed stay valid.
+ */
+export type BriefingGenerationTrace = Readonly<{
+  attemptId: string
+  startedAt: string
+  finishedAt: string
+  state: 'success' | 'failed'
+  stages: readonly BriefingGenerationStage[]
 }>
 
 /** One row in the history rail. `missing` rows are gaps, not empty editions. */
@@ -466,6 +501,43 @@ export function isDailyBriefingReadingState(value: unknown): value is DailyBrief
 
 export function isFactImportanceTier(value: unknown): value is FactImportanceTier {
   return value === 'must' || value === 'support' || value === 'reference'
+}
+
+const generationStageIds: ReadonlySet<string> = new Set(briefingGenerationStageIds)
+const generationStageStates: ReadonlySet<string> = new Set(['success', 'failed', 'skipped', 'pending'])
+
+/** The IPC guard for the optional trace: a malformed trace is dropped, never rendered as data. */
+export function isBriefingGenerationTrace(value: unknown): value is BriefingGenerationTrace {
+  if (!isRecord(value)) return false
+  if (!isBoundedText(value.attemptId, 200)) return false
+  if (!isInstant(value.startedAt) || !isInstant(value.finishedAt)) return false
+  if (value.state !== 'success' && value.state !== 'failed') return false
+  if (!Array.isArray(value.stages) || value.stages.length === 0 || value.stages.length > briefingGenerationStageIds.length) return false
+  const seen = new Set<string>()
+  for (const stage of value.stages) {
+    if (!isRecord(stage)) return false
+    if (typeof stage.id !== 'string' || !generationStageIds.has(stage.id) || seen.has(stage.id)) return false
+    seen.add(stage.id)
+    if (typeof stage.state !== 'string' || !generationStageStates.has(stage.state)) return false
+    if (stage.startedAt !== undefined && !isInstant(stage.startedAt)) return false
+    if (stage.finishedAt !== undefined && !isInstant(stage.finishedAt)) return false
+    if (stage.durationMs !== undefined && !(typeof stage.durationMs === 'number' && Number.isFinite(stage.durationMs) && stage.durationMs >= 0)) return false
+    if (stage.failureCode !== undefined && !isBoundedText(stage.failureCode, 200)) return false
+    if (stage.failureDetail !== undefined && !isBoundedText(stage.failureDetail, 2_000)) return false
+  }
+  return true
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isBoundedText(value: unknown, limit: number): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= limit
+}
+
+function isInstant(value: unknown): value is string {
+  return typeof value === 'string' && value.length <= 40 && Number.isFinite(Date.parse(value))
 }
 
 /** The document crosses IPC; reject an oversized payload before it is stored or rendered. */

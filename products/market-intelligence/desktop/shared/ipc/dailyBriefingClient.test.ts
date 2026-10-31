@@ -132,4 +132,25 @@ describe('daily briefing client', () => {
     stubInvoke(() => ({ state: 'available', result: { editions: [{ date: '2026-10-30' }] } }))
     expect((await dailyBriefingClient.list({ locale: 'zh-CN', timeZone: 'UTC' })).state).toBe('unavailable')
   })
+
+  it('keeps a failed attempt trace and the stored edition trace, and drops a malformed one', async () => {
+    const trace = {
+      attemptId: '2026-10-30:zh-CN:2026-10-30T00:30:00.000Z',
+      startedAt: '2026-10-30T00:30:00.000Z',
+      finishedAt: '2026-10-30T00:30:02.000Z',
+      state: 'failed',
+      stages: [{ id: 'store', state: 'failed', failureCode: 'store-failed' }]
+    }
+    stubInvoke((method) => method === 'intelligence.dailyBriefing.regenerate'
+      ? { state: 'unavailable', failureCode: 'store-failed', generationTrace: trace }
+      : { state: 'unavailable', failureCode: 'source-failed', generationTrace: trace })
+    const today = await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(today).toMatchObject({ state: 'unavailable', failureCode: 'source-failed', generationTrace: trace })
+    const regenerated = await dailyBriefingClient.regenerate({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(regenerated).toMatchObject({ state: 'unavailable', failureCode: 'store-failed', generationTrace: trace })
+
+    stubInvoke(() => ({ state: 'unavailable', failureCode: 'source-failed', generationTrace: { attemptId: 'x', stages: [{ id: 'nope' }] } }))
+    const malformed = await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })
+    expect(malformed).toEqual({ state: 'unavailable', failureCode: 'source-failed' })
+  })
 })

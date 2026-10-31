@@ -476,8 +476,9 @@ describe('daily briefing service', () => {
     })
     const failing: DailyBriefingSource = { async buildPacket() { throw new Error('query failed') } }
     const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
-    expect(await service.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
-      state: 'unavailable', failureCode: 'source-failed'
+    expect(await service.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toMatchObject({
+      state: 'unavailable', failureCode: 'source-failed',
+      generationTrace: { state: 'failed', stages: expect.arrayContaining([expect.objectContaining({ id: 'source', state: 'failed' })]) }
     })
   })
 
@@ -489,8 +490,9 @@ describe('daily briefing service', () => {
     }))
     const service = createDailyBriefingService({ source, store, now: () => asOf })
 
-    await expect(service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toEqual({
-      state: 'unavailable', failureCode: 'candidate-overflow'
+    await expect(service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toMatchObject({
+      state: 'unavailable', failureCode: 'candidate-overflow',
+      generationTrace: { state: 'failed', stages: expect.arrayContaining([expect.objectContaining({ id: 'candidates', state: 'failed' })]) }
     })
     expect(store.rows.size).toBe(0)
   })
@@ -503,8 +505,9 @@ describe('daily briefing service', () => {
     }))
     const service = createDailyBriefingService({ source, store, now: () => asOf })
 
-    await expect(service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toEqual({
-      state: 'unavailable', failureCode: 'candidate-overflow'
+    await expect(service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toMatchObject({
+      state: 'unavailable', failureCode: 'candidate-overflow',
+      generationTrace: { state: 'failed', stages: expect.arrayContaining([expect.objectContaining({ id: 'candidates', state: 'failed' })]) }
     })
     expect(store.rows.size).toBe(0)
   })
@@ -532,8 +535,9 @@ describe('daily briefing service', () => {
     }
     const service = createDailyBriefingService({ source: fakeSource(), store, now: () => asOf })
 
-    await expect(service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toEqual({
-      state: 'unavailable', failureCode: 'store-failed'
+    await expect(service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).resolves.toMatchObject({
+      state: 'unavailable', failureCode: 'store-failed',
+      generationTrace: { state: 'failed', stages: expect.arrayContaining([expect.objectContaining({ id: 'store', state: 'failed' })]) }
     })
   })
 

@@ -1,4 +1,6 @@
 import type {
+  BriefingGenerationStageId,
+  BriefingGenerationTrace,
   DailyBriefingDocument,
   DailyBriefingEditionSummary,
   DailyBriefingListResult,
@@ -13,7 +15,8 @@ import {
 import { buildDailyBriefingDocument } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
-import { runDailyBriefAgentTurn, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
+import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
+import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import { dailyBriefingCutoffMinutes, type DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
 
@@ -35,16 +38,29 @@ export type DailyBriefingStoredEdition = Readonly<{
   document: DailyBriefingDocument
 }>
 
+export type DailyBriefingAttempt = Readonly<{
+  date: string
+  locale: DailyBriefingLocale
+  trace: BriefingGenerationTrace
+}>
+
 export type DailyBriefingStore = Readonly<{
   get: (date: string, locale: DailyBriefingLocale) => Promise<DailyBriefingStoredEdition | undefined>
   put: (edition: DailyBriefingStoredEdition) => Promise<void>
   list: (from: string, to: string, locale: DailyBriefingLocale) => Promise<readonly DailyBriefingStoredEdition[]>
   prune: (beforeDate: string) => Promise<void>
+  /** A failed attempt has no document, so its stage trace is kept beside the edition key. */
+  putAttempt?: (attempt: DailyBriefingAttempt) => Promise<void>
+  getAttempt?: (date: string, locale: DailyBriefingLocale) => Promise<BriefingGenerationTrace | undefined>
+  clearAttempt?: (date: string, locale: DailyBriefingLocale) => Promise<void>
 }>
 
 export type DailyBriefingSource = Readonly<{
   buildPacket: (input: Readonly<{ asOf: string; locale: DailyBriefingLocale; timeZone: string; windowHours?: number }>) => Promise<DailyBriefingFactPacket>
 }>
+
+export type DailyBriefingTodayFailureCode =
+  | 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
 
 export type DailyBriefingTodayResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
@@ -55,7 +71,9 @@ export type DailyBriefingTodayResult =
      * generated or stored. `store-failed`: the edition was built but not persisted, so it is not
      * returned as if it were today's stored edition.
      */
-    failureCode: 'time-invalid' | 'source-failed' | 'build-failed' | 'candidate-overflow' | 'store-failed'
+    failureCode: DailyBriefingTodayFailureCode
+    /** The failed attempt's stages; persisted beside the edition key so a refresh keeps them. */
+    generationTrace?: BriefingGenerationTrace
   }>
 
 export type DailyBriefingGetResult =
@@ -166,7 +184,9 @@ export function createDailyBriefingService(deps: Readonly<{
     const key = `${window.date}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false).finally(() => inFlight.delete(key))
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
+      .then((result) => withStoredAttempt(deps.store, result, window.date, input.locale))
+      .finally(() => inFlight.delete(key))
     inFlight.set(key, promise)
     return promise
   }
@@ -179,35 +199,78 @@ export function createDailyBriefingService(deps: Readonly<{
 
   async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
     const cached = force ? undefined : await deps.store.get(input.date, input.locale).catch(() => undefined)
-    if (cached && isCurrent( cached.document)) return { state: 'available', document: cached.document }
+    if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
+    const recorder = createDailyBriefingGenerationRecorder({
+      attemptId: `${input.date}:${input.locale}:${input.asOf}`,
+      now
+    })
+    let activeStage: BriefingGenerationStageId | undefined
+    let failedStage: BriefingGenerationStageId | undefined
+    const fail = async (failureCode: DailyBriefingTodayFailureCode): Promise<DailyBriefingTodayResult> => {
+      const generationTrace = recorder.complete('failed')
+      await deps.store.putAttempt?.({ date: input.date, locale: input.locale, trace: generationTrace }).catch(() => undefined)
+      return { state: 'unavailable', failureCode, generationTrace }
+    }
+    const onStage = (event: DailyBriefTurnStageEvent): void => {
+      if (event.state === 'begin') {
+        activeStage = event.stage
+        recorder.begin(event.stage)
+        return
+      }
+      if (event.state === 'skipped') {
+        recorder.skip(event.stage)
+        return
+      }
+      recorder.end(event.stage, event.state, {
+        ...(event.failureCode ? { failureCode: event.failureCode } : {}),
+        ...(event.failureDetail ? { failureDetail: event.failureDetail } : {})
+      })
+      if (event.state === 'failed') failedStage = event.stage
+      if (activeStage === event.stage) activeStage = undefined
+    }
+
+    recorder.begin('source')
     let packet: DailyBriefingFactPacket
     try {
       packet = await withDeadline(deps.source.buildPacket({ asOf: input.asOf, locale: input.locale, timeZone: input.timeZone, windowHours: input.windowHours }), 15_000)
+      recorder.end('source', 'success')
     } catch {
-      return { state: 'unavailable', failureCode: 'source-failed' }
+      recorder.end('source', 'failed', { failureCode: 'source-failed' })
+      return fail('source-failed')
     }
+    recorder.begin('candidates')
     let document: DailyBriefingDocument
     try {
       const previous = await previousEditionBefore(input.date, input.locale)
       document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
+      recorder.end('candidates', 'success')
     } catch {
-      return { state: 'unavailable', failureCode: 'build-failed' }
+      recorder.end('candidates', 'failed', { failureCode: 'build-failed' })
+      return fail('build-failed')
     }
     // A pool above the per-class budget fails before any editorial work or write: the builder caps
     // its rendered sections, and a capped selection would silently stand in for the whole day.
-    if (candidateOverflow(packet, document)) return { state: 'unavailable', failureCode: 'candidate-overflow' }
+    if (candidateOverflow(packet, document)) {
+      recorder.end('candidates', 'failed', { failureCode: 'candidate-overflow' })
+      return fail('candidate-overflow')
+    }
     // The deterministic pass owns the core numeric rows; the Agent protocol below sees only what is
     // still missing. It is deliberately before the editorial switch: the fact-layer edition benefits
     // from the same fill, and a failure here must not fail the generation.
     if (deps.coreFactEnsure) {
+      recorder.begin('field-backfill')
       try {
         document = await withDeadline(
           deps.coreFactEnsure({ document, cutoff: document.edition.windowEnd }),
           DAILY_BRIEF_FACT_ENSURE_BUDGET_MS
         )
+        recorder.end('field-backfill', 'success')
       } catch {
         // Keep the gaps. The Agent backfill protocol and the named gap rows remain the fallback.
+        recorder.end('field-backfill', 'failed', { failureCode: 'field-backfill-failed' })
       }
+    } else {
+      recorder.skip('field-backfill')
     }
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
@@ -221,6 +284,9 @@ export function createDailyBriefingService(deps: Readonly<{
         : undefined
       if (model?.state === 'unavailable') {
         publish = false
+        recorder.begin('selection')
+        recorder.end('selection', 'failed', { failureCode: 'model-unavailable', failureDetail: model.reason })
+        failedStage = 'selection'
         document = markEditorialFailure(document, 'model-unavailable', model.reason)
       } else if (model?.state === 'disabled') {
         document = markEditorialFailure(document, 'editorial-disabled')
@@ -236,11 +302,29 @@ export function createDailyBriefingService(deps: Readonly<{
             ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}),
             ...(deps.backfillFactory ? { backfill: deps.backfillFactory(document.edition.windowEnd) } : {}),
             signal: controller.signal,
-            onSession: (id) => { sessionId = id }
+            onSession: (id) => { sessionId = id },
+            onStage
           }), DAILY_BRIEF_GENERATION_BUDGET_MS, () => controller.abort())
-        } catch {
+        } catch (error) {
           publish = false
-          turn = { state: 'failed', failureCode: 'editorial-timeout', sessionId: sessionId ?? 'unknown', toolInvocations: [] }
+          const failureCode = isOutputTruncation(error) ? 'agent-turn-output-truncated' : 'editorial-timeout'
+          const detail = error instanceof Error && error.message ? error.message : undefined
+          if (activeStage) {
+            recorder.end(activeStage, 'failed', { failureCode, ...(detail ? { failureDetail: detail } : {}) })
+            failedStage = activeStage
+            activeStage = undefined
+          } else if (!failedStage) {
+            recorder.begin('writing')
+            recorder.end('writing', 'failed', { failureCode, ...(detail ? { failureDetail: detail } : {}) })
+            failedStage = 'writing'
+          }
+          turn = {
+            state: 'failed',
+            failureCode,
+            ...(detail ? { failureDetail: detail } : {}),
+            sessionId: sessionId ?? 'unknown',
+            toolInvocations: []
+          }
           // The answer is no longer awaited, but the runtime session must stop. The port only
           // abandons a link that is still running, so a turn that finished at the deadline keeps its
           // terminal state. A deadline that fires before any session exists has nothing to close.
@@ -250,6 +334,14 @@ export function createDailyBriefingService(deps: Readonly<{
           document = model?.state === 'agent' ? withEditorialModel(turn.document, model) : turn.document
         } else {
           publish = false
+          if (!failedStage) {
+            recorder.begin('writing')
+            recorder.end('writing', 'failed', {
+              failureCode: turn.failureCode,
+              ...(turn.failureDetail ? { failureDetail: turn.failureDetail } : {})
+            })
+            failedStage = 'writing'
+          }
           document = markEditorialFailure(document, turn.failureCode, turn.failureDetail, turn.sessionId)
         }
       }
@@ -259,23 +351,33 @@ export function createDailyBriefingService(deps: Readonly<{
       document = markEditorialFailure(document, 'editorial-disabled')
     }
     if (publish) {
+      recorder.begin('store')
+      recorder.end('store', 'success')
+      const traced = withGenerationTrace(document, recorder.complete('success'))
       try {
         await deps.store.put({
           date: input.date,
           locale: input.locale,
-          generatedAt: document.edition.generatedAt,
-          windowStart: document.edition.windowStart,
-          windowEnd: document.edition.windowEnd,
-          document
+          generatedAt: traced.edition.generatedAt,
+          windowStart: traced.edition.windowStart,
+          windowEnd: traced.edition.windowEnd,
+          document: traced
         })
+        await deps.store.clearAttempt?.(input.date, input.locale).catch(() => undefined)
       } catch {
         // Returning the document here would report a stored edition that does not exist; the next
         // read would fall back to a different generation, so surface the write failure instead.
-        return { state: 'unavailable', failureCode: 'store-failed' }
+        recorder.end('store', 'failed', { failureCode: 'store-failed' })
+        return fail('store-failed')
       }
+      await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
+      return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-    return { state: 'available', document }
+    // A failed editorial turn still returns the fact-layer document; the page renders its failure
+    // panel from `provenance.editorialFailure`. The trace travels with it so the panel can show the
+    // stage that stopped, while no edition is stored.
+    return { state: 'available', document: withGenerationTrace(document, recorder.complete('failed')) }
   }
 
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
@@ -527,4 +629,34 @@ function lastDays(today: string, days: number): readonly string[] {
 function cutoffDate(today: string): string {
   const start = Date.parse(`${today}T00:00:00.000Z`)
   return new Date(start - (dailyBriefingPolicy.retentionDays - 1) * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
+}
+
+/** A failed read without a fresh trace still shows the last persisted attempt for that edition. */
+async function withStoredAttempt(
+  store: DailyBriefingStore,
+  result: DailyBriefingTodayResult,
+  date: string,
+  locale: DailyBriefingLocale
+): Promise<DailyBriefingTodayResult> {
+  if (result.state !== 'unavailable' || result.generationTrace || !store.getAttempt) return result
+  try {
+    const generationTrace = await store.getAttempt(date, locale)
+    return generationTrace ? { ...result, generationTrace } : result
+  } catch {
+    return result
+  }
+}
+
+/** A stored edition carries its own trace, so a later read does not need a second store hit. */
+function withGenerationTrace(document: DailyBriefingDocument, generationTrace: BriefingGenerationTrace): DailyBriefingDocument {
+  return Object.freeze({
+    ...document,
+    provenance: Object.freeze({ ...document.provenance, generationTrace })
+  })
+}
+
+/** A model round that ran out of output is a writing failure, not a generic timeout. */
+function isOutputTruncation(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  return /truncat|max[_-]?tokens|stop_reason/i.test(`${error.name} ${error.message}`)
 }

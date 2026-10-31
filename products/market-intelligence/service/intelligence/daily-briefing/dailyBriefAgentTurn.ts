@@ -37,6 +37,15 @@ export type DailyBriefDataGap = Readonly<{
 /** The product's historical backfill tool, already bound to the edition cutoff. */
 export type DailyBriefBackfillExecutor = (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult>
 
+export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | 'validation' | 'repair-1' | 'repair-2'
+
+export type DailyBriefTurnStageEvent = Readonly<{
+  stage: DailyBriefTurnStage
+  state: 'begin' | 'success' | 'failed' | 'skipped'
+  failureCode?: string
+  failureDetail?: string
+}>
+
 export type DailyBriefAgentTurnInput = Readonly<{
   runner: DailyBriefAgentRunner
   document: DailyBriefingDocument
@@ -54,6 +63,12 @@ export type DailyBriefAgentTurnInput = Readonly<{
   signal?: AbortSignal
   /** Reports the session as soon as it exists, before the first round resolves. */
   onSession?: (sessionId: string) => void
+  /**
+   * Reports the stage transitions the turn itself owns. The service composes them with the stages
+   * it owns (source, candidates, field backfill, store), so the reader can see where a failed
+   * attempt stopped instead of only its final code.
+   */
+  onStage?: (event: DailyBriefTurnStageEvent) => void
 }>
 
 /** The generation deadline fired, so the turn refuses to open another agent round. */
@@ -100,12 +115,14 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   const summary = factSummary(document, input.locale)
   const gaps = collectDataGaps(document)
   const protocol = backfillProtocol(gaps, document)
+  const stage = (event: DailyBriefTurnStageEvent): void => input.onStage?.(event)
   const selectionPrompt = [
     buildDailyBriefingSelectionPrompt({ document: document, locale: input.locale })
       .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n'),
     ...(protocol ? [protocol] : [])
   ].join('\n\n')
   throwIfAborted(input.signal)
+  stage({ stage: 'selection', state: 'begin' })
   const started = await input.runner.start({ editionKey, date: document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
   let selection: unknown
   try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
@@ -118,17 +135,22 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     toolInvocations.push(...corrected.toolInvocations)
   }
   if (!selection || typeof selection !== 'object' || (selection as { stage?: unknown }).stage !== 'select') {
+    stage({ stage: 'selection', state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection' })
     await input.runner.finish(started.sessionId, 'failed')
     return { state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection', sessionId: started.sessionId, toolInvocations }
   }
   const unknown = unknownSelection(selection, document)
   if (unknown) {
+    stage({ stage: 'selection', state: 'failed', failureCode: 'invalid-shape', failureDetail: `selection-unknown:${unknown}` })
     await input.runner.finish(started.sessionId, 'failed')
     return { state: 'failed', failureCode: 'invalid-shape', failureDetail: `selection-unknown:${unknown}`, sessionId: started.sessionId, toolInvocations }
   }
+  stage({ stage: 'selection', state: 'success' })
   const requests = (selection as { requests?: unknown }).requests
+  stage({ stage: 'field-backfill', state: 'begin' })
   const backfill = await runBackfillRound(selection, input, gaps)
   if (backfill) document = applyBackfillFacts(document, backfill)
+  stage({ stage: 'field-backfill', state: (Array.isArray(requests) && requests.length > 0) || backfill ? 'success' : 'skipped' })
   if ((Array.isArray(requests) && requests.length > 0) || backfill) {
     const sections: string[] = []
     if (Array.isArray(requests) && requests.length > 0) sections.push(`FIELD RESPONSE:\n${fieldResponse(document, requests, input.locale)}`)
@@ -145,9 +167,12 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
   const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   throwIfAborted(input.signal)
+  stage({ stage: 'writing', state: 'begin' })
   const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`, input.signal)
   response = written.assistantText
   toolInvocations.push(...written.toolInvocations)
+  stage({ stage: 'writing', state: 'success' })
+  stage({ stage: 'validation', state: 'begin' })
   let failureCode = 'invalid-json'
   let failureDetail: string | undefined
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -156,6 +181,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     if (parsed) {
       const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations)
       if (validation.ok) {
+        stage({ stage: 'validation', state: 'success' })
         const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
         await input.runner.finish(started.sessionId, 'accepted')
         return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
@@ -165,11 +191,15 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     }
     if (attempt < 2) {
       throwIfAborted(input.signal)
+      const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
+      stage({ stage: repairStage, state: 'begin' })
       const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`, undefined, input.signal)
       response = repair.assistantText
       toolInvocations.push(...repair.toolInvocations)
+      stage({ stage: repairStage, state: 'success' })
     }
   }
+  stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
   await input.runner.finish(started.sessionId, 'failed')
   return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId, toolInvocations }
 }

@@ -256,10 +256,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       ...(regenerateFailure.generationTrace ? { generationTrace: regenerateFailure.generationTrace } : {})
     }
   } else if (editorialBlocked && view.status === 'ready' && editorialFailureCode) {
+    const editorialTrace = readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     failure = {
       kind: 'editorial',
       code: editorialFailureCode,
-      ...(view.document.provenance.editorialFailureDetail ? { detail: view.document.provenance.editorialFailureDetail } : {})
+      ...(view.document.provenance.editorialFailureDetail ? { detail: view.document.provenance.editorialFailureDetail } : {}),
+      ...(editorialTrace ? { generationTrace: editorialTrace } : {})
     }
   } else if (view.status === 'unavailable' && view.failureCode) {
     failure = {

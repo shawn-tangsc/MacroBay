@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   dailyBriefingPolicy,
+  isBriefingGenerationTrace,
   isDailyBriefingDocumentWithinBudget,
   isDailyBriefingEditionDate,
   isDailyBriefingLocale,
@@ -128,5 +129,24 @@ describe('daily briefing editorial layer', () => {
     expect(editorial.conclusion?.translation).toBe('摘要。')
     expect(editorial.provenance.editorialMeta?.fallback).toBe('custom-unavailable')
     expect(isDailyBriefingDocumentWithinBudget(editorial)).toBe(true)
+  })
+
+  it('guards the optional generation trace', () => {
+    const trace = {
+      attemptId: '2026-10-30:zh-CN:2026-10-30T00:30:00.000Z',
+      startedAt: '2026-10-30T00:30:00.000Z',
+      finishedAt: '2026-10-30T00:30:02.000Z',
+      state: 'failed',
+      stages: [
+        { id: 'source', state: 'success', durationMs: 10 },
+        { id: 'candidates', state: 'failed', failureCode: 'build-failed' },
+        { id: 'writing', state: 'skipped' }
+      ]
+    }
+    expect(isBriefingGenerationTrace(trace)).toBe(true)
+    expect(isBriefingGenerationTrace({ ...trace, stages: [] })).toBe(false)
+    expect(isBriefingGenerationTrace({ ...trace, stages: [{ id: 'source', state: 'success' }, { id: 'source', state: 'failed' }] })).toBe(false)
+    expect(isBriefingGenerationTrace({ ...trace, stages: [{ id: 'nope', state: 'success' }] })).toBe(false)
+    expect(isBriefingGenerationTrace({ ...trace, stages: [{ id: 'source', state: 'running' }] })).toBe(false)
   })
 })

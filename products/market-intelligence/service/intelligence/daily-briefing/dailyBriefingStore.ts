@@ -3,7 +3,7 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import { isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
+import { isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 
 export const dailyBriefingStoragePolicy = Object.freeze({
@@ -36,6 +36,13 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       schema_version integer not null,
       primary key (edition_date, locale)
     );
+    create table if not exists daily_briefing_attempts (
+      edition_date text not null,
+      locale text not null,
+      trace_json text not null,
+      updated_at text not null,
+      primary key (edition_date, locale)
+    );
     pragma user_version = ${dailyBriefingStoragePolicy.schemaVersion};
   `)
   const getStatement = db.prepare('select * from daily_briefings where edition_date = ? and locale = ?')
@@ -51,6 +58,16 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       schema_version = excluded.schema_version
   `)
   const pruneStatement = db.prepare('delete from daily_briefings where edition_date < ?')
+  const putAttemptStatement = db.prepare(`
+    insert into daily_briefing_attempts (edition_date, locale, trace_json, updated_at)
+    values (?, ?, ?, ?)
+    on conflict(edition_date, locale) do update set
+      trace_json = excluded.trace_json,
+      updated_at = excluded.updated_at
+  `)
+  const getAttemptStatement = db.prepare('select trace_json from daily_briefing_attempts where edition_date = ? and locale = ?')
+  const clearAttemptStatement = db.prepare('delete from daily_briefing_attempts where edition_date = ? and locale = ?')
+  const pruneAttemptsStatement = db.prepare('delete from daily_briefing_attempts where edition_date < ?')
 
   return Object.freeze({
     async get(date, locale) {
@@ -75,8 +92,25 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
         return parsed ? [parsed] : []
       }))
     },
+    async putAttempt(attempt) {
+      putAttemptStatement.run(attempt.date, attempt.locale, JSON.stringify(attempt.trace), attempt.trace.finishedAt)
+    },
+    async getAttempt(date, locale) {
+      const row = getAttemptStatement.get(date, locale) as { trace_json?: string } | undefined
+      if (!row?.trace_json) return undefined
+      try {
+        const parsed = JSON.parse(row.trace_json) as unknown
+        return isBriefingGenerationTrace(parsed) ? parsed : undefined
+      } catch {
+        return undefined
+      }
+    },
+    async clearAttempt(date, locale) {
+      clearAttemptStatement.run(date, locale)
+    },
     async prune(beforeDate) {
       pruneStatement.run(beforeDate)
+      pruneAttemptsStatement.run(beforeDate)
     }
   })
 }
