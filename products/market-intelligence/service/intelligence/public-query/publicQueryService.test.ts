@@ -87,7 +87,6 @@ function sourceDefinition(overrides: Partial<IntelligenceSourceDefinition> = {})
     defaultRetentionMode: 'balanced',
     defaultScopePolicy: 'watchlist-priority',
     supportsSentiment: true,
-    supportsCredentialTest: false,
     supportsRunNow: true,
     supportsReplay: true,
     sourceSpecificFields: [],

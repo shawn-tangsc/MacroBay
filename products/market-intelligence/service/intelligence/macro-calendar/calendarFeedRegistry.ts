@@ -10,7 +10,6 @@ export type CalendarFeedDefinition = {
   owner: CalendarFeedOwner
   collection: CalendarFeedCollection
   dashboardSection: 'macro-calendar'
-  supportsCredentialTest: boolean
   supportsBlsScheduleSync?: boolean
   schedule?: Readonly<{ kind: 'provider' | 'job'; intervalSeconds: number }>
 }
@@ -44,7 +43,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'official',
     collection: 'provider',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: false,
     schedule: { kind: 'provider', intervalSeconds: 6 * 60 * 60 }
   },
   'macro-calendar-bea': {
@@ -56,7 +54,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'official',
     collection: 'provider',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: false,
     schedule: { kind: 'provider', intervalSeconds: 6 * 60 * 60 }
   },
   'macro-calendar-bls': {
@@ -68,7 +65,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'official',
     collection: 'provider',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: false,
     supportsBlsScheduleSync: true,
     schedule: { kind: 'provider', intervalSeconds: 6 * 60 * 60 }
   },
@@ -81,7 +77,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'market',
     collection: 'job',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: true,
     schedule: { kind: 'job', intervalSeconds: 10 * 60 }
   },
   'macro-calendar-0xrouter-financial-events': {
@@ -93,7 +88,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'market',
     collection: 'job',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: true,
     schedule: { kind: 'job', intervalSeconds: 10 * 60 }
   },
   'macro-calendar-0xrouter-central-bank-activities': {
@@ -105,7 +99,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'market',
     collection: 'job',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: true,
     schedule: { kind: 'job', intervalSeconds: 10 * 60 }
   },
   'macro-calendar-coinmarketcal': {
@@ -117,7 +110,6 @@ export const calendarFeedRegistry: Readonly<Record<CalendarFeedId, CalendarFeedD
     owner: 'pending',
     collection: 'none',
     dashboardSection: 'macro-calendar',
-    supportsCredentialTest: false
   }
 }
 

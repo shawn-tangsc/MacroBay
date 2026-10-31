@@ -195,7 +195,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     defaultScopePolicy: 'all',
     supportsSentiment: false,
     authMode: 'none',
-    supportsCredentialTest: false,
     supportsRunNow: false,
     parserStrategy: 'policy-path-market-v1',
     readiness: 'live',
@@ -213,9 +212,10 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     defaultScopePolicy: 'all',
     supportsSentiment: false,
     authMode: 'api-key',
-    supportsCredentialTest: true,
     supportsRunNow: false,
     parserStrategy: 'twelve-data-time-series-v1',
+    // Hidden in providerRegistry as well: the agreement is what the registry guard test holds.
+    visibility: 'hidden',
     readiness: 'planned',
     // The macro-market collector is a product job (market-intelligence.collect-macro-market); the
     // profile's enable flag is what that job reads, and the generic runtime never schedules it.
@@ -237,7 +237,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     defaultScopePolicy: 'all',
     supportsSentiment: false,
     authMode: 'api-key',
-    supportsCredentialTest: true,
     supportsRunNow: false,
     parserStrategy: 'realmarketapi-dxy-v1',
     // `live` is what lets the reader store a key for this source at all.
@@ -272,7 +271,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     // cadence stays `manual`: enabling the source does not arm a schedule, the reader presses 立即运行,
     // exactly like the Ethereum Foundation blog beside it.
     authMode: 'optional-api-key',
-    supportsCredentialTest: true,
     parserStrategy: 'github-releases-v1',
     readiness: 'live',
     readinessNote:
@@ -288,7 +286,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     defaultCollectionPreset: 'manual',
     defaultScopePolicy: 'all',
     authMode: 'api-key',
-    supportsCredentialTest: false,
     supportsRunNow: false,
     parserStrategy: 'fred-v1',
     readiness: 'planned',
@@ -304,7 +301,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     category: 'mainstream-news',
     defaultScopePolicy: 'watchlist-priority',
     authMode: 'api-key',
-    supportsCredentialTest: true,
     parserStrategy: 'cryptopanic-v1',
     readiness: 'planned',
     readinessNote: '需实现 CryptoPanic REST 解析与 API Key 采集。',
@@ -319,9 +315,10 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     defaultCollectionPreset: 'manual',
     defaultScopePolicy: 'watchlist-priority',
     authMode: 'api-key',
-    supportsCredentialTest: true,
     parserStrategy: 'coinmarketcal-v1',
     readiness: 'planned',
+    // Superseded by the calendar feed of the same provider; providerRegistry hides it too.
+    visibility: 'hidden',
     readinessNote: '需实现 CoinMarketCal REST 解析与 API Key 采集。',
     adapterConfig: { endpointUrl: 'https://developers.coinmarketcal.com/v1/events' }
   }),
@@ -487,7 +484,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     reliabilityTier: 'official',
     eventFamily: 'metric-event',
     authMode: 'optional-api-key',
-    supportsCredentialTest: true,
     readiness: 'fixture-ready',
     readinessNote: '指标解析与影响规则已就绪；BLS registration key 可选，未配置时按公开限额采集，可用 fixture 重放验证。',
     supportedImpactScopes: ['risk-assets', 'crypto-market', 'symbol'],
@@ -507,7 +503,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     reliabilityTier: 'official',
     eventFamily: 'metric-event',
     authMode: 'api-key',
-    supportsCredentialTest: true,
     readiness: 'planned',
     readinessNote: '需实现 beaEconomicSeriesParser（GDP/PCE）与 BEA API 凭证配置。',
     supportedImpactScopes: ['risk-assets', 'crypto-market'],
@@ -527,7 +522,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     reliabilityTier: 'official',
     eventFamily: 'metric-event',
     authMode: 'api-key',
-    supportsCredentialTest: true,
     // Configurable: the reader enables it here and pastes a key; the generic metric runtime collects
     // it on the macro cadence, and a missing key is a runtime validation issue rather than a
     // silently scheduled request.
@@ -570,7 +564,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     // CoinGecko's public `/api/v3/global` answers without a key; the declared credential was never
     // what the endpoint needed, so the reader only switches the source on.
     authMode: 'none',
-    supportsCredentialTest: false,
     readiness: 'live',
     readinessNote:
       'CoinGecko 公开全球市场指标（无需凭据，公共接口限流）。每 10 分钟采集总市值/24h 成交额/BTC 占比；聚合口径，缺失或非数值字段会被丢弃。',
@@ -605,7 +598,6 @@ const catalog: IntelligenceSourceCatalogEntry[] = [
     authMode: 'api-key',
     defaultCollectionPreset: 'balanced',
     supportsSentiment: false,
-    supportsCredentialTest: true,
     supportsRunNow: false,
     supportsReplay: false,
     parserStrategy: '0xrouter-etf-flow-history-current-state-v1',
@@ -663,7 +655,6 @@ function source(
     defaultRetentionMode: 'balanced',
     defaultScopePolicy: 'watchlist-priority',
     supportsSentiment: true,
-    supportsCredentialTest: false,
     supportsRunNow,
     supportsReplay: true,
     collectionOwner: 'adapter',

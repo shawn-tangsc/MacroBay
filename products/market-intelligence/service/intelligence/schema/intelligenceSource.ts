@@ -133,7 +133,6 @@ export type IntelligenceSourceDefinition = {
   defaultRetentionMode: IntelligenceRetentionMode
   defaultScopePolicy: IntelligenceScopePolicy
   supportsSentiment: boolean
-  supportsCredentialTest: boolean
   supportsRunNow: boolean
   supportsReplay: boolean
   collectionOwner: IntelligenceCollectionOwner

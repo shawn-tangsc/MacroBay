@@ -262,7 +262,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'aggregate',
     credential: 'api-key',
     sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
+      src({ sourceId: '0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', panels: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
@@ -273,7 +273,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'RealMarketAPI',
     category: 'aggregate',
     credential: 'api-key',
-    sources: [src({ sourceId: 'realmarketapi-market', displayName: 'RealMarketAPI DXY', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'realmarketapi-market' })]
+    sources: [src({ sourceId: 'realmarketapi-market', displayName: 'RealMarketAPI DXY', panels: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: 'realmarketapi-market' })]
   }),
   provider({
     providerId: 'twelve-data',

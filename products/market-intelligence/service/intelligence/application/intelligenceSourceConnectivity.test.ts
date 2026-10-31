@@ -176,7 +176,6 @@ describe('Polymarket connectivity probe', () => {
     parserStrategy: 'policy-path-market-v1',
     authMode: 'none',
     supportsRunNow: false,
-    supportsCredentialTest: false,
     defaultScopePolicy: 'all',
     scopePolicy: 'all',
     defaultCollectionPreset: 'manual',

@@ -116,7 +116,6 @@ describe('sourceRuntimeConfig', () => {
     const definition: IntelligenceSourceDefinition = {
       ...requireDefinition('coindesk-rss'),
       authMode: 'api-key',
-      supportsCredentialTest: true,
       readiness: 'live'
     }
     const { issues } = resolveAndValidateRuntimeConfig({
