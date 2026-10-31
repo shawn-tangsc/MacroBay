@@ -124,12 +124,20 @@
 }
 .mi-policy-drawer__source:hover { color: var(--mi-accent, #b7cf52); }
 
-/* Five buckets as one spectrum: the leading one is marked, the rest are still readable. */
-.mi-policy-drawer__distribution { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.mi-policy-drawer__distribution > li { display: grid; grid-template-columns: 84px minmax(0, 1fr) 42px; align-items: center; gap: 10px; }
-.mi-policy-drawer__distribution-label { font-size: 11px; color: var(--mi-text-muted, #8b8d94); white-space: nowrap; }
-.mi-policy-drawer__distribution-bar { display: block; height: 6px; border-radius: 3px; background: #1b1f27; overflow: hidden; }
-.mi-policy-drawer__distribution-bar i { display: block; height: 100%; border-radius: 3px; background: #4a5260; }
-.mi-policy-drawer__distribution > li[data-leading='true'] .mi-policy-drawer__distribution-label { color: var(--mi-text, #e8e9ec); }
-.mi-policy-drawer__distribution > li[data-leading='true'] .mi-policy-drawer__distribution-bar i { background: var(--mi-accent, #b7cf52); }
-.mi-policy-drawer__distribution > li > b { font-size: 11.5px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* One distribution, five columns: heights share a scale, so the shape is the message. */
+.mi-policy-drawer__histogram {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  height: 118px;
+  padding-top: 4px;
+  border-bottom: 1px solid var(--mi-border, #22252d);
+}
+.mi-policy-drawer__histogram-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+.mi-policy-drawer__histogram-value { font-size: 11px; color: var(--mi-text-muted, #8b8d94); font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__histogram-bar { width: 34px; min-height: 2px; border-radius: 3px 3px 0 0; background: #39404c; }
+.mi-policy-drawer__histogram-col[data-leading='true'] .mi-policy-drawer__histogram-bar { background: var(--mi-accent, #b7cf52); }
+.mi-policy-drawer__histogram-col[data-leading='true'] .mi-policy-drawer__histogram-value { color: var(--mi-text, #e8e9ec); font-weight: 600; }
+.mi-policy-drawer__histogram-label { font-size: 9.5px; color: var(--mi-text-dim, #6c6f78); padding: 6px 0 4px; white-space: nowrap; }

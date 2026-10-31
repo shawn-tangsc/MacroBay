@@ -37,6 +37,7 @@ export type PolicyPathDrawerText = Readonly<{
   settlementConclusionMissing: string
   /** Every bucket at one instant, not just the one the card leads with. */
   distributionTitle: string
+  shortOutcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
 }>
 
 /**
@@ -85,16 +86,21 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         or 30% looks like it does not exist. */}
     {reading.phase.kind !== 'settlement' && probability?.distribution ? <section className="mi-policy-drawer__section">
       <h3>{text.distributionTitle}</h3>
-      <ul className="mi-policy-drawer__distribution">
+      {/* A histogram, not five progress bars: these buckets are one distribution, and a bar per
+          row reads as five unrelated meters. Heights share one scale; a non-zero bucket keeps a
+          visible minimum so 1% does not vanish. */}
+      <div className="mi-policy-drawer__histogram" role="img"
+        aria-label={[...POLICY_PATH_OUTCOMES].reverse().map((outcome) =>
+          `${text.shortOutcomes[outcome]} ${percentOf(probability.distribution?.[outcome] ?? 0)}`).join('，')}>
         {[...POLICY_PATH_OUTCOMES].reverse().map((outcome) => {
           const share = probability.distribution?.[outcome] ?? 0
-          return <li key={outcome} data-leading={outcome === probability.outcome ? 'true' : undefined}>
-            <span className="mi-policy-drawer__distribution-label">{text.outcomes[outcome]}</span>
-            <span className="mi-policy-drawer__distribution-bar" aria-hidden="true"><i style={{ width: `${Math.max(share * 100, 1)}%` }} /></span>
-            <b>{percentOf(share)}</b>
-          </li>
+          return <div key={outcome} className="mi-policy-drawer__histogram-col" data-leading={outcome === probability.outcome ? 'true' : undefined}>
+            <span className="mi-policy-drawer__histogram-value">{percentOf(share)}</span>
+            <span className="mi-policy-drawer__histogram-bar" style={{ height: `${Math.max(share * 100, share > 0 ? 3 : 1)}%` }} />
+            <span className="mi-policy-drawer__histogram-label">{text.shortOutcomes[outcome]}</span>
+          </div>
         })}
-      </ul>
+      </div>
     </section> : null}
 
     <section className="mi-policy-drawer__section">

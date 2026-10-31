@@ -101,9 +101,9 @@ describe('policy drawer distribution', () => {
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
-    const rows = rendered.querySelectorAll('.mi-policy-drawer__distribution > li')
-    expect(rows).toHaveLength(5)
-    expect(rendered.textContent).toContain('维持利率')
+    const columns = rendered.querySelectorAll('.mi-policy-drawer__histogram-col')
+    expect(columns).toHaveLength(5)
+    expect(rendered.textContent).toContain('维持')
     expect(rendered.textContent).toContain('29%')
     expect(rendered.textContent).toContain('69%')
   })
