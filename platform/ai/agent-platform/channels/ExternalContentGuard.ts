@@ -1,7 +1,13 @@
 import { randomBytes } from 'node:crypto'
 
+/**
+ * Formatting characters that carry no meaning and are used to obfuscate text.
+ * U+200C (ZWNJ) and U+200D (ZWJ) are deliberately excluded: they are orthographic in Persian and
+ * Indic scripts, and ZWJ joins emoji sequences. Stripping them rewrites a legitimate message
+ * (`‍‍` becomes three separate emoji, `‍` joins letters that should not join).
+ */
 const INVISIBLE_CHARS_RE =
-  /[\u200B\u200C\u200D\u200E\u200F\uFEFF\u00AD\u2060\u2061\u2062\u2063\u2064\u2066\u2067\u2068\u2069\u206A-\u206F]/g
+  /[\u200B\u200E\u200F\uFEFF\u00AD\u2060\u2061\u2062\u2063\u2064\u2066\u2067\u2068\u2069\u206A-\u206F]/g
 
 const SUSPICIOUS_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'ignore-previous', re: /ignore\s+(all\s+)?previous\s+instructions/i },
