@@ -15,7 +15,6 @@ export const agentTextZhWorkbench: AgentTextWorkbench = {
     agentResponseCompleted: '智能体已完成响应',
     waitingAgentResponse: '等待智能体响应',
     elapsed: (duration) => `已用 ${duration}`,
-    stillWaiting: '仍在等待模型响应…'
   },
   taskCenter: {
     title: '任务中心',
