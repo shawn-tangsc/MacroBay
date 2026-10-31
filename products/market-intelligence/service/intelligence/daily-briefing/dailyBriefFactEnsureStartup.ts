@@ -1,4 +1,4 @@
-import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefFactEnsure } from './dailyBriefFactEnsure'
 import type { DailyBriefingStore } from './dailyBriefingService'
 
@@ -47,9 +47,11 @@ export async function ensureDailyBriefFactsAtStartup(deps: DailyBriefFactEnsureS
       try {
         const result = await deps.ensure({ document: row.document, cutoff: row.document.edition.windowEnd, trigger: 'startup' })
         if (!result.changed) continue
-        // A newer generation may have landed while the readers were working; do not overwrite it.
+        // A generation that landed while the readers were working must win. `generatedAt` is the
+        // edition cutoff, not the write time, so a same-day regeneration can keep it; compare the
+        // document as well before writing.
         const fresh = await deps.store.get(latestDate, candidate).catch(() => undefined)
-        if (!fresh || fresh.generatedAt !== row.generatedAt) {
+        if (!fresh || fresh.generatedAt !== row.generatedAt || !sameDocument(fresh.document, row.document)) {
           deps.onEvent?.({ event: 'startup-write-skipped', reason: 'regenerated', editionDate: latestDate })
           continue
         }
@@ -69,4 +71,12 @@ function addDays(date: string, days: number): string {
   return Number.isFinite(parsed)
     ? new Date(parsed + days * 24 * 60 * 60 * 1_000).toISOString().slice(0, 10)
     : date
+}
+
+function sameDocument(left: DailyBriefingDocument, right: DailyBriefingDocument): boolean {
+  try {
+    return JSON.stringify(left) === JSON.stringify(right)
+  } catch {
+    return false
+  }
 }
