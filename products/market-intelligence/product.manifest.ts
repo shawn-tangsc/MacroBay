@@ -204,6 +204,17 @@ export const marketIntelligenceProductManifest = {
     { id: 'market-intelligence.refreshBeaOfficialReleases' },
     { id: 'market-intelligence.dailyBriefing' }
   ],
+  /**
+   * 本产品**发布**的话题（`MI-11-R22` A1）：定时任务从这里选订阅目标。
+   * 五个 topic 都有真实生产者（`intelligenceEventPublisher`），与 `INTELLIGENCE_EVENT_TOPICS` 同源。
+   */
+  eventTopics: [
+    'market-intelligence.item.created',
+    'market-intelligence.cluster.updated',
+    'market-intelligence.impact.created',
+    'market-intelligence.sentiment.updated',
+    'market-intelligence.source.health.changed'
+  ],
   eventConsumers: [],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
