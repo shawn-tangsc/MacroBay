@@ -8,6 +8,7 @@ import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../.
 import { DailyBriefingPage } from './DailyBriefingPage'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
+const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
 
 const briefingDocument = (date = '2026-10-30', lede = 'CPI 超预期 · Ripple 获批'): DailyBriefingDocument => ({
   schemaVersion: 1,
@@ -84,6 +85,15 @@ const emptyDocument = (): DailyBriefingDocument => ({
   next: { items: [], note: 'calendar-source-disabled' }
 })
 
+const failedDocument = (code: string, detail?: string): DailyBriefingDocument => ({
+  ...briefingDocument(),
+  provenance: {
+    ...briefingDocument().provenance,
+    editorialFailure: code,
+    ...(detail ? { editorialFailureDetail: detail } : {})
+  }
+})
+
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
@@ -122,12 +132,26 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function renderPage(client: ReturnType<typeof fakeClient>, onBack = vi.fn(), onConfigureSources?: () => void): Promise<HTMLDivElement> {
+async function renderPage(client: ReturnType<typeof fakeClient>, options: Readonly<{
+  onBack?: () => void
+  onConfigureSources?: () => void
+  onOpenModelSettings?: () => void
+  locale?: 'zh-CN' | 'en-US'
+}> = {}): Promise<HTMLDivElement> {
+  const { onBack = vi.fn(), onConfigureSources, onOpenModelSettings, locale = 'zh-CN' } = options
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DailyBriefingPage locale="zh-CN" text={text} eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }} onBack={onBack} {...(onConfigureSources ? { onConfigureSources } : {})} client={client} />)
+    root!.render(<DailyBriefingPage
+      locale={locale}
+      text={locale === 'zh-CN' ? text : englishText}
+      eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }}
+      onBack={onBack}
+      {...(onConfigureSources ? { onConfigureSources } : {})}
+      {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
+      client={client}
+    />)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return container
@@ -139,7 +163,7 @@ afterEach(() => { vi.useRealTimers() })
 describe('daily briefing page', () => {
   it('renders today, the 14-day rail and goes back to the dashboard', async () => {
     const onBack = vi.fn()
-    const dom = await renderPage(fakeClient(), onBack)
+    const dom = await renderPage(fakeClient(), { onBack })
     expect(dom.textContent).toContain('每日简报')
     expect(dom.textContent).toContain('CPI 超预期')
     expect(dom.querySelectorAll('[data-date]')).toHaveLength(14)
@@ -196,7 +220,7 @@ describe('daily briefing page', () => {
     const onConfigureSources = vi.fn()
     const dom = await renderPage(fakeClient({
       getToday: vi.fn(async () => ({ state: 'available' as const, document: emptyDocument() }))
-    }), vi.fn(), onConfigureSources)
+    }), { onConfigureSources })
     expect(dom.textContent).toContain(text.emptyGuide)
     for (const section of [text.sections.news, text.sections.data, text.sections.conclusion, text.sections.next]) {
       expect(dom.querySelector(`[aria-label="${section}"]`)).toBeNull()
@@ -235,5 +259,102 @@ describe('daily briefing page', () => {
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
     expect(getToday).toHaveBeenCalledTimes(2)
     expect(dom.textContent).toContain('每日简报')
+  })
+
+  it('explains an editorial timeout and offers retry, AI settings and model service actions', async () => {
+    const onOpenModelSettings = vi.fn()
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('editorial-timeout') })) })
+    const dom = await renderPage(client, { onOpenModelSettings })
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+
+    expect(panel).not.toBeNull()
+    expect(panel.textContent).toContain(text.failurePanel.editorialTitle)
+    expect(panel.querySelector('[data-failure-code-label]')?.textContent)
+      .toBe(`${text.failurePanel.codeLabel}${text.labelSeparator}${text.aiSettings.failure['editorial-timeout']}`)
+    expect(panel.textContent).not.toContain('editorial-timeout')
+    expect(panel.textContent).toContain(text.failurePanel.advice.retryOrModel)
+    expect(panel.querySelector('[data-failure-action="retry"]')).not.toBeNull()
+    expect(panel.querySelector('[data-failure-action="ai-settings"]')).not.toBeNull()
+    expect(dom.querySelector('.mi-daily-briefing-page__paper')).toBeNull()
+
+    act(() => panel.querySelector<HTMLButtonElement>('[data-failure-action="model-service"]')!.click())
+    expect(onOpenModelSettings).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      panel.querySelector<HTMLButtonElement>('[data-failure-action="retry"]')!.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(client.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: expect.any(String) })
+    expect(dom.querySelector('[data-daily-brief-failure]')).toBeNull()
+    expect(dom.textContent).toContain('重新生成版')
+  })
+
+  it('sends model and provider failures to model settings with a readable detail', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('model-unavailable', 'custom-unavailable') })) })
+    const dom = await renderPage(client)
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+    const detail = panel.querySelector('[data-failure-detail]')
+
+    expect(panel.textContent).toContain(text.aiSettings.failure['model-unavailable'])
+    expect(panel.textContent).toContain(text.failurePanel.detail['custom-unavailable'])
+    expect(panel.textContent).toContain(text.failurePanel.advice.model)
+    expect(panel.textContent).not.toContain('model-unavailable')
+    expect(panel.textContent).not.toContain('custom-unavailable')
+    expect(detail?.textContent).toContain(text.failurePanel.detailLabel)
+    expect(panel.querySelector('[data-failure-action="model-service"]')).not.toBeNull()
+  })
+
+  it('shows a truncated-output reason, redacts credentials and truncates long detail', async () => {
+    const secret = 'sk-live-SECRET0123456789'
+    const longDetail = `stop_reason=max_tokens ${'x'.repeat(80)} ${secret} ${'y'.repeat(240)}\n    at handler (/app/private/secret.js:1:1)`
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('agent-turn-output-truncated', longDetail) })) })
+    const dom = await renderPage(client)
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+    const detail = panel.querySelector<HTMLElement>('[data-failure-detail]')!
+
+    expect(panel.textContent).toContain(text.aiSettings.failure['agent-turn-output-truncated'])
+    expect(panel.textContent).toContain(text.failurePanel.advice.retryOrModel)
+    expect(detail.textContent).toContain('stop_reason=max_tokens')
+    expect(detail.textContent).toContain('…')
+    expect(detail.textContent!.length).toBeLessThan(220)
+    expect(detail.textContent).not.toContain(secret)
+    expect(detail.textContent).not.toContain('/app/private/secret.js')
+  })
+
+  it('keeps a specific unknown-number detail and asks for a retry or AI-settings check', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('unknown-number', '42000') })) })
+    const dom = await renderPage(client)
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+
+    expect(panel.textContent).toContain(text.aiSettings.failure['unknown-number'])
+    expect(panel.querySelector('[data-failure-detail]')?.textContent).toContain('42000')
+    expect(panel.textContent).toContain(text.failurePanel.advice.retryOrSettings)
+    expect(panel.querySelector('[data-failure-action="ai-settings"]')).not.toBeNull()
+  })
+
+  it('treats a source failure as a data problem and sends the reader to the sources', async () => {
+    const onConfigureSources = vi.fn()
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'source-failed' as const })) })
+    const dom = await renderPage(client, { onConfigureSources })
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+
+    expect(panel.textContent).toContain(text.failurePanel.generationTitle)
+    expect(panel.textContent).toContain(text.aiSettings.failure['source-failed'])
+    expect(panel.textContent).toContain(text.failurePanel.advice.data)
+    expect(panel.querySelector('[data-failure-action="model-service"]')).toBeNull()
+
+    act(() => panel.querySelector<HTMLButtonElement>('[data-failure-action="sources"]')!.click())
+    expect(onConfigureSources).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the failure panel in English', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: failedDocument('model-unavailable', 'default-unavailable') })) })
+    const dom = await renderPage(client, { locale: 'en-US' })
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+
+    expect(panel.textContent).toContain(englishText.failurePanel.editorialTitle)
+    expect(panel.textContent).toContain(englishText.aiSettings.failure['model-unavailable'])
+    expect(panel.textContent).toContain(englishText.failurePanel.detail['default-unavailable'])
+    expect(panel.textContent).toContain(englishText.failurePanel.advice.model)
   })
 })
