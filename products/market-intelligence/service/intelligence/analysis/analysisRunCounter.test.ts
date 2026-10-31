@@ -3,7 +3,7 @@ import { analysisRunCounterPolicy, countAnalysisRuns, lastAutoRunAt } from './an
 
 const now = '2026-10-09T12:00:00.000Z'
 const row = (overrides: Record<string, unknown> = {}) => ({
-  triggerKey: 'calendar.refresh', reasonCode: 'significance-confirmed', decision: 'queued', createdAt: now, ...overrides
+  id: 'mi-ledger-row', triggerKey: 'calendar.refresh', reasonCode: 'significance-confirmed', decision: 'queued', createdAt: now, ...overrides
 })
 const repository = (groups: Record<string, readonly ReturnType<typeof row>[]>) => ({
   listEventGroups: () => Object.keys(groups).map(id => ({ id })),
@@ -22,7 +22,13 @@ it('counts delivered runs across every group, not per group', () => {
     b: [row({ triggerKey: 'schedule.asia.open', reasonCode: 'session-slot' })]
   }), now)
   // The slot sits inside the hour too, so `hourRuns` counts it and the event-only hour does not.
-  expect(counts).toEqual({ hourRuns: 2, dayRuns: 3, eventRunsToday: 2, scheduledRunsToday: 1, eventRunsThisHour: 1 })
+  // The slot sits inside the hour too, so `hourRuns` counts it and the event-only hour does not.
+  expect(counts).toEqual({
+    hourRuns: 2, dayRuns: 3,
+    eventRunsToday: 0, eventRunsThisHour: 0,
+    calendarRunsToday: 2, calendarRunsThisHour: 1,
+    scheduledRunsToday: 1
+  })
 })
 
 it('ignores skips, other days, and restart compensation', () => {
@@ -35,7 +41,7 @@ it('ignores skips, other days, and restart compensation', () => {
       row({ createdAt: '2026-10-09T13:00:00.000Z' })
     ]
   }), now)
-  expect(counts).toEqual({ hourRuns: 1, dayRuns: 1, eventRunsToday: 1, scheduledRunsToday: 0, eventRunsThisHour: 1 })
+  expect(counts).toEqual({ hourRuns: 1, dayRuns: 1, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 1, calendarRunsThisHour: 1, scheduledRunsToday: 0 })
 })
 
 it('counts only the last hour for the hourly gate', () => {
@@ -58,6 +64,6 @@ it('reports the group baseline from its latest delivered run', () => {
 })
 
 it('tolerates a repository without the optional readers', () => {
-  expect(countAnalysisRuns({}, now)).toEqual({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0, eventRunsThisHour: 0 })
+  expect(countAnalysisRuns({}, now)).toEqual({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 })
   expect(lastAutoRunAt({}, 'a', now)).toBeNull()
 })

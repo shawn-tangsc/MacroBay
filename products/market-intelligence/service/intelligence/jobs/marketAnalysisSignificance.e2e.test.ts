@@ -73,7 +73,7 @@ it('queues a released value, carries the reason into the prompt, and shows it on
   expect(JSON.parse(messages[1]!.content as string).triggers).toEqual([expect.stringContaining('消费者物价指数（CPI）')])
   // The ledger row is a queue, not a skip, and the count reflects the delivered run.
   expect(projectTriggerStatus(repo.listTriggerLedger('mi-eg-1'), { triggerKey: 'calendar.refresh', queuedAt, completedAt: queuedAt })).toMatchObject({ reasonCode: 'significance-confirmed' })
-  expect(countAnalysisRuns(repo, queuedAt)).toMatchObject({ dayRuns: 1, eventRunsToday: 1, scheduledRunsToday: 0 })
+  expect(countAnalysisRuns(repo, queuedAt)).toMatchObject({ dayRuns: 1, calendarRunsToday: 1, eventRunsToday: 0, scheduledRunsToday: 0 })
 })
 
 it('coalesces a second wave inside the window, and lets the session slot through anyway', async () => {
@@ -89,7 +89,7 @@ it('coalesces a second wave inside the window, and lets the session slot through
   const slot = await gateFor(repo, [official('3.3%', '2026-10-09T11:30:00.000Z')])
     .evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'schedule.asia.open', asOf, previousSnapshot })
   expect(slot).toMatchObject({ decision: 'queued', reasonCode: 'session-slot-asia' })
-  expect(countAnalysisRuns(repo, queuedAt)).toMatchObject({ dayRuns: 2, eventRunsToday: 1, scheduledRunsToday: 1 })
+  expect(countAnalysisRuns(repo, queuedAt)).toMatchObject({ dayRuns: 2, calendarRunsToday: 1, scheduledRunsToday: 1 })
 })
 
 it('never lets an automatic row disturb the item path history', async () => {

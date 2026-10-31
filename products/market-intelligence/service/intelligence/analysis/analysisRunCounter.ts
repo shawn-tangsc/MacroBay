@@ -1,6 +1,5 @@
 import { analysisBudgetPolicy } from './analysisBudgetPolicy'
-import { isScheduledSlotTriggerKey } from './analysisSchedulePolicy'
-import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
+import { analysisRunLineOf, analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
 
 /**
  * Counts the automatic runs the budget is spent on.
@@ -23,19 +22,20 @@ import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
  */
 
 export type AnalysisRunCounts = Readonly<{
+  /** Every delivery in the window, the session slots included. */
   hourRuns: number
   dayRuns: number
+  /** The item line: two registered trigger keys, day and trailing hour. */
   eventRunsToday: number
-  scheduledRunsToday: number
-  /**
-   * The exact mirror of `eventRunsToday` over the trailing hour. The hourly quota reads this one:
-   * the slot line already reserves three calls a day, and charging it to the hourly quota too let a
-   * single open close an hour in which the event line had not reached its limit.
-   */
   eventRunsThisHour: number
+  /** The calendar line: every other data-driven key, day and trailing hour. */
+  calendarRunsToday: number
+  calendarRunsThisHour: number
+  /** Deliveries inside the reserved session-slot line (`schedule.*`). */
+  scheduledRunsToday: number
 }>
 
-export type RunCounterLedgerRow = Readonly<{ triggerKey: string; reasonCode: string; decision: string; createdAt: string }>
+export type RunCounterLedgerRow = Readonly<{ id: string; triggerKey: string; reasonCode: string; decision: string; createdAt: string }>
 
 export type RunCounterRepository = Readonly<{
   listEventGroups?: () => readonly Readonly<{ id: string }>[]
@@ -55,27 +55,35 @@ function isDelivered(row: RunCounterLedgerRow): boolean {
   return row.decision === 'queued' && !isCompensation(row)
 }
 
-/** The one place that decides whether a delivery belongs to the session-slot line. */
-function isScheduledRun(row: RunCounterLedgerRow): boolean {
-  return isScheduledSlotTriggerKey(row.triggerKey)
-}
-
 function ledgerOf(repository: RunCounterRepository): readonly RunCounterLedgerRow[] {
   const groups = repository.listEventGroups?.() ?? []
   return groups.flatMap(group => [...(repository.listTriggerLedger?.(group.id) ?? [])])
 }
 
-export function countAnalysisRuns(repository: RunCounterRepository, now: string): AnalysisRunCounts {
+function countLine(rows: readonly RunCounterLedgerRow[], line: ReturnType<typeof analysisRunLineOf>): number {
+  return rows.filter(row => analysisRunLineOf(row.triggerKey) === line).length
+}
+
+/**
+ * @param excludedRowId the attempt currently being judged. The trigger line writes that row before
+ * the gate sees it, so counting it here would charge this attempt twice: once as "already spent" in
+ * its own check and again when it later passes.
+ */
+export function countAnalysisRuns(repository: RunCounterRepository, now: string, excludedRowId?: string): AnalysisRunCounts {
   const nowMs = Date.parse(now)
   const day = now.slice(0, 10)
-  const rows = ledgerOf(repository).filter(isDelivered).filter(row => row.createdAt.slice(0, 10) === day)
+  const rows = ledgerOf(repository).filter(isDelivered)
+    .filter(row => row.createdAt.slice(0, 10) === day)
+    .filter(row => excludedRowId === undefined || row.id !== excludedRowId)
   const hourRows = rows.filter(row => nowMs - Date.parse(row.createdAt) < 60 * 60 * 1_000)
   return {
     hourRuns: hourRows.length,
     dayRuns: rows.length,
-    eventRunsToday: rows.filter(row => !isScheduledRun(row)).length,
-    scheduledRunsToday: rows.filter(isScheduledRun).length,
-    eventRunsThisHour: hourRows.filter(row => !isScheduledRun(row)).length
+    eventRunsToday: countLine(rows, 'event'),
+    eventRunsThisHour: countLine(hourRows, 'event'),
+    calendarRunsToday: countLine(rows, 'calendar'),
+    calendarRunsThisHour: countLine(hourRows, 'calendar'),
+    scheduledRunsToday: countLine(rows, 'scheduled')
   }
 }
 

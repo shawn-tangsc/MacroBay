@@ -12,7 +12,7 @@ const at = '2026-10-09T12:00:00.000Z'
 function group(): EventGroup {
   return {
     id: groupId, schemaVersion: 1, status: 'monitoring', groupType: 'macro', mergeKey: 'US.CPI|count',
-    firstObservedAt: at, lastObservedAt: at, reviewDeadlineAt: '2026-10-09T13:00:00.000Z',
+    firstObservedAt: at, lastObservedAt: at, reviewDeadlineAt: '2026-10-10T00:00:00.000Z',
     eventRefs: ['event-1'], triggerCount: 1, reviewCount: 0, currentSummaryId: null,
     supersededByGroupId: null, revision: 1, createdAt: at, updatedAt: at
   }
@@ -20,12 +20,7 @@ function group(): EventGroup {
 
 /**
  * The counting contract, driven end to end: the trigger line writes an attempt row, the gate
- * refuses it, and the day's number must not change.
- *
- * Allowed attempts use an item key, which the gate passes through untouched — exactly how the
- * trigger line's own deliveries behave today. Refused attempts use the calendar key, whose budget
- * is what refuses them; the counting formula is key-agnostic, so this is the same arithmetic the
- * item line will use once it is budgeted.
+ * budgets it, and a refusal rewrites that row instead of adding a second one.
  */
 function harness() {
   const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
@@ -36,77 +31,85 @@ function harness() {
   const gate = createAnalysisSignificanceGate({
     now: () => now,
     queryMacroRoute: async () => ({ official: [], provider: [], months: [], asOf: now }) as never,
-    countRuns: (instant) => countAnalysisRuns(repository, instant),
+    countRuns: (instant, excludedRowId) => countAnalysisRuns(repository, instant, excludedRowId),
     lastAutoRunAt: () => null,
     recordDecision: (decision) => { void runs.recordDecision(decision) },
     updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode)
   })
   const advance = (iso: string) => { now = iso }
-  /** Writes the attempt row the trigger line writes, then lets the gate judge it. */
+  /** Writes the attempt row the trigger line writes, then lets the gate budget it. */
   const attempt = async (triggerKey: string, changeHash: string) => {
     const rowId = runs.recordDecision({ eventGroupId: groupId, triggerKey, changeHash, decision: 'queued', reasonCode: 'severity-confirmed' })!
     const outcome = await gate.evaluate({ eventGroupId: groupId, triggerKey, asOf: now, previousSnapshot: null, attemptLedgerId: rowId })
     return { rowId, outcome }
   }
-  const allow = (triggerKey: string, changeHash: string) => runs.recordDecision({ eventGroupId: groupId, triggerKey, changeHash, decision: 'queued', reasonCode: 'severity-confirmed' })!
   const rows = () => repository.listTriggerLedger(groupId)
-  return { repository, runs, gate, advance, attempt, allow, rows }
+  const counts = (instant = now) => countAnalysisRuns(repository, instant)
+  return { repository, advance, attempt, rows, counts, runs }
 }
 
 describe('analysis run counting over refused attempts', () => {
-  it('charges the day for the three allowed calls, not for the nine the hourly gate refused', async () => {
-    const { repository, advance, attempt, allow, rows } = harness()
+  it('charges the day for the twelve allowed calls, not for the refused thirteenth', async () => {
+    const { repository, advance, attempt, rows, counts } = harness()
     advance(at)
-    for (const hash of ['a1', 'a2', 'a3']) {
-      allow('macro.actual.first-confirmed', hash)
+    for (let index = 1; index <= 12; index += 1) {
+      const { outcome } = await attempt('macro.actual.first-confirmed', `a${index}`)
+      expect(outcome).toMatchObject({ decision: 'queued' })
     }
-    expect(countAnalysisRuns(repository, at).dayRuns).toBe(3)
+    expect(counts()).toMatchObject({ eventRunsToday: 12, eventRunsThisHour: 12, dayRuns: 12 })
 
-    const refusals = []
-    for (let index = 0; index < 9; index += 1) {
-      refusals.push(await attempt('calendar.refresh', `r${index}`))
-    }
-    for (const refusal of refusals) expect(refusal.outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
-
-    // Before the fix each refusal also left its trigger row saying "queued": twelve attempts, twelve
-    // charged calls, none of the nine ever ran.
-    expect(countAnalysisRuns(repository, at)).toMatchObject({ dayRuns: 3, hourRuns: 3 })
-    const ledger = rows()
-    expect(ledger).toHaveLength(12)
-    const refused = ledger.filter(row => row.decision === 'skipped')
-    expect(refused).toHaveLength(9)
-    expect(refused.every(row => row.reasonCode === 'hour-budget-exhausted')).toBe(true)
+    const refused = await attempt('macro.actual.first-confirmed', 'a13')
+    expect(refused.outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+    // The refusal rewrote the attempt's own row; a second row would have charged thirteen.
+    expect(counts()).toMatchObject({ eventRunsToday: 12, dayRuns: 12 })
+    const skipped = rows().filter(row => row.decision === 'skipped')
+    expect(skipped).toHaveLength(1)
+    expect(skipped[0]).toMatchObject({ id: refused.rowId, reasonCode: 'hour-budget-exhausted' })
+    expect(rows()).toHaveLength(13)
     repository.close()
   })
 
-  it('carries the unspent allowance into the next hour instead of losing the day', async () => {
-    const { repository, advance, attempt, allow } = harness()
-    advance(at)
-    for (const hash of ['a1', 'a2', 'a3']) allow('macro.actual.first-confirmed', hash)
-    for (let index = 0; index < 3; index += 1) await attempt('calendar.refresh', `r${index}`)
-    expect(countAnalysisRuns(repository, at).dayRuns).toBe(3)
-
-    advance('2026-10-09T13:05:00.000Z')
-    for (const hash of ['b1', 'b2', 'b3']) allow('macro.actual.first-confirmed', hash)
-    expect(countAnalysisRuns(repository, '2026-10-09T13:05:00.000Z')).toMatchObject({ dayRuns: 6, hourRuns: 3 })
-    repository.close()
-  })
-
-  it('lets the twelfth call through and refuses the thirteenth with the day budget', async () => {
-    const { repository, advance, attempt, allow } = harness()
+  it('keeps an unspent hour for the next one, up to the line daily quota', async () => {
+    const { repository, advance, attempt, counts } = harness()
     const hours = ['2026-10-09T08:05:00.000Z', '2026-10-09T09:05:00.000Z', '2026-10-09T10:05:00.000Z', '2026-10-09T11:05:00.000Z']
     let index = 0
     for (const hour of hours) {
       advance(hour)
-      for (let slot = 0; slot < 3; slot += 1) allow('macro.actual.first-confirmed', `h${index++}`)
-      expect(countAnalysisRuns(repository, hour).dayRuns % 3).toBe(0)
+      for (let slot = 0; slot < 12; slot += 1) {
+        const { outcome } = await attempt('macro.actual.first-confirmed', `h${index++}`)
+        expect(outcome).toMatchObject({ decision: 'queued' })
+      }
+      expect(counts(hour).eventRunsToday % 12).toBe(0)
     }
-    expect(countAnalysisRuns(repository, hours.at(-1)!).dayRuns).toBe(12)
+    expect(counts(hours.at(-1)!).eventRunsToday).toBe(48)
 
     advance('2026-10-09T12:05:00.000Z')
-    const thirteenth = await attempt('calendar.refresh', 'day-cap')
-    expect(thirteenth.outcome).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
-    expect(countAnalysisRuns(repository, '2026-10-09T12:05:00.000Z').dayRuns).toBe(12)
+    const refused = await attempt('macro.actual.first-confirmed', 'day-cap')
+    expect(refused.outcome).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
+    expect(counts().eventRunsToday).toBe(48)
+    repository.close()
+  })
+
+  it('no longer takes the calendar line quota for the event line', async () => {
+    const { repository, advance, attempt, counts, runs } = harness()
+    let index = 0
+    for (const hour of ['2026-10-09T08:05:00.000Z', '2026-10-09T09:05:00.000Z', '2026-10-09T10:05:00.000Z', '2026-10-09T11:05:00.000Z']) {
+      advance(hour)
+      for (let slot = 0; slot < 12; slot += 1) await attempt('macro.actual.first-confirmed', `e${index++}`)
+    }
+    // A full event day: the calendar line has still spent nothing, which is the whole point.
+    expect(counts()).toMatchObject({ eventRunsToday: 48, calendarRunsToday: 0 })
+
+    advance('2026-10-09T12:05:00.000Z')
+    for (let slot = 0; slot < 9; slot += 1) {
+      runs.recordDecision({ eventGroupId: groupId, triggerKey: 'calendar.refresh', changeHash: `c${slot}`, decision: 'queued', reasonCode: 'significance-confirmed' })
+    }
+    expect(counts().calendarRunsToday).toBe(9)
+
+    advance('2026-10-09T13:05:00.000Z')
+    const refused = await attempt('calendar.refresh', 'c9')
+    expect(refused.outcome).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
+    expect(counts().calendarRunsToday).toBe(9)
     repository.close()
   })
 })

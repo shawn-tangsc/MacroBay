@@ -245,7 +245,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const significanceGate = createAnalysisSignificanceGate({
     now,
     queryMacroRoute: ({ asOf, months }) => queryMacroRoute(input.publicQueryService, { asOf, months }),
-    countRuns: (at) => countAnalysisRuns(repository, at),
+    countRuns: (at, excludedRowId) => countAnalysisRuns(repository, at, excludedRowId),
     lastAutoRunAt: (eventGroupId, at) => lastAutoRunAt(repository, eventGroupId, at),
     recordDecision: (decision) => { void runs.recordDecision(decision) },
     updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode)

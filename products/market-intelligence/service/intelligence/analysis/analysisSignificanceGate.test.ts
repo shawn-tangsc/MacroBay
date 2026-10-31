@@ -35,7 +35,7 @@ function gate(overrides: Record<string, unknown> = {}, routeOfficial: readonly u
   const queryMacroRoute = vi.fn(async () => route(routeOfficial))
   const instance = createAnalysisSignificanceGate({
     now: () => asOf, queryMacroRoute, recordDecision, updateDecision,
-    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0, eventRunsThisHour: 0 }),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
     lastAutoRunAt: () => null, ...overrides
   } as never)
   return { instance, recordDecision, updateDecision, queryMacroRoute }
@@ -68,7 +68,7 @@ it('lets the item and manual keys through untouched, recording nothing', async (
 })
 
 it('reports the limits instead of the data when the budget is spent', async () => {
-  const { instance } = gate({ countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 3, scheduledRunsToday: 0, eventRunsThisHour: 3 }) })
+  const { instance } = gate({ countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 3, calendarRunsThisHour: 3, scheduledRunsToday: 0 }) })
   expect(await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') }))
     .toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
 })
@@ -108,7 +108,7 @@ it('records a provider surprise under its own reason code, and names the release
   const recordDecision = vi.fn()
   const instance = createAnalysisSignificanceGate({
     now: () => asOf, queryMacroRoute: vi.fn(async () => providerRoute), recordDecision,
-    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0, eventRunsThisHour: 0 }),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
     lastAutoRunAt: () => null
   } as never)
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: null })
@@ -133,7 +133,7 @@ it('stays quiet for a routine provider release even though its actual is new to 
   const recordDecision = vi.fn()
   const instance = createAnalysisSignificanceGate({
     now: () => asOf, queryMacroRoute: vi.fn(async () => providerRoute), recordDecision,
-    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0, eventRunsThisHour: 0 }),
+    countRuns: () => ({ hourRuns: 0, dayRuns: 0, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 0, calendarRunsThisHour: 0, scheduledRunsToday: 0 }),
     lastAutoRunAt: () => null
   } as never)
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: null })
@@ -143,7 +143,7 @@ it('stays quiet for a routine provider release even though its actual is new to 
 
 it('rewrites the attempt row it was given instead of adding a second decision row', async () => {
   const { instance, recordDecision, updateDecision } = gate({
-    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 3, scheduledRunsToday: 0, eventRunsThisHour: 3 })
+    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 3, calendarRunsThisHour: 3, scheduledRunsToday: 0 })
   })
   const outcome = await instance.evaluate({
     eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%'), attemptLedgerId: 'mi-ledger-7'
@@ -156,7 +156,7 @@ it('rewrites the attempt row it was given instead of adding a second decision ro
 
 it('records its own decision for a line that has no attempt row', async () => {
   const { instance, recordDecision, updateDecision } = gate({
-    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 3, scheduledRunsToday: 0, eventRunsThisHour: 3 })
+    countRuns: () => ({ hourRuns: 3, dayRuns: 3, eventRunsToday: 0, eventRunsThisHour: 0, calendarRunsToday: 3, calendarRunsThisHour: 3, scheduledRunsToday: 0 })
   })
   const outcome = await instance.evaluate({ eventGroupId: 'mi-eg-1', triggerKey: 'calendar.refresh', asOf, previousSnapshot: snapshot('3.1%') })
   expect(outcome).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
