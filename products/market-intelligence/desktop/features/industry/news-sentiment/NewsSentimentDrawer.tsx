@@ -278,7 +278,7 @@ export function NewsSentimentDrawer(props: {
                   </span>
                   {translationEnabled && rowState === 'waiting' ? (
                     <span className="mi-news-drawer__row-waiting" title={text.drawer.translationStatus?.waitingHint}>
-                      {text.drawer.translationStatus?.waiting ?? 'waiting'}
+                      {text.drawer.translationStatus?.waiting}
                     </span>
                   ) : null}
                   {translationEnabled && rowState === 'translating' ? (
@@ -286,7 +286,7 @@ export function NewsSentimentDrawer(props: {
                       <LoadingSpinner size="sm" />
                     </span>
                   ) : null}
-                  {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed ?? 'failed'}</span> : null}
+                  {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed}</span> : null}
                   <small className="mi-news-drawer__source">{row.sourceName}</small>
                   <span className="mi-news-drawer__symbols">
                     {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}
