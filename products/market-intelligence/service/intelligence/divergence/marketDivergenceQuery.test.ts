@@ -46,23 +46,3 @@ describe('market divergence query', () => {
     expect(spy).not.toHaveBeenCalled()
   })
 })
-
-describe('the model is an extra, never a dependency', () => {
-  const judgeThatThrows = async () => { throw new Error('provider exploded') }
-
-  it('keeps the rule answer when the model throws', async () => {
-    const result = await queryMarketDivergenceAsync({ asOf, read: reader(), judge: judgeThatThrows })
-    expect(result.state).toBe('available')
-    if (result.state !== 'available') return
-    expect(result.rows.every(row => row.judgedBy === 'rules')).toBe(true)
-  })
-
-  it('still reports a quiet day rather than a failure', async () => {
-    const result = await queryMarketDivergenceAsync({
-      asOf,
-      read: reader({ stablecoin: async () => ({ change7dPercent: 0.4, observedAt: at(2) }), funding: async () => ({ ratePercent: 0.0021, observedAt: at(1) }) }),
-      judge: judgeThatThrows
-    })
-    expect(result.state).toBe('empty')
-  })
-})

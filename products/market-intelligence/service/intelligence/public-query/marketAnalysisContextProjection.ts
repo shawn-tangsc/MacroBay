@@ -477,6 +477,11 @@ const divergenceAnchorSource: Readonly<Record<string, string>> = {
  */
 function pushDivergenceFacts(domain: AnalysisDomain, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], pairs: readonly string[]): number {
   if (!divergence || divergence.state !== 'available') return 0
+  // An unusual reading is handed to the written analysis: the card publishes the rule answer, and
+  // the page's AI summary is the only place a model explains it.
+  if (divergence.escalated) {
+    facts.push(fact(domain, 'divergence', 'divergence-escalation', divergence.rows.length, null, 'market-divergence', divergence.asOf, asOf, 'comparable', 'escalation', { identityFromEventOnly: true }))
+  }
   let count = 0
   for (const row of divergence.rows) {
     if (!pairs.includes(row.pairId)) continue
@@ -484,5 +489,5 @@ function pushDivergenceFacts(domain: AnalysisDomain, divergence: MarketDivergenc
     facts.push(fact(domain, 'divergence', `divergence-${row.pairId}`, row.direction, null, divergenceAnchorSource[row.pairId] ?? 'market-divergence', oldest, asOf, 'comparable', row.pairId, { identityFromEventOnly: true }))
     count += 1
   }
-  return count
+  return count + (divergence.escalated ? 1 : 0)
 }

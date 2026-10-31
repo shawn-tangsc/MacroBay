@@ -28,6 +28,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     'open-interest-notional-usd': 'Binance 永续持仓名义额',
     'open-interest-change-24h-pct': '持仓 24 小时变化',
     'positioning-state': '持仓与费率组合态',
+    'divergence-escalation': '需解读的背离组合',
     'divergence-liquidity-leverage': '背离·弹药收缩而空头加仓',
     'divergence-flows-price': '背离·现货流出而价格未跌',
     'divergence-narrative-price': '背离·看空消息未计价',

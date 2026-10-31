@@ -5,7 +5,7 @@ import { isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 export type DashboardDivergenceViewState =
   | Readonly<{ state: 'loading' }>
   | Readonly<{ state: 'unavailable'; reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large'; missing: readonly DivergenceLeg['id'][] }>
-  | Readonly<{ state: 'empty'; withheld: readonly DivergenceWithheldView[]; judgedBy: 'ai' | 'rules' }>
+  | Readonly<{ state: 'empty'; withheld: readonly DivergenceWithheldView[] }>
   | Readonly<{ state: 'available'; rows: readonly DivergenceRowView[]; withheld: readonly DivergenceWithheldView[] }>
 
 export type DivergenceWithheldView = Readonly<{
@@ -20,10 +20,6 @@ export type DivergenceRowView = Readonly<{
   pairId: string
   direction: 'bearish' | 'bullish' | 'unpriced'
   legs: readonly Readonly<{ id: DivergenceLeg['id']; text: string }>[]
-  judgedBy: 'ai' | 'rules'
-  /** The model's sentence; absent when the rules decided. */
-  mechanism?: string
-  invalidation?: string
 }>
 
 /**
@@ -42,16 +38,13 @@ export function projectDashboardDivergence(value: unknown, asOf: string): Dashbo
     leg: entry.leg,
     ...(entry.observedAt ? { observedAt: entry.observedAt } : {})
   }))
-  if (value.state === 'empty') return { state: 'empty', withheld, judgedBy: value.judgedBy }
+  if (value.state === 'empty') return { state: 'empty', withheld }
   return {
     state: 'available',
     rows: value.rows.map(row => ({
       pairId: row.pairId,
       direction: row.direction,
       legs: row.legs.map(leg => ({ id: leg.id, text: formatLeg(leg) })),
-      judgedBy: row.judgedBy,
-      ...(row.mechanism ? { mechanism: row.mechanism } : {}),
-      ...(row.invalidation ? { invalidation: row.invalidation } : {})
     })),
     withheld
   }

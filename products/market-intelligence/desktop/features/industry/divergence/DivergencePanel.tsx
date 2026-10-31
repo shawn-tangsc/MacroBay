@@ -72,12 +72,12 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <ul className="mi-divergence__rows">
               {state.rows.map(row => (
                 <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
-                  title={row.invalidation ? `${text.invalidationLabel}：${row.invalidation}` : undefined}>
+                  title={`${text.invalidationLabel}：${text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}`}>
                   <div className="mi-divergence__line">
                     <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
                     {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
                   </div>
-                  {row.mechanism ? <p className="mi-divergence__mechanism">{row.mechanism}</p> : null}
+                  <p className="mi-divergence__mechanism">{text.pairs[row.pairId as keyof DivergencePanelText['pairs']].mechanism}</p>
                 </li>
               ))}
             </ul>

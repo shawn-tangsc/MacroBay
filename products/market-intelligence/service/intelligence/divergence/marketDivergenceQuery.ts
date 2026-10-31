@@ -1,9 +1,8 @@
-import { rowsFromJudgements } from './divergenceJudgementService'
-import type { DivergenceJudgementResult } from './divergenceJudgementService'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import {
   detectDivergences,
+  shouldEscalate,
   divergencePolicy,
   divergenceUnavailable,
   isCanonicalDivergenceTime,
@@ -35,26 +34,14 @@ export type DivergenceLegReader = Readonly<{
   sentiment: () => Promise<Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }> | undefined>
 }>
 
-export type DivergenceJudge = (input: Readonly<{
-  asOf: string
-  headlines?: readonly string[]
-  pairs: readonly Readonly<{ pairId: import('../../../contracts/marketDivergence').DivergencePairId; legs: readonly import('../../../contracts/marketDivergence').DivergenceLeg[]; ruleVerdict: 'divergence' | 'agreement' }>[]
-}>, options?: Readonly<{ force?: boolean }>) => Promise<import('./divergenceJudgementService').DivergenceJudgementResult>
-
 export async function queryMarketDivergenceAsync(input: Readonly<{
   asOf: string
   read: DivergenceLegReader
-  /** The assistant model's reading of the same legs. Absent means the rules answer alone. */
-  judge?: DivergenceJudge
   /**
    * `auto` asks the model only when the rules found at least one divergence — there is nothing to
    * explain otherwise, and a quiet day must not cost a request every time the dashboard opens.
    * `manual` is the reader pressing "AI 复核": they asked, so it runs even on a quiet day.
    */
-  /** `rules` answers in milliseconds; `judge` adds the model's reading on top of the same legs. */
-  mode?: 'rules' | 'judge'
-  /** Skip the judgement cache: the reader asked for a fresh answer. */
-  force?: boolean
 }>): Promise<MarketDivergenceResult> {
   if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable('invalid-clock')
   try {
@@ -80,20 +67,13 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
       ...(price ? { price } : {}),
       ...(sentiment ? { sentiment } : {})
     }
-    const ruleResult = detectDivergences(legs)
-    if (ruleResult.state === 'unavailable') return ruleResult
-    // The model is an extra: a throw inside it must fall back to the rules, never blank the card.
-    let judged: MarketDivergenceResult = ruleResult
-    try {
-      judged = await judgeRows(input, legs, ruleResult)
-    } catch {
-      judged = ruleResult
-    }
-    try {
-      return isWithinUtf8JsonBudget(judged, divergencePolicy.maximumDtoBytes) ? judged : divergenceUnavailable('too-large', missing)
-    } catch {
-      return divergenceUnavailable('too-large', missing)
-    }
+    const result = detectDivergences(legs)
+    if (result.state === 'unavailable') return result
+    // The card publishes the rule answer; the flag is what hands an unusual reading to the page's
+    // written analysis, which is the only place a model belongs in this flow.
+    const escalated = shouldEscalate(legs, result)
+    const withFlag = { ...result, escalated }
+    return isWithinUtf8JsonBudget(withFlag, divergencePolicy.maximumDtoBytes) ? withFlag : divergenceUnavailable('too-large', missing)
   } catch {
     return divergenceUnavailable('query-failed')
   }
@@ -124,67 +104,6 @@ export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePe
     observedAt: view.summary.latestItemAt ?? view.generatedAt,
     headlines
   }
-}
-
-/**
- * Hands the same legs to the model and swaps in its verdict.
- *
- * The rules still decide which pairs exist (their legs) and still answer when the model cannot —
- * a provider that is off must not blank a dashboard. What the model changes is the judgement and
- * the sentence; the readings it was shown are the ones that get drawn.
- */
-async function judgeRows(
-  input: Readonly<{ asOf: string; judge?: DivergenceJudge; mode?: 'rules' | 'judge'; force?: boolean }>,
-  legs: DivergenceInputs,
-  ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
-): Promise<MarketDivergenceResult> {
-  if (!input.judge || (input.mode ?? 'rules') === 'rules') return ruleResult
-  const pairs = buildPairs(legs, ruleResult)
-  if (pairs.length === 0) return ruleResult
-  const outcome = await input.judge({
-    asOf: input.asOf,
-    pairs,
-    ...(legs.sentiment?.headlines?.length ? { headlines: legs.sentiment.headlines } : {})
-  }, input.force ? { force: true } : undefined)
-  if (outcome.state !== 'judged') return ruleResult
-  const rows = rowsFromJudgements(outcome.judgements, pairs)
-  return rows.length > 0
-    ? { state: 'available', asOf: input.asOf, rows, withheld: ruleResult.withheld }
-    // A quiet day is still the model's verdict: the card must not mix two authors without saying so.
-    : { state: 'empty', asOf: input.asOf, withheld: ruleResult.withheld, judgedBy: 'ai' }
-}
-
-/** Every pair that has all its legs, plus the rule engine's own verdict as a hint. */
-function buildPairs(
-  legs: DivergenceInputs,
-  ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
-) {
-  const divergent = new Set((ruleResult.state === 'available' ? ruleResult.rows : []).map(row => row.pairId))
-  const pairs: Array<{ pairId: import('../../../contracts/marketDivergence').DivergencePairId; legs: readonly import('../../../contracts/marketDivergence').DivergenceLeg[]; ruleVerdict: 'divergence' | 'agreement' }> = []
-  if (legs.stablecoin && legs.openInterest && legs.funding) {
-    pairs.push({ pairId: 'liquidity-leverage', ruleVerdict: divergent.has('liquidity-leverage') ? 'divergence' : 'agreement', legs: [
-      { id: 'stablecoin', value: legs.stablecoin.change7dPercent, unit: 'percent', observedAt: legs.stablecoin.observedAt },
-      { id: 'open-interest', value: legs.openInterest.change24hPct, unit: 'percent', observedAt: legs.openInterest.observedAt },
-      { id: 'funding', value: legs.funding.ratePercent, unit: 'percent-per-8h', observedAt: legs.funding.observedAt }
-    ] })
-  }
-  const sessions = legs.etf ? lastSessions(legs.etf.rows, divergencePolicy.thresholds.etfWindowSessions) : []
-  if (sessions.length === divergencePolicy.thresholds.etfWindowSessions && legs.openInterest && legs.price) {
-    const net = sessions.reduce((total, row) => total + row.netFlowUsd, 0)
-    pairs.push({ pairId: 'flows-price', ruleVerdict: divergent.has('flows-price') ? 'divergence' : 'agreement', legs: [
-      { id: 'etf', value: net, unit: 'usd', observedAt: `${sessions.at(-1)!.tradingDate}T21:00:00.000Z` },
-      { id: 'open-interest', value: legs.openInterest.change24hPct, unit: 'percent', observedAt: legs.openInterest.observedAt },
-      { id: 'price', value: legs.price.return24hPercent, unit: 'percent', observedAt: legs.price.observedAt }
-    ] })
-  }
-  if (legs.sentiment && legs.price && legs.openInterest) {
-    pairs.push({ pairId: 'narrative-price', ruleVerdict: divergent.has('narrative-price') ? 'divergence' : 'agreement', legs: [
-      { id: 'sentiment', value: legs.sentiment.bearishSharePercent, unit: 'percent', observedAt: legs.sentiment.observedAt },
-      { id: 'price', value: legs.price.return24hPercent, unit: 'percent', observedAt: legs.price.observedAt },
-      { id: 'open-interest', value: legs.openInterest.change24hPct, unit: 'percent', observedAt: legs.openInterest.observedAt }
-    ] })
-  }
-  return pairs
 }
 
 async function safe<T>(read: () => Promise<T | undefined>): Promise<T | undefined> {

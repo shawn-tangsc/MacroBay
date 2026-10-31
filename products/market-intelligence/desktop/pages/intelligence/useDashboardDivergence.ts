@@ -8,7 +8,7 @@ import { projectDashboardDivergence, type DashboardDivergenceViewState } from '.
  * every render would risk legs from two instants being compared.
  */
 export function useDashboardDivergence(input: Readonly<{
-  client: { query: (input: { asOf: string; mode?: 'rules' | 'judge'; force?: boolean }) => Promise<MarketDivergenceResult> } | undefined
+  client: { query: (input: { asOf: string }) => Promise<MarketDivergenceResult> } | undefined
   now: () => Date
 }>): Readonly<{ state: DashboardDivergenceViewState; reload: () => void }> {
   const [state, setState] = useState<DashboardDivergenceViewState>({ state: 'loading' })
@@ -24,20 +24,8 @@ export function useDashboardDivergence(input: Readonly<{
       return () => { active = false }
     }
     setState({ state: 'loading' })
-    // Two passes, one card: the rules answer in milliseconds and the model's reading replaces it
-    // when it arrives. No spinner between them — a number that is already correct should not be
-    // hidden behind a call that only improves the sentence.
-    void client.query({ asOf, mode: 'rules' })
-      .then((result) => {
-        if (!active) return
-        setState(projectDashboardDivergence(result, asOf))
-        void client.query({ asOf, mode: 'judge', ...(attempt > 0 ? { force: true } : {}) })
-          .then((judged) => {
-            if (!active || judged.state === 'unavailable') return
-            setState(projectDashboardDivergence(judged, asOf))
-          })
-          .catch(() => undefined)
-      })
+    void client.query({ asOf })
+      .then((result) => { if (active) setState(projectDashboardDivergence(result, asOf)) })
       .catch(() => { if (active) setState({ state: 'unavailable', reason: 'query-failed', missing: [] }) })
     return () => { active = false }
   }, [mountInput, attempt])

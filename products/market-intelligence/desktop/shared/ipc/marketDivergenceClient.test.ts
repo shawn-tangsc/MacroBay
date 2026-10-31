@@ -6,9 +6,9 @@ import { marketDivergenceClient } from './marketDivergenceClient'
 const asOf = '2026-10-30T12:00:00.000Z'
 const at = (hoursAgo: number) => new Date(Date.parse(asOf) - hoursAgo * 3_600_000).toISOString()
 const available = {
-  state: 'available', asOf,
+  state: 'available', asOf, escalated: false,
   rows: [{
-    pairId: 'liquidity-leverage', direction: 'bearish', judgedBy: 'ai', mechanism: '弹药减少而空头加仓。', invalidation: '稳定币转正。',
+    pairId: 'liquidity-leverage', direction: 'bearish',
     legs: [
       { id: 'stablecoin', value: -1.2, unit: 'percent', observedAt: at(2) },
       { id: 'open-interest', value: 3.4, unit: 'percent', observedAt: at(1) },
@@ -34,7 +34,7 @@ describe('divergence renderer client', () => {
   })
 
   it('passes an empty answer through with its withheld list', async () => {
-    const empty = { state: 'empty', asOf, withheld: [{ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' }], judgedBy: 'rules' }
+    const empty = { state: 'empty', asOf, escalated: false, withheld: [{ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' }] }
     bridge(empty)
     await expect(marketDivergenceClient.query({ asOf })).resolves.toEqual(empty)
   })

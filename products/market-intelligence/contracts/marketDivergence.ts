@@ -32,6 +32,19 @@ export const divergencePolicy = Object.freeze({
     sentimentBearishSharePercent: 60,
     openInterestFlatPercent: 1
   }),
+  /**
+   * When the rule call stops being obvious enough to publish alone.
+   *
+   * The rules are the product; the model only reads the cases a threshold table cannot phrase
+   * well. Two pairs at once, opposite directions, or a leg sitting on its threshold are the
+   * shapes where a table's answer reads either arbitrary or mechanical.
+   */
+  escalation: Object.freeze({
+    /** A second pair disagreeing at the same time is rare enough to deserve a written reading. */
+    minimumPairs: 2,
+    /** A leg within this fraction of its threshold makes the verdict knife-edge. */
+    thresholdMarginRatio: 0.15
+  }),
   maximumDtoBytes: 8 * 1024,
   unavailableFailureCode: 'market-divergence-query-unavailable' as const,
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
@@ -61,11 +74,6 @@ export type DivergenceRow = Readonly<{
   pairId: DivergencePairId
   direction: DivergenceDirection
   legs: readonly DivergenceLeg[]
-  /** Who decided the row: the assistant model, or the threshold table when it could not answer. */
-  judgedBy: 'ai' | 'rules'
-  /** Written by the model; absent when the rules decided. */
-  mechanism?: string
-  invalidation?: string
 }>
 
 export type DivergenceWithheld = Readonly<{
@@ -77,8 +85,8 @@ export type DivergenceWithheld = Readonly<{
 }>
 
 export type MarketDivergenceResult =
-  | Readonly<{ state: 'available'; asOf: string; rows: readonly DivergenceRow[]; withheld: readonly DivergenceWithheld[] }>
-  | Readonly<{ state: 'empty'; asOf: string; withheld: readonly DivergenceWithheld[]; judgedBy: 'ai' | 'rules' }>
+  | Readonly<{ state: 'available'; asOf: string; rows: readonly DivergenceRow[]; withheld: readonly DivergenceWithheld[]; escalated: boolean }>
+  | Readonly<{ state: 'empty'; asOf: string; withheld: readonly DivergenceWithheld[]; escalated: boolean }>
   /**
    * Nothing could be computed. `missing` names the readings that never arrived — a card that says
    * "some data is missing" without saying which is asking the reader to go and find out.
@@ -181,8 +189,9 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
   }
 
   return rows.length > 0
-    ? { state: 'available', asOf: input.asOf, rows: Object.freeze(rows), withheld: Object.freeze(withheld) }
-    : { state: 'empty', asOf: input.asOf, withheld: Object.freeze(withheld), judgedBy: 'rules' }
+    // `escalated` is decided by the caller that can see the raw legs; the pure detector says no.
+    ? { state: 'available', asOf: input.asOf, rows: Object.freeze(rows), withheld: Object.freeze(withheld), escalated: false }
+    : { state: 'empty', asOf: input.asOf, withheld: Object.freeze(withheld), escalated: false }
 }
 
 /** A daily leg's window must end within the lag bound; otherwise it describes another day. */
@@ -224,7 +233,7 @@ function fundingLeg(input: Readonly<{ ratePercent: number; observedAt: string }>
 function freezeRow(pairId: DivergencePairId, direction: DivergenceDirection, legs: readonly DivergenceLeg[]): DivergenceRow {
   // The pair id is the name: the card and the analysis both look their sentence up by it, so
   // there is no second identifier to keep in step.
-  return Object.freeze({ pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))), judgedBy: 'rules' as const })
+  return Object.freeze({ pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))) })
 }
 
 export function isCanonicalDivergenceTime(value: unknown): value is string {
@@ -248,8 +257,8 @@ export function isMarketDivergenceResult(value: unknown, asOf: string): value is
   }
   if (!isCanonicalDivergenceTime(record.asOf) || record.asOf !== asOf) return false
   if (!Array.isArray(record.withheld) || !record.withheld.every(isWithheld)) return false
-  if (record.state === 'empty') return (record.judgedBy === 'ai' || record.judgedBy === 'rules') && Object.keys(record).length === 4
-  if (record.state !== 'available' || !Array.isArray(record.rows)) return false
+  if (record.state === 'empty') return typeof record.escalated === 'boolean' && Object.keys(record).length === 4
+  if (record.state !== 'available' || typeof record.escalated !== 'boolean' || !Array.isArray(record.rows)) return false
   if (record.rows.length > divergencePolicy.pairs.length) return false
   return record.rows.every(isRow)
 }
@@ -259,8 +268,6 @@ function isRow(value: unknown): boolean {
   const row = value as Record<string, unknown>
   if (!divergencePolicy.pairs.includes(row.pairId as never)) return false
   if (row.direction !== 'bearish' && row.direction !== 'bullish' && row.direction !== 'unpriced') return false
-  if (row.judgedBy !== 'ai' && row.judgedBy !== 'rules') return false
-  if (row.judgedBy === 'ai' && (typeof row.mechanism !== 'string' || typeof row.invalidation !== 'string')) return false
   if (!Array.isArray(row.legs) || row.legs.length < 2 || row.legs.length > 3) return false
   return row.legs.every(isLeg)
 }
@@ -280,4 +287,38 @@ function isWithheld(value: unknown): boolean {
   if (entry.reason !== 'window-mismatch' && entry.reason !== 'leg-missing' && entry.reason !== 'leg-stale') return false
   if (typeof entry.leg !== 'string') return false
   return entry.observedAt === undefined || isCanonicalDivergenceTime(entry.observedAt)
+}
+
+/**
+ * Whether this reading is unusual enough to ask the model.
+ *
+ * Deliberately deterministic and cheap: it is a second table, not a judgement. Anything it says
+ * no to is published from the rules alone, which is the normal case.
+ */
+export function shouldEscalate(legs: DivergenceInputs, result: Exclude<MarketDivergenceResult, { state: 'unavailable' }>): boolean {
+  const rows = result.state === 'available' ? result.rows : []
+  if (rows.length >= divergencePolicy.escalation.minimumPairs) return true
+  // Opposite directions at the same time: the card would otherwise print "偏空" and "偏强" with no
+  // word about how both can be true.
+  if (new Set(rows.map(row => row.direction)).size > 1) return true
+  return rows.some(row => nearThreshold(row, legs))
+}
+
+/** A leg sitting on its threshold: the verdict would flip on a rounding error. */
+function nearThreshold(row: DivergenceRow, legs: DivergenceInputs): boolean {
+  const margin = divergencePolicy.escalation.thresholdMarginRatio
+  const within = (value: number, threshold: number) => Math.abs(value - threshold) <= Math.abs(threshold) * margin
+  if (row.pairId === 'liquidity-leverage' && legs.stablecoin && legs.openInterest) {
+    return within(legs.stablecoin.change7dPercent, divergencePolicy.thresholds.stablecoin7dPercent)
+      || within(legs.openInterest.change24hPct, divergencePolicy.thresholds.openInterest24hUpPercent)
+  }
+  if (row.pairId === 'flows-price' && legs.openInterest && legs.price) {
+    return within(legs.openInterest.change24hPct, divergencePolicy.thresholds.openInterest24hDownPercent)
+      || within(Math.abs(legs.price.return24hPercent), divergencePolicy.thresholds.priceFlatPercent)
+  }
+  if (row.pairId === 'narrative-price' && legs.price && legs.openInterest && legs.sentiment) {
+    return within(legs.sentiment.bearishSharePercent, divergencePolicy.thresholds.sentimentBearishSharePercent)
+      || within(Math.abs(legs.price.return24hPercent), divergencePolicy.thresholds.priceStillPercent)
+  }
+  return false
 }
