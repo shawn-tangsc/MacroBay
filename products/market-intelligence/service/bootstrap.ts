@@ -391,7 +391,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     const meetingDate = macroCalendarBackend.repository.policyFacts.readLatestMeeting(now)
     if (!meetingDate) return
     const decided = macroCalendarBackend.repository.policyFacts.read(meetingDate)
-    if (decided?.targetRange) return
+    // Nothing decided yet, or decided without the meeting before it: the second case is what makes
+    // "hold or move" unreadable, so one refresh fills the prior statement's range.
+    const hasEarlier = macroCalendarBackend.repository.policyFacts.readLatestDecisionBefore(meetingDate) !== undefined
+    if (decided?.targetRange && hasEarlier) return
     // The manual refresh service wants the event key and an explicit confirmation, not a run id.
     await refresh.refresh({ eventKey: `US.FOMC.${meetingDate}`, confirmed: true })
   })().catch(() => undefined)

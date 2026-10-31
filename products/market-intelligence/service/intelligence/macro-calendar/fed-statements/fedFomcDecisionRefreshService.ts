@@ -66,6 +66,16 @@ export function createFedFomcDecisionRefreshService(deps: Readonly<{
         })
         const prior = await adjacentPrior(current, input, signal, deps)
         if (!prior) return currentWrite.inserted ? updated() : unchanged()
+        // The prior decision is a fact too: without its range, "what did this meeting do" (hold, hike,
+        // cut) cannot be read from the two ranges, and the card falls back to a dash.
+        deps.facts?.recordDecision({
+          meetingDate: prior.document.decisionDate,
+          targetRange: { lowerPercent: prior.document.targetRange.lowerPercent, upperPercent: prior.document.targetRange.upperPercent },
+          ...(prior.document.vote ? { vote: prior.document.vote } : {}),
+          ...(prior.document.dissents ? { dissents: prior.document.dissents } : {}),
+          statementUrl: prior.statementUrl,
+          detectedAt: input.detectedAt
+        })
         if (signal?.aborted) return unavailable()
         const priorEvidence = deps.evidence.appendVerifiedBody({
           kind: 'prior', officialStatementUrl: prior.statementUrl, body: prior.body, detectedAt: input.detectedAt, runId: input.runId
