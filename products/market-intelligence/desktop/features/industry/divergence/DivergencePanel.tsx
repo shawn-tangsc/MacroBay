@@ -1,5 +1,5 @@
 import { Tooltip } from 'antd'
-import { Info, RefreshCw } from 'lucide-react'
+import { Info } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -24,9 +24,6 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
-  const judgedBy = state.state === 'available'
-    ? (state.rows.every(row => row.judgedBy === 'ai') ? 'ai' : 'rules')
-    : state.state === 'empty' ? state.judgedBy : 'rules'
   // Three pairs withheld is not "no divergence": nothing was compared. Saying so is the whole
   // point of the withheld list, and it must not read as a quiet day.
   const nothingCompared = state.state === 'empty' && withheld.length >= Object.keys(text.pairNames).length
@@ -62,11 +59,6 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           // floating label on a row of its own.
           <div className="mi-divergence__quiet">
             <p className="mi-divergence__note">{text.empty}</p>
-            {onRetry ? (
-              <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry} title={text.judgeAgain}>
-                {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
-              </button>
-            ) : <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span>}
           </div>
         ) : null}
         {nothingCompared ? (
@@ -77,13 +69,6 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
         ) : null}
         {state.state === 'available' ? (
           <div className="mi-divergence__conclusion" data-tone="conclusion">
-            <div className="mi-divergence__meta">
-              {onRetry ? (
-                <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry} title={text.judgeAgain}>
-                  {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
-                </button>
-              ) : <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span>}
-            </div>
             <ul className="mi-divergence__rows">
               {state.rows.map(row => (
                 <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}

@@ -25,12 +25,12 @@ const row = {
 }
 
 describe('divergence panel', () => {
-  it('puts the explanation behind the help icon before the title, and names who judged', () => {
+  it('puts the explanation behind the help icon and leaves no judge badge behind', () => {
     const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
     // No panel name and no pair list: the `?` leads the content and the badge names the judge.
     expect(markup).not.toContain('<h2')
     expect(markup.indexOf('mi-divergence__help')).toBeLessThan(markup.indexOf('mi-divergence__content'))
-    expect(markup).toContain(text.judgedBy.rules)
+    expect(markup).not.toContain('mi-divergence__judge')
     expect(markup).toContain(`aria-label="${text.helpLabel}"`)
     // The prose is not on the card; the badge is.
     expect(markup).not.toContain(text.helpLines[0])
@@ -44,7 +44,7 @@ describe('divergence panel', () => {
     expect(markup).toContain(row.mechanism)
     // The invalidation is one hover away, not another paragraph.
     expect(markup).toContain(`title="${text.invalidationLabel}：${row.invalidation}"`)
-    expect(markup).toContain(text.judgedBy.ai)
+    expect(markup).not.toContain('mi-divergence__judge')
   })
 
   it('says plainly when nothing diverged instead of showing an empty card', () => {

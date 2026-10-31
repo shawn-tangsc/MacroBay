@@ -57,7 +57,7 @@
 .mi-divergence__status {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 4px 10px;
   padding: 7px 10px;
   border-radius: 5px;

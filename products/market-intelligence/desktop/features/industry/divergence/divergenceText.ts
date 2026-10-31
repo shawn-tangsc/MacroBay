@@ -3,14 +3,10 @@ import type { DivergenceDirection, DivergenceLegId, DivergencePairId } from '../
 export type DivergencePanelText = Readonly<{
   title: string
   /** The word that marks the block as a conclusion rather than another section. */
-  /** Who judged, shown as a small badge: the model, or the threshold table when it could not answer. */
-  judgedBy: Readonly<Record<'ai' | 'rules', string>>
   helpLabel: string
   helpLines: readonly string[]
   /** Appended when several pairs were held back for the same reason. */
   withheldGroup: string
-  /** The manual trigger, offered only when the rules found nothing to explain. */
-  judgeAgain: string
   retry: string
   /** When we cannot even name a reading, say why in one short sentence. */
   unavailableWhy: Readonly<Record<'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large', string>>
