@@ -18,8 +18,7 @@ const snapshot = {
   change7dUsd: 10,
   change7dPercent: 10 / 300 * 100,
   change30dUsd: 30,
-  change30dPercent: 30 / 280 * 100,
-  usdStablecoinSupplyUsd: 315
+  change30dPercent: 30 / 280 * 100
 } as const
 
 describe('capital conditions current state store', () => {
@@ -169,7 +168,7 @@ describe('capital conditions current state store', () => {
     const storage = createInMemoryCapitalConditionsStateStorage()
     const store = createCapitalConditionsCurrentStateStore({ storage })
     const end = Date.parse('2026-10-31T13:00:00.000Z')
-    const heavy = { ...snapshot, coreCurrentUsd: 123456789012.345, usdStablecoinSupplyUsd: 123456789012.345, dailyFlows: maximalDailyFlows() }
+    const heavy = { ...snapshot, coreCurrentUsd: 123456789012.345, dailyFlows: maximalDailyFlows() }
 
     for (let at = end - 40 * 60 * 60 * 1_000; at <= end; at += tenMinutesMs) {
       await store.recordSuccess({ snapshot: heavy, verifiedAt: new Date(at).toISOString() })

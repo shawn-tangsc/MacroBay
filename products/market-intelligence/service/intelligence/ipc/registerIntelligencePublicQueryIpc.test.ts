@@ -200,7 +200,7 @@ describe('registerIntelligencePublicQueryIpc', () => {
     expect(mockPublicQueryService.queryCapitalConditionsSnapshot).not.toHaveBeenCalled()
   })
 
-  it('reconstructs the optional finite stablecoin background only', async () => {
+  it('refuses a service result still carrying the removed background-supply key', async () => {
     const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
     registerIntelligencePublicQueryIpc((_productId, method, handler) => handlers.set(method, handler), {} as JobRuntime)
     mockPublicQueryService.queryCapitalConditionsSnapshot.mockResolvedValueOnce({
@@ -209,8 +209,8 @@ describe('registerIntelligencePublicQueryIpc', () => {
       usdStablecoinSupplyUsd: 315, conclusion: 'partial'
     })
 
-    await expect(handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot)?.({ asOf: '2026-08-06T12:00:00.000Z' })).resolves.toMatchObject({
-      state: 'available', usdStablecoinSupplyUsd: 315
+    await expect(handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot)?.({ asOf: '2026-08-06T12:00:00.000Z' })).resolves.toEqual({
+      state: 'unavailable', failureCode: 'capital-conditions-query-unavailable'
     })
   })
 

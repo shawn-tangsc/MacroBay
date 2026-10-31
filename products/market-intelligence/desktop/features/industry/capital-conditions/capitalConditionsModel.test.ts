@@ -18,14 +18,13 @@ describe('dashboard capital conditions model', () => {
         currentUsd: 254_900_000_000, change1dUsd: 82_400_000, change1dPercent: 0.0323, change7dUsd: 82_400_000, change7dPercent: 0.0323,
         change30dUsd: -500_000_000, change30dPercent: -0.21
       },
-      usdStablecoinSupplyUsd: 307_300_000_000,
       conclusion: 'partial'
     }, asOf)
 
     expect(result).toEqual({
       state: 'available', conclusion: 'partial', etf: 'unavailable', observedAt: '2026-08-18T07:00:00.000Z',
       currentUsd: '$254.9B', change1dUsd: '+$82.4M', change1dPercent: '+0.03%', change7dUsd: '+$82.4M', change7dPercent: '+0.03%',
-      change30dUsd: '-$500M', change30dPercent: '-0.21%', usdStablecoinSupplyUsd: '$307.3B'
+      change30dUsd: '-$500M', change30dPercent: '-0.21%'
     })
     expect(JSON.stringify(result)).not.toMatch(/verifiedAt|https?:|source|raw|error|failure/i)
   })

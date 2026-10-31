@@ -15,8 +15,7 @@ const snapshot = {
   change7dUsd: 10,
   change7dPercent: 10 / 300 * 100,
   change30dUsd: 30,
-  change30dPercent: 30 / 280 * 100,
-  usdStablecoinSupplyUsd: 315
+  change30dPercent: 30 / 280 * 100
 } as const
 
 describe('capital conditions snapshot query', () => {
@@ -86,7 +85,7 @@ describe('capital conditions snapshot query', () => {
 
   it('keeps the complete legal 30-row BTC/ETH ETF DTO within the named response budget', async () => {
     const stablecoinStore = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
-    await stablecoinStore.recordSuccess({ snapshot: { ...snapshot, usdStablecoinSupplyUsd: 1 }, verifiedAt })
+    await stablecoinStore.recordSuccess({ snapshot, verifiedAt })
     const etfStore = createEtfCurrentStateStore({ storage: createInMemoryEtfCurrentStateStorage() })
     await etfStore.replace({ window: etfWindow(verifiedAt, 30), verifiedAt })
     const service = createCapitalConditionsSnapshotQueryService({ store: stablecoinStore, etfStore })
@@ -123,7 +122,6 @@ describe('capital conditions snapshot query', () => {
         change30dUsd: 30,
         change30dPercent: 30 / 280 * 100
       },
-      usdStablecoinSupplyUsd: 315,
       conclusion: 'partial'
     })
     expect(Object.isFrozen(result)).toBe(true)

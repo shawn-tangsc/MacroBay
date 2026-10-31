@@ -267,8 +267,7 @@ function sameCanonicalSnapshot(previous: CapitalConditionsSnapshotState, next: S
     previous.change7dUsd === next.change7dUsd &&
     previous.change7dPercent === next.change7dPercent &&
     previous.change30dUsd === next.change30dUsd &&
-    previous.change30dPercent === next.change30dPercent &&
-    previous.usdStablecoinSupplyUsd === next.usdStablecoinSupplyUsd
+    previous.change30dPercent === next.change30dPercent
 }
 
 function increment(value: number, shouldIncrement: boolean): number {
@@ -283,8 +282,7 @@ function isSnapshot(value: StablecoinCapitalSnapshot): boolean {
     value.change7dUsd,
     value.change7dPercent,
     value.change30dUsd,
-    value.change30dPercent,
-    value.usdStablecoinSupplyUsd
+    value.change30dPercent
   ].every((value) => value === undefined || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER)) &&
     (value.dailyFlows === undefined || isDailyFlows(value.dailyFlows))
 }

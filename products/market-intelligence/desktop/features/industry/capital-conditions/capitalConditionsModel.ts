@@ -53,7 +53,6 @@ export type DashboardCapitalConditionsState =
       change30dUsd: string
       change30dPercent: string
       dailyFlows?: readonly DashboardStablecoinFlow[]
-      usdStablecoinSupplyUsd?: string
     }
   | { state: 'empty' }
   | { state: 'unavailable' }
@@ -72,16 +71,14 @@ export function projectDashboardCapitalConditionsSnapshot(value: unknown, asOf: 
     const change7dPercent = formatPercent(core.change7dPercent)
     const change30dUsd = formatUsd(core.change30dUsd, true)
     const change30dPercent = formatPercent(core.change30dPercent)
-    const background = value.usdStablecoinSupplyUsd === undefined ? undefined : formatUsd(value.usdStablecoinSupplyUsd, false)
-    if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent || (value.usdStablecoinSupplyUsd !== undefined && !background)) return { state: 'unavailable' }
+    if (!currentUsd || !change1dUsd || !change1dPercent || !change7dUsd || !change7dPercent || !change30dUsd || !change30dPercent) return { state: 'unavailable' }
     const dailyFlows = isValidCapitalConditionsDailyFlows(core.dailyFlows, asOf) ? core.dailyFlows : undefined
     const etf = projectEtf(value.etf, asOf)
     const flowHistory = projectFlowHistory(dailyFlows, etf)
     return {
       state: 'available', conclusion: value.conclusion, etf, ...(flowHistory === 'unavailable' ? {} : { flowHistory }), observedAt: core.observedAt,
       currentUsd, change1dUsd, change1dPercent, change7dUsd, change7dPercent, change30dUsd, change30dPercent,
-      ...(dailyFlows ? { dailyFlows } : {}),
-      ...(background ? { usdStablecoinSupplyUsd: background } : {})
+      ...(dailyFlows ? { dailyFlows } : {})
     }
   } catch {
     return { state: 'unavailable' }
@@ -101,17 +98,16 @@ function isAvailable(value: unknown, asOf: string): value is {
     change30dPercent: number
     dailyFlows?: unknown
   }
-  usdStablecoinSupplyUsd?: number
   etf: unknown
   conclusion: 'partial' | 'unavailable'
 } {
-  if (!isExactRecord(value, ['state', 'asOf', 'etf', 'coreStablecoins', 'conclusion']) && !isExactRecord(value, ['state', 'asOf', 'etf', 'coreStablecoins', 'usdStablecoinSupplyUsd', 'conclusion'])) return false
+  if (!isExactRecord(value, ['state', 'asOf', 'etf', 'coreStablecoins', 'conclusion'])) return false
   if (value.state !== 'available' || value.asOf !== asOf || value.conclusion !== 'partial' && value.conclusion !== 'unavailable') return false
   const core = value.coreStablecoins
   if ((!isExactRecord(core, ['observedAt', 'verifiedAt', 'currentUsd', 'change1dUsd', 'change1dPercent', 'change7dUsd', 'change7dPercent', 'change30dUsd', 'change30dPercent']) &&
     !isExactRecord(core, ['observedAt', 'verifiedAt', 'currentUsd', 'change1dUsd', 'change1dPercent', 'change7dUsd', 'change7dPercent', 'change30dUsd', 'change30dPercent', 'dailyFlows'])) || !isCanonicalCapitalConditionsSnapshotTime(core.observedAt) || !isCanonicalCapitalConditionsSnapshotTime(core.verifiedAt) || core.observedAt > core.verifiedAt || core.verifiedAt > asOf) return false
   if (!['currentUsd', 'change1dUsd', 'change1dPercent', 'change7dUsd', 'change7dPercent', 'change30dUsd', 'change30dPercent'].every((key) => isDisplayNumber(core[key]))) return false
-  return value.usdStablecoinSupplyUsd === undefined || isDisplayNumber(value.usdStablecoinSupplyUsd)
+  return true
 }
 
 function projectEtf(value: unknown, asOf: string): DashboardEtfFlow | 'unavailable' {

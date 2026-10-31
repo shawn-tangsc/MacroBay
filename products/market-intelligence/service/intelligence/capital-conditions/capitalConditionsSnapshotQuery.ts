@@ -66,7 +66,6 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
             change30dPercent: snapshot.change30dPercent,
             ...(snapshot.dailyFlows ? { dailyFlows: snapshot.dailyFlows.filter((row) => row.tradingDate <= input.asOf.slice(0, 10)) } : {})
           }),
-          ...(snapshot.usdStablecoinSupplyUsd === undefined ? {} : { usdStablecoinSupplyUsd: snapshot.usdStablecoinSupplyUsd }),
           conclusion: snapshot.change30dUsd === 0 ? 'unavailable' as const : 'partial' as const
         })
         return isWithinCapitalConditionsSnapshotDtoBudget(result) ? result : unavailable()
@@ -129,8 +128,7 @@ function isValidSnapshot(snapshot: CapitalConditionsSnapshotState): boolean {
     snapshot.change7dUsd,
     snapshot.change7dPercent,
     snapshot.change30dUsd,
-    snapshot.change30dPercent,
-    snapshot.usdStablecoinSupplyUsd
+    snapshot.change30dPercent
   ].every((value) => value === undefined || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER))
 }
 

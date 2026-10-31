@@ -196,7 +196,6 @@ export type CapitalConditionsSnapshotResult =
         change30dPercent: number
         dailyFlows?: readonly { tradingDate: string; netFlowUsd: number }[]
       }
-      usdStablecoinSupplyUsd?: number
       conclusion: 'partial' | 'unavailable'
     }
   | { state: 'empty'; asOf: string }

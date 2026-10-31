@@ -45,8 +45,6 @@ function sanitize(value: unknown, input: CapitalConditionsSnapshotQueryInput): C
   const safeEtf = isVisibleEtfPublicSnapshot(etf, input.asOf) ? toEtfPublicSnapshot(etf) : undefined
   if ((!isExactRecord(etf, ['state']) || etf.state !== 'unavailable') && !safeEtf) return unavailable()
   if (value.conclusion !== 'partial') return unavailable()
-  const background = value.usdStablecoinSupplyUsd
-  if (background !== undefined && (typeof background !== 'number' || !Number.isFinite(background) || Object.is(background, -0))) return unavailable()
   const result = Object.freeze({
     state: 'available', asOf: input.asOf, etf: safeEtf ?? { state: 'unavailable' },
     coreStablecoins: Object.freeze({
@@ -57,7 +55,6 @@ function sanitize(value: unknown, input: CapitalConditionsSnapshotQueryInput): C
       change30dPercent: core.change30dPercent as number,
       ...(core.dailyFlows ? { dailyFlows: core.dailyFlows } : {})
     }),
-    ...(background === undefined ? {} : { usdStablecoinSupplyUsd: background }),
     conclusion: 'partial'
   }) as CapitalConditionsSnapshotResult
   return isWithinCapitalConditionsSnapshotDtoBudget(result) ? result : unavailable()
@@ -69,7 +66,7 @@ function isAvailableRecord(value: unknown): value is Record<string, unknown> {
     const names = Object.getOwnPropertyNames(value)
     const required = ['state', 'asOf', 'etf', 'coreStablecoins', 'conclusion']
     return isExactRecord(value, names) && required.every((field) => names.includes(field)) &&
-      names.every((name) => required.includes(name) || name === 'usdStablecoinSupplyUsd')
+      names.every((name) => required.includes(name))
   } catch {
     return false
   }

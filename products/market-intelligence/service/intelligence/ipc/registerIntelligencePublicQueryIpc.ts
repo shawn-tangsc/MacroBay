@@ -217,8 +217,7 @@ function capitalConditionsResult(value: unknown, input: CapitalConditionsSnapsho
         change7dPercent: value.coreStablecoins.change7dPercent as number, change30dUsd: value.coreStablecoins.change30dUsd as number,
         change30dPercent: value.coreStablecoins.change30dPercent as number,
         ...(value.coreStablecoins.dailyFlows ? { dailyFlows: value.coreStablecoins.dailyFlows as readonly { tradingDate: string; netFlowUsd: number }[] } : {})
-      }, ...(typeof value.usdStablecoinSupplyUsd === 'number' && Number.isFinite(value.usdStablecoinSupplyUsd) && !Object.is(value.usdStablecoinSupplyUsd, -0)
-        ? { usdStablecoinSupplyUsd: value.usdStablecoinSupplyUsd } : {}), conclusion: 'partial'
+      }, conclusion: 'partial'
     }
     return isWithinCapitalConditionsSnapshotDtoBudget(result) ? result : capitalConditionsUnavailable()
   }
@@ -229,9 +228,8 @@ function isCapitalAvailableRecord(value: unknown): value is Record<string, unkno
   if (!value || typeof value !== 'object') return false
   const fields = Object.getOwnPropertyNames(value)
   const expected = ['state', 'asOf', 'etf', 'coreStablecoins', 'conclusion']
-  return fields.length === expected.length || fields.length === expected.length + 1
-    ? isExactDataRecord(value, fields) && expected.every((field) => fields.includes(field)) && fields.every((field) => expected.includes(field) || field === 'usdStablecoinSupplyUsd')
-    : false
+  return fields.length === expected.length &&
+    isExactDataRecord(value, fields) && expected.every((field) => fields.includes(field))
 }
 
 function isCapitalNumberSet(value: Record<string, unknown>): boolean {
