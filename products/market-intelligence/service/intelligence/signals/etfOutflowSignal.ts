@@ -61,18 +61,19 @@ export function buildEtfOutflowSignal(input: EtfOutflowSignalInput): ModuleSigna
     requiredDays: window.windowDays,
     thresholdUsd: etfFlowPolicy.signalOutflowUsd
   })
+  // The instant the signal describes is the trading day the flows belong to, not the hour the
+  // source stamped the row: a flow that arrives a day late is still about the day it describes.
+  const observedAt = canonicalTradingDayInstant(newest.tradingDate)
+  if (!observedAt) return undefined
   const dedupeKey = buildSignalDedupeKey({
     moduleId: etfOutflowSignalPolicy.moduleId,
     ruleId: etfOutflowSignalPolicy.ruleId,
     asset: input.asset,
-    // The bucket is the trading date the flow belongs to, so a flow that arrives a day late still
-    // deduplicates against the day it describes.
-    observedAt: newest.observedAt,
+    // The bucket is the same trading date, so a late-arriving flow deduplicates against its own day.
+    observedAt,
     cadence: etfOutflowSignalPolicy.cadence
   })
   if (!dedupeKey) return undefined
-  const observedAt = canonicalTradingDayInstant(newest.observedAt)
-  if (!observedAt) return undefined
 
   if (!window.complete) {
     return build({ values, observedAt, dedupeKey, severity: 'low', readiness: 'unavailable', input })
