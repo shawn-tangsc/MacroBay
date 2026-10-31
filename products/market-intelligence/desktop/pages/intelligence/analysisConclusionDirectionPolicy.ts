@@ -31,8 +31,6 @@ export const analysisConclusionDirectionPolicy = Object.freeze({
    * these three variables so it does not depend on the dashboard stylesheet
    * being mounted; they carry the same up/down language the dashboard uses.
    */
-  /** 历史结论总是中文，渲染时用它做兜底；当前语言标签见 `localizedDirectionTerm`。 */
-  terms: Object.freeze({ bullish: '偏多', bearish: '偏空', range: '震荡', undecided: '暂不判断', mixed: '信号冲突' }),
   colorTokens: Object.freeze({
     bullish: '--mi-conclusion-positive',
     bearish: '--mi-conclusion-negative',
