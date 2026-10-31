@@ -80,6 +80,8 @@ export type TranslateIntelligenceItemsJobInput = {
   clusterIds?: string[]
   filters?: {
     timeRange?: '24h' | '7d' | '30d' | 'all'
+    /** Restricts a filter-based queue to the sources of the page that asked for it. */
+    sourceIds?: string[]
     sourceGroup?: string
     scope?: string
     symbol?: string

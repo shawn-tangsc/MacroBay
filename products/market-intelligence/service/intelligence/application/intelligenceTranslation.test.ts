@@ -226,6 +226,21 @@ describe('intelligenceTranslationService', () => {
     expect(retried.some((record) => record.status === 'failed' || record.status === 'translated')).toBe(true)
   })
 
+  it('queues only the sources the page owns when the scope is given', async () => {
+    const { service, pipeline, storage } = createService({
+      fetch: vi.fn(async () => new Response('{}', { status: 503 }))
+    })
+    const coindesk = sampleItem()
+    const fedItem = { ...sampleItem(), itemId: 'item-2', primaryRawRecordId: 'raw-2', canonicalDedupeKey: 'dedupe-2', sourceId: 'federal-reserve-rss', title: 'Fed holds rates steady' }
+    pipeline.listItems = () => [coindesk, fedItem]
+    pipeline.listRevisions = () => []
+
+    await service.translateItems({ reason: 'manual-selection', filters: { sourceIds: ['federal-reserve-rss'] } })
+
+    const records = await storage.readRecords()
+    expect(records.map((record) => record.sourceId)).toEqual(['item-2'])
+  })
+
   it('does not call provider when model service is unavailable', async () => {
     const fetch = vi.fn()
     const { service, pipeline } = createService({

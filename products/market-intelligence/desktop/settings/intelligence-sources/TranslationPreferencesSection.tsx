@@ -54,7 +54,8 @@ export function TranslationPreferencesSection(props: {
   notice?: string | null
   errorCode?: string | null
   onChange: (patch: Partial<SafeIntelligenceTranslationSettings>) => void
-  onQueueMissing: () => void
+  /** Queues the untranslated items of `sourceIds`; the card passes its own scope. */
+  onQueueMissing: (sourceIds?: readonly string[]) => void
 }): React.ReactElement {
   const settings = props.settings
   const scopedCounts = useMemo(() => {
@@ -182,14 +183,20 @@ export function TranslationPreferencesSection(props: {
               <StatusPill label={props.labels.translatedCount} value={String(counts.translatedCount)} />
               <StatusPill
                 label={props.labels.lastJobAt}
-                value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : props.labels.saved}
+                // No job has run yet is not "saved": the pill used to claim a job that never happened.
+                value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : '—'}
                 wide
               />
             </>
           ) : null}
         </div>
         <div className="intelligence-section-actions intelligence-translation-actions">
-          <Button className="ant-secondary-button" size="small" loading={props.queuing} onClick={props.onQueueMissing}>
+          <Button
+            className="ant-secondary-button"
+            size="small"
+            loading={props.queuing}
+            onClick={() => props.onQueueMissing(props.sourceIds)}
+          >
             {props.labels.queueMissing}
           </Button>
         </div>

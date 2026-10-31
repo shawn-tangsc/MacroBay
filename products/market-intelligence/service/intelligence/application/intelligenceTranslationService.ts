@@ -637,8 +637,12 @@ function resolveRequestedItemIds(
           ? 30 * 24 * 60 * 60 * 1000
           : undefined
     const cutoff = rangeMs === undefined ? undefined : Date.now() - rangeMs
+    // A provider page queues its own sources, not the whole catalogue: without this the button read
+    // "translate the current selection" while sending everything published in the window.
+    const sourceIds = new Set((input.filters?.sourceIds ?? []).filter((id) => typeof id === 'string' && id))
     return pipeline.listItems()
       .filter((item) => cutoff === undefined || Date.parse(item.publishedAt ?? '') >= cutoff)
+      .filter((item) => sourceIds.size === 0 || sourceIds.has(item.sourceId))
       .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
       .slice(0, input.filters?.limit ?? 50)
       .map((item) => item.itemId)

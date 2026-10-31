@@ -170,4 +170,58 @@ describe('TranslationPreferencesSection model picker', () => {
 
     expect(onChange).toHaveBeenCalledWith({ providerId: '', modelId: '' })
   })
+
+  it('says no translation job has run yet instead of claiming one was saved', () => {
+    const markup = renderToStaticMarkup(
+      <ShellLanguageProvider language="zh-CN">
+        <TranslationPreferencesSection
+          settings={settings()}
+          moduleStatus={{ pendingCount: 0, failedCount: 0, translatedCount: 0 }}
+          modelProviders={[silicon]}
+          saving={false}
+          queuing={false}
+          labels={labels}
+          onChange={() => undefined}
+          onQueueMissing={() => undefined}
+        />
+      </ShellLanguageProvider>
+    )
+    const container = document.createElement('div')
+    container.innerHTML = markup
+    const pill = [...container.querySelectorAll('.intelligence-translation-pill')]
+      .find((element) => element.textContent?.includes(labels.lastJobAt))
+    expect(pill?.querySelector('.intelligence-translation-pill-value')?.textContent).toBe('—')
+  })
+
+  it('queues only the sources the card is showing', async () => {
+    const onQueueMissing = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        <ShellLanguageProvider language="zh-CN">
+          <TranslationPreferencesSection
+            settings={settings()}
+            moduleStatus={{ pendingCount: 3, failedCount: 0, translatedCount: 0 }}
+            sourceIds={['coindesk-rss', 'federal-reserve-rss']}
+            modelProviders={[silicon]}
+            saving={false}
+            queuing={false}
+            labels={labels}
+            onChange={() => undefined}
+            onQueueMissing={onQueueMissing}
+          />
+        </ShellLanguageProvider>
+      )
+    })
+
+    const button = [...container.querySelectorAll('button')].find((element) => element.textContent === labels.queueMissing)
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onQueueMissing).toHaveBeenCalledWith(['coindesk-rss', 'federal-reserve-rss'])
+  })
 })

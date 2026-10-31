@@ -14,6 +14,7 @@ type TranslationAction = 'save-settings' | 'queue-missing' | 'retry-failed'
 
 type TranslationFilters = {
   timeRange?: '24h' | '7d' | '30d' | 'all'
+  sourceIds?: string[]
   sourceGroup?: string
   scope?: string
   symbol?: string
