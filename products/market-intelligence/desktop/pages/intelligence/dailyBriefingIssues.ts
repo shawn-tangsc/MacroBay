@@ -18,10 +18,44 @@ import type { DailyBriefingText } from './dailyBriefingText'
 export type BriefingIssueSeverity = 'blocking' | 'warning' | 'info'
 export type BriefingIssueCategory = 'data' | 'baseline' | 'backfill' | 'ai' | 'evidence' | 'system' | 'timing'
 
+/**
+ * The copy template an issue was rendered from. Grouping uses this, not the filled title: two
+ * consensus gaps on different events are one limitation, while a stale row and a disabled source
+ * are different ones even when both concern the same row.
+ */
+export type BriefingIssueTemplate =
+  | 'row-disabled' | 'row-unavailable' | 'row-stale' | 'row-no-value' | 'etf-no-history' | 'capital-gate'
+  | 'no-baseline' | 'no-baseline-last-release' | 'insufficient-window'
+  | 'news-disabled' | 'news-unavailable' | 'calendar-disabled' | 'calendar-unavailable'
+  | 'macro-consensus' | 'macro-actual' | 'macro-previous'
+  | 'backfill-done' | 'backfill-generic'
+  | 'ai-fallback' | 'ai-websearch' | 'ai-failure' | 'source-failure' | 'system-failure'
+  | 'evidence-gap' | 'evidence-caveat' | 'evidence-no-citation' | 'evidence-conflict' | 'evidence-none'
+  | 'timing-late'
+
+/** The stable code behind a template; two templates may share a code but never a group. */
+const templateCodes: Readonly<Record<BriefingIssueTemplate, string>> = {
+  'row-disabled': 'source-disabled', 'row-unavailable': 'unavailable', 'row-stale': 'stale',
+  'row-no-value': 'no-value', 'etf-no-history': 'etf-unavailable', 'capital-gate': 'capital-gate',
+  'no-baseline': 'no-baseline', 'no-baseline-last-release': 'no-baseline', 'insufficient-window': 'insufficient-window',
+  'news-disabled': 'source-disabled', 'news-unavailable': 'unavailable',
+  'calendar-disabled': 'source-disabled', 'calendar-unavailable': 'unavailable',
+  'macro-consensus': 'consensus-missing', 'macro-actual': 'actual-missing', 'macro-previous': 'previous-missing',
+  'backfill-done': 'backfill', 'backfill-generic': 'backfill',
+  'ai-fallback': 'model-fallback', 'ai-websearch': 'websearch-off', 'ai-failure': 'editorial-failure',
+  'source-failure': 'source-failed',
+  'system-failure': 'generation-failure',
+  'evidence-gap': 'data-gap', 'evidence-caveat': 'data-caveat', 'evidence-no-citation': 'uncited-counter-evidence',
+  'evidence-conflict': 'source-conflict', 'evidence-none': 'no-citations',
+  'timing-late': 'late-generation'
+}
+
 export type BriefingIssue = Readonly<{
   id: string
   severity: BriefingIssueSeverity
   category: BriefingIssueCategory
+  code: string
+  template: BriefingIssueTemplate
   /** The source the limited fact came from, e.g. a provider or the AI editor. */
   source: string
   /** When the fact was observed, or when the edition checked it. */
@@ -48,8 +82,12 @@ const categoryRank: Readonly<Record<BriefingIssueCategory, number>> = {
 export function briefingIssues(input: BriefingIssueInput): readonly BriefingIssue[] {
   const issues = new Map<string, BriefingIssue>()
   const fallbackAt = input.document.edition.generatedAt
-  const add = (issue: Omit<BriefingIssue, 'at'> & Readonly<{ at?: string }>): void => {
-    const complete = Object.freeze({ ...issue, at: issue.at || fallbackAt })
+  const add = (issue: Omit<BriefingIssue, 'at' | 'code'> & Readonly<{ at?: string }>): void => {
+    const complete = Object.freeze({
+      ...issue,
+      code: templateCodes[issue.template],
+      at: issue.at || fallbackAt
+    })
     if (!issues.has(complete.id)) issues.set(complete.id, complete)
   }
   collectRows(input, add)
@@ -68,6 +106,61 @@ export function briefingIssueCounts(issues: readonly BriefingIssue[]): Readonly<
   return Object.freeze(counts)
 }
 
+/** One summary row: every issue with the same category, code and copy template. */
+export type BriefingIssueGroup = Readonly<{
+  key: string
+  category: BriefingIssueCategory
+  code: string
+  template: BriefingIssueTemplate
+  severity: BriefingIssueSeverity
+  label: string
+  count: number
+  /** The first issue's title, shown as the summary's one example. */
+  example: string
+  issues: readonly BriefingIssue[]
+}>
+
+/**
+ * Groups the issue list for the rail. The rail shows one row per group, so an edition with seven
+ * consensus gaps is one line, not seven. Blocking groups sort first; an empty group cannot exist.
+ */
+export function groupBriefingIssues(
+  issues: readonly BriefingIssue[],
+  text: DailyBriefingText
+): readonly BriefingIssueGroup[] {
+  const buckets = new Map<string, BriefingIssue[]>()
+  for (const issue of issues) {
+    const key = `${issue.category}\u0000${issue.code}\u0000${issue.template}`
+    const bucket = buckets.get(key)
+    if (bucket) bucket.push(issue)
+    else buckets.set(key, [issue])
+  }
+  const groups = [...buckets.entries()].map(([key, bucket]): BriefingIssueGroup => {
+    const sorted = [...bucket].sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id))
+    const first = sorted[0]!
+    const severity = sorted.reduce<BriefingIssueSeverity>(
+      (highest, issue) => severityRank[issue.severity] < severityRank[highest] ? issue.severity : highest,
+      first.severity
+    )
+    return Object.freeze({
+      key,
+      category: first.category,
+      code: first.code,
+      template: first.template,
+      severity,
+      label: text.limits.groupLabels[first.template],
+      count: sorted.length,
+      example: first.title,
+      issues: Object.freeze(sorted)
+    })
+  })
+  return Object.freeze(groups.sort((left, right) =>
+    severityRank[left.severity] - severityRank[right.severity] ||
+    categoryRank[left.category] - categoryRank[right.category] ||
+    right.count - left.count ||
+    left.key.localeCompare(right.key)))
+}
+
 function compare(left: BriefingIssue, right: BriefingIssue): number {
   return severityRank[left.severity] - severityRank[right.severity] ||
     categoryRank[left.category] - categoryRank[right.category] ||
@@ -75,7 +168,7 @@ function compare(left: BriefingIssue, right: BriefingIssue): number {
     left.id.localeCompare(right.id)
 }
 
-type AddIssue = (issue: Omit<BriefingIssue, 'at'> & Readonly<{ at?: string }>) => void
+type AddIssue = (issue: Omit<BriefingIssue, 'at' | 'code'> & Readonly<{ at?: string }>) => void
 
 function collectRows(input: BriefingIssueInput, add: AddIssue): void {
   const { document, text } = input
@@ -90,7 +183,7 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
     const at = row.observedAt ?? document.edition.generatedAt
     if (row.state === 'source-disabled') {
       add({
-        id: `data:${row.id}:disabled`, severity: 'warning', category: 'data', source, at,
+        id: `data:${row.id}:disabled`, severity: 'warning', category: 'data', template: 'row-disabled', source, at,
         title: fill(text.limits.row.disabled, { row: label }), advice: text.limits.advice.enableSource
       })
       continue
@@ -100,6 +193,7 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
       const gated = etf && row.reason === 'capital-gate'
       add({
         id: `data:${row.id}:unavailable`, severity: 'warning', category: 'data', source, at,
+        template: etf ? gated ? 'capital-gate' : 'etf-no-history' : 'row-unavailable',
         title: etf
           ? fill(gated ? text.limits.row.capitalGate : text.limits.row.etfNoHistory, { row: label })
           : fill(text.limits.row.unavailable, { row: label }),
@@ -111,13 +205,13 @@ function collectRows(input: BriefingIssueInput, add: AddIssue): void {
     }
     if (row.state === 'stale') {
       add({
-        id: `data:${row.id}:stale`, severity: 'warning', category: 'data', source, at,
+        id: `data:${row.id}:stale`, severity: 'warning', category: 'data', template: 'row-stale', source, at,
         title: fill(text.limits.row.stale, { row: label, time: input.formatTime(at, 'minute') }),
         advice: text.limits.advice.checkSource
       })
     } else if (row.value === null) {
       add({
-        id: `data:${row.id}:no-value`, severity: 'warning', category: 'data', source, at,
+        id: `data:${row.id}:no-value`, severity: 'warning', category: 'data', template: 'row-no-value', source, at,
         title: fill(text.limits.row.noValue, { row: label }), advice: text.limits.advice.waitCollection
       })
     }
@@ -136,10 +230,12 @@ function collectChangeReason(
   const { document, text } = input
   const at = row.observedAt ?? document.edition.generatedAt
   const insufficient = row.changeReason === 'insufficient-window'
+  let template: BriefingIssueTemplate = insufficient ? 'insufficient-window' : 'no-baseline'
   let title = fill(insufficient ? text.limits.row.insufficientWindow : text.limits.row.noBaseline, { row: label })
   if (!insufficient && row.id === 'fear-greed' && row.observedAt) {
     const elapsed = Date.parse(document.edition.windowEnd) - Date.parse(row.observedAt)
     if (Number.isFinite(elapsed) && elapsed > 0) {
+      template = 'no-baseline-last-release'
       title = fill(text.limits.row.noBaselineLastRelease, {
         row: label,
         time: input.formatTime(row.observedAt, 'minute'),
@@ -149,7 +245,7 @@ function collectChangeReason(
   }
   add({
     id: `baseline:${row.id}:${insufficient ? 'insufficient-window' : 'no-baseline'}`,
-    severity: 'warning', category: 'baseline', source, at, title,
+    severity: 'warning', category: 'baseline', template, source, at, title,
     advice: insufficient ? text.limits.advice.widenWindow : text.limits.advice.waitNextRelease
   })
 }
@@ -159,15 +255,15 @@ function collectNewsAndCalendar(input: BriefingIssueInput, add: AddIssue): void 
   const at = document.edition.generatedAt
   const news = document.data.sentiment.news.state
   if (news === 'source-disabled') {
-    add({ id: 'data:news:disabled', severity: 'warning', category: 'data', source: text.limits.sources.news, at, title: text.limits.newsDisabled, advice: text.limits.advice.checkNews })
+    add({ id: 'data:news:disabled', severity: 'warning', category: 'data', template: 'news-disabled', source: text.limits.sources.news, at, title: text.limits.newsDisabled, advice: text.limits.advice.checkNews })
   } else if (news === 'unavailable') {
-    add({ id: 'data:news:unavailable', severity: 'warning', category: 'data', source: text.limits.sources.news, at, title: text.limits.newsUnavailable, advice: text.limits.advice.checkNews })
+    add({ id: 'data:news:unavailable', severity: 'warning', category: 'data', template: 'news-unavailable', source: text.limits.sources.news, at, title: text.limits.newsUnavailable, advice: text.limits.advice.checkNews })
   }
   const notes = [document.news.notes.macroEmpty, document.next.note]
   if (notes.includes('calendar-source-disabled')) {
-    add({ id: 'data:calendar:disabled', severity: 'warning', category: 'data', source: text.limits.sources.calendar, at, title: text.limits.calendarDisabled, advice: text.limits.advice.checkCalendar })
+    add({ id: 'data:calendar:disabled', severity: 'warning', category: 'data', template: 'calendar-disabled', source: text.limits.sources.calendar, at, title: text.limits.calendarDisabled, advice: text.limits.advice.checkCalendar })
   } else if (notes.includes('calendar-unavailable')) {
-    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkCalendar })
+    add({ id: 'data:calendar:unavailable', severity: 'warning', category: 'data', template: 'calendar-unavailable', source: text.limits.sources.calendar, at, title: text.limits.calendarUnavailable, advice: text.limits.advice.checkCalendar })
   }
 }
 
@@ -183,21 +279,21 @@ function macroItemIssues(input: BriefingIssueInput, add: AddIssue, item: Briefin
   const name = eventTitle(item, input.eventTitles)
   if (!item.consensus) {
     add({
-      id: `data:macro:consensus:${item.eventKey}`, severity: 'warning', category: 'data',
+      id: `data:macro:consensus:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-consensus',
       source: text.limits.sources.calendar, at: item.scheduledAt,
       title: fill(text.limits.macro.consensusMissing, { event: name }), advice: text.limits.advice.fillConsensus
     })
   }
   if (!item.actual) {
     add({
-      id: `data:macro:actual:${item.eventKey}`, severity: 'warning', category: 'data',
+      id: `data:macro:actual:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-actual',
       source: text.limits.sources.calendar, at: item.scheduledAt,
       title: fill(text.limits.macro.actualMissing, { event: name }), advice: text.limits.advice.waitCollection
     })
   }
   if (!item.previous) {
     add({
-      id: `data:macro:previous:${item.eventKey}`, severity: 'info', category: 'data',
+      id: `data:macro:previous:${item.eventKey}`, severity: 'info', category: 'data', template: 'macro-previous',
       source: text.limits.sources.calendar, at: item.scheduledAt,
       title: fill(text.limits.macro.previousMissing, { event: name }), advice: text.limits.advice.waitCollection
     })
@@ -209,14 +305,14 @@ function nextItemIssues(input: BriefingIssueInput, add: AddIssue, item: Briefing
   const name = eventTitle(item, input.eventTitles)
   if (!item.consensus) {
     add({
-      id: `data:next:consensus:${item.eventKey}`, severity: 'warning', category: 'data',
+      id: `data:next:consensus:${item.eventKey}`, severity: 'warning', category: 'data', template: 'macro-consensus',
       source: text.limits.sources.calendar, at: item.at,
       title: fill(text.limits.macro.consensusMissing, { event: name }), advice: text.limits.advice.fillConsensus
     })
   }
   if (!item.previous) {
     add({
-      id: `data:next:previous:${item.eventKey}`, severity: 'info', category: 'data',
+      id: `data:next:previous:${item.eventKey}`, severity: 'info', category: 'data', template: 'macro-previous',
       source: text.limits.sources.calendar, at: item.at,
       title: fill(text.limits.macro.previousMissing, { event: name }), advice: text.limits.advice.waitCollection
     })
@@ -235,6 +331,7 @@ function collectBackfill(input: BriefingIssueInput, add: AddIssue): void {
       id: `backfill:${supplement.at}:${index}`,
       severity: 'info',
       category: 'backfill',
+      template: parsed && rows.length > 0 ? 'backfill-done' : 'backfill-generic',
       source: text.limits.sources.backfill,
       at: supplement.at,
       title: parsed && rows.length > 0
@@ -250,13 +347,13 @@ function collectEditorial(input: BriefingIssueInput, add: AddIssue): void {
   const meta = document.provenance.editorialMeta
   if (meta?.fallback === 'custom-unavailable') {
     add({
-      id: 'ai:model-fallback', severity: 'warning', category: 'ai', source: text.limits.sources.editorial,
+      id: 'ai:model-fallback', severity: 'warning', category: 'ai', template: 'ai-fallback', source: text.limits.sources.editorial,
       at: document.edition.generatedAt, title: text.limits.ai.fallback, advice: text.limits.advice.modelFallback
     })
   }
   if (input.webSearchEnabled === false && meta) {
     add({
-      id: 'ai:websearch-off', severity: 'info', category: 'ai', source: text.limits.sources.editorial,
+      id: 'ai:websearch-off', severity: 'info', category: 'ai', template: 'ai-websearch', source: text.limits.sources.editorial,
       at: document.edition.generatedAt, title: text.limits.ai.webSearchOff, advice: text.limits.advice.webSearch
     })
   }
@@ -270,6 +367,7 @@ function collectEditorial(input: BriefingIssueInput, add: AddIssue): void {
     id: `${category}:editorial-failure:${failure}`,
     severity: 'blocking',
     category,
+    template: category === 'system' ? 'system-failure' : category === 'data' ? 'source-failure' : 'ai-failure',
     source: category === 'data' ? text.limits.sources.collector : category === 'system' ? text.limits.sources.system : text.limits.sources.editorial,
     at: document.edition.generatedAt,
     title: category === 'system'
@@ -297,7 +395,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     const value = gap.trim()
     if (!value) continue
     add({
-      id: `evidence:${value}`, severity: 'info', category: 'evidence', source: text.limits.sources.analysis,
+      id: `evidence:${value}`, severity: 'info', category: 'evidence', template: 'evidence-gap', source: text.limits.sources.analysis,
       at: conclusion.publishedAt, title: fill(text.limits.evidence.gap, { text: value }), advice: text.limits.advice.evidence
     })
   }
@@ -305,14 +403,14 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     const value = caveat.trim()
     if (!value) continue
     add({
-      id: `evidence:${value}`, severity: 'info', category: 'evidence', source: text.limits.sources.analysis,
+      id: `evidence:${value}`, severity: 'info', category: 'evidence', template: 'evidence-caveat', source: text.limits.sources.analysis,
       at: conclusion.publishedAt, title: fill(text.limits.evidence.caveat, { text: value }), advice: text.limits.advice.evidence
     })
   }
   for (const claim of conclusion.counterEvidence) {
     if (claim.citations.length > 0 || !claim.statement.trim()) continue
     add({
-      id: `evidence:claim:${claim.statement}`, severity: 'warning', category: 'evidence',
+      id: `evidence:claim:${claim.statement}`, severity: 'warning', category: 'evidence', template: 'evidence-no-citation',
       source: text.limits.sources.analysis, at: conclusion.publishedAt,
       title: fill(text.limits.evidence.noCitation, { text: clip(claim.statement) }),
       advice: text.limits.advice.citeEvidence
@@ -322,7 +420,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
     const statement = entry.statement ?? ''
     if (!/\(source conflict\)/i.test(statement)) continue
     add({
-      id: `evidence:conflict:${entry.index}`, severity: 'warning', category: 'evidence',
+      id: `evidence:conflict:${entry.index}`, severity: 'warning', category: 'evidence', template: 'evidence-conflict',
       source: text.limits.sources.webSearch, at: entry.observedAt ?? conclusion.publishedAt,
       title: fill(text.limits.evidence.conflict, { text: clip(statement.replace(/\s*\(source conflict\)\s*/i, '')) }),
       advice: text.limits.advice.officialSource
@@ -330,7 +428,7 @@ function collectEvidence(input: BriefingIssueInput, add: AddIssue): void {
   }
   if (document.citations.length === 0) {
     add({
-      id: 'evidence:no-citations', severity: 'info', category: 'evidence', source: text.limits.sources.analysis,
+      id: 'evidence:no-citations', severity: 'info', category: 'evidence', template: 'evidence-none', source: text.limits.sources.analysis,
       at: conclusion.publishedAt, title: text.limits.evidence.none, advice: text.limits.advice.evidence
     })
   }
@@ -344,7 +442,7 @@ function collectTiming(input: BriefingIssueInput, add: AddIssue): void {
   const delay = generated - cutoff
   if (!Number.isFinite(delay) || delay < 15 * 60 * 1_000) return
   add({
-    id: 'timing:late-generation', severity: 'info', category: 'timing', source: text.limits.sources.settings,
+    id: 'timing:late-generation', severity: 'info', category: 'timing', template: 'timing-late', source: text.limits.sources.settings,
     at: document.edition.generatedAt,
     title: fill(text.limits.timing.late, { interval: intervalText(delay, text) }),
     advice: text.limits.advice.keepRunning

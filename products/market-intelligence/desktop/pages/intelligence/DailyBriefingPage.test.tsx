@@ -154,6 +154,28 @@ const diagnosticsDocument = (date = '2026-10-30'): DailyBriefingDocument => ({
   }
 })
 
+const traceStageIds = [
+  'source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation', 'repair-1', 'repair-2', 'store'
+] as const
+
+function generationTraceFixture(state: 'success' | 'failed', failed?: string, failureCode?: string) {
+  const failedAt = failed ? traceStageIds.indexOf(failed as (typeof traceStageIds)[number]) : -1
+  return {
+    attemptId: 'attempt-1',
+    startedAt: '2026-10-30T04:00:00.000Z',
+    finishedAt: '2026-10-30T04:00:30.000Z',
+    state,
+    stages: traceStageIds.map((id, position) => ({
+      id,
+      state: failedAt < 0 ? 'success' : position < failedAt ? 'success' : position === failedAt ? 'failed' : 'skipped',
+      startedAt: '2026-10-30T04:00:00.000Z',
+      finishedAt: '2026-10-30T04:00:01.000Z',
+      durationMs: 1_000,
+      ...(position === failedAt && failureCode ? { failureCode } : {})
+    }))
+  }
+}
+
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
@@ -418,40 +440,67 @@ describe('daily briefing page', () => {
     expect(panel.textContent).toContain(englishText.failurePanel.advice.model)
   })
 
-  it('names every concrete edition limitation, orders it by severity and keeps the caveats', async () => {
+  it('groups limitations into severity-ordered summaries and opens one group in a drawer', async () => {
     const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: diagnosticsDocument() })) })
     const dom = await renderPage(client)
     const aside = dom.querySelector<HTMLElement>('[data-briefing-issues]')!
 
     expect(aside).not.toBeNull()
+    // The timeline is the first block; this edition has no trace, so it says so without guessing.
+    expect(aside.firstElementChild?.classList.contains('mi-generation-trace')).toBe(true)
+    expect(aside.querySelector('[data-generation-trace-missing]')?.textContent).toBe(text.generationTrace.missing)
     expect(aside.textContent).toContain(text.sections.limits)
-    expect(aside.textContent).toContain('美国比特币现货基金：08:00 前无可用历史')
-    expect(aside.textContent).toContain('稳定币：昨日无可比数据，已隐藏变化')
-    expect(aside.textContent).toContain('恐惧贪婪：来源未启用，未显示数据')
-    expect(aside.textContent).toContain('CPI：预期值未收录')
-    expect(aside.textContent).toContain('美元：数据不可用')
-    expect(aside.textContent).toContain('已回补 2 个核心数据行：稳定币、美国比特币现货基金')
-    expect(aside.textContent).toContain(text.limits.ai.fallback)
-    expect(aside.textContent).toContain('本期在统计截止后 4 小时生成')
-    expect(aside.textContent).toContain('数据缺口：证据条数已截断')
-    expect(aside.textContent).toContain('数据限制：资金费率是场所特定的')
-
-    const titles = [...aside.querySelectorAll('.mi-daily-briefing-page__issue-title')].map((element) => element.textContent)
-    expect(titles.filter((title) => title === '数据缺口：证据条数已截断')).toHaveLength(1)
-
-    const categories = [...aside.querySelectorAll('[data-issue-category]')].map((element) => element.getAttribute('data-issue-category'))
-    expect(new Set(categories)).toEqual(new Set(['data', 'baseline', 'backfill', 'ai', 'evidence', 'timing']))
-    const severities = [...aside.querySelectorAll('[data-issue-severity]')].map((element) => element.getAttribute('data-issue-severity'))
-    expect(severities.lastIndexOf('warning')).toBeLessThan(severities.indexOf('info'))
-
-    // Every entry names its source, its time and an actionable next step.
-    expect(aside.textContent).toContain(text.limits.roles.source)
-    expect(aside.textContent).toContain(text.limits.roles.time)
-    expect(aside.textContent).toContain(text.limits.roles.advice)
     expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
     expect(aside.textContent).toContain(text.limits.counts.info.replace('{count}', '5'))
 
-    // Internal reason strings, machine codes and model ids never reach the panel.
+    // The rail is a list of group summaries; no individual fact is listed before a group is opened.
+    const groupButtons = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
+    expect(groupButtons.length).toBeGreaterThan(0)
+    expect(aside.querySelectorAll('[data-issue-detail]')).toHaveLength(0)
+    expect(dom.querySelector('[data-issue-drawer]')).toBeNull()
+    const groupLabel = (button: HTMLButtonElement): string | null | undefined =>
+      button.querySelector('.mi-daily-briefing-page__group-label')?.textContent
+    const groupCount = (button: HTMLButtonElement): string | null | undefined =>
+      button.querySelector('.mi-daily-briefing-page__group-count')?.textContent
+    const groupSeverities = groupButtons.map((button) => button.getAttribute('data-group-severity'))
+    expect(groupSeverities.lastIndexOf('warning')).toBeLessThan(groupSeverities.indexOf('info'))
+
+    const consensusGroup = groupButtons.find((button) => groupLabel(button) === '预期值未收录')!
+    expect(groupCount(consensusGroup)).toBe('2 项')
+    expect(groupCount(groupButtons.find((button) => groupLabel(button) === '变化基线缺失')!)).toBe('1 项')
+    expect(groupCount(groupButtons.find((button) => groupLabel(button) === '核心数据回补')!)).toBe('1 项')
+    expect(groupCount(groupButtons.find((button) => groupLabel(button) === '数据缺口')!)).toBe('1 项')
+    expect(groupButtons.some((button) => groupLabel(button) === '数据陈旧')).toBe(false)
+
+    // Source, time and advice belong to the detail layer, not to the summary rows.
+    expect(aside.textContent).not.toContain(`${text.limits.roles.source}${text.labelSeparator}`)
+
+    act(() => consensusGroup.click())
+    const drawer = dom.querySelector<HTMLElement>('[data-issue-drawer]')!
+    expect(drawer).not.toBeNull()
+    expect(drawer.textContent).toContain('「预期值未收录」明细（2 项）')
+    const details = [...drawer.querySelectorAll('[data-issue-detail]')]
+    expect(details).toHaveLength(2)
+    expect(new Set(details.map((detail) => detail.querySelector('.mi-issue-drawer__title')?.textContent)).size).toBe(2)
+    for (const detail of details) {
+      expect(detail.textContent).toContain(text.limits.roles.source)
+      expect(detail.textContent).toContain(text.limits.roles.time)
+      expect(detail.textContent).toContain(text.limits.roles.advice)
+    }
+
+    // Escape closes the drawer and returns focus to the summary row that opened it.
+    act(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) })
+    expect(dom.querySelector('[data-issue-drawer]')).toBeNull()
+    expect(document.activeElement).toBe(consensusGroup)
+
+    // The close button does the same.
+    act(() => consensusGroup.click())
+    expect(dom.querySelector('[data-issue-drawer]')).not.toBeNull()
+    act(() => dom.querySelector<HTMLButtonElement>('[data-drawer-close]')!.click())
+    expect(dom.querySelector('[data-issue-drawer]')).toBeNull()
+    expect(document.activeElement).toBe(consensusGroup)
+
+    // Internal reason strings, machine codes and model ids never reach the rail or the drawer.
     expect(aside.textContent).not.toContain('filled 2 core data rows')
     expect(aside.textContent).not.toContain('custom-unavailable')
     expect(aside.textContent).not.toContain('no-baseline')
@@ -460,13 +509,11 @@ describe('daily briefing page', () => {
     const toggle = aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')!
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     act(() => toggle.click())
-    expect(aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')?.getAttribute('aria-expanded')).toBe('false')
-    expect(aside.querySelectorAll('.mi-daily-briefing-page__issue')).toHaveLength(0)
+    expect(aside.querySelectorAll('.mi-daily-briefing-page__group')).toHaveLength(0)
     expect(aside.textContent).toContain(text.limits.expand)
     expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
-
     act(() => aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')!.click())
-    expect(aside.querySelectorAll('.mi-daily-briefing-page__issue').length).toBeGreaterThan(0)
+    expect(aside.querySelectorAll('.mi-daily-briefing-page__group').length).toBeGreaterThan(0)
     expect(aside.textContent).toContain(text.limits.collapse)
   })
 
@@ -478,9 +525,62 @@ describe('daily briefing page', () => {
     expect(aside.textContent).toContain(englishText.sections.limits)
     expect(aside.textContent).toContain(englishText.limits.categories.data)
     expect(aside.textContent).toContain(englishText.limits.severity.warning)
-    expect(aside.textContent).toContain('Stablecoins: no comparable data for yesterday, so the change is hidden')
-    expect(aside.textContent).toContain('US spot bitcoin ETF: no usable history before 08:00')
-    expect(aside.textContent).toContain('CPI: consensus not collected')
-    expect(aside.textContent).toContain(englishText.limits.roles.advice)
+    expect(aside.textContent).toContain(englishText.limits.groupLabels['macro-consensus'])
+    expect(aside.textContent).toContain(englishText.limits.groupLabels['no-baseline'])
+    expect(aside.textContent).not.toContain('变化基线缺失')
+
+    const consensusGroup = [...aside.querySelectorAll<HTMLButtonElement>('.mi-daily-briefing-page__group')]
+      .find((button) => button.querySelector('.mi-daily-briefing-page__group-label')?.textContent === englishText.limits.groupLabels['macro-consensus'])!
+    act(() => consensusGroup.click())
+    const drawer = dom.querySelector<HTMLElement>('[data-issue-drawer]')!
+    expect(drawer.textContent).toContain('CPI: consensus not collected')
+    expect(drawer.textContent).toContain(englishText.limits.drawerClose)
+    expect(drawer.textContent).toContain(englishText.limits.roles.advice)
+  })
+
+  it('keeps the successful generation stages in the right rail for tracing', async () => {
+    const base = briefingDocument()
+    const withTrace = {
+      ...base,
+      provenance: { ...base.provenance, generationTrace: generationTraceFixture('success') }
+    } as DailyBriefingDocument
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: withTrace })) })
+    const dom = await renderPage(client)
+    const trace = dom.querySelector<HTMLElement>('[data-generation-trace-state="success"]')!
+
+    expect(trace).not.toBeNull()
+    expect(trace.textContent).toContain(text.generationTrace.title)
+    expect(trace.textContent).toContain(text.generationTrace.completed)
+    expect(trace.querySelectorAll('[data-stage]')).toHaveLength(0)
+    expect(trace.textContent).toContain('耗时 30 秒')
+    act(() => trace.querySelector<HTMLButtonElement>('.mi-generation-trace__toggle')!.click())
+    expect(trace.querySelectorAll('[data-stage]')).toHaveLength(9)
+    expect(dom.querySelector<HTMLElement>('[data-briefing-issues]')?.firstElementChild?.classList.contains('mi-generation-trace')).toBe(true)
+  })
+
+  it('shows where a failed generation stopped and renders the same trace on a fresh read', async () => {
+    const result = {
+      state: 'unavailable' as const,
+      failureCode: 'store-failed',
+      generationTrace: generationTraceFixture('failed', 'store', 'store-failed')
+    }
+    const client = fakeClient({ getToday: vi.fn(async () => result) })
+    const dom = await renderPage(client)
+    const panel = dom.querySelector<HTMLElement>('[data-daily-brief-failure]')!
+
+    expect(panel.textContent).toContain('失败于：落库/发布')
+    expect(panel.querySelector('[data-stage="store"]')?.getAttribute('data-stage-state')).toBe('failed')
+    expect(panel.querySelector('[data-stage="writing"]')?.getAttribute('data-stage-state')).toBe('success')
+    expect(panel.querySelector('[data-failed-stage="store"]')).not.toBeNull()
+
+    // The next read of the same failed edition still carries the trace: the service persists the
+    // attempt, so a refresh does not reduce the diagnosis to one failure code.
+    act(() => root!.unmount())
+    container!.remove()
+    root = null
+    container = null
+    const again = await renderPage(client)
+    expect(again.querySelector('[data-daily-brief-failure]')?.textContent).toContain('失败于：落库/发布')
+    expect(again.querySelector('[data-stage="store"]')?.getAttribute('data-stage-state')).toBe('failed')
   })
 })

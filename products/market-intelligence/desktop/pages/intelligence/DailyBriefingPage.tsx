@@ -16,7 +16,11 @@ import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
-import { briefingIssueCounts, briefingIssues } from './dailyBriefingIssues'
+import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
+import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
+import { readableFailureDetail } from './dailyBriefingFailureDetail'
+import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
+import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
@@ -24,13 +28,14 @@ import './dailyBriefingShareCard.css'
 
 type ViewState =
   | Readonly<{ status: 'loading' }>
-  | Readonly<{ status: 'unavailable'; failureCode?: string }>
+  | Readonly<{ status: 'unavailable'; failureCode?: string; generationTrace?: GenerationTrace }>
   | Readonly<{ status: 'ready'; document: DailyBriefingDocument; kind: 'today' | 'history' }>
 
 type BriefFailure = Readonly<{
   kind: 'editorial' | 'generation'
   code?: string
   detail?: string
+  generationTrace?: GenerationTrace
 }>
 
 type BriefFailureAdvice = 'model' | 'retryOrModel' | 'retryOrSettings' | 'data' | 'system'
@@ -61,30 +66,6 @@ function failureAdvice(code: string | undefined): BriefFailureAdvice {
     default:
       return 'retryOrSettings'
   }
-}
-
-const FAILURE_DETAIL_LIMIT = 160
-
-/**
- * `failureDetail` is model/service text. It is never a place for a stack trace or a credential, and
- * an unbounded string must not stretch the panel: cut a stack, redact key-shaped fragments, then
- * trim to a readable length.
- */
-function readableFailureDetail(detail: string | undefined, labels: Readonly<Record<string, string>>): string | undefined {
-  if (!detail) return undefined
-  const mapped = Object.hasOwn(labels, detail) ? labels[detail] : undefined
-  if (mapped) return mapped
-  const stackAt = detail.search(/\n\s*at\s/)
-  const withoutStack = stackAt >= 0 ? detail.slice(0, stackAt) : detail
-  const cleaned = withoutStack
-    .replace(/\r?\n/g, ' ')
-    .replace(/(?:sk|pk|api|key)[-_][A-Za-z0-9_-]{6,}/gi, '[redacted]')
-    .replace(/(Bearer\s+)[^\s,;]+/gi, '$1[redacted]')
-    .replace(/((?:api[_-]?key|token|secret|password)\s*[=:]\s*)[^\s,;]+/gi, '$1[redacted]')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!cleaned) return undefined
-  return cleaned.length > FAILURE_DETAIL_LIMIT ? `${cleaned.slice(0, FAILURE_DETAIL_LIMIT)}…` : cleaned
 }
 
 function briefFailureCodeLabel(code: string | undefined, text: DailyBriefingText): string {
@@ -121,9 +102,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
   const [regenerating, setRegenerating] = useState(false)
-  const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string }> | null>(null)
+  const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
   const [issuesOpen, setIssuesOpen] = useState(true)
+  const [openGroup, setOpenGroup] = useState<Readonly<{ key: string; trigger: HTMLElement | null }> | null>(null)
   const shareRef = useRef<HTMLDivElement>(null)
   const exportTimer = useRef<number | undefined>(undefined)
   const copyTimer = useRef<number | undefined>(undefined)
@@ -157,13 +139,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         setView({ status: 'ready', document: today.document, kind: 'today' })
         setRegenerateFailure(null)
       } else {
+        const generationTrace = readGenerationTrace((today as unknown as Readonly<{ generationTrace?: unknown }> | undefined)?.generationTrace)
         setView({
           status: 'unavailable',
-          ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {})
+          ...(today?.state === 'unavailable' ? { failureCode: today.failureCode } : {}),
+          ...(generationTrace ? { generationTrace } : {})
         })
         if (emptyGenerateRef.current) {
           setRegenerateFailure({
-            ...(today?.state === 'unavailable' ? { code: today.failureCode } : {})
+            ...(today?.state === 'unavailable' ? { code: today.failureCode } : {}),
+            ...(generationTrace ? { generationTrace } : {})
           })
         }
       }
@@ -214,7 +199,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         setRegenerateFailure(null)
         setEditions((current) => current.map((edition) => edition.date === result.document.edition.date ? summaryFromDocument(result.document) : edition))
       } else {
-        setRegenerateFailure({ code: result.failureCode })
+        const generationTrace = readGenerationTrace((result as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
+        setRegenerateFailure({ code: result.failureCode, ...(generationTrace ? { generationTrace } : {}) })
       }
     } catch {
       setRegenerateFailure({})
@@ -264,7 +250,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const editorialBlocked = Boolean(editorialFailureCode && editorialFailureCode !== 'editorial-disabled')
   let failure: BriefFailure | null = null
   if (regenerateFailure) {
-    failure = { kind: 'generation', ...(regenerateFailure.code ? { code: regenerateFailure.code } : {}) }
+    failure = {
+      kind: 'generation',
+      ...(regenerateFailure.code ? { code: regenerateFailure.code } : {}),
+      ...(regenerateFailure.generationTrace ? { generationTrace: regenerateFailure.generationTrace } : {})
+    }
   } else if (editorialBlocked && view.status === 'ready' && editorialFailureCode) {
     failure = {
       kind: 'editorial',
@@ -272,7 +262,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       ...(view.document.provenance.editorialFailureDetail ? { detail: view.document.provenance.editorialFailureDetail } : {})
     }
   } else if (view.status === 'unavailable' && view.failureCode) {
-    failure = { kind: 'generation', code: view.failureCode }
+    failure = {
+      kind: 'generation',
+      code: view.failureCode,
+      ...(view.generationTrace ? { generationTrace: view.generationTrace } : {})
+    }
   }
   const contentBlocked = editorialBlocked || regenerateFailure !== null
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
@@ -288,8 +282,16 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       })
     : []
   const issueCounts = briefingIssueCounts(issues)
+  const groups = groupBriefingIssues(issues, text)
+  const activeGroup = openGroup ? groups.find((group) => group.key === openGroup.key) : undefined
+  // A successful edition keeps its stage trace for auditing; a failed attempt carries the same
+  // shape in the result, so the timeline survives a refresh once the service returns it.
+  const generationTrace = view.status === 'ready'
+    ? readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
+    : undefined
+  const showAppendix = view.status === 'ready' && !contentBlocked
   const openModelService = onOpenModelSettings ?? openModelSettings
-  const bodyClass = `mi-daily-briefing-page__body${issues.length > 0 ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
+  const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
       <button className="mi-daily-briefing-page__back" type="button" onClick={onBack}>
@@ -336,6 +338,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}
+          formatTime={formatTime}
           regenerating={regenerating}
           onRetry={() => void regenerate()}
           onOpenAiSettings={() => setSettingsOpen(true)}
@@ -351,29 +354,36 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
-      {issues.length > 0 && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits} data-briefing-issues="true">
-        <header className="mi-daily-briefing-page__appendix-head">
-          <h2>{text.sections.limits}</h2>
-          <button className="mi-daily-briefing-page__appendix-toggle" type="button" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
-            {issuesOpen ? text.limits.collapse : text.limits.expand}
-          </button>
-        </header>
-        <p className="mi-daily-briefing-page__appendix-counts">{issueCountsText(issueCounts, text)}</p>
-        {issuesOpen ? <ol className="mi-daily-briefing-page__issues">
-          {issues.map((issue) => <li className="mi-daily-briefing-page__issue" key={issue.id} data-issue-category={issue.category} data-issue-severity={issue.severity}>
-            <div className="mi-daily-briefing-page__issue-tags">
-              <span data-severity={issue.severity}>{text.limits.severity[issue.severity]}</span>
-              <span data-category={issue.category}>{text.limits.categories[issue.category]}</span>
-            </div>
-            <div className="mi-daily-briefing-page__issue-title">{issue.title}</div>
-            <div className="mi-daily-briefing-page__issue-meta">
-              {text.limits.roles.source}{text.labelSeparator}{issue.source} · {text.limits.roles.time}{text.labelSeparator}{formatTime(issue.at, 'minute')}
-            </div>
-            <div className="mi-daily-briefing-page__issue-advice">{text.limits.roles.advice}{text.labelSeparator}{issue.advice}</div>
-          </li>)}
-        </ol> : null}
+      {showAppendix && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits} {...(issues.length > 0 ? { 'data-briefing-issues': 'true' } : {})}>
+        <DailyBriefingGenerationTimeline trace={generationTrace} text={text} formatTime={formatTime} />
+        {issues.length > 0 ? <>
+          <header className="mi-daily-briefing-page__appendix-head">
+            <h2>{text.sections.limits}</h2>
+            <button className="mi-daily-briefing-page__appendix-toggle" type="button" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
+              {issuesOpen ? text.limits.collapse : text.limits.expand}
+            </button>
+          </header>
+          <p className="mi-daily-briefing-page__appendix-counts">{issueCountsText(issueCounts, text)}</p>
+          {issuesOpen ? <ol className="mi-daily-briefing-page__groups">
+            {groups.map((group) => <li key={group.key}>
+              <button className="mi-daily-briefing-page__group" type="button" aria-haspopup="dialog"
+                aria-label={text.limits.openGroup.replace('{label}', group.label).replace('{count}', String(group.count))}
+                data-group-key={group.key} data-group-severity={group.severity} data-group-category={group.category}
+                onClick={(event) => setOpenGroup({ key: group.key, trigger: event.currentTarget })}>
+                <span className="mi-daily-briefing-page__group-tags">
+                  <span data-severity={group.severity}>{text.limits.severity[group.severity]}</span>
+                  <span data-category={group.category}>{text.limits.categories[group.category]}</span>
+                </span>
+                <span className="mi-daily-briefing-page__group-label">{group.label}</span>
+                <span className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
+                <span className="mi-daily-briefing-page__group-example">{text.limits.groupExample.replace('{text}', group.example)}</span>
+              </button>
+            </li>)}
+          </ol> : null}
+        </> : null}
       </aside> : null}
     </div>
+    {activeGroup ? <DailyBriefingIssueDrawer group={activeGroup} text={text} formatTime={formatTime} returnFocusTo={openGroup?.trigger ?? null} onClose={() => setOpenGroup(null)} /> : null}
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
       setSettingsOpen(false)
       void client.getSettings?.().then((result) => { if (result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled) }).catch(() => undefined)
@@ -387,9 +397,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   </main>
 }
 
-function DailyBriefingFailurePanel({ failure, text, regenerating, onRetry, onOpenAiSettings, onOpenModelSettings, onConfigureSources }: Readonly<{
+function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, onRetry, onOpenAiSettings, onOpenModelSettings, onConfigureSources }: Readonly<{
   failure: BriefFailure
   text: DailyBriefingText
+  formatTime: (value: string, precision?: 'minute' | 'second') => string
   regenerating: boolean
   onRetry: () => void
   onOpenAiSettings: () => void
@@ -407,6 +418,7 @@ function DailyBriefingFailurePanel({ failure, text, regenerating, onRetry, onOpe
     <p data-failure-code-label>{text.failurePanel.codeLabel}{separator}{codeLabel}</p>
     {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
     <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
+    <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
     <div className="mi-daily-briefing-page__empty-actions">
       <button type="button" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
         {regenerating ? text.regenerating : text.regenerate}

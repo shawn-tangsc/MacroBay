@@ -7,7 +7,7 @@ import type {
   DailyBriefingDocument
 } from '../../../contracts/dailyBriefing'
 import { productText } from '../../shared/i18n/productText'
-import { briefingIssueCounts, briefingIssues } from './dailyBriefingIssues'
+import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
 
 const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const enText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
@@ -313,5 +313,44 @@ describe('daily briefing issues', () => {
     expect(issues.find((entry) => entry.id === 'baseline:stablecoin:no-baseline')?.title)
       .toBe('Stablecoins: no comparable data for yesterday, so the change is hidden')
     expect(issues.find((entry) => entry.id === 'baseline:stablecoin:no-baseline')?.advice).toContain('next release')
+  })
+})
+
+describe('issue grouping', () => {
+  it('counts by category, code and copy template, puts blocking first and keeps empty groups out', () => {
+    const macroItems = Array.from({ length: 7 }, (_, index) => macro({
+      eventKey: `US.EVENT.${index}`, title: `EVENT ${index}`, consensus: undefined
+    }))
+    const staleRows = [
+      market({ id: 'dxy', state: 'stale', change: null }),
+      market({ id: 'gold', labelKey: 'dailyBriefing.row.gold', state: 'stale', change: null })
+    ]
+    const issues = briefingIssues({
+      document: document({
+        news: { items: [], macro: macroItems, notes: {} },
+        data: {
+          market: staleRows,
+          funds: [pulse({ change: null, changeReason: 'no-baseline' })],
+          sentiment: { fearGreed: null, news: { state: 'available' } }
+        },
+        provenance: { summaryId: null, readAt: '2026-10-30T00:30:00.000Z', editorialFailure: 'store-failed' }
+      }),
+      text: zhText,
+      formatTime
+    })
+    const groups = groupBriefingIssues(issues, zhText)
+    const label = (name: string) => groups.find((group) => group.label === name)!
+
+    expect(label('预期值未收录').count).toBe(7)
+    expect(label('数据陈旧').count).toBe(2)
+    expect(label('变化基线缺失').count).toBe(1)
+    expect(groups[0]?.severity).toBe('blocking')
+    expect(groups.every((group) => group.count > 0)).toBe(true)
+    expect(groups.reduce((total, group) => total + group.count, 0)).toBe(issues.length)
+    expect(new Set(groups.map((group) => group.key)).size).toBe(groups.length)
+    for (const group of groups) {
+      expect(group.issues.every((issue) => issue.category === group.category && issue.code === group.code && issue.template === group.template)).toBe(true)
+      expect(group.example).toBe(group.issues[0]?.title)
+    }
   })
 })
