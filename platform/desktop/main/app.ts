@@ -154,6 +154,7 @@ import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
+import { createProductIpcInvoker } from './productIpcInvoker'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
@@ -579,6 +580,11 @@ let quitDisposeSettled = false
 /** 退出清理挂起本轮退出的上界：清理再慢也绝不让进程永远退不出去（有界逃逸）。 */
 const QUIT_DISPOSE_BUDGET_MS = 15_000
 let jobRuntimeForDisposal: JobRuntime | null = null
+/**
+ * 退出清理开始后 product IPC 只回答结构化 unavailable（见 `productIpcInvoker`）。
+ * 这里持有同一实例，保证「清理已开始」先于任何产品 DB 关闭被登记。
+ */
+let productIpcRegistryForDisposal: ReturnType<typeof createProductIpcRegistry> | null = null
 /** workspace 组合体：只在产品注册 seal 之后建立，用于退出时的有界布局 flush。 */
 let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null
 let disposeTaskAutomationMaintenance: (() => void) | null = null
@@ -604,6 +610,8 @@ async function flushPanelWorkspaceLayoutForExit(): Promise<void> {
 async function disposePlatformRuntimes(): Promise<void> {
   if (platformRuntimesDisposed) return
   platformRuntimesDisposed = true
+  // 先关产品 IPC 入口，再拆产品服务/DB：退出期迟到的 renderer 调用不应再触碰已关闭的连接。
+  productIpcRegistryForDisposal?.markClosed()
   await flushPanelWorkspaceLayoutForExit()
   disposeTaskAutomationMaintenance?.()
   disposeTaskAutomationMaintenance = null
@@ -2258,10 +2266,15 @@ function registerIpcHandlers(
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
 
   // 产品 IPC 统一入口：renderer 通过 preload.products.invoke 调用
+  // 退出/重启期 DB 已关闭时返回结构化 `platform-unavailable`，不把 DB 异常变成 handler rejection。
+  const invokeProductIpc = createProductIpcInvoker({
+    registry: productIpcRegistry,
+    isRuntimeClosed: () => platformRuntimesDisposed
+  })
   ipcMain.handle(
     IpcChannels.productIpcInvoke,
     (_event: IpcMainInvokeEvent, productId: string, method: string, payload?: unknown) =>
-      productIpcRegistry.invoke(productId, method, payload)
+      invokeProductIpc(productId, method, payload)
   )
 }
 
@@ -2381,6 +2394,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     safeSendToMainWindow(getMainWindow, IpcChannels.productIpcEvent, { productId, event, data })
   })
   const productIpcRegistry = createProductIpcRegistry()
+  productIpcRegistryForDisposal = productIpcRegistry
   const jobRuntime = createJobRuntime({ store: jobRunStore })
   jobRuntimeForDisposal = jobRuntime
   jobRuntime.recover()

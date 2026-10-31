@@ -20,6 +20,29 @@ describe('product IPC registry', () => {
     })
   })
 
+  it('returns a typed closed failure after quit cleanup starts, even once sealed', async () => {
+    const registry = createProductIpcRegistry()
+    registry.register('demo-product', 'settings.get', () => ({ ok: true }))
+    registry.seal([{ productId: 'demo-product', method: 'settings.get' }])
+    registry.markClosed()
+    // 退出清理可能重复进入：再关一次不得抛错，也绝不回到 active。
+    registry.markClosed()
+
+    await expect(registry.invoke('demo-product', 'settings.get')).rejects.toMatchObject({
+      code: 'product-runtime-closed'
+    })
+  })
+
+  it('lets a failed boot be closed afterwards without reopening it', async () => {
+    const registry = createProductIpcRegistry()
+    registry.markUnavailable()
+    registry.markClosed()
+
+    await expect(registry.invoke('demo-product', 'settings.get')).rejects.toMatchObject({
+      code: 'product-runtime-closed'
+    })
+  })
+
   it('dispatches registered handlers by product id and method', async () => {
     const registry = createProductIpcRegistry()
     registry.register('demo-product', 'settings.get', () => ({ ok: true }))

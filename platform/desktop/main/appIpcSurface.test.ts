@@ -359,6 +359,21 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("'renderer-lifecycle.ndjson'")
   })
 
+  it('answers product IPC with structured unavailability once quit cleanup has closed the runtime', () => {
+    expect(appSource).toContain("import { createProductIpcInvoker } from './productIpcInvoker'")
+    expect(appSource).toContain('const invokeProductIpc = createProductIpcInvoker({')
+    // 退出标记是入口的短路条件：产品 DB 关闭后绝不再进入产品 handler。
+    expect(appSource).toContain('isRuntimeClosed: () => platformRuntimesDisposed')
+    expect(appSource).toContain('invokeProductIpc(productId, method, payload)')
+    // 关闭登记与 renderer 入口共用同一 registry 实例。
+    expect(appSource).toContain('productIpcRegistryForDisposal = productIpcRegistry')
+    expect(appSource).toContain('productIpcRegistryForDisposal?.markClosed()')
+    // 登记关闭必须早于产品服务/DB 拆除。
+    expect(appSource.indexOf('productIpcRegistryForDisposal?.markClosed()')).toBeLessThan(
+      appSource.indexOf('productServiceDisposerRegistry.disposeAll()')
+    )
+  })
+
   it('owns product service disposal alongside platform runtime disposal', () => {
     expect(appSource).toContain('createProductServiceDisposerRegistry')
     expect(appSource).toContain('registerProductDisposer: productServiceDisposerRegistry.register')

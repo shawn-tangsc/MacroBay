@@ -19,7 +19,11 @@ export type ProductIpcRegistrar = (productId: string, method: string, handler: P
 
 export type ProductIpcMethod = Readonly<{ productId: string; method: string }>
 
-export type ProductIpcRegistryErrorCode = 'product-runtime-booting' | 'product-runtime-unavailable'
+export type ProductIpcRegistryErrorCode =
+  | 'product-runtime-booting'
+  | 'product-runtime-unavailable'
+  /** 退出/重启清理已开始（或已结束）：产品服务与它们的 DB 连接不再接受调用。 */
+  | 'product-runtime-closed'
 
 export class ProductIpcRegistryError extends Error {
   constructor(readonly code: ProductIpcRegistryErrorCode) {
@@ -32,6 +36,11 @@ export type ProductIpcRegistry = {
   register: ProductIpcRegistrar
   seal: (expectedMethods?: readonly ProductIpcMethod[]) => readonly ProductIpcMethod[]
   markUnavailable: () => void
+  /**
+   * 退出清理的第一件事：登记表从此只回答「已关闭」。
+   * 与 `markUnavailable()`（启动失败）区分：`closed` 可以发生在 seal 之后，且幂等。
+   */
+  markClosed: () => void
   invoke: (productId: string, method: string, payload?: unknown) => Promise<unknown>
 }
 
@@ -43,7 +52,7 @@ function toHandlerKey(productId: string, method: string): string {
 export function createProductIpcRegistry(): ProductIpcRegistry {
   const handlers = new Map<string, ProductIpcHandler>()
   const methods: ProductIpcMethod[] = []
-  let state: 'booting' | 'active' | 'unavailable' = 'booting'
+  let state: 'booting' | 'active' | 'unavailable' | 'closed' = 'booting'
 
   return {
     register(productId, method, handler) {
@@ -63,11 +72,17 @@ export function createProductIpcRegistry(): ProductIpcRegistry {
     },
     markUnavailable() {
       if (state === 'active') throw new Error('Product IPC registry is sealed.')
+      if (state === 'closed') return
       state = 'unavailable'
+    },
+    markClosed() {
+      if (state === 'closed') return
+      state = 'closed'
     },
     async invoke(productId, method, payload) {
       if (state === 'booting') throw new ProductIpcRegistryError('product-runtime-booting')
       if (state === 'unavailable') throw new ProductIpcRegistryError('product-runtime-unavailable')
+      if (state === 'closed') throw new ProductIpcRegistryError('product-runtime-closed')
       const handler = handlers.get(toHandlerKey(productId, method))
       if (!handler) {
         throw new Error(`Unknown product IPC method "${productId}.${method}".`)
