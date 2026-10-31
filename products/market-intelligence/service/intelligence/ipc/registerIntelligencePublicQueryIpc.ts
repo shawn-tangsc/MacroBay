@@ -152,9 +152,16 @@ function snapshotResult(value: unknown, input: FearGreedSnapshotQueryInput): Fea
   return snapshotUnavailable()
 }
 
-function asMarketDivergenceInput(value: unknown): { asOf: string } | undefined {
-  if (!isExactDataRecord(value, ['asOf'])) return undefined
-  return isCanonicalDivergenceTime(value.asOf) ? { asOf: value.asOf } : undefined
+/** Exported for its guard test: the payload shape is what broke the two-pass read once. */
+export function asMarketDivergenceInput(value: unknown): { asOf: string; mode?: 'rules' | 'judge' } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  // `asOf` plus at most the mode the reader chose; anything else is a caller bug, not a payload.
+  if (!keys.includes('asOf') || keys.some(key => key !== 'asOf' && key !== 'mode')) return undefined
+  if (!isCanonicalDivergenceTime(record.asOf)) return undefined
+  if (record.mode !== undefined && record.mode !== 'rules' && record.mode !== 'judge') return undefined
+  return record.mode === undefined ? { asOf: record.asOf } : { asOf: record.asOf, mode: record.mode }
 }
 
 function asOpenInterestHistoryInput(value: unknown): { asOf: string; window: OpenInterestWindow } | undefined {

@@ -34,76 +34,74 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
 
   return (
     <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
-      <header className="mi-divergence__head">
+      <div className="mi-divergence__lead">
         <Tooltip title={<span className="mi-divergence__help-body">{text.helpLines.map(line => <b key={line}>{line}</b>)}</span>}
           trigger={['hover', 'focus', 'click']}>
           <button type="button" className="mi-divergence__help" aria-label={text.helpLabel}>
             <Info size={11} aria-hidden="true" />
           </button>
         </Tooltip>
-        <span className="mi-divergence__pairs">
-          {text.pairsLine.replace('{pairs}', Object.values(text.pairNames).join(' · '))}
-        </span>
-        {(state.state === 'available' || state.state === 'empty') && onRetry ? (
-          // The badge is the trigger, not a label: pressing it asks the model again.
-          <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry}
-            title={text.judgeAgain}>
-            {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
-          </button>
+      </div>
+      <div className="mi-divergence__content">
+        {state.state === 'available' || state.state === 'empty' ? (
+          <div className="mi-divergence__meta">
+            {onRetry ? (
+              <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry} title={text.judgeAgain}>
+                {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
+              </button>
+            ) : <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span>}
+          </div>
         ) : null}
-        {(state.state === 'available' || state.state === 'empty') && !onRetry ? <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span> : null}
-      </header>
 
-      {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
-      {state.state === 'unavailable' ? (
-        <div className="mi-divergence__status" data-tone="error">
-          <b>{text.unavailable}</b>
-          {state.missing.length > 0 ? (
-            <span className="mi-divergence__status-sub">
-              {text.missingLegs.replace('{legs}', state.missing.map(leg => text.legs[leg]).join('、'))}
-            </span>
-          ) : (
-            <span className="mi-divergence__status-sub">{text.unavailableWhy[state.reason]}</span>
-          )}
-          {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
-        </div>
-      ) : null}
-      {state.state === 'empty' && !nothingCompared ? <p className="mi-divergence__note">{text.empty}</p> : null}
-      {nothingCompared ? (
-        <div className="mi-divergence__status" data-tone="error">
-          <b>{text.nothingCompared}</b>
-          <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')).join('、')}</span>
-        </div>
-      ) : null}
-
-      {state.state === 'available' ? (
-        <div className="mi-divergence__conclusion" data-tone="conclusion">
-        <ul className="mi-divergence__rows">
-          {state.rows.map(row => (
-            <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
-              title={row.invalidation ? `${text.invalidationLabel}：${row.invalidation}` : undefined}>
-              <div className="mi-divergence__line">
-                <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
-                {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
-              </div>
-              {row.mechanism ? <p className="mi-divergence__mechanism">{row.mechanism}</p> : null}
-            </li>
-          ))}
-        </ul>
-        </div>
-      ) : null}
-
-      {state.state === 'available' && withheld.length > 0 ? (
-        <p className="mi-divergence__withheld">
-          <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
-          {groupWithheld(withheld).map(group => (
-            <span key={group.key} className="mi-divergence__withheld-item" data-reason={group.reason}>
-              {text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')}
-              {group.count > 1 ? text.withheldGroup.replace('{count}', String(group.count)) : ''}
-            </span>
-          ))}
-        </p>
-      ) : null}
+        {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
+        {state.state === 'unavailable' ? (
+          <div className="mi-divergence__status" data-tone="error">
+            <b>{text.unavailable}</b>
+            {state.missing.length > 0 ? (
+              <span className="mi-divergence__status-sub">
+                {text.missingLegs.replace('{legs}', state.missing.map(leg => text.legs[leg]).join('、'))}
+              </span>
+            ) : (
+              <span className="mi-divergence__status-sub">{text.unavailableWhy[state.reason]}</span>
+            )}
+            {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
+          </div>
+        ) : null}
+        {state.state === 'empty' && !nothingCompared ? <p className="mi-divergence__note">{text.empty}</p> : null}
+        {nothingCompared ? (
+          <div className="mi-divergence__status" data-tone="error">
+            <b>{text.nothingCompared}</b>
+            <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')).join('、')}</span>
+          </div>
+        ) : null}
+        {state.state === 'available' ? (
+          <div className="mi-divergence__conclusion" data-tone="conclusion">
+            <ul className="mi-divergence__rows">
+              {state.rows.map(row => (
+                <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
+                  title={row.invalidation ? `${text.invalidationLabel}：${row.invalidation}` : undefined}>
+                  <div className="mi-divergence__line">
+                    <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
+                    {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
+                  </div>
+                  {row.mechanism ? <p className="mi-divergence__mechanism">{row.mechanism}</p> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {state.state === 'available' && withheld.length > 0 ? (
+          <p className="mi-divergence__withheld">
+            <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
+            {groupWithheld(withheld).map(group => (
+              <span key={group.key} className="mi-divergence__withheld-item" data-reason={group.reason}>
+                {text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')}
+                {group.count > 1 ? text.withheldGroup.replace('{count}', String(group.count)) : ''}
+              </span>
+            ))}
+          </p>
+        ) : null}
+      </div>
     </section>
   )
 }

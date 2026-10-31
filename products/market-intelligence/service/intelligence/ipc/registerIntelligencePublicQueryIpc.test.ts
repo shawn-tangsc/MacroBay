@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
+
 import type { JobRuntime } from '@platform/jobs'
 
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
 import { MARKET_INTELLIGENCE_QUERY_TYPES } from '../../../contracts/intelligenceQueryContracts'
 import { registerIntelligencePublicQueryIpc } from './registerIntelligencePublicQueryIpc'
+import { asMarketDivergenceInput } from './registerIntelligencePublicQueryIpc'
 
 const mockPublicQueryService = {
   querySentimentSnapshot: vi.fn(async () => ({ queryType: MARKET_INTELLIGENCE_QUERY_TYPES.sentimentSnapshot })),
@@ -262,3 +264,25 @@ function capitalResultWithFullEtf() {
     coreStablecoins: { observedAt: '2026-08-06T10:00:00.000Z', verifiedAt: '2026-08-06T10:00:00.000Z', currentUsd: 310, change1dUsd: 10, change1dPercent: 3, change7dUsd: 10, change7dPercent: 3, change30dUsd: 30, change30dPercent: 10 }, conclusion: 'partial' as const
   }
 }
+
+describe('market divergence route', () => {
+  const asMarketDivergenceInputForTest = asMarketDivergenceInput
+  const asOf = '2026-10-30T12:00:00.000Z'
+
+  it('accepts the mode the reader chose, and the bare form', () => {
+    // The handler used to accept only `asOf`, so the two-pass read (which sends a mode) was
+    // rejected as a malformed payload and every call came back "query failed".
+    expect(asMarketDivergenceInputForTest({ asOf })).toEqual({ asOf })
+    expect(asMarketDivergenceInputForTest({ asOf, mode: 'rules' })).toEqual({ asOf, mode: 'rules' })
+    expect(asMarketDivergenceInputForTest({ asOf, mode: 'judge' })).toEqual({ asOf, mode: 'judge' })
+  })
+
+  it.each([
+    ['an unknown mode', { asOf, mode: 'auto' }],
+    ['a stray field', { asOf, window: '7d' }],
+    ['no asOf', { mode: 'rules' }],
+    ['a non-canonical asOf', { asOf: '2026-10-30 12:00' }]
+  ])('refuses %s', (_name, payload) => {
+    expect(asMarketDivergenceInputForTest(payload)).toBeUndefined()
+  })
+})
