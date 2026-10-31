@@ -10543,6 +10543,13 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   border-bottom: 1px solid var(--border);
 }
 
+/* 默认模型条底部一行说明：哪些默认值是平台入口直接用、哪些只供产品功能读取。 */
+.model-service-default-consumer-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* 每行 = 可横向滚动的选择器区 + 右侧固定不动的展开按钮：
    窗口再窄也不会裁掉选择器，也不会让按钮滚出可视区域。 */
 .model-service-default-row {

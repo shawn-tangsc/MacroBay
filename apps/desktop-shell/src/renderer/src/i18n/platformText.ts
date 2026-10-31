@@ -359,6 +359,8 @@ export type PlatformText = {
     mcpDisabled: string
     mcpAuto: string
     mcpManual: string
+    /** 助手侧 MCP 执行未接入：此设置暂不生效，只保留已存的值。 */
+    mcpModeUnavailableHint: string
     enableWebSearch: string
     webSearchHint: string
     contextSourcesPlaceholder: string
@@ -623,6 +625,8 @@ export type PlatformText = {
     /** 默认模型条：第二行（绘画模型）默认收起，用「更多默认模型设置」展开。 */
     defaultModelsShowMore: string
     defaultModelsCollapse: string
+    /** 默认模型条底部：说清哪些默认值由平台入口直接用、哪些只供产品功能读取。 */
+    defaultModelsConsumerHint: string
     copyModelId: string
     copied: string
     nonChatModelHint: string
@@ -1423,6 +1427,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpDisabled: '禁用',
       mcpAuto: '自动',
       mcpManual: '手动',
+      mcpModeUnavailableHint: '助手的 MCP 执行尚未接入，此处设置暂不生效；需要 MCP 请使用智能体。',
       enableWebSearch: '启用网页搜索',
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
       contextSourcesPlaceholder: '知识库与上下文源将在后续平台能力中接入。',
@@ -1675,13 +1680,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelAgent: '默认智能体模型',
       defaultModelAgentHint: '新建智能体时使用',
       defaultModelFast: '快速模型',
-      defaultModelFastHint: '轻量任务使用',
+      defaultModelFastHint: '供产品功能读取（轻量任务），平台自身不调用',
       defaultModelTranslation: '翻译模型',
-      defaultModelTranslationHint: '翻译任务使用',
+      defaultModelTranslationHint: '供产品功能读取（翻译任务），平台自身不调用',
       defaultModelImage: '绘画模型',
       defaultModelImageHint: '图片生成使用',
       defaultModelsShowMore: '更多默认模型设置',
       defaultModelsCollapse: '收起',
+      defaultModelsConsumerHint:
+        '助手、智能体、绘画由对应入口直接使用；快速与翻译模型只作为共用默认值被产品功能读取。没有产品用到时，选了也不会有可见效果。',
       copyModelId: '复制',
       copied: '已复制',
       nonChatModelHint: '非聊天模型不会出现在对话模型选择中',
@@ -2445,6 +2452,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpDisabled: 'Disabled',
       mcpAuto: 'Auto',
       mcpManual: 'Manual',
+      mcpModeUnavailableHint:
+        'Assistant-side MCP execution is not connected yet, so this setting has no effect. Use an agent when you need MCP.',
       enableWebSearch: 'Enable web search',
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
       contextSourcesPlaceholder: 'Knowledge and context sources will connect through later platform capabilities.',
@@ -2699,13 +2708,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelAgent: 'Default agent model',
       defaultModelAgentHint: 'Used for new agents',
       defaultModelFast: 'Fast model',
-      defaultModelFastHint: 'Used for lightweight tasks',
+      defaultModelFastHint: 'Read by product features (lightweight tasks); the platform itself does not call it',
       defaultModelTranslation: 'Translation model',
-      defaultModelTranslationHint: 'Used for translations',
+      defaultModelTranslationHint: 'Read by product features (translation); the platform itself does not call it',
       defaultModelImage: 'Image model',
       defaultModelImageHint: 'Used for image generation',
       defaultModelsShowMore: 'More default model settings',
       defaultModelsCollapse: 'Collapse',
+      defaultModelsConsumerHint:
+        'Assistant, agent, and image defaults are used directly by their own entry points. The fast and translation defaults are shared values read by product features only, so they have no visible effect until a product uses them.',
       copyModelId: 'Copy',
       copied: 'Copied',
       nonChatModelHint: 'Non-chat models do not appear in chat model selection.',

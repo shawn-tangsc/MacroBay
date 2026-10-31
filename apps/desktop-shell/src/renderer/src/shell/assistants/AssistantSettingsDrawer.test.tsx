@@ -25,4 +25,24 @@ describe('AssistantSettingsDrawer', () => {
     expect(markup).toContain('data-assistant-model-note')
     expect(markup).not.toContain('默认模型')
   })
+
+  it('keeps the MCP mode read-only because the assistant runtime has no MCP execution', () => {
+    const labels = platformText['zh-CN'].assistants
+    const markup = renderToStaticMarkup(
+      <AssistantSettingsForm
+        labels={labels}
+        name="Default Assistant"
+        prompt="Help."
+        settings={createDefaultAssistantSettings()}
+        onNameChange={() => undefined}
+        onPromptChange={() => undefined}
+        onSettingsChange={() => undefined}
+      />
+    )
+
+    // 假可用收口：能点但没有执行链路的下拉比没有下拉更伤信任。
+    expect(markup).toContain('data-assistant-mcp-unavailable')
+    expect(markup).toContain(labels.mcpModeUnavailableHint)
+    expect(markup).toContain('ant-select-disabled')
+  })
 })
