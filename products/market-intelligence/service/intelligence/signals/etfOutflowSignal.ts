@@ -52,7 +52,7 @@ export type EtfOutflowSignalInput = Readonly<{
 export function buildEtfOutflowSignal(input: EtfOutflowSignalInput): ModuleSignal | undefined {
   const windows = computeEtfCumulativeFlow(input.rows, [etfFlowPolicy.signalWindowDays])
   const window = windows?.find(candidate => candidate.windowDays === etfFlowPolicy.signalWindowDays)
-  const newest = input.rows.at(-1)
+  const newest = newestByTradingDate(input.rows)
   if (!window || !newest) return undefined
 
   const values = Object.freeze({
@@ -119,6 +119,23 @@ function build(input: Readonly<{
   // The contract check runs on the way out, not only in tests: a rule that publishes a shape the
   // reader refuses would leave the chip blank with nothing failing.
   return isModuleSignal(signal) ? signal : undefined
+}
+
+/**
+ * The row with the latest trading date, regardless of the order the caller handed them in.
+ *
+ * Not `.at(-1)`: the rows are only sorted by the sum below, which does nothing to the array itself,
+ * and nothing in this rule's input promises an order. A caller that lists the newest arrival last
+ * would hand a late-arriving flow the "newest" slot, move the bucket to the day it landed, and the
+ * chip would still render — with the wrong date on it. Taking the maximum is the difference between
+ * reading the data's own trading day and trusting whoever assembled the list.
+ */
+function newestByTradingDate(rows: EtfFlowRows): EtfFlowRows[number] | undefined {
+  let newest: EtfFlowRows[number] | undefined
+  for (const row of rows) {
+    if (!newest || row.tradingDate > newest.tradingDate) newest = row
+  }
+  return newest
 }
 
 /** The UTC midnight of a trading date, so the signal's instant is the day it describes. */

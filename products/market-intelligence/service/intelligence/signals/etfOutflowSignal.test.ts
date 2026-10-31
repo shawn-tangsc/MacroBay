@@ -73,6 +73,23 @@ describe('ETF outflow signal', () => {
     expect(signal.dedupeKey).not.toContain('2026-10-30')
   })
 
+  it('reads the same trading day however the caller ordered the rows', () => {
+    // Nothing in the input promises an order, and nothing checks it: the rule has to find the
+    // newest trading date itself. Sorted by arrival instead, a late flow would take the "newest"
+    // slot and move the bucket to the day it landed — the chip would still draw, with a wrong date.
+    const rows = flows([threshold, threshold, threshold])
+    const arrivals = [rows[0]!, { ...rows[1]!, observedAt: '2026-10-30T03:00:00.000Z' }, rows[2]!]
+    const ordered = buildEtfOutflowSignal({ asset: 'btc', rows, asOf: '2026-10-30T04:00:00.000Z' })!
+    const shuffled = buildEtfOutflowSignal({ asset: 'btc', rows: arrivals, asOf: '2026-10-30T04:00:00.000Z' })!
+    const reversed = buildEtfOutflowSignal({ asset: 'btc', rows: [...arrivals].reverse(), asOf: '2026-10-30T04:00:00.000Z' })!
+
+    expect(shuffled.observedAt).toBe(ordered.observedAt)
+    expect(shuffled.dedupeKey).toBe(ordered.dedupeKey)
+    expect(reversed.dedupeKey).toBe(ordered.dedupeKey)
+    expect(shuffled.values).toEqual(ordered.values)
+    expect(shuffled.observedAt).toBe('2026-10-28T00:00:00.000Z')
+  })
+
   it('keys each asset separately', () => {
     expect(signalFor([threshold, threshold, threshold], 'eth')!.dedupeKey).toContain(':eth:')
   })
