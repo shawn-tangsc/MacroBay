@@ -234,6 +234,30 @@ describe('daily brief share card in English', () => {
     expect(rendered.textContent).toContain(`${text.conclusion.invalidation}: Stablecoins turn positive.`)
   })
 
+  it('names the basis of a forecast as its premises and falsifiers', async () => {
+    const base = briefing()
+    const withFalsifier: DailyBriefingDocument = {
+      ...base,
+      conclusion: {
+        ...base.conclusion!,
+        conditions: ['ETF outflows keep running for two sessions'],
+        counterEvidence: [{ statement: 'Two straight days of ETF inflows.', citations: [] }]
+      }
+    }
+    const rendered = await render(withFalsifier)
+    const cards = [...rendered.querySelectorAll('.mi-brief-poster__basis-card')]
+
+    // The basis belongs to the forecast the editor just made, so the headings say what that forecast
+    // needs and what would overturn it — not "conditions" and "counter-evidence" of a past call.
+    expect(cards.map((card) => card.querySelector('h3')?.textContent)).toEqual(['Premises', 'Falsifiers'])
+    expect(cards[0]?.textContent).toContain('ETF outflows keep running for two sessions')
+    expect(cards[1]?.textContent).toContain('Two straight days of ETF inflows.')
+
+    const chinese = await renderWith(withFalsifier, zhText, 'zh-CN')
+    expect([...chinese.querySelectorAll('.mi-brief-poster__basis-card h3')].map((heading) => heading.textContent))
+      .toEqual(['判断前提', '证伪条件'])
+  })
+
   it('shows only the two surprise cards and keeps the baseline out of the row', async () => {
     const rendered = await render(withFocus({
       consensus: '3.2%',
