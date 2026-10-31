@@ -30,9 +30,20 @@ export type DivergenceLegReader = Readonly<{
    *
    * Not the sentiment snapshot: its aggregates only exist for market-wide scopes, so an
    * asset-scoped or 24h-labelled read answers `unknown` and the leg silently disappears.
+   *
+   * Three outcomes, never one `undefined`: a reading (0% included — the headlines took a side and
+   * none of them was bearish), a read that found nothing to score, and a read that failed. The
+   * card says "today is quiet" for the second and "today I do not know" for the third, so a single
+   * absent value cannot carry both.
    */
-  sentiment: () => Promise<Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }> | undefined>
+  sentiment: () => Promise<DivergenceSentimentLeg>
 }>
+
+/** What the sentiment leg answered. `empty` is a fact about the day; `unavailable` is about us. */
+export type DivergenceSentimentLeg =
+  | Readonly<{ state: 'available'; bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }>
+  | Readonly<{ state: 'empty'; reason: 'no-scored-items' }>
+  | Readonly<{ state: 'unavailable' }>
 
 export async function queryMarketDivergenceAsync(input: Readonly<{
   asOf: string
@@ -61,9 +72,30 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
         return undefined
       }
     }
+    // The sentiment leg answers in three states, so it is folded here rather than through `read`:
+    // "nothing worth scoring" is a quiet day, "could not read" is a fault, and only the second is
+    // allowed to read as a missing reading.
+    const readSentiment = async (): Promise<DivergenceInputs['sentiment']> => {
+      try {
+        const leg = await input.read.sentiment()
+        if (leg.state === 'available') {
+          return {
+            bearishSharePercent: leg.bearishSharePercent, scoredCount: leg.scoredCount, observedAt: leg.observedAt,
+            ...(leg.headlines ? { headlines: leg.headlines } : {})
+          }
+        }
+        if (leg.state === 'unavailable') faulted.push('sentiment')
+        else missing.push('sentiment')
+        return undefined
+      } catch (error) {
+        faulted.push('sentiment')
+        console.error('[divergence] leg sentiment threw:', error instanceof Error ? `${error.name}: ${error.message}` : String(error))
+        return undefined
+      }
+    }
     const [stablecoin, etf, openInterest, funding, price, sentiment] = await Promise.all([
       read('stablecoin', input.read.stablecoin), read('etf', input.read.etf), read('open-interest', input.read.openInterest),
-      read('funding', input.read.funding), read('price', input.read.price), read('sentiment', input.read.sentiment)
+      read('funding', input.read.funding), read('price', input.read.price), readSentiment()
     ])
     if (missing.length + faulted.length === 6) return divergenceUnavailable('all-legs-missing', [...missing, ...faulted])
     const legs: DivergenceInputs = {
@@ -95,12 +127,20 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
  *
  * `directionalCount` excludes neutral items on purpose: "most of what was said was bearish" is a
  * statement about the headlines that took a side, not about the volume of coverage.
+ *
+ * That denominator also decides whether a share may exist at all. With no headline taking a side
+ * there is no share to publish — writing 0% would turn "nobody was scored" into "nobody is
+ * bearish", which is a conclusion the day does not support.
  */
-export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines: readonly string[] }> | undefined {
-  if (view.state !== 'available' || !view.summary) return undefined
+export function readSentimentLeg(view: NewsSentimentView): DivergenceSentimentLeg {
+  // A read that succeeded but found nothing in its window is a quiet day, not a fault. Only a read
+  // that failed, or one whose shape cannot yield a share at all, is allowed to call itself unknown.
+  if (view.state === 'unavailable') return { state: 'unavailable' }
+  if (view.state === 'empty') return { state: 'empty', reason: 'no-scored-items' }
+  if (!view.summary) return { state: 'unavailable' }
   const directional = view.summary.directionalCount
+  if (directional <= 0) return { state: 'empty', reason: 'no-scored-items' }
   const bearishItems = view.items.filter(item => item.polarity === 'bearish')
-  if (directional <= 0 || bearishItems.length === 0) return undefined
   // The titles travel with the share: a judge that only knows "72% bearish" can write a number,
   // not a sentence about what the market was actually told.
   const headlines = bearishItems
@@ -110,6 +150,7 @@ export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePe
     .map(item => item.title.trim().slice(0, 90))
     .filter(title => title.length > 0)
   return {
+    state: 'available',
     bearishSharePercent: Math.round((bearishItems.length / directional) * 100),
     scoredCount: directional,
     observedAt: view.summary.latestItemAt ?? view.generatedAt,

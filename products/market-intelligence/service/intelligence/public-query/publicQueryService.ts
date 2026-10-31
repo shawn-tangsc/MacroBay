@@ -53,7 +53,7 @@ import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
-import { bearishShare, queryMarketDivergenceAsync, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
 import { createPriceLegReader } from '../divergence/priceLegReading'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
@@ -426,9 +426,10 @@ function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: s
     // five-minute boundary, and that made the card say "no price" while the price card showed one.
     price: () => readPriceLeg(asOf),
     sentiment: async () => {
-      if (!newsSentimentQuery) return undefined
+      // An unwired reader is a fault, not a quiet day: the card must say it could not read.
+      if (!newsSentimentQuery) return { state: 'unavailable' }
       const view = await newsSentimentQuery.query({ asOf, window: '24h', scope: 'market', direction: 'all', limit: 100 })
-      return bearishShare(view)
+      return readSentimentLeg(view)
     }
   }
 }

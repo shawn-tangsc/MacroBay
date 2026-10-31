@@ -65,6 +65,23 @@ describe('divergence panel', () => {
     expect(markup).toContain('的时间对不上')
     expect(markup).toContain(text.legs.sentiment)
   })
+
+  it('reads a quiet news day and a failed read as two different sentences', () => {
+    const quiet = render({
+      state: 'available', rows: [row],
+      withheld: [{ pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' }]
+    })
+    const failed = render({
+      state: 'available', rows: [row],
+      withheld: [{ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' }]
+    })
+    // "No headline took a side" is a fact about the day; "the read failed" is a fault. A reader
+    // acts differently on each, so the card must not print one sentence for both.
+    expect(quiet).toContain(text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment))
+    expect(quiet).not.toContain(text.withheldReasons['leg-unavailable'].replace('{leg}', text.legs.sentiment))
+    expect(failed).toContain(text.withheldReasons['leg-unavailable'].replace('{leg}', text.legs.sentiment))
+    expect(failed).not.toContain(text.sentimentNoScoredItems.replace('{leg}', text.legs.sentiment))
+  })
 })
 
 describe('withheld grouping', () => {

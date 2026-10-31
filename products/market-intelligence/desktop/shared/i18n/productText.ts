@@ -480,6 +480,7 @@ export const productText = {
                 'leg-stale': '{leg} 太旧了',
                 'leg-unavailable': '{leg} 读取失败，不是没数据'
               },
+              sentimentNoScoredItems: '{leg}：今天没有明确表态的标题',
               legAsOf: '{leg} 截至 {at}',
               legs: {
                 stablecoin: '稳定币 7 天', etf: 'ETF 3 日净流', 'open-interest': '持仓 24 小时',
@@ -2184,6 +2185,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'leg-stale': '{leg} is too old',
                 'leg-unavailable': 'reading {leg} failed, which is not the same as no data'
               },
+              sentimentNoScoredItems: '{leg}: no headline took a side today',
               legAsOf: '{leg} as of {at}',
               legs: {
                 stablecoin: 'Stablecoins 7d', etf: 'ETF net flow 3d', 'open-interest': 'Open interest 24h',

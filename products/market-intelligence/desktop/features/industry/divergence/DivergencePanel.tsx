@@ -64,7 +64,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
         {nothingCompared ? (
           <div className="mi-divergence__status" data-tone="error">
             <b>{text.nothingCompared}</b>
-            <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')).join('、')}</span>
+            <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join('、')}</span>
           </div>
         ) : null}
         {state.state === 'available' ? (
@@ -88,7 +88,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
             {groupWithheld(withheld).map(group => (
               <span key={group.key} className="mi-divergence__withheld-item" data-reason={group.reason}>
-                {text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')}
+                {withheldLine(text, group, when)}
                 {group.count > 1 ? text.withheldGroup.replace('{count}', String(group.count)) : ''}
               </span>
             ))}
@@ -97,6 +97,18 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
       </div>
     </section>
   )
+}
+
+/**
+ * The sentence for one refused pair.
+ *
+ * A sentiment leg that answered "nothing took a side" is a fact about the day, so it keeps its own
+ * line instead of the generic "we did not get it" — the reader must be able to tell a quiet day
+ * from a failed read.
+ */
+function withheldLine(text: DivergencePanelText, group: ReturnType<typeof groupWithheld>[number], when: (value: string) => string): string {
+  if (group.reason === 'leg-missing' && group.leg === 'sentiment') return text.sentimentNoScoredItems.replace('{leg}', text.legs[group.leg])
+  return text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')
 }
 
 /**

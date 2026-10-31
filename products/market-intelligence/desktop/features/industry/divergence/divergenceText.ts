@@ -20,6 +20,13 @@ export type DivergencePanelText = Readonly<{
   unavailable: string
   withheldTitle: string
   withheldReasons: Readonly<Record<'window-mismatch' | 'leg-missing' | 'leg-stale' | 'leg-unavailable', string>>
+  /**
+   * A sentiment leg that was read and had nothing to score. "{leg}" is the leg's own short name.
+   *
+   * The generic `leg-missing` line would say "we did not get the reading", which turns a quiet news
+   * day into a fault. These are the two facts a reader acts on differently, so they get two lines.
+   */
+  sentimentNoScoredItems: string
   legs: Readonly<Record<DivergenceLegId, string>>
   directions: Readonly<Record<DivergenceDirection, string>>
   pairs: Readonly<Record<DivergencePairId, Readonly<{ mechanism: string; invalidation: string }>>>
