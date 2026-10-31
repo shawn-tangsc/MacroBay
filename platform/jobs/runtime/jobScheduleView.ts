@@ -127,5 +127,9 @@ function projectLastOutcome(status: JobStatus | undefined): JobScheduleLastOutco
 }
 
 function latestRun(source: JobScheduleSource, definitionId: string): JobRunRecord | null {
-  return source.listRuns({ definitionId, limit: 1 })[0] ?? null
+  // `newestFirst` is mandatory here, not cosmetic: run ids are `run-sqlite-<sequence>` and the
+  // default order compares that text, so once the shared sequence passes 9999 the newest row sorts
+  // below `…-9999` and this projection silently reports a week-old run as "last run". The settings
+  // page shows this field, so the time order has to come from `created_at`.
+  return source.listRuns({ definitionId, limit: 1, newestFirst: true })[0] ?? null
 }

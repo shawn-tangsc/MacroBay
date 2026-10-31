@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { JobDefinition, JobRunRecord } from '../contracts/jobTypes'
+import type { JobDefinition, JobRunQuery, JobRunRecord } from '../contracts/jobTypes'
 import { projectJobSchedules } from './jobScheduleView'
 
 const now = new Date('2026-07-17T09:30:00.000Z')
@@ -70,6 +70,30 @@ describe('projectJobSchedules', () => {
     expect(views[0]?.lastRunStatus).toBe('failed')
     expect(views[0]?.lastDurationMs).toBe(4_000)
     expect(views[0]?.nextRunAt).toBe('2026-07-17T09:15:05.000Z')
+  })
+
+  it('reads the newest run by time, not by run id text, once the shared sequence passes 9999', () => {
+    const calls: JobRunQuery[] = []
+    // Exactly what the repository does: default order compares the id text, so `…-9999` sits above
+    // `…-23789` and the older run wins; `newestFirst` compares `created_at`.
+    const runs: JobRunRecord[] = [
+      run({ id: 'run-sqlite-9999', definitionId: 'job-hi-freq', status: 'completed', createdAt: '2026-07-10T08:00:00.000Z' }),
+      run({ id: 'run-sqlite-23789', definitionId: 'job-hi-freq', status: 'failed', createdAt: '2026-07-17T09:00:00.000Z' })
+    ]
+    const views = projectJobSchedules({
+      listSchedules: () => [definition({ id: 'job-hi-freq', title: 'High frequency job' })],
+      listRuns: (query) => {
+        calls.push(query ?? {})
+        const ordered = [...runs].sort((a, b) => query?.newestFirst
+          ? b.createdAt.localeCompare(a.createdAt)
+          : b.id.localeCompare(a.id))
+        return ordered.slice(0, query?.limit ?? ordered.length)
+      }
+    }, { now })
+
+    expect(calls).toEqual([{ definitionId: 'job-hi-freq', limit: 1, newestFirst: true }])
+    expect(views[0]?.lastRunAt).toBe('2026-07-17T09:00:00.000Z')
+    expect(views[0]?.lastOutcome).toBe('failed')
   })
 
   it('maps cancelled runs to skipped and keeps in-flight runs without a terminal outcome', () => {
