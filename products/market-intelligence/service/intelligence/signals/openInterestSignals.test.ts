@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { liquidationHintPolicy, type PositioningBar } from '../../../contracts/openInterestPositioning'
 import { isModuleSignal } from '../../../contracts/moduleSignal'
-import { openInterestSignals, openInterestSignalRule } from './openInterestSignals'
+import { openInterestSignals, openInterestSignalsFromHistory, openInterestSignalRule } from './openInterestSignals'
 
 const bucket = 15 * 60_000
 const start = Date.parse('2026-10-31T00:00:00.000Z')
@@ -77,5 +77,43 @@ describe('open interest signals', () => {
     const again = openInterestSignals({ asset: 'btc', bars: input(), asOf })
     expect(first[0]!.dedupeKey).toBe(again[0]!.dedupeKey)
     expect(first[0]!.dedupeKey).toContain('open-interest:oi-liquidation-proxy:btc:')
+  })
+})
+
+describe('signals read from the panel query', () => {
+  const hint = (asset: 'btc' | 'eth', dropPct: number) => ({
+    observedAt: '2026-10-31T14:30:00.000Z', asset, dropPct, volumeMultiple: 3.1, notionalUsd: 7.4e9
+  })
+
+  it('maps the hints the query already marked, without running the mark again', () => {
+    const signals = openInterestSignalsFromHistory({
+      state: 'available', asOf: '2026-10-31T14:45:00.000Z', window: '24h',
+      btc: [], eth: [], liquidationHints: [hint('btc', -1.8), hint('eth', -2.9)], liquidationHintsState: 'available'
+    }, '2026-10-31T14:45:00.000Z')
+    expect(signals.map(signal => [signal.asset, signal.severity])).toEqual([['btc', 'medium'], ['eth', 'high']])
+    expect(signals.every(signal => signal.readiness === 'available')).toBe(true)
+  })
+
+  it('does not read an unreadable volume leg as a quiet market', () => {
+    const signals = openInterestSignalsFromHistory({
+      state: 'available', asOf: '2026-10-31T14:45:00.000Z', window: '24h',
+      btc: [], eth: [], liquidationHintsState: 'unavailable'
+    }, '2026-10-31T14:45:00.000Z')
+    expect(signals).toHaveLength(2)
+    expect(signals.every(signal => signal.readiness === 'unavailable')).toBe(true)
+  })
+
+  it('reports a failed history read for both assets, since it cannot name one', () => {
+    const signals = openInterestSignalsFromHistory({ state: 'unavailable', failureCode: 'open-interest-history-query-unavailable' }, '2026-10-31T14:45:00.000Z')
+    expect(signals.map(signal => signal.asset)).toEqual(['btc', 'eth'])
+    expect(signals.every(signal => signal.readiness === 'unavailable')).toBe(true)
+  })
+
+  it('keeps only the asset each hint belongs to', () => {
+    const signals = openInterestSignalsFromHistory({
+      state: 'available', asOf: '2026-10-31T14:45:00.000Z', window: '24h',
+      btc: [], eth: [], liquidationHints: [hint('eth', -1.9)], liquidationHintsState: 'available'
+    }, '2026-10-31T14:45:00.000Z')
+    expect(signals.map(signal => signal.asset)).toEqual(['eth'])
   })
 })
