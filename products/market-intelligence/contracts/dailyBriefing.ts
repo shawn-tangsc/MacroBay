@@ -357,18 +357,29 @@ export type BriefingPriorConclusion = Readonly<{
 /**
  * The structured synthesis the editorial model writes over the window's prior conclusions.
  *
- * `direction` is the editor's own verdict after weighing them; the remaining fields make the
- * reasoning auditable: what regime changed, what was confirmed or refuted, the core tension, what
- * would overturn the read, and which frozen facts support it.
+ * `direction` is the editor's own verdict after weighing them; `summary` must carry the mechanism
+ * chain and the forward view, not a recap. `outlook`, `conditions`, `counterEvidence` and `watch`
+ * make the next-1-3-day base case auditable: what must hold, what would falsify it, and which
+ * observable catalysts decide it. The fact-layer conclusion's own conditions are never reused.
  */
 export type BriefingConclusionSynthesis = Readonly<{
   direction: AnalysisConclusionDirection
   confidence: 'high' | 'medium' | 'low'
+  /** Mechanism chain plus the next-1-3-day base case; must be forward-looking prose. */
   summary: string
+  /** The base case for the next 1-3 days: explicit bias and BTC-vs-ETH relative strength. */
+  outlook: string
+  /** Premises the base case needs to hold; derived from this forecast, never the old analysis. */
+  conditions: readonly string[]
+  /** Falsifiers: the observable conditions that would prove this forecast wrong. */
+  counterEvidence: readonly string[]
+  /** Catalysts and indicators to watch, each carrying a FACTS display value. */
+  watch: readonly string[]
   regimeChange: string
   confirmed: readonly string[]
   refuted: readonly string[]
   coreTension: string
+  /** The single clearest observable threshold that would overturn the base case. */
   whatWouldChange: string
   /** Frozen document fact ids (news:/macro:/data:) this synthesis stands on. */
   evidenceRefs: readonly string[]

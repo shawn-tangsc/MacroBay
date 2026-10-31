@@ -1,4 +1,10 @@
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import {
+  briefingDisplayNumbers,
+  formatBriefingChangeDisplay,
+  formatBriefingValueDisplay,
+  formatPercentDisplay
+} from './dailyBriefingFactDisplay'
 
 /**
  * Fraction digits kept for each fact number. The collector stores at most six places today, but
@@ -52,6 +58,20 @@ export function buildNumericFactWhitelist(document: DailyBriefingDocument): Read
     }
   }
   visit(document)
+  // The prose quotes a fact's `display`, not its raw stored value, so the legal scaled spellings
+  // (`-6.43` for `-643200000`, `0.00` for `0.003619`) have to be legal fact numbers too.
+  const locale = document.edition.locale
+  for (const row of [
+    ...document.data.market,
+    ...document.data.funds,
+    ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])
+  ]) {
+    for (const token of briefingDisplayNumbers(formatBriefingValueDisplay(row.value, locale))) remember(token)
+    for (const token of briefingDisplayNumbers(formatBriefingChangeDisplay(row.change, locale))) remember(token)
+  }
+  if (document.data.policyPath) {
+    for (const token of briefingDisplayNumbers(formatPercentDisplay(document.data.policyPath.probability))) remember(token)
+  }
   // Safe count anchors: the day's window, the candidate sets and the citation list. Clock times
   // (`HH:mm`) are stripped from the prose before this function is consulted, so they never appear.
   add(24)

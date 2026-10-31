@@ -23,7 +23,7 @@ import {
   selectBriefingDataFacts
 } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
-import { validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
+import { validateConclusionSynthesis, briefingConclusionBasis } from './dailyBriefingConclusionValidation'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -60,6 +60,13 @@ export type DailyBriefingValidationFailure =
   | 'copied-conclusion'
   | 'missing-conclusion-evidence'
   | 'missing-conclusion-divergence'
+  | 'missing-forward-view'
+  | 'missing-mechanism'
+  | 'data-only-summary'
+  | 'missing-outlook'
+  | 'repeated-direction'
+  | 'forbidden-forecast'
+  | 'invalid-number-format'
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
@@ -238,9 +245,13 @@ export function validateDailyBriefingEditorial(
     ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : []),
     ...(conclusionSynthesis ? [
       conclusionSynthesis.summary,
+      conclusionSynthesis.outlook,
       conclusionSynthesis.regimeChange,
       conclusionSynthesis.coreTension,
       conclusionSynthesis.whatWouldChange,
+      ...conclusionSynthesis.conditions,
+      ...conclusionSynthesis.counterEvidence,
+      ...conclusionSynthesis.watch,
       ...conclusionSynthesis.confirmed,
       ...conclusionSynthesis.refuted
     ] : [])].join('\n')
@@ -364,10 +375,18 @@ export function applyDailyBriefingEditorial(
         ...document.conclusion,
         direction: editorial.conclusionSynthesis.direction,
         summary: editorial.conclusionSynthesis.summary,
+        // The published basis must belong to this forecast. The earlier analysis conclusion's
+        // conditions, invalidations and counter evidence are for a different call and a different
+        // horizon, so they are replaced by the synthesis's own premises and falsifiers — or, when a
+        // legacy recap carries no forward view, dropped instead of rendered as if they still held.
+        ...briefingConclusionBasis(editorial.conclusionSynthesis),
         synthesis: 'agent' as const,
         synthesizedFrom: Object.freeze(priorConclusions.map((conclusion) => conclusion.id)),
         synthesisDetail: Object.freeze({
           ...editorial.conclusionSynthesis,
+          conditions: Object.freeze([...editorial.conclusionSynthesis.conditions]),
+          counterEvidence: Object.freeze([...editorial.conclusionSynthesis.counterEvidence]),
+          watch: Object.freeze([...editorial.conclusionSynthesis.watch]),
           confirmed: Object.freeze([...editorial.conclusionSynthesis.confirmed]),
           refuted: Object.freeze([...editorial.conclusionSynthesis.refuted]),
           evidenceRefs: Object.freeze([...editorial.conclusionSynthesis.evidenceRefs])

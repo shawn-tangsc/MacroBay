@@ -37,7 +37,20 @@ const document = (): DailyBriefingDocument => ({
       state: 'available', value: { number: -1.1, format: 'percent' }, change: null,
       window: '24h', observedAt: '2026-10-30T00:25:00.000Z'
     }],
-    funds: [],
+    funds: [
+      {
+        id: 'etf-btc', group: 'funds', labelKey: 'dailyBriefing.row.etfBtc',
+        importance: { tier: 'support', source: 'rule', reasonCode: 'etf-flow' },
+        state: 'available', value: { number: -643_200_000, format: 'flow-usd' }, change: null,
+        window: 'trading-day', observedAt: '2026-10-30T00:20:00.000Z'
+      },
+      {
+        id: 'funding-btc', group: 'funds', labelKey: 'dailyBriefing.row.fundingBtc',
+        importance: { tier: 'support', source: 'rule', reasonCode: 'funding-extreme' },
+        state: 'available', value: { number: 0.0036, format: 'percent' }, change: null,
+        window: '24h', observedAt: '2026-10-30T00:20:00.000Z'
+      }
+    ],
     sentiment: {
       fearGreed: null,
       news: { state: 'available', counts: { bearish: 1, bullish: 0, mixed: 0, neutral: 0 }, itemCount: 1 }
@@ -80,13 +93,17 @@ const bullishBriefPrior = (): BriefingPriorConclusion => ({
 const synthesis = (overrides: Record<string, unknown> = {}) => ({
   direction: 'bearish',
   confidence: 'high',
-  summary: 'BTC 偏空：美国 CPI 同比 3.4%，高于预期 3.2%，降息预期被压低；24 小时内 BTC 下跌 1.1%。盘中一度转多，但 CPI 公布后买盘回吐。',
-  regimeChange: '与上一交易日相比，BTC 由持平转为下跌 1.1%，CPI 超预期后反弹没有延续。',
+  summary: '美国 CPI 同比 3.4%，高于预期 3.2%，通过压低降息预期导致实际利率上行，BTC 因此承压下跌 1.10%。未来两到三个交易日基准情形偏空：BTC 弱于 ETH，若 ETF 流出维持在 -6.43 亿美元附近，反弹空间有限。',
+  outlook: '未来两到三个交易日基准情形偏空：BTC 弱于 ETH，ETF 流出 -6.43 亿美元尚未收窄，反弹空间受限。',
+  conditions: ['ETF 流出维持在 -6.43 亿美元附近，且资金费率不转负。'],
+  counterEvidence: ['若 ETF 转为净流入 6.43 亿美元且 BTC 收复 1.10% 跌幅，则偏空判断失效。'],
+  watch: ['ETF 净流出 -6.43 亿美元是否收窄', 'BTC 资金费率 0.00% 是否转负', '美国 CPI 3.4% 后的降息预期'],
+  regimeChange: '与上一交易日相比，BTC 由持平转为下跌 1.10%，CPI 超预期后反弹没有延续。',
   confirmed: ['CPI 3.4% 高于预期 3.2%，BTC 的反弹在数据公布后停止。'],
   refuted: ['CPI 回落后 BTC 会反弹的判断被 3.4% 的实际值推翻。'],
-  coreTension: 'CPI 3.4% 高于预期 3.2%，但 BTC 只下跌 1.1%，卖盘没有加速。',
-  whatWouldChange: 'BTC 收复 1.1% 跌幅且 CPI 修正回 3.2%，会推翻偏空判断。',
-  evidenceRefs: ['data:btc', 'macro:US.CPI'],
+  coreTension: 'CPI 3.4% 高于预期 3.2%，但 BTC 只下跌 1.10%，卖盘没有加速。',
+  whatWouldChange: '若 BTC 收复 1.10% 跌幅且 ETF 转为净流入 6.43 亿美元，则偏空判断失效。',
+  evidenceRefs: ['data:btc', 'macro:US.CPI', 'data:etf-btc'],
   ...overrides
 })
 
@@ -114,7 +131,7 @@ describe('daily briefing conclusion synthesis', () => {
     expect(applied.conclusion?.direction).toBe('bearish')
     expect(applied.conclusion?.summary).toBe(synthesis().summary)
     expect(applied.conclusion?.synthesisDetail).toMatchObject({
-      confidence: 'high', evidenceRefs: ['data:btc', 'macro:US.CPI']
+      confidence: 'high', evidenceRefs: ['data:btc', 'macro:US.CPI', 'data:etf-btc']
     })
   })
 
@@ -159,16 +176,58 @@ describe('daily briefing conclusion synthesis', () => {
     const priors = [bearishPrior(), bullishBriefPrior()]
     const averaged = synthesis({
       direction: 'range',
+      summary: 'CPI 3.4% 高于预期 3.2%，通过利率渠道压制 BTC，BTC 下跌 1.10%。未来两到三个交易日基准情形震荡：BTC 弱于 ETH。',
+      outlook: '未来两到三个交易日基准情形震荡：BTC 弱于 ETH，区间内波动。',
       regimeChange: '信号交织，方向没有延续。',
-      summary: '资金面与价格给出的方向并不一致，价格暂时没有明确选择。',
       coreTension: '两股力量大致抵消。',
-      whatWouldChange: '任意一方重新占优就会改变判断。',
+      whatWouldChange: '若 CPI 回到 3.2% 且 BTC 收复 1.10% 跌幅，则判断改变。',
       confirmed: [],
       refuted: []
     })
     expect(validateDailyBriefingEditorial(editorial(averaged), document(), 'zh-CN', [], priors))
       .toMatchObject({ ok: false, failureCode: 'missing-conclusion-divergence' })
     expect(validateDailyBriefingEditorial(editorial(synthesis()), document(), 'zh-CN', [], priors).ok).toBe(true)
+  })
+
+  it('publishes the forecast premises and falsifiers, never the old analysis conditions', () => {
+    const stale = document()
+    const withStaleBasis: DailyBriefingDocument = {
+      ...stale,
+      conclusion: {
+        ...stale.conclusion!,
+        conditions: ['旧分析：稳定币收缩'],
+        counterEvidence: [{ statement: '旧反证：ETF 流入', citations: [1] }],
+        invalidations: [{ asset: 'BTC', horizonEnd: '2026-10-31', text: '旧失效条件' }]
+      }
+    }
+    const validation = validateDailyBriefingEditorial(editorial(synthesis()), withStaleBasis, 'zh-CN', [], [bearishPrior()])
+    expect(validation.ok).toBe(true)
+    if (!validation.ok) return
+    const applied = applyDailyBriefingEditorial(withStaleBasis, validation.value, { promptVersion: 'v2', model: 'm', source: 'default' }, [bearishPrior()])
+    expect(applied.conclusion?.conditions).toEqual(synthesis().conditions)
+    expect(applied.conclusion?.counterEvidence.map((claim) => claim.statement)).toEqual(synthesis().counterEvidence)
+    expect(applied.conclusion?.invalidations).toEqual([])
+  })
+
+  it('renders no basis blocks when a legacy synthesis has no forward view', () => {
+    const stale = document()
+    const withStaleBasis: DailyBriefingDocument = {
+      ...stale,
+      conclusion: {
+        ...stale.conclusion!,
+        conditions: ['旧分析：稳定币收缩'],
+        counterEvidence: [{ statement: '旧反证：ETF 流入', citations: [1] }]
+      }
+    }
+    const recap = synthesis({ summary: '美国 CPI 同比 3.4%，高于预期 3.2%；BTC 下跌 1.10%。' })
+    const applied = applyDailyBriefingEditorial(
+      withStaleBasis,
+      { ...editorial(), conclusionSynthesis: recap } as never,
+      { promptVersion: 'v2', model: 'm', source: 'default' },
+      [bearishPrior()]
+    )
+    expect(applied.conclusion?.conditions).toEqual([])
+    expect(applied.conclusion?.counterEvidence).toEqual([])
   })
 
   it('does not attach a fallback translation to the synthesized summary', () => {

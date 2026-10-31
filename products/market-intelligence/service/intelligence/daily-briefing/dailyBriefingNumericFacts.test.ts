@@ -92,6 +92,29 @@ describe('daily briefing numeric facts', () => {
     expect(() => buildNumericFactWhitelist(documentWith({ marketValues }))).toThrow(/20000/)
   })
 
+  it('accepts the scaled display spelling of a raw amount instead of the raw nine-digit value', () => {
+    const base = documentWith()
+    const withFlow: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        funds: [{
+          id: 'etf-btc',
+          group: 'funds',
+          labelKey: 'dailyBriefing.row.etfBtc',
+          importance: { tier: 'support', source: 'rule', reasonCode: 'etf-flow' },
+          state: 'available',
+          value: { number: -643_200_000, format: 'flow-usd' },
+          change: null,
+          window: 'trading-day',
+          observedAt: '2026-10-30T00:20:00.000Z'
+        }]
+      }
+    }
+    const allowed = buildNumericFactWhitelist(withFlow)
+    expect(findUnknownNumber('ETF 流出 -6.43 亿美元', allowed)).toBeUndefined()
+  })
+
   it('no longer rejects a full-precision fact in editorial prose', () => {
     const editorial = {
       lede: 'BTC 资金费率仍为 0.003619%，处于低位。',

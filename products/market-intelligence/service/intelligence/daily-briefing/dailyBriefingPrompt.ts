@@ -1,6 +1,11 @@
 import type { StructuredModelMessage } from '@platform/ai/invocation/structuredModelInvocationTypes'
 
 import type { DailyBriefingDocument, BriefingPriorConclusion } from '../../../contracts/dailyBriefing'
+import {
+  formatBriefingChangeDisplay,
+  formatBriefingValueDisplay,
+  formatPercentDisplay
+} from './dailyBriefingFactDisplay'
 
 /**
  * The editorial prompt is bounded to the frozen document: the model may add prose and a visibility
@@ -14,6 +19,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
   priorConclusions?: readonly BriefingPriorConclusion[]
 }>): StructuredModelMessage[] {
   const { document, locale } = input
+  const rowFacts = dataFacts(document, locale)
   const facts = {
     locale,
     ...(input.selection !== undefined ? { selection: input.selection } : {}),
@@ -55,11 +61,16 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       previous: item.previous ?? null,
       surprise: item.surprise.direction
     })),
-    data: dataFacts(document),
+    data: rowFacts,
     ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
-    ...(document.data.policyPath ? { policyPath: document.data.policyPath } : {}),
-    mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId),
-    hiddenDataFacts: dataFacts(document).filter((item) => item.visibility === 'hidden').map((item) => item.factId),
+    ...(document.data.policyPath ? {
+      policyPath: {
+        ...document.data.policyPath,
+        probabilityDisplay: formatPercentDisplay(document.data.policyPath.probability)
+      }
+    } : {}),
+    mustFloor: rowFacts.filter((item) => item.must).map((item) => item.factId),
+    hiddenDataFacts: rowFacts.filter((item) => item.visibility === 'hidden').map((item) => item.factId),
     next: [document.next.focus, ...document.next.items].filter(Boolean).map((item) => ({
       eventKey: item!.eventKey,
       title: item!.title,
@@ -81,8 +92,9 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       content: [
         'You are the editor of a frozen daily market brief. Write in the requested locale.',
         'Return one JSON object and nothing else. Do not use markdown fences, URLs, code, or a preamble.',
-        'Do not add facts, numbers, prices, targets, or buy/sell advice. Only use numbers that already appear in FACTS.',
-        'Copy each number character-for-character from FACTS. Never round, recompute, or add decimal places (0.0036 must not become 0.003619).',
+        'Do not add facts or numbers, and never write a price target, a trade instruction, or an invented probability. Directional forecasts and conditional statements are required.',
+        'Every number you write must be copied character-for-character from a FACTS `display` field (or `changeDisplay`/`probabilityDisplay`). Never format, scale, round or convert a raw value yourself.',
+        'The FACTS `value`/`change.value` numbers are stored raw values for reasoning only; they are not prose spellings and must never appear in the output. A 9-digit raw amount, a percentage with more than two decimals, or a Chinese 亿 next to an English billion is rejected.',
         'The reader is a professional: short, concrete, no filler, no "the market is complex".',
         'Every string must be plain prose; no HTML and no bullet lists inside a string.'
       ].join('\n')
@@ -120,12 +132,16 @@ export function buildDailyBriefingPrompt(input: Readonly<{
           conclusionSynthesis: {
             direction: 'bullish|bearish|range|undecided|mixed',
             confidence: 'high|medium|low',
-            summary: 'reader-facing verdict. The direction is rendered as a tag before this summary, so do NOT start with or repeat the direction label (no 偏空/偏多/震荡/结论偏空/方向偏空). Sentence 1 starts directly with the main driver (event, data or fund flow); sentences 2-3 add 2-3 direct drivers with FACTS numbers. If the read changed today, say what the market did, not what an earlier analysis thought. At most 3 sentences.',
+            summary: 'Analyst prose in 2-4 sentences. Sentence 1 is the mechanism chain: what changed → through which channel → pressure or support for BTC/ETH (use 因为/导致/通过 or because/leads to/through). Then the next-1-3-day base case carrying a forward marker (未来/接下来/基准情形/若/一旦 or next/base case/if). The direction is already rendered as a tag before this summary, so do NOT start with or repeat the direction label (no 偏空/偏多/震荡/结论偏空/方向偏空). A recital of data without a causal link is not a conclusion. At most 600 characters.',
+            outlook: 'Next one to three sessions: state the base case explicitly as 偏多/偏空/震荡 (bullish/bearish/range), then BTC versus ETH relative strength (强于/弱于/跑赢/跑输 or outperform/underperform). Use only FACTS display numbers.',
+            conditions: ['premise this forecast needs: the observable market state that must hold, with its FACTS display value; 1-3 items. Derived from this forecast, never copied from the earlier analysis conclusion.'],
+            counterEvidence: ['falsifier for this forecast: 若/if + observable threshold + what it would mean for BTC/ETH; 1-3 items, each with a FACTS display number. Replaces the earlier analysis counter-evidence.'],
+            watch: ['catalyst or indicator to watch next (ETF flow, funding, stablecoins, NFP/CPI, the next release), with its FACTS display number; 1-4 items'],
             regimeChange: 'only when something material changed versus earlier: the market shift and the fact plus number that shows it. If nothing important changed, write "no material change" / "无重要变化". Never narrate the editing process, a window, or an earlier AI view.',
             confirmed: ['market outcome that supports the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
             refuted: ['market outcome that contradicts the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
             coreTension: 'the live contradiction in market terms: which buyers/sellers, prices or flows disagree right now. No bare labels.',
-            whatWouldChange: 'the specific observable (price, flow or print) that would overturn this read; include the number from FACTS',
+            whatWouldChange: 'the single clearest observable threshold that would overturn the base case, with the number from FACTS',
             evidenceRefs: ['news:<id>|macro:<key>|data:<id>']
           },
           nextFocus: {
@@ -146,11 +162,14 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- data:leverage and data:policy-path are selectable only when materiality.material is true. Below the threshold they cannot be shown, whatever the ranking says. A flat open interest, a rate path that has not moved, and a row with no change are context, not news.',
         '- Include a data fact only when it has a material change or explains today’s read; every hidden data fact is audited with a reason, never silently dropped.',
         '- conclusionTranslation: only when conclusionSynthesis is omitted and the fallback conclusion summary is in a different language from LOCALE. When you write conclusionSynthesis, omit it: the synthesized summary is already in LOCALE.',
-        '- conclusionSynthesis: required when FACTS.priorConclusions is not empty; omit it when the list is empty (the fact-layer conclusion stays as a marked fallback). Weigh the prior conclusions against today’s facts and write your own verdict for a reader who never saw an earlier draft: what the market did and how you read it now. Never copy any prior conclusion’s wording, sentence or structure; a verbatim or near-verbatim copy is rejected. Never describe the editing process, a window, frozen data, earlier AI views, models, documents called conclusions, or a timeline.',
+        '- conclusionSynthesis: required when FACTS.priorConclusions is not empty; omit it when the list is empty (the fact-layer conclusion stays as a marked fallback). Weigh the prior conclusions against today’s facts and write your own forward verdict for a reader who never saw an earlier draft. Never copy any prior conclusion’s wording, sentence or structure; a verbatim or near-verbatim copy is rejected. Never describe the editing process, a window, frozen data, earlier AI views, models, documents called conclusions, or a timeline.',
         '- priorConclusions are claims, not facts: do not repeat their numbers as if verified and do not cite them as evidence. Cite only frozen news:/macro:/data: factIds in conclusionSynthesis.evidenceRefs, at least one. Never mention their observedAt/asOf clock times.',
-        '- summary opens with one sentence of direction, then 2-3 direct drivers. Each driver names the event, data point or fund flow and carries its number from FACTS (actual vs consensus, the 24h move, the net flow). A direction without a driver, or a driver without a number, is not a conclusion.',
-        '- If today’s facts changed the read, write the market action that changed it: "盘中一度转多，但 ETF 流出 1.2 亿美元，判断回到偏空" / "it briefly turned bid, but the ETF outflow took the bounce back to bearish". Name the move and the flow or number that reversed it. Never write "the view flipped during the window", "most calls", or a clock time.',
-        '- confirmed/refuted describe market outcomes, not an analyst scorecard: each entry names the earlier read and the fact plus number that confirmed or contradicted it. Leave them empty when the earlier read is not worth mentioning; never pad them with a chronology of views. coreTension is the live contradiction a trader must price now, not a summary of the lede. whatWouldChange is a specific, observable threshold with a number.',
+        '- summary is an analyst view, not a recap: sentence 1 must state the mechanism chain (what changed → through which channel → pressure or support for BTC/ETH), and at least one later sentence must state the next-1-3-day base case with a forward marker (未来/接下来/基准情形/若/一旦 or next/base case/if). Write the channel explicitly with 因为/导致/通过 or because/leads to/through. A summary with no forward marker, no mechanism connective, or fewer than two sentences is rejected.',
+        '- outlook is the base case itself: 偏多/偏空/震荡 (bullish/bearish/range) plus BTC versus ETH relative strength. conditions are the premises the base case needs; counterEvidence are the falsifiers, each a conditional (若/if) with a FACTS display number. Never reuse the earlier analysis conclusion’s conditions, invalidations or counter-evidence: they describe a different call and horizon. watch lists 1-4 catalysts or indicators with their display numbers (ETF flow, funding, stablecoins, NFP/CPI, the next release).',
+        '- Price targets, buy/sell advice and invented probabilities are rejected: no 目标价/目标位/上看/下看/止损/止盈, no price target/target price/stop loss/take profit, no 建议买入/卖出/加仓/减仓, no "70% 概率". Directional predictions and conditionals ("若 ... 则 ..." / "if ... then ...") are required instead.',
+        '- Numbers: quote the FACTS `display` field exactly. Percentages keep two decimals; Chinese USD uses 亿/万美元; English USD uses $B/$M; never write a raw 9-digit amount, a percentage with more than two decimals, or mix billion/million with 亿. Example: ETF net flow -6.43 亿美元 / -$643.2M; BTC 24h -0.83%.',
+        '- If today’s facts changed the read, write the market action that changed it: "盘中一度转多，但 ETF 流出 -6.43 亿美元，判断回到偏空" / "it briefly turned bid, but the ETF outflow of -$643.2M took the bounce back to bearish". Name the move and the flow or number that reversed it. Never write "the view flipped during the window", "most calls", or a clock time.',
+        '- confirmed/refuted describe market outcomes, not an analyst scorecard: each entry names the earlier read and the fact plus number that confirmed or contradicted it. Leave them empty when the earlier read is not worth mentioning; never pad them with a chronology of views. coreTension is the live contradiction a trader must price now, not a summary of the lede. whatWouldChange is the single clearest observable threshold with a display number.',
         '- BANNED in conclusionSynthesis (the validator rejects them): 窗口/窗口内, 多数判断, 冻结数据, 前提被削弱, AI, 模型, 结论, 时间线; English window, most calls, frozen data, premise weakened, AI, model, conclusion, timeline. Also banned: clock times such as 23:09 unless they are a scheduled market event named in the same sentence (for example "20:30 CPI"), and bare 分化/承压/风险偏好/流动性 or divergence/under pressure/risk appetite/liquidity with no concrete object or number in the same sentence. Do not stack jargon.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
         '- webEvidence is optional; only add entries actually seen in this turn’s WebSearch/WebFetch results. The URL and publishedAt must match a tool result; never invent a source. Local official actual overrides a web value.',
@@ -164,12 +183,16 @@ export function buildDailyBriefingPrompt(input: Readonly<{
   ]
 }
 
-function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{
+function dataFacts(document: DailyBriefingDocument, locale: 'zh-CN' | 'en-US'): ReadonlyArray<{
   factId: string
   labelKey: string
   state: string
   value: Readonly<{ number: number; format: string }> | null
   change: Readonly<{ value: number; unit: string; window: string }> | null
+  /** The only prose spelling of `value` the model may quote. */
+  display: string | null
+  /** The only prose spelling of `change` the model may quote. */
+  changeDisplay: string | null
   window: string
   must: boolean
   materiality: Readonly<{ material: boolean; reasonCode: string }> | null
@@ -187,6 +210,8 @@ function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{
       state: row.state,
       value: row.value ? { number: row.value.number, format: row.value.format } : null,
       change: row.change ? { value: row.change.value, unit: row.change.unit, window: row.change.window } : null,
+      display: formatBriefingValueDisplay(row.value, locale),
+      changeDisplay: formatBriefingChangeDisplay(row.change, locale),
       window: row.window,
       must: row.importance.tier === 'must',
       materiality: row.materiality ?? null,
@@ -198,6 +223,8 @@ function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{
       state: document.data.leverage.state,
       value: null,
       change: null,
+      display: null,
+      changeDisplay: null,
       window: '24h',
       must: false,
       materiality: document.data.leverage.materiality ?? null,
@@ -209,6 +236,8 @@ function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{
       state: document.data.policyPath.state,
       value: { number: document.data.policyPath.probability, format: 'percent' },
       change: null,
+      display: formatPercentDisplay(document.data.policyPath.probability),
+      changeDisplay: null,
       window: 'latest',
       must: false,
       materiality: document.data.policyPath.materiality ?? null,
@@ -226,19 +255,26 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
   const candidates = {
     news: document.news.items.map((item) => ({ factId: `news:${item.itemId}`, title: item.translatedTitle ?? item.title, source: item.sourceName })),
     macro: document.news.macro.map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
-    data: dataFacts(document).map((item) => ({
+    data: dataFacts(document, locale).map((item) => ({
       factId: item.factId,
       labelKey: item.labelKey,
       state: item.state,
       value: item.value,
       change: item.change,
+      display: item.display,
+      changeDisplay: item.changeDisplay,
       window: item.window,
       must: item.must,
       materiality: item.materiality,
       visibility: item.visibility
     })),
     ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
-    ...(document.data.policyPath ? { policyPath: document.data.policyPath } : {}),
+    ...(document.data.policyPath ? {
+      policyPath: {
+        ...document.data.policyPath,
+        probabilityDisplay: formatPercentDisplay(document.data.policyPath.probability)
+      }
+    } : {}),
     next: (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null, ...(item.relevance ? { relevance: item.relevance } : {}) }))
   }
   return [
