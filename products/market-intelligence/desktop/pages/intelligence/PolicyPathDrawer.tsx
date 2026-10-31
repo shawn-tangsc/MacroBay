@@ -34,6 +34,10 @@ export type PolicyPathDrawerText = Readonly<{
   settlementTitle: string; settlementPricingBefore: string; settlementOther: string
   settlementPricedDetail: string; settlementStatementLink: string
   settlementConclusionLabel: string; voteTally: string
+  /** The row label above the realised band; the date sits in the value. */
+  settlementActualLabel: string
+  /** The fallback baseline, labelled with the hours since the decision. */
+  settlementPricingAfter: string
   settlementActual: string; settlementPricedMissing: string
   settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
   settlementConclusionMissing: string
@@ -207,33 +211,32 @@ function SettlementSection({ reading, text }: Readonly<{ reading: PolicyPathRead
     : undefined
   const statementUrl = reading.lastDecision?.statementUrl
   return <section className="mi-policy-drawer__section" data-settlement>
-    <h3>{text.settlementTitle}</h3>
-    <p className="mi-policy-drawer__settle">
-      <span>{text.settlementActual.replace('{date}', settlement.decidedMeetingDate.slice(5))}</span>
-      <b>{text.outcomes[settlement.actualOutcome]}</b>
-      {vote ? <span>· {text.voteTally} {vote.for}–{vote.against}</span> : null}
-    </p>
-    {distribution && leading && otherShare !== undefined
-      ? <p className="mi-policy-drawer__note">
-        {text.settlementPricingBefore}
-        {text.outcomes[leading]} {percentOf(distribution[leading])} ·{' '}
-        {text.outcomes[settlement.actualOutcome]} {percentOf(distribution[settlement.actualOutcome])} ·{' '}
-        {text.settlementOther} {percentOf(otherShare)}
-      </p>
-      : <p className="mi-policy-drawer__note">{text.settlementPricedMissing}</p>}
-    <p className="mi-policy-drawer__note">
-      {text.settlementConclusionLabel}{' '}
-      {conclusion
-        ? <em className="mi-policy-drawer__conclusion" data-direction={conclusion.direction}>{conclusion.label}</em>
-        : text.settlementConclusionMissing}
-      {settlement.conclusion.kind === 'relative' && settlement.priced !== undefined
-        ? text.settlementPricedDetail.replace('{value}', percentOf(settlement.priced))
-        : null}
-    </p>
-    {statementUrl ? <p className="mi-policy-drawer__note">
-      <a className="mi-policy-drawer__source" href={statementUrl} rel="noreferrer" target="_blank">
-        {text.settlementStatementLink}<ExternalLink aria-hidden="true" size={11} />
-      </a>
-    </p> : null}
+    <h3>{text.settlementTitle}
+      {statementUrl ? <a href={statementUrl} rel="noreferrer" target="_blank">{text.settlementStatementLink}<ExternalLink aria-hidden="true" size={11} /></a> : null}
+    </h3>
+    <dl className="mi-policy-drawer__kv">
+      <div>
+        <dt>{text.settlementActualLabel}</dt>
+        <dd>{settlement.decidedMeetingDate.slice(5)} · <b>{text.outcomes[settlement.actualOutcome]}</b></dd>
+      </div>
+      {vote ? <div><dt>{text.voteTally}</dt><dd>{vote.for}–{vote.against}</dd></div> : null}
+      {distribution && leading && otherShare !== undefined ? <div>
+        <dt>{settlement.pricingBasis === 'post-decision'
+          ? text.settlementPricingAfter.replace('{hours}', String(settlement.pricedHoursAfter ?? 0))
+          : text.settlementPricingBefore}</dt>
+        <dd>{text.outcomes[leading]} {percentOf(distribution[leading])} · {text.outcomes[settlement.actualOutcome]} {percentOf(distribution[settlement.actualOutcome])} · {text.settlementOther} {percentOf(otherShare)}</dd>
+      </div> : null}
+      <div>
+        <dt>{text.settlementConclusionLabel}</dt>
+        <dd>{conclusion
+          ? <em className="mi-policy-drawer__conclusion" data-direction={conclusion.direction}>{conclusion.label}</em>
+          : <span className="mi-policy-drawer__muted">{text.settlementConclusionMissing}</span>}</dd>
+      </div>
+    </dl>
+    {/* One note, not three: the reason is already inside the conclusion cell, and repeating it under
+        the table is what made this block read as a wall of text. */}
+    {settlement.conclusion.kind === 'relative' && settlement.priced !== undefined
+      ? <p className="mi-policy-drawer__note">{text.settlementPricedDetail.replace('{value}', percentOf(settlement.priced))}</p>
+      : null}
   </section>
 }

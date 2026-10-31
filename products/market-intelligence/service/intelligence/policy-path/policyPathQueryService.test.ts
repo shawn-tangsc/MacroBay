@@ -131,10 +131,20 @@ describe('policy path phase', () => {
   })
 
   it('keeps the meeting that just decided through settlement and its verdict days', () => {
-    const settlement = service({ meeting, facts: decidedFact }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
-    expect(settlement.phase).toEqual({ kind: 'settlement', minutesSinceDecision: 60 })
+    // Without a print around the decision there is no conclusion, so the card stays on its normal body
+    // while the drawer still carries the settlement for explanation.
+    const bare = service({ meeting, facts: decidedFact }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+    expect(bare.settlement?.conclusion.kind).toBe('unavailable')
+    expect(bare.phase).toEqual({ kind: 'normal' })
 
-    const verdict = service({ meeting, facts: decidedFact }).read({ asOf: '2026-12-10T20:00:00.000Z' })!
+    const withPrint = service({
+      meeting, facts: decidedFact, series: [observation('2026-12-09T18:00:00.000Z', 0.4)]
+    }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+    expect(withPrint.phase).toEqual({ kind: 'settlement', minutesSinceDecision: 60 })
+
+    const verdict = service({
+      meeting, facts: decidedFact, series: [observation('2026-12-09T18:00:00.000Z', 0.4)]
+    }).read({ asOf: '2026-12-10T20:00:00.000Z' })!
     expect(verdict.phase).toEqual({ kind: 'verdict', daysSinceDecision: 1 })
 
     // Three days after the decision the card belongs to the next meeting again.
@@ -218,18 +228,30 @@ describe('policy path settlement', () => {
     expect(reading.settlement?.conclusion).toEqual({ kind: 'priced' })
   })
 
-  it('names the missing pre-decision price instead of guessing a conclusion', () => {
+  it('falls back to the first print after the decision and says so', () => {
     const reading = service({
       meeting, facts: decided, previousDecision: previous, nextAfter,
-      series: [observation('2026-12-09T18:30:00.000Z', 0.5)]
-    }).read({ asOf: '2026-12-09T20:00:00.000Z' })!
+      series: [observation('2026-12-09T20:30:00.000Z', 0.24)]
+    }).read({ asOf: '2026-12-09T21:00:00.000Z' })!
 
+    // A collection that started after the meeting still gets a settlement, labelled as post-decision
+    // so nobody mistakes it for a forecast.
     expect(reading.settlement).toMatchObject({
       actualOutcome: 'hike-25',
-      conclusion: { kind: 'unavailable', reason: 'settlement-pricing-unavailable' }
+      pricingBasis: 'post-decision',
+      pricedHoursAfter: 2,
+      conclusion: { kind: 'relative', direction: 'hawkish' }
     })
-    expect(reading.settlement?.priced).toBeUndefined()
-    expect(reading.settlement?.pricedOutcome).toBeUndefined()
+  })
+
+  it('shows no settlement at all when neither side has a print', () => {
+    const reading = service({
+      meeting, facts: decided, previousDecision: previous, nextAfter,
+      series: [observation('2026-12-15T18:30:00.000Z', 0.5)]
+    }).read({ asOf: '2026-12-16T20:00:00.000Z' })!
+
+    expect(reading.settlement).toBeUndefined()
+    expect(reading.phase.kind).toBe('normal')
   })
 
   it('reads a cut from the range change and keeps the strip through the next day', () => {

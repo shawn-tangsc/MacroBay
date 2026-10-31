@@ -60,11 +60,10 @@ describe('policy path drawer settlement', () => {
     const section = rendered.querySelector('[data-settlement]')
     expect(section).not.toBeNull()
     expect(section?.textContent).toContain(text.settlementTitle)
-    expect(section?.textContent).toContain('12-09 实际')
-    expect(section?.textContent).toContain('加息 25bp')
-    expect(section?.textContent).toContain('票型 9–3')
+    expect(section?.textContent).toContain('12-09 · 加息 25bp')
+    expect(section?.textContent).toContain('9–3')
     // Leading band, realised band, and everything else as one number: no five-bucket ladder.
-    expect(section?.textContent).toContain('决议前 1 小时：维持利率 59.0% · 加息 25bp 38.0% · 其他 3.0%')
+    expect(section?.textContent).toContain('维持利率 59.0% · 加息 25bp 38.0% · 其他 3.0%')
     expect(section?.textContent).toContain('相对定价偏鹰 +62pp（实际档当时只被定价 38.0%）')
     const statement = section?.querySelector('a')
     expect(statement?.getAttribute('href')).toBe(reading.lastDecision?.statementUrl)
@@ -85,8 +84,9 @@ describe('policy path drawer settlement', () => {
       }
     })
     const section = rendered.querySelector('[data-settlement]')
-    expect(section?.textContent).toContain(text.settlementPricedMissing)
+    // The reason lives here, in the drawer - the card does not carry a strip that cannot answer.
     expect(section?.textContent).toContain(text.settlementConclusionMissing)
+    expect(section?.textContent).not.toContain(text.settlementPricedBefore)
   })
 })
 

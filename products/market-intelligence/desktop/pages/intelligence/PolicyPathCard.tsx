@@ -45,8 +45,6 @@ export type PolicyPathCardText = Readonly<{
   settlementConclusionMissing: string
   /** The verdict line under the facts: what the last decision was, against what was priced. */
   judgedLabel: string; judgedPriced: string; judgedHawkish: string; judgedDovish: string
-  /** The prefix when there is no conclusion to state: "已判定" would promise one. */
-  judgedUnavailableLabel: string
   newTargetRange: string; voteTally: string
   settledMinutes: string; settledHours: string
   /** The last decision's direction, for the "last" row when the settlement knows it. */
@@ -223,8 +221,8 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
 
     {/* The verdict survives the strip as one clickable grey line: the full explanation lives in the
         drawer, so the card keeps the normal reading position and only adds a memory. */}
-    {phase.kind === 'verdict' && judged ? <button type="button" className="mi-policy-card__judged" onClick={onOpen}>
-      <span>{judged.direction === 'missing' ? text.judgedUnavailableLabel : text.judgedLabel}</span>
+    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <button type="button" className="mi-policy-card__judged" onClick={onOpen}>
+      <span>{text.judgedLabel}</span>
       <b data-direction={judged.direction}>{judged.label}</b>
     </button> : null}
 

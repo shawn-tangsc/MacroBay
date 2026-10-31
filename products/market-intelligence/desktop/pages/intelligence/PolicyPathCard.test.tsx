@@ -249,7 +249,7 @@ describe('policy path card markers', () => {
   })
 })
 
-describe('policy path card mix', () => {
+describe('policy path card distribution', () => {
   it('names only the buckets above 5% and folds the rest into one label', async () => {
     const rendered = await render({
       ...reading,
@@ -258,6 +258,12 @@ describe('policy path card mix', () => {
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
+    // The bar reads high to low, then one grey 其他 block: two named bands plus the rest.
+    const bars = [...rendered.querySelectorAll('.mi-policy-card__bar > i')]
+    expect(bars).toHaveLength(3)
+    expect(bars[0]?.getAttribute('data-outcome')).toBe('hike-25')
+    expect(bars[1]?.getAttribute('data-outcome')).toBe('no-change')
+    expect(bars[2]?.getAttribute('data-outcome')).toBe('other')
     const named = [...rendered.querySelectorAll('.mi-policy-card__mix > span:not(.mi-policy-card__mix-rest)')]
     expect(named).toHaveLength(2)
     expect(named[0]?.textContent).toContain('69.0%')

@@ -124,8 +124,14 @@ function readSettlement(value: unknown): PolicyPathSettlement | undefined {
   const pricedOutcome = isOutcome(value.pricedOutcome) ? value.pricedOutcome : undefined
   const pricedDistribution = readDistribution(value.pricedDistribution)
   const nextMeeting = readNextMeeting(value.nextMeeting)
+  const pricingBasis = value.pricingBasis === 'post-decision' ? 'post-decision' as const : 'pre-decision' as const
+  const pricedHoursAfter = typeof value.pricedHoursAfter === 'number' && Number.isFinite(value.pricedHoursAfter) && value.pricedHoursAfter >= 0
+    ? Math.round(value.pricedHoursAfter)
+    : undefined
   return {
     decidedMeetingDate: value.decidedMeetingDate,
+    pricingBasis,
+    ...(pricedHoursAfter === undefined ? {} : { pricedHoursAfter }),
     ...(previousTargetRange ? { previousTargetRange } : {}),
     actualOutcome: value.actualOutcome,
     ...(priced === undefined ? {} : { priced }),

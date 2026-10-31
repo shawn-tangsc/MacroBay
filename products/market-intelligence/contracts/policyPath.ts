@@ -247,6 +247,17 @@ export function outcomeFromRangeChange(input: Readonly<{
 }
 
 /**
+ * Buckets at or below this share are not worth naming: the card folds them into 其他 and the drawer
+ * greys them, so a colour never promises a band the reader was not told about.
+ */
+export const POLICY_PATH_SHARE_FLOOR = 0.05
+
+/** The buckets above the floor, in the order the surfaces read them. */
+export function namedOutcomes(values: PolicyPathDistribution): PolicyPathOutcome[] {
+  return POLICY_PATH_OUTCOME_ORDER.filter((outcome) => values[outcome] > POLICY_PATH_SHARE_FLOOR)
+}
+
+/**
  * The three directions a reader actually thinks in: hike, hold, cut.
  *
  * The venue quotes five buckets because 25 and 50+ are different trades, but "is the next move a
@@ -272,6 +283,13 @@ export type PolicyPathSettlement = Readonly<{
   pricedOutcome?: PolicyPathOutcome
   /** That whole distribution, so the drawer can say what else was priced instead of one number. */
   pricedDistribution?: PolicyPathDistribution
+  /**
+   * Which side of the decision the baseline sits on. `pre-decision` is the honest comparison; the
+   * fallback uses the first print after the meeting and says so, so nobody reads it as foresight.
+   */
+  pricingBasis: 'pre-decision' | 'post-decision'
+  /** Hours between the decision and the fallback print; only meaningful for `post-decision`. */
+  pricedHoursAfter?: number
   conclusion:
     | Readonly<{ kind: 'priced' }>
     | Readonly<{ kind: 'relative'; direction: 'hawkish' | 'dovish'; surprisePp: number }>

@@ -142,7 +142,7 @@ export function createPolicyPathQueryService(deps: {
         ? deps.facts.readLatestDecision(dayBefore(decided.meetingDate))
         : undefined
       const decidedRange = decided?.targetRange
-      const settlement = settledPhase && decided && decidedRange && previousDecision?.targetRange
+      const settlementCandidate = settledPhase && decided && decidedRange && previousDecision?.targetRange
         ? settlementOf({
           asOf,
           decidedMeetingDate: decided.meetingDate,
@@ -156,9 +156,13 @@ export function createPolicyPathQueryService(deps: {
           }
         })
         : undefined
+      // A settlement without a conclusion stays in the reading for the drawer to explain, but the card
+      // does not take its strip: a strip that cannot answer would spend the same space as one that can.
+      const settlement = settlementCandidate
+      const settledWithConclusion = settlement && settlement.conclusion.kind !== 'unavailable'
       // A decision window whose decision has not been collected falls back to the normal block:
       // without the realised band and the price before it there is nothing honest to strip against.
-      const phase: PolicyPathPhase = settlement && settledPhase
+      const phase: PolicyPathPhase = settledWithConclusion && settledPhase
         ? settledPhase
         : nextPhase.kind === 'normal' || nextPhase.kind === 'pre-meeting'
           ? nextPhase
@@ -230,9 +234,17 @@ function settlementOf(input: Readonly<{
   const before = Number.isFinite(cutoff)
     ? input.series.filter((row) => Date.parse(row.at) <= cutoff).at(-1)
     : undefined
-  const pricedOutcome = before ? leadingOutcome(before.values).outcome : undefined
-  const priced = before ? before.values[input.actualOutcome] : undefined
-  const conclusion: PolicyPathSettlement['conclusion'] = before && pricedOutcome && priced !== undefined
+  // No print before the decision (a collection that started later): use the first print after it and
+  // label the basis, rather than hiding the settlement the reader asked for. The window is capped so
+  // a print a week later cannot pretend to be "the reaction".
+  const after = !before && decisionAt
+    ? input.series.find((row) => Date.parse(row.at) > Date.parse(decisionAt) && Date.parse(row.at) - Date.parse(decisionAt) <= 72 * 3_600_000)
+    : undefined
+  const basis = before ? 'pre-decision' as const : after ? 'post-decision' as const : undefined
+  const baseline = before ?? after
+  const pricedOutcome = baseline ? leadingOutcome(baseline.values).outcome : undefined
+  const priced = baseline ? baseline.values[input.actualOutcome] : undefined
+  const conclusion: PolicyPathSettlement['conclusion'] = baseline && pricedOutcome && priced !== undefined
     ? settlementConclusion({ actual: input.actualOutcome, pricedOutcome, pricedShare: priced })
     : { kind: 'unavailable', reason: 'settlement-pricing-unavailable' }
   const nextMeetingDate = input.nextMeetingAfter(input.decidedMeetingDate)
@@ -245,7 +257,9 @@ function settlementOf(input: Readonly<{
     actualOutcome: input.actualOutcome,
     ...(priced === undefined ? {} : { priced }),
     ...(pricedOutcome ? { pricedOutcome } : {}),
-    ...(before ? { pricedDistribution: before.values } : {}),
+    ...(baseline ? { pricedDistribution: baseline.values } : {}),
+    ...(basis && after && decisionAt ? { pricedHoursAfter: Math.round((Date.parse(after.at) - Date.parse(decisionAt)) / 3_600_000) } : {}),
+    pricingBasis: basis ?? 'pre-decision',
     conclusion,
     ...(nextMeetingDate && daysUntil !== undefined && Number.isFinite(daysUntil)
       ? { nextMeeting: { meetingDate: nextMeetingDate, daysUntil } }
