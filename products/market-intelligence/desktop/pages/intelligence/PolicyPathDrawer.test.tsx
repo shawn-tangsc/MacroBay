@@ -64,8 +64,8 @@ describe('policy path drawer settlement', () => {
     expect(section?.textContent).toContain('加息 25bp')
     expect(section?.textContent).toContain('票型 9–3')
     // Leading band, realised band, and everything else as one number: no five-bucket ladder.
-    expect(section?.textContent).toContain('决议前 1 小时：维持利率 59% · 加息 25bp 38% · 其他 3%')
-    expect(section?.textContent).toContain('相对定价偏鹰 +62pp（实际档当时只被定价 38%）')
+    expect(section?.textContent).toContain('决议前 1 小时：维持利率 59.0% · 加息 25bp 38.0% · 其他 3.0%')
+    expect(section?.textContent).toContain('相对定价偏鹰 +62pp（实际档当时只被定价 38.0%）')
     const statement = section?.querySelector('a')
     expect(statement?.getAttribute('href')).toBe(reading.lastDecision?.statementUrl)
     expect(statement?.textContent).toContain(text.settlementStatementLink)
@@ -101,10 +101,12 @@ describe('policy drawer distribution', () => {
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
-    const columns = rendered.querySelectorAll('.mi-policy-drawer__histogram-col')
-    expect(columns).toHaveLength(5)
+    const rows = rendered.querySelectorAll('.mi-policy-drawer__distribution tbody tr')
+    expect(rows).toHaveLength(5)
     expect(rendered.textContent).toContain('维持')
-    expect(rendered.textContent).toContain('29%')
-    expect(rendered.textContent).toContain('69%')
+    expect(rendered.textContent).toContain('28.5%')
+    expect(rendered.textContent).toContain('69.0%')
+    // No observation a day or a week back yet: dashes, not zeros.
+    expect(rows[3]?.textContent).toContain('—')
   })
 })

@@ -170,7 +170,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
           </span>}
         </p>
       : <p className="mi-policy-card__lead">
-          <span className="mi-policy-card__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
+          <span className="mi-policy-card__value">{probability ? percentOf(probability.value) : '—'}</span>
           {probability ? <span className="mi-policy-card__outcome">{outcomeLabel}</span> : null}
           {change === undefined ? null : <span className="mi-policy-card__delta" data-direction={change > 0 ? 'up' : change < 0 ? 'down' : 'flat'}>
             <Direction aria-hidden="true" size={12} />{Math.abs(change).toFixed(1)}pp

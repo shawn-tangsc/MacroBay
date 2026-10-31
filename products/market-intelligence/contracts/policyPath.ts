@@ -309,6 +309,22 @@ export function formatSignedPp(value: number): string {
   return `${value > 0 ? '+' : ''}${formatPp(value)}`
 }
 
+/** The whole distribution `minutes` before the newest observation, when the series reaches back. */
+export function distributionAtOrBefore(
+  series: readonly PolicyPathObservation[],
+  minutes: number
+): PolicyPathDistribution | undefined {
+  const newest = series.at(-1)
+  if (!newest) return undefined
+  const target = Date.parse(newest.at) - minutes * 60_000
+  let candidate: PolicyPathDistribution | undefined
+  for (const observation of series) {
+    if (Date.parse(observation.at) <= target) candidate = observation.values
+    else break
+  }
+  return candidate
+}
+
 /** The value that was in force `minutes` before the newest observation, if the series reaches back. */
 export function valueAtOrBefore(series: readonly PolicyPathObservation[], outcome: PolicyPathOutcome, minutes: number): number | undefined {
   const newest = series.at(-1)

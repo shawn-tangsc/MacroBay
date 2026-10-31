@@ -41,7 +41,7 @@ describe('policy path card', () => {
   it('leads with the odds and names the month', async () => {
     const rendered = await render(reading)
     expect(rendered.textContent).toContain(text.title)
-    expect(rendered.textContent).toContain('76%')
+    expect(rendered.textContent).toContain('76.0%')
     expect(rendered.textContent).toContain('12 月加息 25bp')
     // The label follows the leading bucket: a hold or a cut must not still read 'hike'.
     expect(rendered.textContent).toContain(text.outcomes['hike-25'])
@@ -148,7 +148,7 @@ describe('policy path card shapes', () => {
     expect(rendered.textContent).toContain('加息 25bp')
     expect(rendered.textContent).toContain('12-09 实际')
     expect(rendered.textContent).toContain('相对定价偏鹰 +62pp')
-    expect(rendered.textContent).toContain('决议前 1 小时定价 38%')
+    expect(rendered.textContent).toContain('决议前 1 小时定价 38.0%')
     expect(rendered.textContent).toContain('实际落在 加息 25bp 档 · 之前主档「维持利率」')
     expect(rendered.textContent).toContain('4.00–4.25%')
     expect(rendered.textContent).toContain('9–3')
@@ -200,7 +200,7 @@ describe('policy path card shapes', () => {
     })))
 
     expect(host.querySelector('.mi-policy-card')?.getAttribute('data-phase')).toBe('verdict')
-    expect(host.textContent).toContain('66%')
+    expect(host.textContent).toContain('66.0%')
     expect(host.querySelectorAll('.mi-policy-card__facts > div')).toHaveLength(4)
     // The verdict does not take the header chip: the header is the normal one again.
     expect(host.querySelector('.mi-policy-card__phase')).toBeNull()
@@ -260,10 +260,10 @@ describe('policy path card directions', () => {
     })
     const legend = rendered.querySelector('.mi-policy-card__direction-legend')
     expect(legend).not.toBeNull()
-    // 69 + 1.55 = 70.55 → 71%; the two cut buckets add to 1.2% → 1%.
-    expect(legend?.textContent).toContain('71%')
-    expect(legend?.textContent).toContain('29%')
-    expect(legend?.textContent).toContain('1%')
+    // 69.0 + 1.55 = 70.55 → 70.6%; the two cut buckets add to 1.2%.
+    expect(legend?.textContent).toContain('70.6%')
+    expect(legend?.textContent).toContain('28.5%')
+    expect(legend?.textContent).toContain('1.2%')
   })
 
   it('drops the line when the payload has no distribution', async () => {

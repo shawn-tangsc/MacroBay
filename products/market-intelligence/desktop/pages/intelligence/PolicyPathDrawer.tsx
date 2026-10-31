@@ -38,6 +38,10 @@ export type PolicyPathDrawerText = Readonly<{
   /** Every bucket at one instant, not just the one the card leads with. */
   distributionTitle: string
   shortOutcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
+  /** The comparison columns: today, a day ago, a week ago. */
+  compareNow: string; compareDay: string; compareWeek: string
+  /** Says what a dash in the comparison columns means. */
+  compareHint: string
 }>
 
 /**
@@ -71,7 +75,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
     {/* While the strip is up the odds below belong to a meeting that already decided; showing them
         would put a pre-decision price under a post-decision result. */}
     {reading.phase.kind === 'settlement' ? null : <div className="mi-policy-drawer__hero">
-      <span className="mi-policy-drawer__value">{probability ? `${(probability.value * 100).toFixed(0)}%` : '—'}</span>
+      <span className="mi-policy-drawer__value">{probability ? percentOf(probability.value) : '—'}</span>
       <span className="mi-policy-drawer__hero-label">{probability
         ? `${Number(reading.meetingDate.slice(5, 7))} 月${text.outcomes[probability.outcome]}`
         : ''}</span>
@@ -86,21 +90,27 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         or 30% looks like it does not exist. */}
     {reading.phase.kind !== 'settlement' && probability?.distribution ? <section className="mi-policy-drawer__section">
       <h3>{text.distributionTitle}</h3>
-      {/* A histogram, not five progress bars: these buckets are one distribution, and a bar per
-          row reads as five unrelated meters. Heights share one scale; a non-zero bucket keeps a
-          visible minimum so 1% does not vanish. */}
-      <div className="mi-policy-drawer__histogram" role="img"
-        aria-label={[...POLICY_PATH_OUTCOMES].reverse().map((outcome) =>
-          `${text.shortOutcomes[outcome]} ${percentOf(probability.distribution?.[outcome] ?? 0)}`).join('，')}>
-        {[...POLICY_PATH_OUTCOMES].reverse().map((outcome) => {
+      {/* One row per bucket, one column per time point: the shape is the bar in the first cell,
+          and the two right-hand columns say whether today's number is news or a week-old level. */}
+      <table className="mi-policy-drawer__distribution">
+        <thead><tr>
+          <th scope="col">{''}</th><th scope="col">{text.compareNow}</th>
+          <th scope="col">{text.compareDay}</th><th scope="col">{text.compareWeek}</th>
+        </tr></thead>
+        <tbody>{[...POLICY_PATH_OUTCOMES].reverse().map((outcome) => {
           const share = probability.distribution?.[outcome] ?? 0
-          return <div key={outcome} className="mi-policy-drawer__histogram-col" data-leading={outcome === probability.outcome ? 'true' : undefined}>
-            <span className="mi-policy-drawer__histogram-value">{percentOf(share)}</span>
-            <span className="mi-policy-drawer__histogram-bar" style={{ height: `${Math.max(share * 100, share > 0 ? 3 : 1)}%` }} />
-            <span className="mi-policy-drawer__histogram-label">{text.shortOutcomes[outcome]}</span>
-          </div>
-        })}
-      </div>
+          return <tr key={outcome} data-leading={outcome === probability.outcome ? 'true' : undefined}>
+            <th scope="row">
+              <span className="mi-policy-drawer__distribution-bar" aria-hidden="true"><i style={{ width: `${Math.max(share * 100, share > 0 ? 2 : 0)}%` }} /></span>
+              {text.shortOutcomes[outcome]}
+            </th>
+            <td>{percentOf(share)}</td>
+            <td>{probability.comparison?.day ? percentOf(probability.comparison.day[outcome]) : '—'}</td>
+            <td>{probability.comparison?.week ? percentOf(probability.comparison.week[outcome]) : '—'}</td>
+          </tr>
+        })}</tbody>
+      </table>
+      <p className="mi-policy-drawer__note">{text.compareHint}</p>
     </section> : null}
 
     <section className="mi-policy-drawer__section">
@@ -151,7 +161,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
               ? <><span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPendingShort}）</span></>
               : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}
           </dd></div>
-          <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${(probability.range30d.min * 100).toFixed(0)}–${(probability.range30d.max * 100).toFixed(0)}%` : '—'}</dd></div>
+          <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${percentOf(probability.range30d.min)}–${percentOf(probability.range30d.max)}` : '—'}</dd></div>
           <div><dt>{text.quote}</dt><dd>{probability.quote ? `${(probability.quote.bid * 100).toFixed(0)} / ${(probability.quote.ask * 100).toFixed(0)}` : '—'}</dd></div>
         </> : null}
         <div><dt>{text.venue}</dt><dd>{probability?.venue ?? '—'}</dd></div>

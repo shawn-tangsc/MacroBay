@@ -1,5 +1,5 @@
 import {
-  changeInPp, decisionInstant, leadingOutcome, outcomeFromRangeChange, phaseAt, repricingMarkers,
+  changeInPp, decisionInstant, distributionAtOrBefore, leadingOutcome, outcomeFromRangeChange, phaseAt, repricingMarkers,
   settlementConclusion, stalenessOf, thinSeries, valueAtOrBefore,
   type PolicyPathMarker, type PolicyPathObservation, type PolicyPathOutcome, type PolicyPathPhase,
   type PolicyPathSettlement, type PolicyPathStaleness
@@ -51,6 +51,14 @@ export type PolicyPathReading = Readonly<{
     value: number
     /** All five buckets at the same instant, so the reader can see what the rest is priced at. */
     distribution?: Readonly<Record<PolicyPathOutcome, number>>
+    /**
+     * The same distribution a day and a week earlier, when the series reaches back that far. The
+     * comparison is what tells a reader whether today's number is news or the same as last Tuesday.
+     */
+    comparison?: Readonly<{
+      day?: Readonly<Record<PolicyPathOutcome, number>>
+      week?: Readonly<Record<PolicyPathOutcome, number>>
+    }>
     changeInPp24h?: number
     range30d?: Readonly<{ min: number; max: number }>
     quote?: Readonly<{ bid: number; ask: number }>
@@ -265,6 +273,14 @@ function lastActionOf(
   return outcomeFromRangeChange({ previous: previous.targetRange, current: decided.targetRange })
 }
 
+/** A day and a week earlier, only for the windows the series actually covers. */
+function comparisonOf(series: readonly PolicyPathObservation[]): { comparison?: NonNullable<NonNullable<PolicyPathReading['probability']>['comparison']> } {
+  const day = distributionAtOrBefore(series, 24 * 60)
+  const week = distributionAtOrBefore(series, 7 * 24 * 60)
+  if (!day && !week) return {}
+  return { comparison: { ...(day ? { day } : {}), ...(week ? { week } : {}) } }
+}
+
 /** The parsed statement wins; the published series fills in when no decision has been parsed. */
 function targetRangeOf(
   decided: PolicyPathReading['targetRange'] | undefined,
@@ -321,6 +337,7 @@ function probabilityOf(series: readonly PolicyPathObservation[], asOf: string): 
     outcome,
     value: probability,
     distribution: latest.values,
+    ...comparisonOf(series),
     ...(previous === undefined ? {} : { changeInPp24h: changeInPp(probability, previous) }),
     ...(window.length ? { range30d: { min: Math.min(...window), max: Math.max(...window) } } : {}),
     ...(latest.quote ? { quote: latest.quote } : {}),

@@ -291,3 +291,24 @@ describe('last decision direction', () => {
     expect(probe.read({ asOf: '2026-12-10T00:00:00.000Z' })?.lastDecision?.outcome).toBeUndefined()
   })
 })
+
+describe('comparison columns', () => {
+  it('fills a day earlier only when the series actually reaches back a day', () => {
+    const base = observation('2026-10-30T00:00:00.000Z', 0.7)
+    const short = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: false, detectedAt: '2026-10-30T00:00:00.000Z' },
+      series: [base, observation('2026-10-30T12:00:00.000Z', 0.69)]
+    })
+    expect(short.read({ asOf: '2026-10-30T12:00:00.000Z' })?.probability?.comparison).toBeUndefined()
+
+    const long = service({
+      meeting: { eventKey: 'US.FOMC.2026-12-09', scheduledDate: '2026-12-09' },
+      facts: { meetingDate: '2026-12-09', hasProjectionMaterials: false, detectedAt: '2026-10-30T00:00:00.000Z' },
+      series: [observation('2026-10-28T00:00:00.000Z', 0.62), observation('2026-10-30T12:00:00.000Z', 0.69)]
+    })
+    const comparison = long.read({ asOf: '2026-10-30T12:00:00.000Z' })?.probability?.comparison
+    expect(comparison?.day?.['hike-25']).toBeCloseTo(0.62, 4)
+    expect(comparison?.week).toBeUndefined()
+  })
+})

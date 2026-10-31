@@ -51,7 +51,8 @@ function readReading(value: unknown): PolicyPathReading | undefined {
       ...value.probability,
       ...(isCompleteDistribution(value.probability.distribution)
         ? { distribution: value.probability.distribution as Record<string, number> }
-        : {})
+        : {}),
+      ...(isObject(value.probability.comparison) ? { comparison: readComparison(value.probability.comparison) } : {})
     } as PolicyPathReading['probability']
     : undefined
   const lastDecision = readLastDecision(value.lastDecision)
@@ -191,6 +192,13 @@ function readLastDecision(value: unknown): PolicyPathReading['lastDecision'] | u
     ...(outcome ? { outcome } : {}),
     ...(dissents?.length ? { dissents } : {}),
     ...(typeof value.statementUrl === 'string' && value.statementUrl.startsWith('https://') ? { statementUrl: value.statementUrl } : {})
+  }
+}
+
+function readComparison(value: Record<string, unknown>): NonNullable<NonNullable<PolicyPathReading['probability']>['comparison']> {
+  return {
+    ...(isCompleteDistribution(value.day) ? { day: value.day as never } : {}),
+    ...(isCompleteDistribution(value.week) ? { week: value.week as never } : {})
   }
 }
 
