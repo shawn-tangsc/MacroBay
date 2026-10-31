@@ -94,6 +94,66 @@ const failedDocument = (code: string, detail?: string): DailyBriefingDocument =>
   }
 })
 
+/**
+ * One edition that carries every kind of limitation the right rail must name: a source that is
+ * disabled, a source that failed, a change without a baseline, an ETF row without an as-of point,
+ * a missing consensus, a backfill, a model fallback, a late generation and a duplicated caveat.
+ */
+const diagnosticsDocument = (date = '2026-10-30'): DailyBriefingDocument => ({
+  ...briefingDocument(date),
+  edition: { ...briefingDocument(date).edition, generatedAt: `${date}T04:30:00.000Z` },
+  news: {
+    items: [],
+    macro: [{
+      eventKey: 'US.CPI', title: 'cpi', titleKey: 'cpi', scheduledAt: `${date}T00:00:00.000Z`,
+      importance: 'high', actual: '3.4%', previous: '3.1%',
+      surprise: { direction: 'consensus-unavailable' }
+    }],
+    notes: {}
+  },
+  data: {
+    market: [{
+      id: 'dxy', labelKey: 'dailyBriefing.row.dxy', importance: { tier: 'support', source: 'rule', reasonCode: 'context' },
+      state: 'unavailable', value: null, change: null, window: '24h', observedAt: null, reason: 'query-failed'
+    }],
+    funds: [
+      {
+        id: 'stablecoin', group: 'funds', labelKey: 'dailyBriefing.row.stablecoin',
+        importance: { tier: 'support', source: 'rule', reasonCode: 'context' },
+        state: 'available', value: { number: 253_033_903_673.4, format: 'usd' },
+        change: null, changeReason: 'no-baseline', window: '1d', observedAt: `${date}T00:12:00.000Z`
+      },
+      {
+        id: 'etf-btc', group: 'funds', labelKey: 'dailyBriefing.row.etfBtc',
+        importance: { tier: 'must', source: 'rule', reasonCode: 'gap' },
+        state: 'unavailable', value: null, change: null, reason: 'etf-unavailable',
+        window: 'trading-day', observedAt: null
+      }
+    ],
+    sentiment: {
+      fearGreed: {
+        id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed',
+        importance: { tier: 'must', source: 'rule', reasonCode: 'gap' },
+        state: 'source-disabled', value: null, change: null, window: 'latest', observedAt: null
+      },
+      news: { state: 'available', counts: { bearish: 0, bullish: 0, mixed: 0, neutral: 0 }, itemCount: 0 }
+    }
+  },
+  conclusion: {
+    ...briefingDocument(date).conclusion!,
+    dataGaps: ['证据条数已截断'],
+    caveats: ['证据条数已截断', '资金费率是场所特定的']
+  },
+  provenance: {
+    ...briefingDocument(date).provenance,
+    supplements: [{
+      at: `${date}T04:00:00.000Z`, tool: 'daily-brief-core-fact-ensure',
+      reason: 'filled 2 core data rows: core-stablecoin-supply-usd, etf-net-flow-btc'
+    }],
+    editorialMeta: { promptVersion: 'v1', model: 'provider:model', source: 'default', fallback: 'custom-unavailable' }
+  }
+})
+
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
@@ -356,5 +416,71 @@ describe('daily briefing page', () => {
     expect(panel.textContent).toContain(englishText.aiSettings.failure['model-unavailable'])
     expect(panel.textContent).toContain(englishText.failurePanel.detail['default-unavailable'])
     expect(panel.textContent).toContain(englishText.failurePanel.advice.model)
+  })
+
+  it('names every concrete edition limitation, orders it by severity and keeps the caveats', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: diagnosticsDocument() })) })
+    const dom = await renderPage(client)
+    const aside = dom.querySelector<HTMLElement>('[data-briefing-issues]')!
+
+    expect(aside).not.toBeNull()
+    expect(aside.textContent).toContain(text.sections.limits)
+    expect(aside.textContent).toContain('美国比特币现货基金：08:00 前无可用历史')
+    expect(aside.textContent).toContain('稳定币：昨日无可比数据，已隐藏变化')
+    expect(aside.textContent).toContain('恐惧贪婪：来源未启用，未显示数据')
+    expect(aside.textContent).toContain('CPI：预期值未收录')
+    expect(aside.textContent).toContain('美元：数据不可用')
+    expect(aside.textContent).toContain('已回补 2 个核心数据行：稳定币、美国比特币现货基金')
+    expect(aside.textContent).toContain(text.limits.ai.fallback)
+    expect(aside.textContent).toContain('本期在统计截止后 4 小时生成')
+    expect(aside.textContent).toContain('数据缺口：证据条数已截断')
+    expect(aside.textContent).toContain('数据限制：资金费率是场所特定的')
+
+    const titles = [...aside.querySelectorAll('.mi-daily-briefing-page__issue-title')].map((element) => element.textContent)
+    expect(titles.filter((title) => title === '数据缺口：证据条数已截断')).toHaveLength(1)
+
+    const categories = [...aside.querySelectorAll('[data-issue-category]')].map((element) => element.getAttribute('data-issue-category'))
+    expect(new Set(categories)).toEqual(new Set(['data', 'baseline', 'backfill', 'ai', 'evidence', 'timing']))
+    const severities = [...aside.querySelectorAll('[data-issue-severity]')].map((element) => element.getAttribute('data-issue-severity'))
+    expect(severities.lastIndexOf('warning')).toBeLessThan(severities.indexOf('info'))
+
+    // Every entry names its source, its time and an actionable next step.
+    expect(aside.textContent).toContain(text.limits.roles.source)
+    expect(aside.textContent).toContain(text.limits.roles.time)
+    expect(aside.textContent).toContain(text.limits.roles.advice)
+    expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
+    expect(aside.textContent).toContain(text.limits.counts.info.replace('{count}', '5'))
+
+    // Internal reason strings, machine codes and model ids never reach the panel.
+    expect(aside.textContent).not.toContain('filled 2 core data rows')
+    expect(aside.textContent).not.toContain('custom-unavailable')
+    expect(aside.textContent).not.toContain('no-baseline')
+    expect(aside.textContent).not.toContain('provider:model')
+
+    const toggle = aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')!
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    act(() => toggle.click())
+    expect(aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')?.getAttribute('aria-expanded')).toBe('false')
+    expect(aside.querySelectorAll('.mi-daily-briefing-page__issue')).toHaveLength(0)
+    expect(aside.textContent).toContain(text.limits.expand)
+    expect(aside.textContent).toContain(text.limits.counts.warning.replace('{count}', '7'))
+
+    act(() => aside.querySelector<HTMLButtonElement>('.mi-daily-briefing-page__appendix-toggle')!.click())
+    expect(aside.querySelectorAll('.mi-daily-briefing-page__issue').length).toBeGreaterThan(0)
+    expect(aside.textContent).toContain(text.limits.collapse)
+  })
+
+  it('renders the diagnostics panel in English', async () => {
+    const client = fakeClient({ getToday: vi.fn(async () => ({ state: 'available' as const, document: diagnosticsDocument() })) })
+    const dom = await renderPage(client, { locale: 'en-US' })
+    const aside = dom.querySelector<HTMLElement>('[data-briefing-issues]')!
+
+    expect(aside.textContent).toContain(englishText.sections.limits)
+    expect(aside.textContent).toContain(englishText.limits.categories.data)
+    expect(aside.textContent).toContain(englishText.limits.severity.warning)
+    expect(aside.textContent).toContain('Stablecoins: no comparable data for yesterday, so the change is hidden')
+    expect(aside.textContent).toContain('US spot bitcoin ETF: no usable history before 08:00')
+    expect(aside.textContent).toContain('CPI: consensus not collected')
+    expect(aside.textContent).toContain(englishText.limits.roles.advice)
   })
 })

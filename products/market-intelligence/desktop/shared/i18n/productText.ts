@@ -698,7 +698,7 @@ export const productText = {
                 ai: { fallback: '自选模型不可用，本期回落到默认模型', webSearchOff: 'WebSearch 未授权，缺失的宏观结论无法补查', failure: 'AI 编辑未完成：{reason}' },
                 evidence: { gap: '数据缺口：{text}', caveat: '数据限制：{text}', noCitation: '反证未附证据：{text}', conflict: '来源冲突：{text}', none: '本期结论没有证据脚注' },
                 system: { failure: '生成或存储未完成：{reason}' },
-                timing: { late: '本期在统计截止后 {interval} 生成' },
+                timing: { late: '本期在统计截止后 {interval}生成' },
                 advice: {
                   enableSource: '在「配置看板来源」里启用该来源，等一次采集完成后再生成。',
                   checkSource: '检查来源网络与凭据，等一次成功采集后再生成；沿用上次数据时按陈旧值阅读。',

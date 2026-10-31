@@ -16,6 +16,7 @@ import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
+import { briefingIssueCounts, briefingIssues } from './dailyBriefingIssues'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
@@ -122,6 +123,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string }> | null>(null)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
+  const [issuesOpen, setIssuesOpen] = useState(true)
   const shareRef = useRef<HTMLDivElement>(null)
   const exportTimer = useRef<number | undefined>(undefined)
   const copyTimer = useRef<number | undefined>(undefined)
@@ -274,11 +276,20 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }
   const contentBlocked = editorialBlocked || regenerateFailure !== null
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
-  const appendix = view.status === 'ready' && !contentBlocked && view.document.conclusion
-    ? [...new Set([...view.document.conclusion.dataGaps, ...view.document.conclusion.caveats])]
+  // The right rail audits the edition that was actually generated: a missing source, a hidden
+  // change and the conclusion's own gaps are separate facts, not one generic caveat list.
+  const issues = view.status === 'ready' && !contentBlocked
+    ? briefingIssues({
+        document: view.document,
+        text,
+        formatTime,
+        ...(eventTitles ? { eventTitles } : {}),
+        webSearchEnabled
+      })
     : []
+  const issueCounts = briefingIssueCounts(issues)
   const openModelService = onOpenModelSettings ?? openModelSettings
-  const bodyClass = `mi-daily-briefing-page__body${appendix.length > 0 ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
+  const bodyClass = `mi-daily-briefing-page__body${issues.length > 0 ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
       <button className="mi-daily-briefing-page__back" type="button" onClick={onBack}>
@@ -340,9 +351,27 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}
       </section>
-      {appendix.length > 0 && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits}>
-        <h2>{text.sections.limits}</h2>
-        {appendix.map((entry) => <p key={entry}>{entry}</p>)}
+      {issues.length > 0 && !contentBlocked ? <aside className="mi-daily-briefing-page__appendix" aria-label={text.sections.limits} data-briefing-issues="true">
+        <header className="mi-daily-briefing-page__appendix-head">
+          <h2>{text.sections.limits}</h2>
+          <button className="mi-daily-briefing-page__appendix-toggle" type="button" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
+            {issuesOpen ? text.limits.collapse : text.limits.expand}
+          </button>
+        </header>
+        <p className="mi-daily-briefing-page__appendix-counts">{issueCountsText(issueCounts, text)}</p>
+        {issuesOpen ? <ol className="mi-daily-briefing-page__issues">
+          {issues.map((issue) => <li className="mi-daily-briefing-page__issue" key={issue.id} data-issue-category={issue.category} data-issue-severity={issue.severity}>
+            <div className="mi-daily-briefing-page__issue-tags">
+              <span data-severity={issue.severity}>{text.limits.severity[issue.severity]}</span>
+              <span data-category={issue.category}>{text.limits.categories[issue.category]}</span>
+            </div>
+            <div className="mi-daily-briefing-page__issue-title">{issue.title}</div>
+            <div className="mi-daily-briefing-page__issue-meta">
+              {text.limits.roles.source}{text.labelSeparator}{issue.source} · {text.limits.roles.time}{text.labelSeparator}{formatTime(issue.at, 'minute')}
+            </div>
+            <div className="mi-daily-briefing-page__issue-advice">{text.limits.roles.advice}{text.labelSeparator}{issue.advice}</div>
+          </li>)}
+        </ol> : null}
       </aside> : null}
     </div>
     <DailyBriefingAiSettingsModal open={settingsOpen} text={text} client={client} onClose={() => {
@@ -427,4 +456,15 @@ function localDate(timeZone: string): string {
 
 function editorialFailureText(code: string, text: DailyBriefingText): string {
   return (text.aiSettings.failure as Readonly<Record<string, string>>)[code] ?? code
+}
+
+/** "2 blocking · 3 warnings · 1 note", with empty severities omitted. */
+function issueCountsText(
+  counts: Readonly<Record<'blocking' | 'warning' | 'info', number>>,
+  text: DailyBriefingText
+): string {
+  return (['blocking', 'warning', 'info'] as const)
+    .filter((severity) => counts[severity] > 0)
+    .map((severity) => text.limits.counts[severity].replace('{count}', String(counts[severity])))
+    .join(' · ')
 }
