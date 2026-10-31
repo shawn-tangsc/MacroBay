@@ -1,14 +1,17 @@
 .mi-divergence {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 7px;
   min-width: 0;
-  padding: 8px 0 2px;
+  padding: 6px 0 2px;
 }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; padding-top: 3px; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
-.mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -2px; }
+.mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -1px; }
+/* A quiet day is one sentence with its badge at the end of the same line. */
+.mi-divergence__quiet { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+.mi-divergence__quiet .mi-divergence__note { flex: 0 1 auto; margin: 0; }
 .mi-divergence__head {
   display: flex;
   align-items: center;
