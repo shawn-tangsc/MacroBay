@@ -79,8 +79,18 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
     }
     const ruleResult = detectDivergences(legs)
     if (ruleResult.state === 'unavailable') return ruleResult
-    const judged = await judgeRows(input, legs, ruleResult)
-    return isWithinUtf8JsonBudget(judged, divergencePolicy.maximumDtoBytes) ? judged : divergenceUnavailable('too-large', missing)
+    // The model is an extra: a throw inside it must fall back to the rules, never blank the card.
+    let judged: MarketDivergenceResult = ruleResult
+    try {
+      judged = await judgeRows(input, legs, ruleResult)
+    } catch {
+      judged = ruleResult
+    }
+    try {
+      return isWithinUtf8JsonBudget(judged, divergencePolicy.maximumDtoBytes) ? judged : divergenceUnavailable('too-large', missing)
+    } catch {
+      return divergenceUnavailable('too-large', missing)
+    }
   } catch {
     return divergenceUnavailable('query-failed')
   }
