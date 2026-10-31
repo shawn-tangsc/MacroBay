@@ -49,6 +49,8 @@ export type PolicyPathReading = Readonly<{
     asOf: string
     outcome: PolicyPathOutcome
     value: number
+    /** All five buckets at the same instant, so the reader can see what the rest is priced at. */
+    distribution?: Readonly<Record<PolicyPathOutcome, number>>
     changeInPp24h?: number
     range30d?: Readonly<{ min: number; max: number }>
     quote?: Readonly<{ bid: number; ask: number }>
@@ -318,6 +320,7 @@ function probabilityOf(series: readonly PolicyPathObservation[], asOf: string): 
     asOf: latest.at,
     outcome,
     value: probability,
+    distribution: latest.values,
     ...(previous === undefined ? {} : { changeInPp24h: changeInPp(probability, previous) }),
     ...(window.length ? { range30d: { min: Math.min(...window), max: Math.max(...window) } } : {}),
     ...(latest.quote ? { quote: latest.quote } : {}),

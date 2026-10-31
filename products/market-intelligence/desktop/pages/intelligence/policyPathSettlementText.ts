@@ -71,7 +71,9 @@ export function judgedView(
 
 /** The share of the odds as the panels write it: whole percent, since a pp of noise is noise. */
 export function percentOf(share: number): string {
-  return `${(share * 100).toFixed(0)}%`
+  // `0.285 * 100` is 28.499999999999996 in binary, so a plain toFixed(0) would print 28% where the
+  // venue means 28.5%. Round through thousandths first, then to whole percent.
+  return `${Math.round(Math.round(share * 1000) / 10)}%`
 }
 
 /** "Settled 42 minutes ago" — the unit follows the elapsed time, never "2634 minutes". */

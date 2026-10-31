@@ -47,7 +47,12 @@ function readReading(value: unknown): PolicyPathReading | undefined {
   const probability = isObject(value.probability) && typeof value.probability.value === 'number'
     && typeof value.probability.outcome === 'string'
     && (POLICY_PATH_OUTCOMES as readonly string[]).includes(value.probability.outcome)
-    ? { ...value.probability } as PolicyPathReading['probability']
+    ? {
+      ...value.probability,
+      ...(isCompleteDistribution(value.probability.distribution)
+        ? { distribution: value.probability.distribution as Record<string, number> }
+        : {})
+    } as PolicyPathReading['probability']
     : undefined
   const lastDecision = readLastDecision(value.lastDecision)
   // `medianCurrentYear` is optional: a table whose year column is missing is still a valid SEP, and
@@ -187,6 +192,11 @@ function readLastDecision(value: unknown): PolicyPathReading['lastDecision'] | u
     ...(dissents?.length ? { dissents } : {}),
     ...(typeof value.statementUrl === 'string' && value.statementUrl.startsWith('https://') ? { statementUrl: value.statementUrl } : {})
   }
+}
+
+function isCompleteDistribution(value: unknown): boolean {
+  if (!isObject(value)) return false
+  return POLICY_PATH_OUTCOMES.every((outcome) => typeof value[outcome] === 'number' && Number.isFinite(value[outcome]))
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

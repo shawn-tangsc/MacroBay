@@ -123,3 +123,13 @@
   text-decoration: none;
 }
 .mi-policy-drawer__source:hover { color: var(--mi-accent, #b7cf52); }
+
+/* Five buckets as one spectrum: the leading one is marked, the rest are still readable. */
+.mi-policy-drawer__distribution { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.mi-policy-drawer__distribution > li { display: grid; grid-template-columns: 84px minmax(0, 1fr) 42px; align-items: center; gap: 10px; }
+.mi-policy-drawer__distribution-label { font-size: 11px; color: var(--mi-text-muted, #8b8d94); white-space: nowrap; }
+.mi-policy-drawer__distribution-bar { display: block; height: 6px; border-radius: 3px; background: #1b1f27; overflow: hidden; }
+.mi-policy-drawer__distribution-bar i { display: block; height: 100%; border-radius: 3px; background: #4a5260; }
+.mi-policy-drawer__distribution > li[data-leading='true'] .mi-policy-drawer__distribution-label { color: var(--mi-text, #e8e9ec); }
+.mi-policy-drawer__distribution > li[data-leading='true'] .mi-policy-drawer__distribution-bar i { background: var(--mi-accent, #b7cf52); }
+.mi-policy-drawer__distribution > li > b { font-size: 11.5px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }

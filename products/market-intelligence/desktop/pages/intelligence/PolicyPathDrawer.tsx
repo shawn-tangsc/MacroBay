@@ -35,6 +35,8 @@ export type PolicyPathDrawerText = Readonly<{
   settlementActual: string; settlementPricedMissing: string
   settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
   settlementConclusionMissing: string
+  /** Every bucket at one instant, not just the one the card leads with. */
+  distributionTitle: string
 }>
 
 /**
@@ -78,6 +80,22 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
     </div>}
 
     {reading.settlement ? <SettlementSection reading={reading} text={text} /> : null}
+
+    {/* The card names one bucket; the reader still needs to see what the other four are priced at,
+        or 30% looks like it does not exist. */}
+    {reading.phase.kind !== 'settlement' && probability?.distribution ? <section className="mi-policy-drawer__section">
+      <h3>{text.distributionTitle}</h3>
+      <ul className="mi-policy-drawer__distribution">
+        {[...POLICY_PATH_OUTCOMES].reverse().map((outcome) => {
+          const share = probability.distribution?.[outcome] ?? 0
+          return <li key={outcome} data-leading={outcome === probability.outcome ? 'true' : undefined}>
+            <span className="mi-policy-drawer__distribution-label">{text.outcomes[outcome]}</span>
+            <span className="mi-policy-drawer__distribution-bar" aria-hidden="true"><i style={{ width: `${Math.max(share * 100, 1)}%` }} /></span>
+            <b>{percentOf(share)}</b>
+          </li>
+        })}
+      </ul>
+    </section> : null}
 
     <section className="mi-policy-drawer__section">
       <h3>{text.sepPath}

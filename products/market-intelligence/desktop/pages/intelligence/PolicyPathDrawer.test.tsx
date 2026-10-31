@@ -89,3 +89,22 @@ describe('policy path drawer settlement', () => {
     expect(section?.textContent).toContain(text.settlementConclusionMissing)
   })
 })
+
+describe('policy drawer distribution', () => {
+  it('lists every bucket, not only the one the card leads with', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'normal' },
+      settlement: undefined,
+      probability: {
+        venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69, points: 40,
+        distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
+      }
+    })
+    const rows = rendered.querySelectorAll('.mi-policy-drawer__distribution > li')
+    expect(rows).toHaveLength(5)
+    expect(rendered.textContent).toContain('维持利率')
+    expect(rendered.textContent).toContain('29%')
+    expect(rendered.textContent).toContain('69%')
+  })
+})
