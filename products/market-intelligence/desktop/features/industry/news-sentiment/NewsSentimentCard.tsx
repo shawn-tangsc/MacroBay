@@ -69,6 +69,12 @@ export function NewsSentimentCard(props: {
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
           <p>{text.empty}</p>
         </div>
+      ) : visibleDrivers.length === 0 ? (
+        // A read that succeeded but whose rows were filtered out is not an empty window: say which
+        // of the two it is, or the reader cannot tell a quiet day from a broken card.
+        <div className="mi-news-sentiment__state" data-news-sentiment-state="filtered-empty">
+          <p>{text.drawer.emptyFiltered}</p>
+        </div>
       ) : (
         <>
           <div

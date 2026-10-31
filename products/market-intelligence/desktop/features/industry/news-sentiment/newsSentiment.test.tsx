@@ -183,6 +183,20 @@ describe('NewsSentimentFeature', () => {
     expect(withCaveat.textContent).not.toContain(text.engine.rules)
   })
 
+  it('says the filter is empty instead of rendering a blank card', async () => {
+    // "不带中性" on a day whose items are all neutral used to leave an empty list region with no
+    // sentence at all — the reader cannot tell a quiet day from a broken card.
+    const neutralOnly = { ...VIEW, items: [{ ...VIEW.items[0]!, polarity: 'neutral' as const }] }
+    const container = await mount(
+      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
+        view={neutralOnly} includeNeutral={false} onIncludeNeutralChange={() => undefined} />
+    )
+    expect(container.querySelector('.mi-news-sentiment__drivers button')).toBeNull()
+    expect(container.querySelector('[data-news-sentiment-state="filtered-empty"]')?.textContent)
+      .toContain(text.drawer.emptyFiltered)
+  })
+
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
