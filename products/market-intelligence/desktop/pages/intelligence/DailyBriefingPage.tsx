@@ -17,6 +17,7 @@ import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationS
 import { withWindowHours } from './dailyBriefingWindowText'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
+import { posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
 import { readableFailureDetail } from './dailyBriefingFailureDetail'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
@@ -213,7 +214,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (view.status !== 'ready' || !shareRef.current) return
     setExportState('exporting')
     try {
-      const dataUrl = await toPng(shareRef.current, { pixelRatio: 2, backgroundColor: '#f4efe4', width: 1080, cacheBust: true })
+      // The poster paints its own paper; the export reads that colour back instead of keeping a
+      // second copy here, so a palette change cannot leave the downloaded image on the old paper.
+      const poster = shareRef.current.querySelector<HTMLElement>('.mi-brief-poster') ?? shareRef.current
+      const paper = posterExportBackground(poster)
+      const dataUrl = await toPng(poster, { pixelRatio: 2, ...(paper ? { backgroundColor: paper } : {}), width: 1080, cacheBust: true })
       const link = document.createElement('a')
       link.download = `mi-daily-brief-${view.document.edition.date}-${locale}.png`
       link.href = dataUrl
