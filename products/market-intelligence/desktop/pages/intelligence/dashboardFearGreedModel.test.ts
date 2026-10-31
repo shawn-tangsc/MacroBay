@@ -14,6 +14,19 @@ describe('projectDashboardFearGreedSnapshot', () => {
     expect(JSON.stringify(result)).not.toMatch(/asOf|source|metric|https?:|credential|profile|health|error/i)
   })
 
+  it('refuses a daily reading past the one-publication tolerance', () => {
+    // 36h keeps one missed publication; past that the score is a stopped source, not today's mood.
+    const fresh = projectDashboardFearGreedSnapshot({
+      state: 'available', asOf, score: 30, bucket: 'fear', observedAt: '2026-08-05T00:00:00.000Z'
+    }, asOf)
+    const stale = projectDashboardFearGreedSnapshot({
+      state: 'available', asOf, score: 30, bucket: 'fear', observedAt: '2026-08-04T23:59:59.000Z'
+    }, asOf)
+
+    expect(fresh).toEqual({ state: 'available', score: 30, bucket: 'fear', observedAt: '2026-08-05T00:00:00.000Z' })
+    expect(stale).toEqual({ state: 'unavailable' })
+  })
+
   it.each([
     [{ state: 'empty', asOf }, { state: 'empty' }],
     [{ state: 'unavailable', failureCode: 'fear-greed-query-unavailable' }, { state: 'unavailable' }],

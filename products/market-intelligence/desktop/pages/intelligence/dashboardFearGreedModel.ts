@@ -4,6 +4,7 @@ import {
   isFearGreedSnapshotScore,
   resolveFearGreedSnapshotBucket
 } from '../../../contracts/intelligenceQueryContracts'
+import { marketPulsePolicy } from '../../../contracts/marketPulse'
 import { dashboardEconomicCalendarSourcePolicy } from './dashboardEconomicCalendarModel'
 
 export const dashboardFearGreedPresentationPolicy = {
@@ -80,7 +81,15 @@ export function projectDashboardFearGreedSnapshot(value: unknown, asOf: string):
     if (isExactRecord(value, ['state', 'asOf', 'score', 'bucket', 'observedAt']) && value.state === 'available' &&
       value.asOf === asOf && isFearGreedSnapshotScore(value.score) && isCanonicalFearGreedSnapshotTime(value.observedAt) && value.observedAt <= asOf) {
       const bucket = resolveFearGreedSnapshotBucket(value.score)
-      if (bucket && value.bucket === bucket) return { state: 'available', score: value.score, bucket, observedAt: value.observedAt }
+      // A daily index has no intraday promise: the newest possible reading is under a day old, so a
+      // score past the tolerance is a source that stopped publishing, not the current sentiment. The
+      // briefing already refuses to call that reading fresh; the gauge is easier to mistake for today,
+      // so it fails closed instead of moving the needle on yesterday's number. One threshold, two
+      // consumers — do not invent a second one here.
+      const ageMs = Date.parse(asOf) - Date.parse(value.observedAt)
+      if (bucket && value.bucket === bucket && ageMs <= marketPulsePolicy.fearGreedStaleAfterMs) {
+        return { state: 'available', score: value.score, bucket, observedAt: value.observedAt }
+      }
     }
     if (isExactRecord(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === asOf) return { state: 'empty' }
     if (isExactRecord(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === fearGreedSnapshotPolicy.unavailableFailureCode) return { state: 'unavailable' }
