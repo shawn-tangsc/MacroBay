@@ -79,56 +79,113 @@ function banner(): Element | null {
   return host.querySelector('[data-daily-brief-generated-banner]')
 }
 
+function bannerState(): string | null {
+  return banner()?.getAttribute('data-daily-brief-banner-state') ?? null
+}
+
+async function remount(): Promise<void> {
+  await act(() => root.unmount())
+  host.remove()
+  host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+}
+
 async function dismiss(): Promise<void> {
   const button = host.querySelector<HTMLButtonElement>('.mi-daily-brief-banner__dismiss')
   expect(button).not.toBeNull()
   await act(async () => { button?.click() })
 }
 
-describe('daily briefing generated banner', () => {
+describe('daily briefing banner', () => {
   it('shows today’s generated briefing in the reader’s language, with its generation time', async () => {
     await renderBanner({ editions: [edition('2026-10-30')], now: '2026-10-30T12:00:00.000Z' })
 
-    expect(banner()).not.toBeNull()
+    expect(bannerState()).toBe('generated')
     expect(host.textContent).toContain('今日简报已生成')
     expect(host.textContent).toContain(formatShellInstant(generatedAt, {
       timeZone: 'UTC', locale: 'zh-CN', precision: 'minute'
     }))
+    expect(host.textContent).toContain('知道了')
   })
 
-  it('stays hidden when no briefing was generated for today', async () => {
+  it('tells the reader today’s briefing is not generated and that opening the brief fills it in', async () => {
     await renderBanner({ editions: [edition('2026-10-30', 'zh-CN', 'missing')], now: '2026-10-30T12:00:00.000Z' })
-    expect(banner()).toBeNull()
 
-    await renderBanner({ editions: [], now: '2026-10-31T12:00:00.000Z' })
-    expect(banner()).toBeNull()
+    expect(bannerState()).toBe('pending')
+    expect(host.textContent).toContain('今日简报未生成')
+    expect(host.textContent).toContain('打开日报会补生成')
+    expect(host.textContent).not.toContain('今日简报已生成')
   })
 
-  it('stays hidden when the list read fails', async () => {
+  it('uses the reader’s language for the not-generated notice', async () => {
+    await renderBanner({
+      editions: [edition('2026-10-30', 'en-US', 'missing')],
+      now: '2026-10-30T12:00:00.000Z',
+      language: 'en-US'
+    })
+
+    expect(bannerState()).toBe('pending')
+    expect(host.textContent).toContain('Today’s brief is not generated yet')
+    expect(host.textContent).toContain('Open the daily brief to generate it')
+  })
+
+  it('does not claim the briefing is missing when the list read fails', async () => {
     await renderBanner({
       editions: [],
       now: '2026-10-30T12:00:00.000Z',
       client: { list: vi.fn(async () => ({ state: 'unavailable' as const, failureCode: 'time-invalid' })) }
     })
     expect(banner()).toBeNull()
+
+    await renderBanner({
+      editions: [],
+      now: '2026-10-30T12:00:00.000Z',
+      client: { list: vi.fn(async () => { throw new Error('ipc down') }) }
+    })
+    expect(banner()).toBeNull()
+  })
+
+  it('does not claim the briefing is missing when the list has no row for today', async () => {
+    // 读取成功但今天这一行不在返回里：这是读不到状态，不是确定没生成。
+    await renderBanner({ editions: [edition('2026-10-29')], now: '2026-10-30T12:00:00.000Z' })
+    expect(banner()).toBeNull()
+
+    // 今天只有另一语言的版次，也不替当前语言断言「未生成」。
+    await renderBanner({ editions: [edition('2026-10-30', 'en-US', 'missing')], now: '2026-10-30T12:00:00.000Z' })
+    expect(banner()).toBeNull()
   })
 
   it('stays away after dismissal, including on a fresh mount', async () => {
-    const trigger = new Date('2026-10-30T12:00:00.000Z')
-    await renderBanner({ editions: [edition('2026-10-30')], now: trigger.toISOString() })
+    const trigger = '2026-10-30T12:00:00.000Z'
+    await renderBanner({ editions: [edition('2026-10-30')], now: trigger })
     expect(banner()).not.toBeNull()
 
     await dismiss()
     expect(banner()).toBeNull()
 
     // 刷新/重启：同一个版次重新挂载也不再提示。
-    await act(() => root.unmount())
-    host.remove()
-    host = document.createElement('div')
-    document.body.append(host)
-    root = createRoot(host)
-    await renderBanner({ editions: [edition('2026-10-30')], now: trigger.toISOString() })
+    await remount()
+    await renderBanner({ editions: [edition('2026-10-30')], now: trigger })
     expect(banner()).toBeNull()
+  })
+
+  it('dismisses the not-generated notice for that edition only', async () => {
+    const trigger = '2026-10-30T12:00:00.000Z'
+    await renderBanner({ editions: [edition('2026-10-30', 'zh-CN', 'missing')], now: trigger })
+    expect(bannerState()).toBe('pending')
+
+    await dismiss()
+    expect(banner()).toBeNull()
+
+    await remount()
+    await renderBanner({ editions: [edition('2026-10-30', 'zh-CN', 'missing')], now: trigger })
+    expect(banner()).toBeNull()
+
+    // 同一天后来补生成了：已生成是另一条提示，不该被「未生成」的确认一并压掉。
+    await renderBanner({ editions: [edition('2026-10-30')], now: '2026-10-30T15:00:00.000Z' })
+    expect(bannerState()).toBe('generated')
+    expect(host.textContent).toContain('今日简报已生成')
   })
 
   it('shows again on a new day and in a new language', async () => {
@@ -151,5 +208,16 @@ describe('daily briefing generated banner', () => {
     })
     expect(banner()).not.toBeNull()
     expect(host.textContent).toContain('Today’s brief is ready')
+  })
+
+  it('repeats the not-generated notice on a new date', async () => {
+    const editions = [edition('2026-10-30', 'zh-CN', 'missing'), edition('2026-10-31', 'zh-CN', 'missing')]
+    await renderBanner({ editions, now: '2026-10-30T12:00:00.000Z' })
+    await dismiss()
+    expect(banner()).toBeNull()
+
+    await renderBanner({ editions, now: '2026-10-31T12:00:00.000Z' })
+    expect(bannerState()).toBe('pending')
+    expect(host.textContent).toContain('今日简报未生成')
   })
 })

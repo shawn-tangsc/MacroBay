@@ -1,6 +1,7 @@
 /*
- * 简报生成横幅：页面内的一条状态条，跟着页面内容走（与示例模式横幅同一内边距），
+ * 简报状态横幅：页面内的一条状态条，跟着页面内容走（与示例模式横幅同一内边距），
  * 不吸顶、不横跨窗口，避免被读成应用级通知。
+ * 已生成用成功色；未生成用警示色——它是「还没写」，不是错误，所以仍是一条普通状态条。
  */
 .mi-daily-brief-banner {
   flex: 0 0 auto;
@@ -18,9 +19,19 @@
   line-height: 1.5;
 }
 
+.mi-daily-brief-banner--pending {
+  border-color: color-mix(in srgb, var(--warning, #c48a1a) 42%, var(--border));
+  background: color-mix(in srgb, var(--warning, #c48a1a) 9%, var(--surface));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--warning, #c48a1a) 65%, transparent);
+}
+
 .mi-daily-brief-banner__icon {
   flex: 0 0 auto;
   color: var(--success, #3d9a6a);
+}
+
+.mi-daily-brief-banner--pending .mi-daily-brief-banner__icon {
+  color: var(--warning, #c48a1a);
 }
 
 .mi-daily-brief-banner__copy {
@@ -34,6 +45,10 @@
 .mi-daily-brief-banner__title {
   font-weight: 700;
   color: color-mix(in srgb, var(--success, #3d9a6a) 82%, var(--text));
+}
+
+.mi-daily-brief-banner--pending .mi-daily-brief-banner__title {
+  color: color-mix(in srgb, var(--warning, #c48a1a) 84%, var(--text));
 }
 
 .mi-daily-brief-banner__time {
@@ -58,4 +73,8 @@
 
 .mi-daily-brief-banner__dismiss:hover {
   border-color: color-mix(in srgb, var(--success, #3d9a6a) 55%, var(--border));
+}
+
+.mi-daily-brief-banner--pending .mi-daily-brief-banner__dismiss:hover {
+  border-color: color-mix(in srgb, var(--warning, #c48a1a) 55%, var(--border));
 }

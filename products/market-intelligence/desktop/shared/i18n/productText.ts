@@ -52,6 +52,8 @@ export const productText = {
           dailyBriefingGeneratedBanner: {
             title: '今日简报已生成',
             generatedAt: '生成时间 {time}',
+            pendingTitle: '今日简报未生成',
+            pendingHint: '打开日报会补生成',
             dismiss: '知道了'
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
@@ -1563,6 +1565,8 @@ export const productText = {
           dailyBriefingGeneratedBanner: {
             title: 'Today’s brief is ready',
             generatedAt: 'Generated at {time}',
+            pendingTitle: 'Today’s brief is not generated yet',
+            pendingHint: 'Open the daily brief to generate it',
             dismiss: 'Got it'
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
