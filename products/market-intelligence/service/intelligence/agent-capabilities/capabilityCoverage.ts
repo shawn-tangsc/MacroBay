@@ -92,6 +92,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // The divergence card's own read: the reader sees it on the dashboard; the Agent gets the same
   // judgement as an analysis fact instead of calling the view.
   'intelligence.queryMarketDivergence': excluded('internal-view'),
+  // The chips the dashboard draws; the analysis reads its own facts, not this panel view.
+  'intelligence.queryModuleSignals': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
   'intelligence.macro.economicCalendar.setReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.clearReleaseTime': exposed('operate_macro_calendar'),
