@@ -22,7 +22,13 @@ export function DivergencePanel({ state, text }: Readonly<{
 
   return (
     <section className="mi-divergence" aria-labelledby="mi-divergence-heading" data-state={state.state}>
-      <h2 id="mi-divergence-heading">{text.title}</h2>
+      {/* A banner, not a paragraph: the block is a conclusion drawn from the card above, and it has
+          to look like one without being mistaken for another chart section. */}
+      <header className="mi-divergence__banner-head">
+        <span className="mi-divergence__kicker">{text.kicker}</span>
+        <h2 id="mi-divergence-heading">{text.title}</h2>
+      </header>
+      <div className="mi-divergence__banner">
       {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={48} /> : null}
       {state.state === 'unavailable' ? <p className="mi-divergence__note" data-tone="muted">{text.unavailable}</p> : null}
       {state.state === 'empty' ? <p className="mi-divergence__note" data-tone="muted">{text.empty}</p> : null}
@@ -44,6 +50,8 @@ export function DivergencePanel({ state, text }: Readonly<{
           ))}
         </ul>
       ) : null}
+      </div>
+      <p className="mi-divergence__basis">{text.basis}</p>
       {withheld.length > 0 ? (
         <div className="mi-divergence__withheld" data-withheld={withheld.length}>
           <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>

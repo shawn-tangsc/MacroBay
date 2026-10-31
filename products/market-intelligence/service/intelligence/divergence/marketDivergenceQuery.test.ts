@@ -13,7 +13,7 @@ function reader(overrides: Partial<DivergenceLegReader> = {}): DivergenceLegRead
     openInterest: async () => ({ change24hPct: 3.4, observedAt: at(1) }),
     funding: async () => ({ ratePercent: -0.0032, observedAt: at(1) }),
     price: async () => ({ return24hPercent: 0.2, observedAt: at(1) }),
-    sentiment: async () => ({ label: 'negative' as const, computedAt: at(1) }),
+    sentiment: async () => ({ bearishSharePercent: 72, scoredCount: 11, observedAt: at(1) }),
     ...overrides
   }
 }

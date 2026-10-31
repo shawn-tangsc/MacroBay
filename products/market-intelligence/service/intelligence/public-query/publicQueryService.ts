@@ -53,7 +53,9 @@ import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
 import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
-import { queryMarketDivergenceAsync, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import { bearishShare, queryMarketDivergenceAsync, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
+import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import type { FundingRateHistoryStore } from '../store/fundingRateHistoryStore'
 import type { PerpetualPositioningStore } from '../store/perpetualPositioningStore'
 import { impactMatchesScope, itemMatchesScope, normalizeQueryScope, type ResolvedQueryScope } from './queryScopeResolver'
@@ -108,6 +110,8 @@ export type MarketIntelligencePublicQueryService = {
    */
   queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string }) => Promise<CrossAssetSnapshot | undefined>
   setCrossAssetQuery: (query: Pick<CrossAssetQuery, 'query'> | undefined) => void
+  /** The scored-headline reader the news page and the analysis already share. */
+  setNewsSentimentQuery: (query: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined) => void
   /**
    * The macro snapshot the 市场状态 block reads: the dollar row (licensed `dxy-real`, or the labelled
    * `dxy-synthetic` fallback) and gold's stored level with its window returns.
@@ -182,6 +186,7 @@ export function createMarketIntelligencePublicQueryService(
   let macroEconomicCalendarQuery = input.macroEconomicCalendarQuery
   let marketCalendarQuery = input.marketCalendarQuery
   let crossAssetQuery: CrossAssetQuery | undefined
+  let newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
   let macroRatesSnapshotQuery: MacroRatesSnapshotQuery | undefined
   let macroHistoryAsOfQuery: Pick<MacroHistoryAsOfQuery, 'read'> | undefined
@@ -331,6 +336,9 @@ export function createMarketIntelligencePublicQueryService(
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },
+    setNewsSentimentQuery(query) {
+      newsSentimentQuery = query
+    },
     // Fail closed to `undefined` exactly like the cross-asset read: an unwired or throwing snapshot
     // must leave the domain unavailable, never empty — "no data" and "no answer" are different facts.
     queryMacroMarketSnapshot() {
@@ -382,12 +390,12 @@ export function createMarketIntelligencePublicQueryService(
   // "what the dashboard already knows", and the divergence rule never sees a second view of it.
   service.queryMarketDivergence = async (queryInput) => queryMarketDivergenceAsync({
     asOf: queryInput.asOf,
-    read: divergenceReader(service, queryInput.asOf)
+    read: divergenceReader(service, queryInput.asOf, newsSentimentQuery)
   })
   return service
 }
 
-function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string): DivergenceLegReader {
+function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string, newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined): DivergenceLegReader {
   return {
     stablecoin: async () => {
       const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
@@ -418,12 +426,9 @@ function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: s
       return { return24hPercent: metric.value, observedAt: snapshot.analysisEnd }
     },
     sentiment: async () => {
-      // 24h on purpose: the pair asks whether a day of news moved a day of price, and the
-      // builder defaults to 1h.
-      const envelope = await service.querySentimentSnapshot({ asOf, scope: { asset: 'BTC' }, filters: { horizon: '24h' } })
-      const data = envelope.data
-      if (!data || data.status !== 'available' || !data.label) return undefined
-      return { label: data.label, computedAt: data.computedAt ?? asOf }
+      if (!newsSentimentQuery) return undefined
+      const view = await newsSentimentQuery.query({ asOf, window: '24h', scope: 'market', direction: 'all', limit: 100 })
+      return bearishShare(view)
     }
   }
 }

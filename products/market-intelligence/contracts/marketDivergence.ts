@@ -28,6 +28,8 @@ export const divergencePolicy = Object.freeze({
     etfWindowSessions: 3,
     priceFlatPercent: 1,
     priceStillPercent: 0.5,
+    /** A majority of the day's scored headlines bearish is the "bad news" condition. */
+    sentimentBearishSharePercent: 60,
     openInterestFlatPercent: 1
   }),
   maximumDtoBytes: 8 * 1024,
@@ -51,8 +53,6 @@ export type DivergenceLeg = Readonly<{
   value: number
   unit: 'percent' | 'usd' | 'percent-per-8h'
   observedAt: string
-  /** Label legs carry their state as text; numeric legs leave this out. */
-  label?: string
 }>
 
 export type DivergenceDirection = 'bearish' | 'bullish' | 'unpriced'
@@ -84,7 +84,8 @@ export type DivergenceInputs = Readonly<{
   openInterest?: Readonly<{ change24hPct: number; observedAt: string }>
   funding?: Readonly<{ ratePercent: number; observedAt: string }>
   price?: Readonly<{ return24hPercent: number; observedAt: string }>
-  sentiment?: Readonly<{ label: 'positive' | 'negative' | 'neutral' | 'mixed'; computedAt: string }>
+  /** Share of the last 24 hours' scored headlines that are bearish, 0–100. */
+  sentiment?: Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }>
 }>
 
 export function divergenceUnavailable(): Extract<MarketDivergenceResult, { state: 'unavailable' }> {
@@ -149,12 +150,13 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     const open = input.openInterest
     const price = input.price
     if (!sentiment || !open || !price) withheld.push({ pairId: 'narrative-price', reason: 'leg-missing', leg: !sentiment ? 'sentiment' : !open ? 'open-interest' : 'price' })
-    else if (!isFresh(open.observedAt, input.asOf) || !isFresh(price.observedAt, input.asOf) || !isFresh(sentiment.computedAt, input.asOf)) withheld.push({ pairId: 'narrative-price', reason: 'leg-stale', leg: !isFresh(sentiment.computedAt, input.asOf) ? 'sentiment' : !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'price' })
-    else if ((sentiment.label === 'negative' || sentiment.label === 'mixed')
+    else if (!isFresh(open.observedAt, input.asOf) || !isFresh(price.observedAt, input.asOf) || !isFresh(sentiment.observedAt, input.asOf)) {
+      withheld.push({ pairId: 'narrative-price', reason: 'leg-stale', leg: !isFresh(sentiment.observedAt, input.asOf) ? 'sentiment' : !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'price' })
+    } else if (sentiment.bearishSharePercent >= divergencePolicy.thresholds.sentimentBearishSharePercent
       && Math.abs(price.return24hPercent) <= divergencePolicy.thresholds.priceStillPercent
       && Math.abs(open.change24hPct) <= divergencePolicy.thresholds.openInterestFlatPercent) {
       rows.push(freezeRow('narrative-price', 'unpriced', [
-        { id: 'sentiment', value: sentiment.label === 'negative' ? -1 : 0, unit: 'percent', observedAt: sentiment.computedAt, label: sentiment.label },
+        { id: 'sentiment', value: sentiment.bearishSharePercent, unit: 'percent', observedAt: sentiment.observedAt },
         { id: 'price', value: price.return24hPercent, unit: 'percent', observedAt: price.observedAt },
         openLeg(open)
       ]))
@@ -245,8 +247,7 @@ function isLeg(value: unknown): boolean {
   const leg = value as Record<string, unknown>
   if (typeof leg.id !== 'string' || typeof leg.value !== 'number' || !Number.isFinite(leg.value)) return false
   if (leg.unit !== 'percent' && leg.unit !== 'usd' && leg.unit !== 'percent-per-8h') return false
-  if (!isCanonicalDivergenceTime(leg.observedAt)) return false
-  return leg.label === undefined || typeof leg.label === 'string'
+  return isCanonicalDivergenceTime(leg.observedAt)
 }
 
 function isWithheld(value: unknown): boolean {

@@ -1,20 +1,47 @@
 .mi-divergence {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
   padding: 8px 0 2px;
 }
-/* A footnote to the card above, not a section of its own: the heading is small, lower-case weight
-   and sits on the same line as its result. */
+.mi-divergence__banner-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+/* The word "结论" as a bordered label: a reader has to see at a glance that this block is a
+   judgement about the card above, not another reading. */
+.mi-divergence__kicker {
+  padding: 1px 5px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 3px;
+  color: var(--mi-dashboard-text);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  line-height: 1.4;
+}
 .mi-divergence h2 {
+  margin: 0;
   color: var(--mi-dashboard-muted);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+/* The banner carries the surface; the rows inside drop theirs so the block reads as one object. */
+.mi-divergence__banner {
+  display: grid;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--mi-dashboard-surface) 78%, var(--mi-dashboard-line));
+}
+.mi-divergence[data-state='empty'] .mi-divergence__banner { background: color-mix(in srgb, var(--mi-dashboard-surface) 92%, transparent); }
 .mi-divergence__note {
   margin: 0;
-  color: var(--mi-dashboard-muted);
+  color: var(--mi-dashboard-text);
   font-size: 10px;
   line-height: 1.5;
 }
@@ -28,9 +55,8 @@
 .mi-divergence__row {
   display: grid;
   gap: 3px;
-  padding: 6px 8px;
+  padding: 2px 0 2px 8px;
   border-left: 2px solid var(--mi-dashboard-line);
-  background: color-mix(in srgb, var(--mi-dashboard-surface) 60%, transparent);
 }
 .mi-divergence__row[data-direction='bearish'] { border-left-color: var(--mi-dashboard-negative); }
 .mi-divergence__row[data-direction='bullish'] { border-left-color: var(--mi-dashboard-positive); }
@@ -72,8 +98,17 @@
   font-size: 9px;
   opacity: 0.8;
 }
+.mi-divergence__basis {
+  margin: 0;
+  padding-left: 2px;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
 .mi-divergence__withheld {
   display: block;
+  padding-left: 2px;
   color: var(--mi-dashboard-muted);
   font-size: 9px;
   line-height: 1.5;

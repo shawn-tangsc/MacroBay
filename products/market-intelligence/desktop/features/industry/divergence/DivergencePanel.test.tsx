@@ -22,6 +22,13 @@ const row = {
 }
 
 describe('divergence panel', () => {
+  it('says it was decided by fixed rules, so it is not read as the model’s conclusion', () => {
+    const markup = render({ state: 'empty', withheld: [] })
+    expect(markup).toContain(text.kicker)
+    expect(markup).toContain(text.basis)
+    expect(markup).toContain('不是 AI 结论')
+  })
+
   it('shows a row with both readings, the mechanism and the invalidation', () => {
     const markup = render({ state: 'available', rows: [row], withheld: [] })
     expect(markup).toContain('偏空')

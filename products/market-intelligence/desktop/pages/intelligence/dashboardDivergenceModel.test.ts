@@ -38,6 +38,7 @@ describe('divergence view model', () => {
 
   it('reads a dollar flow in millions and a sentiment label as its own word', () => {
     expect(formatLeg({ id: 'etf', value: -150e6, unit: 'usd', observedAt: at(1) })).toBe('−$150M')
-    expect(formatLeg({ id: 'sentiment', value: -1, unit: 'percent', observedAt: at(1), label: 'negative' })).toBe('negative')
+    // A share, not a change: no sign, no plus.
+    expect(formatLeg({ id: 'sentiment', value: 72, unit: 'percent', observedAt: at(1) })).toBe('72%')
   })
 })

@@ -52,7 +52,9 @@ export function projectDashboardDivergence(value: unknown, asOf: string): Dashbo
 
 /** Percentages keep two decimals; a dollar flow reads in millions; funding keeps its own unit. */
 export function formatLeg(leg: DivergenceLeg): string {
-  if (leg.id === 'sentiment' && leg.label) return leg.label
+  // A share, not a change: 62% of the headlines that took a side were bearish. The sign a change
+  // formatter would add (+62%) would read as a gain.
+  if (leg.id === 'sentiment') return `${Math.round(leg.value)}%`
   if (leg.unit === 'usd') return `${leg.value < 0 ? '−' : '+'}$${Math.abs(leg.value / 1e6).toFixed(0)}M`
   const percent = `${leg.value < 0 ? '−' : '+'}${Math.abs(leg.value).toFixed(leg.unit === 'percent-per-8h' ? 4 : 2)}%`
   return leg.unit === 'percent-per-8h' ? `${percent} / 8h` : percent

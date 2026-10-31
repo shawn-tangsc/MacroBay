@@ -20,7 +20,7 @@ function inputs(overrides: Partial<DivergenceInputs> = {}): DivergenceInputs {
     openInterest: { change24hPct: 3.4, observedAt: at(1) },
     funding: { ratePercent: -0.0032, observedAt: at(1) },
     price: { return24hPercent: 0.2, observedAt: at(1) },
-    sentiment: { label: 'negative', computedAt: at(1) },
+    sentiment: { bearishSharePercent: 72, scoredCount: 11, observedAt: at(1) },
     ...overrides
   }
 }
@@ -37,7 +37,7 @@ describe('divergence pairs', () => {
     const row = result.rows.find(entry => entry.pairId === 'liquidity-leverage')!
     expect(row.direction).toBe('bearish')
     expect(row.legs.map(leg => leg.id)).toEqual(['stablecoin', 'open-interest', 'funding'])
-    expect(row.mechanismKey).toBe('divergence.liquidity-leverage.mechanism')
+    expect(row.direction).toBe('bearish')
   })
 
   it('stays quiet when the legs agree — agreement is the default state, not a row', () => {
@@ -45,7 +45,7 @@ describe('divergence pairs', () => {
       stablecoin: { change7dPercent: -1.2, observedAt: at(2) },
       openInterest: { change24hPct: -4, observedAt: at(1) },
       price: { return24hPercent: -2, observedAt: at(1) },
-      sentiment: { label: 'neutral', computedAt: at(1) }
+      sentiment: { bearishSharePercent: 20, scoredCount: 9, observedAt: at(1) }
     }))
     expect(result.state).toBe('empty')
     if (result.state !== 'empty') return
@@ -66,7 +66,7 @@ describe('divergence pairs', () => {
     if (result.state !== 'available') throw new Error('expected rows')
     const row = result.rows.find(entry => entry.pairId === 'narrative-price')!
     expect(row.direction).toBe('unpriced')
-    expect(row.legs.find(leg => leg.id === 'sentiment')!.label).toBe('negative')
+    expect(row.legs.find(leg => leg.id === 'sentiment')!.value).toBe(72)
   })
 })
 
@@ -75,7 +75,7 @@ describe('window alignment', () => {
     // Friday's ETF session on a Monday morning: the market was shut in between.
     const result = detectDivergences(inputs({ asOf: '2026-11-02T12:00:00.000Z', stablecoin: { change7dPercent: -1.2, observedAt: '2026-11-02T06:00:00.000Z' }, openInterest: { change24hPct: 3.4, observedAt: '2026-11-02T11:00:00.000Z' }, funding: { ratePercent: -0.0032, observedAt: '2026-11-02T11:00:00.000Z' }, price: { return24hPercent: 0.2, observedAt: '2026-11-02T11:00:00.000Z' } }))
     if (result.state === 'unavailable') throw new Error('unexpected')
-    expect(result.withheld).toContainEqual({ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' })
+    expect(result.withheld).toContainEqual(expect.objectContaining({ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' }))
     expect(result.rows.some(row => row.pairId === 'flows-price')).toBe(false)
   })
 

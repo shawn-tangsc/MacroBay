@@ -447,6 +447,8 @@ export const productText = {
             },
             divergence: {
               title: '跨面板背离',
+              basis: '按固定阈值判定，不是 AI 结论；「舆情」一项是模型对新闻标题的打分，其余是交易所与链上读数。AI 的书面结论在分析里引用这些判定。',
+              kicker: '规则判定',
               loading: '正在比对四条腿…',
               empty: '今日三对均未出现背离：资金、杠杆与价格指向同一方向。',
               unavailable: '背离读数暂不可用：几条腿没有同时取到。',
@@ -2115,6 +2117,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             divergence: {
               title: 'Cross-panel divergence',
+              basis: 'Decided by fixed thresholds, not written by the model; the sentiment leg is the model’s scoring of headlines, the rest are exchange and on-chain readings. The written AI conclusion cites these decisions in the analysis.',
+              kicker: 'Rule-based',
               loading: 'Comparing the four legs…',
               empty: 'None of the three pairs diverged today: money, leverage and price point the same way.',
               unavailable: 'The divergence reading is unavailable: the legs could not be read together.',

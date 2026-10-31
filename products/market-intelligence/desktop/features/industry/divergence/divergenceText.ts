@@ -2,6 +2,10 @@ import type { DivergenceDirection, DivergenceLegId, DivergencePairId } from '../
 
 export type DivergencePanelText = Readonly<{
   title: string
+  /** The word that marks the block as a conclusion rather than another section. */
+  kicker: string
+  /** One line stating what decided this card, so it is not read as the model's conclusion. */
+  basis: string
   loading: string
   /** No pair diverged: a state, not a failure. */
   empty: string

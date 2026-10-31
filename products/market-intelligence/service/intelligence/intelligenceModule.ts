@@ -661,6 +661,10 @@ export function getIntelligenceModule(
       ).catch(() => undefined)
     }
     const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore, perpetualPositioningStore })
+    // The divergence card asks whether the day's news was priced; that needs the same scored
+    // headlines the news page and the analysis read, not the sentiment aggregate (which only
+    // exists for market-wide scopes).
+    publicQueryService.setNewsSentimentQuery(newsSentimentQuery ? { query: input => newsSentimentQuery.query(input) } : undefined)
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
     const marketAnalysisSettingsService = createMarketAnalysisSettingsService({

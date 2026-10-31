@@ -1,3 +1,5 @@
+import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
+import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import {
   detectDivergences,
   divergencePolicy,
@@ -22,7 +24,13 @@ export type DivergenceLegReader = Readonly<{
   openInterest: () => Promise<Readonly<{ change24hPct: number; observedAt: string }> | undefined>
   funding: () => Promise<Readonly<{ ratePercent: number; observedAt: string }> | undefined>
   price: () => Promise<Readonly<{ return24hPercent: number; observedAt: string }> | undefined>
-  sentiment: () => Promise<Readonly<{ label: 'positive' | 'negative' | 'neutral' | 'mixed'; computedAt: string }> | undefined>
+  /**
+   * The share of scored headlines that are bearish in the last 24 hours.
+   *
+   * Not the sentiment snapshot: its aggregates only exist for market-wide scopes, so an
+   * asset-scoped or 24h-labelled read answers `unknown` and the leg silently disappears.
+   */
+  sentiment: () => Promise<Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }> | undefined>
 }>
 
 export async function queryMarketDivergenceAsync(input: Readonly<{
@@ -51,6 +59,24 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
     return isWithinUtf8JsonBudget(result, divergencePolicy.maximumDtoBytes) ? result : divergenceUnavailable()
   } catch {
     return divergenceUnavailable()
+  }
+}
+
+/**
+ * Turns the scored headline view into the one number the pair needs.
+ *
+ * `directionalCount` excludes neutral items on purpose: "most of what was said was bearish" is a
+ * statement about the headlines that took a side, not about the volume of coverage.
+ */
+export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }> | undefined {
+  if (view.state !== 'available' || !view.summary) return undefined
+  const directional = view.summary.directionalCount
+  const bearish = view.items.filter(item => item.polarity === 'bearish').length
+  if (directional <= 0 || bearish <= 0) return undefined
+  return {
+    bearishSharePercent: Math.round((bearish / directional) * 100),
+    scoredCount: directional,
+    observedAt: view.summary.latestItemAt ?? view.generatedAt
   }
 }
 
