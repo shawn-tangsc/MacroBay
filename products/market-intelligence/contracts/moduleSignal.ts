@@ -44,14 +44,18 @@ export const moduleSignalPolicy = Object.freeze({
   /** A bucket longer than a day is a daily rule wearing an intraday shape. */
   maximumBucketMs: 24 * 60 * 60 * 1_000,
   /**
-   * Modules whose rule sums a multi-day window, and therefore cannot be read without its coverage.
+   * Rules that **sum** a multi-day window, and therefore cannot be read without their coverage.
    *
-   * A windowed rule that forgets `coveredDays` / `requiredDays` would let a two-day window pass for
-   * a three-day one, so the contract refuses to construct the signal at all. The calendar is not in
-   * this list on purpose: a release is a point event, not a window, and inventing `1/1` for it would
-   * put a coverage figure on a rule that has no coverage.
+   * The criterion is the rule's arithmetic, not the module it lives in and not its cadence: a sum
+   * over days has a denominator and can be short of it, so it must say how much it covered. A point
+   * event — one bucket of open interest, one release — has no denominator, and inventing `1/1` for
+   * it would put a coverage figure on a rule that has no coverage. Whoever adds a module here first
+   * answers "does this leg sum a multi-day window?", and only then the entry belongs.
+   *
+   * A summing rule that forgets `coveredDays` / `requiredDays` would let a two-day window pass for a
+   * three-day one, so the contract refuses to construct the signal at all.
    */
-  coverageRequiredModules: ['etf-flows'] as const,
+  summingModules: ['etf-flows'] as const,
   /** A window requirement of zero days is a window nobody means. */
   minimumRequiredDays: 1
 })
@@ -169,7 +173,7 @@ export function buildSignalDedupeKey(input: Readonly<{
  * Missing numbers answer **false**, not true. "We were not told how much was covered" and "all of it
  * was covered" are the same mistake this contract exists to prevent — a two-day window quietly
  * passing for a three-day one. A windowed rule cannot even be constructed without both numbers
- * (`coverageRequiredModules`), so this default only ever catches values built by hand.
+ * (`summingModules`), so this default only ever catches values built by hand.
  */
 export function isCoverageComplete(values: Readonly<Record<string, number>>): boolean {
   const covered = values.coveredDays
@@ -234,7 +238,7 @@ function isCadence(value: unknown): value is SignalCadence {
  *
  * Two independent rules, deliberately not fused into one condition:
  *
- * - A module whose rule sums a multi-day window **must** publish both numbers.
+ * - A module whose rule sums a multi-day window (`summingModules`) **must** publish both numbers.
  * - Anything that publishes either number **is** subject to the same check, listed module or not.
  *
  * The second rule is why the list cannot rot into a single point of failure: a future windowed rule
@@ -248,7 +252,7 @@ function isCoverageWellFormed(
   moduleId: unknown
 ): boolean {
   const publishesCoverage = values.coveredDays !== undefined || values.requiredDays !== undefined
-  if (!publishesCoverage && !moduleSignalPolicy.coverageRequiredModules.includes(moduleId as never)) return true
+  if (!publishesCoverage && !moduleSignalPolicy.summingModules.includes(moduleId as never)) return true
   const covered = values.coveredDays
   const required = values.requiredDays
   if (!Number.isInteger(covered) || covered < 0) return false
