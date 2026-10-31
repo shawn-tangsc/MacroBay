@@ -147,10 +147,17 @@
 .mi-policy-drawer__distribution-bar i { display: block; height: 100%; border-radius: 2px; }
 /* Each row keeps its direction's colour; the leading row is brighter, not a different hue - a green
    bar on a hike reads as a dovish signal, which is the opposite of what the row says. */
-.mi-policy-drawer__distribution tbody tr[data-outcome='hike-25'] .mi-policy-drawer__distribution-bar i { background: #e0524c; }
-.mi-policy-drawer__distribution tbody tr[data-outcome='hike-50-plus'] .mi-policy-drawer__distribution-bar i { background: #8f3b37; }
-.mi-policy-drawer__distribution tbody tr[data-outcome='no-change'] .mi-policy-drawer__distribution-bar i { background: #4a5260; }
-.mi-policy-drawer__distribution tbody tr[data-outcome='cut-25'] .mi-policy-drawer__distribution-bar i { background: #3fbf6f; }
-.mi-policy-drawer__distribution tbody tr[data-outcome='cut-50-plus'] .mi-policy-drawer__distribution-bar i { background: #2c7a49; }
-.mi-policy-drawer__distribution tbody tr:not([data-leading='true']) .mi-policy-drawer__distribution-bar i { opacity: .55; }
+/* Direction colours for the bands the reader was told about; anything at or below the floor is grey,
+   the same grey the card uses for 其他. */
+.mi-policy-drawer__distribution tbody tr[data-named='true'] .mi-policy-drawer__distribution-bar i { background: #e0524c; }
+.mi-policy-drawer__distribution tbody tr[data-named='true'][data-outcome='cut-25'] .mi-policy-drawer__distribution-bar i,
+.mi-policy-drawer__distribution tbody tr[data-named='true'][data-outcome='cut-50-plus'] .mi-policy-drawer__distribution-bar i { background: #3fbf6f; }
+.mi-policy-drawer__distribution tbody tr[data-named='true'][data-outcome='no-change'] .mi-policy-drawer__distribution-bar i { background: #d9a441; }
+.mi-policy-drawer__distribution tbody tr[data-named='false'] .mi-policy-drawer__distribution-bar i { background: #3b4048; }
+.mi-policy-drawer__distribution tbody tr:not([data-leading='true']) .mi-policy-drawer__distribution-bar i { opacity: .65; }
 .mi-policy-drawer__distribution tbody tr[data-leading='true'] .mi-policy-drawer__distribution-bar { width: 62px; height: 6px; }
+
+/* Two series, one prefix: the section heading stays a single line on a 488px drawer. */
+.mi-policy-drawer__source-links { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__source-links a { display: inline-flex; align-items: center; gap: 3px; color: var(--mi-text-muted, #8b8d94); text-decoration: none; }
+.mi-policy-drawer__source-links a:hover { color: var(--mi-accent, #b7cf52); }

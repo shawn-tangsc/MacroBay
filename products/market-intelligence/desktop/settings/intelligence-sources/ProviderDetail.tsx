@@ -259,7 +259,10 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
               {source.requiresProxy ? <em className="source-provider-detail__proxy">{labels.badges.proxy}</em> : null}
               {needsJob(source) ? <em className={`source-provider-detail__job${source.jobRegistered ? ' is-on' : ''}`}>{source.jobRegistered ? labels.jobRegistered : labels.jobNotRegistered}</em> : null}
               {(() => {
-                const detailHealth = details[source.sourceId]?.health.runtimeStatus
+                // A source with no generic adapter is collected by the product's own job; the
+                // pipeline has nothing to say about it, and an old failure from a manual attempt
+                // would otherwise read as "this source is broken".
+                const detailHealth = source.collection === 'none' ? undefined : details[source.sourceId]?.health.runtimeStatus
                 const calendarHealth = !detailHealth && source.enabled && source.jobRegistered && source.kind.includes('calendar') ? 'healthy' : undefined
                 const status = detailHealth ?? calendarHealth
                 return status ? <em className={`source-provider-detail__health is-${status}`}>{sourceDetailLabels?.health.statuses[status] ?? status}</em> : null

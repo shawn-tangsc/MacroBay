@@ -20,6 +20,8 @@ export type PolicyPathDrawerText = Readonly<{
   odds: string; change24h: string; range30d: string; quote: string
   sepMissing: string; decisionMissing: string
   meeting: string; daysAway: string; projection: string; unchanged: string; range: string
+  /** The two FRED series behind the range, labelled so the series ids do not have to be memorised. */
+  rangeLower: string; rangeUpper: string
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
   change24hPending: string
@@ -156,7 +158,12 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
 
     <section className="mi-policy-drawer__section">
       <h3>{text.basis}
-        <a href="https://fred.stlouisfed.org/series/DFEDTARU" rel="noreferrer" target="_blank">FRED · DFEDTARU<ExternalLink aria-hidden="true" size={11} /></a>
+        {/* Both bounds, each to its own series: the row shows 3.75–4.00, and a reader should be
+            able to check either half instead of trusting the pair. */}
+        <span className="mi-policy-drawer__source-links">FRED ·
+          <a href="https://fred.stlouisfed.org/series/DFEDTARL" rel="noreferrer" target="_blank">{text.rangeLower} DFEDTARL<ExternalLink aria-hidden="true" size={11} /></a>
+          <a href="https://fred.stlouisfed.org/series/DFEDTARU" rel="noreferrer" target="_blank">{text.rangeUpper} DFEDTARU<ExternalLink aria-hidden="true" size={11} /></a>
+        </span>
       </h3>
       <dl className="mi-policy-drawer__kv">
         {probability ? <>
