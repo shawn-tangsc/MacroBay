@@ -1,4 +1,4 @@
-import type { DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
+import type { BriefingMarketRow, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
@@ -68,19 +68,45 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new DailyBriefTurnAbortedError()
 }
 
+function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly BackfillOutcome[]): DailyBriefingDocument {
+  const metrics: Record<string, { id: string; format: BriefingValueFormat; group: 'market' | 'funds' }> = {
+    'core-stablecoin-supply-usd': { id: 'stablecoin', format: 'usd', group: 'funds' },
+    'etf-net-flow-btc': { id: 'etf-btc', format: 'usd', group: 'funds' },
+    'etf-net-flow-eth': { id: 'etf-eth', format: 'usd', group: 'funds' },
+    'funding-rate-percent-btc': { id: 'funding-btc', format: 'percent', group: 'funds' },
+    'funding-rate-percent-eth': { id: 'funding-eth', format: 'percent', group: 'funds' },
+    'dxy-level': { id: 'dxy', format: 'level', group: 'market' },
+    'gold-level-usd': { id: 'gold', format: 'level', group: 'market' },
+    'us10y-yield-percent': { id: 'us10y', format: 'percent', group: 'market' },
+    'us10y-real-yield-percent': { id: 'us10y-real', format: 'percent', group: 'market' }
+  }
+  const byId = new Map(outcomes.flatMap((outcome) => outcome.result?.state === 'available' && metrics[outcome.result.metric] ? [[metrics[outcome.result.metric]!.id, outcome.result] as const] : []))
+  if (byId.size === 0) return document
+  const patch = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
+    const fact = byId.get(row.id)
+    if (!fact) return row
+    return Object.freeze({ ...row, state: 'available' as const, value: Object.freeze({ number: fact.value, format: metrics[fact.metric]!.format }), observedAt: fact.observedAt, change: null }) as T
+  }
+  return Object.freeze({
+    ...document,
+    data: Object.freeze({ ...document.data, market: Object.freeze(document.data.market.map(patch)), funds: Object.freeze(document.data.funds.map(patch)) })
+  })
+}
+
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
-  const editionKey = dailyBriefEditionKey(input.document.edition.date, input.locale)
+  let document = input.document
+  const editionKey = dailyBriefEditionKey(document.edition.date, input.locale)
   const copy = dailyBriefSessionCopy(input.locale)
-  const summary = factSummary(input.document, input.locale)
-  const gaps = collectDataGaps(input.document)
-  const protocol = backfillProtocol(gaps, input.document)
+  const summary = factSummary(document, input.locale)
+  const gaps = collectDataGaps(document)
+  const protocol = backfillProtocol(gaps, document)
   const selectionPrompt = [
-    buildDailyBriefingSelectionPrompt({ document: input.document, locale: input.locale })
+    buildDailyBriefingSelectionPrompt({ document: document, locale: input.locale })
       .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n'),
     ...(protocol ? [protocol] : [])
   ].join('\n\n')
   throwIfAborted(input.signal)
-  const started = await input.runner.start({ editionKey, date: input.document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
+  const started = await input.runner.start({ editionKey, date: document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
   let selection: unknown
   try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
   const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]
@@ -95,26 +121,27 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     await input.runner.finish(started.sessionId, 'failed')
     return { state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection', sessionId: started.sessionId, toolInvocations }
   }
-  const unknown = unknownSelection(selection, input.document)
+  const unknown = unknownSelection(selection, document)
   if (unknown) {
     await input.runner.finish(started.sessionId, 'failed')
     return { state: 'failed', failureCode: 'invalid-shape', failureDetail: `selection-unknown:${unknown}`, sessionId: started.sessionId, toolInvocations }
   }
   const requests = (selection as { requests?: unknown }).requests
   const backfill = await runBackfillRound(selection, input, gaps)
+  if (backfill) document = applyBackfillFacts(document, backfill)
   if ((Array.isArray(requests) && requests.length > 0) || backfill) {
     const sections: string[] = []
-    if (Array.isArray(requests) && requests.length > 0) sections.push(`FIELD RESPONSE:\n${fieldResponse(input.document, requests, input.locale)}`)
-    if (backfill) sections.push(backfillMessage(backfill, input.document.edition.windowEnd))
+    if (Array.isArray(requests) && requests.length > 0) sections.push(`FIELD RESPONSE:\n${fieldResponse(document, requests, input.locale)}`)
+    if (backfill) sections.push(backfillMessage(backfill, document.edition.windowEnd))
     throwIfAborted(input.signal)
-    const answer = await input.runner.continue(started.sessionId, `${sections.join('\n\n')}\nReturn the next selection JSON if you need to adjust; otherwise continue.`, undefined, input.signal)
+    const answer = await input.runner.continue(started.sessionId, `${sections.join('\n\n')}\nDo not return another selection. The next message is the writing task.`, undefined, input.signal)
     toolInvocations.push(...answer.toolInvocations)
     try {
       const adjusted = JSON.parse(answer.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''))
       if (adjusted && typeof adjusted === 'object' && (adjusted as { stage?: unknown }).stage === 'select') selection = adjusted
     } catch { /* keep the prior selection when the model just acknowledges */ }
   }
-  const selectedDocument = selectDocument(input.document, selection)
+  const selectedDocument = selectDocument(document, selection)
   const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   throwIfAborted(input.signal)
