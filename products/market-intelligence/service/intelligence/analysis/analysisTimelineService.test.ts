@@ -23,7 +23,7 @@ describe('analysisTimelineService', () => {
 
     const page = service.listTimeline({ eventGroupId: 'mi-eg-1', limit: 50 })
 
-    expect(page).toEqual({ schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: fullAssessment, direction: null, version: 1, triggerStatus: null }], nextCursor: 'opaque-cursor' })
+    expect(page).toEqual({ schemaVersion: 1, items: [{ id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: fullAssessment, direction: null, version: 1, triggerStatus: null, groupType: null, groupSubject: null }], nextCursor: 'opaque-cursor' })
     expect(() => JSON.parse(page.nextCursor!)).toThrow()
   })
 
@@ -163,4 +163,53 @@ it('explains a reader-triggered entry as the reader\'s, never with the floor\'s 
 it('says nothing rather than guessing when the entry\'s run cannot be read', () => {
   const service = serviceFor({ id: 'mi-ar-1', triggerKey: 'calendar.refresh', queuedAt: '2026-09-28T00:31:00.000Z' }, 'mi-ar-absent')
   expect(service.listTimeline({}).items[0]!.triggerStatus).toBeNull()
+})
+
+// Two rows published twenty seconds apart are two different events. The list spans event groups,
+// so without the group's own name the reader sees the same bearish paragraph posted twice.
+describe('analysisTimelineService group identity', () => {
+  const groups: Record<string, { id: string; currentSummaryId: string | null; groupType: string; mergeKey: string }> = {
+    'mi-eg-news': { id: 'mi-eg-news', currentSummaryId: null, groupType: 'sentiment', mergeKey: 'sentiment|official|sentiment|A Nasdaq-listed company may sell $450 million bitcoin|1494542' },
+    'mi-eg-macro': { id: 'mi-eg-macro', currentSummaryId: null, groupType: 'macro', mergeKey: 'macro|official|unknown|unknown|Fed Funds Target Range Upper|1494504' },
+    'mi-eg-blank': { id: 'mi-eg-blank', currentSummaryId: null, groupType: 'funding', mergeKey: 'funding|official|unknown|unknown|1494550' }
+  }
+  const entry = (id: string, eventGroupId: string, occurredAt: string) => ({ id, schemaVersion: 1, eventGroupId, analysisRunId: null, kind: 'analysis' as const, status: 'published' as const, occurredAt, summaryRef: null, safeTitle: '市场分析已生成', safeExcerpt: '偏空。', version: 1 })
+
+  it('names each row with its own group type and subject', () => {
+    const service = createAnalysisTimelineService({
+      repository: {
+        listTimeline: () => ({ items: [entry('mi-tl-2', 'mi-eg-news', '2026-10-31T13:36:23.000Z'), entry('mi-tl-1', 'mi-eg-macro', '2026-10-31T13:36:04.000Z')], nextCursor: null }),
+        getEventGroup: (id: string) => groups[id],
+        getSummary: () => undefined, getRun: () => undefined, listPredictions: () => []
+      } as never
+    })
+
+    const [newer, older] = service.listTimeline({}).items
+    expect(newer).toMatchObject({ groupType: 'sentiment', groupSubject: 'A Nasdaq-listed company may sell $450 million bitcoin' })
+    expect(older).toMatchObject({ groupType: 'macro', groupSubject: 'Fed Funds Target Range Upper' })
+  })
+
+  it('drops a subject that is only a placeholder instead of captioning the row with it', () => {
+    const service = createAnalysisTimelineService({
+      repository: {
+        listTimeline: () => ({ items: [entry('mi-tl-3', 'mi-eg-blank', '2026-10-31T13:36:23.000Z')], nextCursor: null }),
+        getEventGroup: (id: string) => groups[id],
+        getSummary: () => undefined, getRun: () => undefined, listPredictions: () => []
+      } as never
+    })
+
+    expect(service.listTimeline({}).items[0]).toMatchObject({ groupType: 'funding', groupSubject: null })
+  })
+
+  it('keeps the list readable when the group row cannot be read', () => {
+    const service = createAnalysisTimelineService({
+      repository: {
+        listTimeline: () => ({ items: [entry('mi-tl-4', 'mi-eg-gone', '2026-10-31T13:36:23.000Z')], nextCursor: null }),
+        getEventGroup: () => { throw new Error('mi_analysis_event_groups is locked') },
+        getSummary: () => undefined, getRun: () => undefined, listPredictions: () => []
+      } as never
+    })
+
+    expect(service.listTimeline({}).items[0]).toMatchObject({ groupType: null, groupSubject: null, safeExcerpt: '偏空。' })
+  })
 })

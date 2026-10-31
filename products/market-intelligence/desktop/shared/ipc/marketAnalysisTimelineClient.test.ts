@@ -25,12 +25,29 @@ describe('marketAnalysisTimelineClient', () => {
         schemaVersion: 1,
         items: [{
           id: 'mi-tl-1', eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published',
-          occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', direction: null, version: 1, triggerStatus: { triggerKey: 'calendar.refresh', reasonCode: 'significance-confirmed', decidedAt: asOf }
+          occurredAt: asOf, summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '摘要', direction: null, version: 1, triggerStatus: { triggerKey: 'calendar.refresh', reasonCode: 'significance-confirmed', decidedAt: asOf }, groupType: null, groupSubject: null
         }],
         nextCursor: null
       }
     })
     expect(invoke).toHaveBeenCalledWith('market-intelligence', 'marketAnalysis.listTimeline', {})
+  })
+
+  it('carries the group that a row belongs to, and drops a label that is not text', async () => {
+    const named = {
+      id: 'mi-tl-2', eventGroupId: 'mi-eg-news', analysisRunId: null, kind: 'review', status: 'published',
+      occurredAt: asOf, summaryRef: null, safeTitle: '市场分析已生成', safeExcerpt: '偏空。', version: 1,
+      groupType: 'sentiment', groupSubject: 'A Nasdaq-listed company may sell $450 million bitcoin'
+    }
+    const malformed = { ...named, id: 'mi-tl-3', groupType: 7, groupSubject: null }
+    const invoke = vi.fn(async () => ({ schemaVersion: 1, items: [named, malformed], nextCursor: null }))
+    vi.stubGlobal('window', { platform: { products: { invoke } } })
+
+    const result = await marketAnalysisTimelineClient.listTimeline()
+    expect(result.state).toBe('available')
+    const [first, second] = result.state === 'available' ? result.page.items : []
+    expect(first).toMatchObject({ groupType: 'sentiment', groupSubject: 'A Nasdaq-listed company may sell $450 million bitcoin' })
+    expect(second).toMatchObject({ groupType: null, groupSubject: null })
   })
 
   it('passes a structured conclusion through and keeps its direction key', async () => {

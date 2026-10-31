@@ -60,6 +60,10 @@ export type MarketAnalysisTimelineEntry = Readonly<{
   version: number
   /** Why the newest automatic decision happened, or why it did not; tokens only. */
   triggerStatus: MarketAnalysisTriggerStatus | null
+  /** Which kind of event this row belongs to; null against an older main process. */
+  groupType: string | null
+  /** The group's own subject, so two rows published seconds apart are told apart. */
+  groupSubject: string | null
 }>
 
 export type MarketAnalysisTriggerStatus = Readonly<{
@@ -268,13 +272,22 @@ function sanitizeEntry(value: unknown): MarketAnalysisTimelineEntry | undefined 
   // `triggerStatus` is optional on purpose: a newer renderer must keep working against a
   // payload from an older main process (or a mixed build), where a mandatory key turned the
   // whole panel into "detail unavailable" instead of simply showing no decision yet.
-  if (!isExactRecordWithOptionals(value, ['id', 'eventGroupId', 'analysisRunId', 'kind', 'status', 'occurredAt', 'summaryRef', 'safeTitle', 'safeExcerpt', 'version'], ['triggerStatus', 'direction']) ||
+  if (!isExactRecordWithOptionals(value, ['id', 'eventGroupId', 'analysisRunId', 'kind', 'status', 'occurredAt', 'summaryRef', 'safeTitle', 'safeExcerpt', 'version'], ['triggerStatus', 'direction', 'groupType', 'groupSubject']) ||
     !isText(value.id) || !isText(value.eventGroupId) || (value.analysisRunId !== null && !isText(value.analysisRunId)) ||
     !['event', 'analysis', 'review', 'prediction-update', 'system'].includes(value.kind as string) ||
     !['published', 'stale', 'superseded'].includes(value.status as string) || !isCanonicalTime(value.occurredAt) ||
     (value.summaryRef !== null && !isText(value.summaryRef)) || !isText(value.safeTitle) ||
     (value.safeExcerpt !== null && !isText(value.safeExcerpt)) || typeof value.version !== 'number' || !Number.isSafeInteger(value.version) || value.version < 1) return undefined
-  return { ...(value as MarketAnalysisTimelineEntry), direction: sanitizeDirectionKey((value as { direction?: unknown }).direction) ?? null, triggerStatus: sanitizeTriggerStatus((value as { triggerStatus?: unknown }).triggerStatus) }
+  const entry = value as { groupType?: unknown; groupSubject?: unknown }
+  return {
+    ...(value as MarketAnalysisTimelineEntry),
+    direction: sanitizeDirectionKey((value as { direction?: unknown }).direction) ?? null,
+    triggerStatus: sanitizeTriggerStatus((value as { triggerStatus?: unknown }).triggerStatus),
+    // Both are optional against an older main process, and a non-text value is dropped rather than
+    // rendered: the panel prints these strings directly.
+    groupType: isText(entry.groupType) ? entry.groupType : null,
+    groupSubject: isText(entry.groupSubject) ? entry.groupSubject : null
+  }
 }
 
 function sanitizeDetail(entry: MarketAnalysisTimelineEntry, run: unknown, summary: unknown, predictions: unknown): { state: 'available'; detail: MarketAnalysisTimelineDetail } | undefined {
