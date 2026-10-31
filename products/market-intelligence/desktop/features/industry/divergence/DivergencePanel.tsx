@@ -43,16 +43,6 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
         </Tooltip>
       </div>
       <div className="mi-divergence__content">
-        {state.state === 'available' || state.state === 'empty' ? (
-          <div className="mi-divergence__meta">
-            {onRetry ? (
-              <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry} title={text.judgeAgain}>
-                {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
-              </button>
-            ) : <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span>}
-          </div>
-        ) : null}
-
         {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
         {state.state === 'unavailable' ? (
           <div className="mi-divergence__status" data-tone="error">
@@ -67,7 +57,18 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
           </div>
         ) : null}
-        {state.state === 'empty' && !nothingCompared ? <p className="mi-divergence__note">{text.empty}</p> : null}
+        {state.state === 'empty' && !nothingCompared ? (
+          // One line, badge at its end: a quiet day is a single sentence, not a block with a
+          // floating label on a row of its own.
+          <div className="mi-divergence__quiet">
+            <p className="mi-divergence__note">{text.empty}</p>
+            {onRetry ? (
+              <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry} title={text.judgeAgain}>
+                {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
+              </button>
+            ) : <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span>}
+          </div>
+        ) : null}
         {nothingCompared ? (
           <div className="mi-divergence__status" data-tone="error">
             <b>{text.nothingCompared}</b>
@@ -76,6 +77,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
         ) : null}
         {state.state === 'available' ? (
           <div className="mi-divergence__conclusion" data-tone="conclusion">
+            <div className="mi-divergence__meta">
+              {onRetry ? (
+                <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry} title={text.judgeAgain}>
+                  {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
+                </button>
+              ) : <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span>}
+            </div>
             <ul className="mi-divergence__rows">
               {state.rows.map(row => (
                 <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
