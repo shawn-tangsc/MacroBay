@@ -97,9 +97,9 @@ describe('market-intelligence product manifest', () => {
     const portal = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'), 'utf8')
     const model = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/agentPortalModel.ts'), 'utf8')
     const portalSources = [portal, model].join('\n')
-    // The page composes four injected read-only clients and nothing else; each is named here so a
-    // fifth one cannot slip in without this list changing.
-    const approvedClients = ['../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient']
+    // The page composes these injected read-only clients and nothing else; each is named here so
+    // another one cannot slip in without this list changing.
+    const approvedClients = ['../../shared/ipc/crossAssetObservationClient', '../../shared/ipc/dashboardFeedStatusClient', '../../shared/ipc/macroMarketSnapshotClient', '../../shared/ipc/macroRatesSnapshotClient', '../../shared/ipc/marketDivergenceClient']
 
     expect(page).toContain('AgentPortal')
     const imports = [...page.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(match => match[1])

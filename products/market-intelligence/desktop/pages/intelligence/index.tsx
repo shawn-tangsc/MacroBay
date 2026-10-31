@@ -6,7 +6,6 @@ import { productText } from '../../shared/i18n/productText'
 import { EconomicCalendar, macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
 import { intelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { intelligenceFundingRateHistoryClient, intelligenceOpenInterestClient } from '../../features/industry/positioning'
-import { marketDivergenceClient } from '../../shared/ipc/marketDivergenceClient'
 import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import { AgentPortal } from './AgentPortal'
 import { useCryptoActivation } from './useCryptoActivation'
@@ -31,6 +30,7 @@ import { createCrossAssetObservationClient } from '../../shared/ipc/crossAssetOb
 import { createDashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedStatusClient'
 import { createMacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import { createMacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
+import { marketDivergenceClient } from '../../shared/ipc/marketDivergenceClient'
 
 const crossAssetClient = createCrossAssetObservationClient()
 /**
