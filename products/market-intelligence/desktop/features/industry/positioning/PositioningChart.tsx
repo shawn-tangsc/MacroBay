@@ -154,9 +154,12 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
           const crowded = index > 0 && cx - x(Date.parse(positioning.hints[index - 1]!.observedAt)) < 58
           // The chip says what it is, not only who: a bare "ETH −1.9%" floating over a chart reads
           // as an unexplained number, and the reader had to guess it was the liquidation mark.
+          // The drop alone says how far it fell; the multiple says whether anyone was forced to
+          // sell. Both are what the mark was detected on, so both belong on it.
           const label = text.liquidationChip
             .replace('{asset}', text.assets[hint.asset])
             .replace('{pct}', formatDashboardChange(hint.dropPct))
+            .replace('{multiple}', hint.volumeMultiple.toFixed(1))
           // The chip lives in the strip above the plot, never on top of it; only the rule and the
           // dot enter the chart. Nearby marks take the second row of the strip.
           const chipWidth = chipWidthFor(label)

@@ -87,7 +87,7 @@ describe('positioning panel', () => {
     // The mark names itself on the chart: asset and size, no timestamp (the axis already says
     // when) and no single header badge (it could only ever name one of several marks).
     expect(markup).toContain('data-hint="btc"')
-    expect(markup).toContain('疑似强平 BTC -1.9%')
+    expect(markup).toContain('疑似强平 BTC -1.9% · 3.4×')
     expect(markup).not.toContain('mi-positioning-panel__badge')
     // The caveat is no longer a permanent line: it lives in the help popover, which also says
     // what the two series mean together — the part a reader cannot infer from the numbers.

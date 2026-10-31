@@ -423,7 +423,7 @@ export const productText = {
                 'mixed': '方向分歧'
               },
               liquidationMore: '更早的标记已折叠',
-              liquidationChip: '疑似强平 {asset} {pct}',
+              liquidationChip: '疑似强平 {asset} {pct} · {multiple}×',
               helpLabel: '这张卡在读什么',
               helpLines: [
                 '这张卡把 Binance USDT-M 永续的持仓名义额（线，1 小时）与资金费率（柱，8 小时）放在一起。',
@@ -1948,7 +1948,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'mixed': 'Mixed'
               },
               liquidationMore: 'older marks collapsed',
-              liquidationChip: 'Suspected liquidation {asset} {pct}',
+              liquidationChip: 'Suspected liquidation {asset} {pct} · {multiple}×',
               helpLabel: 'What this card reads',
               helpLines: [
                 'Notional open interest (the line, hourly) and the funding rate (the bars, 8-hourly) for Binance USDT-M perpetuals, side by side.',
