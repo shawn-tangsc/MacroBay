@@ -176,9 +176,9 @@ function McpRow({
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
-        ) : (
+        ) : checked ? (
           <small className="agent-mcp-empty-hint">{text.editor.tools.mcpNoToolsHint}</small>
-        )}
+        ) : null}
         {item.actions.length > 0 ? (
           <span className="agent-mcp-credential-actions">
             {item.actions.map((action) => (

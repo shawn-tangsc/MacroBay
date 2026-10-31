@@ -78,4 +78,10 @@ describe('McpCatalog', () => {
 
     expect(markup).toContain(agentTextZh.editor.tools.mcpNoToolsHint)
   })
+
+  it('does not explain an empty tool list on a server that is not bound yet', () => {
+    const markup = renderCatalog({ addable: [{ ...baseItem, status: 'idle' }] })
+
+    expect(markup).not.toContain(agentTextZh.editor.tools.mcpNoToolsHint)
+  })
 })
