@@ -104,7 +104,7 @@ export const productText = {
               domain: { macro: '宏观', capital: '资金面', sentiment: '情绪', funding: '资金费率', 'cross-asset': '跨资产' },
               metric: {
                 'current-usd': '当前值', 'change-1d-usd': '1 日变化', 'change-7d-usd': '7 日变化', 'change-30d-usd': '30 日变化',
-                'etf-net-flow-usd': 'ETF 净流入', 'funding-rate-percent': '资金费率', 'fear-greed-index': '恐惧贪婪指数',
+                'etf-net-flow-usd': 'ETF 净流入', 'etf-net-flow-5d-usd': 'ETF 5 日累计净流入', 'etf-net-flow-20d-usd': 'ETF 20 日累计净流入', 'funding-rate-percent': '资金费率', 'fear-greed-index': '恐惧贪婪指数',
                 'open-interest-notional-usd': 'Binance 永续持仓名义额', 'open-interest-change-24h-pct': '持仓 24 小时变化', 'positioning-state': '持仓与费率组合态',
                 'divergence-escalation': '需解读的背离组合', 'divergence-liquidity-leverage': '背离·弹药收缩而空头加仓', 'divergence-flows-price': '背离·现货流出而价格未跌', 'divergence-narrative-price': '背离·看空消息未计价',
                 'price-return-15m': '15 分钟价格收益', 'price-return-2h': '2 小时价格收益',
@@ -1817,7 +1817,7 @@ export const productText = {
               domain: { macro: 'Macro', capital: 'Capital', sentiment: 'Sentiment', funding: 'Funding', 'cross-asset': 'Cross-asset' },
               metric: {
                 'current-usd': 'Current', 'change-1d-usd': '1 day change', 'change-7d-usd': '7 day change', 'change-30d-usd': '30 day change',
-                'etf-net-flow-usd': 'ETF net flow', 'funding-rate-percent': 'Funding rate', 'fear-greed-index': 'Fear & Greed',
+                'etf-net-flow-usd': 'ETF net flow', 'etf-net-flow-5d-usd': 'ETF 5-day cumulative net flow', 'etf-net-flow-20d-usd': 'ETF 20-day cumulative net flow', 'funding-rate-percent': 'Funding rate', 'fear-greed-index': 'Fear & Greed',
                 'open-interest-notional-usd': 'Binance perpetual notional open interest', 'open-interest-change-24h-pct': 'Open interest 24h change', 'positioning-state': 'Positioning and funding state',
                 'divergence-escalation': 'Divergence set needing explanation', 'divergence-liquidity-leverage': 'Divergence: money shrinking while shorts build', 'divergence-flows-price': 'Divergence: spot outflow with price holding', 'divergence-narrative-price': 'Divergence: bearish news not priced',
                 'price-return-15m': '15-minute price return', 'price-return-2h': '2-hour price return',

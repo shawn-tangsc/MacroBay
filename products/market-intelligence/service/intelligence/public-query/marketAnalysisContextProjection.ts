@@ -1,3 +1,4 @@
+import { computeEtfCumulativeFlow } from '../../../contracts/etfCumulativeFlow'
 import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { resolvePositioningState } from '../../../contracts/openInterestPositioning'
@@ -96,6 +97,27 @@ function projectEtfDailyFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Read
   return rows.length
 }
 
+/**
+ * The cumulative windows are what carry the long view now that the daily rows are capped: a model
+ * cannot total twenty daily rows it was never handed.
+ *
+ * Only a complete window becomes a fact. A five-day total summed over two days is a different
+ * number wearing the same name, so it is not published at all — absence is the honest answer, and
+ * the model is not asked to notice that `coveredDays` fell short.
+ */
+function projectEtfCumulativeFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number; observedAt: string }>[] }, sourceId: string, asOf: string, facts: AgentFact[]): number {
+  const windows = computeEtfCumulativeFlow(asset.rows)
+  const newest = asset.rows.at(-1)
+  if (!windows || !newest) return 0
+  let projected = 0
+  for (const window of windows) {
+    if (!window.complete) continue
+    facts.push(fact('capital', asset.asset, `etf-net-flow-${window.windowDays}d-usd`, window.netFlowUsd, 'USD', sourceId, newest.observedAt, asOf, 'comparable', `${window.windowDays}d`))
+    projected += 1
+  }
+  return projected
+}
+
 export function projectCapital(result: CapitalConditionsSnapshotResult | undefined, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.capital = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
@@ -112,7 +134,10 @@ export function projectCapital(result: CapitalConditionsSnapshotResult | undefin
     ['stablecoins', 'change-30d-usd', result.coreStablecoins.change30dUsd, 'USD']
   ]
   for (const [subject, metric, value, unit] of rows) facts.push(fact('capital', subject, metric, value, unit, 'defillama-stablecoins', result.coreStablecoins.observedAt, asOf, 'comparable'))
-  const etfFactCount = result.etf.state === 'available' ? projectEtfDailyFlows(result.etf.btc, result.etf.sourceId, asOf, facts) + projectEtfDailyFlows(result.etf.eth, result.etf.sourceId, asOf, facts) : 0
+  const etfFactCount = result.etf.state === 'available'
+    ? projectEtfDailyFlows(result.etf.btc, result.etf.sourceId, asOf, facts) + projectEtfDailyFlows(result.etf.eth, result.etf.sourceId, asOf, facts)
+      + projectEtfCumulativeFlows(result.etf.btc, result.etf.sourceId, asOf, facts) + projectEtfCumulativeFlows(result.etf.eth, result.etf.sourceId, asOf, facts)
+    : 0
   const caveat = result.etf.state === 'unavailable' ? 'etf-unavailable' : undefined
   if (caveat) caveats.add(caveat)
   // A divergence is a combination of legs that are already facts. It enters the domain of its

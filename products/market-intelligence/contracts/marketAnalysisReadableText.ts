@@ -34,7 +34,7 @@ export const marketAnalysisReadableTextPolicy = Object.freeze({
    * Metrics that are flows: their sign is the message ("+3.14 亿" inflow versus "-2.02 亿"
    * outflow). Levels such as a stablecoin total must not show a sign.
    */
-  signedMetrics: ['etf-net-flow-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'funding-rate-percent', 'surprise'],
+  signedMetrics: ['etf-net-flow-usd', 'etf-net-flow-5d-usd', 'etf-net-flow-20d-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'funding-rate-percent', 'surprise'],
   /**
    * Decimals kept for a derived deviation. The raw value is floating-point arithmetic on two
    * display strings (`3.4 − 3.1 = 0.2999999999999998`); the reading projection rounds it, the

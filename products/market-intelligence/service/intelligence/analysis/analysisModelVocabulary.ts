@@ -24,6 +24,8 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
     'change-7d-usd': '7 日变化',
     'change-30d-usd': '30 日变化',
     'etf-net-flow-usd': 'ETF 净流入',
+    'etf-net-flow-5d-usd': 'ETF 5 日累计净流入',
+    'etf-net-flow-20d-usd': 'ETF 20 日累计净流入',
     'funding-rate-percent': '资金费率',
     'open-interest-notional-usd': 'Binance 永续持仓名义额',
     'open-interest-change-24h-pct': '持仓 24 小时变化',
@@ -155,7 +157,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
 export const analysisVocabularyRequiredIds = Object.freeze({
   metric: Object.freeze([
     ...Object.values(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics),
-    'current-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'etf-net-flow-usd',
+    'current-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'etf-net-flow-usd', 'etf-net-flow-5d-usd', 'etf-net-flow-20d-usd',
     'funding-rate-percent', 'open-interest-notional-usd', 'open-interest-change-24h-pct', 'positioning-state', 'fear-greed-index', 'price-return-15m', 'price-return-2h', 'price-return-24h', 'price-return-3d', 'relative-return-2h',
     // 重点舆情：每条新闻作为一条事实进入快照，模型必须认得它的名字。
     'news-sentiment', 'event-excerpt',
