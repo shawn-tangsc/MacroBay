@@ -242,6 +242,49 @@ describe('daily briefing document', () => {
     expect(document.comparison?.stablecoinDelta).toBe(-100_000_000)
   })
 
+  it('leads the stablecoin row with its 1d change and keeps the longer windows behind it', () => {
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+    const stablecoin = document.data.funds.find((row) => row.id === 'stablecoin')
+
+    // The level stays in `value` for the caption; the headline is the move, not the quarter-trillion.
+    expect(stablecoin?.value).toMatchObject({ number: 253_033_903_673.4, format: 'usd' })
+    expect(stablecoin?.change).toMatchObject({ value: -0.3324, unit: 'percent', window: '1d' })
+    expect(stablecoin?.auxiliaryChanges).toEqual([
+      { value: -843_904_300.6, unit: 'usd', window: '1d' },
+      { value: -0.8134, unit: 'percent', window: '7d' },
+      { value: -2.2699, unit: 'percent', window: '30d' }
+    ])
+  })
+
+  it('reads fear and greed as a point change against yesterday, never as its level', () => {
+    const score = (value: number): FearGreedSnapshotResult => ({
+      state: 'available', asOf, score: value, bucket: 'fear', observedAt: '2026-10-30T00:00:00.000Z'
+    })
+    const readings = (value: number): DailyBriefingFactPacket['readings'] => ({ fearGreed: score(value), funding, capital })
+    const previous = buildDailyBriefingDocument({ packet: packet({ readings: readings(30) }), date: '2026-10-29' })
+    const document = buildDailyBriefingDocument({
+      packet: packet({ readings: readings(28) }),
+      date: '2026-10-30',
+      previous
+    })
+
+    expect(document.data.sentiment.fearGreed?.change).toMatchObject({ value: -2, unit: 'points', window: '1d' })
+    expect(document.data.sentiment.fearGreed?.changeReason).toBeUndefined()
+    expect(document.data.sentiment.fearGreed?.value).toMatchObject({ number: 28, format: 'score' })
+  })
+
+  it('states a missing baseline instead of inventing a zero change', () => {
+    const withoutYesterday = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+    expect(withoutYesterday.data.sentiment.fearGreed?.change).toBeNull()
+    expect(withoutYesterday.data.sentiment.fearGreed?.changeReason).toBe('no-baseline')
+
+    // A gap in the history is not yesterday: an older edition may not be relabelled as the 1d baseline.
+    const older = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-27' })
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30', previous: older })
+    expect(document.data.sentiment.fearGreed?.change).toBeNull()
+    expect(document.data.sentiment.fearGreed?.changeReason).toBe('no-baseline')
+  })
+
   it('includes a high-impact event on the seventh local day', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

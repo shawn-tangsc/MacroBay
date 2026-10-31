@@ -2,9 +2,11 @@ import type {
   BriefingMarketRow,
   BriefingMateriality,
   BriefingPulseRow,
+  BriefingRowChange,
   BriefingValueFormat,
   FactImportance
 } from '../../../contracts/dailyBriefing'
+import type { CapitalConditionsSnapshotResult } from '../../../contracts/intelligenceQueryContracts'
 import { buildMarketPulseRows } from '../../../contracts/marketPulse'
 import {
   baselineVisibility,
@@ -28,7 +30,10 @@ export type BriefingReadingRows = Readonly<{
   fearGreed: BriefingPulseRow | null
 }>
 
-export function buildBriefingReadingRows(packet: DailyBriefingFactPacket): BriefingReadingRows {
+export function buildBriefingReadingRows(
+  packet: DailyBriefingFactPacket,
+  previousFearGreedScore?: number
+): BriefingReadingRows {
   const pulses = buildMarketPulseRows({
     asOf: packet.asOf,
     enabled: packet.enabled,
@@ -36,7 +41,7 @@ export function buildBriefingReadingRows(packet: DailyBriefingFactPacket): Brief
     funding: packet.readings.funding,
     capital: packet.readings.capital
   })
-  const mapped = pulses.map(toPulseRow)
+  const mapped = pulses.map((row) => toPulseRow(row, packet.readings.capital, previousFearGreedScore))
   const fearGreed = mapped.find((row) => row.id === 'fear-greed') ?? null
   return Object.freeze({
     market: Object.freeze(buildMarketRows(packet)),
@@ -45,10 +50,25 @@ export function buildBriefingReadingRows(packet: DailyBriefingFactPacket): Brief
   })
 }
 
-function toPulseRow(row: ReturnType<typeof buildMarketPulseRows>[number]): BriefingPulseRow {
+/**
+ * Builds one reading row, and the comparisons that explain it.
+ *
+ * Two rows are read as moves rather than levels: the stablecoin supply (a quarter-trillion level
+ * changes slowly, and the day-over-day shift is the story) and fear-and-greed (an index level only
+ * means something against yesterday). Both keep their level in `value` for the caption, keep the
+ * 1d move as the headline `change`, and state `no-baseline` when the edition has nothing to compare
+ * against — a zero would read as "flat" and is never substituted.
+ */
+function toPulseRow(
+  row: ReturnType<typeof buildMarketPulseRows>[number],
+  capital: CapitalConditionsSnapshotResult,
+  previousFearGreedScore: number | undefined
+): BriefingPulseRow {
   // A stale reading is a gap: the reader must see that the number is old, so it keeps the floor.
   const isGap = row.state !== 'available'
   const materiality = isGap ? materialVerdict('gap') : pulseRowMateriality(row.id, row)
+  const change = readingRowChange(row, previousFearGreedScore)
+  const auxiliaryChanges = row.id === 'stablecoin' && change ? stablecoinAuxiliaryChanges(capital) : []
   return Object.freeze({
     id: row.id as BriefingPulseRow['id'],
     group: row.id === 'fear-greed' ? 'sentiment' : 'funds',
@@ -58,12 +78,54 @@ function toPulseRow(row: ReturnType<typeof buildMarketPulseRows>[number]): Brief
     ...baselineVisibility(materiality, isGap),
     state: row.state,
     value: row.value ? Object.freeze({ number: row.value.number, format: row.value.format }) : null,
-    change: row.change ? Object.freeze({ ...row.change }) : null,
-    ...(row.changeReason ? { changeReason: row.changeReason } : {}),
+    change,
+    ...(auxiliaryChanges.length > 0 ? { auxiliaryChanges: Object.freeze(auxiliaryChanges) } : {}),
+    ...(change ? {} : row.changeReason ? { changeReason: row.changeReason } : {}),
     window: row.window,
     observedAt: row.observedAt,
     ...(row.reason ? { reason: row.reason } : {})
   })
+}
+
+/** The headline comparison: the fear-and-greed score is measured against yesterday, others are read. */
+function readingRowChange(
+  row: ReturnType<typeof buildMarketPulseRows>[number],
+  previousFearGreedScore: number | undefined
+): BriefingRowChange | null {
+  if (row.id === 'fear-greed') {
+    // A stale score has no trustworthy 1d move: even the same stale value twice is not a baseline.
+    return row.state === 'available' ? fearGreedChange(row.value?.number, previousFearGreedScore) : null
+  }
+  return row.change ? Object.freeze({ ...row.change }) : null
+}
+
+/** The fear-and-greed headline is the point change against the previous edition's score. */
+function fearGreedChange(currentScore: number | undefined, previousScore: number | undefined): BriefingRowChange | null {
+  if (typeof currentScore !== 'number' || !Number.isFinite(currentScore)) return null
+  if (typeof previousScore !== 'number' || !Number.isFinite(previousScore)) return null
+  const delta = Math.round(currentScore - previousScore)
+  // A ranking that did not move is still a baseline: report 0 only when both scores are known.
+  return Object.freeze({ value: normalize(delta), unit: 'points' as const, window: '1d' as const })
+}
+
+/**
+ * The longer windows the stablecoin snapshot already measured, for the caption under the 1d move.
+ *
+ * The snapshot reports a zero delta both for a genuinely flat window and for a window it could not
+ * compare, so a zero is dropped rather than printed as a `0.00%` move; the 1d percentage stays the
+ * headline either way.
+ */
+function stablecoinAuxiliaryChanges(capital: CapitalConditionsSnapshotResult): readonly BriefingRowChange[] {
+  if (capital.state !== 'available') return []
+  const core = capital.coreStablecoins
+  const candidates: readonly BriefingRowChange[] = [
+    { value: core.change1dUsd, unit: 'usd', window: '1d' },
+    { value: core.change7dPercent, unit: 'percent', window: '7d' },
+    { value: core.change30dPercent, unit: 'percent', window: '30d' }
+  ]
+  return candidates
+    .filter((change) => Number.isFinite(change.value) && change.value !== 0)
+    .map((change) => Object.freeze({ ...change, value: normalize(change.value) }))
 }
 
 function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMarketRow[] {

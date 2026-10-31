@@ -40,10 +40,15 @@ const document = (overrides: Partial<DailyBriefingDocument> = {}): DailyBriefing
     funds: [{
       id: 'stablecoin', group: 'funds', labelKey: 'dailyBriefing.row.stablecoin', importance: { tier: 'must', source: 'rule', reasonCode: 'reading' },
       state: 'available', value: { number: 253_033_903_673.4, format: 'usd' }, change: { value: -0.33, unit: 'percent', window: '1d' },
+      auxiliaryChanges: [
+        { value: -843_904_300.6, unit: 'usd', window: '1d' },
+        { value: -0.8134, unit: 'percent', window: '7d' },
+        { value: -2.2699, unit: 'percent', window: '30d' }
+      ],
       window: '1d', observedAt: '2026-10-30T00:12:00.000Z'
     }],
     sentiment: {
-      fearGreed: { id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed', importance: { tier: 'must', source: 'rule', reasonCode: 'reading' }, state: 'available', value: { number: 48, format: 'score' }, change: null, window: 'latest', observedAt: null },
+      fearGreed: { id: 'fear-greed', group: 'sentiment', labelKey: 'dailyBriefing.row.fearGreed', importance: { tier: 'must', source: 'rule', reasonCode: 'reading' }, state: 'available', value: { number: 30, format: 'score' }, change: { value: -2, unit: 'points', window: '1d' }, window: 'latest', observedAt: null },
       news: { state: 'available', counts: { bearish: 1, bullish: 0, mixed: 0, neutral: 2 }, itemCount: 3 }
     }
   },
@@ -91,6 +96,36 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain('稳定币收缩')
     expect(markdown).not.toContain('<svg')
     expect(markdown).not.toContain('<div')
+  })
+
+  it('leads change rows with the move and keeps the level as the caption', () => {
+    const markdown = dailyBriefingToMarkdown(document(), options)
+
+    // The 1d move is the line; the quarter-trillion level and the longer windows sit behind it.
+    expect(markdown).toContain('- 稳定币: 1d -0.33% (总量 253B USD · 1d -843.9M USD · 7d -0.81% · 30d -2.27%)')
+    expect(markdown).toContain('- 恐惧贪婪: 1d -2 点 (当前 30)')
+  })
+
+  it('states a missing baseline instead of a zero change', () => {
+    const base = document()
+    const stablecoin = base.data.funds[0]!
+    const fearGreed = base.data.sentiment.fearGreed!
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: {
+        ...base.data,
+        funds: [{ ...stablecoin, change: null, changeReason: 'no-baseline' }],
+        sentiment: {
+          ...base.data.sentiment,
+          fearGreed: { ...fearGreed, change: null, changeReason: 'no-baseline' }
+        }
+      }
+    }, options)
+
+    expect(markdown).toContain('- 稳定币: 无基线 (总量 253B USD)')
+    expect(markdown).toContain('- 恐惧贪婪: 无基线 (当前 30)')
+    // Neither row may fall back to printing the level as if it were a flat move.
+    expect(markdown).not.toContain('0.00%')
   })
 
   it('states an empty edition instead of leaving blank sections', () => {

@@ -142,6 +142,78 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toContain(text.sections.policyPath)
   })
 
+  it('leads stablecoins and fear and greed with the change, not the level', async () => {
+    const base = briefing()
+    const rendered = await render({
+      ...base,
+      data: {
+        ...base.data,
+        funds: [{
+          id: 'stablecoin', group: 'funds' as const, labelKey: 'dailyBriefing.row.stablecoin',
+          importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
+          state: 'available' as const, value: { number: 253_033_903_673.4, format: 'usd' as const },
+          change: { value: -0.33, unit: 'percent' as const, window: '1d' as const },
+          auxiliaryChanges: [
+            { value: -843_904_300.6, unit: 'usd' as const, window: '1d' as const },
+            { value: -0.8134, unit: 'percent' as const, window: '7d' as const },
+            { value: -2.2699, unit: 'percent' as const, window: '30d' as const }
+          ],
+          window: '1d' as const, observedAt: '2026-10-30T00:12:00.000Z'
+        }],
+        sentiment: {
+          ...base.data.sentiment,
+          fearGreed: {
+            id: 'fear-greed', group: 'sentiment' as const, labelKey: 'dailyBriefing.row.fearGreed',
+            importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
+            state: 'available' as const, value: { number: 28, format: 'score' as const },
+            change: { value: -2, unit: 'points' as const, window: '1d' as const },
+            window: 'latest' as const, observedAt: '2026-10-30T00:00:00.000Z'
+          }
+        }
+      }
+    })
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+
+    expect(poster).toContain('1d -0.33%')
+    expect(poster).toContain('1d -2 pts')
+    // The level is the caption, and the longer windows stay visible behind the day move.
+    expect(poster).toContain('Total 253B USD')
+    expect(poster).toContain('7d -0.81%')
+    expect(poster).toContain('Current 28')
+  })
+
+  it('prints the missing baseline instead of a zero change', async () => {
+    const base = briefing()
+    const rendered = await render({
+      ...base,
+      data: {
+        ...base.data,
+        funds: [{
+          id: 'stablecoin', group: 'funds' as const, labelKey: 'dailyBriefing.row.stablecoin',
+          importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
+          state: 'available' as const, value: { number: 253_033_903_673.4, format: 'usd' as const },
+          change: null, changeReason: 'no-baseline' as const,
+          window: '1d' as const, observedAt: '2026-10-30T00:12:00.000Z'
+        }],
+        sentiment: {
+          ...base.data.sentiment,
+          fearGreed: {
+            id: 'fear-greed', group: 'sentiment' as const, labelKey: 'dailyBriefing.row.fearGreed',
+            importance: { tier: 'must' as const, source: 'rule' as const, reasonCode: 'reading' as const },
+            state: 'available' as const, value: { number: 30, format: 'score' as const },
+            change: null, changeReason: 'no-baseline' as const,
+            window: 'latest' as const, observedAt: '2026-10-30T00:00:00.000Z'
+          }
+        }
+      }
+    })
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+
+    expect(poster).toContain(text.changeReasons['no-baseline'])
+    expect(poster).toContain('Total 253B USD')
+    expect(poster).not.toContain('0.00%')
+  })
+
   it('separates the invalidation label with the locale separator', async () => {
     const rendered = await render()
     expect(rendered.textContent).toContain(`${text.conclusion.invalidation}: Stablecoins turn positive.`)

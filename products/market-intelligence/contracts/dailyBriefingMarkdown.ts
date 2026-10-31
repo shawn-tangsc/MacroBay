@@ -1,4 +1,4 @@
-import type { BriefingMacroItem, BriefingMarketRow, BriefingNewsItem, BriefingNextItem, BriefingPulseRow, DailyBriefingDocument } from './dailyBriefing'
+import type { BriefingMacroItem, BriefingMarketRow, BriefingNewsItem, BriefingNextItem, BriefingPulseRow, BriefingRowChange, DailyBriefingDocument } from './dailyBriefing'
 import { formatBriefingChange, formatBriefingValue } from './dailyBriefingFormat'
 
 export type DailyBriefingMarkdownLabels = Readonly<{
@@ -13,6 +13,11 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   states: Readonly<Record<string, string>>
   reasons: Readonly<Record<string, string>>
   changeReasons: Readonly<Record<string, string>>
+  /** Unit suffixes for change values: a fear-and-greed move is points, not a percentage. */
+  units: Readonly<{ points: string }>
+  /** Captions for the level that sits behind a change-led row, e.g. `Total {value}`. */
+  rowTotal: string
+  rowCurrent: string
   rows: Readonly<Record<string, string>>
   empty: Readonly<{ news: string; macro: string; next: string; conclusion: string }>
   newsEmptyCodes: Readonly<Record<string, string>>
@@ -24,6 +29,9 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   citations: string
   translated: string
 }>
+
+/** The labels one row's copy needs; the full page copy satisfies this structurally. */
+export type BriefingRowCopyLabels = Pick<DailyBriefingMarkdownLabels, 'noValue' | 'changeReasons' | 'units' | 'rowTotal' | 'rowCurrent'>
 
 export type DailyBriefingMarkdownOptions = Readonly<{
   labels: DailyBriefingMarkdownLabels
@@ -100,6 +108,55 @@ function dataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | Br
     .filter((row) => row.visibility !== 'hidden')
 }
 
+/**
+ * Which number leads a data row, shared by the poster and this text edition.
+ *
+ * Stablecoin supply and fear-and-greed are read as moves, not levels: their headline is the 1d
+ * change and the level becomes the caption. A row with no earlier observation says so with its
+ * `no-baseline` label instead of printing the level as if it were a change. Every other row keeps
+ * its own headline (a net flow, a 24h percentage, a yield level).
+ */
+export function changeLedRowCopy(
+  row: BriefingMarketRow | BriefingPulseRow,
+  labels: BriefingRowCopyLabels,
+  locale = 'en-US'
+): Readonly<{ primary: string; secondary: string }> | null {
+  if (row.id !== 'stablecoin' && row.id !== 'fear-greed') return null
+  // Without a level there is no caption, and the normal "no value" row is the honest rendering.
+  if (row.value === null) return null
+  const level = formatBriefingValue(row.value, labels.noValue, locale)
+  const caption = (row.id === 'stablecoin' ? labels.rowTotal : labels.rowCurrent).replace('{value}', level)
+  const reason = row.changeReason ? labels.changeReasons[row.changeReason] ?? '' : ''
+  if (!row.change) return Object.freeze({ primary: reason || caption, secondary: reason ? caption : '' })
+  const secondary = row.id === 'stablecoin'
+    ? [caption, ...(row.auxiliaryChanges ?? []).map((change) => rowChangeText(change, labels, locale))].join(' · ')
+    : caption
+  return Object.freeze({ primary: rowChangeText(row.change, labels, locale), secondary })
+}
+
+/** A change value without its window, for rows whose headline is a level. */
+export function formatRowChange(
+  change: BriefingRowChange | null,
+  labels: BriefingRowCopyLabels,
+  locale: string
+): string {
+  if (!change) return ''
+  const { unit, value } = change
+  // A fear-and-greed move is index points, which has no percentage equivalent.
+  return unit === 'points'
+    ? `${value > 0 ? '+' : ''}${Math.round(value)} ${labels.units.points}`
+    : formatBriefingChange({ value, unit }, locale)
+}
+
+/** A change with its window, so a 7d move can never be read as a day move. */
+function rowChangeText(
+  change: BriefingRowChange,
+  labels: BriefingRowCopyLabels,
+  locale: string
+): string {
+  return `${change.window} ${formatRowChange(change, labels, locale)}`
+}
+
 function readingsLabel(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
   return document.status.readingsAvailable === 0
     ? labels.readingsAllMissing
@@ -120,8 +177,14 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
   const label = rowLabel(row.labelKey, options.labels)
   if (row.state === 'available' || row.state === 'stale') {
+    const copy = changeLedRowCopy(row, options.labels, options.locale)
+    if (copy) {
+      const meta = [copy.secondary, row.state === 'stale' ? options.labels.states.stale ?? '' : '']
+        .filter(Boolean).join(' · ')
+      return `- ${label}: ${copy.primary}${meta ? ` (${meta})` : ''}`
+    }
     const value = formatBriefingValue(row.value, options.labels.noValue, options.locale)
-    const change = formatBriefingChange(row.change, options.locale)
+    const change = formatRowChange(row.change, options.labels, options.locale)
     const reason = row.changeReason ? options.labels.changeReasons[row.changeReason] ?? '' : ''
     const suffix = [change, reason, row.state === 'stale' ? options.labels.states.stale ?? '' : ''].filter(Boolean).join(' · ')
     return `- ${label}: ${value}${suffix ? ` (${suffix})` : ''}`

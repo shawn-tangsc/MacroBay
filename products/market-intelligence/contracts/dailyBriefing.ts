@@ -131,8 +131,23 @@ export type BriefingMateriality = Readonly<{
 export type BriefingDataVisibility = 'shown' | 'hidden'
 
 export type BriefingValueFormat = 'score' | 'percent' | 'usd' | 'flow-usd' | 'yield' | 'level'
-export type BriefingChangeUnit = 'pp' | 'percent' | 'bp' | 'usd'
-export type BriefingWindow = 'latest' | '24h' | '1d' | 'daily' | 'trading-day'
+/** `points` is a fear-and-greed index move, which is a score change rather than a percentage. */
+export type BriefingChangeUnit = 'pp' | 'percent' | 'bp' | 'usd' | 'points'
+export type BriefingWindow = 'latest' | '24h' | '1d' | '7d' | '30d' | 'daily' | 'trading-day'
+
+/**
+ * One comparison window of a data row.
+ *
+ * `change` is the row's headline comparison; `auxiliaryChanges` carries the longer or alternate
+ * windows (stablecoin 7d/30d, the 1d dollar amount beside its percentage). A change is never
+ * inferred from the level: when the edition has no earlier observation the row says
+ * `changeReason: 'no-baseline'` instead of reporting a zero move.
+ */
+export type BriefingRowChange = Readonly<{
+  value: number
+  unit: BriefingChangeUnit
+  window: BriefingWindow
+}>
 
 export type BriefingMarketRow = Readonly<{
   id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real'
@@ -145,7 +160,9 @@ export type BriefingMarketRow = Readonly<{
   visibilityReason?: string
   state: DailyBriefingReadingState
   value: Readonly<{ number: number; format: BriefingValueFormat }> | null
-  change: Readonly<{ value: number; unit: BriefingChangeUnit; window: BriefingWindow }> | null
+  change: BriefingRowChange | null
+  /** Longer comparison windows shown behind the headline change; never invented when absent. */
+  auxiliaryChanges?: readonly BriefingRowChange[]
   changeReason?: 'no-baseline' | 'insufficient-window'
   window: BriefingWindow
   observedAt: string | null
@@ -164,7 +181,9 @@ export type BriefingPulseRow = Readonly<{
   visibilityReason?: string
   state: DailyBriefingReadingState
   value: Readonly<{ number: number; format: BriefingValueFormat }> | null
-  change: Readonly<{ value: number; unit: BriefingChangeUnit; window: BriefingWindow }> | null
+  change: BriefingRowChange | null
+  /** Longer comparison windows shown behind the headline change; never invented when absent. */
+  auxiliaryChanges?: readonly BriefingRowChange[]
   changeReason?: 'no-baseline' | 'insufficient-window'
   window: BriefingWindow
   observedAt: string | null

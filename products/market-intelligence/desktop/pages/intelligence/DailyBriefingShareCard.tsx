@@ -1,5 +1,6 @@
 import type { BriefingMarketRow, BriefingPulseRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
-import { formatBriefingChange, formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
+import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
+import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { withWindowHours } from './dailyBriefingWindowText'
@@ -85,11 +86,16 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
     {hasData ? <section className="mi-brief-poster__data-section">
       <h2>{text.sections.data}</h2>
       <div className="mi-brief-poster__numbers" data-count={keyRows.length}>
-        {keyRows.map((row) => <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)}>
-          <span>{rowLabel(text, row.labelKey)}</span>
-          <strong>{formatBriefingValue(row.value, text.noValue, locale)}</strong>
-          <small>{keyMeta(row, text, locale, formatTime)}</small>
-        </div>)}
+        {keyRows.map((row) => {
+          // The poster and the Markdown copy read one rule: a change-led row headlines its move and
+          // keeps the level in the caption, so a screenshot and an export cannot disagree.
+          const copy = changeLedRowCopy(row, text, locale)
+          return <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
+            <span>{rowLabel(text, row.labelKey)}</span>
+            <strong>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</strong>
+            <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
+          </div>
+        })}
       </div>
       {doc.data.leverage && doc.data.leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage">
         <span>{text.sections.leverage}</span>
@@ -98,7 +104,14 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
       </div> : null}
       {doc.data.policyPath && doc.data.policyPath.visibility !== 'hidden' ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, text)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
-        {metricRows.map((row) => <div key={row.id} data-tone={toneFor(row)}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
+        {metricRows.map((row) => {
+          const copy = changeLedRowCopy(row, text, locale)
+          return <div key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
+            <span>{rowLabel(text, row.labelKey)}</span>
+            <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
+            {copy ? <small>{copy.secondary}</small> : null}
+          </div>
+        })}
       </div> : null}
     </section> : null}
 
@@ -173,7 +186,7 @@ function toneFor(row: BriefingMarketRow | BriefingPulseRow): 'positive' | 'negat
 }
 
 function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
-  const change = formatBriefingChange(row.change, locale)
+  const change = formatRowChange(row.change, text, locale)
   if (row.id === 'etf-btc' || row.id === 'etf-eth') {
     const flow = (row.value?.number ?? 0) >= 0 ? text.flow.in : text.flow.out
     return `${flow}${row.observedAt ? ` · ${row.observedAt.slice(0, 10)}` : ''}`

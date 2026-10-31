@@ -24,7 +24,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
   previous?: DailyBriefingDocument
 }>): DailyBriefingDocument {
   const { packet, date } = input
-  const readings = buildBriefingReadingRows(packet)
+  const readings = buildBriefingReadingRows(packet, previousFearGreedScore(input.previous, date))
   const news = selectNews(packet)
   const macroCandidates = selectMacroCandidates(packet)
   const macro = selectMacro(packet, macroCandidates)
@@ -90,6 +90,19 @@ export function buildDailyBriefingDocument(input: Readonly<{
     })
   })
   return input.previous ? Object.freeze({ ...document, comparison: buildComparison(document, input.previous) }) : document
+}
+
+/**
+ * The score fear-and-greed moved from, when the previous edition really is yesterday's.
+ *
+ * The source publishes one snapshot, so the day-over-day move can only come from the stored
+ * previous edition. A gap in the history is not a baseline: when yesterday has no edition, the row
+ * keeps `no-baseline` rather than comparing against a two-week-old score and calling it 1d.
+ */
+function previousFearGreedScore(previous: DailyBriefingDocument | undefined, date: string): number | undefined {
+  if (!previous || previous.edition.date !== addDays(date, -1)) return undefined
+  const score = previous.data.sentiment.fearGreed?.value?.number
+  return typeof score === 'number' && Number.isFinite(score) ? score : undefined
 }
 
 function buildComparison(current: DailyBriefingDocument, previous: DailyBriefingDocument): DailyBriefingDocument['comparison'] {
