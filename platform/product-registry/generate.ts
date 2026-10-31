@@ -80,6 +80,7 @@ export function buildGeneratedProductRegistry(products: readonly DiscoveredProdu
       routePaths
     )
   }
+  assertCrossProductEventTopics(products)
 
   const menuEntries = products.flatMap((product) => {
     const shellContributions = normalizeShellContributions(product.manifest)
@@ -329,4 +330,40 @@ export function assertGeneratedArtifactsExist(workspaceRoot: string): void {
 
 export async function generateProductRegistryArtifacts(options: GenerateProductRegistryOptions): Promise<GeneratedProductRegistry> {
   return generateProductRegistry(options)
+}
+
+/**
+ * 跨产品的事件话题守卫（`MI-11-R22` A1，架构师 2026-11-01 要求与目录同批）。
+ *
+ * 两条，都是「合并之前先解决歧义」：
+ * 1. 一个 topic 只能由一个产品声明——两个产品声明同一个 topic，订阅目录就说不清是谁发布的；
+ * 2. 消费声明必须落在某产品的发布声明里——消费别家的话题合法，但话题本身必须被某处声明过，
+ *    否则订阅校验会把一个合法的消费判成非法。
+ */
+function assertCrossProductEventTopics(products: readonly DiscoveredProduct[]): void {
+  const publisherByTopic = new Map<string, string>()
+
+  for (const product of products) {
+    for (const topic of product.manifest.eventTopics ?? []) {
+      const existing = publisherByTopic.get(topic)
+      if (existing && existing !== product.productId) {
+        throw new ProductRegistryValidationError(
+          `event topic "${topic}" is declared by both "${existing}" and "${product.productId}"; a topic has exactly one publisher`
+        )
+      }
+      publisherByTopic.set(topic, product.productId)
+    }
+  }
+
+  for (const product of products) {
+    for (const consumer of product.manifest.eventConsumers ?? []) {
+      for (const topic of consumer.topics ?? []) {
+        if (!publisherByTopic.has(topic)) {
+          throw new ProductRegistryValidationError(
+            `product "${product.productId}" consumer "${consumer.id}" subscribes to an undeclared event topic: ${topic}`
+          )
+        }
+      }
+    }
+  }
 }
