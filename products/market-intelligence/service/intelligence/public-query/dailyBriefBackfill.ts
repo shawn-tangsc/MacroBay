@@ -3,12 +3,14 @@ import type {
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
 import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import type { EtfHistoryAsOfResult, EtfHistoryAsset } from './etfHistoryAsOf'
 import type {
   MacroHistoryAsOfGapCode,
   MacroHistoryAsOfResult,
   MacroHistoryAsOfSeries
 } from './macroHistoryAsOf'
 import type { MarketIntelligencePublicQueryService } from './publicQueryService'
+import type { StablecoinHistoryAsOfResult } from './stablecoinHistoryAsOf'
 
 /**
  * The daily brief's historical backfill tool.
@@ -30,6 +32,17 @@ import type { MarketIntelligencePublicQueryService } from './publicQueryService'
  *   including when no historical reader is wired at all. It never falls back to the current
  *   snapshot: a 21:00 figure is not the 08:00 market, and a backfill that "filled" a gap with it
  *   would be exactly the masquerade this tool exists to prevent.
+ *
+ * The two capital facts have a second read path, used only when the local store holds no point at or
+ * before the instant:
+ *
+ * - the stablecoin level and the ETF flows can be answered from the providers' own public history —
+ *   DefiLlama's aggregate supply series and 0xRouter's daily flow history — because a briefing
+ *   frozen at its cutoff may be generated hours later, on a machine that was not awake for the
+ *   cutoff. Those readers only run when the local store answered `empty`, they validate `asOf`
+ *   against the cutoff and the clock before any request, and an unavailable or failed interface is a
+ *   named gap (`historical-api-unavailable`, `historical-as-of-unavailable`, `query-unavailable`),
+ *   never a number. A stored point always wins, and a disabled or broken store is not read around.
  */
 
 export const dailyBriefBackfillPolicy = Object.freeze({
@@ -67,6 +80,8 @@ export type DailyBriefBackfillGapCode =
   | 'future-as-of'
   | 'unknown-metric'
   | 'historical-as-of-unavailable'
+  /** No public history interface is wired for this fact, so there is nothing to ask. */
+  | 'historical-api-unavailable'
   | 'not-visible-as-of'
   | 'query-unavailable'
   | 'value-unavailable'
@@ -111,6 +126,13 @@ export type DailyBriefBackfillDeps = Readonly<{
    * `undefined` means no such read path is wired in this build, which is a gap rather than a value.
    */
   macroHistory: (input: Readonly<{ series: MacroHistoryAsOfSeries; asOf: string }>) => Promise<MacroHistoryAsOfResult | undefined>
+  /**
+   * The providers' public historical supply and flow series. They are asked only after the capital
+   * store answered `empty`; `undefined` means no interface is wired, which is a gap
+   * (`historical-api-unavailable`), not a fallback to any current snapshot.
+   */
+  stablecoinHistory?: (input: Readonly<{ asOf: string }>) => Promise<StablecoinHistoryAsOfResult>
+  etfHistory?: (input: Readonly<{ asset: EtfHistoryAsset; asOf: string }>) => Promise<EtfHistoryAsOfResult>
   now?: () => string
 }>
 
@@ -183,8 +205,9 @@ export function isDailyBriefBackfillResult(value: unknown): value is DailyBriefB
 }
 
 /**
- * Answers one backfill request. Pure of the clock except for the optional `now` guard, and pure of
- * the network: every reader is an already-collected store.
+ * Answers one backfill request. Pure of the clock except for the optional `now` guard. The stored
+ * readers never touch the network; the two capital facts fall back to a public history reader only
+ * when the store holds nothing at the instant, and that fallback is what `historical-*` gaps name.
  */
 export async function backfillDailyBriefFact(
   request: DailyBriefBackfillRequest,
@@ -230,7 +253,7 @@ export async function backfillDailyBriefFact(
     })
     return fact
   } catch {
-    return gap(requested, 'query-unavailable', 'the stored series could not be read.')
+    return gap(requested, 'query-unavailable', 'the stored series or its public history could not be read.')
   }
 }
 
@@ -239,6 +262,9 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
   cutoff: string
   publicQuery: Pick<MarketIntelligencePublicQueryService,
     'queryCapitalConditionsSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryMacroHistoryAsOf'>
+  /** The providers' public history, asked only when the local store holds nothing at the instant. */
+  stablecoinHistory?: (request: Readonly<{ asOf: string }>) => Promise<StablecoinHistoryAsOfResult>
+  etfHistory?: (request: Readonly<{ asset: EtfHistoryAsset; asOf: string }>) => Promise<EtfHistoryAsOfResult>
   now?: () => string
 }>): (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult> {
   const deps: DailyBriefBackfillDeps = {
@@ -247,6 +273,8 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
     funding: (query) => input.publicQuery.queryFundingRateHistory(query),
     openInterest: (query) => input.publicQuery.queryOpenInterestHistory(query),
     macroHistory: async (query) => input.publicQuery.queryMacroHistoryAsOf(query),
+    ...(input.stablecoinHistory ? { stablecoinHistory: input.stablecoinHistory } : {}),
+    ...(input.etfHistory ? { etfHistory: input.etfHistory } : {}),
     ...(input.now ? { now: input.now } : {})
   }
   return (request) => backfillDailyBriefFact(request, deps)
@@ -295,33 +323,53 @@ const MACRO_GAP_CODES: Readonly<Record<MacroHistoryAsOfGapCode, DailyBriefBackfi
   'query-unavailable': 'query-unavailable'
 })
 
+/**
+ * The public-history readers' gap vocabulary, mapped onto this tool's. `unknown-asset` cannot occur
+ * from a whitelisted ETF metric; it is mapped rather than passed through so no unrecognised code
+ * reaches the editor.
+ */
+const HISTORICAL_API_GAP_CODES: Readonly<Record<string, DailyBriefBackfillGapCode>> = Object.freeze({
+  'invalid-as-of': 'invalid-as-of',
+  'future-as-of': 'future-as-of',
+  'unknown-asset': 'unknown-metric',
+  'historical-api-unavailable': 'historical-api-unavailable',
+  'historical-as-of-unavailable': 'historical-as-of-unavailable',
+  'query-unavailable': 'query-unavailable'
+})
+
 async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
   switch (reader) {
     case 'stablecoin': {
       const result = await deps.capital({ asOf, allowStale: true })
-      if (result.state === 'empty') return missing('the capital store holds no snapshot at or before this instant.')
-      if (result.state !== 'available') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
-      return {
-        state: 'available', value: result.coreStablecoins.currentUsd, observedAt: result.coreStablecoins.observedAt,
-        ...READER_PROVENANCE.stablecoin
+      if (result.state === 'available') {
+        return {
+          state: 'available', value: result.coreStablecoins.currentUsd, observedAt: result.coreStablecoins.observedAt,
+          ...READER_PROVENANCE.stablecoin
+        }
       }
+      if (result.state === 'unavailable') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
+      // The store holds nothing at or before the instant; the public history might.
+      return readStablecoinHistory(asOf, deps)
     }
     case 'etf-btc':
     case 'etf-eth': {
+      const asset: EtfHistoryAsset = reader === 'etf-btc' ? 'btc' : 'eth'
       const result = await deps.capital({ asOf, allowStale: true })
-      if (result.state === 'empty') return missing('the capital store holds no snapshot at or before this instant.')
-      if (result.state !== 'available') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
-      if (result.etf.state !== 'available') return missing('the ETF current-state snapshot was not visible at this instant.')
-      const rows = (reader === 'etf-btc' ? result.etf.btc.rows : result.etf.eth.rows)
-        .filter((row) => row.tradingDate <= asOf.slice(0, 10) && row.observedAt <= asOf)
-        .sort((left, right) => left.tradingDate.localeCompare(right.tradingDate))
-      const latest = rows.at(-1)
-      return latest
-        ? {
-          state: 'available', value: latest.netFlowUsd, observedAt: latest.observedAt,
-          ...(reader === 'etf-btc' ? READER_PROVENANCE.etfBtc : READER_PROVENANCE.etfEth)
+      if (result.state === 'unavailable') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
+      if (result.state === 'available' && result.etf.state === 'available') {
+        const rows = (asset === 'btc' ? result.etf.btc.rows : result.etf.eth.rows)
+          .filter((row) => row.tradingDate <= asOf.slice(0, 10) && row.observedAt <= asOf)
+          .sort((left, right) => left.tradingDate.localeCompare(right.tradingDate))
+        const latest = rows.at(-1)
+        if (latest) {
+          return {
+            state: 'available', value: latest.netFlowUsd, observedAt: latest.observedAt,
+            ...(asset === 'btc' ? READER_PROVENANCE.etfBtc : READER_PROVENANCE.etfEth)
+          }
         }
-        : missing('no ETF flow row was observed at or before this instant.')
+      }
+      // The store holds no flow row at or before the instant; the provider's history might.
+      return readEtfHistory(asset, asOf, deps)
     }
     case 'funding-btc':
     case 'funding-eth': {
@@ -360,6 +408,33 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
       return { state: 'available', value: read.value, observedAt: read.observedAt, method: read.method, sourceUrl: read.sourceUrl }
     }
   }
+}
+
+/**
+ * The provider's own history, asked only when the store answered `empty`.
+ *
+ * The reader validates the instant and the result; this function only turns its answer into this
+ * tool's vocabulary, so a public series can never inherit a stored snapshot's method or a store's
+ * `not-visible-as-of` wording.
+ */
+async function readStablecoinHistory(asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
+  const read = deps.stablecoinHistory
+  if (!read) {
+    return unavailable('historical-api-unavailable', 'no public stablecoin history interface is wired in this build; the gap stays.')
+  }
+  const result = await read({ asOf })
+  if (result.state === 'unavailable') return unavailable(HISTORICAL_API_GAP_CODES[result.gapCode] ?? 'query-unavailable', result.detail)
+  return { state: 'available', value: result.value, observedAt: result.observedAt, method: result.method, sourceUrl: result.sourceUrl }
+}
+
+async function readEtfHistory(asset: EtfHistoryAsset, asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
+  const read = deps.etfHistory
+  if (!read) {
+    return unavailable('historical-api-unavailable', 'no public ETF flow history interface is wired in this build; the gap stays.')
+  }
+  const result = await read({ asset, asOf })
+  if (result.state === 'unavailable') return unavailable(HISTORICAL_API_GAP_CODES[result.gapCode] ?? 'query-unavailable', result.detail)
+  return { state: 'available', value: result.value, observedAt: result.observedAt, method: result.method, sourceUrl: result.sourceUrl }
 }
 
 function gap(
