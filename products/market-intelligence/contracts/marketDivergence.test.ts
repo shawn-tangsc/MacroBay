@@ -93,6 +93,27 @@ describe('window alignment', () => {
     expect(result.withheld).toContainEqual({ pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'open-interest' })
   })
 
+  it('judges funding on its own settlement cycle: seven hours old is the freshest reading there is', () => {
+    const result = detectDivergences(inputs({ funding: { ratePercent: -0.0032, observedAt: at(7) } }))
+    if (result.state === 'unavailable') throw new Error('unexpected')
+    expect(result.withheld.some(entry => entry.leg === 'funding')).toBe(false)
+    expect(result.state === 'available' && result.rows.some(row => row.pairId === 'liquidity-leverage')).toBe(true)
+  })
+
+  it('still calls funding stale past one settlement cycle plus a poll of slack', () => {
+    const result = detectDivergences(inputs({ funding: { ratePercent: -0.0032, observedAt: at(10) } }))
+    if (result.state === 'unavailable') throw new Error('unexpected')
+    expect(result.withheld).toContainEqual({ pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'funding' })
+  })
+
+  it('separates a leg that could not be read from one the market never sent', () => {
+    const unreadable = detectDivergences(inputs({ price: undefined, faulted: ['price'] }))
+    const absent = detectDivergences(inputs({ price: undefined }))
+    if (unreadable.state === 'unavailable' || absent.state === 'unavailable') throw new Error('unexpected')
+    expect(unreadable.withheld).toContainEqual({ pairId: 'flows-price', reason: 'leg-unavailable', leg: 'price' })
+    expect(absent.withheld).toContainEqual({ pairId: 'flows-price', reason: 'leg-missing', leg: 'price' })
+  })
+
   it('needs three finished sessions before it will sum ETF flows', () => {
     const result = detectDivergences(inputs({ etf: { rows: [{ tradingDate: session(1), netFlowUsd: -60e6 }] } }))
     if (result.state === 'unavailable') throw new Error('unexpected')

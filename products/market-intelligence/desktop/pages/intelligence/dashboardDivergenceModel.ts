@@ -10,7 +10,7 @@ export type DashboardDivergenceViewState =
 
 export type DivergenceWithheldView = Readonly<{
   pairId: string
-  reason: 'window-mismatch' | 'leg-missing' | 'leg-stale'
+  reason: 'window-mismatch' | 'leg-missing' | 'leg-stale' | 'leg-unavailable'
   leg: DivergenceLeg['id']
   /** The instant the leg stopped, when the reason is a window mismatch. */
   observedAt?: string

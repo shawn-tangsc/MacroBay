@@ -33,10 +33,10 @@ describe('market divergence query', () => {
     expect(result.rows.map(row => row.pairId)).not.toContain('liquidity-leverage')
   })
 
-  it('treats a throwing leg as an absent one', async () => {
+  it('reports a throwing leg as a failed read, not as an empty market', async () => {
     const boom = vi.fn(async () => { throw new Error('leg down') })
     const result = await queryMarketDivergenceAsync({ asOf, read: reader({ sentiment: boom as never }) })
-    expect(result.withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' })
+    expect(result.withheld).toContainEqual({ pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'sentiment' })
   })
 
   it('refuses a non-canonical instant without reading a single leg', async () => {

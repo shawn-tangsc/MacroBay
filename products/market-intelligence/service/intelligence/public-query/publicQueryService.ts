@@ -54,6 +54,7 @@ import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { bearishShare, queryMarketDivergenceAsync, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import { createPriceLegReader } from '../divergence/priceLegReading'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import type { FundingRateHistoryStore } from '../store/fundingRateHistoryStore'
@@ -396,6 +397,7 @@ export function createMarketIntelligencePublicQueryService(
 }
 
 function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string, newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined): DivergenceLegReader {
+  const readPriceLeg = createPriceLegReader(input => service.queryCrossAssetSnapshot(input))
   return {
     stablecoin: async () => {
       const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
@@ -419,12 +421,10 @@ function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: s
       const latest = result.state === 'available' ? result.btc.at(-1) : undefined
       return latest ? { ratePercent: latest.ratePercent, observedAt: latest.observedAt } : undefined
     },
-    price: async () => {
-      const snapshot = await service.queryCrossAssetSnapshot({ range: '24h', asOf })
-      const metric = snapshot?.closedReturns.btc['24h']
-      if (!snapshot || !metric || metric.state !== 'available') return undefined
-      return { return24hPercent: metric.value, observedAt: snapshot.analysisEnd }
-    },
+    // Anchored on the newest close the store can answer, not on the instant the card was opened:
+    // the bar closing exactly at `floor(asOf)` is not written yet for the first seconds after every
+    // five-minute boundary, and that made the card say "no price" while the price card showed one.
+    price: () => readPriceLeg(asOf),
     sentiment: async () => {
       if (!newsSentimentQuery) return undefined
       const view = await newsSentimentQuery.query({ asOf, window: '24h', scope: 'market', direction: 'all', limit: 100 })

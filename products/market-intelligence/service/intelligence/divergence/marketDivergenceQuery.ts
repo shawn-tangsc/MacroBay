@@ -46,18 +46,26 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
   if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable('invalid-clock')
   try {
     // Every leg is attempted: one that fails must show up as `withheld` with its own name, not
-    // take the other two pairs down with it.
+    // take the other two pairs down with it. A leg that threw is recorded apart from one that
+    // answered nothing, because the card has to say which of the two happened.
     const missing: Array<import('../../../contracts/marketDivergence').DivergenceLegId> = []
+    const faulted: Array<import('../../../contracts/marketDivergence').DivergenceLegId> = []
     const read = async <T>(id: import('../../../contracts/marketDivergence').DivergenceLegId, fn: () => Promise<T | undefined>) => {
-      const value = await safe(fn)
-      if (!value) missing.push(id)
-      return value
+      try {
+        const value = await fn()
+        if (!value) missing.push(id)
+        return value
+      } catch (error) {
+        faulted.push(id)
+        console.error(`[divergence] leg ${id} threw:`, error instanceof Error ? `${error.name}: ${error.message}` : String(error))
+        return undefined
+      }
     }
     const [stablecoin, etf, openInterest, funding, price, sentiment] = await Promise.all([
       read('stablecoin', input.read.stablecoin), read('etf', input.read.etf), read('open-interest', input.read.openInterest),
       read('funding', input.read.funding), read('price', input.read.price), read('sentiment', input.read.sentiment)
     ])
-    if (missing.length === 6) return divergenceUnavailable('all-legs-missing', missing)
+    if (missing.length + faulted.length === 6) return divergenceUnavailable('all-legs-missing', [...missing, ...faulted])
     const legs: DivergenceInputs = {
       asOf: input.asOf,
       ...(stablecoin ? { stablecoin } : {}),
@@ -65,7 +73,8 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
       ...(openInterest ? { openInterest } : {}),
       ...(funding ? { funding } : {}),
       ...(price ? { price } : {}),
-      ...(sentiment ? { sentiment } : {})
+      ...(sentiment ? { sentiment } : {}),
+      ...(faulted.length > 0 ? { faulted } : {})
     }
     const result = detectDivergences(legs)
     if (result.state === 'unavailable') return result
@@ -106,10 +115,6 @@ export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePe
     observedAt: view.summary.latestItemAt ?? view.generatedAt,
     headlines
   }
-}
-
-async function safe<T>(read: () => Promise<T | undefined>): Promise<T | undefined> {
-  try { return await read() } catch { return undefined }
 }
 
 /** Newest N sessions, oldest first: the ETF leg is a window sum, not a single day. */

@@ -19,7 +19,7 @@ export type DivergencePanelText = Readonly<{
   empty: string
   unavailable: string
   withheldTitle: string
-  withheldReasons: Readonly<Record<'window-mismatch' | 'leg-missing' | 'leg-stale', string>>
+  withheldReasons: Readonly<Record<'window-mismatch' | 'leg-missing' | 'leg-stale' | 'leg-unavailable', string>>
   legs: Readonly<Record<DivergenceLegId, string>>
   directions: Readonly<Record<DivergenceDirection, string>>
   pairs: Readonly<Record<DivergencePairId, Readonly<{ mechanism: string; invalidation: string }>>>

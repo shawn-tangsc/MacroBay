@@ -450,10 +450,10 @@ export const productText = {
               helpLabel: '这张卡怎么来的',
               helpLines: [
                 '只有两组数据指向相反方向时才会出现这一行；三对都没背离时只显示一句话。',
-                '每次打开看板都会让助手模型判定一次，30 分钟内复用同一次结果；点「重新判定」立即再来一次。模型不可用时退回固定阈值，标记会写「规则判定」。',
-                '模型看不到别的东西，只看到这几组读数；它也不能编造数字，答案不合格式就整份作废、退回固定阈值。',
+                '这几行由固定阈值判定，没有模型参与：同一组数字每次读到的结论都相同，也不用等模型。',
+                '不常规的组合（同时出现两对、方向互相冲突、某条腿正压在阈值上）不在这张卡里解释——它会被标出来，交给页面右侧的 AI 总结说清为什么特殊。',
                 '「舆情」是模型给新闻标题打的标签：24 小时内明确表态的标题里，看空的占多少；它不是交易所数据，其余几组才是。',
-                '比对前先对时间：按天更新的数据超过 36 小时、或分钟级数据断档时，这一对不下结论，并在下方写明原因。'
+                '比对前先对时间：按天更新的数据超过 36 小时、或某条腿超过它自己节奏的允许滞后时，这一对不下结论，并在下方写明原因。'
               ],
               withheldGroup: '（{count} 对）',
               retry: '重试',
@@ -474,7 +474,8 @@ export const productText = {
               withheldReasons: {
                 'window-mismatch': '{leg} 的时间对不上（数据截至 {at}）',
                 'leg-missing': '没有取到{leg}',
-                'leg-stale': '{leg} 太旧了'
+                'leg-stale': '{leg} 太旧了',
+                'leg-unavailable': '{leg} 读取失败，不是没数据'
               },
               legAsOf: '{leg} 截至 {at}',
               legs: {
@@ -2150,10 +2151,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               helpLabel: 'How this card is produced',
               helpLines: [
                 'A line appears only when two readings point opposite ways; with none, the card is one sentence.',
-                'The judgement comes from the assistant model by default, fed only the four readings and forbidden from inventing numbers. Without a model the fixed thresholds answer and the badge says Rule-based.',
-                'It judges once every time the dashboard opens, and the same readings reuse that answer for 30 minutes; asking again runs it immediately.',
+                'These lines come from fixed thresholds, with no model in the loop: the same readings always give the same answer, and nothing waits on a request.',
+                'Unusual combinations — two pairs at once, directions that contradict each other, a leg sitting on its threshold — are not explained here. They are flagged and handed to the page’s written analysis, which says in one sentence why they are special.',
                 'Sentiment is the model labelling headlines: of the day’s items that took a side, how many were bearish. The rest are exchange and on-chain readings.',
-                'Windows are checked first: data updated daily that is older than 36 hours, or minute-level data with a gap, withholds the pair and names the reason.'
+                'Windows are checked first: data updated daily that is older than 36 hours, or any leg older than its own cadence allows, withholds the pair and names the reason.'
               ],
               withheldGroup: ' ({count} pairs)',
               retry: 'Retry',
@@ -2174,7 +2175,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               withheldReasons: {
                 'window-mismatch': '{leg} covers a different day (data as of {at})',
                 'leg-missing': '{leg} was not collected',
-                'leg-stale': '{leg} is too old'
+                'leg-stale': '{leg} is too old',
+                'leg-unavailable': 'reading {leg} failed, which is not the same as no data'
               },
               legAsOf: '{leg} as of {at}',
               legs: {

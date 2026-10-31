@@ -18,6 +18,21 @@ export const divergencePolicy = Object.freeze({
    * than explained with a stale window.
    */
   maximumDailyLagMs: 36 * 60 * 60 * 1_000,
+  /**
+   * How old an intraday leg's own reading may be, per leg.
+   *
+   * One number for all of them was wrong in the direction that costs the reader an answer: funding
+   * only settles every eight hours, so a six-hour bound called the newest possible reading "too
+   * old" for two hours out of every settlement cycle — a quarter of the day. Each leg is bounded by
+   * its own cadence plus one poll of slack. The daily legs do not appear here: they are bounded by
+   * `maximumDailyLagMs` and the three-session ETF window instead.
+   */
+  freshnessMs: Object.freeze({
+    'open-interest': 60 * 60 * 1_000,
+    funding: 9 * 60 * 60 * 1_000,
+    price: 60 * 60 * 1_000,
+    sentiment: 26 * 60 * 60 * 1_000
+  }),
   /** US cash session close, the instant a trading day's flow becomes a finished reading. */
   etfSessionCloseUtcHour: 21,
   thresholds: Object.freeze({
@@ -78,7 +93,12 @@ export type DivergenceRow = Readonly<{
 
 export type DivergenceWithheld = Readonly<{
   pairId: DivergencePairId
-  reason: 'window-mismatch' | 'leg-missing' | 'leg-stale'
+  /**
+   * Why the pair was refused. `leg-missing` is data that never arrived; `leg-unavailable` is a read
+   * that failed — telling the reader "we could not ask" instead of "the market said nothing" is the
+   * difference between a fault to report and a quiet day.
+   */
+  reason: 'window-mismatch' | 'leg-missing' | 'leg-stale' | 'leg-unavailable'
   leg: DivergenceLegId
   /** The instant the leg stopped, when the refusal is about time rather than a missing leg. */
   observedAt?: string
@@ -107,8 +127,13 @@ export type DivergenceInputs = Readonly<{
   openInterest?: Readonly<{ change24hPct: number; observedAt: string }>
   funding?: Readonly<{ ratePercent: number; observedAt: string }>
   price?: Readonly<{ return24hPercent: number; observedAt: string }>
-  /** Share of the last 24 hours' scored headlines that are bearish, 0–100. */
+/** Share of the last 24 hours' scored headlines that are bearish, 0–100. */
   sentiment?: Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }>
+  /**
+   * Legs whose read threw, as opposed to legs that answered with nothing. The detector cannot tell
+   * those apart from a missing key, and the reader can.
+   */
+  faulted?: readonly DivergenceLegId[]
 }>
 
 export function divergenceUnavailable(
@@ -134,13 +159,17 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     const stable = input.stablecoin
     const open = input.openInterest
     const funding = input.funding
-    if (!stable || !open || !funding) withheld.push({ pairId: 'liquidity-leverage', reason: 'leg-missing', leg: !stable ? 'stablecoin' : !open ? 'open-interest' : 'funding' })
-    else if (!withinDailyWindow(stable.observedAt, input.asOf)) withheld.push({ pairId: 'liquidity-leverage', reason: 'window-mismatch', leg: 'stablecoin', observedAt: stable.observedAt })
-    else if (!isFresh(open.observedAt, input.asOf) || !isFresh(funding.observedAt, input.asOf)) withheld.push({ pairId: 'liquidity-leverage', reason: 'leg-stale', leg: !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'funding' })
-    else if (stable.change7dPercent <= divergencePolicy.thresholds.stablecoin7dPercent
-      && open.change24hPct >= divergencePolicy.thresholds.openInterest24hUpPercent
-      && funding.ratePercent < 0) {
-      rows.push(freezeRow('liquidity-leverage', 'bearish', [stableLeg(stable), openLeg(open), fundingLeg(funding)]))
+    const absent = !stable ? 'stablecoin' : !open ? 'open-interest' : !funding ? 'funding' : undefined
+    const stale = open && funding
+      ? !isFresh('open-interest', open.observedAt, input.asOf) ? 'open-interest' : !isFresh('funding', funding.observedAt, input.asOf) ? 'funding' : undefined
+      : undefined
+    if (absent) withheld.push({ pairId: 'liquidity-leverage', reason: absentReason(input, absent), leg: absent })
+    else if (!withinDailyWindow(stable!.observedAt, input.asOf)) withheld.push({ pairId: 'liquidity-leverage', reason: 'window-mismatch', leg: 'stablecoin', observedAt: stable!.observedAt })
+    else if (stale) withheld.push({ pairId: 'liquidity-leverage', reason: 'leg-stale', leg: stale })
+    else if (stable!.change7dPercent <= divergencePolicy.thresholds.stablecoin7dPercent
+      && open!.change24hPct >= divergencePolicy.thresholds.openInterest24hUpPercent
+      && funding!.ratePercent < 0) {
+      rows.push(freezeRow('liquidity-leverage', 'bearish', [stableLeg(stable!), openLeg(open!), fundingLeg(funding!)]))
     }
   }
 
@@ -150,21 +179,25 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     const open = input.openInterest
     const price = input.price
     const sessions = etf ? lastSessions(etf.rows, divergencePolicy.thresholds.etfWindowSessions) : []
-    if (!etf || !open || !price) withheld.push({ pairId: 'flows-price', reason: 'leg-missing', leg: !etf ? 'etf' : !open ? 'open-interest' : 'price' })
+    const absent = !etf ? 'etf' : !open ? 'open-interest' : !price ? 'price' : undefined
+    const stale = open && price
+      ? !isFresh('open-interest', open.observedAt, input.asOf) ? 'open-interest' : !isFresh('price', price.observedAt, input.asOf) ? 'price' : undefined
+      : undefined
+    if (absent) withheld.push({ pairId: 'flows-price', reason: absentReason(input, absent), leg: absent })
     else if (sessions.length < divergencePolicy.thresholds.etfWindowSessions) withheld.push({ pairId: 'flows-price', reason: 'leg-stale', leg: 'etf' })
     // The window is anchored on the newest finished session: a three-day sum ends the day the
     // market last closed, not the day it started.
     else if (!withinDailyWindow(etfObservedAt(sessions.at(-1)!), input.asOf)) withheld.push({ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf', observedAt: etfObservedAt(sessions.at(-1)!) })
-    else if (!isFresh(open.observedAt, input.asOf) || !isFresh(price.observedAt, input.asOf)) withheld.push({ pairId: 'flows-price', reason: 'leg-stale', leg: !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'price' })
+    else if (stale) withheld.push({ pairId: 'flows-price', reason: 'leg-stale', leg: stale })
     else {
       const net = sessions.reduce((total, row) => total + row.netFlowUsd, 0)
       if (net <= divergencePolicy.thresholds.etf3dNetFlowUsd
-        && open.change24hPct <= divergencePolicy.thresholds.openInterest24hDownPercent
-        && Math.abs(price.return24hPercent) <= divergencePolicy.thresholds.priceFlatPercent) {
+        && open!.change24hPct <= divergencePolicy.thresholds.openInterest24hDownPercent
+        && Math.abs(price!.return24hPercent) <= divergencePolicy.thresholds.priceFlatPercent) {
         rows.push(freezeRow('flows-price', 'bullish', [
           { id: 'etf', value: net, unit: 'usd', observedAt: etfObservedAt(sessions.at(-1)!) },
-          openLeg(open),
-          { id: 'price', value: price.return24hPercent, unit: 'percent', observedAt: price.observedAt }
+          openLeg(open!),
+          { id: 'price', value: price!.return24hPercent, unit: 'percent', observedAt: price!.observedAt }
         ]))
       }
     }
@@ -175,16 +208,21 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     const sentiment = input.sentiment
     const open = input.openInterest
     const price = input.price
-    if (!sentiment || !open || !price) withheld.push({ pairId: 'narrative-price', reason: 'leg-missing', leg: !sentiment ? 'sentiment' : !open ? 'open-interest' : 'price' })
-    else if (!isFresh(open.observedAt, input.asOf) || !isFresh(price.observedAt, input.asOf) || !isFresh(sentiment.observedAt, input.asOf)) {
-      withheld.push({ pairId: 'narrative-price', reason: 'leg-stale', leg: !isFresh(sentiment.observedAt, input.asOf) ? 'sentiment' : !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'price' })
-    } else if (sentiment.bearishSharePercent >= divergencePolicy.thresholds.sentimentBearishSharePercent
-      && Math.abs(price.return24hPercent) <= divergencePolicy.thresholds.priceStillPercent
-      && Math.abs(open.change24hPct) <= divergencePolicy.thresholds.openInterestFlatPercent) {
+    const absent = !sentiment ? 'sentiment' : !open ? 'open-interest' : !price ? 'price' : undefined
+    const stale = sentiment && open && price
+      ? !isFresh('sentiment', sentiment.observedAt, input.asOf) ? 'sentiment'
+        : !isFresh('open-interest', open.observedAt, input.asOf) ? 'open-interest'
+          : !isFresh('price', price.observedAt, input.asOf) ? 'price' : undefined
+      : undefined
+    if (absent) withheld.push({ pairId: 'narrative-price', reason: absentReason(input, absent), leg: absent })
+    else if (stale) withheld.push({ pairId: 'narrative-price', reason: 'leg-stale', leg: stale })
+    else if (sentiment!.bearishSharePercent >= divergencePolicy.thresholds.sentimentBearishSharePercent
+      && Math.abs(price!.return24hPercent) <= divergencePolicy.thresholds.priceStillPercent
+      && Math.abs(open!.change24hPct) <= divergencePolicy.thresholds.openInterestFlatPercent) {
       rows.push(freezeRow('narrative-price', 'unpriced', [
-        { id: 'sentiment', value: sentiment.bearishSharePercent, unit: 'percent', observedAt: sentiment.observedAt },
-        { id: 'price', value: price.return24hPercent, unit: 'percent', observedAt: price.observedAt },
-        openLeg(open)
+        { id: 'sentiment', value: sentiment!.bearishSharePercent, unit: 'percent', observedAt: sentiment!.observedAt },
+        { id: 'price', value: price!.return24hPercent, unit: 'percent', observedAt: price!.observedAt },
+        openLeg(open!)
       ]))
     }
   }
@@ -195,16 +233,31 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     : { state: 'empty', asOf: input.asOf, withheld: Object.freeze(withheld), escalated: false }
 }
 
+/**
+ * Why a leg is absent: the read failed, or it answered with nothing.
+ *
+ * The pair is refused either way; only the sentence differs, and "we could not ask" is a fault the
+ * reader should be able to report while "the market said nothing" is a quiet day.
+ */
+function absentReason(input: DivergenceInputs, leg: DivergenceLegId): DivergenceWithheld['reason'] {
+  return input.faulted?.includes(leg) ? 'leg-unavailable' : 'leg-missing'
+}
+
 /** A daily leg's window must end within the lag bound; otherwise it describes another day. */
 function withinDailyWindow(observedAt: string, asOf: string): boolean {
   const lag = Date.parse(asOf) - Date.parse(observedAt)
   return Number.isFinite(lag) && lag >= 0 && lag <= divergencePolicy.maximumDailyLagMs
 }
 
-/** An intraday leg must be recent enough to describe the same day the card is showing. */
-function isFresh(observedAt: string, asOf: string): boolean {
+/**
+ * An intraday leg must be recent enough to describe the same day the card is showing.
+ *
+ * The bound belongs to the leg, not to the card: a leg is judged against the cadence it actually
+ * reports on, so the freshest reading a source can produce is never called stale.
+ */
+function isFresh(leg: keyof typeof divergencePolicy.freshnessMs, observedAt: string, asOf: string): boolean {
   const lag = Date.parse(asOf) - Date.parse(observedAt)
-  return Number.isFinite(lag) && lag >= 0 && lag <= 6 * 60 * 60 * 1_000
+  return Number.isFinite(lag) && lag >= 0 && lag <= divergencePolicy.freshnessMs[leg]
 }
 
 /** Newest N sessions, oldest first, so a 3-session sum reads in calendar order. */
@@ -286,7 +339,7 @@ function isWithheld(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const entry = value as Record<string, unknown>
   if (!divergencePolicy.pairs.includes(entry.pairId as never)) return false
-  if (entry.reason !== 'window-mismatch' && entry.reason !== 'leg-missing' && entry.reason !== 'leg-stale') return false
+  if (entry.reason !== 'window-mismatch' && entry.reason !== 'leg-missing' && entry.reason !== 'leg-stale' && entry.reason !== 'leg-unavailable') return false
   if (typeof entry.leg !== 'string') return false
   return entry.observedAt === undefined || isCanonicalDivergenceTime(entry.observedAt)
 }

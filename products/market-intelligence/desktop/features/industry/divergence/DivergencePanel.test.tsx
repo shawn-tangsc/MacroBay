@@ -14,7 +14,6 @@ const render = (state: Parameters<typeof DivergencePanel>[0]['state']) =>
 const row = {
   pairId: 'liquidity-leverage' as const,
   direction: 'bearish' as const,
-  judgedBy: 'ai' as const,
   mechanism: '可动用稳定币在减少，永续空头却仍在加仓；价格一旦反弹，空头回补会放大涨幅。',
   invalidation: '稳定币 7 天转正，或持仓 24 小时内回落 3% 以上。',
   legs: [
@@ -26,7 +25,7 @@ const row = {
 
 describe('divergence panel', () => {
   it('puts the explanation behind the help icon and leaves no judge badge behind', () => {
-    const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
+    const markup = render({ state: 'empty', withheld: [] })
     // No panel name and no pair list: the `?` leads the content and the badge names the judge.
     expect(markup).not.toContain('<h2')
     expect(markup.indexOf('mi-divergence__help')).toBeLessThan(markup.indexOf('mi-divergence__content'))
@@ -48,7 +47,7 @@ describe('divergence panel', () => {
   })
 
   it('says plainly when nothing diverged instead of showing an empty card', () => {
-    const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
+    const markup = render({ state: 'empty', withheld: [] })
     expect(markup).toContain(text.empty)
     expect(markup).not.toContain('mi-divergence__row"')
   })
@@ -86,7 +85,7 @@ describe('withheld grouping', () => {
 describe('states that must not be confused', () => {
   it('says nothing was compared, in the error tone, when every pair was withheld', () => {
     const markup = render({
-      state: 'empty', judgedBy: 'rules' as const,
+      state: 'empty',
       withheld: [
         { pairId: 'flows-price', reason: 'leg-missing', leg: 'price' },
         { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' },
@@ -99,7 +98,7 @@ describe('states that must not be confused', () => {
   })
 
   it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
-    const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
+    const markup = render({ state: 'empty', withheld: [] })
     expect(markup).toContain(text.empty)
     expect(markup).not.toContain('data-tone="error"')
   })
