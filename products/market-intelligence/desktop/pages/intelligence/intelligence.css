@@ -674,18 +674,6 @@ button.mi-agent-card__status:focus-visible {
   min-width: 150px;
 }
 
-.mi-dashboard-source-drawer .macro-calendar-settings {
-  padding: 0;
-}
-
-.mi-dashboard-source-drawer .macro-calendar-settings__cards {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.mi-dashboard-source-drawer .macro-calendar-settings__card {
-  background: color-mix(in srgb, var(--surface) 82%, var(--bg));
-}
-
 @container (max-width: 520px) {
   .mi-dashboard-source-drawer__layout {
     grid-template-columns: minmax(0, 1fr);

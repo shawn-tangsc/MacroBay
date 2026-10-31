@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactEl
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import { NetworkProxyBanner } from '../../../shared/NetworkProxyBanner'
-import { openIntelligenceSourcesSettings, openMacroCalendarSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
+import { openIntelligenceSourcesSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
 import {
   createEconomicCalendarProjection,
   createEconomicCalendarQuery,
@@ -508,7 +508,7 @@ function CalendarEmptyState({ onImportBlsIcs, text }: { onImportBlsIcs: () => vo
       <p className="mi-economic-calendar__more">{text.status.empty}</p>
     </div>
     <div className="mi-economic-calendar__empty-state-actions">
-      <Button onClick={openMacroCalendarSettings} size="small" type="primary">{text.emptyState.manageAction}</Button>
+      <Button onClick={openIntelligenceSourcesSettings} size="small" type="primary">{text.emptyState.manageAction}</Button>
       <Button icon={<Upload aria-hidden="true" size={15} />} onClick={onImportBlsIcs} size="small">{text.manualImport.action}</Button>
     </div>
   </section>
