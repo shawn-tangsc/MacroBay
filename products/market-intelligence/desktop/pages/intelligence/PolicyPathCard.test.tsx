@@ -248,3 +248,26 @@ describe('policy path card markers', () => {
     expect(rendered.querySelector('.mi-policy-card__marker')).toBeNull()
   })
 })
+
+describe('policy path card directions', () => {
+  it('shows hike, hold and cut together instead of only the leading band', async () => {
+    const rendered = await render({
+      ...reading,
+      probability: {
+        ...reading.probability!,
+        distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
+      }
+    })
+    const legend = rendered.querySelector('.mi-policy-card__direction-legend')
+    expect(legend).not.toBeNull()
+    // 69 + 1.55 = 70.55 → 71%; the two cut buckets add to 1.2% → 1%.
+    expect(legend?.textContent).toContain('71%')
+    expect(legend?.textContent).toContain('29%')
+    expect(legend?.textContent).toContain('1%')
+  })
+
+  it('drops the line when the payload has no distribution', async () => {
+    const rendered = await render(reading)
+    expect(rendered.querySelector('.mi-policy-card__direction-legend')).toBeNull()
+  })
+})

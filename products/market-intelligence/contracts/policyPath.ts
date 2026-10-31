@@ -246,6 +246,20 @@ export function outcomeFromRangeChange(input: Readonly<{
   return 'no-change'
 }
 
+/**
+ * The three directions a reader actually thinks in: hike, hold, cut.
+ *
+ * The venue quotes five buckets because 25 and 50+ are different trades, but "is the next move a
+ * hike" is answered by summing them; showing only the leading bucket hides the other two answers.
+ */
+export function directionShares(values: PolicyPathDistribution): Readonly<{ hike: number; hold: number; cut: number }> {
+  return {
+    hike: values['hike-25'] + values['hike-50-plus'],
+    hold: values['no-change'],
+    cut: values['cut-25'] + values['cut-50-plus']
+  }
+}
+
 /** What the realised band was worth against the price one hour before the decision. */
 export type PolicyPathSettlement = Readonly<{
   decidedMeetingDate: string

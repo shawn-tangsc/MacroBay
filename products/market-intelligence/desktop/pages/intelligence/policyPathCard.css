@@ -186,3 +186,15 @@
 .mi-policy-card__judged b[data-direction='dovish'] { color: #3fbf6f; }
 .mi-policy-card__judged b[data-direction='priced'],
 .mi-policy-card__judged b[data-direction='missing'] { color: var(--muted, #8b8d94); }
+
+/* Three answers in one row: the card's band names one, this says how much sits on the other two. */
+.mi-policy-card__directions { display: flex; flex-direction: column; gap: 5px; }
+.mi-policy-card__direction-bar { display: flex; height: 5px; border-radius: 3px; overflow: hidden; background: #1b1f27; }
+.mi-policy-card__direction-bar i { display: block; height: 100%; }
+.mi-policy-card__direction-bar i[data-direction='hike'] { background: #e0524c; }
+.mi-policy-card__direction-bar i[data-direction='hold'] { background: #4a5260; }
+.mi-policy-card__direction-bar i[data-direction='cut'] { background: #3fbf6f; }
+.mi-policy-card__direction-legend { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--muted, #8b8d94); }
+.mi-policy-card__direction-legend b { color: var(--text, #e8e9ec); font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 3px; }
+.mi-policy-card__direction-legend > span[data-direction='hike'] b { color: #e0524c; }
+.mi-policy-card__direction-legend > span[data-direction='cut'] b { color: #3fbf6f; }

@@ -2,7 +2,7 @@ import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
 
-import { formatSignedPp } from '../../../contracts/policyPath'
+import { directionShares, formatSignedPp } from '../../../contracts/policyPath'
 import type { PolicyPathSettlement } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { conclusionView, judgedView, percentOf, settledFor } from './policyPathSettlementText'
@@ -31,6 +31,7 @@ export type PolicyPathCardText = Readonly<{
   phasePreMeeting: string; phaseSettlement: string
   /** The single repricing chip, and the two ways it can read. */
   markerRepricing: string; markerIntraday: string
+  directions: Readonly<{ hike: string; hold: string; cut: string }>
   /** The pre-meeting block: what the median implies and what the venue quotes. */
   upgradeGapAbove: string; upgradeGapBelow: string; upgradeGapLevel: string
   upgradeCompare: string; upgradeCompareNoPrevious: string
@@ -82,6 +83,9 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   // The strip is the settlement body; the verdict keeps the normal body and only remembers the
   // conclusion in its footer, which is why the two uses are kept apart.
   const settlement = reading.settlement
+  // One band answers "which way"; the other four live in the drawer. The three-way line is the
+  // smallest form that still says how much sits on hold and on a cut.
+  const shares = probability?.distribution ? directionShares(probability.distribution) : undefined
   const strip = phase.kind === 'settlement' ? settlement : undefined
   const nextMeeting = strip?.nextMeeting
 
@@ -172,6 +176,19 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
             <Direction aria-hidden="true" size={12} />{Math.abs(change).toFixed(1)}pp
           </span>}
         </p>}
+
+    {shares === undefined || strip ? null : <div className="mi-policy-card__directions">
+      <span className="mi-policy-card__direction-bar" aria-hidden="true">
+        <i data-direction="hike" style={{ width: `${shares.hike * 100}%` }} />
+        <i data-direction="hold" style={{ width: `${shares.hold * 100}%` }} />
+        <i data-direction="cut" style={{ width: `${shares.cut * 100}%` }} />
+      </span>
+      <span className="mi-policy-card__direction-legend">
+        <span data-direction="hike">{text.directions.hike} <b>{percentOf(shares.hike)}</b></span>
+        <span data-direction="hold">{text.directions.hold} <b>{percentOf(shares.hold)}</b></span>
+        <span data-direction="cut">{text.directions.cut} <b>{percentOf(shares.cut)}</b></span>
+      </span>
+    </div>}
 
     {phase.kind === 'pre-meeting' ? <PreMeetingBlock reading={reading} text={text} /> : null}
     {strip ? <SettlementBlock settlement={strip} text={text} /> : null}

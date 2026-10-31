@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  changeInPp, decisionInstant, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
+  changeInPp, decisionInstant, directionShares, leadingOutcome, normalizeOutcomes, outcomeFromRangeChange, phaseAt,
   POLICY_PATH_OUTCOME_ORDER, repricingMarkers, settlementConclusion, stalenessOf, thinSeries,
   valueAtOrBefore, verdictOf, type PolicyPathObservation
 } from './policyPath'
@@ -172,5 +172,19 @@ describe('policy path settlement', () => {
       .toEqual({ kind: 'relative', direction: 'dovish', surprisePp: 71 })
     expect(settlementConclusion({ actual: 'hike-50-plus', pricedOutcome: 'hike-25', pricedShare: 0.14 }))
       .toEqual({ kind: 'relative', direction: 'hawkish', surprisePp: 86 })
+  })
+})
+
+describe('direction shares', () => {
+  it('sums the two hike buckets and the two cut buckets separately from the hold', () => {
+    const shares = directionShares({ 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 })
+    expect(shares.hike).toBeCloseTo(0.7055, 10)
+    expect(shares.hold).toBeCloseTo(0.285, 10)
+    expect(shares.cut).toBeCloseTo(0.012, 10)
+  })
+
+  it('adds back to one, so the three labels are comparable', () => {
+    const shares = directionShares({ 'no-change': 0.2, 'hike-25': 0.5, 'hike-50-plus': 0.1, 'cut-25': 0.15, 'cut-50-plus': 0.05 })
+    expect(shares.hike + shares.hold + shares.cut).toBeCloseTo(1, 10)
   })
 })
