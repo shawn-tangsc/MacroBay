@@ -7,14 +7,6 @@ export function intelligenceHttpRequest(
 ) {
   return httpRequest(request, {
     ...options,
-    fetchImpl: resolvePlatformFetch()
+    fetchImpl: getPlatformFetch()
   })
-}
-
-function resolvePlatformFetch(): typeof fetch {
-  try {
-    return getPlatformFetch()
-  } catch {
-    return fetch
-  }
 }
