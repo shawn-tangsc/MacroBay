@@ -103,10 +103,6 @@ function isExactInput(value: unknown): value is CapitalConditionsSnapshotQueryIn
   }
 }
 
-export function isCanonicalCapitalConditionsTime(value: unknown): value is string {
-  return isCanonicalCapitalConditionsSnapshotTime(value)
-}
-
 /**
  * The newest retained point that was already known at the instant.
  *
