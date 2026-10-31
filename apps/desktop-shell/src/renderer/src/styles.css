@@ -1,6 +1,4 @@
 @import './shell/workspace/workspaceLayout.css';
-/* Design tokens live in the platform layer so both windows and every product read one copy. */
-@import '../../../../../platform/ui/tokens/tokens.css';
 
 :root {
   color-scheme: dark;
