@@ -461,7 +461,7 @@ export const productText = {
               legAsOf: '{leg} 截至 {at}',
               legs: {
                 stablecoin: '稳定币 7 天', etf: 'ETF 3 日净流', 'open-interest': '持仓 24 小时',
-                funding: '费率', price: '价格 24 小时', sentiment: '舆情 24 小时'
+                funding: '费率', price: '价格 24 小时', sentiment: '舆情看空占比'
               },
               directions: { bearish: '偏空', bullish: '偏强', unpriced: '未被计价' },
               invalidationLabel: '失效条件',
@@ -2131,7 +2131,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               legAsOf: '{leg} as of {at}',
               legs: {
                 stablecoin: 'Stablecoins 7d', etf: 'ETF net flow 3d', 'open-interest': 'Open interest 24h',
-                funding: 'Funding', price: 'Price 24h', sentiment: 'Sentiment 24h'
+                funding: 'Funding', price: 'Price 24h', sentiment: 'Bearish share'
               },
               directions: { bearish: 'Bearish', bullish: 'Bullish', unpriced: 'Unpriced' },
               invalidationLabel: 'Invalidated by',
