@@ -35,7 +35,7 @@ const caches = [
     sensitivity: 'none' as const,
     clearable: true,
     compactable: false,
-    backupPolicy: 'metadata-only' as const,
+    backupPolicy: 'exclude' as const,
     warnings: ['warning'],
     latestInspection: {
       cacheId: 'platform.agent-runtime-compatibility',

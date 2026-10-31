@@ -107,7 +107,7 @@ describe('storageCacheViewModel', () => {
       displayNameI18n: { 'zh-CN': '派生分析缓存', 'en-US': 'Derived analysis cache' },
       warnings: ['fallback warning'],
       warningsI18n: [{ 'zh-CN': '本地化警告', 'en-US': 'Localized warning' }],
-      backupPolicy: 'metadata-only'
+      backupPolicy: 'exclude'
     })
 
     expect(resolveStorageCacheText(cache.displayName, cache.displayNameI18n, 'zh-CN')).toBe('派生分析缓存')
