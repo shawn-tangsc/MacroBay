@@ -54,6 +54,8 @@ import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import { createOpenInterestSignalQuery, type ModuleSignalProducer } from '../signals/moduleSignalQuery'
+import { isCanonicalSignalTime, type ModuleSignal } from '../../../contracts/moduleSignal'
 import { createPriceLegReader } from '../divergence/priceLegReading'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
 import type { NewsSentimentQuery } from '../schema/newsSentiment'
@@ -97,6 +99,15 @@ export type MarketIntelligencePublicQueryService = {
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
   queryMarketDivergence: (input: { asOf: string }) => Promise<MarketDivergenceResult>
+  /**
+   * The module rules' signals at one instant, for the chips the dashboard reads.
+   *
+   * A list, not a tree: a leg that can answer adds itself here when its wiring lands, so the page
+   * reads one shape whether one rule or four can speak today.
+   */
+  queryModuleSignals: (input: { asOf: string }) => Promise<readonly ModuleSignal[]>
+  /** Late-bound for the same reason the other readers are: the leg's store is built in bootstrap. */
+  addModuleSignalProducer: (producer: ModuleSignalProducer) => void
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -386,6 +397,27 @@ export function createMarketIntelligencePublicQueryService(
       policyPathContextQuery = query
     }
   } as MarketIntelligencePublicQueryService
+
+  // The legs that can answer a signal today. The ETF leg joins this list when its own wiring lands —
+  // as a producer that answers, never as a placeholder that returns nothing.
+  const moduleSignalProducers: ModuleSignalProducer[] = [
+    createOpenInterestSignalQuery({ readHistory: input => service.queryOpenInterestHistory(input) })
+  ]
+  service.addModuleSignalProducer = (producer) => { moduleSignalProducers.push(producer) }
+  service.queryModuleSignals = async (queryInput) => {
+    if (!isCanonicalSignalTime(queryInput?.asOf)) return []
+    // One leg that throws must not take the others down: each producer answers for itself, and a
+    // failed read is already reported as an `unavailable` signal by the leg that owns it.
+    const perProducer = await Promise.all(moduleSignalProducers.map(async (producer) => {
+      try {
+        return await producer.query({ asOf: queryInput.asOf })
+      } catch (error) {
+        console.error('[signals] producer threw:', error instanceof Error ? `${error.name}: ${error.message}` : String(error))
+        return []
+      }
+    }))
+    return perProducer.flat()
+  }
 
   // Reads the service's own legs rather than reaching into stores again: one implementation of
   // "what the dashboard already knows", and the divergence rule never sees a second view of it.

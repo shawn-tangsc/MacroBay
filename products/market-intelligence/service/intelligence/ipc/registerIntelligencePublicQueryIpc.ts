@@ -28,6 +28,7 @@ import {
   toEtfPublicSnapshot
 } from '../../../contracts/intelligenceQueryContracts'
 import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
+import { isCanonicalSignalTime, isModuleSignal } from '../../../contracts/moduleSignal'
 import {
   isCanonicalOpenInterestTime,
   isOpenInterestHistoryResult,
@@ -124,6 +125,16 @@ export function registerIntelligencePublicQueryIpc(
       const value = await publicQueryService().queryMarketDivergence(input)
       return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable('bad-answer')
     } catch { return divergenceUnavailable('query-failed') }
+  })
+
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals, async (payload) => {
+    try {
+      // The page reads signals, so the payload is one instant and nothing else.
+      if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) return []
+      const signals = await publicQueryService().queryModuleSignals({ asOf: payload.asOf })
+      // A malformed signal is dropped here rather than handed to a chip that would render half of it.
+      return signals.filter(signal => isModuleSignal(signal))
+    } catch { return [] }
   })
 
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {

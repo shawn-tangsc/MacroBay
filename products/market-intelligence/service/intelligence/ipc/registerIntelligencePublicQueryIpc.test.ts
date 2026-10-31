@@ -23,6 +23,18 @@ const mockPublicQueryService = {
     btc: [{ observedAt: '2026-08-05T00:00:00.000Z', ratePercent: 0.01 }],
     eth: [{ observedAt: '2026-08-05T00:00:00.000Z', ratePercent: -0.02 }]
   })),
+  queryModuleSignals: vi.fn(async () => ([
+    {
+      version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: 'btc',
+      severity: 'high', observedAt: '2026-07-08T10:15:00.000Z',
+      cadence: { kind: 'intraday', bucketMs: 15 * 60_000 },
+      values: { dropPct: -2.7, volumeMultiple: 3.1, notionalUsd: 7.4e9 },
+      dedupeKey: 'open-interest:oi-liquidation-proxy:btc:2026-07-08T10:15:00.000Z',
+      readiness: 'available', triggerOwner: 'module-signal'
+    },
+    // A rule bug: the handler must not hand this to a chip.
+    { version: '1', moduleId: 'open-interest', ruleId: 'oi-liquidation-proxy', asset: null, severity: 'high' }
+  ])),
   queryCapitalConditionsSnapshot: vi.fn(async () => ({
     state: 'available', asOf: '2026-08-06T12:00:00.000Z', etf: { state: 'unavailable' },
     coreStablecoins: { observedAt: '2026-08-06T10:00:00.000Z', verifiedAt: '2026-08-06T10:00:00.000Z', currentUsd: 310, change1dUsd: 10, change1dPercent: 3, change7dUsd: 10, change7dPercent: 3, change30dUsd: 30, change30dPercent: 10 }, conclusion: 'partial'
@@ -280,5 +292,32 @@ describe('market divergence route', () => {
     ['a non-canonical asOf', { asOf: '2026-10-30 12:00' }]
   ])('refuses %s', (_name, payload) => {
     expect(asMarketDivergenceInputForTest(payload)).toBeUndefined()
+  })
+})
+
+describe('module signals over IPC', () => {
+  it('answers the page path with the signals it can render', async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerIntelligencePublicQueryIpc(
+      (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => { handlers.set(method, handler) },
+      {} as JobRuntime
+    )
+    const answer = await handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals)?.({ asOf: '2026-07-08T10:30:00.000Z' })
+    expect(mockPublicQueryService.queryModuleSignals).toHaveBeenCalledWith({ asOf: '2026-07-08T10:30:00.000Z' })
+    expect(answer).toHaveLength(1)
+    expect(answer).toMatchObject([{ ruleId: 'oi-liquidation-proxy', readiness: 'available' }])
+  })
+
+  it('asks nothing for a payload the page should not be able to send', async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>()
+    registerIntelligencePublicQueryIpc(
+      (_productId: string, method: string, handler: (payload: unknown) => Promise<unknown>) => { handlers.set(method, handler) },
+      {} as JobRuntime
+    )
+    mockPublicQueryService.queryModuleSignals.mockClear()
+    const handler = handlers.get(INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals)!
+    expect(await handler({ asOf: '2026-07-08 10:30' })).toEqual([])
+    expect(await handler({ asOf: '2026-07-08T10:30:00.000Z', extra: true })).toEqual([])
+    expect(mockPublicQueryService.queryModuleSignals).not.toHaveBeenCalled()
   })
 })
