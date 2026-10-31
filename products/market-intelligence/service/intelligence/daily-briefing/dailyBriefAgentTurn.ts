@@ -4,7 +4,7 @@ import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './d
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
-import { compareBriefingNextRelevance, selectMacroFloorItem } from './dailyBriefingDocument'
+import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
 import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
   dailyBriefBackfillPolicy,
@@ -424,17 +424,14 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
     .slice(0, dailyBriefingPolicy.maximumNextItems)
   const selectedNews = newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items
   const selectedMacro = macroIds ? macroCandidates.filter((item) => macroIds.has(`macro:${item.eventKey}`)) : macroCandidates
-  // The high-impact floor is unioned into selection. Dropping every release, or selecting only
-  // lower-ranked ones, still leaves the key release for the writer to show or hide with a reason.
-  // A high-impact release without consensus is unioned too: missing consensus is a data gap, not a
-  // reason to hide the event, so the writer always gets the chance to explain actual vs previous.
-  const macroFloor = selectMacroFloorItem(macroCandidates)
-  const noConsensusFloor = macroCandidates.filter((item) => item.importance === 'high' && item.consensus === undefined)
-  const forcedMacro = [...new Map([...(macroFloor ? [macroFloor] : []), ...noConsensusFloor].map((item) => [item.eventKey, item])).values()]
-  const macro = [
-    ...forcedMacro.filter((item) => !selectedMacro.some((selected) => selected.eventKey === item.eventKey)),
-    ...selectedMacro
-  ]
+  // Selection decides visibility. The system never unions a release the editor did not select: a
+  // missing consensus only removes "no consensus" as a hiding reason, it does not make the event
+  // shown. The cap keeps the section at four candidates; when a selection is missing altogether the
+  // single most surprising release is the deterministic floor instead of every high-impact print.
+  const macro = selectBriefingMacroItems(selectedMacro, macroIds ? undefined : selectMacroFloorItem(selectedMacro))
+  const macroCapOmitted = new Set(selectedMacro
+    .filter((item) => !macro.some((chosen) => chosen.eventKey === item.eventKey))
+    .map((item) => `macro:${item.eventKey}`))
   const shown = [...new Set([
     ...selectedNews.map((item) => `news:${item.itemId}`),
     ...macro.map((item) => `macro:${item.eventKey}`),
@@ -470,7 +467,10 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
   const newsMacroNextAudit = {
     shown: Object.freeze([...shown, ...dataAudit.shown]),
     hidden: Object.freeze([
-      ...allCandidates.filter((factId) => !shownIds.has(factId)).map((factId) => Object.freeze({ factId, reason: hiddenReason.get(factId) ?? 'not selected' })),
+      ...allCandidates.filter((factId) => !shownIds.has(factId)).map((factId) => Object.freeze({
+        factId,
+        reason: hiddenReason.get(factId) ?? (macroCapOmitted.has(factId) ? 'macro display cap reached (at most 4)' : 'not selected')
+      })),
       ...dataAudit.hidden
     ])
   }

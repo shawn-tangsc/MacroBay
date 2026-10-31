@@ -250,6 +250,23 @@ describe('daily briefing document', () => {
     expect(document.news.macro[0]?.visibility).toBeUndefined()
   })
 
+  it('caps the 24h macro list at four and keeps the key floor event first', () => {
+    const events = Array.from({ length: 6 }, (_, index) => ({
+      eventKey: `US.EVENT_${index}`, title: `event ${index}`, scheduledAt: `2026-10-29T${String(12 + index).padStart(2, '0')}:30:00.000Z`,
+      importance: 'high' as const, lifecycleState: 'released' as const, category: 'economic-indicator' as const,
+      actual: `${index + 1}.0%`, previous: `${index}.0%`, consensus: `${index + 0.5}%`,
+      surprise: { direction: 'beat' as const, value: index === 5 ? 1 : 0.1, unit: 'pp' as const }
+    }))
+    const document = buildDailyBriefingDocument({
+      packet: packet({ calendar: { state: 'available', events } }),
+      date: '2026-10-30'
+    })
+
+    expect(document.news.macroCandidates).toHaveLength(6)
+    expect(document.news.macro).toHaveLength(4)
+    expect(document.news.macro[0]?.eventKey).toBe('US.EVENT_5')
+  })
+
   it('records the packet window that generation actually read', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

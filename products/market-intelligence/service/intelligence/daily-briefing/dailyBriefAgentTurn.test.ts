@@ -94,6 +94,17 @@ const withNoConsensusMacro = (): DailyBriefingDocument => {
   return { ...base, news: { ...base.news, macro: [...base.news.macro, ppi], macroCandidates: [...base.news.macro, ppi] } }
 }
 
+const withManyMacro = (): DailyBriefingDocument => {
+  const base = withNextCandidates()
+  const keys = ['US.CPI', 'US.PPI', 'US.PCE', 'US.GDP', 'US.RETAIL', 'US.CLAIMS']
+  const macro = keys.map((eventKey, index) => ({
+    eventKey, title: eventKey, scheduledAt: `2026-10-29T${String(10 + index).padStart(2, '0')}:30:00.000Z`,
+    importance: 'high' as const, actual: `${index + 1}.0%`, previous: `${index}.0%`, consensus: `${index + 0.5}%`,
+    surprise: { direction: 'beat' as const, value: 0.5, unit: 'pp' as const }
+  }))
+  return { ...base, news: { ...base.news, macro, macroCandidates: macro } }
+}
+
 const editorial = (focusKey: string, focusWhy: string) => ({
   lede: 'Stablecoin contraction keeps the read defensive.',
   ledePattern: 'structure',
@@ -276,15 +287,19 @@ describe('daily brief agent turn copy', () => {
     expect(result.document.next.focus?.eventKey).toBe('US.FOMC')
   })
 
-  it('keeps a high-impact event without consensus shown even when the editor hides it', async () => {
+  it('shows a no-consensus event the editor selected and explained with actual vs previous', async () => {
     const selection = {
-      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI', 'macro:US.PPI'], next: [],
       focus: 'US.FOMC',
       focusWhy: 'The policy path sets the discount rate for BTC and ETH.'
     }
     const written = {
       ...editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.'),
-      hidden: [{ factId: 'macro:US.PPI', reason: 'No consensus was published, so it is not actionable.' }]
+      items: [
+        { factId: 'news:n1', why: 'Stablecoin supply keeps shrinking and pulls bids away.' },
+        { factId: 'macro:US.CPI', why: 'The CPI beat keeps the discount rate higher for longer.' },
+        { factId: 'macro:US.PPI', why: 'PPI printed 0.4% against 0.2% previously, so pipeline pressure is still firm.' }
+      ]
     }
     const { runner } = scriptedRunner(selection, written)
 
@@ -293,9 +308,79 @@ describe('daily brief agent turn copy', () => {
     expect(result.state).toBe('accepted')
     if (result.state !== 'accepted') return
     const ppi = result.document.news.macro.find((item) => item.eventKey === 'US.PPI')
-    // Missing consensus is a data gap for the limits section, never a visibility decision.
     expect(ppi).toMatchObject({ importance: 'high', actual: '0.4%', previous: '0.2%', visibility: 'shown' })
+    expect(ppi?.why).toContain('0.4%')
     expect(ppi?.consensus).toBeUndefined()
     expect(result.document.provenance.selectionAudit?.shown).toContain('macro:US.PPI')
+  })
+
+  it('leaves a no-consensus event hidden when the editor does not select it', async () => {
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [],
+      hidden: [{ factId: 'macro:US.PPI', reason: 'Low crypto relevance: the move is already in the price.' }],
+      focus: 'US.FOMC',
+      focusWhy: 'The policy path sets the discount rate for BTC and ETH.'
+    }
+    const { runner } = scriptedRunner(selection, editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.'))
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNoConsensusMacro(), locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    expect(result.document.news.macro.find((item) => item.eventKey === 'US.PPI')).toBeUndefined()
+    expect(result.document.provenance.selectionAudit?.hidden).toContainEqual({
+      factId: 'macro:US.PPI', reason: 'Low crypto relevance: the move is already in the price.'
+    })
+  })
+
+  it('leaves a no-consensus event hidden when the editor hides it for low relevance', async () => {
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI', 'macro:US.PPI'], next: [],
+      focus: 'US.FOMC',
+      focusWhy: 'The policy path sets the discount rate for BTC and ETH.'
+    }
+    const written = {
+      ...editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.'),
+      hidden: [{ factId: 'macro:US.PPI', reason: 'Low crypto relevance: the move is already in the price.' }]
+    }
+    const { runner } = scriptedRunner(selection, written)
+
+    const result = await runDailyBriefAgentTurn({ runner, document: withNoConsensusMacro(), locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    expect(result.document.news.macro.find((item) => item.eventKey === 'US.PPI')).toMatchObject({
+      visibility: 'hidden', visibilityReason: 'Low crypto relevance: the move is already in the price.'
+    })
+  })
+
+  it('caps the 24h macro section at four releases and audits the omitted ones with a reason', async () => {
+    const source = withManyMacro()
+    const candidates = source.news.macroCandidates!
+    const expected = candidates.slice(0, 4)
+    const selection = {
+      stage: 'select', news: ['news:n1'], macro: candidates.map((item) => `macro:${item.eventKey}`), next: [],
+      focus: 'US.FOMC',
+      focusWhy: 'The policy path sets the discount rate for BTC and ETH.'
+    }
+    const written = {
+      ...editorial('US.FOMC', 'The policy path sets the discount rate for BTC and ETH.'),
+      items: [
+        { factId: 'news:n1', why: 'Stablecoin supply keeps shrinking and pulls bids away.' },
+        ...expected.map((item) => ({ factId: `macro:${item.eventKey}`, why: 'The release changes the discount-rate path for BTC.' }))
+      ]
+    }
+    const { runner } = scriptedRunner(selection, written)
+
+    const result = await runDailyBriefAgentTurn({ runner, document: source, locale: 'en-US' })
+
+    expect(result.state).toBe('accepted')
+    if (result.state !== 'accepted') return
+    expect(result.document.news.macro.map((item) => item.eventKey)).toEqual(expected.map((item) => item.eventKey))
+    const hidden = result.document.provenance.selectionAudit?.hidden ?? []
+    for (const item of candidates.slice(4)) {
+      const entry = hidden.find((candidate) => candidate.factId === `macro:${item.eventKey}`)
+      expect(entry?.reason).toBe('macro display cap reached (at most 4)')
+    }
   })
 })

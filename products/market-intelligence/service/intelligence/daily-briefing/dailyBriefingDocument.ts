@@ -180,13 +180,36 @@ function selectMacroCandidates(packet: DailyBriefingFactPacket): readonly Briefi
 }
 
 function selectMacro(packet: DailyBriefingFactPacket, candidates: readonly BriefingMacroItem[]): readonly BriefingMacroItem[] {
-  return Object.freeze(candidates.slice(0, dailyBriefingPolicy.maximumMacroItems))
+  return selectBriefingMacroItems(candidates, selectMacroFloorItem(candidates))
 }
 
 /**
- * The high-impact floor: the release with the largest surprise, and the latest release when the
- * surprise is equal. Selection and the final visibility pass both use this one ordering so a model
- * cannot silently hide every high-impact release.
+ * The 24h macro section is a judgement, not a table: at most four releases reach the reader. The
+ * deterministic floor stays first, the editor's selection follows in candidate order (largest
+ * actual-vs-previous surprise first), and everything past the cap stays in `macroCandidates` for the
+ * audit instead of being rendered as another row without an explanation.
+ */
+export const maximumBriefingMacroItems = 4
+
+export function selectBriefingMacroItems(
+  selected: readonly BriefingMacroItem[],
+  floor?: BriefingMacroItem
+): readonly BriefingMacroItem[] {
+  const ordered: BriefingMacroItem[] = []
+  const seen = new Set<string>()
+  for (const item of [floor, ...selected]) {
+    if (!item || seen.has(item.eventKey)) continue
+    seen.add(item.eventKey)
+    ordered.push(item)
+    if (ordered.length === maximumBriefingMacroItems) break
+  }
+  return Object.freeze(ordered)
+}
+
+/**
+ * The key release for the default selection: the largest surprise, and the latest release on a tie.
+ * It is the fallback when there is no editor selection yet, so a template document shows one key
+ * print instead of every high-impact release.
  */
 export function selectMacroFloorItem(items: readonly BriefingMacroItem[]): BriefingMacroItem | undefined {
   let floor: BriefingMacroItem | undefined

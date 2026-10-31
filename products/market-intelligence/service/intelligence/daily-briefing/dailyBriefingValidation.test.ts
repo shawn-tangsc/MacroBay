@@ -88,6 +88,17 @@ const documentWithMacro = (eventKeys: readonly string[], withNews = true): Daily
   return { ...base, news: { ...base.news, items: withNews ? base.news.items : [], macro, macroCandidates: macro } }
 }
 
+const documentWithoutMacroConsensus = (): DailyBriefingDocument => {
+  const base = document()
+  const template = base.news.macro[0]!
+  const macro = [{
+    eventKey: 'US.PPI', title: 'PPI', scheduledAt: template.scheduledAt,
+    importance: 'high' as const, actual: '0.4%', previous: '0.2%',
+    surprise: { direction: 'consensus-unavailable' as const }
+  }]
+  return { ...base, news: { ...base.news, macro, macroCandidates: macro } }
+}
+
 const hiddenOnlyEditorial = (eventKeys: readonly string[]) => ({
   lede: 'Stablecoin contraction keeps the read unchanged.',
   ledePattern: 'structure',
@@ -315,7 +326,7 @@ describe('daily briefing editorial validation and application', () => {
     }
   })
 
-  it('keeps the key high-impact release visible when the editorial hides every release', () => {
+  it('never shows a macro that the editorial did not explain', () => {
     const source = document()
     const validated = validateDailyBriefingEditorial({
       ...validOutput,
@@ -327,7 +338,66 @@ describe('daily briefing editorial validation and application', () => {
     if (!validated.ok) return
     const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
     expect(applied.news.items[0]).toMatchObject({ itemId: 'n1', visibility: 'shown' })
-    expect(applied.news.macro[0]).toMatchObject({ eventKey: 'US.CPI', visibility: 'shown' })
+    expect(applied.news.macro[0]).toMatchObject({ eventKey: 'US.CPI', visibility: 'hidden', visibilityReason: '已反映在结论中。' })
+  })
+
+  it('rejects a shown macro without a why', () => {
+    expect(validateDailyBriefingEditorial({
+      ...validOutput,
+      items: [{ factId: 'macro:US.CPI' }]
+    }, document(), 'zh-CN')).toMatchObject({ ok: false, failureCode: 'missing-macro-why', detail: 'macro:US.CPI' })
+  })
+
+  it('requires a no-consensus why to compare actual with previous', () => {
+    const source = documentWithoutMacroConsensus()
+    const base = {
+      ...validOutput,
+      lede: '稳定币继续收缩，价格压力仍在。',
+      ledePattern: 'structure',
+      items: [
+        { factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' },
+        { factId: 'macro:US.PPI', why: 'PPI actual 0.4% vs previous 0.2%, so pipeline pressure is firm.' }
+      ]
+    }
+    const validated = validateDailyBriefingEditorial(base, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.news.macro[0]).toMatchObject({ eventKey: 'US.PPI', visibility: 'shown' })
+    expect(applied.news.macro[0]?.consensus).toBeUndefined()
+    expect(applied.news.macro[0]?.why).toContain('0.4%')
+
+    expect(validateDailyBriefingEditorial({
+      ...base,
+      items: [
+        { factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' },
+        { factId: 'macro:US.PPI', why: 'No consensus was published, so it is not actionable.' }
+      ]
+    }, source, 'zh-CN')).toMatchObject({ ok: false, failureCode: 'invalid-macro-why', detail: 'macro:US.PPI' })
+
+    expect(validateDailyBriefingEditorial({
+      ...base,
+      items: [
+        { factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' },
+        { factId: 'macro:US.PPI', why: 'Pipeline pressure is still firm.' }
+      ]
+    }, source, 'zh-CN')).toMatchObject({ ok: false, failureCode: 'invalid-macro-why', detail: 'macro:US.PPI' })
+  })
+
+  it('keeps a no-consensus event hidden with the reason the editorial gave', () => {
+    const source = documentWithoutMacroConsensus()
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      lede: '稳定币继续收缩，价格压力仍在。',
+      ledePattern: 'structure',
+      items: [{ factId: 'news:n1', why: '这条消息解释了风险偏好的下行。' }],
+      hidden: [{ factId: 'macro:US.PPI', reason: 'Low crypto relevance today.' }],
+      importance: []
+    }, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.news.macro[0]).toMatchObject({ eventKey: 'US.PPI', visibility: 'hidden', visibilityReason: 'Low crypto relevance today.' })
   })
 })
 

@@ -15,7 +15,6 @@ import {
   type DailyBriefWebEvidenceRef,
   type DailyBriefWebEvidenceField
 } from './dailyBriefWebEvidence'
-import { selectMacroFloorItem } from './dailyBriefingDocument'
 import {
   briefingDataFactIds,
   briefingDataVisibilityAudit,
@@ -49,6 +48,8 @@ export type DailyBriefingValidationFailure =
   | 'invalid-translation'
   | 'too-long'
   | 'missing-hidden-reason'
+  | 'missing-macro-why'
+  | 'invalid-macro-why'
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
@@ -87,12 +88,26 @@ export function validateDailyBriefingEditorial(
   const dataIds = new Set(briefingDataFactIds(document))
   const items: Array<{ factId: string; why: string }> = []
   for (const item of raw.items) {
+    // A shown macro must carry its explanation. This is the safety net for an editor that lists a
+    // macro without a why; a macro the system did not receive a why for is never shown.
+    if (isRecord(item) && typeof item.factId === 'string' && item.factId.startsWith('macro:') && !isText(item.why)) {
+      return fail('missing-macro-why', item.factId)
+    }
     if (!isExact(item, ['factId', 'why'])) return fail('invalid-shape')
     if (!isText(item.factId) || !isText(item.why)) return fail('invalid-shape')
     if (item.why.length > 200) return fail('too-long')
     if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) return fail('unknown-fact')
     if (items.some((existing) => existing.factId === item.factId)) return fail('invalid-shape')
     items.push({ factId: item.factId, why: item.why })
+  }
+  // A release without a consensus still needs a reason to be shown. "No consensus was published" is
+  // a data gap, not an explanation of what the number means: the why has to read actual vs previous.
+  for (const item of items) {
+    if (!item.factId.startsWith('macro:')) continue
+    const macro = document.news.macro.find((candidate) => `macro:${candidate.eventKey}` === item.factId)
+    if (macro && macro.consensus === undefined && !macroWhyExplainsActualVsPrevious(macro, item.why)) {
+      return fail('invalid-macro-why', item.factId)
+    }
   }
   const hidden: Array<{ factId: string; reason: string }> = []
   for (const entry of raw.hidden) {
@@ -242,14 +257,6 @@ export function applyDailyBriefingEditorial(
     include: editorial.importance.map((entry) => entry.factId),
     hidden: editorial.hiddenData
   })
-  const macroFloor = selectMacroFloorItem(document.news.macro)
-  const highImpactShown = document.news.macro.some((item) => item.importance === 'high' && macroWhy.has(item.eventKey))
-  // Missing consensus is a data gap, not a visibility decision: a high-impact release without a
-  // consensus stays shown even if the editor tried to hide it, so the limits section can record
-  // "consensus not collected" while the reader still sees the actual and previous values.
-  const noConsensusHighImpact = new Set(document.news.macro
-    .filter((item) => item.importance === 'high' && item.consensus === undefined)
-    .map((item) => item.eventKey))
   const citations = [...document.citations, ...(editorial.webEvidence ?? []).map((ref) => Object.freeze({
     index: document.citations.length + (editorial.webEvidence ?? []).indexOf(ref) + 1,
     refId: ref.evidenceRefId,
@@ -306,11 +313,9 @@ export function applyDailyBriefingEditorial(
         ? Object.freeze({ ...item, why: newsWhy.get(item.itemId)!, visibility: 'shown' as const })
         : Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`news:${item.itemId}`) ? { visibilityReason: hiddenReason.get(`news:${item.itemId}`)! } : {}) }))),
       macro: Object.freeze(document.news.macro.map((item: BriefingMacroItem) => {
+        // Visibility is the editor's decision. The system never injects a shown release without a
+        // why, so a macro the editorial did not explain stays hidden with its reason.
         if (macroWhy.has(item.eventKey)) return Object.freeze({ ...item, why: macroWhy.get(item.eventKey)!, visibility: 'shown' as const })
-        if (noConsensusHighImpact.has(item.eventKey)) return Object.freeze({ ...item, visibility: 'shown' as const })
-        // The floor is a floor: if the editorial would hide every high-impact release, the key
-        // release stays visible even though the model listed it in `hidden` with a reason.
-        if (!highImpactShown && macroFloor?.eventKey === item.eventKey) return Object.freeze({ ...item, visibility: 'shown' as const })
         return Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })
       }))
     }),
@@ -371,6 +376,21 @@ function mergeSelectionAudit(
 
 function fail(failureCode: DailyBriefingValidationFailure, detail?: string): DailyBriefingValidation {
   return Object.freeze({ ok: false as const, failureCode, ...(detail ? { detail } : {}) })
+}
+
+/**
+ * A release without consensus has no surprise to explain, so it is explained by the number itself:
+ * the why must quote the actual and the previous print. Missing consensus may be noted as a data
+ * gap, but it cannot be the reason the release does not matter.
+ */
+function macroWhyExplainsActualVsPrevious(macro: BriefingMacroItem, why: string): boolean {
+  const text = why.toLowerCase()
+  const actual = macro.actual?.trim().toLowerCase()
+  if (!actual || !text.includes(actual)) return false
+  const previous = macro.previous?.trim().toLowerCase()
+  if (previous && !text.includes(previous)) return false
+  const dismisses = /(?:无预期|没有预期|未公布预期|no consensus|consensus (?:is |was )?(?:missing|unavailable|not published))[^。.!?]{0,40}(?:不重要|无关|不可交易|not important|not actionable|irrelevant|nothing to trade|does not matter)/i
+  return !dismisses.test(why)
 }
 
 function optionalText(value: unknown, maximum: number): string | undefined | false {
