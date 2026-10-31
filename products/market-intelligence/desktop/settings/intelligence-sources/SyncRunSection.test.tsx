@@ -50,6 +50,27 @@ describe('sync run section', () => {
     expect(dom.textContent).toContain('32.0s')
   })
 
+  it('names a known job in the reader\u2019s language instead of the catalog\u2019s own label', async () => {
+    const english = productText['en-US'].settings.intelligenceSources.syncRun
+    vi.spyOn(syncRunClient, 'list').mockResolvedValue({
+      state: 'available',
+      rows: [{
+        at: '2026-10-30T08:27:20.000Z', runId: 'r9', correlationId: 'r9', taskLabel: '每日简报',
+        sources: [{ sourceId: 'macro-calendar-fed', label: '美联储官方日历' }],
+        handlerId: 'market-intelligence.dailyBriefing', action: 'analysis', outcome: 'succeeded'
+      }]
+    })
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => root!.render(createElement(SyncRunSection, { text: { ...english, sourceNames: productText['en-US'].settings.intelligenceSources.sourceNames } })))
+    await act(async () => { await Promise.resolve() })
+
+    expect(host.textContent).toContain('Daily briefing')
+    expect(host.textContent).not.toContain('每日简报')
+    expect(host.textContent).toContain(productText['en-US'].settings.intelligenceSources.sourceNames['macro-calendar-fed'])
+  })
+
   it('shows the empty sentence when the window has no runs', async () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'available', rows: [] })
     const dom = await render()

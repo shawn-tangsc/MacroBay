@@ -29,6 +29,10 @@ export type SyncRunText = Readonly<{
   csvHeader: readonly string[]
   empty: string; unavailable: string; loading: string; exportCsv: string; exported: string; exportFailed: string
   actions: Readonly<Record<'collect' | 'refresh' | 'analysis' | 'configure' | 'test' | 'import' | 'other', string>>
+  /** `handlerId` → the reader's name for that job; the service catalogue's own labels are data. */
+  tasks: Readonly<Record<string, string>>
+  /** `sourceId` → the product's name for that source, the same map the source list uses. */
+  sourceNames?: Readonly<Record<string, string>>
   outcomes: Readonly<Record<'succeeded' | 'failed' | 'cancelled' | 'running', string>>
 }>
 
@@ -59,10 +63,21 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
     return () => { cancelled = true }
   }, [window, outcome])
 
-  const tasks = [...new Set(rows.map((row) => row.taskLabel))].sort()
-  const sources = [...new Map(rows.flatMap((row) => row.sources).map((source) => [source.sourceId, source.label])).entries()].sort((left, right) => left[1].localeCompare(right[1]))
+  // A run's task and source arrive as data. Product-side rows use their action as the handler id,
+  // so the audit actions are the fallback before the raw label — otherwise an English reader gets
+  // Chinese job names with no translation path at all.
+  const auditTaskLabel = (handlerId: string): string | undefined =>
+    Object.prototype.hasOwnProperty.call(text.actions, handlerId)
+      ? text.actions[handlerId as keyof SyncRunText['actions']]
+      : undefined
+  const taskLabelOf = (row: SyncRunRow): string =>
+    text.tasks[row.handlerId] ?? auditTaskLabel(row.handlerId) ?? row.taskLabel
+  const sourceLabelOf = (source: SyncRunRow['sources'][number]): string =>
+    text.sourceNames?.[source.sourceId] ?? source.label
+  const tasks = [...new Set(rows.map(taskLabelOf))].sort()
+  const sources = [...new Map(rows.flatMap((row) => row.sources).map((source) => [source.sourceId, sourceLabelOf(source)])).entries()].sort((left, right) => left[1].localeCompare(right[1]))
   const filtered = rows
-    .filter((row) => taskFilter === '' || row.taskLabel === taskFilter)
+    .filter((row) => taskFilter === '' || taskLabelOf(row) === taskFilter)
     .filter((row) => sourceFilter === '' || row.sources.some((source) => source.sourceId === sourceFilter))
     .filter((row) => outcome === undefined || row.outcome === outcome)
   const pageSize = SYNC_RUN_PAGE_SIZE
@@ -72,7 +87,11 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
 
   const exportCsv = async () => {
     // Export exactly what the filters produced, not the unfiltered window the IPC read returned.
-    const csv = syncRunsCsv(filtered, text.csvHeader)
+    const csv = syncRunsCsv(filtered.map((row) => ({
+      ...row,
+      taskLabel: taskLabelOf(row),
+      sources: row.sources.map((source) => ({ ...source, label: sourceLabelOf(source) }))
+    })), text.csvHeader)
     try {
       await navigator.clipboard.writeText(csv)
       setNotice(text.exported)
@@ -131,9 +150,9 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
       </div>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, window)}</span>
-        <span className="mi-sync-run__task" role="cell" title={row.taskLabel}>{row.taskLabel}</span>
-        <span className="mi-sync-run__source" role="cell" title={row.sources.map((source) => source.label).join(' · ')}>
-          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map((source) => source.label).join(' · ')}
+        <span className="mi-sync-run__task" role="cell" title={taskLabelOf(row)}>{taskLabelOf(row)}</span>
+        <span className="mi-sync-run__source" role="cell" title={row.sources.map(sourceLabelOf).join(' · ')}>
+          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map(sourceLabelOf).join(' · ')}
           {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
         </span>
         <span role="cell">{text.actions[row.action]}</span>

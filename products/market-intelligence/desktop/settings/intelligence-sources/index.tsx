@@ -69,7 +69,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         <button aria-pressed={view === 'sources'} className={view === 'sources' ? 'is-active' : undefined} onClick={() => setView('sources')} type="button">{t.viewSources}</button>
         <button aria-pressed={view === 'runs'} className={view === 'runs' ? 'is-active' : undefined} onClick={() => setView('runs')} type="button">{t.viewRuns}</button>
       </div>
-      {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection text={t.syncRun} /></div> : <>
+      {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection text={{ ...t.syncRun, sourceNames: t.sourceNames }} /></div> : <>
       <SettingsSourceTree
         filter={sourceFilter}
         labels={{ title: t.title, categories: t.sourceCategories, filters: t.sourceFilters, providerNames: t.providerNames, providerSummary: t.providerSummary }}
