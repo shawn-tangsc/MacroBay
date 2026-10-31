@@ -10,7 +10,6 @@ import type {
   MacroHistoryAsOfSeries
 } from './macroHistoryAsOf'
 import type { MarketIntelligencePublicQueryService } from './publicQueryService'
-import type { StablecoinHistoryAsOfResult } from './stablecoinHistoryAsOf'
 
 /**
  * The daily brief's historical backfill tool.
@@ -33,16 +32,19 @@ import type { StablecoinHistoryAsOfResult } from './stablecoinHistoryAsOf'
  *   snapshot: a 21:00 figure is not the 08:00 market, and a backfill that "filled" a gap with it
  *   would be exactly the masquerade this tool exists to prevent.
  *
- * The two capital facts have a second read path, used only when the local store holds no point at or
- * before the instant:
+ * The ETF flows have a second read path, used only when the local store holds no flow row at or
+ * before the instant: 0xRouter's own daily flow history, because a briefing frozen at its cutoff may
+ * be generated hours later, on a machine that was not awake for the cutoff. That reader only runs
+ * when the local snapshot answered `empty` (or held no row for the instant), it validates `asOf`
+ * against the cutoff and the clock before any request, and an unavailable or failed interface is a
+ * named gap — never a number. A stored row always wins, and a disabled or broken store is not read
+ * around.
  *
- * - the stablecoin level and the ETF flows can be answered from the providers' own public history —
- *   DefiLlama's aggregate supply series and 0xRouter's daily flow history — because a briefing
- *   frozen at its cutoff may be generated hours later, on a machine that was not awake for the
- *   cutoff. Those readers only run when the local store answered `empty`, they validate `asOf`
- *   against the cutoff and the clock before any request, and an unavailable or failed interface is a
- *   named gap (`historical-api-unavailable`, `historical-as-of-unavailable`, `query-unavailable`),
- *   never a number. A stored point always wins, and a disabled or broken store is not read around.
+ * The stablecoin level has no second read path, deliberately. Its metric is the USDT+USDC *core*
+ * supply the funds card shows; DefiLlama's bounded public history is aggregate USD-pegged supply, a
+ * different (wider) series, and substituting it would silently change what the fact measures. So a
+ * missing core point stays a named `historical-api-unavailable` gap. An aggregate series belongs to
+ * a separate `stablecoin-aggregate` metric and label, never to this one.
  */
 
 export const dailyBriefBackfillPolicy = Object.freeze({
@@ -127,11 +129,10 @@ export type DailyBriefBackfillDeps = Readonly<{
    */
   macroHistory: (input: Readonly<{ series: MacroHistoryAsOfSeries; asOf: string }>) => Promise<MacroHistoryAsOfResult | undefined>
   /**
-   * The providers' public historical supply and flow series. They are asked only after the capital
-   * store answered `empty`; `undefined` means no interface is wired, which is a gap
-   * (`historical-api-unavailable`), not a fallback to any current snapshot.
+   * The ETF provider's public daily flow history, asked only after the capital store answered
+   * `empty` or held no flow row at the instant. `undefined` means no interface is wired, which is
+   * `historical-api-unavailable`, not a fallback to any current snapshot.
    */
-  stablecoinHistory?: (input: Readonly<{ asOf: string }>) => Promise<StablecoinHistoryAsOfResult>
   etfHistory?: (input: Readonly<{ asset: EtfHistoryAsset; asOf: string }>) => Promise<EtfHistoryAsOfResult>
   now?: () => string
 }>
@@ -262,8 +263,7 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
   cutoff: string
   publicQuery: Pick<MarketIntelligencePublicQueryService,
     'queryCapitalConditionsSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryMacroHistoryAsOf'>
-  /** The providers' public history, asked only when the local store holds nothing at the instant. */
-  stablecoinHistory?: (request: Readonly<{ asOf: string }>) => Promise<StablecoinHistoryAsOfResult>
+  /** The ETF provider's public daily flow history, asked only when the store holds nothing. */
   etfHistory?: (request: Readonly<{ asset: EtfHistoryAsset; asOf: string }>) => Promise<EtfHistoryAsOfResult>
   now?: () => string
 }>): (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult> {
@@ -273,7 +273,6 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
     funding: (query) => input.publicQuery.queryFundingRateHistory(query),
     openInterest: (query) => input.publicQuery.queryOpenInterestHistory(query),
     macroHistory: async (query) => input.publicQuery.queryMacroHistoryAsOf(query),
-    ...(input.stablecoinHistory ? { stablecoinHistory: input.stablecoinHistory } : {}),
     ...(input.etfHistory ? { etfHistory: input.etfHistory } : {}),
     ...(input.now ? { now: input.now } : {})
   }
@@ -348,8 +347,14 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
         }
       }
       if (result.state === 'unavailable') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
-      // The store holds nothing at or before the instant; the public history might.
-      return readStablecoinHistory(asOf, deps)
+      // The store holds nothing at or before the instant. There is no same-metric public history to
+      // fall back to — DefiLlama's bounded series is aggregate supply, while this metric is the
+      // USDT+USDC core the funds card shows — so the gap is named rather than filled with a
+      // different, wider series.
+      return unavailable(
+        'historical-api-unavailable',
+        'the capital store holds no core stablecoin point at or before this instant, and no same-metric public history interface exists (DefiLlama publishes only aggregate supply, which is a different metric).'
+      )
     }
     case 'etf-btc':
     case 'etf-eth': {
@@ -411,22 +416,12 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
 }
 
 /**
- * The provider's own history, asked only when the store answered `empty`.
+ * The ETF provider's own history, asked only when the store answered `empty` or held no row.
  *
  * The reader validates the instant and the result; this function only turns its answer into this
  * tool's vocabulary, so a public series can never inherit a stored snapshot's method or a store's
  * `not-visible-as-of` wording.
  */
-async function readStablecoinHistory(asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
-  const read = deps.stablecoinHistory
-  if (!read) {
-    return unavailable('historical-api-unavailable', 'no public stablecoin history interface is wired in this build; the gap stays.')
-  }
-  const result = await read({ asOf })
-  if (result.state === 'unavailable') return unavailable(HISTORICAL_API_GAP_CODES[result.gapCode] ?? 'query-unavailable', result.detail)
-  return { state: 'available', value: result.value, observedAt: result.observedAt, method: result.method, sourceUrl: result.sourceUrl }
-}
-
 async function readEtfHistory(asset: EtfHistoryAsset, asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
   const read = deps.etfHistory
   if (!read) {

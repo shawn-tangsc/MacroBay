@@ -69,7 +69,6 @@ import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRun
 import { resolveDailyBriefAgentAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
-import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
@@ -460,15 +459,9 @@ export function getIntelligenceModule(
       store: etfCurrentStateStore,
       now: () => new Date().toISOString()
     })
-    // One bounded, proxy-aware DefiLlama client serves both the current-state refresh and the
-    // edition backfill's historical read: the platform fetch is the only transport, and a history
-    // response is admitted under the same byte budget as the current one.
-    const capitalConditionsHttp = createCapitalConditionsHttpClient({
-      platformFetch: hooks?.platformFetch ?? getPlatformFetch()
-    })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
-      http: capitalConditionsHttp,
+      http: createCapitalConditionsHttpClient({ platformFetch: hooks?.platformFetch }),
       store: capitalConditionsStore,
       now: () => new Date().toISOString()
     })
@@ -775,14 +768,12 @@ export function getIntelligenceModule(
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       generationSettings: () => dailyBriefingGenerationSettings.getView(),
-      // The edition's two capital facts may be answered by the providers' own history when the
-      // machine was not awake at the cutoff. The readers are built per edition: they share one
-      // request window inside the edition and never outlive it, so a later edition cannot inherit
-      // yesterday's answer.
+      // The ETF rows may be answered by the provider's own history when the machine was not awake
+      // at the cutoff. The reader is built per edition: it shares one request window inside the
+      // edition and never outlives it, so a later edition cannot inherit yesterday's answer. The
+      // stablecoin level deliberately has no such reader: its metric is the USDT+USDC core supply
+      // the card shows, and the provider's bounded history is a different (aggregate) series.
       backfillFactory: (cutoff) => {
-        const stablecoinHistory = createStablecoinHistoryAsOf({
-          requestHistory: capitalConditionsHttp.requestStablecoinHistoryPayload
-        })
         const etfHistory = createEtfHistoryAsOf({
           requestWindow: async () => {
             // The same two gates the refresh applies: a switched-off source is not read around, and
@@ -797,7 +788,6 @@ export function getIntelligenceModule(
         return createDailyBriefBackfillExecutor({
           cutoff,
           publicQuery: publicQueryService,
-          stablecoinHistory: (request) => stablecoinHistory.read(request),
           etfHistory: (request) => etfHistory.read(request)
         })
       },
