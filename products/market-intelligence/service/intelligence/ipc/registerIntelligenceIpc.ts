@@ -105,7 +105,6 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     const module = getIntelligenceModule(jobRuntime)
     if (!module.newsSentiment.bodyTranslation) throw new Error('Body translation is unavailable.')
     const result = await module.newsSentiment.bodyTranslation.translate(itemId, { manual: true, force })
-    console.log('MI_BODY_TRANSLATE', itemId, result.state)
     return result
   })
 
