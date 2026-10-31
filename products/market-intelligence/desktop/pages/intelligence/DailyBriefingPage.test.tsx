@@ -551,10 +551,11 @@ describe('daily briefing page', () => {
     expect(trace).not.toBeNull()
     expect(trace.textContent).toContain(text.generationTrace.title)
     expect(trace.textContent).toContain(text.generationTrace.completed)
-    expect(trace.querySelectorAll('[data-stage]')).toHaveLength(0)
-    expect(trace.textContent).toContain('耗时 30 秒')
-    act(() => trace.querySelector<HTMLButtonElement>('.mi-generation-trace__toggle')!.click())
+    // The successful stages are a vertical stepper that starts fully visible; there is no fold.
+    expect(trace.querySelectorAll('.ant-steps-item')).toHaveLength(9)
     expect(trace.querySelectorAll('[data-stage]')).toHaveLength(9)
+    expect(trace.textContent).toContain('耗时 30 秒')
+    expect(trace.querySelector('.mi-generation-trace__toggle')).toBeNull()
     expect(dom.querySelector<HTMLElement>('[data-briefing-issues]')?.firstElementChild?.classList.contains('mi-generation-trace')).toBe(true)
   })
 

@@ -13,6 +13,8 @@ import {
   type GenerationTraceStage
 } from './dailyBriefingGenerationTrace'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
 // Mirrors the shell formatter's `YYYY-MM-DD HH:mm[:ss]` shape so the same-day rule is exercised.
@@ -26,11 +28,11 @@ function stage(
 ): GenerationTraceStage {
   return {
     id, state,
-    ...(state === 'pending' ? {} : {
+    ...(state === 'success' || state === 'failed' ? {
       startedAt: '2026-10-30T00:00:05.000Z',
       finishedAt: '2026-10-30T00:00:06.000Z',
       durationMs: 1_000
-    }),
+    } : {}),
     ...overrides
   }
 }
@@ -77,39 +79,120 @@ afterEach(() => {
   container?.remove()
   root = null
   container = null
+  // AntD keeps closed popups in its own portal; drop them so a later test cannot read a stale one.
+  for (const tip of document.querySelectorAll('.ant-tooltip')) tip.remove()
 })
 
-function render(value: GenerationTrace | undefined, english = false): HTMLDivElement {
+function render(value: GenerationTrace | undefined, english = false, copy: typeof text = english ? englishText : text): HTMLDivElement {
   act(() => {
     root!.render(<DailyBriefingGenerationTimeline
       trace={value}
-      text={english ? englishText : text}
+      text={copy}
       formatTime={formatTime}
     />)
   })
   return container!
 }
 
-describe('generation stage timeline', () => {
-  it('shows every stage, its timing and the whole-attempt duration on success', () => {
-    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
-    // A successful attempt stays folded; the header still carries the status and the duration.
-    expect(dom.querySelectorAll('[data-stage]')).toHaveLength(0)
-    act(() => dom.querySelector<HTMLButtonElement>('.mi-generation-trace__toggle')!.click())
-    const stages = [...dom.querySelectorAll('[data-stage]')]
+function stepItems(dom: HTMLElement): HTMLElement[] {
+  return [...dom.querySelectorAll<HTMLElement>('.ant-steps-item')]
+}
 
-    expect(stages).toHaveLength(9)
-    expect(stages.map((entry) => entry.getAttribute('data-stage'))).toEqual(allSucceeded)
-    expect(stages.every((entry) => entry.getAttribute('data-stage-state') === 'success')).toBe(true)
+function stepOf(dom: HTMLElement, id: GenerationStageId): HTMLElement {
+  const title = dom.querySelector<HTMLElement>(`[data-stage="${id}"]`)
+  const item = title?.closest<HTMLElement>('.ant-steps-item')
+  if (!item) throw new Error(`no step for ${id}`)
+  return item
+}
+
+function resultOf(dom: HTMLElement, id: GenerationStageId): HTMLElement {
+  const result = dom.querySelector<HTMLElement>(`[data-stage-result="${id}"]`)
+  if (!result) throw new Error(`no step description for ${id}`)
+  return result
+}
+
+/** AntD keeps a closed popup mounted but hides its root; only visible tooltips count as shown. */
+function visibleTooltipText(): string {
+  return [...document.querySelectorAll('.ant-tooltip')]
+    .filter((element) => !element.classList.contains('ant-tooltip-hidden')
+      // happy-dom does not end the zoom-out motion, so a leaving popup is still in the DOM.
+      && !element.classList.contains('ant-zoom-big-fast-leave')
+      && !element.classList.contains('ant-zoom-big-fast-leave-active'))
+    .map((element) => element.textContent ?? '')
+    .join(' ')
+}
+
+async function settle(): Promise<void> {
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 300)) })
+}
+
+describe('generation stage timeline', () => {
+  it('shows every stage as a vertical stepper by default, with its timing and the whole-attempt duration', () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    const steps = stepItems(dom)
+    // Success and failure both show every step: the reader asked for the stages, not a fold.
+    expect(dom.querySelector('.ant-steps-vertical')).not.toBeNull()
+    expect(dom.querySelector('.mi-generation-trace__toggle')).toBeNull()
+    expect(steps).toHaveLength(9)
+    expect(steps.map((entry) => entry.querySelector('[data-stage]')?.getAttribute('data-stage'))).toEqual(allSucceeded)
+    expect(steps.every((entry) => entry.classList.contains('ant-steps-item-finish'))).toBe(true)
     expect(dom.textContent).toContain(text.generationTrace.title)
     expect(dom.textContent).toContain(text.generationTrace.completed)
     // Same-day attempts print only the clock; the date is noise inside one edition.
     expect(dom.textContent).toContain('本次尝试 · 00:00:00 → 00:01:00')
     expect(dom.textContent).toContain('耗时 1 分 0 秒')
     expect(dom.textContent).not.toContain('2026-10-30 00:00:00')
-    expect(stages[0]?.textContent).toContain('00:00:05 → 00:00:06')
-    expect(stages[0]?.textContent).toContain('1 秒')
+    expect(resultOf(dom, 'source').textContent).toContain('00:00:05 → 00:00:06')
+    expect(resultOf(dom, 'source').textContent).toContain('1 秒')
     expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
+  })
+
+  it('maps finish, error and wait to the recorded stage states', () => {
+    const success = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    expect(stepItems(success).every((item) => item.classList.contains('ant-steps-item-finish'))).toBe(true)
+
+    const failed = render(failureTrace('validation', 'schema-validation-failed'))
+    expect(stepOf(failed, 'source').classList.contains('ant-steps-item-finish')).toBe(true)
+    expect(stepOf(failed, 'validation').classList.contains('ant-steps-item-error')).toBe(true)
+    expect(stepOf(failed, 'store').classList.contains('ant-steps-item-wait')).toBe(true)
+  })
+
+  it('waits on a stage the trace does not carry, including an unrecorded second repair', () => {
+    const dom = render(trace('success', [stage('source', 'success')]))
+    // repair-2 is absent from this trace: it waits, it never claims a process or a finish.
+    expect(stepOf(dom, 'repair-2').classList.contains('ant-steps-item-wait')).toBe(true)
+    expect(stepOf(dom, 'repair-2').querySelector('[data-stage]')?.getAttribute('data-stage-state')).toBe('pending')
+    expect(stepOf(dom, 'selection').classList.contains('ant-steps-item-wait')).toBe(true)
+    expect(resultOf(dom, 'selection').textContent).toContain(text.generationTrace.notRecorded)
+    expect(resultOf(dom, 'selection').textContent).not.toContain('00:00:05')
+  })
+
+  it('counts a skipped repair on a clean run as a finished step, not a grey skip', () => {
+    const dom = render(trace('success', [
+      ...['source', 'candidates', 'selection', 'field-backfill', 'writing', 'validation'].map((id) => stage(id as GenerationStageId, 'success')),
+      stage('repair-1', 'skipped'),
+      stage('repair-2', 'skipped'),
+      stage('store', 'success')
+    ]))
+    expect(stepOf(dom, 'repair-2').classList.contains('ant-steps-item-finish')).toBe(true)
+    expect(resultOf(dom, 'repair-2').textContent).toContain(text.generationTrace.states.notNeeded)
+    expect(resultOf(dom, 'repair-2').textContent).not.toContain(text.generationTrace.states.skipped)
+  })
+
+  it('keeps a stage skipped because an earlier one failed grey and not run', () => {
+    const dom = render(failureTrace('source', 'source-failed'))
+    expect(stepOf(dom, 'repair-2').classList.contains('ant-steps-item-wait')).toBe(true)
+    expect(dom.querySelector('[data-stage="repair-2"]')?.getAttribute('data-stage-skip')).toBe('blocked')
+    expect(resultOf(dom, 'repair-2').textContent).toContain(text.generationTrace.states.notRun)
+  })
+
+  it('shows a stage that began but never finished as process', () => {
+    const dom = render(trace('success', [
+      stage('source', 'success'),
+      stage('candidates', 'pending', { startedAt: '2026-10-30T00:00:05.000Z' })
+    ]))
+    expect(stepOf(dom, 'candidates').classList.contains('ant-steps-item-process')).toBe(true)
+    expect(resultOf(dom, 'candidates').textContent).toContain('00:00:05')
   })
 
   it('adds the date only to the side that crosses midnight', () => {
@@ -117,35 +200,34 @@ describe('generation stage timeline', () => {
       stage('source', 'success', { startedAt: '2026-10-30T23:59:50.000Z', finishedAt: '2026-10-31T00:00:10.000Z' }),
       stage('candidates', 'success')
     ], { startedAt: '2026-10-30T23:59:00.000Z', finishedAt: '2026-10-31T00:01:00.000Z' }))
-    act(() => dom.querySelector<HTMLButtonElement>('.mi-generation-trace__toggle')!.click())
 
     expect(dom.textContent).toContain('10-30 23:59:00 → 10-31 00:01:00')
-    expect(dom.querySelector('[data-stage="source"]')?.textContent).toContain('10-30 23:59:50 → 10-31 00:00:10')
-    expect(dom.querySelector('[data-stage="candidates"]')?.textContent).toContain('00:00:05 → 00:00:06')
-    expect(dom.querySelector('[data-stage="candidates"]')?.textContent).not.toContain('2026-10-30')
+    expect(resultOf(dom, 'source').textContent).toContain('10-30 23:59:50 → 10-31 00:00:10')
+    expect(resultOf(dom, 'candidates').textContent).toContain('00:00:05 → 00:00:06')
+    expect(resultOf(dom, 'candidates').textContent).not.toContain('2026-10-30')
   })
 
-  it('locates a source failure and marks later stages skipped', () => {
+  it('locates a source failure and keeps the later steps waiting', () => {
     const dom = render(failureTrace('source', 'source-failed'))
     const failed = dom.querySelector<HTMLElement>('[data-failed-stage-label]')!
 
     expect(dom.querySelector('[data-generation-trace-state]')?.getAttribute('data-generation-trace-state')).toBe('failed')
     expect(dom.querySelector('[data-failed-stage="source"]')).not.toBeNull()
     expect(failed.textContent).toBe('失败于：数据采集')
-    expect(dom.querySelectorAll('[data-stage-state="skipped"]')).toHaveLength(8)
-    expect(dom.querySelector('[data-stage="source"]')?.getAttribute('data-stage-state')).toBe('failed')
+    expect(stepOf(dom, 'source').classList.contains('ant-steps-item-error')).toBe(true)
+    expect(dom.querySelectorAll('.ant-steps-item-wait')).toHaveLength(8)
   })
 
   it('locates an AI-selection failure', () => {
     const dom = render(failureTrace('selection', 'unknown-fact'))
     expect(dom.querySelector('[data-failed-stage-label]')?.textContent).toBe('失败于：AI 选择')
-    expect(dom.querySelector('[data-stage="selection"]')?.textContent).toContain(text.aiSettings.failure['unknown-fact'])
+    expect(resultOf(dom, 'selection').textContent).toContain(text.aiSettings.failure['unknown-fact'])
   })
 
   it('locates a truncated writing stage and redacts its detail', () => {
     const detail = 'stop_reason=max_tokens sk-live-SECRET0123456789\n    at handler (/app/private/secret.js:1:1)'
     const dom = render(failureTrace('writing', 'agent-turn-output-truncated', detail))
-    const failed = dom.querySelector('[data-stage="writing"]')!
+    const failed = resultOf(dom, 'writing')
 
     expect(dom.querySelector('[data-failed-stage-label]')?.textContent).toBe('失败于：写作')
     expect(failed.textContent).toContain(text.aiSettings.failure['agent-turn-output-truncated'])
@@ -157,30 +239,94 @@ describe('generation stage timeline', () => {
   it('locates a validation failure', () => {
     const dom = render(failureTrace('validation', 'schema-validation-failed'))
     expect(dom.querySelector('[data-failed-stage-label]')?.textContent).toBe('失败于：校验')
-    expect(dom.querySelector('[data-stage="validation"]')?.textContent)
+    expect(resultOf(dom, 'validation').textContent)
       .toContain(text.aiSettings.failure['schema-validation-failed'])
   })
 
   it('locates a store/publish failure', () => {
     const dom = render(failureTrace('store', 'store-failed'))
     expect(dom.querySelector('[data-failed-stage-label]')?.textContent).toBe('失败于：落库/发布')
-    expect(dom.querySelector('[data-stage="store"]')?.textContent).toContain(text.aiSettings.failure['store-failed'])
+    expect(resultOf(dom, 'store').textContent).toContain(text.aiSettings.failure['store-failed'])
   })
 
-  it('marks stages the trace does not carry as not recorded instead of guessing', () => {
-    const dom = render(trace('success', [stage('source', 'success')]))
-    act(() => dom.querySelector<HTMLButtonElement>('.mi-generation-trace__toggle')!.click())
-    const selection = dom.querySelector('[data-stage="selection"]')!
+  it('puts each stage’s fixed logic behind a question mark instead of inline', () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    for (const id of allSucceeded) {
+      const help = stepOf(dom, id).querySelector<HTMLButtonElement>(`[data-stage-help="${id}"]`)
+      expect(help, id).not.toBeNull()
+      expect(help?.getAttribute('aria-label')).toBe(text.generationTrace.stageHelpLabel.replace('{stage}', text.generationTrace.stages[id]))
+      expect(stepOf(dom, id).textContent).not.toContain(text.generationTrace.stageHelp[id])
+      expect(text.generationTrace.stageHelp[id].length).toBeGreaterThan(0)
+      expect(englishText.generationTrace.stageHelp[id].length).toBeGreaterThan(0)
+    }
+  })
 
-    expect(selection.getAttribute('data-stage-state')).toBe('pending')
-    expect(selection.textContent).toContain(text.generationTrace.notRecorded)
-    expect(selection.textContent).not.toContain('00:00:05')
+  it('shows the logic on hover and on keyboard focus', async () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    const help = dom.querySelector<HTMLButtonElement>('[data-stage-help="source"]')!
+
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    act(() => help.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
+    await settle()
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(visibleTooltipText()).toContain(text.generationTrace.stageHelp.source)
+
+    // Leaving closes it again; the content is a tooltip, never a permanent row.
+    act(() => help.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })))
+    await settle()
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+
+    await act(async () => { help.focus() })
+    await settle()
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    expect(visibleTooltipText()).toContain(text.generationTrace.stageHelp.source)
+  })
+
+  it('pins on click and closes on Escape', async () => {
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))))
+    const help = dom.querySelector<HTMLButtonElement>('[data-stage-help="writing"]')!
+
+    act(() => help.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })))
+    await settle()
+    act(() => help.click())
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    // Pinned: leaving the icon keeps it open.
+    act(() => help.dispatchEvent(new MouseEvent('mouseout', { bubbles: true })))
+    await settle()
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    await settle()
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+    expect(visibleTooltipText()).not.toContain(text.generationTrace.stageHelp.writing)
+
+    // A pinned icon also closes on a second click.
+    act(() => help.click())
+    expect(help.getAttribute('aria-expanded')).toBe('true')
+    act(() => help.click())
+    expect(help.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('renders no question mark when a stage has no help line', () => {
+    const withoutHelp = {
+      ...text,
+      generationTrace: {
+        ...text.generationTrace,
+        stageHelp: { ...text.generationTrace.stageHelp, writing: '' }
+      }
+    } as unknown as typeof text
+    const dom = render(trace('success', allSucceeded.map((id) => stage(id, 'success'))), false, withoutHelp)
+
+    expect(dom.querySelector('[data-stage-help="writing"]')).toBeNull()
+    expect(dom.querySelector('[data-stage-help="source"]')).not.toBeNull()
+    // The stage itself, its timing and the rest of the stepper are untouched by the missing line.
+    expect(resultOf(dom, 'writing').textContent).toContain('00:00:05 → 00:00:06')
   })
 
   it('says the timeline was not recorded instead of guessing when the edition has no trace', () => {
     const dom = render(undefined)
     expect(dom.querySelector('[data-generation-trace-missing]')?.textContent).toBe(text.generationTrace.missing)
-    expect(dom.querySelectorAll('[data-stage]')).toHaveLength(0)
+    expect(dom.querySelectorAll('.ant-steps-item')).toHaveLength(0)
     expect(dom.textContent).not.toContain(text.generationTrace.failed)
   })
 

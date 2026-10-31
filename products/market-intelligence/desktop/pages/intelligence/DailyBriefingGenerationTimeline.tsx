@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Steps, Tooltip } from 'antd'
+import { CircleHelp } from 'lucide-react'
 
 import type { DailyBriefingText } from './dailyBriefingText'
 import {
@@ -6,19 +8,23 @@ import {
   generationStageIds,
   stageDurationMs,
   traceDurationMs,
+  type GenerationStageId,
   type GenerationTrace,
   type GenerationTraceStage
 } from './dailyBriefingGenerationTrace'
 import { readableFailureDetail } from './dailyBriefingFailureDetail'
 
+type StepStatus = 'finish' | 'error' | 'wait' | 'process'
+
 /**
- * The right rail's first block: the fixed generation stages, with the status and timing the service
- * recorded for each.
+ * The right rail's first block: the fixed generation stages as a vertical stepper, with the status
+ * and timing the service recorded for each. Every stage is always visible; there is nothing to fold.
  *
  * A stage the trace does not carry is shown as not recorded. The timeline never fills a gap with a
  * guessed success, a guessed duration or a guessed stage: a reader auditing a failed generation
- * needs to see exactly where it stopped. A failed attempt opens on its failed stage; a successful
- * one stays folded until the reader asks for it.
+ * needs to see exactly where it stopped. Each stage carries its fixed logic behind a question mark
+ * instead of a paragraph, while the recorded result — timing, failure code and detail — stays in
+ * the step's description.
  */
 export function DailyBriefingGenerationTimeline({ trace, text, formatTime }: Readonly<{
   trace: GenerationTrace | undefined
@@ -26,18 +32,14 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime }: Rea
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const labels = text.generationTrace
-  const [open, setOpen] = useState(trace?.state === 'failed')
-  useEffect(() => { setOpen(trace?.state === 'failed') }, [trace?.attemptId, trace?.state])
   const failed = trace ? failedStage(trace) : undefined
   const failedLabel = failed ? labels.stages[failed.id] : labels.notRecorded
   const duration = trace ? traceDurationMs(trace) : undefined
+  const failedIndex = failed ? generationStageIds.indexOf(failed.id) : -1
   return <section className="mi-generation-trace" data-generation-trace-state={trace?.state ?? 'missing'} data-failed-stage={failed?.id ?? 'none'}>
     <header className="mi-generation-trace__head">
       <h3>{labels.title}</h3>
       <span data-trace-state={trace?.state ?? 'missing'}>{trace ? trace.state === 'failed' ? labels.failed : labels.completed : labels.notRecorded}</span>
-      {trace ? <button className="mi-generation-trace__toggle" type="button" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        {open ? labels.collapse : labels.expand}
-      </button> : null}
     </header>
     {trace ? <>
       <p className="mi-generation-trace__summary">
@@ -47,34 +49,124 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime }: Rea
       {trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
         {labels.failedAt.replace('{stage}', failedLabel)}
       </p> : null}
-      {open ? <ol className="mi-generation-trace__stages">
-        {generationStageIds.map((id) => {
+      <Steps
+        className="mi-generation-trace__steps"
+        direction="vertical"
+        size="small"
+        items={generationStageIds.map((id) => {
           const stage = trace.stages.find((entry) => entry.id === id)
           const state = stage?.state ?? 'pending'
-          return <li className="mi-generation-trace__stage" key={id} data-stage={id} data-stage-state={state}>
-            <span className="mi-generation-trace__stage-dot" data-stage-dot={state} aria-hidden="true" />
-            <span className="mi-generation-trace__stage-name">{labels.stages[id]}</span>
-            <span className="mi-generation-trace__stage-time">{stage ? stageTiming(stage, text, formatTime) : labels.notRecorded}</span>
-            {failed?.id === id && stage?.failureCode ? <span className="mi-generation-trace__stage-failure" data-stage-failure-code={stage.failureCode}>
-              {failureLabel(stage.failureCode, text)}
-              {stage.failureDetail ? ` · ${readableFailureDetail(stage.failureDetail, text.failurePanel.detail) ?? ''}` : ''}
-            </span> : null}
-          </li>
+          const skipReason = state === 'skipped' ? skipReasonFor(generationStageIds.indexOf(id), failedIndex) : undefined
+          const failure = failed?.id === id ? stage : undefined
+          return {
+            status: stepStatus(stage, skipReason),
+            title: <span className="mi-generation-trace__stage-title" data-stage={id} data-stage-state={state} data-stage-skip={skipReason ?? 'none'}>
+              <span className="mi-generation-trace__stage-name">{labels.stages[id]}</span>
+              <StageHelp id={id} text={text} />
+            </span>,
+            description: <span className="mi-generation-trace__stage-result" data-stage-result={id} data-stage-result-state={state}>
+              <span className="mi-generation-trace__stage-time">{stage ? stageResult(stage, id, skipReason, text, formatTime) : labels.notRecorded}</span>
+              {failure?.failureCode ? <span className="mi-generation-trace__stage-failure" data-stage-failure-code={failure.failureCode}>
+                {failureLabel(failure.failureCode, text)}
+                {failure.failureDetail ? ` · ${readableFailureDetail(failure.failureDetail, text.failurePanel.detail) ?? ''}` : ''}
+              </span> : null}
+            </span>
+          }
         })}
-      </ol> : null}
+      />
     </> : <p className="mi-generation-trace__missing" data-generation-trace-missing="true">{labels.missing}</p>}
   </section>
 }
 
-function stageTiming(
+type SkipReason = 'not-needed' | 'blocked'
+
+/**
+ * A skipped stage before the failing one was not needed (a clean validation needs no repair), so it
+ * still counts as a success. Only a stage after the failure was cut off by it and stays grey.
+ */
+function skipReasonFor(index: number, failedIndex: number): SkipReason {
+  return failedIndex >= 0 && index > failedIndex ? 'blocked' : 'not-needed'
+}
+
+/** Not needed is a finished stage; blocked and absent stages wait; a started, unended stage is in process. */
+function stepStatus(stage: GenerationTraceStage | undefined, skipReason: SkipReason | undefined): StepStatus {
+  if (!stage) return 'wait'
+  if (stage.state === 'success') return 'finish'
+  if (stage.state === 'failed') return 'error'
+  if (stage.state === 'pending') return stage.startedAt ? 'process' : 'wait'
+  return skipReason === 'blocked' ? 'wait' : 'finish'
+}
+
+/**
+ * The fixed logic of one stage, behind the question mark. Hover and keyboard focus preview it,
+ * a click pins or closes it, and Escape closes it from anywhere. The help is a stage's own copy:
+ * when the locale has no line for a stage the icon is not rendered, so no empty tooltip appears.
+ */
+function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBriefingText }>): React.ReactElement | null {
+  const labels = text.generationTrace
+  const help = labels.stageHelp[id]
+  const [pinned, setPinned] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  // A dismiss (click on a pinned icon, or Escape) outranks the pointer still resting on the icon.
+  const [dismissed, setDismissed] = useState(false)
+  const open = (pinned || hovered) && !dismissed
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      setPinned(false)
+      setHovered(false)
+      setDismissed(true)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  if (!help?.trim()) return null
+  return <Tooltip open={open} title={help} trigger={[]} placement="top" styles={{ root: { maxWidth: 360 } }}>
+    <button
+      className="mi-generation-trace__stage-help"
+      type="button"
+      data-stage-help={id}
+      aria-label={labels.stageHelpLabel.replace('{stage}', labels.stages[id])}
+      aria-expanded={open}
+      onMouseEnter={() => { setHovered(true); setDismissed(false) }}
+      onMouseLeave={() => { setHovered(false); setDismissed(false) }}
+      onFocus={() => { setHovered(true); setDismissed(false) }}
+      onBlur={() => { setHovered(false); setPinned(false); setDismissed(false) }}
+      onClick={() => {
+        if (pinned) { setPinned(false); setDismissed(true) } else { setPinned(true); setDismissed(false) }
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
+        setPinned(false)
+        setHovered(false)
+        setDismissed(true)
+      }}
+    >
+      <CircleHelp size={10} aria-hidden="true" />
+    </button>
+  </Tooltip>
+}
+
+function stageResult(
   stage: GenerationTraceStage,
+  id: GenerationStageId,
+  skipReason: SkipReason | undefined,
   text: DailyBriefingText,
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 ): string {
   const range = formatRange(stage.startedAt, stage.finishedAt, formatTime)
   const duration = stageDurationMs(stage)
   const parts = [range, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
-  return parts.length > 0 ? parts.join(' · ') : text.generationTrace.notRecorded
+  if (parts.length > 0) return parts.join(' · ')
+  if (stage.state === 'skipped') {
+    if (skipReason === 'blocked') return text.generationTrace.states.notRun
+    // Only the repair stages mean "no repair was needed"; any other clean skip just says skipped.
+    return id === 'repair-1' || id === 'repair-2' ? text.generationTrace.states.notNeeded : text.generationTrace.states.skipped
+  }
+  return text.generationTrace.notRecorded
 }
 
 /**

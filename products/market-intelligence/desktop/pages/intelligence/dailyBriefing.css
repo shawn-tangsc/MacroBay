@@ -329,25 +329,36 @@
 .mi-generation-trace__head > span { color: #8d979f; font-size: 9px; }
 .mi-generation-trace[data-generation-trace-state="failed"] .mi-generation-trace__head span[data-trace-state] { color: #f0a3a3; }
 .mi-generation-trace[data-generation-trace-state="success"] .mi-generation-trace__head span[data-trace-state] { color: #9ec9a8; }
-.mi-generation-trace__toggle { flex: none; padding: 2px 6px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px; background: transparent; color: var(--mi-dashboard-muted); font-size: 9px; cursor: pointer; }
 .mi-generation-trace__summary, .mi-generation-trace__failed, .mi-generation-trace__missing { margin: 4px 0 0; color: #7d8790; font-size: 9px; line-height: 1.5; }
 .mi-generation-trace__failed { color: #e7c98f; }
 .mi-generation-trace__missing { color: #7d8790; font-style: italic; }
-.mi-generation-trace__stages { margin: 8px 0 0; padding: 0; list-style: none; }
-/* A vertical rail with one node per stage: the name owns the panel width and never breaks mid-word. */
-.mi-generation-trace__stage { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 9px; row-gap: 1px; padding-bottom: 11px; }
-.mi-generation-trace__stage:last-child { padding-bottom: 0; }
-.mi-generation-trace__stage::before { content: ''; position: absolute; left: 3px; top: 10px; bottom: 0; width: 1px; background: var(--mi-dashboard-line); }
-.mi-generation-trace__stage:last-child::before { display: none; }
-.mi-generation-trace__stage-dot { grid-column: 1; grid-row: 1 / span 2; align-self: start; width: 7px; height: 7px; margin-top: 3px; border-radius: 50%; background: #8d979f; z-index: 1; }
-.mi-generation-trace__stage-dot[data-stage-dot="success"] { background: #6f9e7b; }
-.mi-generation-trace__stage-dot[data-stage-dot="failed"] { background: #d16a6a; }
-.mi-generation-trace__stage-dot[data-stage-dot="skipped"] { background: #4d555c; }
-.mi-generation-trace__stage-dot[data-stage-dot="pending"] { background: transparent; border: 1px solid #4d555c; }
-.mi-generation-trace__stage-name { grid-column: 2; grid-row: 1; overflow: hidden; color: #c4ccd2; font-size: 10px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
-.mi-generation-trace__stage[data-stage-state="failed"] .mi-generation-trace__stage-name { color: #f0a3a3; }
-.mi-generation-trace__stage-time { grid-column: 2; grid-row: 2; color: #7d8790; font-size: 9px; line-height: 1.45; font-variant-numeric: tabular-nums; }
-.mi-generation-trace__stage-failure { grid-column: 2; grid-row: 3; color: #e7c98f; font-size: 8.5px; line-height: 1.45; }
+/* Vertical antd Steps, compressed to the rail's 10px scale: the stage name and its help share the
+   title row, and the recorded time/error is the description. The stepper draws the rail itself. */
+.mi-generation-trace__steps { margin-top: 8px; }
+.mi-generation-trace__steps .ant-steps-item { padding-bottom: 8px; }
+.mi-generation-trace__steps .ant-steps-item:last-child { padding-bottom: 0; }
+.mi-generation-trace__steps .ant-steps-item-tail { inset-inline-start: 7px; }
+.mi-generation-trace__steps .ant-steps-item-tail::after { width: 1px; background: var(--mi-dashboard-line) !important; }
+.mi-generation-trace__steps .ant-steps-item-icon { width: 15px; height: 15px; margin-inline-start: 0; font-size: 8px; line-height: 13px; }
+.mi-generation-trace__steps .ant-steps-item-icon .ant-steps-icon { font-size: 8px; line-height: 1; }
+.mi-generation-trace__steps .ant-steps-item-finish .ant-steps-item-icon { background: #6f9e7b; border-color: #6f9e7b; }
+.mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-icon { background: #d16a6a; border-color: #d16a6a; }
+.mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon { background: transparent; border-color: #4d555c; }
+.mi-generation-trace__steps .ant-steps-item-wait .ant-steps-item-icon .ant-steps-icon { color: #4d555c; }
+.mi-generation-trace__steps .ant-steps-item-content { min-height: 15px; }
+.mi-generation-trace__steps .ant-steps-item-title { padding-inline-end: 0; color: #c4ccd2; font-size: 10px; line-height: 1.4; }
+.mi-generation-trace__steps .ant-steps-item-title::after { display: none; }
+.mi-generation-trace__steps .ant-steps-item-description { padding-bottom: 0; color: #7d8790; font-size: 9px; line-height: 1.45; }
+.mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
+.mi-generation-trace__stage-title { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.mi-generation-trace__stage-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The stage's fixed logic lives here, not in the timeline: a question mark that can be hovered,
+   focused and pinned, so a long explanation never pushes the recorded result down the rail. */
+.mi-generation-trace__stage-help { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #6f7981; cursor: pointer; }
+.mi-generation-trace__stage-help:hover, .mi-generation-trace__stage-help:focus-visible, .mi-generation-trace__stage-help[aria-expanded="true"] { color: #c4ccd2; background: rgba(255, 255, 255, .08); }
+.mi-generation-trace__stage-help:focus-visible { outline: 1px solid #7d8790; outline-offset: 1px; }
+.mi-generation-trace__stage-time { font-variant-numeric: tabular-nums; }
+.mi-generation-trace__stage-failure { display: block; margin-top: 1px; color: #e7c98f; font-size: 8.5px; }
 
 .mi-daily-briefing-page__websearch-warning { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; padding: 9px 11px; border: 1px solid #6b5324; border-radius: 8px; background: rgba(245, 158, 11, .08); color: #e7c98f; }
 .mi-daily-briefing-page__websearch-warning strong { display: block; font-size: 11px; }
