@@ -60,7 +60,7 @@ describe('divergence panel', () => {
     })
     expect(markup).toContain(text.withheldTitle)
     expect(markup).toContain('ETF 3 日净流')
-    expect(markup).toContain('窗口不重叠')
+    expect(markup).toContain('的时间对不上')
     expect(markup).toContain(text.legs.sentiment)
   })
 })
@@ -74,7 +74,7 @@ describe('withheld grouping', () => {
         { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' }
       ]
     })
-    const occurrences = markup.split('缺少 价格 24 小时').length - 1
+    const occurrences = markup.split('没有取到价格 24 小时').length - 1
     expect(occurrences).toBe(1)
     expect(markup).toContain('（2 对）')
   })
