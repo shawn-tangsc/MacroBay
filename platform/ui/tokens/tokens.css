@@ -1,0 +1,34 @@
+/*
+ * UI tokens — the one place a UI colour name is given a value.
+ *
+ * Every token is defined in both theme blocks. A token that exists in only one
+ * block is not a token: the other theme silently falls back to whatever the
+ * property inherits, which is how a text hierarchy disappears without an error.
+ *
+ * Consumers must reference these names and never write `var(--token, #hex)`.
+ * The default belongs here, not at the call site: five copies of the same
+ * fallback is five different colours waiting to drift apart.
+ */
+
+:root {
+  /* Secondary text: one step below `--text`, one step above `--muted`. */
+  --text-secondary: #b8c0cc;
+  /* Separator that must not compete with `--border`. */
+  --border-subtle: #1c1f26;
+  /* Status colours. Used for text and icons, never as the only carrier of meaning. */
+  --success: #3fbf6f;
+  --warning: #c48a2a;
+
+  /* Legacy aliases kept so existing rules resolve; they add no new colour. */
+  --text-primary: var(--text-strong);
+  --panel: var(--surface);
+  --surface-2: var(--surface-soft);
+  --surface-raised: var(--surface-strong);
+}
+
+:root[data-theme="light"] {
+  --text-secondary: #555f6d;
+  --border-subtle: #eef0f3;
+  --success: #2f7d4f;
+  --warning: #a2691a;
+}
