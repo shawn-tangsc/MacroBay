@@ -1,16 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import type {
+  AnalysisPredictionStatus,
   AnalysisRun,
   AnalysisSummary,
   EvidenceSnapshot,
   EventGroup,
   Prediction,
+  PredictionLedgerCondition,
+  PredictionLedgerEntry,
   PredictionVerification,
   TimelineEntry
 } from '../../../contracts/marketAnalysisContracts'
+import { PREDICTION_LEDGER_SHAPE_POLICY } from '../../../contracts/marketAnalysisContracts'
 import { buildAnalysisSnapshotHash, canonicalizeMarketAnalysisJson, snapshotHashInput } from '../analysis/analysisHash'
 import { analysisConclusionRetentionPolicy } from '../retention/analysisConclusionRetention'
+import { predictionLedgerRetentionPolicy } from '../retention/predictionLedgerRetention'
 import { marketAnalysisSqlitePolicy, createMarketAnalysisSqlite, type MarketAnalysisSqlite } from './marketAnalysisSqlite'
 
 const MARKET_ANALYSIS_SCHEMA_VERSION = 2
@@ -192,10 +197,23 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     getSummary(id: string) { const row = sqlite.database.prepare('select payload_json from mi_analysis_summaries where id=?').get(id) as Row | undefined; return row ? JSON.parse(String(row.payload_json)) as AnalysisSummary : undefined },
     getSummaryForRun(analysisRunId: string) { const row = sqlite.database.prepare('select payload_json from mi_analysis_summaries where analysis_run_id=?').get(analysisRunId) as Row | undefined; return row ? JSON.parse(String(row.payload_json)) as AnalysisSummary : undefined },
     listPredictions(summaryId: string) { return (sqlite.database.prepare('select payload_json from mi_analysis_predictions where summary_id=? order by rowid asc').all(summaryId) as Row[]).map(row => JSON.parse(String(row.payload_json)) as Prediction) },
+    /**
+     * The verdicts, oldest first, optionally inside a window.
+     *
+     * No page limit: the retention window is what bounds this read (six rows a day for a hundred and
+     * eighty days), so a caller reading the whole ledger is reading a table that cannot be large. A
+     * cursor here would be a second bound on the same thing, and the two would drift.
+     */
+    listPredictionLedger(input: Readonly<{ sinceIso?: string; untilIso?: string }> = {}): readonly PredictionLedgerEntry[] {
+      const filters = [input.sinceIso ? 'evaluated_at >= ?' : '', input.untilIso ? 'evaluated_at <= ?' : ''].filter(Boolean)
+      const parameters = [input.sinceIso, input.untilIso].filter((value): value is string => typeof value === 'string')
+      const rows = sqlite.database.prepare(`select * from mi_analysis_prediction_ledger ${filters.length ? `where ${filters.join(' and ')}` : ''} order by evaluated_at asc, prediction_id asc`).all(...parameters) as Row[]
+      return rows.map(fromLedger)
+    },
     listDuePredictions(asOf: string) { return (sqlite.database.prepare("select payload_json from mi_analysis_predictions where status='pending' and verification_due_at <= ? order by verification_due_at asc, id asc").all(asOf) as Row[]).map(row => JSON.parse(String(row.payload_json)) as Prediction) },
     hasPredictionVerificationAt(predictionId: string, evaluatedAt: string) { return Boolean(sqlite.database.prepare('select 1 from mi_analysis_prediction_verifications where prediction_id=? and evaluated_at=?').get(predictionId, evaluatedAt)) },
     updatePredictionStatus(value: Readonly<{ id: string; status: Prediction['status'] }>) { return Number(sqlite.database.prepare('update mi_analysis_predictions set status=?, payload_json=json_set(payload_json, \'$.status\', ?) where id=?').run(value.status, value.status, value.id).changes) === 1 },
-    appendPredictionVerificationAndUpdateStatus(value: PredictionVerification) {
+    appendPredictionVerificationAndUpdateStatus(value: PredictionVerification, condition: PredictionLedgerCondition) {
       const database = sqlite.database
       database.exec('begin immediate')
       try {
@@ -203,6 +221,7 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
         database.prepare(`insert into mi_analysis_prediction_verifications (id,prediction_id,status,evaluated_at,rule_version,evidence_refs_json,reason_code,reason,schema_version) values (?,?,?,?,?,?,?,?,?)`).run(value.id, value.predictionId, value.status, value.evaluatedAt, value.ruleVersion, json(value.evidenceRefs), value.reasonCode, value.reason, 1)
         const updated = Number(database.prepare('update mi_analysis_predictions set status=?, payload_json=json_set(payload_json, \'$.status\', ?) where id=? and status=\'pending\'').run(value.status, value.status, value.predictionId).changes) === 1
         if (!updated) throw new Error('analysis-prediction-status-not-pending')
+        insertLedgerEntry(database, value, condition)
         database.exec('commit')
       } catch (error) {
         try { database.exec('rollback') } catch { /* preserve original failure */ }
@@ -225,7 +244,8 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
     },
     inspectStorage() { return { rowCount: Number((sqlite.database.prepare('select count(*) as count from mi_analysis_event_groups').get() as Row).count), databaseBytes: sqlite.filePath === ':memory:' ? 0 : statSync(sqlite.filePath).size } },
     /**
-     * Drop the conclusions that have outlived their window, and the graph hanging off each of them.
+     * Drop the conclusions that have outlived their window, and the graph hanging off each of them, then
+     * drop the verdicts that have outlived their own — longer — window.
      *
      * Rows leave in dependency order — verifications, then the predictions they verified, then the
      * timeline entries that point at a conclusion, then the conclusion itself, then the run and snapshot
@@ -234,11 +254,18 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
      * is the policy's own: a conclusion with a prediction **not yet due** for verification is skipped, so
      * a verdict the product still intends to reach cannot lose the evidence it needs. One transaction,
      * one batch of conclusions per pass, and a second pass finds nothing left to do.
+     *
+     * The verdict ledger is the exception to the cascade: it hangs off nothing, so deleting a conclusion
+     * leaves its verdicts behind until *their* cutoff. That is the whole point of the second cutoff —
+     * `mi_analysis_predictions` rows go after fourteen days, the verdicts about them after a hundred and
+     * eighty, and neither window can move the other.
      */
-    retention(cutoffIso: string): Readonly<{ deleted: number; oldestKeptAtMs: number | null }> {
+    retention(value: Readonly<{ conclusionCutoffIso: string; ledgerCutoffIso: string }>): Readonly<{ deleted: number; ledgerDeleted: number; oldestKeptAtMs: number | null }> {
+      const { conclusionCutoffIso: cutoffIso, ledgerCutoffIso } = value
       const database = sqlite.database
       const placeholders = (count: number) => Array.from({ length: count }, () => '?').join(',')
       let deleted = 0
+      let ledgerDeleted = 0
       database.exec('begin')
       try {
         for (;;) {
@@ -280,10 +307,19 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
           deleted += ids.length
           if (ids.length < analysisConclusionRetentionPolicy.batchSize) break
         }
+        // The verdicts go on their own clock, in their own batches, inside the same transaction: a row whose
+        // prediction was just deleted is exactly the row this pass is asked to keep.
+        for (;;) {
+          const changes = Number(database.prepare(`delete from mi_analysis_prediction_ledger where prediction_id in (
+            select prediction_id from mi_analysis_prediction_ledger where evaluated_at < ?
+            order by evaluated_at limit ${predictionLedgerRetentionPolicy.batchSize})`).run(ledgerCutoffIso).changes)
+          ledgerDeleted += changes
+          if (changes < predictionLedgerRetentionPolicy.batchSize) break
+        }
         database.exec('commit')
       } catch (error) { database.exec('rollback'); throw error }
       const oldest = database.prepare('select min(created_at) as created_at from mi_analysis_summaries').get() as Row | undefined
-      return Object.freeze({ deleted, oldestKeptAtMs: oldest?.created_at == null ? null : Date.parse(String(oldest.created_at)) })
+      return Object.freeze({ deleted, ledgerDeleted, oldestKeptAtMs: oldest?.created_at == null ? null : Date.parse(String(oldest.created_at)) })
     },
     /** The retention pass's ledger, in this file's own meta table: additive, so no migration is needed. */
     note(key: string, value: string) {
@@ -309,7 +345,7 @@ function migrate(database: MarketAnalysisSqlite['database']): void {
   database.exec(`pragma busy_timeout = ${marketAnalysisSqlitePolicy.busyTimeoutMs}`)
   database.exec('begin')
   try {
-    database.exec(`create table if not exists mi_analysis_migrations (version integer primary key); create table if not exists mi_analysis_event_groups (id text primary key, schema_version integer not null, status text not null, group_type text not null, merge_key text not null, first_observed_at text not null, last_observed_at text not null, review_deadline_at text not null, event_refs_json text not null, trigger_count integer not null, review_count integer not null, current_summary_id text, superseded_by_group_id text, revision integer not null, created_at text not null, updated_at text not null, unique(merge_key,status)); create table if not exists mi_analysis_snapshots (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), as_of text not null, data_cutoff text not null, snapshot_hash text not null, profile_id text not null, facts_json text not null, missing_domains_json text not null, caveats_json text not null, evidence_refs_json text not null, source_health_json text not null, created_at text not null, policy_version text not null, archive_ref text, archive_hash text, archive_bytes integer, archive_schema_version integer, archive_status text); create table if not exists mi_analysis_runs (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), snapshot_id text not null references mi_analysis_snapshots(id), snapshot_hash text not null, analysis_phase text not null, trigger_key text not null, idempotency_key text not null unique, status text not null, attempt integer not null, retry_of_run_id text, model_provider_id text, model_id text, policy_version text not null, prompt_version text not null, skill_version text not null, output_schema_version integer not null, job_run_id text, trace_id text, failure_code text, failure_detail_code text, queued_at text not null, started_at text, completed_at text); create table if not exists mi_analysis_summaries (id text primary key, schema_version integer not null, analysis_run_id text not null unique references mi_analysis_runs(id), event_group_id text not null references mi_analysis_event_groups(id), version integer not null, payload_json text not null, evidence_refs_json text not null, created_at text not null, archive_ref text, archive_hash text, archive_bytes integer, archive_schema_version integer, archive_status text, unique(event_group_id,version)); create table if not exists mi_analysis_predictions (id text primary key, schema_version integer not null, summary_id text not null references mi_analysis_summaries(id), asset text not null, horizon_start text not null, horizon_end text not null, payload_json text not null, status text not null, verification_due_at text not null, created_at text not null, check(horizon_end > horizon_start)); create table if not exists mi_analysis_prediction_verifications (id text primary key, prediction_id text not null references mi_analysis_predictions(id), status text not null, evaluated_at text not null, rule_version text not null, evidence_refs_json text not null, reason_code text not null, reason text not null, schema_version integer not null); create table if not exists mi_analysis_timeline (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), analysis_run_id text references mi_analysis_runs(id), kind text not null, status text not null, occurred_at text not null, summary_ref text references mi_analysis_summaries(id), safe_title text not null, safe_excerpt text, direction text, version integer not null); create table if not exists mi_analysis_trigger_ledger (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), trigger_key text not null, change_hash text not null, decision text not null, reason_code text not null, snapshot_hash text, analysis_run_id text references mi_analysis_runs(id), created_at text not null, unique(event_group_id,trigger_key,change_hash)); create index if not exists idx_mi_analysis_snapshot_hash on mi_analysis_snapshots(snapshot_hash); create index if not exists idx_mi_analysis_snapshot_group_asof on mi_analysis_snapshots(event_group_id,as_of desc); create index if not exists idx_mi_analysis_run_group_queued on mi_analysis_runs(event_group_id,queued_at desc); create index if not exists idx_mi_analysis_run_status_queued on mi_analysis_runs(status,queued_at); create index if not exists idx_mi_analysis_summary_group_version on mi_analysis_summaries(event_group_id,version); create index if not exists idx_mi_analysis_prediction_due on mi_analysis_predictions(status,verification_due_at); create index if not exists idx_mi_analysis_verification_prediction on mi_analysis_prediction_verifications(prediction_id,evaluated_at desc); create index if not exists idx_mi_analysis_timeline_group_occurred on mi_analysis_timeline(event_group_id,occurred_at desc,id desc); create index if not exists idx_mi_analysis_event_updated on mi_analysis_event_groups(updated_at desc); create index if not exists idx_mi_analysis_trigger_group_key_hash on mi_analysis_trigger_ledger(event_group_id,trigger_key,change_hash); insert or ignore into mi_analysis_migrations(version) values (${MARKET_ANALYSIS_SCHEMA_VERSION});`)
+    database.exec(`create table if not exists mi_analysis_migrations (version integer primary key); create table if not exists mi_analysis_event_groups (id text primary key, schema_version integer not null, status text not null, group_type text not null, merge_key text not null, first_observed_at text not null, last_observed_at text not null, review_deadline_at text not null, event_refs_json text not null, trigger_count integer not null, review_count integer not null, current_summary_id text, superseded_by_group_id text, revision integer not null, created_at text not null, updated_at text not null, unique(merge_key,status)); create table if not exists mi_analysis_snapshots (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), as_of text not null, data_cutoff text not null, snapshot_hash text not null, profile_id text not null, facts_json text not null, missing_domains_json text not null, caveats_json text not null, evidence_refs_json text not null, source_health_json text not null, created_at text not null, policy_version text not null, archive_ref text, archive_hash text, archive_bytes integer, archive_schema_version integer, archive_status text); create table if not exists mi_analysis_runs (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), snapshot_id text not null references mi_analysis_snapshots(id), snapshot_hash text not null, analysis_phase text not null, trigger_key text not null, idempotency_key text not null unique, status text not null, attempt integer not null, retry_of_run_id text, model_provider_id text, model_id text, policy_version text not null, prompt_version text not null, skill_version text not null, output_schema_version integer not null, job_run_id text, trace_id text, failure_code text, failure_detail_code text, queued_at text not null, started_at text, completed_at text); create table if not exists mi_analysis_summaries (id text primary key, schema_version integer not null, analysis_run_id text not null unique references mi_analysis_runs(id), event_group_id text not null references mi_analysis_event_groups(id), version integer not null, payload_json text not null, evidence_refs_json text not null, created_at text not null, archive_ref text, archive_hash text, archive_bytes integer, archive_schema_version integer, archive_status text, unique(event_group_id,version)); create table if not exists mi_analysis_predictions (id text primary key, schema_version integer not null, summary_id text not null references mi_analysis_summaries(id), asset text not null, horizon_start text not null, horizon_end text not null, payload_json text not null, status text not null, verification_due_at text not null, created_at text not null, check(horizon_end > horizon_start)); create table if not exists mi_analysis_prediction_verifications (id text primary key, prediction_id text not null references mi_analysis_predictions(id), status text not null, evaluated_at text not null, rule_version text not null, evidence_refs_json text not null, reason_code text not null, reason text not null, schema_version integer not null); create table if not exists mi_analysis_prediction_ledger (prediction_id text primary key, schema_version integer not null, asset text not null, horizon_start text not null, horizon_end text not null, predicate text, condition_count integer not null, status text not null, reason_code text not null, rule_version text not null, evidence_refs_json text not null, evidence_ref_count integer not null, prediction_created_at text not null, evaluated_at text not null, check(horizon_end > horizon_start)); create table if not exists mi_analysis_timeline (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), analysis_run_id text references mi_analysis_runs(id), kind text not null, status text not null, occurred_at text not null, summary_ref text references mi_analysis_summaries(id), safe_title text not null, safe_excerpt text, direction text, version integer not null); create table if not exists mi_analysis_trigger_ledger (id text primary key, schema_version integer not null, event_group_id text not null references mi_analysis_event_groups(id), trigger_key text not null, change_hash text not null, decision text not null, reason_code text not null, snapshot_hash text, analysis_run_id text references mi_analysis_runs(id), created_at text not null, unique(event_group_id,trigger_key,change_hash)); create index if not exists idx_mi_analysis_snapshot_hash on mi_analysis_snapshots(snapshot_hash); create index if not exists idx_mi_analysis_snapshot_group_asof on mi_analysis_snapshots(event_group_id,as_of desc); create index if not exists idx_mi_analysis_run_group_queued on mi_analysis_runs(event_group_id,queued_at desc); create index if not exists idx_mi_analysis_run_status_queued on mi_analysis_runs(status,queued_at); create index if not exists idx_mi_analysis_summary_group_version on mi_analysis_summaries(event_group_id,version); create index if not exists idx_mi_analysis_prediction_due on mi_analysis_predictions(status,verification_due_at); create index if not exists idx_mi_analysis_verification_prediction on mi_analysis_prediction_verifications(prediction_id,evaluated_at desc); create index if not exists idx_mi_analysis_ledger_evaluated on mi_analysis_prediction_ledger(evaluated_at); create index if not exists idx_mi_analysis_timeline_group_occurred on mi_analysis_timeline(event_group_id,occurred_at desc,id desc); create index if not exists idx_mi_analysis_event_updated on mi_analysis_event_groups(updated_at desc); create index if not exists idx_mi_analysis_trigger_group_key_hash on mi_analysis_trigger_ledger(event_group_id,trigger_key,change_hash); insert or ignore into mi_analysis_migrations(version) values (${MARKET_ANALYSIS_SCHEMA_VERSION});`)
     // Additive migration for databases created before the timeline carried a direction: the
     // column is what lets a language-neutral row render its own chip without parsing prose.
     const timelineColumns = (database.prepare('pragma table_info(mi_analysis_timeline)').all() as Row[]).map(row => String(row.name))
@@ -323,6 +359,26 @@ function migrate(database: MarketAnalysisSqlite['database']): void {
 
 function insertTimeline(database: MarketAnalysisSqlite['database'], value: TimelineEntry): void {
   database.prepare('insert into mi_analysis_timeline (id,schema_version,event_group_id,analysis_run_id,kind,status,occurred_at,summary_ref,safe_title,safe_excerpt,direction,version) values (?,?,?,?,?,?,?,?,?,?,?,?)').run(value.id, value.schemaVersion, value.eventGroupId, value.analysisRunId, value.kind, value.status, value.occurredAt, value.summaryRef, value.safeTitle, value.safeExcerpt, value.direction ?? null, value.version)
+}
+/**
+ * Write the verdict's ledger line from the prediction row it judges, not from a copy the caller passed.
+ *
+ * `asset`, the horizon and the creation instant are the prediction's own; taking them from the row means
+ * a ledger line cannot claim a shape the prediction never had. Only the predicate and the condition count
+ * are supplied, because only the verifier parsed them. Evidence refs are capped by the shape policy and
+ * their full count is kept, so a capped line says how much it left out; the uncapped list stays in
+ * `mi_analysis_prediction_verifications` until that row's own fourteen days are up.
+ */
+function insertLedgerEntry(database: MarketAnalysisSqlite['database'], value: PredictionVerification, condition: PredictionLedgerCondition): void {
+  const row = database.prepare('select asset,horizon_start,horizon_end,created_at from mi_analysis_predictions where id=?').get(value.predictionId) as Row | undefined
+  if (!row) throw new Error('analysis-prediction-not-found')
+  database.prepare(`insert into mi_analysis_prediction_ledger (prediction_id,schema_version,asset,horizon_start,horizon_end,predicate,condition_count,status,reason_code,rule_version,evidence_refs_json,evidence_ref_count,prediction_created_at,evaluated_at) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    on conflict(prediction_id) do update set predicate=excluded.predicate, condition_count=excluded.condition_count, status=excluded.status, reason_code=excluded.reason_code, rule_version=excluded.rule_version, evidence_refs_json=excluded.evidence_refs_json, evidence_ref_count=excluded.evidence_ref_count, evaluated_at=excluded.evaluated_at`).run(
+    value.predictionId, 1, String(row.asset), String(row.horizon_start), String(row.horizon_end),
+    condition.predicate, condition.conditionCount, value.status, value.reasonCode, value.ruleVersion,
+    json(value.evidenceRefs.slice(0, PREDICTION_LEDGER_SHAPE_POLICY.maximumStoredEvidenceRefs)),
+    value.evidenceRefs.length, String(row.created_at), value.evaluatedAt
+  )
 }
 function exists(sqlite: MarketAnalysisSqlite, table: string, id: string): boolean { return Boolean(sqlite.database.prepare(`select 1 from ${table} where id=?`).get(id)) }
 function json(value: unknown): string { return canonicalizeMarketAnalysisJson(value) }
@@ -356,4 +412,5 @@ function fromEventGroup(row: Row): EventGroup { return { id: String(row.id), sch
 function fromSnapshot(row: Row): EvidenceSnapshot { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1 | 2, eventGroupId: String(row.event_group_id), asOf: String(row.as_of), dataCutoff: String(row.data_cutoff), snapshotHash: String(row.snapshot_hash), profileId: 'crypto-market-analysis-v1', facts: JSON.parse(String(row.facts_json)), missingDomains: JSON.parse(String(row.missing_domains_json)), caveats: JSON.parse(String(row.caveats_json)), evidenceRefs: JSON.parse(String(row.evidence_refs_json)), sourceHealth: JSON.parse(String(row.source_health_json)), createdAt: String(row.created_at), policyVersion: 'cryptoMarketAnalysisTriggerPolicy.v1' } }
 function fromRun(row: Row): AnalysisRun { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, eventGroupId: String(row.event_group_id), snapshotId: String(row.snapshot_id), snapshotHash: String(row.snapshot_hash), analysisPhase: row.analysis_phase as AnalysisRun['analysisPhase'], triggerKey: String(row.trigger_key), idempotencyKey: String(row.idempotency_key), status: row.status as AnalysisRun['status'], attempt: Number(row.attempt), retryOfRunId: row.retry_of_run_id as string | null, modelProviderId: row.model_provider_id as string | null, modelId: row.model_id as string | null, policyVersion: String(row.policy_version), promptVersion: String(row.prompt_version), skillVersion: String(row.skill_version), outputSchemaVersion: Number(row.output_schema_version) as 1 | 2, jobRunId: row.job_run_id as string | null, traceId: row.trace_id as string | null, failureCode: row.failure_code as string | null, failureDetailCode: row.failure_detail_code as string | null, queuedAt: String(row.queued_at), startedAt: row.started_at as string | null, completedAt: row.completed_at as string | null } }
 function fromTimeline(row: Row): TimelineEntry { return { id: String(row.id), schemaVersion: Number(row.schema_version) as 1, eventGroupId: String(row.event_group_id), analysisRunId: row.analysis_run_id as string | null, kind: row.kind as TimelineEntry['kind'], status: row.status as TimelineEntry['status'], occurredAt: String(row.occurred_at), summaryRef: row.summary_ref as string | null, safeTitle: String(row.safe_title), safeExcerpt: row.safe_excerpt as string | null, direction: (row.direction as TimelineEntry['direction']) ?? null, version: Number(row.version) } }
+function fromLedger(row: Row): PredictionLedgerEntry { return { predictionId: String(row.prediction_id), schemaVersion: 1, asset: row.asset as PredictionLedgerEntry['asset'], horizonStart: String(row.horizon_start), horizonEnd: String(row.horizon_end), predicate: row.predicate === null ? null : String(row.predicate), conditionCount: Number(row.condition_count), status: row.status as AnalysisPredictionStatus, reasonCode: String(row.reason_code), ruleVersion: row.rule_version as PredictionLedgerEntry['ruleVersion'], evidenceRefs: JSON.parse(String(row.evidence_refs_json)) as string[], evidenceRefCount: Number(row.evidence_ref_count), predictionCreatedAt: String(row.prediction_created_at), evaluatedAt: String(row.evaluated_at) } }
 function stableMergeKey(value: string): string { const parts = value.split('|'); return parts.slice(0, -1).join('|') }

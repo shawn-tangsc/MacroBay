@@ -62,7 +62,7 @@ describe('predictionVerificationService', () => {
       } as never, now: () => '2026-09-28T00:16:00.000Z', idFactory: () => 'mi-pv-4'
     })
     expect(service.verifyDue({ asOf: '2026-09-28T00:16:00.000Z', observations: [{ asset: 'BTC', horizon: '15m', observedAt: '2026-09-28T00:15:00.000Z', comparable: true, evidenceRefId: 'ev-btc', priceReturnPct: 0.8 }] })).toEqual({ verified: 1, skipped: 0 })
-    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'confirmed', evidenceRefs: ['ev-btc'] }))
+    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'confirmed', evidenceRefs: ['ev-btc'] }), { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 1 })
   })
 
   it('does not use a comparable observation without an evidence reference to decide a prediction', () => {
@@ -76,7 +76,7 @@ describe('predictionVerificationService', () => {
 
     service.verifyDue({ asOf: '2026-09-28T00:16:00.000Z', observations: [{ asset: 'BTC', observedAt: '2026-09-28T00:15:00.000Z', comparable: true, priceReturnPct: 0.8 }] })
 
-    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'insufficient-data', reasonCode: 'no-comparable-observation', evidenceRefs: [] }))
+    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'insufficient-data', reasonCode: 'no-comparable-observation', evidenceRefs: [] }), { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 1 })
   })
 
   it('verifies supported relative-return and funding-delta predicates with their matching observation', () => {
@@ -96,7 +96,7 @@ describe('predictionVerificationService', () => {
       ]
     })
 
-    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'confirmed', evidenceRefs: ['ev-relative', 'ev-funding'] }))
+    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'confirmed', evidenceRefs: ['ev-relative', 'ev-funding'] }), { predicate: 'relative_return(BTC,ETH,2h)>=1% && funding_delta(BTC,8h)<=0.05%', conditionCount: 2 })
   })
 
   it('records a partially-confirmed result when supported conditions have mixed outcomes', () => {
@@ -113,7 +113,7 @@ describe('predictionVerificationService', () => {
       { asset: 'ETH', horizon: '15m', observedAt: '2026-09-28T00:15:00.000Z', comparable: true, evidenceRefId: 'ev-eth', priceReturnPct: 0.1 }
     ] })
 
-    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'partially-confirmed' }))
+    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'partially-confirmed' }), { predicate: 'price_return(BTC,15m)>=0.5% && price_return(ETH,15m)>=0.5%', conditionCount: 2 })
   })
 
   it('does not use an observation that arrived after the prediction horizon', () => {
@@ -127,7 +127,7 @@ describe('predictionVerificationService', () => {
 
     service.verifyDue({ asOf: '2026-09-28T00:17:00.000Z', observations: [{ asset: 'BTC', horizon: '15m', observedAt: '2026-09-28T00:16:00.000Z', comparable: true, evidenceRefId: 'ev-late', priceReturnPct: 0.8 }] })
 
-    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'insufficient-data', reasonCode: 'no-comparable-observation' }))
+    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'insufficient-data', reasonCode: 'no-comparable-observation' }), { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 1 })
   })
 
   it('records unsupported predicates as insufficient-data without treating them as price observations', () => {
@@ -141,6 +141,26 @@ describe('predictionVerificationService', () => {
 
     service.verifyDue({ asOf: '2026-09-28T00:16:00.000Z', observations: [{ asset: 'BTC', horizon: '15m', observedAt: '2026-09-28T00:15:00.000Z', comparable: true, evidenceRefId: 'ev-btc', priceReturnPct: 0.8 }] })
 
-    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'insufficient-data', reasonCode: 'unsupported-condition', evidenceRefs: ['ev-btc'] }))
+    expect(appendPredictionVerificationAndUpdateStatus).toHaveBeenCalledWith(expect.objectContaining({ status: 'insufficient-data', reasonCode: 'unsupported-condition', evidenceRefs: ['ev-btc'] }), { predicate: null, conditionCount: 1 })
+  })
+
+  it('records the first stored conditions and the full count when a prediction carries more than the ledger keeps', () => {
+    const appendPredictionVerificationAndUpdateStatus = vi.fn()
+    const conditions = Array.from({ length: 10 }, (_, index) => `price_return(BTC,15m)>=0.${index + 1}%`)
+    const service = createPredictionVerificationService({
+      repository: {
+        listDuePredictions: vi.fn(() => [{ id: 'mi-pr-many', asset: 'BTC', status: 'pending', horizonStart: '2026-09-28T00:00:00.000Z', horizonEnd: '2026-09-28T00:15:00.000Z', verificationDueAt: '2026-09-28T00:15:00.000Z', conditions }]),
+        appendPredictionVerification: vi.fn(), updatePredictionStatus: vi.fn(), appendPredictionVerificationAndUpdateStatus
+      } as never, now: () => '2026-09-28T00:16:00.000Z', idFactory: () => 'mi-pv-many'
+    })
+
+    service.verifyDue({ asOf: '2026-09-28T00:16:00.000Z', observations: [{ asset: 'BTC', horizon: '15m', observedAt: '2026-09-28T00:15:00.000Z', comparable: true, evidenceRefId: 'ev-btc', priceReturnPct: 5 }] })
+
+    const call = appendPredictionVerificationAndUpdateStatus.mock.calls[0] as [unknown, Readonly<{ predicate: string; conditionCount: number }>]
+    expect(call[0]).toMatchObject({ status: 'confirmed' })
+    // The verdict is decided on all ten; the record keeps eight and says how many there were.
+    expect(call[1].conditionCount).toBe(10)
+    expect(call[1].predicate.split(' && ')).toHaveLength(8)
+    expect(call[1].predicate.startsWith('price_return(BTC,15m)>=0.1%')).toBe(true)
   })
 })

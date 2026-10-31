@@ -14,6 +14,7 @@ import { createPlatformWebSocketFactory } from '@platform/network/platformWebSoc
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
 import { createCrossAssetStore, crossAssetStoragePolicy } from './intelligence/cross-asset/crossAssetStore'
 import { analysisConclusionCutoffIso } from './intelligence/retention/analysisConclusionRetention'
+import { predictionLedgerCutoffIso } from './intelligence/retention/predictionLedgerRetention'
 import { createMarketHistoryRetention, registerMarketHistoryRetentionJob } from './intelligence/retention/marketHistoryRetentionJob'
 import { createCrossAssetRuntime } from './intelligence/cross-asset/crossAssetRuntime'
 import { createBinanceCrossAssetClient } from './intelligence/cross-asset/binanceCrossAssetClient'
@@ -275,10 +276,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       stores: {
         macro: { retention: ({ cutoffs }) => macroStore.retention(cutoffs), note: (key, value) => macroStore.note(key, value) },
         crossAsset: { retention: ({ cutoffs }) => crossAssetStore.retention(cutoffs), note: (key, value) => crossAssetStore.note(key, value) },
-        // The conclusions keep their own window: fourteen days, then the whole graph goes. The bar
-        // cutoffs are ignored rather than reinterpreted — two policies, one clock.
+        // The conclusions keep their own window: fourteen days, then the whole graph goes — except the
+        // verdicts, which keep theirs (a hundred and eighty days) on the same clock. The bar cutoffs are
+        // ignored rather than reinterpreted — several policies, one clock.
         analysis: {
-          retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention(analysisConclusionCutoffIso(atMs)) }),
+          retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention({ conclusionCutoffIso: analysisConclusionCutoffIso(atMs), ledgerCutoffIso: predictionLedgerCutoffIso(atMs) }) }),
           note: (key, value) => analysisRepository.note(key, value)
         }
       }

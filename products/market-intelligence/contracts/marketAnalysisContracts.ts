@@ -573,6 +573,57 @@ export type PredictionVerification = Readonly<{
   reason: string
 }>
 
+/**
+ * The fixed shape of a verdict ledger row.
+ *
+ * A conclusion is deleted after fourteen days; the verdict it produced outlives it so a calibration
+ * view has something to count. That longer life must not become unbounded growth, so the two fields
+ * that come from model output are capped here: a prediction carrying more conditions than
+ * `maximumStoredConditions`, or a verdict citing more evidence than `maximumStoredEvidenceRefs`, keeps
+ * the first ones and its row records the full counts — a truncated claim that says how much it left out.
+ * The evidence a verdict was decided on is still complete for fourteen days in
+ * `mi_analysis_prediction_verifications`; the ledger is the long-lived aggregate, not the audit trail.
+ */
+export const PREDICTION_LEDGER_SHAPE_POLICY = Object.freeze({
+  maximumStoredConditions: 8,
+  maximumStoredEvidenceRefs: 8
+} as const)
+
+/**
+ * One judged prediction, kept longer than the conclusion it came from.
+ *
+ * No prose: a predicate that can be re-evaluated, the verdict it earned, the rule that produced it, the
+ * evidence it cited, and the two instants that bound it. `conditionCount` and `evidenceRefCount` are the
+ * full counts, so a reader can tell a complete row from a capped one without a flag.
+ */
+export type PredictionLedgerEntry = Readonly<{
+  /** The same id as the prediction it judges; the ledger row outlives that prediction row. */
+  predictionId: string
+  schemaVersion: 1
+  asset: 'BTC' | 'ETH'
+  horizonStart: string
+  horizonEnd: string
+  /** Canonical conditions the verdict was decided on, joined by ` && `; null when none parsed. */
+  predicate: string | null
+  /** Conditions the prediction carried; larger than the stored predicate when the ledger capped it. */
+  conditionCount: number
+  status: AnalysisPredictionStatus
+  reasonCode: string
+  ruleVersion: PredictionVerification['ruleVersion']
+  evidenceRefs: readonly string[]
+  /** Evidence refs the verdict cited; larger than `evidenceRefs.length` when the ledger capped them. */
+  evidenceRefCount: number
+  predictionCreatedAt: string
+  evaluatedAt: string
+}>
+
+/**
+ * What the verifier knows and the store cannot derive from the prediction row: the condition the verdict
+ * was decided on, and how many conditions it carried. The rest of the ledger row is read off that row
+ * when the verdict is written, so the two can never disagree about what was judged.
+ */
+export type PredictionLedgerCondition = Readonly<{ predicate: string | null; conditionCount: number }>
+
 export type TimelineEntry = Readonly<{
   id: string
   schemaVersion: 1

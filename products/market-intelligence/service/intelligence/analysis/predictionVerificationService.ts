@@ -1,4 +1,5 @@
-import type { Prediction, PredictionVerification } from '../../../contracts/marketAnalysisContracts'
+import type { Prediction, PredictionLedgerCondition, PredictionVerification } from '../../../contracts/marketAnalysisContracts'
+import { PREDICTION_LEDGER_SHAPE_POLICY } from '../../../contracts/marketAnalysisContracts'
 
 /**
  * Exported so the horizon list the verifier checks can be asserted against the window policy the
@@ -32,7 +33,12 @@ type Repository = Readonly<{
   listDuePredictions: (asOf: string) => readonly Prediction[]
   appendPredictionVerification: (value: PredictionVerification) => void
   updatePredictionStatus: (value: { id: string; status: Prediction['status'] }) => void
-  appendPredictionVerificationAndUpdateStatus?: (value: PredictionVerification) => void
+  /**
+   * The one path that also writes the verdict ledger, because the ledger line has to travel in the same
+   * transaction as the verdict: a verdict without its line, or a line without its verdict, would make the
+   * calibration sample disagree with the record of how it was decided.
+   */
+  appendPredictionVerificationAndUpdateStatus?: (value: PredictionVerification, condition: PredictionLedgerCondition) => void
   hasPredictionVerificationAt?: (predictionId: string, evaluatedAt: string) => boolean
 }>
 type Evaluation = Readonly<{
@@ -40,6 +46,8 @@ type Evaluation = Readonly<{
   status: Prediction['status']
   reason: string
   evidenceRefs: readonly string[]
+  /** The machine conditions the verdict was decided on; null when the prediction carried none we can check. */
+  predicate: string | null
 }>
 type Predicate =
   | Readonly<{ kind: 'price-return'; asset: Asset; horizon: PriceHorizon; operator: '>=' | '<='; threshold: number }>
@@ -65,8 +73,11 @@ export function createPredictionVerificationService(deps: Readonly<{
         ruleVersion: predictionVerificationPolicy.ruleVersion, evidenceRefs: evaluation.evidenceRefs,
         reasonCode: evaluation.reasonCode, reason: evaluation.reason
       }
-      if (deps.repository.appendPredictionVerificationAndUpdateStatus) deps.repository.appendPredictionVerificationAndUpdateStatus(verification)
+      const condition = { predicate: evaluation.predicate, conditionCount: prediction.conditions.length }
+      if (deps.repository.appendPredictionVerificationAndUpdateStatus) deps.repository.appendPredictionVerificationAndUpdateStatus(verification, condition)
       else {
+        // A repository that cannot write both in one transaction keeps the verdict alone. It is the older
+        // shape, and the ledger's own check refuses to invent a line it was not handed.
         deps.repository.appendPredictionVerification(verification)
         deps.repository.updatePredictionStatus({ id: prediction.id, status: verification.status })
       }
@@ -82,16 +93,36 @@ function evaluateConditions(prediction: Prediction, values: readonly PredictionV
   const evidenceRefs = uniqueEvidenceRefs(observations)
   const predicates = prediction.conditions.map(parsePredicate)
   if (predicates.length === 0 || predicates.some(predicate => predicate === undefined)) {
-    return { reasonCode: 'unsupported-condition', status: 'insufficient-data', reason: '预测条件暂不支持确定性验证。', evidenceRefs }
+    return { reasonCode: 'unsupported-condition', status: 'insufficient-data', reason: '预测条件暂不支持确定性验证。', evidenceRefs, predicate: null }
   }
-  const matches = predicates.filter((predicate): predicate is Predicate => predicate !== undefined).map(predicate => matchesPredicate(predicate, observations))
+  const parsed = predicates.filter((predicate): predicate is Predicate => predicate !== undefined)
+  const predicate = canonicalPredicates(parsed)
+  const matches = parsed.map(item => matchesPredicate(item, observations))
   if (matches.some((match): match is undefined => match === undefined)) {
-    return { reasonCode: 'no-comparable-observation', status: 'insufficient-data', reason: '预测窗口内没有可比行情观测。', evidenceRefs }
+    return { reasonCode: 'no-comparable-observation', status: 'insufficient-data', reason: '预测窗口内没有可比行情观测。', evidenceRefs, predicate }
   }
   const matched = matches.filter(Boolean).length
-  if (matched === matches.length) return { reasonCode: 'confirmed', status: 'confirmed', reason: '可比行情观测满足预测条件。', evidenceRefs }
-  if (matched === 0) return { reasonCode: 'invalidated', status: 'invalidated', reason: '可比行情观测未满足预测条件。', evidenceRefs }
-  return { reasonCode: 'partially-confirmed', status: 'partially-confirmed', reason: '可比行情观测仅满足部分预测条件。', evidenceRefs }
+  if (matched === matches.length) return { reasonCode: 'confirmed', status: 'confirmed', reason: '可比行情观测满足预测条件。', evidenceRefs, predicate }
+  if (matched === 0) return { reasonCode: 'invalidated', status: 'invalidated', reason: '可比行情观测未满足预测条件。', evidenceRefs, predicate }
+  return { reasonCode: 'partially-confirmed', status: 'partially-confirmed', reason: '可比行情观测仅满足部分预测条件。', evidenceRefs, predicate }
+}
+
+/**
+ * The conditions as one canonical line, capped at the ledger's stored-condition limit.
+ *
+ * The cap is the ledger's, not the verifier's: the verdict is decided on every condition, and only the
+ * *record* of what was decided keeps the first few. `conditionCount` on the ledger line carries the full
+ * number, so a capped line is arithmetic, not a guess.
+ */
+function canonicalPredicates(predicates: readonly Predicate[]): string {
+  return predicates.slice(0, PREDICTION_LEDGER_SHAPE_POLICY.maximumStoredConditions).map(formatPredicate).join(' && ')
+}
+
+/** The canonical spelling of a predicate: the same text `parsePredicate` reads back. */
+function formatPredicate(predicate: Predicate): string {
+  if (predicate.kind === 'price-return') return `price_return(${predicate.asset},${predicate.horizon})${predicate.operator}${predicate.threshold}%`
+  if (predicate.kind === 'relative-return') return `relative_return(${predicate.asset},${predicate.relativeToAsset},${predicate.horizon})${predicate.operator}${predicate.threshold}%`
+  return `funding_delta(${predicate.asset},${predicate.interval})${predicate.operator}${predicate.threshold}%`
 }
 
 function isComparableObservation(value: PredictionVerificationObservation, prediction: Prediction, asOf: string): value is PredictionVerificationObservation & Required<Pick<PredictionVerificationObservation, 'asset' | 'evidenceRefId'>> {

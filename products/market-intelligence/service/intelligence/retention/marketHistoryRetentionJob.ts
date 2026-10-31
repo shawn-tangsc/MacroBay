@@ -19,7 +19,12 @@ export const marketHistoryRetentionPolicy = Object.freeze({
 })
 
 type StoreId = keyof typeof marketHistoryRetentionPolicy.stores
-export type MarketHistoryRetentionResult = Readonly<{ thinned: number; deleted: number; oldestKeptAtMs: number | null }>
+/**
+ * What one store's pass did. `ledgerDeleted` is optional because only the analysis store has a second
+ * clock: its verdicts outlive their conclusions, so the pass reports two counts and the bar stores
+ * report one.
+ */
+export type MarketHistoryRetentionResult = Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; oldestKeptAtMs: number | null }>
 /**
  * What a store has to offer to be retained: the pass itself, and somewhere to write its own ledger.
  *
@@ -56,6 +61,7 @@ export function createMarketHistoryRetention(deps: Readonly<{
           store.note(`${prefix}.lastRunAtMs`, String(atMs))
           store.note(`${prefix}.lastThinned`, String(result.thinned))
           store.note(`${prefix}.lastDeleted`, String(result.deleted))
+          if (result.ledgerDeleted !== undefined) store.note(`${prefix}.lastLedgerDeleted`, String(result.ledgerDeleted))
           store.note(`${prefix}.oldestKeptAtMs`, result.oldestKeptAtMs === null ? 'none' : String(result.oldestKeptAtMs))
           results[storeId] = result
         } catch (error) {

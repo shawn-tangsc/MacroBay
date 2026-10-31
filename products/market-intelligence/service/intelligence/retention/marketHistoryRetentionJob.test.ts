@@ -6,7 +6,7 @@ import { createMarketHistoryRetention, MARKET_HISTORY_RETENTION_JOB_ID, register
 const atMs = Date.UTC(2026, 9, 15, 12, 0, 0)
 
 /** A store that records what it was asked and what its ledger was told. */
-function storeFor(result: Readonly<{ thinned: number; deleted: number; oldestKeptAtMs: number | null }> | Error) {
+function storeFor(result: Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; oldestKeptAtMs: number | null }> | Error) {
   const notes = new Map<string, string>()
   return {
     notes,
@@ -19,7 +19,9 @@ describe('the market history retention pass', () => {
   it('retains both stores against one clock reading and writes each one its own ledger', async () => {
     const macro = storeFor({ thinned: 412, deleted: 96, oldestKeptAtMs: atMs - 30 * 24 * 3_600_000 })
     const crossAsset = storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null })
-    const summary = await createMarketHistoryRetention({ stores: { macro, crossAsset, analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }) }, now: () => atMs }).run()
+    // The analysis store has two windows, so its pass reports two counts; the bar stores report one.
+    const analysis = storeFor({ thinned: 0, deleted: 3, ledgerDeleted: 7, oldestKeptAtMs: null })
+    const summary = await createMarketHistoryRetention({ stores: { macro, crossAsset, analysis }, now: () => atMs }).run()
 
     // Both stores are handed the same edges: a pass that straddled midnight would thin one store against
     // a different instant than the other and the ledger would describe two nights.
@@ -34,6 +36,9 @@ describe('the market history retention pass', () => {
       'macro-market.retention.lastDeleted': '96', 'macro-market.retention.oldestKeptAtMs': String(atMs - 30 * 24 * 3_600_000)
     })
     expect(crossAsset.notes.get('cross-asset.retention.oldestKeptAtMs')).toBe('none')
+    // The second clock is only recorded where it exists; a bar store that has none gets no empty note.
+    expect(analysis.notes.get('analysis.retention.lastLedgerDeleted')).toBe('7')
+    expect(macro.notes.has('macro-market.retention.lastLedgerDeleted')).toBe(false)
   })
 
   it('keeps going when one store refuses, and records the refusal as a code', async () => {
