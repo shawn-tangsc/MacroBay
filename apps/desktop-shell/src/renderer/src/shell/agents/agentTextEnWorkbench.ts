@@ -221,6 +221,8 @@ export const agentTextEnWorkbench: AgentTextWorkbench = {
       mcpConnecting: 'Connecting',
       mcpError: 'Unavailable',
       mcpDisabled: 'Inactive',
+      mcpIdle: 'Not started',
+      mcpNoToolsHint: 'No tools yet — this server has not connected.',
       mcpActionOpenUrl: 'Open auth URL',
       mcpActionRestart: 'Restart server',
       mcpActionOpenSettings: 'Open settings',

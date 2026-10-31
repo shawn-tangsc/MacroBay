@@ -221,6 +221,8 @@ export const agentTextZhWorkbench: AgentTextWorkbench = {
       mcpConnecting: '连接中',
       mcpError: '不可用',
       mcpDisabled: '未启用',
+      mcpIdle: '未启动',
+      mcpNoToolsHint: '暂时没有工具：这个服务器还没有连上。',
       mcpActionOpenUrl: '打开认证链接',
       mcpActionRestart: '重启服务',
       mcpActionOpenSettings: '打开设置',

@@ -193,6 +193,8 @@ export type AgentTextWorkbench = {
       mcpConnecting: string
       mcpError: string
       mcpDisabled: string
+      mcpIdle: string
+      mcpNoToolsHint: string
       mcpActionOpenUrl: string
       mcpActionRestart: string
       mcpActionOpenSettings: string

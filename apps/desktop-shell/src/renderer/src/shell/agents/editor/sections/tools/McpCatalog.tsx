@@ -176,7 +176,9 @@ function McpRow({
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
-        ) : null}
+        ) : (
+          <small className="agent-mcp-empty-hint">{text.editor.tools.mcpNoToolsHint}</small>
+        )}
         {item.actions.length > 0 ? (
           <span className="agent-mcp-credential-actions">
             {item.actions.map((action) => (
@@ -213,8 +215,9 @@ function McpRow({
       <Switch
         size="small"
         checked={checked}
-        disabled={!checked && !item.pickable}
-        aria-label={checked ? text.common.enabled : text.common.available}
+        // 说法必须与上面那枚标签同源：标签写什么，这个开关就读出什么。
+        // 这里不再按 `pickable` 判禁用——能进这个列表的条目按定义都可 pick，那个条件是旧语义的残骸。
+        aria-label={mcpStatusLabel(item.status, text)}
         onChange={onToggle}
       />
     </div>
@@ -293,9 +296,25 @@ async function runCredentialAction(
   }
 }
 
+/**
+ * 穷举分支，不留静默 `default`：新增一个运行时状态却忘了给它文案时，
+ * `never` 检查会让编译失败，而不是让这个值悄悄落进某个兜底说法里（「连接中」那次就是这么来的）。
+ */
 function mcpStatusLabel(status: AgentMcpCatalogItem['status'], text: AgentText): string {
-  if (status === 'connected') return text.editor.tools.mcpConnected
-  if (status === 'connecting') return text.editor.tools.mcpConnecting
-  if (status === 'error') return text.editor.tools.mcpError
-  return text.editor.tools.mcpDisabled
+  switch (status) {
+    case 'connected':
+      return text.editor.tools.mcpConnected
+    case 'connecting':
+      return text.editor.tools.mcpConnecting
+    case 'error':
+      return text.editor.tools.mcpError
+    case 'idle':
+      return text.editor.tools.mcpIdle
+    case 'disabled':
+      return text.editor.tools.mcpDisabled
+    default: {
+      const unreachable: never = status
+      return unreachable
+    }
+  }
 }
