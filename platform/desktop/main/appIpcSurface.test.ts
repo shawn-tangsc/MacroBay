@@ -560,6 +560,22 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("app.getPath('temp')")
   })
 
+  it('keeps the attachment text preview on its existing channel but reads it from platform/files', () => {
+    // 附件读取归位后只剩这一条接缝：通道不变，preload 不变，实现改由 platform/files/attachments 提供。
+    expect(appSource).toContain(
+      "import { readTextFilePreview } from '../../files/attachments/textFilePreview'"
+    )
+    expect(appSource).toContain(
+      'ipcMain.handle(IpcChannels.appReadTextFile, async (_event: IpcMainInvokeEvent, path: string) => readTextFilePreview(path))'
+    )
+    expect(preloadSource).toContain(
+      'readTextFile: (path: string) => ipcRenderer.invoke(IpcChannels.appReadTextFile, path)'
+    )
+    // 实现只留一份：启动文件里不允许再长出第二个读取实现或第二个 128 KiB 上限。
+    expect(appSource).not.toContain('TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024')
+    expect(appSource).not.toContain('function isLikelyBinary')
+  })
+
   it('wires the PLAT-82 detection channels end to end (memory-only, no writes)', () => {
     expect(IpcChannels.modelProvidersDetectModels).toBe('platform:model-providers-detect-models')
     expect(IpcChannels.modelProvidersCancelModelDetection)

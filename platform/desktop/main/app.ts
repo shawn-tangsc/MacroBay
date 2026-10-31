@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
-import { open, readFile, stat, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { release } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -124,6 +124,7 @@ import {
 import { createProviderStore } from '../../ai/providers/providerStore'
 import { createProviderSqliteStorage } from '../../ai/providers/storage/providerSqliteStorage'
 import { createElectronSecretVault } from '../../secrets'
+import { readTextFilePreview } from '../../files/attachments/textFilePreview'
 import { summarizeProductManifests, type ProductManifest } from '../../product-manifest'
 import {
   createPlatformAgentSeed,
@@ -497,7 +498,6 @@ const skillService = createSkillService({
   }
 })
 const skillSearchService = createSkillSearchService()
-const TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024
 const agentSystemWorkspacesRoot = join(app.getPath('userData'), 'platform', 'agents', 'workspaces')
 const runtimeDriverRegistry = new RuntimeDriverRegistry()
 const toolApprovalRegistry = new ToolApprovalRegistry()
@@ -2276,38 +2276,6 @@ function registerIpcHandlers(
     (_event: IpcMainInvokeEvent, productId: string, method: string, payload?: unknown) =>
       invokeProductIpc(productId, method, payload)
   )
-}
-
-async function readTextFilePreview(path: string): Promise<{ path: string; text: string; truncated: boolean }> {
-  const trimmedPath = path.trim()
-  if (!trimmedPath) throw new Error('File path is required.')
-
-  const info = await stat(trimmedPath)
-  if (!info.isFile()) throw new Error('Only files can be attached.')
-
-  const bytesToRead = Math.min(info.size, TEXT_FILE_READ_LIMIT_BYTES)
-  const buffer = Buffer.alloc(bytesToRead)
-  const file = await open(trimmedPath, 'r')
-  try {
-    await file.read(buffer, 0, bytesToRead, 0)
-    if (isLikelyBinary(buffer)) throw new Error('Binary files are not supported in text attachments yet.')
-  } finally {
-    await file.close()
-  }
-
-  return {
-    path: trimmedPath,
-    text: buffer.toString('utf8'),
-    truncated: info.size > TEXT_FILE_READ_LIMIT_BYTES
-  }
-}
-
-function isLikelyBinary(buffer: Buffer): boolean {
-  const sampleSize = Math.min(buffer.length, 1024)
-  for (let index = 0; index < sampleSize; index++) {
-    if (buffer[index] === 0) return true
-  }
-  return false
 }
 
 async function readHeartbeatFileFromWorkspace(workspacePath: string): Promise<string | null> {
