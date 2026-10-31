@@ -395,6 +395,7 @@ const providerLinks: Readonly<Record<string, Pick<ProviderDefinition, 'website' 
   cryptopanic: { website: 'https://cryptopanic.com/', signupUrl: 'https://cryptopanic.com/developers/api/' },
   '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true },
   realmarketapi: { website: 'https://realmarketapi.com/', signupUrl: 'https://realmarketapi.com/?via=Macrobay', invite: true },
+  'policy-path': { website: 'https://polymarket.com/zh?tag=fed' },
   twelvedata: { website: 'https://twelvedata.com/', signupUrl: 'https://twelvedata.com/pricing' },
   coinbase: { website: 'https://www.coinbase.com/' },
   kraken: { website: 'https://www.kraken.com/' },

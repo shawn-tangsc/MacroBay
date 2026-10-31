@@ -41,7 +41,7 @@ type FetchLike = (url: string) => Promise<{ ok: boolean; status: number; text: (
 
 export function createPolicyPathRuntime(deps: {
   jobRuntime: Pick<JobRuntime, 'registerHandler' | 'setSchedule' | 'removeSchedule'>
-  repository: Pick<MacroCalendarRepository, 'policyObservations' | 'policyFacts' | 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
+  repository: Pick<MacroCalendarRepository, 'policyObservations' | 'policyFacts' | 'policyMarketLinks' | 'listEffectiveMonthAsOf' | 'getEffectiveEventAsOf'>
   fetch: FetchLike
   isEnabled: () => Promise<boolean>
   /** Why a SEP read ended as it did: the run record is the only place a silent parse failure shows. */
@@ -60,6 +60,8 @@ export function createPolicyPathRuntime(deps: {
     const meetingDate = next.meeting.scheduledDate
     const slug = await discoverSlug(deps.fetch, meetingDate)
     if (!slug) return { state: 'skipped', reason: 'no-event' }
+    // The venue page the odds come from: stored so the number can be opened, not trusted.
+    deps.repository.policyMarketLinks.record({ meetingDate, slug, detectedAt: at })
     const observation = await source.fetchMeeting({ slug, at })
     if (!observation) return { state: 'skipped', reason: 'no-reading' }
     deps.repository.policyObservations.append(meetingDate, observation)

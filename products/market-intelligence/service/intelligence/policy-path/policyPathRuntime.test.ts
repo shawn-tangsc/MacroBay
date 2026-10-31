@@ -29,7 +29,8 @@ const runtimeWith = (input: { enabled?: boolean; scheduled?: string; facts?: { h
     repository: {
       listEffectiveMonthAsOf: () => input.scheduled ? [meeting(input.scheduled)] : [],
       policyObservations: { append: (meetingDate: string, observation: { at: string }) => { appended.push({ meetingDate, at: observation.at }) } },
-      policyFacts: {
+      policyMarketLinks: { record: () => undefined, read: () => undefined },
+        policyFacts: {
         read: () => input.facts,
         recordSep: (value: { meetingDate: string }) => { sepWrites.push(value) },
         // The published table is the newest projection meeting at or before today.
@@ -69,7 +70,8 @@ describe('policy path runtime', () => {
     const jobRuntime = { registerHandler: vi.fn(), setSchedule: vi.fn(), removeSchedule: vi.fn() }
     const scoped = createPolicyPathRuntime({
       jobRuntime,
-      repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() }, policyFacts: { read: () => undefined, recordSep: vi.fn(), listProjectionMeetings: () => [] } } as never,
+      repository: { listEffectiveMonthAsOf: () => [], policyObservations: { append: vi.fn() }, policyMarketLinks: { record: () => undefined, read: () => undefined },
+        policyFacts: { read: () => undefined, recordSep: vi.fn(), listProjectionMeetings: () => [] } } as never,
       fetch: async () => ({ ok: false, status: 0, text: async () => '' }),
       isEnabled: async () => true
     })
@@ -96,6 +98,7 @@ describe('policy path runtime SEP collection', () => {
       repository: {
         listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
         policyObservations: { append: vi.fn() },
+        policyMarketLinks: { record: () => undefined, read: () => undefined },
         policyFacts: { read: () => ({ hasProjectionMaterials: true }), recordSep: (value: never) => { sepWrites.push(value) }, listProjectionMeetings: () => ['2026-09-16'] }
       } as never,
       fetch: async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('fomcprojtabl') ? projection : url.includes('public-search') ? search : event }),
@@ -115,6 +118,7 @@ describe('policy path runtime SEP collection', () => {
       repository: {
         listEffectiveMonthAsOf: () => [meeting('2026-12-09')],
         policyObservations: { append: vi.fn() },
+        policyMarketLinks: { record: () => undefined, read: () => undefined },
         policyFacts: { read: () => ({ hasProjectionMaterials: true, sep: { asOf: '2026-09-16' } }), recordSep, listProjectionMeetings: () => ['2026-09-16'] }
       } as never,
       fetch: async (url: string) => ({ ok: true, status: 200, text: async () => url.includes('public-search') ? search : event }),

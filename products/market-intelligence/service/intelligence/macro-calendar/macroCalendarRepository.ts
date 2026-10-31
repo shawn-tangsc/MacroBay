@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import { createPolicyPathFactStore, type PolicyPathFactStore } from '../policy-path/policyPathFactStore'
 import { createPolicyPathObservationStore, type PolicyPathObservationStore } from '../policy-path/policyPathObservationStore'
+import { createPolicyPathMarketLinkStore, type PolicyPathMarketLinkStore } from '../policy-path/policyPathMarketLinkStore'
 import { statSync } from 'node:fs'
 
 import { MACRO_CALENDAR_SCHEMA_VERSION, type MacroCalendarRevision, type MacroCalendarValue } from './macroCalendarContracts'
@@ -24,6 +25,7 @@ export type MacroCalendarRepository = {
   policyFacts: PolicyPathFactStore
   /** Market-implied odds per meeting, kept as a series. */
   policyObservations: PolicyPathObservationStore
+  policyMarketLinks: PolicyPathMarketLinkStore
   close: () => void
 }
 
@@ -140,6 +142,7 @@ function initializeRepository(sqlite: MacroCalendarSqlite, migrationExecutor: Re
     },
     policyFacts: createPolicyPathFactStore(sqlite.database),
     policyObservations: createPolicyPathObservationStore(sqlite.database),
+    policyMarketLinks: createPolicyPathMarketLinkStore(sqlite.database),
     inspectStorage() {
       const aggregate = sqlite.database.prepare('select count(*) as count, min(detected_at) as oldest, max(detected_at) as newest from mi_macro_calendar_revisions').get() as Row
       return { rowCount: Number(aggregate.count), databaseBytes: sqlite.filePath === ':memory:' ? 0 : statSync(sqlite.filePath).size, oldestDetectedAt: aggregate.oldest ?? undefined, newestDetectedAt: aggregate.newest ?? undefined }
@@ -189,6 +192,8 @@ function migrate(database: ReturnType<typeof createMacroCalendarSqlite>['databas
     execute("create table if not exists mi_policy_path_facts (meeting_date text primary key, has_projection_materials integer not null default 0, target_lower real, target_upper real, vote_for integer, vote_against integer, dissents_json text, statement_url text, detected_at text not null, constraint mi_policy_path_facts_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); insert or ignore into mi_macro_calendar_migrations(version) values (4)")
     execute("create table if not exists mi_policy_path_observations (meeting_date text not null, at text not null, values_json text not null, quote_json text, primary key (meeting_date, at), constraint mi_policy_path_observations_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); create index if not exists idx_mi_policy_path_observations_at on mi_policy_path_observations(meeting_date, at desc); insert or ignore into mi_macro_calendar_migrations(version) values (5)")
     execute("create table if not exists mi_policy_path_sep (meeting_date text primary key, sep_json text not null, detected_at text not null, constraint mi_policy_path_sep_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); insert or ignore into mi_macro_calendar_migrations(version) values (6)")
+    // The venue page the odds came from, so the number can be opened instead of trusted.
+    execute("create table if not exists mi_policy_path_market (meeting_date text primary key, slug text not null, detected_at text not null, constraint mi_policy_path_market_meeting_date check (meeting_date glob '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')); insert or ignore into mi_macro_calendar_migrations(version) values (7)")
     execute('commit')
   } catch (error) {
     try { execute('rollback') } catch { /* Preserve the migration failure. */ }

@@ -51,6 +51,8 @@ export type PolicyPathReading = Readonly<{
     value: number
     /** All five buckets at the same instant, so the reader can see what the rest is priced at. */
     distribution?: Readonly<Record<PolicyPathOutcome, number>>
+    /** The venue page this price came from; absent until the collector has recorded it. */
+    marketUrl?: string
     /**
      * The same distribution a day and a week earlier, when the series reaches back that far. The
      * comparison is what tells a reader whether today's number is news or the same as last Tuesday.
@@ -96,6 +98,8 @@ export function createPolicyPathQueryService(deps: {
   calendar: Pick<MacroEconomicCalendarQueryService, 'nextFomcMeeting'>
   facts: Pick<PolicyPathFactStore, 'read' | 'readLatestDecision' | 'readLatestDecisionBefore' | 'readLatestSep'>
   observations: Pick<PolicyPathObservationStore, 'list'>
+  /** The venue page behind the odds, when the collector has seen it. */
+  marketLinks?: Pick<import('./policyPathMarketLinkStore').PolicyPathMarketLinkStore, 'read'>
   /**
    * The policy range as FRED already publishes it. The decision refresh only writes a fact when a
    * statement is parsed, so a range that depends on it alone stays empty until the next meeting.
@@ -178,7 +182,7 @@ export function createPolicyPathQueryService(deps: {
             ...(lastActionOf(decided, deps.facts) === undefined ? {} : { outcome: lastActionOf(decided, deps.facts)! })
           } }
           : {}),
-        ...(series.length ? { probability: probabilityOf(series, asOf) } : {}),
+        ...(series.length ? { probability: probabilityOf(series, asOf, deps.marketLinks?.read(meetingDate)?.url) } : {}),
         staleness: series.length ? stalenessOf(series[series.length - 1]!.at, asOf) : 'unavailable'
       }
     }
@@ -320,7 +324,7 @@ function sepOf(
   }
 }
 
-function probabilityOf(series: readonly PolicyPathObservation[], asOf: string): NonNullable<PolicyPathReading['probability']> {
+function probabilityOf(series: readonly PolicyPathObservation[], asOf: string, marketUrl?: string): NonNullable<PolicyPathReading['probability']> {
   const latest = series[series.length - 1]!
   const { outcome, probability } = leadingOutcome(latest.values)
   const thinned = thinSeries(series, policyPathQueryPolicy.chartPoints)
@@ -337,6 +341,7 @@ function probabilityOf(series: readonly PolicyPathObservation[], asOf: string): 
     outcome,
     value: probability,
     distribution: latest.values,
+    ...(marketUrl === undefined ? {} : { marketUrl }),
     ...comparisonOf(series),
     ...(previous === undefined ? {} : { changeInPp24h: changeInPp(probability, previous) }),
     ...(window.length ? { range30d: { min: Math.min(...window), max: Math.max(...window) } } : {}),

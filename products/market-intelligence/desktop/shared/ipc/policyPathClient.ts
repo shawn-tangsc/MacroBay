@@ -52,7 +52,10 @@ function readReading(value: unknown): PolicyPathReading | undefined {
       ...(isCompleteDistribution(value.probability.distribution)
         ? { distribution: value.probability.distribution as Record<string, number> }
         : {}),
-      ...(isObject(value.probability.comparison) ? { comparison: readComparison(value.probability.comparison) } : {})
+      ...(isObject(value.probability.comparison) ? { comparison: readComparison(value.probability.comparison) } : {}),
+      ...(typeof value.probability.marketUrl === 'string' && value.probability.marketUrl.startsWith('https://')
+        ? { marketUrl: value.probability.marketUrl }
+        : {})
     } as PolicyPathReading['probability']
     : undefined
   const lastDecision = readLastDecision(value.lastDecision)

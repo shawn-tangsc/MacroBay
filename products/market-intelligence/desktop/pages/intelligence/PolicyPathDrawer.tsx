@@ -2,7 +2,7 @@ import { ExternalLink } from 'lucide-react'
 
 import { MiSideDrawer } from './MiSideDrawer'
 
-import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES } from '../../../contracts/policyPath'
+import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES, namedOutcomes } from '../../../contracts/policyPath'
 import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
 import { conclusionView, percentOf } from './policyPathSettlementText'
 import './policyPathDrawer.css'
@@ -97,9 +97,12 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
           <th scope="col">{''}</th><th scope="col">{text.compareNow}</th>
           <th scope="col">{text.compareDay}</th><th scope="col">{text.compareWeek}</th>
         </tr></thead>
-        <tbody>{POLICY_PATH_OUTCOME_ORDER.map((outcome) => {
+        <tbody>{(() => {
+          const named = new Set(namedOutcomes(probability.distribution!))
+          return POLICY_PATH_OUTCOME_ORDER.map((outcome) => {
           const share = probability.distribution?.[outcome] ?? 0
-          return <tr key={outcome} data-outcome={outcome} data-leading={outcome === probability.outcome ? 'true' : undefined}>
+          return <tr key={outcome} data-outcome={outcome} data-named={named.has(outcome) ? 'true' : 'false'}
+            data-leading={outcome === probability.outcome ? 'true' : undefined}>
             <th scope="row">
               <span className="mi-policy-drawer__distribution-bar" aria-hidden="true"><i style={{ width: `${Math.max(share * 100, share > 0 ? 2 : 0)}%` }} /></span>
               {text.shortOutcomes[outcome]}
@@ -108,7 +111,8 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
             <td>{probability.comparison?.day ? percentOf(probability.comparison.day[outcome]) : '—'}</td>
             <td>{probability.comparison?.week ? percentOf(probability.comparison.week[outcome]) : '—'}</td>
           </tr>
-        })}</tbody>
+          })
+        })()}</tbody>
       </table>
       <p className="mi-policy-drawer__note">{text.compareHint}</p>
     </section> : null}
@@ -164,7 +168,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
           <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${percentOf(probability.range30d.min)}–${percentOf(probability.range30d.max)}` : '—'}</dd></div>
           <div><dt>{text.quote}</dt><dd>{probability.quote ? `${(probability.quote.bid * 100).toFixed(0)} / ${(probability.quote.ask * 100).toFixed(0)}` : '—'}</dd></div>
         </> : null}
-        <div><dt>{text.venue}</dt><dd>{probability?.venue ?? '—'}</dd></div>
+        <div><dt>{text.venue}</dt><dd>{probability?.marketUrl
+          ? <a href={probability.marketUrl} rel="noreferrer" target="_blank">{probability.venue}<ExternalLink aria-hidden="true" size={11} /></a>
+          : probability?.venue ?? '—'}</dd></div>
         <div><dt>{text.range}</dt><dd>{reading.targetRange ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%` : '—'}</dd></div>
         {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{probability.asOf.replace('T', ' ').slice(0, 19)}</dd></div> : null}
       </dl>

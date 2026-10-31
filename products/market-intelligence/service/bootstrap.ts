@@ -210,6 +210,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     calendar: macroEconomicCalendarQueryService,
     facts: macroCalendarBackend.repository.policyFacts,
     observations: macroCalendarBackend.repository.policyObservations,
+    marketLinks: macroCalendarBackend.repository.policyMarketLinks,
     // The parsed statement wins when it exists; between meetings the published FRED series is the
     // only current source of the range.
     readTargetRange: () => readPublishedTargetRange(intelligenceModule.pipeline.listMetricEvents())
