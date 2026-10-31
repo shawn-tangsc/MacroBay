@@ -95,7 +95,7 @@ export type MarketIntelligencePublicQueryService = {
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
-  queryMarketDivergence: (input: { asOf: string; mode?: 'auto' | 'manual' }) => Promise<MarketDivergenceResult>
+  queryMarketDivergence: (input: { asOf: string; mode?: 'rules' | 'judge' }) => Promise<MarketDivergenceResult>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -396,7 +396,7 @@ export function createMarketIntelligencePublicQueryService(
   // "what the dashboard already knows", and the divergence rule never sees a second view of it.
   service.queryMarketDivergence = async (queryInput) => queryMarketDivergenceAsync({
     asOf: queryInput.asOf,
-    mode: queryInput.mode ?? 'auto',
+    mode: queryInput.mode ?? 'rules',
     read: divergenceReader(service, queryInput.asOf, newsSentimentQuery),
     ...(divergenceJudgement ? { judge: divergenceJudgement } : {})
   })

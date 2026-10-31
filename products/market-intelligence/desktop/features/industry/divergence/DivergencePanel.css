@@ -85,6 +85,13 @@
 .mi-divergence__judge[data-judged-by='ai'] { color: var(--mi-dashboard-text); border-color: color-mix(in srgb, var(--mi-dashboard-text) 30%, transparent); }
 /* The word "结论" as a bordered label: a reader has to see at a glance that this block is a
    judgement about the card above, not another reading. */
+.mi-divergence__pairs {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
 .mi-divergence h2 {
   margin: 0;
   color: var(--mi-dashboard-muted);

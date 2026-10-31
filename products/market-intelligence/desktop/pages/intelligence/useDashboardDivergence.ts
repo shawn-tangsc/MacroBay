@@ -8,7 +8,7 @@ import { projectDashboardDivergence, type DashboardDivergenceViewState } from '.
  * every render would risk legs from two instants being compared.
  */
 export function useDashboardDivergence(input: Readonly<{
-  client: { query: (input: { asOf: string; mode?: 'auto' | 'manual' }) => Promise<MarketDivergenceResult> } | undefined
+  client: { query: (input: { asOf: string; mode?: 'rules' | 'judge' }) => Promise<MarketDivergenceResult> } | undefined
   now: () => Date
 }>): Readonly<{ state: DashboardDivergenceViewState; reload: () => void }> {
   const [state, setState] = useState<DashboardDivergenceViewState>({ state: 'loading' })
@@ -18,13 +18,26 @@ export function useDashboardDivergence(input: Readonly<{
   useEffect(() => {
     let active = true
     const asOf = readClock(mountInput.now)
-    if (!asOf || typeof mountInput.client?.query !== 'function') {
+    const client = mountInput.client
+    if (!asOf || typeof client?.query !== 'function') {
       setState({ state: 'unavailable', reason: 'query-failed', missing: [] })
       return () => { active = false }
     }
     setState({ state: 'loading' })
-    void mountInput.client.query({ asOf, ...(attempt > 0 ? { mode: 'manual' as const } : {}) })
-      .then((result) => { if (active) setState(projectDashboardDivergence(result, asOf)) })
+    // Two passes, one card: the rules answer in milliseconds and the model's reading replaces it
+    // when it arrives. No spinner between them — a number that is already correct should not be
+    // hidden behind a call that only improves the sentence.
+    void client.query({ asOf, mode: 'rules' })
+      .then((result) => {
+        if (!active) return
+        setState(projectDashboardDivergence(result, asOf))
+        void client.query({ asOf, mode: 'judge' })
+          .then((judged) => {
+            if (!active || judged.state === 'unavailable') return
+            setState(projectDashboardDivergence(judged, asOf))
+          })
+          .catch(() => undefined)
+      })
       .catch(() => { if (active) setState({ state: 'unavailable', reason: 'query-failed', missing: [] }) })
     return () => { active = false }
   }, [mountInput, attempt])

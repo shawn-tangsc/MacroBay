@@ -27,7 +27,10 @@ const row = {
 describe('divergence panel', () => {
   it('puts the explanation behind the help icon before the title, and names who judged', () => {
     const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
-    expect(markup.indexOf('mi-divergence__help')).toBeLessThan(markup.indexOf('<h2'))
+    // No panel name any more: the header states what is compared, and the `?` comes before it.
+    expect(markup).not.toContain('<h2')
+    expect(markup.indexOf('mi-divergence__help')).toBeLessThan(markup.indexOf('mi-divergence__pairs'))
+    expect(markup).toContain(text.pairNames['liquidity-leverage'])
     expect(markup).toContain(`aria-label="${text.helpLabel}"`)
     // The prose is not on the card; the badge is.
     expect(markup).not.toContain(text.helpLines[0])

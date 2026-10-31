@@ -51,7 +51,8 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
    * explain otherwise, and a quiet day must not cost a request every time the dashboard opens.
    * `manual` is the reader pressing "AI 复核": they asked, so it runs even on a quiet day.
    */
-  mode?: 'auto' | 'manual'
+  /** `rules` answers in milliseconds; `judge` adds the model's reading on top of the same legs. */
+  mode?: 'rules' | 'judge'
 }>): Promise<MarketDivergenceResult> {
   if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable('invalid-clock')
   try {
@@ -131,11 +132,11 @@ export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePe
  * the sentence; the readings it was shown are the ones that get drawn.
  */
 async function judgeRows(
-  input: Readonly<{ asOf: string; judge?: DivergenceJudge; mode?: 'auto' | 'manual' }>,
+  input: Readonly<{ asOf: string; judge?: DivergenceJudge; mode?: 'rules' | 'judge' }>,
   legs: DivergenceInputs,
   ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
 ): Promise<MarketDivergenceResult> {
-  if (!input.judge) return ruleResult
+  if (!input.judge || (input.mode ?? 'rules') === 'rules') return ruleResult
   const pairs = buildPairs(legs, ruleResult)
   if (pairs.length === 0) return ruleResult
   const outcome = await input.judge({

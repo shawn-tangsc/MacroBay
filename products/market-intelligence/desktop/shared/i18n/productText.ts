@@ -448,6 +448,7 @@ export const productText = {
             divergence: {
               title: '跨面板背离',
               helpLabel: '这张卡怎么来的',
+              pairsLine: '比三对：{pairs}',
               helpLines: [
                 '只有两组数据指向相反方向时才会出现这一行；三对都没背离时只显示一句话。',
                 '每次打开看板都会让助手模型判定一次，30 分钟内复用同一次结果；点「重新判定」立即再来一次。模型不可用时退回固定阈值，标记会写「规则判定」。',
@@ -2150,6 +2151,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             divergence: {
               title: 'Cross-panel divergence',
               helpLabel: 'How this card is produced',
+              pairsLine: 'Comparing three pairs: {pairs}',
               helpLines: [
                 'A line appears only when two readings point opposite ways; with none, the card is one sentence.',
                 'The judgement comes from the assistant model by default, fed only the four readings and forbidden from inventing numbers. Without a model the fixed thresholds answer and the badge says Rule-based.',

@@ -33,7 +33,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
 
   return (
-    <section className="mi-divergence" aria-labelledby="mi-divergence-heading" data-state={state.state}>
+    <section className="mi-divergence" aria-label={text.title} data-state={state.state}>
       <header className="mi-divergence__head">
         <Tooltip title={<span className="mi-divergence__help-body">{text.helpLines.map(line => <b key={line}>{line}</b>)}</span>}
           trigger={['hover', 'focus', 'click']}>
@@ -41,7 +41,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <Info size={11} aria-hidden="true" />
           </button>
         </Tooltip>
-        <h2 id="mi-divergence-heading">{text.title}</h2>
+        <span className="mi-divergence__pairs">
+          {text.pairsLine.replace('{pairs}', Object.values(text.pairNames).join(' · '))}
+        </span>
         {(state.state === 'available' || state.state === 'empty') && onRetry ? (
           // The badge is the trigger, not a label: pressing it asks the model again.
           <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry}

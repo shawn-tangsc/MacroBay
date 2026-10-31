@@ -13,7 +13,7 @@ import {
  * cannot become a blank card on the other.
  */
 export const marketDivergenceClient = {
-  async query(input: Readonly<{ asOf: string; mode?: 'auto' | 'manual' }>): Promise<MarketDivergenceResult> {
+  async query(input: Readonly<{ asOf: string; mode?: 'rules' | 'judge' }>): Promise<MarketDivergenceResult> {
     try {
       if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable()
       const value = await window.platform?.products?.invoke(

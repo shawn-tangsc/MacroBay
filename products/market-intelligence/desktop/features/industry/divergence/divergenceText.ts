@@ -2,6 +2,8 @@ import type { DivergenceDirection, DivergenceLegId, DivergencePairId } from '../
 
 export type DivergencePanelText = Readonly<{
   title: string
+  /** Shown instead of a panel name: what is actually being compared. */
+  pairsLine: string
   /** The word that marks the block as a conclusion rather than another section. */
   /** Who judged, shown as a small badge: the model, or the threshold table when it could not answer. */
   judgedBy: Readonly<Record<'ai' | 'rules', string>>
