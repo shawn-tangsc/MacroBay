@@ -328,6 +328,50 @@ export type BriefingTopSignal = Readonly<{
   citations: readonly number[]
 }>
 
+/** Where a conclusion the daily brief may synthesize came from. */
+export type BriefingPriorConclusionSource = 'analysis' | 'daily-brief'
+
+export type BriefingPriorConclusionConfidence = 'high' | 'medium' | 'low' | 'unknown'
+
+/**
+ * One earlier AI conclusion inside the edition's window.
+ *
+ * This is a *claim*, never a fact: the editor may compare, weigh and quote it, but its numbers and
+ * assertions are not evidence. `observedAt` is when it was published and `asOf` the instant its own
+ * evidence chain was frozen, so a conclusion written after the window can never enter it.
+ */
+export type BriefingPriorConclusion = Readonly<{
+  id: string
+  source: BriefingPriorConclusionSource
+  observedAt: string
+  asOf: string
+  direction: AnalysisConclusionDirection
+  confidence: BriefingPriorConclusionConfidence
+  summary: string
+  rationale?: string
+  evidenceRefs: readonly string[]
+}>
+
+/**
+ * The structured synthesis the editorial model writes over the window's prior conclusions.
+ *
+ * `direction` is the editor's own verdict after weighing them; the remaining fields make the
+ * reasoning auditable: what regime changed, what was confirmed or refuted, the core tension, what
+ * would overturn the read, and which frozen facts support it.
+ */
+export type BriefingConclusionSynthesis = Readonly<{
+  direction: AnalysisConclusionDirection
+  confidence: 'high' | 'medium' | 'low'
+  summary: string
+  regimeChange: string
+  confirmed: readonly string[]
+  refuted: readonly string[]
+  coreTension: string
+  whatWouldChange: string
+  /** Frozen document fact ids (news:/macro:/data:) this synthesis stands on. */
+  evidenceRefs: readonly string[]
+}>
+
 export type BriefingConclusion = Readonly<{
   summaryId: string
   publishedAt: string
@@ -344,6 +388,14 @@ export type BriefingConclusion = Readonly<{
   evidenceStrength?: string
   dataGaps: readonly string[]
   caveats: readonly string[]
+  /** How this conclusion was produced. `agent` means the editorial model synthesized the window's
+   * prior conclusions; `fallback` means the fact-layer conclusion stands because no synthesis ran.
+   * Absent on editions generated before synthesis existed (those copied the analysis conclusion). */
+  synthesis?: 'agent' | 'fallback'
+  /** Prior conclusion ids the synthesis weighed, oldest first. Absent for the fact-layer fallback. */
+  synthesizedFrom?: readonly string[]
+  /** Present only when `synthesis` is `agent`. */
+  synthesisDetail?: BriefingConclusionSynthesis
 }>
 
 export type BriefingNewsSummary = Readonly<{

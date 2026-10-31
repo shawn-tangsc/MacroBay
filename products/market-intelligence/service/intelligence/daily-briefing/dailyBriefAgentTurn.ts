@@ -1,4 +1,4 @@
-import type { BriefingMarketRow, BriefingNextItem, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
+import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
@@ -51,6 +51,11 @@ export type DailyBriefAgentTurnInput = Readonly<{
   runner: DailyBriefAgentRunner
   document: DailyBriefingDocument
   locale: DailyBriefingLocale
+  /**
+   * The window's earlier AI conclusions, oldest first. The editor synthesizes them into a new
+   * conclusion instead of copying the analysis page's verdict.
+   */
+  priorConclusions?: readonly BriefingPriorConclusion[]
   allowedTools?: readonly string[]
   /**
    * Optional so the turn keeps working when no historian is wired: a requested backfill then answers
@@ -111,6 +116,7 @@ function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly 
 
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
   let document = input.document
+  const priorConclusions = input.priorConclusions ?? []
   const editionKey = dailyBriefEditionKey(document.edition.date, input.locale)
   const copy = dailyBriefSessionCopy(input.locale)
   const summary = factSummary(document, input.locale)
@@ -165,7 +171,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     } catch { /* keep the prior selection when the model just acknowledges */ }
   }
   const selectedDocument = selectDocument(document, selection)
-  const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection })
+  const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection, priorConclusions })
     .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
   throwIfAborted(input.signal)
   stage({ stage: 'writing', state: 'begin' })
@@ -180,10 +186,10 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
     let parsed: unknown
     try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
     if (parsed) {
-      const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations)
+      const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations, priorConclusions)
       if (validation.ok) {
         stage({ stage: 'validation', state: 'success' })
-        const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v1', model: 'agent-session', source: 'default' })
+        const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions)
         await input.runner.finish(started.sessionId, 'accepted')
         return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
       }

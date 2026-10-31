@@ -1,6 +1,6 @@
 import type { StructuredModelMessage } from '@platform/ai/invocation/structuredModelInvocationTypes'
 
-import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import type { DailyBriefingDocument, BriefingPriorConclusion } from '../../../contracts/dailyBriefing'
 
 /**
  * The editorial prompt is bounded to the frozen document: the model may add prose and a visibility
@@ -11,6 +11,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
   document: DailyBriefingDocument
   locale: 'zh-CN' | 'en-US'
   selection?: unknown
+  priorConclusions?: readonly BriefingPriorConclusion[]
 }>): StructuredModelMessage[] {
   const { document, locale } = input
   const facts = {
@@ -25,6 +26,19 @@ export function buildDailyBriefingPrompt(input: Readonly<{
       invalidations: document.conclusion.invalidations.map((item) => item.text),
       counterEvidence: document.conclusion.counterEvidence.map((item) => item.statement)
     } : null,
+    // Oldest first, bounded by the packet collector: the editor must be able to see a flip in the
+    // sequence. Each entry is a claim with its own observation instant, never a verified fact.
+    priorConclusions: (input.priorConclusions ?? []).map((conclusion) => ({
+      id: conclusion.id,
+      source: conclusion.source,
+      observedAt: conclusion.observedAt,
+      asOf: conclusion.asOf,
+      direction: conclusion.direction,
+      confidence: conclusion.confidence,
+      summary: conclusion.summary,
+      ...(conclusion.rationale ? { rationale: conclusion.rationale } : {}),
+      evidenceRefs: conclusion.evidenceRefs
+    })),
     news: document.news.items.map((item) => ({
       factId: `news:${item.itemId}`,
       title: item.translatedTitle ?? item.title,
@@ -102,7 +116,18 @@ export function buildDailyBriefingPrompt(input: Readonly<{
           ],
           dataNote: 'one sentence about what the numbers say, at most 240 characters',
           invalidationNote: 'one sentence about what would change the read, at most 240 characters',
-          conclusionTranslation: 'translate the conclusion summary only, or omit',
+          conclusionTranslation: 'only when conclusionSynthesis is omitted: translate the fallback conclusion summary, or omit',
+          conclusionSynthesis: {
+            direction: 'bullish|bearish|range|undecided|mixed',
+            confidence: 'high|medium|low',
+            summary: 'the day’s synthesized verdict: what the window’s conclusions, taken together with today’s facts, now imply for BTC/ETH. At most 3 sentences.',
+            regimeChange: 'what changed in the regime during the window, or state plainly that no regime change occurred',
+            confirmed: ['which earlier calls the window’s facts confirmed'],
+            refuted: ['which earlier calls the window’s facts refuted'],
+            coreTension: 'the main contradiction a trader has to price right now',
+            whatWouldChange: 'the specific evidence that would overturn this read',
+            evidenceRefs: ['news:<id>|macro:<key>|data:<id>']
+          },
           nextFocus: {
             eventKey: 'FACTS.nextFocus.eventKey',
             why: 'the BTC/ETH transmission of this event and why it, not the nearest event, is the focus, at most 200 characters',
@@ -120,7 +145,11 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         '- hiddenData: for every data: fact whose materiality.material is true that you do NOT show, give one sentence explaining why. Omit immaterial rows: the rule already hides them with reason no-material-change.',
         '- data:leverage and data:policy-path are selectable only when materiality.material is true. Below the threshold they cannot be shown, whatever the ranking says. A flat open interest, a rate path that has not moved, and a row with no change are context, not news.',
         '- Include a data fact only when it has a material change or explains today’s read; every hidden data fact is audited with a reason, never silently dropped.',
-        '- conclusionTranslation: only when the conclusion summary is in a different language from LOCALE.',
+        '- conclusionTranslation: only when conclusionSynthesis is omitted and the fallback conclusion summary is in a different language from LOCALE. When you write conclusionSynthesis, omit it: the synthesized summary is already in LOCALE.',
+        '- conclusionSynthesis: required when FACTS.priorConclusions is not empty; omit it when the list is empty (the fact-layer conclusion stays as a marked fallback). Synthesize ALL entries plus today’s facts into your own verdict. Never copy any prior conclusion’s wording, sentence or structure; a verbatim or near-verbatim copy is rejected.',
+        '- priorConclusions are claims, not facts: do not repeat their numbers as if verified and do not cite them as evidence. Cite only frozen news:/macro:/data: factIds in conclusionSynthesis.evidenceRefs, at least one.',
+        '- If priorConclusions disagree or flipped during the window, say so explicitly in the synthesis (for example “during the window the read diverged/flipped from … to …”) and explain which side today’s facts support. Never average conflicting calls into a neutral middle or silently pick one.',
+        '- conclusionSynthesis.confirmed/refuted must name the earlier call and the fact that confirmed or refuted it; keep each entry to one sentence. coreTension is the live contradiction, not a summary of the lede. whatWouldChange is specific and testable.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
         '- webEvidence is optional; only add entries actually seen in this turn’s WebSearch/WebFetch results. The URL and publishedAt must match a tool result; never invent a source. Local official actual overrides a web value.',
         '- items are shown facts with why; hidden contains every other candidate with a reason. items + hidden must cover every news and macro candidate exactly once.',

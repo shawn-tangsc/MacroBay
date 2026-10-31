@@ -299,6 +299,7 @@ export function createDailyBriefingService(deps: Readonly<{
             runner: deps.agentRunner,
             document,
             locale: input.locale,
+            priorConclusions: packet.priorConclusions ?? [],
             ...(deps.agentAllowedTools ? { allowedTools: await deps.agentAllowedTools() } : {}),
             ...(deps.backfillFactory ? { backfill: deps.backfillFactory(document.edition.windowEnd) } : {}),
             signal: controller.signal,
@@ -422,7 +423,7 @@ function withEditorialModel(
     provenance: Object.freeze({
       ...document.provenance,
       editorialMeta: Object.freeze({
-        promptVersion: meta?.promptVersion ?? 'daily-briefing.agent.v1',
+        promptVersion: meta?.promptVersion ?? 'daily-briefing.agent.v2',
         model: `${model.providerId}:${model.modelId}`,
         source: model.source,
         ...(model.fallback ? { fallback: model.fallback } : {})

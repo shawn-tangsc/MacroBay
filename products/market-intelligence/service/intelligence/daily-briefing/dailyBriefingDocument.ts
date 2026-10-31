@@ -391,7 +391,11 @@ function buildConclusion(packet: DailyBriefingFactPacket): Readonly<{
     topSignal,
     ...(structured?.evidenceStrength ? { evidenceStrength: structured.evidenceStrength } : {}),
     dataGaps: Object.freeze((structured?.dataGaps ?? []).slice(0, dailyBriefingPolicy.maximumGaps)),
-    caveats: Object.freeze(summary.dataCaveats.slice(0, dailyBriefingPolicy.maximumCaveats))
+    caveats: Object.freeze(summary.dataCaveats.slice(0, dailyBriefingPolicy.maximumCaveats)),
+    // The fact-layer conclusion is the fallback, never a synthesis: a failed or disabled editorial
+    // turn must be readable as "this is the last analysis conclusion", not as an aggregation of the
+    // window's AI views. The editorial pass upgrades this marker only when it actually synthesizes.
+    synthesis: 'fallback'
   })
   return Object.freeze({ conclusion, citations: Object.freeze(citations.list()) })
 }

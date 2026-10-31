@@ -6,6 +6,7 @@ import type {
   FundingRateHistoryResult
 } from '../../../contracts/intelligenceQueryContracts'
 import type { AgentEvidenceRef, AnalysisConclusionDirection, AnalysisSummary, Prediction } from '../../../contracts/marketAnalysisContracts'
+import type { BriefingPriorConclusion } from '../../../contracts/dailyBriefing'
 import type { MarketIntelligencePublicQueryService } from '../public-query/publicQueryService'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
 
@@ -57,6 +58,11 @@ export type DailyBriefingFactPacket = Readonly<{
   locale: 'zh-CN' | 'en-US'
   timeZone: string
   conclusion: DailyBriefingConclusionInput | null
+  /**
+   * Every earlier AI conclusion inside the window, oldest first. These are claims the editor may
+   * weigh, never facts: their numbers do not become evidence and cannot be cited as such.
+   */
+  priorConclusions?: readonly BriefingPriorConclusion[]
   news: Readonly<{
     state: 'available' | 'empty' | 'unavailable' | 'source-disabled'
     items: readonly NewsSentimentItemView[]

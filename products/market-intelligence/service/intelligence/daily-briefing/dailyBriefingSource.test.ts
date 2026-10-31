@@ -268,4 +268,46 @@ describe('daily briefing source', () => {
 
     expect(packet.market.macroRates).toMatchObject({ state: 'empty', readings: [] })
   })
+
+  it('collects the window’s analysis and brief conclusions, oldest first, without the current edition', async () => {
+    const briefDocument = {
+      edition: {
+        date: '2026-10-29', locale: 'zh-CN', generatedAt: '2026-10-29T00:30:00.000Z',
+        windowStart: '2026-10-28T00:30:00.000Z', windowEnd: '2026-10-29T00:30:00.000Z', timeZone: 'Asia/Shanghai'
+      },
+      conclusion: {
+        direction: 'bullish', summary: 'Liquidity expansion supports bids.', synthesis: 'agent',
+        synthesisDetail: { confidence: 'medium', coreTension: 'Price lags flows.', evidenceRefs: ['data:btc'] }
+      },
+      citations: [{ index: 1, refId: 'ev-9' }],
+      provenance: { summaryId: 's1', readAt: '2026-10-29T00:30:00.000Z' }
+    }
+    const currentDocument = {
+      ...briefDocument,
+      edition: { ...briefDocument.edition, date: '2026-10-30', windowEnd: '2026-10-30T00:30:00.000Z' },
+      conclusion: { ...briefDocument.conclusion, summary: 'Current edition must not feed itself.' }
+    }
+    const base = deps()
+    const packet = await createDailyBriefingSource({
+      ...base,
+      briefEditions: {
+        list: async () => [
+          { date: '2026-10-29', locale: 'zh-CN', generatedAt: '2026-10-29T00:30:00.000Z', windowStart: '2026-10-28T00:30:00.000Z', windowEnd: '2026-10-29T00:30:00.000Z', document: briefDocument as never },
+          { date: '2026-10-30', locale: 'zh-CN', generatedAt: '2026-10-30T00:30:00.000Z', windowStart: '2026-10-29T00:30:00.000Z', windowEnd: '2026-10-30T00:30:00.000Z', document: currentDocument as never }
+        ]
+      }
+    }).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+
+    expect(packet.priorConclusions?.map((item) => item.id)).toEqual([
+      'daily-brief:2026-10-29:zh-CN',
+      'analysis:mi-as-1'
+    ])
+    expect(packet.priorConclusions?.[1]).toMatchObject({
+      source: 'analysis', direction: 'bearish', confidence: 'unknown', summary: 'Flows pull bids away.'
+    })
+    expect(packet.priorConclusions?.[0]).toMatchObject({
+      source: 'daily-brief', direction: 'bullish', confidence: 'medium', rationale: 'Price lags flows.',
+      evidenceRefs: ['data:btc', 'ev-9']
+    })
+  })
 })

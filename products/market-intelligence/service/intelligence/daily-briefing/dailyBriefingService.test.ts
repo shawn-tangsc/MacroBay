@@ -327,7 +327,7 @@ describe('daily briefing service', () => {
     if (result.state === 'available') {
       expect(result.document.lede.source).toBe('agent')
       expect(result.document.provenance.editorialMeta).toEqual({
-        promptVersion: 'daily-briefing.agent.v1',
+        promptVersion: 'daily-briefing.agent.v2',
         model: 'p:m',
         source: 'default',
         fallback: 'custom-unavailable'
@@ -347,7 +347,7 @@ describe('daily briefing service', () => {
     expect(result.state).toBe('available')
     if (result.state === 'available') {
       expect(result.document.provenance.editorialMeta).toEqual({
-        promptVersion: 'daily-briefing.agent.v1',
+        promptVersion: 'daily-briefing.agent.v2',
         model: 'p2:m2',
         source: 'custom'
       })

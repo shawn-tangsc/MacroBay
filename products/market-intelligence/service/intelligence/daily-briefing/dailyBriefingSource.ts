@@ -9,8 +9,13 @@ import { assessMarketCalendarSurprise, toCalendarSurpriseView } from '../../../c
 import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import { dailyBriefingPolicy, isDailyBriefingWindowHours, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingSource } from './dailyBriefingService'
+import type { DailyBriefingSource, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
+import {
+  collectAnalysisPriorConclusions,
+  collectBriefingPriorConclusions,
+  mergePriorConclusions
+} from './dailyBriefingPriorConclusions'
 
 const HOUR_MS = 60 * 60 * 1_000
 const DAY_MS = 24 * 60 * 60 * 1_000
@@ -32,6 +37,11 @@ export type DailyBriefingSourceDeps = Readonly<{
   news: NewsQuery
   profiles: Pick<SourceProfileStore, 'listProfiles'>
   policyPathQuery?: { read: (input: { asOf: string }) => import('../policy-path/policyPathQueryService').PolicyPathReading | undefined }
+  /**
+   * Stored brief editions, read-only. Optional so a build without a briefing store still produces a
+   * packet; the window then carries analysis conclusions only.
+   */
+  briefEditions?: Pick<DailyBriefingStore, 'list'>
 }>
 
 /**
@@ -48,8 +58,12 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
       const asOfMs = Date.parse(input.asOf)
       const windowStart = new Date(asOfMs - windowHours * HOUR_MS).toISOString()
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
-      const [conclusion, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
-        readConclusion(deps, input.asOf),
+      // One timeline read feeds both the fact-layer conclusion and the window's prior conclusions:
+      // two reads could disagree about which nodes are visible at the cutoff.
+      const timeline = readTimeline(deps)
+      const [conclusion, priorConclusions, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
+        readConclusion(deps, input.asOf, timeline),
+        readPriorConclusions(deps, timeline, input.asOf, windowStart, input.locale),
         readNews(deps, input.asOf, windowStart),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
@@ -68,6 +82,7 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         locale: input.locale,
         timeZone: input.timeZone,
         conclusion,
+        priorConclusions,
         news,
         calendar,
         readings: Object.freeze({ fearGreed, funding, capital: capitalAsOf(capital, input.asOf) }),
@@ -98,13 +113,26 @@ async function readEnabled(deps: DailyBriefingSourceDeps): Promise<DailyBriefing
   }
 }
 
-async function readConclusion(deps: DailyBriefingSourceDeps, cutoff: string): Promise<DailyBriefingFactPacket['conclusion']> {
+type TimelineItem = ReturnType<MarketAnalysisRepository['listTimeline']>['items'][number]
+
+function readTimeline(deps: DailyBriefingSourceDeps): readonly TimelineItem[] {
   try {
-    const page = deps.repository.listTimeline({ limit: 50 })
+    return deps.repository.listTimeline({ limit: 50 }).items
+  } catch {
+    return Object.freeze([])
+  }
+}
+
+async function readConclusion(
+  deps: DailyBriefingSourceDeps,
+  cutoff: string,
+  timeline: readonly TimelineItem[]
+): Promise<DailyBriefingFactPacket['conclusion']> {
+  try {
     const cutoffMs = Date.parse(cutoff)
     const eligible = Number.isFinite(cutoffMs)
-      ? page.items.filter((item) => !item.occurredAt || Date.parse(item.occurredAt) <= cutoffMs)
-      : page.items
+      ? timeline.filter((item) => !item.occurredAt || Date.parse(item.occurredAt) <= cutoffMs)
+      : timeline
     const latest = selectLatestPublishedEntry(eligible)
     if (!latest?.summaryRef) return null
     const summary: AnalysisSummary | undefined = deps.repository.getSummary(latest.summaryRef)
@@ -122,6 +150,47 @@ async function readConclusion(deps: DailyBriefingSourceDeps, cutoff: string): Pr
   } catch {
     return null
   }
+}
+
+/**
+ * The window's earlier AI conclusions, claims rather than facts.
+ *
+ * Analysis conclusions are read from the same timeline page as the fact-layer conclusion; brief
+ * conclusions come from the stored editions, which are date-keyed and therefore filtered again by
+ * their own `windowEnd`. A failed read is an empty list: a brief without prior conclusions is still
+ * valid, and it says `fallback` instead of pretending it synthesized something.
+ */
+async function readPriorConclusions(
+  deps: DailyBriefingSourceDeps,
+  timeline: readonly TimelineItem[],
+  asOf: string,
+  windowStart: string,
+  locale: DailyBriefingLocale
+): Promise<readonly import('../../../contracts/dailyBriefing').BriefingPriorConclusion[]> {
+  const analysis = collectAnalysisPriorConclusions({
+    entries: timeline,
+    windowStart,
+    asOf,
+    readSummary: (summaryId) => {
+      try {
+        return deps.repository.getSummary(summaryId)
+      } catch {
+        return undefined
+      }
+    }
+  })
+  let briefs: readonly DailyBriefingStoredEdition[] = Object.freeze([])
+  if (deps.briefEditions) {
+    // One day of slack on the left: the store is keyed by the reader's local edition date, which can
+    // sit a calendar day before the UTC window start. The windowEnd check below is authoritative.
+    const from = new Date(Date.parse(windowStart) - DAY_MS).toISOString().slice(0, 10)
+    const to = asOf.slice(0, 10)
+    briefs = await safe(() => deps.briefEditions!.list(from, to, locale), Object.freeze([]))
+  }
+  return mergePriorConclusions([
+    analysis,
+    collectBriefingPriorConclusions({ editions: briefs, windowStart, asOf })
+  ])
 }
 
 async function readNews(deps: DailyBriefingSourceDeps, asOf: string, windowStart: string): Promise<DailyBriefingFactPacket['news']> {

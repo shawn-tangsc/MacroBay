@@ -1,6 +1,8 @@
 import type {
+  BriefingConclusionSynthesis,
   BriefingMacroItem,
   BriefingNewsItem,
+  BriefingPriorConclusion,
   BriefingPulseRow,
   BriefingMarketRow,
   DailyBriefingDocument,
@@ -21,6 +23,7 @@ import {
   selectBriefingDataFacts
 } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
+import { validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
 
 export type DailyBriefingEditorialOutput = Readonly<{
   lede: string
@@ -33,6 +36,8 @@ export type DailyBriefingEditorialOutput = Readonly<{
   dataNote?: string
   invalidationNote?: string
   conclusionTranslation?: string
+  /** The editorial model's synthesis over the window's prior conclusions. */
+  conclusionSynthesis?: BriefingConclusionSynthesis
   nextFocus?: Readonly<{
     eventKey: string
     why: string
@@ -50,6 +55,11 @@ export type DailyBriefingValidationFailure =
   | 'missing-hidden-reason'
   | 'missing-macro-why'
   | 'invalid-macro-why'
+  | 'invalid-conclusion-synthesis'
+  | 'missing-conclusion-synthesis'
+  | 'copied-conclusion'
+  | 'missing-conclusion-evidence'
+  | 'missing-conclusion-divergence'
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
@@ -70,9 +80,10 @@ export function validateDailyBriefingEditorial(
   raw: unknown,
   document: DailyBriefingDocument,
   locale: 'zh-CN' | 'en-US',
-  toolInvocations: readonly AgentRuntimeToolInvocation[] = []
+  toolInvocations: readonly AgentRuntimeToolInvocation[] = [],
+  priorConclusions: readonly BriefingPriorConclusion[] = []
 ): DailyBriefingValidation {
-  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['hiddenData', 'dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus', 'webEvidence'])) {
+  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['hiddenData', 'dataNote', 'invalidationNote', 'conclusionTranslation', 'conclusionSynthesis', 'nextFocus', 'webEvidence'])) {
     return fail('invalid-shape')
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
@@ -191,8 +202,20 @@ export function validateDailyBriefingEditorial(
   if (dataNote === false) return fail('too-long')
   const invalidationNote = optionalText(raw.invalidationNote, 240)
   if (invalidationNote === false) return fail('too-long')
-  const conclusionTranslation = optionalText(raw.conclusionTranslation, 2_000)
+  // With no prior conclusion there is nothing to synthesize: the fact-layer conclusion stands and
+  // is marked `fallback`, so the field is ignored rather than accepted as an aggregation. With at
+  // least one prior, a synthesis is required — a copy of that prior is exactly what must not ship.
+  let conclusionSynthesis: BriefingConclusionSynthesis | undefined
+  if (priorConclusions.length > 0) {
+    const synthesized = validateConclusionSynthesis(raw.conclusionSynthesis, document, priorConclusions)
+    if (!synthesized.ok) return fail(synthesized.failureCode, synthesized.detail)
+    conclusionSynthesis = synthesized.value
+  }
+  // A synthesized summary is already written in LOCALE, so a translation of the old fallback summary
+  // would be attached to the wrong text. The field belongs to the no-synthesis (fallback) path only.
+  let conclusionTranslation = optionalText(raw.conclusionTranslation, 2_000)
   if (conclusionTranslation === false) return fail('too-long')
+  if (conclusionSynthesis) conclusionTranslation = undefined
   if (conclusionTranslation !== undefined && (!document.conclusion || !needsTranslation(document.conclusion.summary, locale))) return fail('invalid-translation')
 
   let nextFocus: DailyBriefingEditorialOutput['nextFocus']
@@ -212,7 +235,15 @@ export function validateDailyBriefingEditorial(
   const prose = [raw.lede, ...items.map((item) => item.why), ...importance.map((entry) => entry.reasonText ?? ''),
     ...(nextFocus ? [nextFocus.why, ...nextFocus.watch.flatMap((entry) => [entry.condition, entry.implication])] : []),
     ...(typeof dataNote === 'string' ? [dataNote] : []), ...(typeof invalidationNote === 'string' ? [invalidationNote] : []),
-    ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : [])].join('\n')
+    ...(typeof conclusionTranslation === 'string' ? [conclusionTranslation] : []),
+    ...(conclusionSynthesis ? [
+      conclusionSynthesis.summary,
+      conclusionSynthesis.regimeChange,
+      conclusionSynthesis.coreTension,
+      conclusionSynthesis.whatWouldChange,
+      ...conclusionSynthesis.confirmed,
+      ...conclusionSynthesis.refuted
+    ] : [])].join('\n')
   const hiddenTitles = [
     ...document.news.items.filter((item) => hidden.some((entry) => entry.factId === `news:${item.itemId}`)).map((item) => item.translatedTitle ?? item.title),
     ...document.news.macro.filter((item) => hidden.some((entry) => entry.factId === `macro:${item.eventKey}`)).map((item) => item.title)
@@ -239,6 +270,7 @@ export function validateDailyBriefingEditorial(
       ...(typeof dataNote === 'string' ? { dataNote } : {}),
       ...(typeof invalidationNote === 'string' ? { invalidationNote } : {}),
       ...(typeof conclusionTranslation === 'string' ? { conclusionTranslation } : {}),
+      ...(conclusionSynthesis ? { conclusionSynthesis } : {}),
       ...(nextFocus ? { nextFocus } : {})
     })
   })
@@ -247,7 +279,8 @@ export function validateDailyBriefingEditorial(
 export function applyDailyBriefingEditorial(
   document: DailyBriefingDocument,
   editorial: DailyBriefingEditorialOutput,
-  meta: DailyBriefingEditorialMeta
+  meta: DailyBriefingEditorialMeta,
+  priorConclusions: readonly BriefingPriorConclusion[] = []
 ): DailyBriefingDocument {
   const newsWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('news:')).map((item) => [item.factId.slice('news:'.length), item.why]))
   const macroWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('macro:')).map((item) => [item.factId.slice('macro:'.length), item.why]))
@@ -326,7 +359,21 @@ export function applyDailyBriefingEditorial(
         ...(editorial.invalidationNote ? { invalidationNote: editorial.invalidationNote } : {})
       })
     } : {}),
-    ...(editorial.conclusionTranslation && document.conclusion ? {
+    ...(editorial.conclusionSynthesis && document.conclusion && priorConclusions.length > 0 ? {
+      conclusion: Object.freeze({
+        ...document.conclusion,
+        direction: editorial.conclusionSynthesis.direction,
+        summary: editorial.conclusionSynthesis.summary,
+        synthesis: 'agent' as const,
+        synthesizedFrom: Object.freeze(priorConclusions.map((conclusion) => conclusion.id)),
+        synthesisDetail: Object.freeze({
+          ...editorial.conclusionSynthesis,
+          confirmed: Object.freeze([...editorial.conclusionSynthesis.confirmed]),
+          refuted: Object.freeze([...editorial.conclusionSynthesis.refuted]),
+          evidenceRefs: Object.freeze([...editorial.conclusionSynthesis.evidenceRefs])
+        })
+      })
+    } : editorial.conclusionTranslation && document.conclusion ? {
       conclusion: Object.freeze({ ...document.conclusion, translation: editorial.conclusionTranslation })
     } : {}),
     citations: Object.freeze(citations),

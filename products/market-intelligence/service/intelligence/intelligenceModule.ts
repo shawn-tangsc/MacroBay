@@ -859,6 +859,9 @@ export function getIntelligenceModule(
         repository: marketAnalysisRuntime.repository,
         publicQuery: publicQueryService,
         policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
+        // Read-only history: the morning brief synthesizes the window's earlier brief conclusions
+        // together with the analysis conclusions instead of copying one of them.
+        briefEditions: dailyBriefingStore,
         news: newsSentimentQuery
           ? { query: (input) => newsSentimentQuery.query(input) }
           : {
