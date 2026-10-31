@@ -120,7 +120,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
           conclusionSynthesis: {
             direction: 'bullish|bearish|range|undecided|mixed',
             confidence: 'high|medium|low',
-            summary: 'reader-facing verdict. Sentence 1 states the BTC/ETH direction in plain market language. Sentences 2-3 give 2-3 direct drivers (event, data or fund flow) with their numbers from FACTS. If the read changed today, say what the market did, not what an earlier analysis thought. At most 3 sentences.',
+            summary: 'reader-facing verdict. The direction is rendered as a tag before this summary, so do NOT start with or repeat the direction label (no 偏空/偏多/震荡/结论偏空/方向偏空). Sentence 1 starts directly with the main driver (event, data or fund flow); sentences 2-3 add 2-3 direct drivers with FACTS numbers. If the read changed today, say what the market did, not what an earlier analysis thought. At most 3 sentences.',
             regimeChange: 'only when something material changed versus earlier: the market shift and the fact plus number that shows it. If nothing important changed, write "no material change" / "无重要变化". Never narrate the editing process, a window, or an earlier AI view.',
             confirmed: ['market outcome that supports the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
             refuted: ['market outcome that contradicts the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
