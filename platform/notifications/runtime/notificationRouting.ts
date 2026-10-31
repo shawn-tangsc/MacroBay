@@ -30,7 +30,12 @@ export function routeTransientDelivery(
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-disabled' })
         continue
       }
-      hooks.toast?.(record)
+      // A channel with no delivery hook cannot be recorded as sent: that would be a false success.
+      if (!hooks.toast) {
+        attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-unavailable' })
+        continue
+      }
+      hooks.toast(record)
       attempts.push({ channel, attemptedAt: now, result: 'sent' })
       continue
     }
@@ -40,7 +45,11 @@ export function routeTransientDelivery(
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'popup-disabled' })
         continue
       }
-      hooks.popup?.(record)
+      if (!hooks.popup) {
+        attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'popup-unavailable' })
+        continue
+      }
+      hooks.popup(record)
       attempts.push({ channel, attemptedAt: now, result: 'sent' })
     }
   }
@@ -48,8 +57,13 @@ export function routeTransientDelivery(
   const desktopChannel = transientChannels.includes('desktop')
   if (!desktopChannel) return Promise.resolve(attempts)
 
-  if (!settings.desktopEnabled || !hooks.desktop) {
+  if (!settings.desktopEnabled) {
     attempts.push({ channel: 'desktop', attemptedAt: now, result: 'skipped', reason: 'desktop-disabled' })
+    return Promise.resolve(attempts)
+  }
+
+  if (!hooks.desktop) {
+    attempts.push({ channel: 'desktop', attemptedAt: now, result: 'skipped', reason: 'desktop-unavailable' })
     return Promise.resolve(attempts)
   }
 
