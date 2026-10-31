@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { createAppLog } from '../../observability/logging/appLog'
+import { redactText } from '../../secrets/redaction/redactText'
 import { createRendererProcessLog } from './rendererProcessLog'
 
 describe('createRendererProcessLog', () => {
@@ -63,5 +64,33 @@ describe('createRendererProcessLog', () => {
       .split('\n')
       .map((line) => JSON.parse(line).level)
     expect(levels).toEqual(['error', 'warn'])
+  })
+
+  it('cannot bypass redaction: console text and failed URLs land with the key replaced', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'renderer-process-log-redaction-'))
+    const appLog = createAppLog({ directory, redact: (text) => redactText(text).text })
+    const log = createRendererProcessLog(appLog)
+    const secret = 'sk-proj-0123456789abcdefghijABCDEFGHIJ'
+
+    log.write({
+      timestamp: '2026-07-10T14:00:03.000Z',
+      event: 'console-message',
+      level: 'error',
+      message: `fetch failed with ${secret}`,
+      lineNumber: 1,
+      sourceId: 'app://renderer/index.js'
+    })
+    log.write({
+      timestamp: '2026-07-10T14:00:04.000Z',
+      event: 'did-fail-load',
+      errorCode: -2,
+      errorDescription: 'ERR_FAILED',
+      validatedURL: `https://api.example.com/v1?key=${secret}`,
+      isMainFrame: true
+    })
+
+    const contents = await readFile(appLog.path, 'utf8')
+    expect(contents).not.toContain(secret)
+    expect(contents).toContain('[REDACTED]')
   })
 })
