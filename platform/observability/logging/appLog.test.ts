@@ -57,21 +57,46 @@ describe('createAppLog', () => {
 
   it('rotates inside the writer and drops the oldest file when the total cap is crossed', async () => {
     const directory = join(root, 'rotated')
-    const limits = { maxFileBytes: 320, maxRolledFiles: 3, maxTotalBytes: 640 }
+    // 滚动预算正好等于 3 个满文件：活动文件不该被算进这笔预算。
+    const limits = { maxFileBytes: 320, maxRolledFiles: 3, maxRotatedBytes: 960 }
     const log = createAppLog({ directory, redact: (text) => text, limits })
 
     for (let index = 0; index < 80; index++) log.log('info', 'tick', { index })
 
     const names = (await readdir(directory)).sort()
     const sizes = await Promise.all(names.map(async (name) => (await stat(join(directory, name))).size))
-    expect(names.length).toBeLessThanOrEqual(limits.maxRolledFiles + 1)
+    // 活动文件 + 3 个滚动文件都在：把活动文件算进总量会提前删掉一个滚轮。
+    expect(names).toHaveLength(limits.maxRolledFiles + 1)
     expect(Math.max(...sizes)).toBeLessThanOrEqual(limits.maxFileBytes)
-    expect(sizes.reduce((total, size) => total + size, 0)).toBeLessThanOrEqual(limits.maxTotalBytes)
+    const totalBytes = sizes.reduce((total, size) => total + size, 0)
+    const rolledBytes = totalBytes - (await stat(log.path)).size
+    expect(rolledBytes).toBeLessThanOrEqual(limits.maxRotatedBytes)
+    expect(totalBytes).toBeLessThanOrEqual(limits.maxFileBytes + limits.maxRotatedBytes)
 
     // 最旧的内容被丢掉了，不是被覆盖成空文件。
     const everything = (await Promise.all(names.map((name) => readFile(join(directory, name), 'utf8')))).join('')
     expect(everything).not.toMatch(/"index":0,/)
     expect(everything).toMatch(/"index":79,/)
+  })
+
+  it('keeps a steady-state directory under 20 MiB with the shipped limits', async () => {
+    const directory = join(root, 'steady-state')
+    const log = createAppLog({ directory, redact: (text) => text })
+    const lineBytes = 256 * 1024
+    const payload = 'x'.repeat(lineBytes)
+
+    // 25 MiB 的连续写入：足以滚过 5 MiB × 3 的预算好几轮。
+    for (let index = 0; index < 100; index++) log.log('info', 'payload', { index, payload })
+
+    const names = await readdir(directory)
+    const sizes = await Promise.all(names.map(async (name) => (await stat(join(directory, name))).size))
+    const totalBytes = sizes.reduce((total, size) => total + size, 0)
+    const rolledBytes = totalBytes - (await stat(log.path)).size
+
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(5 * 1024 * 1024)
+    expect(rolledBytes).toBeLessThanOrEqual(15 * 1024 * 1024)
+    // 真实峰值：滚动文件 ≤ 15 MiB + 活动文件 ≤ 5 MiB。
+    expect(totalBytes).toBeLessThanOrEqual(20 * 1024 * 1024)
   })
 
   it('refuses to write at all without a redactor', () => {
