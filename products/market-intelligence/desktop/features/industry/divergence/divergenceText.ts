@@ -11,6 +11,11 @@ export type DivergencePanelText = Readonly<{
   withheldGroup: string
   /** The manual trigger, offered only when the rules found nothing to explain. */
   judgeAgain: string
+  retry: string
+  /** Every pair withheld: nothing was compared, which is not the same as no divergence. */
+  nothingCompared: string
+  /** "Missing: {legs}" — the legs that made the whole card unavailable. */
+  missingLegs: string
   loading: string
   /** No pair diverged: a state, not a failure. */
   empty: string

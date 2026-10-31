@@ -1,5 +1,5 @@
 import { Tooltip } from 'antd'
-import { Info } from 'lucide-react'
+import { Info, RefreshCw } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -25,6 +25,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
   const formatTime = useShellTimeFormat()
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
   const judgedBy = state.state === 'available' && state.rows.every(row => row.judgedBy === 'ai') ? 'ai' : 'rules'
+  // Three pairs withheld is not "no divergence": nothing was compared. Saying so is the whole
+  // point of the withheld list, and it must not read as a quiet day.
+  const nothingCompared = state.state === 'empty' && withheld.length >= Object.keys(text.pairNames).length
   const when = (value: string) => formatTime(`${value.replace('T', ' ').slice(0, 19)}Z`)
 
   return (
@@ -37,15 +40,37 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           </button>
         </Tooltip>
         <h2 id="mi-divergence-heading">{text.title}</h2>
-        {state.state === 'available' ? <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span> : null}
-        {onRetry ? <button type="button" className="mi-divergence__retry" onClick={onRetry}>{text.judgeAgain}</button> : null}
+        {state.state === 'available' && onRetry ? (
+          // The badge is the trigger, not a label: pressing it asks the model again.
+          <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry}
+            title={text.judgeAgain}>
+            {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
+          </button>
+        ) : null}
+        {state.state === 'available' && !onRetry ? <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span> : null}
+        {state.state === 'empty' && onRetry ? (
+          <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.judgeAgain}</button>
+        ) : null}
       </header>
 
       {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}
-      {state.state === 'unavailable' ? <p className="mi-divergence__note">{text.unavailable}</p> : null}
-      {state.state === 'empty' ? <p className="mi-divergence__note">{text.empty}</p> : null}
+      {state.state === 'unavailable' ? (
+        <div className="mi-divergence__status" data-tone="error">
+          <b>{text.unavailable}</b>
+          {withheld.length > 0 ? <span className="mi-divergence__status-sub">{text.missingLegs.replace('{legs}', groupWithheld(withheld).map(group => text.legs[group.leg]).join('、'))}</span> : null}
+          {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
+        </div>
+      ) : null}
+      {state.state === 'empty' && !nothingCompared ? <p className="mi-divergence__note">{text.empty}</p> : null}
+      {nothingCompared ? (
+        <div className="mi-divergence__status" data-tone="error">
+          <b>{text.nothingCompared}</b>
+          <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')).join('、')}</span>
+        </div>
+      ) : null}
 
       {state.state === 'available' ? (
+        <div className="mi-divergence__conclusion" data-tone="conclusion">
         <ul className="mi-divergence__rows">
           {state.rows.map(row => (
             <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
@@ -58,9 +83,10 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             </li>
           ))}
         </ul>
+        </div>
       ) : null}
 
-      {withheld.length > 0 ? (
+      {state.state === 'available' && withheld.length > 0 ? (
         <p className="mi-divergence__withheld">
           <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
           {groupWithheld(withheld).map(group => (

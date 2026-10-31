@@ -52,7 +52,7 @@ describe('divergence panel', () => {
 
   it('names every pair it refused and why, so "no divergence" cannot be confused with "not compared"', () => {
     const markup = render({
-      state: 'empty',
+      state: 'available', rows: [row],
       withheld: [
         { pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf', observedAt: '2026-10-30T21:00:00.000Z' },
         { pairId: 'narrative-price', reason: 'leg-missing', leg: 'sentiment' }
@@ -62,5 +62,42 @@ describe('divergence panel', () => {
     expect(markup).toContain('ETF 3 日净流')
     expect(markup).toContain('窗口不重叠')
     expect(markup).toContain(text.legs.sentiment)
+  })
+})
+
+describe('withheld grouping', () => {
+  it('reports one missing leg once, however many pairs it held back', () => {
+    const markup = render({
+      state: 'available', rows: [row],
+      withheld: [
+        { pairId: 'flows-price', reason: 'leg-missing', leg: 'price' },
+        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' }
+      ]
+    })
+    const occurrences = markup.split('缺少 价格 24 小时').length - 1
+    expect(occurrences).toBe(1)
+    expect(markup).toContain('（2 对）')
+  })
+})
+
+describe('states that must not be confused', () => {
+  it('says nothing was compared, in the error tone, when every pair was withheld', () => {
+    const markup = render({
+      state: 'empty',
+      withheld: [
+        { pairId: 'flows-price', reason: 'leg-missing', leg: 'price' },
+        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' },
+        { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'stablecoin' }
+      ]
+    })
+    expect(markup).toContain(text.nothingCompared)
+    expect(markup).toContain('data-tone="error"')
+    expect(markup).not.toContain(text.empty)
+  })
+
+  it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
+    const markup = render({ state: 'empty', withheld: [] })
+    expect(markup).toContain(text.empty)
+    expect(markup).not.toContain('data-tone="error"')
   })
 })

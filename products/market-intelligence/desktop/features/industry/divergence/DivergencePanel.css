@@ -35,13 +35,52 @@
   cursor: pointer;
 }
 .mi-divergence__retry:hover { color: var(--mi-dashboard-text); }
+/* The conclusion block carries the weight: a reader scanning the dashboard should see that
+   something here needs attention, the same way an error does but in the caution tone. */
+.mi-divergence__conclusion {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-caution) 42%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--mi-dashboard-caution) 12%, var(--mi-dashboard-surface));
+}
+.mi-divergence__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 7px 10px;
+  border-radius: 5px;
+}
+.mi-divergence__status[data-tone='error'] {
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-negative) 50%, transparent);
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 14%, var(--mi-dashboard-surface));
+  color: var(--mi-dashboard-text);
+}
+.mi-divergence__status b { font-size: 11px; }
+.mi-divergence__status-sub { color: var(--mi-dashboard-muted); font-size: 10px; }
+.mi-divergence__act {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-text) 28%, transparent);
+  border-radius: 4px;
+  background: none;
+  color: var(--mi-dashboard-text);
+  font-size: 9px;
+  cursor: pointer;
+}
+.mi-divergence__act:hover { background: color-mix(in srgb, var(--mi-dashboard-text) 8%, transparent); }
 .mi-divergence__judge {
-  padding: 1px 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
   border: 1px solid var(--mi-dashboard-line);
   border-radius: 3px;
   color: var(--mi-dashboard-muted);
   font-size: 9px;
   line-height: 1.4;
+  background: none;
+  cursor: pointer;
 }
 .mi-divergence__judge[data-judged-by='ai'] { color: var(--mi-dashboard-text); border-color: color-mix(in srgb, var(--mi-dashboard-text) 30%, transparent); }
 /* The word "结论" as a bordered label: a reader has to see at a glance that this block is a
