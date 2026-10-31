@@ -20,6 +20,10 @@ export type PolicyPathDrawerText = Readonly<{
   odds: string; change24h: string; range30d: string; quote: string
   sepMissing: string; decisionMissing: string
   meeting: string; daysAway: string; projection: string; unchanged: string; range: string
+  /** Same split as the card: the month and the bucket stay separate so English can order them. */
+  outcomeLead: string
+  /** The SEP table's open-ended column, which is a phrase rather than a year. */
+  longerRun: string
   /** The two FRED series behind the range, labelled so the series ids do not have to be memorised. */
   rangeLower: string; rangeUpper: string
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
@@ -54,10 +58,10 @@ export type PolicyPathDrawerText = Readonly<{
  * The projection columns come from the stored table, not from a fixed list: next year's SEP covers a
  * different four-year window, and a hardcoded 2026–2029 would print four dashes for it.
  */
-function projectionColumns(medianPath: Readonly<Record<string, number>> | undefined) {
+function projectionColumns(medianPath: Readonly<Record<string, number>> | undefined, text: PolicyPathDrawerText) {
   const keys = Object.keys(medianPath ?? {}).filter((key) => key === 'longerRun' || /^y\d{4}$/.test(key))
   return keys.sort((left, right) => (left === 'longerRun' ? 1 : right === 'longerRun' ? -1 : left.localeCompare(right)))
-    .map((key) => ({ key, label: key === 'longerRun' ? '长期' : key.slice(1) }))
+    .map((key) => ({ key, label: key === 'longerRun' ? text.longerRun : key.slice(1) }))
 }
 
 export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
@@ -83,7 +87,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
     {reading.phase.kind === 'settlement' ? null : <div className="mi-policy-drawer__hero">
       <span className="mi-policy-drawer__value">{probability ? percentOf(probability.value) : '—'}</span>
       <span className="mi-policy-drawer__hero-label">{probability
-        ? `${Number(reading.meetingDate.slice(5, 7))} 月${text.outcomes[probability.outcome]}`
+        ? text.outcomeLead
+          .replace('{month}', String(Number(reading.meetingDate.slice(5, 7))))
+          .replace('{outcome}', text.outcomes[probability.outcome])
         : ''}</span>
       {probability?.changeInPp24h === undefined ? null : <span className="mi-policy-drawer__delta" data-direction={probability.changeInPp24h > 0 ? 'up' : probability.changeInPp24h < 0 ? 'down' : 'flat'}>
         {probability.changeInPp24h > 0 ? '+' : ''}{probability.changeInPp24h.toFixed(1)}pp · {text.change24h}
@@ -129,7 +135,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
       </h3>
       {reading.sep ? <>
         <div className="mi-policy-drawer__path">
-          {projectionColumns(reading.sep.medianPath).map(({ key, label }) => <div key={key} data-empty={reading.sep?.medianPath?.[key] === undefined ? 'true' : undefined}>
+          {projectionColumns(reading.sep.medianPath, text).map(({ key, label }) => <div key={key} data-empty={reading.sep?.medianPath?.[key] === undefined ? 'true' : undefined}>
             <b>{reading.sep?.medianPath?.[key]?.toFixed(1) ?? '—'}</b><span>{label}</span>
           </div>)}
         </div>

@@ -523,6 +523,8 @@ export const productText = {
               daysAway: '{days} 天',
               projection: 'SEP',
               probability: '{month} 月加息概率',
+              outcomeLead: '{month} 月{outcome}',
+              longerRun: '长期',
               outcomes: { 'no-change': '维持利率', 'hike-25': '加息 25bp', 'hike-50-plus': '加息 50bp 以上', 'cut-25': '降息 25bp', 'cut-50-plus': '降息 50bp 以上' },
               helpLabel: '这个概率怎么来的',
               helpLines: [
@@ -2266,6 +2268,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               daysAway: '{days} days',
               projection: 'SEP',
               probability: '{month} hike odds',
+              outcomeLead: '{month} · {outcome}',
+              longerRun: 'longer run',
               outcomes: { 'no-change': 'Hold', 'hike-25': 'hike 25bp', 'hike-50-plus': 'hike 50bp+', 'cut-25': 'cut 25bp', 'cut-50-plus': 'cut 50bp+' },
               helpLabel: 'Where this odds comes from',
               helpLines: [

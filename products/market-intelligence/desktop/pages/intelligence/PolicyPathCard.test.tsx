@@ -29,15 +29,20 @@ afterEach(async () => {
   host = undefined
 })
 
-const render = async (candidate: PolicyPathReading) => {
+const render = async (candidate: PolicyPathReading, cardText: typeof text = text) => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(PolicyPathCard, { reading: candidate, text, month: '12' })))
+  await act(async () => root!.render(createElement(PolicyPathCard, { reading: candidate, text: cardText, month: '12' })))
   return host
 }
 
 describe('policy path card', () => {
+  it('names the month and the bucket through one localized template, with no Chinese left in English', async () => {
+    const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath)
+    expect(rendered.textContent).not.toMatch(/[\u4e00-\u9fa5]/)
+    expect(rendered.textContent).toContain(reading.probability!.outcome === 'hike-25' ? 'hike 25bp' : '')
+  })
   it('leads with the odds and names the month', async () => {
     const rendered = await render(reading)
     expect(rendered.textContent).toContain(text.title)
