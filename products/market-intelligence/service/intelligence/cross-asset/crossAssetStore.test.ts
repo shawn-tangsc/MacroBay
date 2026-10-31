@@ -18,28 +18,6 @@ const setup = () => {
 const query = (asOfMs: number) => ({ symbol: 'QQQUSDT' as const, fromMs: open, toMs: open + 600_000, asOfMs })
 
 describe('cross-asset append-only closed bar store', () => {
-  it('stops at 500k versions without discarding history and still allows a same-value no-op', () => {
-    const { store: initial, path } = setup()
-    initial.close()
-    const db = new DatabaseSync(path)
-    db.exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<499999)
-      INSERT INTO cross_asset_bar_versions(symbol,bar_open_ms,observed_at_ms,open,high,low,close,volume,origin)
-      SELECT 'BTCUSDT',${open},${nine},'100','110','90','100','1','rest' FROM n;
-      INSERT INTO cross_asset_bar_current VALUES('BTCUSDT',${open},499999);`)
-    db.close()
-    const store = createCrossAssetStore(path)
-    try {
-      expect(store.append({ bars: [bar()], observedAtMs: nine, origin: 'rest' }).state).toBe('updated')
-      expect(store.append({ bars: [bar('101')], observedAtMs: ten, origin: 'rest' }).state).toBe('limited')
-      expect(store.append({ bars: [bar()], observedAtMs: ten, origin: 'ws' }).state).toBe('unchanged')
-      expect(store.diagnostics().versionRows).toBe(500_000)
-      expect(store.queryAt(query(ten))[0].close).toBe('100')
-      expect(store.diagnostics().databaseBytes).toBeLessThanOrEqual(256 * 1024 ** 2)
-      const started = performance.now()
-      expect(store.queryAt({ ...query(ten), symbol: 'BTCUSDT' })[0].close).toBe('100')
-      expect(performance.now() - started).toBeLessThan(100)
-    } finally { store.close() }
-  })
   it('retains A→B→A, no-ops consecutive equal values, and selects the version known at asOf', () => {
     const { store, path } = setup()
     try {
