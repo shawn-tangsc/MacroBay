@@ -10,6 +10,7 @@ import {
 } from './dailyBriefBackfill'
 import type { EtfHistoryAsOfReading } from './etfHistoryAsOf'
 import type { MacroHistoryAsOfReading, MacroHistoryAsOfSeries } from './macroHistoryAsOf'
+import type { StablecoinHistoryAsOfResult, StablecoinHistoryAssetPoint } from './stablecoinHistoryAsOf'
 
 const cutoff = '2026-10-30T00:00:00.000Z'
 
@@ -305,6 +306,113 @@ function etfHistoryReading(asset: 'btc' | 'eth'): EtfHistoryAsOfReading {
   })
 }
 
+/** A per-asset core-supply answer as the standalone reader returns it. */
+function stablecoinHistoryReading(): Extract<StablecoinHistoryAsOfResult, { state: 'available' }> {
+  return Object.freeze({
+    state: 'available' as const,
+    asOf: cutoff,
+    value: 251_995_000_000,
+    observedAt: '2026-10-30T00:00:00.000Z',
+    components: Object.freeze([
+      Object.freeze({
+        assetId: '1' as const, symbol: 'USDT' as const, value: 180_000_000_000,
+        tradingDate: '2026-10-29', observedAt: '2026-10-30T00:00:00.000Z',
+        sourceUrl: 'https://stablecoins.llama.fi/stablecoin/1'
+      }),
+      Object.freeze({
+        assetId: '2' as const, symbol: 'USDC' as const, value: 71_995_000_000,
+        tradingDate: '2026-10-29', observedAt: '2026-10-30T00:00:00.000Z',
+        sourceUrl: 'https://stablecoins.llama.fi/stablecoin/2'
+      })
+    ]) as readonly [StablecoinHistoryAssetPoint, StablecoinHistoryAssetPoint],
+    sourceUrl: 'https://stablecoins.llama.fi/stablecoin/1',
+    method: 'historical-api' as const
+  })
+}
+
+describe('daily brief backfill: core stablecoin from the per-asset series', () => {
+  const emptyCapital = async (): Promise<CapitalConditionsSnapshotResult> => Object.freeze({ state: 'empty' as const, asOf: cutoff })
+
+  it('fills the core level only when both per-asset histories answer', async () => {
+    const stablecoinHistory = vi.fn(async () => stablecoinHistoryReading())
+    const result = await backfillDailyBriefFact(
+      { source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: cutoff },
+      deps({ capital: emptyCapital, stablecoinHistory })
+    )
+
+    expect(result).toEqual({
+      state: 'available',
+      source: 'stablecoin',
+      metric: 'core-stablecoin-supply-usd',
+      asOf: cutoff,
+      value: 251_995_000_000,
+      unit: 'usd',
+      observedAt: '2026-10-30T00:00:00.000Z',
+      sourceUrl: 'https://stablecoins.llama.fi/stablecoin/1',
+      method: 'historical-api'
+    })
+    expect(isDailyBriefBackfillResult(result)).toBe(true)
+    expect(stablecoinHistory).toHaveBeenCalledWith({ asOf: cutoff })
+  })
+
+  it('keeps a stored official point ahead of the public series', async () => {
+    const stablecoinHistory = vi.fn(async () => stablecoinHistoryReading())
+    const result = await backfillDailyBriefFact(
+      { source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: cutoff },
+      deps({ stablecoinHistory })
+    )
+    expect(result).toMatchObject({
+      state: 'available', value: 253_033_903_673.4, method: 'capital-conditions-as-of-snapshot'
+    })
+    expect(stablecoinHistory).not.toHaveBeenCalled()
+  })
+
+  it('keeps the gap when one asset is missing, without a half-core value', async () => {
+    const missingUsdc: StablecoinHistoryAsOfResult = Object.freeze({
+      state: 'unavailable' as const, asOf: cutoff, gapCode: 'historical-api-unavailable' as const,
+      detail: 'the DefiLlama USDC per-asset history request was refused (response-unavailable).'
+    })
+    const result = await backfillDailyBriefFact(
+      { source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: cutoff },
+      deps({ capital: emptyCapital, stablecoinHistory: async () => missingUsdc })
+    )
+    expect(result).toMatchObject({ state: 'unavailable', gapCode: 'historical-api-unavailable' })
+    expect('value' in result).toBe(false)
+    expect(result.state === 'unavailable' ? result.detail : '').toMatch(/USDC/)
+  })
+
+  it('does not read around a capital query that answered unavailable', async () => {
+    const stablecoinHistory = vi.fn(async () => stablecoinHistoryReading())
+    const unavailableQuery = async (): Promise<CapitalConditionsSnapshotResult> =>
+      Object.freeze({ state: 'unavailable' as const, failureCode: 'capital-conditions-query-unavailable' as const })
+    await expect(backfillDailyBriefFact(
+      { source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: cutoff },
+      deps({ capital: unavailableQuery, stablecoinHistory })
+    )).resolves.toMatchObject({ state: 'unavailable', gapCode: 'query-unavailable' })
+    expect(stablecoinHistory).not.toHaveBeenCalled()
+  })
+
+  it('validates asOf against the cutoff before asking for either asset', async () => {
+    const stablecoinHistory = vi.fn(async () => stablecoinHistoryReading())
+    const capitalQuery = vi.fn(emptyCapital)
+    const result = await backfillDailyBriefFact(
+      { source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: '2026-10-30T00:00:00.001Z' },
+      deps({ capital: capitalQuery, stablecoinHistory })
+    )
+    expect(result).toMatchObject({ state: 'unavailable', gapCode: 'future-as-of' })
+    expect(stablecoinHistory).not.toHaveBeenCalled()
+    expect(capitalQuery).not.toHaveBeenCalled()
+  })
+
+  it('turns a throwing history read into a query gap instead of a failed turn', async () => {
+    const result = await backfillDailyBriefFact(
+      { source: 'stablecoin', metric: 'core-stablecoin-supply-usd', asOf: cutoff },
+      deps({ capital: emptyCapital, stablecoinHistory: async () => { throw new Error('socket closed') } })
+    )
+    expect(result).toMatchObject({ state: 'unavailable', gapCode: 'query-unavailable' })
+  })
+})
+
 describe('daily brief backfill: public history when the store holds nothing', () => {
   const emptyCapital = async (): Promise<CapitalConditionsSnapshotResult> => Object.freeze({ state: 'empty' as const, asOf: cutoff })
 
@@ -321,8 +429,9 @@ describe('daily brief backfill: public history when the store holds nothing', ()
       gapCode: 'historical-api-unavailable'
     })
     expect('value' in result).toBe(false)
-    // The gap names the reason: the public series is aggregate supply, not the USDT+USDC core level.
-    expect(result.state === 'unavailable' ? result.detail : '').toMatch(/core|aggregate/i)
+    // The gap names the reason: no same-metric per-asset history is wired, and the core level is
+    // never rebuilt from a wider series.
+    expect(result.state === 'unavailable' ? result.detail : '').toMatch(/per-asset|core/i)
   })
 
   it('asks the public history for exactly the requested ETF asset', async () => {

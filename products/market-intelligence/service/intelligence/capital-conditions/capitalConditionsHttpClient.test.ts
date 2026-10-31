@@ -118,4 +118,41 @@ describe('capital conditions HTTP client', () => {
     expect(Buffer.byteLength(payload, 'utf8')).toBeLessThanOrEqual(capitalConditionsTransportPolicy.maximumResponseBytes)
     expect(result).toMatchObject({ state: 'available', acceptedBytes: Buffer.byteLength(payload, 'utf8') })
   })
+
+  it('requests one asset history from its own endpoint through the bounded asset budget', async () => {
+    const platformFetch = vi.fn(async () => new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = createCapitalConditionsHttpClient({ platformFetch })
+
+    await expect(client.requestStablecoinAssetHistoryPayload('1')).resolves.toMatchObject({ state: 'available', payload: [] })
+    await expect(client.requestStablecoinAssetHistoryPayload('2')).resolves.toMatchObject({ state: 'available', payload: [] })
+    expect(platformFetch).toHaveBeenNthCalledWith(
+      1,
+      'https://stablecoins.llama.fi/stablecoin/1',
+      capitalConditionsTransportPolicy.requestInit
+    )
+    expect(platformFetch).toHaveBeenNthCalledWith(
+      2,
+      'https://stablecoins.llama.fi/stablecoin/2',
+      capitalConditionsTransportPolicy.requestInit
+    )
+    // The per-asset payloads are ~22-24 MB today; the cap must admit them and still be finite.
+    expect(capitalConditionsTransportPolicy.stablecoinAssetHistoryMaximumResponseBytes).toBeGreaterThan(23_468_256)
+    expect(capitalConditionsTransportPolicy.stablecoinAssetHistoryMaximumResponseBytes).toBeLessThan(64 * 1024 * 1024)
+  })
+
+  it('rejects an asset history above its own named budget instead of loading it without a limit', async () => {
+    const cancel = vi.fn()
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(capitalConditionsTransportPolicy.stablecoinAssetHistoryMaximumResponseBytes + 1))
+      },
+      cancel
+    })
+    const platformFetch = vi.fn(async () => new Response(stream, { status: 200, headers: { 'content-type': 'application/json' } }))
+    const client = createCapitalConditionsHttpClient({ platformFetch })
+
+    await expect(client.requestStablecoinAssetHistoryPayload('1'))
+      .resolves.toEqual({ state: 'unavailable', reason: 'response-body-too-large' })
+    expect(cancel).toHaveBeenCalled()
+  })
 })

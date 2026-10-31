@@ -69,6 +69,7 @@ import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRun
 import { resolveDailyBriefAgentAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
 import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
 import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
+import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
 import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
 import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
 import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
@@ -465,6 +466,12 @@ export function getIntelligenceModule(
       store: capitalConditionsStore,
       now: () => new Date().toISOString()
     })
+    // The historical reader shares the platform fetch and the source switch with the live refresh,
+    // but reads each core asset's own endpoint; the aggregate `stablecoincharts/all` series is never
+    // used to answer the core metric. The client streams and caps each per-asset response (~22-24 MB).
+    const capitalConditionsAssetHistoryHttp = createCapitalConditionsHttpClient({
+      platformFetch: hooks?.platformFetch ?? getPlatformFetch()
+    })
     const capitalConditions = createCapitalConditionsSourceIntegration({
       refreshService: capitalConditionsRefresh,
       readHealth: async () => {
@@ -768,11 +775,11 @@ export function getIntelligenceModule(
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       generationSettings: () => dailyBriefingGenerationSettings.getView(),
-      // The ETF rows may be answered by the provider's own history when the machine was not awake
-      // at the cutoff. The reader is built per edition: it shares one request window inside the
-      // edition and never outlives it, so a later edition cannot inherit yesterday's answer. The
-      // stablecoin level deliberately has no such reader: its metric is the USDT+USDC core supply
-      // the card shows, and the provider's bounded history is a different (aggregate) series.
+      // The ETF and core-stablecoin rows may be answered by the providers' own history when the
+      // machine was not awake at the cutoff. Each reader is built per edition so a later edition
+      // cannot inherit yesterday's cached series. The stablecoin reader asks DefiLlama for USDT and
+      // USDC separately and returns nothing unless both answered; it never reads the wider
+      // aggregate series, which measures every USD-pegged asset rather than the card's core level.
       backfillFactory: (cutoff) => {
         const etfHistory = createEtfHistoryAsOf({
           requestWindow: async () => {
@@ -785,10 +792,19 @@ export function getIntelligenceModule(
             return etfFlowHistoryClient.requestWindow(credential.apiKey)
           }
         })
+        const stablecoinHistory = createStablecoinHistoryAsOf({
+          requestAssetHistory: async (assetId) => {
+            // A switched-off stablecoin source is a missing interface, not a reason to bypass it.
+            const profile = await profileStore.resolveProfile('defillama-stablecoins')
+            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
+            return capitalConditionsAssetHistoryHttp.requestStablecoinAssetHistoryPayload(assetId)
+          }
+        })
         return createDailyBriefBackfillExecutor({
           cutoff,
           publicQuery: publicQueryService,
-          etfHistory: (request) => etfHistory.read(request)
+          etfHistory: (request) => etfHistory.read(request),
+          stablecoinHistory: (request) => stablecoinHistory.read(request)
         })
       },
       agentAllowedTools: async () => {

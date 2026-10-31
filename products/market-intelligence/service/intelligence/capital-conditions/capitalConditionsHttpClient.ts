@@ -1,8 +1,14 @@
 export const capitalConditionsTransportPolicy = Object.freeze({
   stablecoinEndpoint: 'https://stablecoins.llama.fi/stablecoins',
   stablecoinHistoryEndpoint: 'https://stablecoins.llama.fi/stablecoincharts/all',
+  /**
+   * One asset's endpoint returns its whole per-chain history (~22-24 MB), so it is read through the
+   * same bounded, streaming client with its own cap rather than buffered without a limit.
+   */
+  stablecoinAssetHistoryEndpointBase: 'https://stablecoins.llama.fi/stablecoin/',
   maximumResponseBytes: 1_024 * 1_024,
   stablecoinHistoryMaximumResponseBytes: 2 * 1024 * 1024,
+  stablecoinAssetHistoryMaximumResponseBytes: 48 * 1024 * 1024,
   requestInit: Object.freeze({
     method: 'GET',
     redirect: 'manual' as const,
@@ -24,6 +30,17 @@ export function createCapitalConditionsHttpClient(deps: { platformFetch?: Capita
     },
     async requestStablecoinHistoryPayload(): Promise<CapitalConditionsHttpResult> {
       return request(deps.platformFetch, capitalConditionsTransportPolicy.stablecoinHistoryEndpoint, capitalConditionsTransportPolicy.stablecoinHistoryMaximumResponseBytes)
+    },
+    /**
+     * One asset's own daily history. The id is restricted to the two core assets this client is
+     * allowed to ask about, so a caller cannot turn the base URL into an arbitrary request.
+     */
+    async requestStablecoinAssetHistoryPayload(assetId: '1' | '2'): Promise<CapitalConditionsHttpResult> {
+      return request(
+        deps.platformFetch,
+        `${capitalConditionsTransportPolicy.stablecoinAssetHistoryEndpointBase}${assetId}`,
+        capitalConditionsTransportPolicy.stablecoinAssetHistoryMaximumResponseBytes
+      )
     }
   }
 }

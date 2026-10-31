@@ -10,6 +10,7 @@ import type {
   MacroHistoryAsOfSeries
 } from './macroHistoryAsOf'
 import type { MarketIntelligencePublicQueryService } from './publicQueryService'
+import type { StablecoinHistoryAsOfResult } from './stablecoinHistoryAsOf'
 
 /**
  * The daily brief's historical backfill tool.
@@ -40,11 +41,11 @@ import type { MarketIntelligencePublicQueryService } from './publicQueryService'
  * named gap — never a number. A stored row always wins, and a disabled or broken store is not read
  * around.
  *
- * The stablecoin level has no second read path, deliberately. Its metric is the USDT+USDC *core*
- * supply the funds card shows; DefiLlama's bounded public history is aggregate USD-pegged supply, a
- * different (wider) series, and substituting it would silently change what the fact measures. So a
- * missing core point stays a named `historical-api-unavailable` gap. An aggregate series belongs to
- * a separate `stablecoin-aggregate` metric and label, never to this one.
+ * The stablecoin level has a second read path too, but only for its own metric: the USDT+USDC
+ * *core* supply the funds card shows is read from DefiLlama's per-asset histories
+ * (`/stablecoin/1`, `/stablecoin/2`) and summed. It is never answered from `stablecoincharts/all`,
+ * which is every USD-pegged asset and therefore a wider, different metric. Both assets must answer;
+ * one missing asset stays a named `historical-api-unavailable` gap rather than half a number.
  */
 
 export const dailyBriefBackfillPolicy = Object.freeze({
@@ -134,6 +135,13 @@ export type DailyBriefBackfillDeps = Readonly<{
    * `historical-api-unavailable`, not a fallback to any current snapshot.
    */
   etfHistory?: (input: Readonly<{ asset: EtfHistoryAsset; asOf: string }>) => Promise<EtfHistoryAsOfResult>
+  /**
+   * DefiLlama's two per-asset daily histories (USDT and USDC), asked only after the capital store
+   * answered `empty`. The reader itself refuses to answer unless both assets produced a completed
+   * point, so this tool never sees a half-core value. `undefined` means no interface is wired,
+   * which is `historical-api-unavailable`.
+   */
+  stablecoinHistory?: (input: Readonly<{ asOf: string }>) => Promise<StablecoinHistoryAsOfResult>
   now?: () => string
 }>
 
@@ -265,6 +273,8 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
     'queryCapitalConditionsSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryMacroHistoryAsOf'>
   /** The ETF provider's public daily flow history, asked only when the store holds nothing. */
   etfHistory?: (request: Readonly<{ asset: EtfHistoryAsset; asOf: string }>) => Promise<EtfHistoryAsOfResult>
+  /** DefiLlama's per-asset USDT+USDC histories, asked only when the store holds nothing. */
+  stablecoinHistory?: (request: Readonly<{ asOf: string }>) => Promise<StablecoinHistoryAsOfResult>
   now?: () => string
 }>): (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult> {
   const deps: DailyBriefBackfillDeps = {
@@ -274,6 +284,7 @@ export function createDailyBriefBackfillExecutor(input: Readonly<{
     openInterest: (query) => input.publicQuery.queryOpenInterestHistory(query),
     macroHistory: async (query) => input.publicQuery.queryMacroHistoryAsOf(query),
     ...(input.etfHistory ? { etfHistory: input.etfHistory } : {}),
+    ...(input.stablecoinHistory ? { stablecoinHistory: input.stablecoinHistory } : {}),
     ...(input.now ? { now: input.now } : {})
   }
   return (request) => backfillDailyBriefFact(request, deps)
@@ -347,14 +358,10 @@ async function readMetric(reader: Reader, asOf: string, deps: DailyBriefBackfill
         }
       }
       if (result.state === 'unavailable') return unavailable('query-unavailable', 'the capital conditions query answered unavailable.')
-      // The store holds nothing at or before the instant. There is no same-metric public history to
-      // fall back to — DefiLlama's bounded series is aggregate supply, while this metric is the
-      // USDT+USDC core the funds card shows — so the gap is named rather than filled with a
-      // different, wider series.
-      return unavailable(
-        'historical-api-unavailable',
-        'the capital store holds no core stablecoin point at or before this instant, and no same-metric public history interface exists (DefiLlama publishes only aggregate supply, which is a different metric).'
-      )
+      // The store holds nothing at or before the instant; the two per-asset public series might.
+      // This reader returns a value only when USDT and USDC both answered, so the core metric is
+      // never rebuilt from one asset, from a zero, or from the wider aggregate series.
+      return readStablecoinHistory(asOf, deps)
     }
     case 'etf-btc':
     case 'etf-eth': {
@@ -428,6 +435,26 @@ async function readEtfHistory(asset: EtfHistoryAsset, asOf: string, deps: DailyB
     return unavailable('historical-api-unavailable', 'no public ETF flow history interface is wired in this build; the gap stays.')
   }
   const result = await read({ asset, asOf })
+  if (result.state === 'unavailable') return unavailable(HISTORICAL_API_GAP_CODES[result.gapCode] ?? 'query-unavailable', result.detail)
+  return { state: 'available', value: result.value, observedAt: result.observedAt, method: result.method, sourceUrl: result.sourceUrl }
+}
+
+/**
+ * The two DefiLlama per-asset histories, asked only when the store answered `empty`.
+ *
+ * The reader owns the both-assets rule and the instant validation; this function only turns its
+ * answer into this tool's vocabulary. An unavailable reader is the same named gap as a missing
+ * asset, so a half-core or aggregate substitute can never be assembled here.
+ */
+async function readStablecoinHistory(asOf: string, deps: DailyBriefBackfillDeps): Promise<ReadResult> {
+  const read = deps.stablecoinHistory
+  if (!read) {
+    return unavailable(
+      'historical-api-unavailable',
+      'no per-asset DefiLlama supply history interface is wired in this build; the core stablecoin gap stays.'
+    )
+  }
+  const result = await read({ asOf })
   if (result.state === 'unavailable') return unavailable(HISTORICAL_API_GAP_CODES[result.gapCode] ?? 'query-unavailable', result.detail)
   return { state: 'available', value: result.value, observedAt: result.observedAt, method: result.method, sourceUrl: result.sourceUrl }
 }
