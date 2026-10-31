@@ -25,6 +25,12 @@ export type SignificanceGateDependencies = Readonly<{
   countRuns: (now: string) => AnalysisRunCounts
   lastAutoRunAt: (eventGroupId: string, now: string) => string | null
   recordDecision: (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string }>) => void
+  /**
+   * Flips one attempt's own row to skipped. Required, not optional: a gate that refuses an attempt
+   * without being able to mark it is precisely the case where the counting formula keeps charging
+   * the day for a model call that never happened.
+   */
+  updateDecision: (rowId: string, decision: 'skipped', reasonCode: string) => void
 }>
 
 export type SignificanceGateInput = Readonly<{
@@ -32,6 +38,12 @@ export type SignificanceGateInput = Readonly<{
   triggerKey: string
   asOf: string
   previousSnapshot: Readonly<{ facts: readonly unknown[]; asOf: string }> | undefined | null
+  /**
+   * The ledger row the trigger line wrote for this attempt. Present only for attempts that were
+   * recorded as allowed before reaching the gate; keys the trigger line does not own (the calendar
+   * line) have no attempt row and the gate records its own decision as before.
+   */
+  attemptLedgerId?: string
 }>
 
 export type SignificanceGateOutcome = Readonly<{
@@ -63,10 +75,16 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
         ...dependencies.countRuns(now)
       })
       if (decision.reasonCode !== null) {
-        dependencies.recordDecision({
-          eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: decision.changeHash,
-          decision: decision.decision, reasonCode: decision.reasonCode
-        })
+        // A refused attempt that arrived with its own ledger row rewrites that row; anything else
+        // (the calendar line, the session slots) records a decision of its own as it always has.
+        if (input.attemptLedgerId !== undefined && decision.decision === 'skipped') {
+          dependencies.updateDecision(input.attemptLedgerId, 'skipped', decision.reasonCode)
+        } else {
+          dependencies.recordDecision({
+            eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: decision.changeHash,
+            decision: decision.decision, reasonCode: decision.reasonCode
+          })
+        }
       }
       return {
         decision: decision.decision, reasonCode: decision.reasonCode, signals: decision.signals,

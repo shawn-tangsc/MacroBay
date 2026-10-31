@@ -16,7 +16,7 @@ import { createAnalysisSignificanceGate } from '../analysis/analysisSignificance
 import { createAnalysisSlotTick, hasSlotAnchor } from '../analysis/analysisSlotTick'
 import { analysisSchedulePolicy, triggerKeyForSlot } from '../analysis/analysisSchedulePolicy'
 import type { SessionSlotInstant } from '../analysis/analysisSlotCoverage'
-import { isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
+import { analysisTriggerSourcePolicy, isGateEligible, phaseForNewTriggerKey, type AnalysisTriggerSource } from '../analysis/analysisTriggerSourcePolicy'
 import { queryMacroRoute } from '../public-query/macroRouteQuery'
 import type { SignificanceSignal } from '../analysis/significanceChangeMatcher'
 import { createAnalysisRunService } from '../analysis/analysisRunService'
@@ -233,7 +233,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     queryMacroRoute: ({ asOf, months }) => queryMacroRoute(input.publicQueryService, { asOf, months }),
     countRuns: (at) => countAnalysisRuns(repository, at),
     lastAutoRunAt: (eventGroupId, at) => lastAutoRunAt(repository, eventGroupId, at),
-    recordDecision: (decision) => runs.recordDecision(decision)
+    recordDecision: (decision) => { void runs.recordDecision(decision) },
+    updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode)
   })
   let crossAssetQuery = input.crossAssetQuery
   let disposed = false
@@ -468,17 +469,25 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       lastTriggeredAt: previousLedger.at(-1)?.createdAt ?? null,
       lastTriggeredPhase: previousLedger.at(-1) ? toTriggerHistory(previousLedger.at(-1)!).phase : undefined
     })
-    runs.recordDecision({ eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash, decision: decision.decision, reasonCode: decision.reasonCode })
+    const attemptLedgerId = runs.recordDecision({ eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash, decision: decision.decision, reasonCode: decision.reasonCode })
     if (decision.decision !== 'queued' || !decision.phase) return
-    return { eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now() }
+    // The row id rides the freeze payload so a later refusal can rewrite this very attempt instead
+    // of leaving it counted as a spent call.
+    return { eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now(), ...(attemptLedgerId ? { attemptLedgerId } : {}) }
   }
 
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
-    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string }
+    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string }
+    // The trigger line owns the attempt row; without its id a later refusal cannot be recorded
+    // against that attempt, so the work is refused rather than run and counted unmarked.
+    if ((analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(value.triggerKey) && !value.attemptLedgerId) {
+      throw new Error('analysis-missing-attempt-ledger-row')
+    }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
     // Decided before anything is built: a skipped evaluation must not leave a snapshot or a run.
     const gate = await significanceGate.evaluate({
-      eventGroupId: value.eventGroupId, triggerKey: value.triggerKey, asOf: value.asOf, previousSnapshot
+      eventGroupId: value.eventGroupId, triggerKey: value.triggerKey, asOf: value.asOf, previousSnapshot,
+      ...(value.attemptLedgerId ? { attemptLedgerId: value.attemptLedgerId } : {})
     })
     if (gate.decision === 'skipped') return { eventGroupId: value.eventGroupId }
     const context = await buildMarketAnalysisContext({ eventGroupId: value.eventGroupId, asOf: value.asOf }, input.publicQueryService,

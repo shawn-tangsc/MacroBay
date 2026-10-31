@@ -16,7 +16,7 @@ type Repository = {
   listRuns?: () => readonly AnalysisRun[]
   listEventGroups?: () => readonly EventGroup[]
   listSnapshots?: (eventGroupId: string) => readonly EvidenceSnapshot[]
-  appendTriggerLedger?: (value: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string }) => void
+  appendTriggerLedger?: (value: { id: string; eventGroupId: string; triggerKey: string; changeHash: string; decision: string; reasonCode: string; snapshotHash: string | null; analysisRunId: string | null; createdAt: string }) => string
 }
 /** A recovered run that still needs its `runMarketAnalysis` job before it can ever finish. */
 export type AnalysisRunDispatch = Readonly<{ analysisRunId: string; eventGroupId: string }>
@@ -54,7 +54,7 @@ export type AnalysisRunEnqueueInput = Readonly<{
 export type AnalysisRunService = Readonly<{
   enqueue: (input: AnalysisRunEnqueueInput) => { created: boolean; run: AnalysisRun }
   recover: () => AnalysisRunRecovery
-  recordDecision: (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string; snapshotHash?: string | null; analysisRunId?: string | null }>) => void
+  recordDecision: (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string; snapshotHash?: string | null; analysisRunId?: string | null }>) => string | undefined
 }>
 
 export function createAnalysisRunService(deps: Readonly<{ repository: Repository; now: () => string; idFactory: () => string }>): AnalysisRunService {
@@ -131,8 +131,13 @@ export function createAnalysisRunService(deps: Readonly<{ repository: Repository
     }
     return { failed, stale, dispatch }
   }
-  const recordDecision = (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string; snapshotHash?: string | null; analysisRunId?: string | null }>): void => {
-    deps.repository.appendTriggerLedger?.({ id: `${analysisRunPolicy.triggerLedgerIdPrefix}${deps.idFactory()}`, eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: input.changeHash, decision: input.decision, reasonCode: input.reasonCode, snapshotHash: input.snapshotHash ?? null, analysisRunId: input.analysisRunId ?? null, createdAt: deps.now() })
+  /**
+   * Writes one attempt to the ledger and answers with the row id. The id is what a later stage
+   * flips when it refuses the attempt: a refusal must rewrite *this* row, because the counting
+   * formula reads "decision = queued" and a second skipped row would leave the attempt counted.
+   */
+  const recordDecision = (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string; snapshotHash?: string | null; analysisRunId?: string | null }>): string | undefined => {
+    return deps.repository.appendTriggerLedger?.({ id: `${analysisRunPolicy.triggerLedgerIdPrefix}${deps.idFactory()}`, eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: input.changeHash, decision: input.decision, reasonCode: input.reasonCode, snapshotHash: input.snapshotHash ?? null, analysisRunId: input.analysisRunId ?? null, createdAt: deps.now() })
   }
   return { enqueue, recover, recordDecision }
 }

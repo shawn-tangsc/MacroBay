@@ -12,6 +12,11 @@ import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
  * The exclusion keys off the reason-code prefix, which survives the ledger's upsert because
  * every `recover()` decision is `restart-*`.
  *
+ * A row that says `queued` therefore means "this attempt was finally allowed": the trigger line
+ * writes its row before the significance gate sees it, and a refusal later flips that same row to
+ * `skipped` (by row id). A second skipped row would leave the attempt counted, which is how a day
+ * could be charged for calls that never happened.
+ *
  * The window is the UTC calendar day, matching the UTC instants stored everywhere else.
  */
 
@@ -25,7 +30,7 @@ export type RunCounterRepository = Readonly<{
 }>
 
 export const analysisRunCounterPolicy = Object.freeze({
-  version: 'marketAnalysisRunCounterPolicy.v1',
+  version: 'marketAnalysisRunCounterPolicy.v2',
   restartReasonPrefix: 'restart-'
 })
 
@@ -37,6 +42,11 @@ function isDelivered(row: RunCounterLedgerRow): boolean {
   return row.decision === 'queued' && !isCompensation(row)
 }
 
+/** The one place that decides whether a delivery belongs to the session-slot line. */
+function isScheduledRun(row: RunCounterLedgerRow): boolean {
+  return isScheduledSlotTriggerKey(row.triggerKey)
+}
+
 function ledgerOf(repository: RunCounterRepository): readonly RunCounterLedgerRow[] {
   const groups = repository.listEventGroups?.() ?? []
   return groups.flatMap(group => [...(repository.listTriggerLedger?.(group.id) ?? [])])
@@ -46,13 +56,11 @@ export function countAnalysisRuns(repository: RunCounterRepository, now: string)
   const nowMs = Date.parse(now)
   const day = now.slice(0, 10)
   const rows = ledgerOf(repository).filter(isDelivered).filter(row => row.createdAt.slice(0, 10) === day)
-  // The scheduled line is the session slots; every other automatic delivery is an event run.
-  const isScheduled = (row: RunCounterLedgerRow) => isScheduledSlotTriggerKey(row.triggerKey)
   return {
     hourRuns: rows.filter(row => nowMs - Date.parse(row.createdAt) < 60 * 60 * 1_000).length,
     dayRuns: rows.length,
-    eventRunsToday: rows.filter(row => !isScheduled(row)).length,
-    scheduledRunsToday: rows.filter(isScheduled).length
+    eventRunsToday: rows.filter(row => !isScheduledRun(row)).length,
+    scheduledRunsToday: rows.filter(isScheduledRun).length
   }
 }
 

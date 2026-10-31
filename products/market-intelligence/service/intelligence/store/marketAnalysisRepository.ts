@@ -238,6 +238,19 @@ function createRepository(sqlite: MarketAnalysisSqlite, owned: boolean) {
       if (value.analysisRunId && !exists(sqlite, 'mi_analysis_runs', value.analysisRunId)) throw new Error('analysis-run-not-found')
       sqlite.database.prepare(`insert into mi_analysis_trigger_ledger (id,schema_version,event_group_id,trigger_key,change_hash,decision,reason_code,snapshot_hash,analysis_run_id,created_at) values (?,?,?,?,?,?,?,?,?,?) on conflict(event_group_id,trigger_key,change_hash) do update set
         decision = excluded.decision, reason_code = excluded.reason_code, snapshot_hash = excluded.snapshot_hash, analysis_run_id = excluded.analysis_run_id`).run(value.id, 1, value.eventGroupId, value.triggerKey, value.changeHash, value.decision, value.reasonCode, value.snapshotHash, value.analysisRunId, value.createdAt)
+      // The conflict target keeps the first row's id, so a repeated (group, key, change) attempt
+      // must answer with the id that is actually stored — the caller flips that row later.
+      const stored = sqlite.database.prepare('select id from mi_analysis_trigger_ledger where event_group_id=? and trigger_key=? and change_hash=?').get(value.eventGroupId, value.triggerKey, value.changeHash) as Row | undefined
+      return String(stored?.id ?? value.id)
+    },
+    /**
+     * Rewrites one attempt's decision in place. A row the trigger line recorded as allowed can be
+     * refused later; that attempt never spent a model call, so its own row must stop saying it did.
+     * Deliberately by row id: a group and a trigger key repeat, so locating by that pair would
+     * rewrite an older attempt that really did run.
+     */
+    updateTriggerLedgerDecision(rowId: string, decision: string, reasonCode: string) {
+      sqlite.database.prepare('update mi_analysis_trigger_ledger set decision=?, reason_code=? where id=?').run(decision, reasonCode, rowId)
     },
     listTriggerLedger(eventGroupId: string) {
       return (sqlite.database.prepare('select id,event_group_id,trigger_key,change_hash,decision,reason_code,snapshot_hash,analysis_run_id,created_at from mi_analysis_trigger_ledger where event_group_id=? order by created_at asc,id asc').all(eventGroupId) as Row[]).map(row => ({ id: String(row.id), eventGroupId: String(row.event_group_id), triggerKey: String(row.trigger_key), changeHash: String(row.change_hash), decision: String(row.decision), reasonCode: String(row.reason_code), snapshotHash: row.snapshot_hash as string | null, analysisRunId: row.analysis_run_id as string | null, createdAt: String(row.created_at) }))

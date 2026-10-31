@@ -11,7 +11,7 @@ const repository = (groups: Record<string, readonly ReturnType<typeof row>[]>) =
 })
 
 it('states its version and how compensation is recognised', () => {
-  expect(analysisRunCounterPolicy.version).toBe('marketAnalysisRunCounterPolicy.v1')
+  expect(analysisRunCounterPolicy.version).toBe('marketAnalysisRunCounterPolicy.v2')
   expect(analysisRunCounterPolicy.restartReasonPrefix).toBe('restart-')
   expect(Object.isFrozen(analysisRunCounterPolicy)).toBe(true)
 })
