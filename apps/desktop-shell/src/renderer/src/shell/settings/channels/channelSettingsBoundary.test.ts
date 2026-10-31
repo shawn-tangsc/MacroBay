@@ -16,6 +16,12 @@ describe('channel settings boundary', () => {
     expect(page).toContain('window.platform.agents.listAgents')
     expect(page).toContain('window.platform.channels.update')
     expect(page).toContain('channelEnableBlocked')
+    // Every adapter states what it is missing; a blocked row is never just "blocked", and no
+    // adapter is hidden from the catalog list.
+    expect(page).toContain('catalogReason(')
+    expect(page).toContain('channelCatalogReason')
+    expect(page).toContain('{catalog.map((entry) => (')
+    expect(page).not.toContain("entry.type !== 'telegram'")
     expect(page).toContain("type: 'telegram' | 'slack' | 'feishu' | 'qq' | 'discord' | 'wechat'")
     expect(page).toContain('channelAppCredential')
     expect(page).toContain('channelLarkAppSecret')

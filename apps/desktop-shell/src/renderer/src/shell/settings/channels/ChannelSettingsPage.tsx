@@ -22,6 +22,18 @@ type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKi
 type Agent = { id: string; name: string }
 type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
 
+/** A blocked adapter must say what it is missing, not only that it is blocked. */
+function catalogReason(
+  entry: Catalog,
+  labels: { channelCatalogReason: Record<'supported' | 'planned' | 'blockedImplemented' | 'blockedUnimplemented', string> }
+): string {
+  if (entry.status === 'supported') return labels.channelCatalogReason.supported
+  if (entry.status === 'planned') return labels.channelCatalogReason.planned
+  return entry.implemented
+    ? labels.channelCatalogReason.blockedImplemented
+    : labels.channelCatalogReason.blockedUnimplemented
+}
+
 export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' }): React.ReactElement {
   const labels = platformText[language].settings
   const [catalog, setCatalog] = useState<Catalog[]>([])
@@ -209,10 +221,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             {labels.channelCreate}
           </Button>
         </section>
-        {catalog.filter((entry) => entry.type !== 'telegram').map((entry) => (
+        {catalog.map((entry) => (
           <p key={entry.type}>
             <Tag>{labels.channelCatalogStatus[entry.status]}</Tag>
             {entry.type}
+            <small>{catalogReason(entry, labels)}</small>
           </p>
         ))}
       </aside>
