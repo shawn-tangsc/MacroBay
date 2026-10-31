@@ -24,6 +24,12 @@ export type PositioningPanelText = Readonly<{
   stateWhy: string
   liquidationMore: string
   liquidationChip: string
+  /** The module rule's chip: what it says, and what its own hover line is made of. */
+  signalInsufficient: string
+  signalHover: string
+  signalKindInferred: string
+  /** The chip's hover line names the window it judges; the rule reads one closed 15-minute bucket. */
+  window15m: string
   helpLabel: string
   helpLines: readonly string[]
   liquidationUnavailable: string

@@ -9,6 +9,7 @@ import {
   type LiquidationHint,
   type PositioningState
 } from '../../../contracts/openInterestPositioning'
+import type { ModuleSignal, SignalSeverity } from '../../../contracts/moduleSignal'
 
 /**
  * The card's view of the positioning series.
@@ -34,6 +35,28 @@ export type DashboardPositioningViewState =
       hintsState: 'available' | 'unavailable'
       /** Set when the newest reading is older than the staleness bound. */
       staleSince?: string
+      /** What the module's rule says right now. Absent means "nothing to say" — no chip at all. */
+      signal?: DashboardSignalChip
+    }>
+
+/**
+ * The card's chip, as a state rather than a string.
+ *
+ * Three shapes and no fourth: a normal market draws nothing, a rule that fired draws its own words
+ * and numbers, and a rule that could not read its data says so without a single digit. Severity is
+ * deliberately absent — the panel may order two signals by it, the reader must not compare two
+ * modules by it.
+ */
+export type DashboardSignalChip =
+  | Readonly<{ state: 'hidden' }>
+  | Readonly<{ state: 'insufficient' }>
+  | Readonly<{
+      state: 'alert'
+      asset: 'btc' | 'eth'
+      dropPct: number
+      volumeMultiple: number
+      ruleId: string
+      observedAt: string
     }>
 
 /** Two polling ticks: one missed tick is noise, three is a故障. */
@@ -101,4 +124,34 @@ export function formatDashboardNotional(value: number): string {
 export function formatDashboardChange(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '—'
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+}
+
+const severityRank: Readonly<Record<SignalSeverity, number>> = Object.freeze({ high: 3, medium: 2, low: 1 })
+
+/**
+ * Picks the one signal this card may show.
+ *
+ * The rule is the product's: one chip per module, and when several speak at once the loudest one
+ * wins. A second chip beside the first would let a reader compare two readings the product says are
+ * not comparable, and three chips on one card is a wall, not a signal.
+ *
+ * The card reads its own module only. A signal from another module belongs to that module's card.
+ */
+export function projectModuleSignalChip(
+  signals: readonly ModuleSignal[] | undefined,
+  moduleId: ModuleSignal['moduleId'] = 'open-interest'
+): DashboardSignalChip {
+  const mine = (signals ?? []).filter(signal => signal.moduleId === moduleId)
+  if (mine.length === 0) return { state: 'hidden' }
+  const loudest = mine.reduce((best, signal) => severityRank[signal.severity] > severityRank[best.severity] ? signal : best)
+  // A rule that could not finish reading says only that. Printing its partial numbers would be a
+  // guess wearing the same clothes as a reading.
+  if (loudest.readiness !== 'available') return { state: 'insufficient' }
+  const { asset, observedAt } = loudest
+  const dropPct = loudest.values.dropPct
+  const volumeMultiple = loudest.values.volumeMultiple
+  if (asset === null || observedAt === undefined || dropPct === undefined || volumeMultiple === undefined) {
+    return { state: 'insufficient' }
+  }
+  return { state: 'alert', asset, dropPct, volumeMultiple, ruleId: loudest.ruleId, observedAt }
 }

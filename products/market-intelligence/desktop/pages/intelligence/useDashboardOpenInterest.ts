@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 
 import { isCanonicalOpenInterestTime, type OpenInterestHistoryResult, type OpenInterestWindow } from '../../../contracts/openInterestHistory'
-import { projectDashboardPositioning, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
+import type { ModuleSignal } from '../../../contracts/moduleSignal'
+import { projectDashboardPositioning, projectModuleSignalChip, type DashboardPositioningViewState } from './dashboardOpenInterestModel'
+import { moduleSignalClient } from '../../shared/ipc/moduleSignalClient'
 
 /**
  * One read per window. Switching 7d/24h is a new query rather than a client-side reshape: the
@@ -12,6 +14,8 @@ export function useDashboardOpenInterest(input: Readonly<{
   client: { query: (input: { asOf: string; window: OpenInterestWindow }) => Promise<OpenInterestHistoryResult> }
   now: () => Date
   window: OpenInterestWindow
+  /** Defaults to the real bridge; a test hands in its own reader. */
+  signalClient?: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> }
 }>): DashboardPositioningViewState {
   const [state, setState] = useState<DashboardPositioningViewState>({ state: 'loading' })
   const [mountInput] = useState(() => input)
@@ -25,14 +29,35 @@ export function useDashboardOpenInterest(input: Readonly<{
       return () => { active = false }
     }
     setState({ state: 'loading' })
+    // The chip comes from the module's rule, not from the series: the two reads answer different
+    // questions and either may fail alone. A missing signal is no chip, never a made-up one.
+    const signals = readSignals(mountInput.signalClient ?? moduleSignalClient, asOf)
     void mountInput.client.query({ asOf, window })
-      .then((result) => { if (active) setState(projectDashboardPositioning(result, asOf, window)) })
+      .then(async (result) => {
+        if (!active) return
+        const projected = projectDashboardPositioning(result, asOf, window)
+        const chip = projectModuleSignalChip(await signals)
+        if (!active) return
+        setState(projected.state === 'available' ? { ...projected, signal: chip } : projected)
+      })
       .catch(() => { if (active) setState({ state: 'unavailable' }) })
     return () => { active = false }
     // `mountInput` is captured once on purpose: the clock must not re-read on every render.
   }, [mountInput, window])
 
   return state
+}
+
+/** A signal read that failed is no chip, not a fabricated one. */
+async function readSignals(
+  client: { query: (input: { asOf: string }) => Promise<readonly ModuleSignal[]> },
+  asOf: string
+): Promise<readonly ModuleSignal[]> {
+  try {
+    return await client.query({ asOf })
+  } catch {
+    return []
+  }
 }
 
 function readClock(now: () => Date): string | undefined {

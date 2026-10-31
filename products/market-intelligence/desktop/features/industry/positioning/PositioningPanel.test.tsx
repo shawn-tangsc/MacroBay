@@ -256,3 +256,46 @@ describe('the liquidation multiple', () => {
     expect(text.helpLines.some(line => line.includes('相对过去 24 小时同长度桶均量的倍数'))).toBe(true)
   })
 })
+
+describe('the module rule chip', () => {
+  const alert = (overrides: Record<string, unknown> = {}) => ({
+    state: 'available' as const,
+    window: '7d' as const,
+    btc: positioning.state === 'available' ? positioning.btc : [],
+    eth: positioning.state === 'available' ? positioning.eth : [],
+    hints: [], hintsTruncated: false, hintsState: 'available' as const,
+    signal: { state: 'alert' as const, asset: 'btc' as const, dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(15) },
+    ...overrides
+  })
+
+  it('draws the rule\'s own words and numbers when it fires', () => {
+    const markup = render({ positioning: alert() })
+    expect(markup).toContain('疑似强平')
+    expect(markup).toContain('-1.9%')
+    expect(markup).toContain('3.4×')
+    // Severity never reaches the reader.
+    expect(markup).not.toContain('严重')
+    expect(markup).not.toContain('high')
+  })
+
+  it('renders nothing at all on a normal market, not an empty container', () => {
+    const markup = render({ positioning: alert({ signal: { state: 'hidden' } }) })
+    expect(markup).not.toContain('mi-positioning-panel__signal')
+  })
+
+  it('says data is insufficient without a digit or a direction', () => {
+    const markup = render({ positioning: alert({ signal: { state: 'insufficient' } }) })
+    expect(markup).toContain('数据不齐')
+    const chip = markup.slice(markup.indexOf('mi-positioning-panel__signal'))
+    const chipText = chip.slice(0, chip.indexOf('</span>'))
+    expect(chipText).not.toMatch(/\d/)
+    expect(chipText).not.toContain('强平')
+  })
+
+  it('names the rule, the window and that the reading is inferred, on hover', () => {
+    const markup = render({ positioning: alert() })
+    expect(markup).toContain('oi-liquidation-proxy')
+    expect(markup).toContain('15 分钟')
+    expect(markup).toContain('推断值')
+  })
+})

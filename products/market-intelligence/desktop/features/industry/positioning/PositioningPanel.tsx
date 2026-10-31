@@ -38,9 +38,29 @@ export type PositioningPanelProps = Readonly<{
 // nominal size and the drawing is 186 units tall instead of being blown up with the container.
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
+  // container, no grey "normal": an always-present badge becomes background noise within a fortnight.
+  const signal = positioning.state === 'available' ? positioning.signal : undefined
+  const chip = signal && signal.state !== 'hidden' ? signal : undefined
   const header = (extra?: React.ReactNode) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
+      {chip ? (
+        <span className="mi-positioning-panel__signal" data-state={chip.state}
+          title={chip.state === 'alert'
+            ? text.signalHover
+              .replace('{rule}', 'oi-liquidation-proxy')
+              .replace('{window}', text.window15m)
+              .replace('{kind}', text.signalKindInferred)
+            : text.signalInsufficient}>
+          {chip.state === 'alert'
+            ? text.liquidationChip
+              .replace('{asset}', text.assets[chip.asset])
+              .replace('{pct}', formatDashboardChange(chip.dropPct))
+              .replace('{multiple}', chip.volumeMultiple.toFixed(1))
+            : text.signalInsufficient}
+        </span>
+      ) : null}
       <span className="mi-positioning-panel__help" tabIndex={0} role="note" aria-label={text.helpLabel} data-help>
         <i aria-hidden="true">?</i>
         <span className="mi-positioning-panel__help-pop" role="tooltip">
