@@ -73,22 +73,30 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setChannels(nextChannels as Channel[])
       setAgents((agentState as { agents?: Agent[] }).agents ?? [])
       setSelected((previous) => previous ?? (nextChannels as Channel[])[0]?.id ?? null)
+    } catch {
+      // A failed first read used to leave an empty panel and an unhandled rejection: the page then
+      // looked like "no channels" instead of "could not read".
+      setError(labels.channelOperationFailed)
     } finally {
       setInitialLoading(false)
     }
   }
 
   const reloadDetails = async (channelId: string): Promise<void> => {
-    const [nextPolicies, nextConversations, nextCandidates, nextRuntime] = await Promise.all([
-      window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
-      window.platform.channels.listConversations({ id: channelId, limit: 100 }),
-      window.platform.channels.listCandidates({ id: channelId, limit: 100 }),
-      window.platform.channels.runtimeStatus({ id: channelId })
-    ])
-    setPolicies(nextPolicies as Policy[])
-    setConversations(nextConversations as Conversation[])
-    setCandidates(nextCandidates as Candidate[])
-    setRuntimeStatus(nextRuntime as RuntimeStatus)
+    try {
+      const [nextPolicies, nextConversations, nextCandidates, nextRuntime] = await Promise.all([
+        window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
+        window.platform.channels.listConversations({ id: channelId, limit: 100 }),
+        window.platform.channels.listCandidates({ id: channelId, limit: 100 }),
+        window.platform.channels.runtimeStatus({ id: channelId })
+      ])
+      setPolicies(nextPolicies as Policy[])
+      setConversations(nextConversations as Conversation[])
+      setCandidates(nextCandidates as Candidate[])
+      setRuntimeStatus(nextRuntime as RuntimeStatus)
+    } catch {
+      setError(labels.channelOperationFailed)
+    }
   }
 
   useEffect(() => {
