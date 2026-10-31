@@ -143,6 +143,26 @@ const packet = (overrides: Partial<DailyBriefingFactPacket> = {}): DailyBriefing
   ...overrides
 })
 
+
+const positioning = (btcH24: number, ethH24: number): NonNullable<DailyBriefingFactPacket['positioning']> => ({
+  state: 'available', asOf, window: '24h',
+  btc: [{ observedAt: asOf, notionalUsd: 1_200_000_000 }],
+  eth: [{ observedAt: asOf, notionalUsd: 800_000_000 }],
+  change: { btc: { h24Pct: btcH24 }, eth: { h24Pct: ethH24 } }
+})
+
+const policyPath = (
+  value: number,
+  overrides: Readonly<{ meetingDate?: string; outcome?: string }> = {}
+): NonNullable<DailyBriefingFactPacket['policyPath']> => ({
+  meetingDate: overrides.meetingDate ?? '2026-12-09',
+  daysUntilMeeting: 40,
+  hasProjectionMaterials: true,
+  phase: { kind: 'normal' },
+  probability: { venue: 'polymarket', asOf, outcome: overrides.outcome ?? 'hike-25', value, points: 12 },
+  staleness: 'live'
+})
+
 describe('daily briefing document', () => {
   it('builds the six readings, market rows, news, macro, next and conclusion', () => {
     const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
@@ -150,11 +170,20 @@ describe('daily briefing document', () => {
     expect(document.edition).toMatchObject({ date: '2026-10-30', locale: 'zh-CN', windowStart, windowHours: 24 })
     expect(document.status).toMatchObject({ readingsAvailable: 4, readingsTotal: 4 })
     expect(document.data.funds).toHaveLength(5)
-    expect(document.data.funds.every((row) => row.importance.tier === 'must')).toBe(true)
-    expect(document.data.sentiment.fearGreed?.importance.tier).toBe('must')
+    // Available readings are candidates, not floor rows: the editor decides what the day needs.
+    expect(document.data.funds.every((row) => row.importance.tier === 'support')).toBe(true)
+    expect(document.data.funds.find((row) => row.id === 'etf-btc')?.materiality).toMatchObject({ material: true, reasonCode: 'etf-flow' })
+    expect(document.data.funds.find((row) => row.id === 'stablecoin')?.materiality).toMatchObject({ material: false })
+    expect(document.data.funds.find((row) => row.id === 'stablecoin')?.visibility).toBe('hidden')
+    expect(document.data.sentiment.fearGreed?.importance.tier).toBe('support')
+    expect(document.data.sentiment.fearGreed?.materiality).toMatchObject({ material: false })
     expect(document.data.market).toHaveLength(7)
     expect(document.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
+    expect(document.data.market.find((row) => row.id === 'btc')?.visibility).toBe('shown')
+    expect(document.data.market.find((row) => row.id === 'index')?.materiality).toMatchObject({ material: false })
+    expect(document.data.market.find((row) => row.id === 'index')?.visibility).toBe('hidden')
     expect(document.data.market.find((row) => row.id === 'us10y')?.importance.tier).toBe('support')
+    expect(document.data.market.find((row) => row.id === 'us10y')?.materiality).toMatchObject({ material: false })
     expect(document.data.market.find((row) => row.id === 'us10y')?.change).toMatchObject({ unit: 'bp', value: 4 })
     expect(document.data.market.find((row) => row.id === 'us10y-real')).toMatchObject({ value: { number: 1.8, format: 'yield' } })
 
@@ -187,7 +216,7 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    expect(document.schemaVersion).toBe(7)
+    expect(document.schemaVersion).toBe(8)
     expect(document.edition).toMatchObject({
       windowStart: '2026-10-28T00:30:00.000Z',
       windowEnd: asOf,
@@ -309,6 +338,60 @@ describe('daily briefing document', () => {
     expect(document.status.readings[1]?.state).toBe('unavailable')
     expect(document.status.readings[2]?.state).toBe('unavailable')
     expect(document.status.readingsAvailable).toBe(1)
+  })
+
+
+  it('admits leverage only when open interest or funding moved past the threshold', () => {
+    const flat = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(1.2, 0.4) }), date: '2026-10-30' })
+    expect(flat.data.leverage?.materiality).toMatchObject({ material: false, reasonCode: 'no-material-change' })
+    expect(flat.data.leverage?.visibility).toBe('hidden')
+
+    const moved = buildDailyBriefingDocument({ packet: packet({ positioning: positioning(12.4, -8.1) }), date: '2026-10-30' })
+    expect(moved.data.leverage?.materiality).toMatchObject({ material: true, reasonCode: 'open-interest-shift' })
+    // Material is not the same as shown: the editor still has to ask for the line.
+    expect(moved.data.leverage?.visibility).toBe('hidden')
+
+    const extremeFunding = buildDailyBriefingDocument({
+      packet: packet({
+        positioning: positioning(0.4, 0.5),
+        readings: {
+          fearGreed: fearGreed,
+          capital,
+          funding: {
+            state: 'available', asOf,
+            btc: [{ observedAt: '2026-10-29T08:00:00.000Z', ratePercent: 0.008 }, { observedAt: '2026-10-30T00:00:00.000Z', ratePercent: 0.061 }],
+            eth: [{ observedAt: '2026-10-29T08:00:00.000Z', ratePercent: 0.006 }, { observedAt: '2026-10-30T00:00:00.000Z', ratePercent: 0.058 }]
+          }
+        }
+      }),
+      date: '2026-10-30'
+    })
+    expect(extremeFunding.data.leverage?.materiality).toMatchObject({ material: true, reasonCode: 'funding-extreme' })
+  })
+
+  it('admits the rate path only on a probability shift, an imminent meeting or a changed outcome', () => {
+    const unchanged = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(60) }), date: '2026-10-30' })
+    expect(unchanged.data.policyPath?.materiality).toMatchObject({ material: false })
+    expect(unchanged.data.policyPath?.visibility).toBe('hidden')
+
+    const previous = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(45) }), date: '2026-10-29' })
+    const shifted = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(76) }), date: '2026-10-30', previous })
+    expect(shifted.data.policyPath?.probabilityChangePp).toBe(31)
+    expect(shifted.data.policyPath?.materiality).toMatchObject({ material: true, reasonCode: 'policy-probability-shift' })
+
+    const imminent = buildDailyBriefingDocument({
+      packet: packet({ policyPath: policyPath(60, { meetingDate: '2026-11-03' }) }),
+      date: '2026-10-30'
+    })
+    expect(imminent.data.policyPath?.materiality).toMatchObject({ material: true, reasonCode: 'policy-meeting-imminent' })
+
+    const previousOutcome = buildDailyBriefingDocument({ packet: packet({ policyPath: policyPath(60, { outcome: 'hike-25' }) }), date: '2026-10-29' })
+    const changedOutcome = buildDailyBriefingDocument({
+      packet: packet({ policyPath: policyPath(60, { outcome: 'hold' }) }),
+      date: '2026-10-30',
+      previous: previousOutcome
+    })
+    expect(changedOutcome.data.policyPath?.materiality).toMatchObject({ material: true, reasonCode: 'policy-path-change' })
   })
 
   it('floors the largest surprise, then the latest release, among high-impact events', () => {

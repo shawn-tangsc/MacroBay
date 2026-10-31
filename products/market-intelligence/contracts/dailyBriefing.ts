@@ -14,8 +14,8 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * validates an incoming document, which keeps the client and the builder from drifting apart.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 7,
-  policyVersion: 'daily-briefing.v18',
+  schemaVersion: 8,
+  policyVersion: 'daily-briefing.v19',
   /** The default statistical window. The reader's generation settings may override it per edition. */
   windowHours: 24,
   maximumBytes: 256 * 1024,
@@ -69,8 +69,8 @@ export function isDailyBriefingWindowHours(value: unknown): value is DailyBriefi
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -96,6 +96,40 @@ export type FactImportance = Readonly<{
   reasonText?: string
 }>
 
+/**
+ * Deterministic materiality of one data fact.
+ *
+ * The rule layer decides whether a fact is allowed to appear at all: a leverage or policy-path line
+ * below its threshold can never be shown, however the model ranks it. The reader's rule is
+ * "no material change, no line", so an immaterial row keeps a hidden baseline instead of appearing
+ * because a value exists. `reasonCode` is stable data, never prose.
+ */
+export type BriefingMaterialityCode =
+  | 'largest-move'
+  | 'gap'
+  | 'index-move'
+  | 'fx-move'
+  | 'gold-move'
+  | 'yield-move'
+  | 'stablecoin-shift'
+  | 'etf-flow'
+  | 'funding-extreme'
+  | 'funding-flip'
+  | 'sentiment-extreme'
+  | 'open-interest-shift'
+  | 'policy-probability-shift'
+  | 'policy-meeting-imminent'
+  | 'policy-path-change'
+  | 'no-material-change'
+
+export type BriefingMateriality = Readonly<{
+  material: boolean
+  reasonCode: BriefingMaterialityCode
+}>
+
+/** Editorial visibility of a data fact. Absent on editions built before the field existed: shown. */
+export type BriefingDataVisibility = 'shown' | 'hidden'
+
 export type BriefingValueFormat = 'score' | 'percent' | 'usd' | 'flow-usd' | 'yield' | 'level'
 export type BriefingChangeUnit = 'pp' | 'percent' | 'bp' | 'usd'
 export type BriefingWindow = 'latest' | '24h' | '1d' | 'daily' | 'trading-day'
@@ -104,6 +138,11 @@ export type BriefingMarketRow = Readonly<{
   id: 'btc' | 'eth' | 'index' | 'dxy' | 'gold' | 'us10y' | 'us10y-real'
   labelKey: string
   importance: FactImportance
+  /** Deterministic verdict; absent on editions built before v19. */
+  materiality?: BriefingMateriality
+  /** Editorial visibility; absent means shown, for older editions. */
+  visibility?: BriefingDataVisibility
+  visibilityReason?: string
   state: DailyBriefingReadingState
   value: Readonly<{ number: number; format: BriefingValueFormat }> | null
   change: Readonly<{ value: number; unit: BriefingChangeUnit; window: BriefingWindow }> | null
@@ -118,6 +157,11 @@ export type BriefingPulseRow = Readonly<{
   group: 'funds' | 'sentiment'
   labelKey: string
   importance: FactImportance
+  /** Deterministic verdict; absent on editions built before v19. */
+  materiality?: BriefingMateriality
+  /** Editorial visibility; absent means shown, for older editions. */
+  visibility?: BriefingDataVisibility
+  visibilityReason?: string
   state: DailyBriefingReadingState
   value: Readonly<{ number: number; format: BriefingValueFormat }> | null
   change: Readonly<{ value: number; unit: BriefingChangeUnit; window: BriefingWindow }> | null
@@ -268,12 +312,28 @@ export type DailyBriefingDocument = Readonly<{
   }>
   data: Readonly<{
     market: readonly BriefingMarketRow[]
-    policyPath?: Readonly<{ state: 'available'; meetingDate: string; outcome: string; probability: number; observedAt: string; targetLower?: number; targetUpper?: number }>
+    policyPath?: Readonly<{
+      state: 'available'
+      meetingDate: string
+      outcome: string
+      probability: number
+      observedAt: string
+      targetLower?: number
+      targetUpper?: number
+      /** Probability change against the previous edition, in percentage points. */
+      probabilityChangePp?: number
+      materiality?: BriefingMateriality
+      visibility?: BriefingDataVisibility
+      visibilityReason?: string
+    }>
     leverage?: Readonly<{
       state: 'available' | 'stale' | 'unavailable'
       observedAt?: string
       btc: Readonly<{ fundingRate?: number; openInterestUsd?: number; change1hPct?: number; change24hPct?: number }>
       eth: Readonly<{ fundingRate?: number; openInterestUsd?: number; change1hPct?: number; change24hPct?: number }>
+      materiality?: BriefingMateriality
+      visibility?: BriefingDataVisibility
+      visibilityReason?: string
     }>
     funds: readonly BriefingPulseRow[]
     sentiment: Readonly<{

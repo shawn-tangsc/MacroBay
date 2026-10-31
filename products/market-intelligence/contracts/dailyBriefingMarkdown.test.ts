@@ -112,6 +112,35 @@ describe('daily briefing markdown', () => {
     expect(markdown).not.toContain('## 接下来 7 日关注')
   })
 
+  it('renders only the data rows the editor kept', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: {
+        ...base.data,
+        market: [
+          ...base.data.market,
+          {
+            id: 'dxy' as const, labelKey: 'dailyBriefing.row.dxy',
+            importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+            materiality: { material: true as const, reasonCode: 'fx-move' as const },
+            visibility: 'hidden' as const, visibilityReason: 'not-selected',
+            state: 'available' as const, value: { number: 0.43, format: 'percent' as const },
+            change: null, window: '24h' as const, observedAt: '2026-10-30T00:25:00.000Z'
+          }
+        ],
+        funds: base.data.funds.map((row) => ({
+          ...row,
+          visibility: 'hidden' as const,
+          visibilityReason: 'no-material-change'
+        }))
+      }
+    }, options)
+    expect(markdown).toContain('BTC')
+    expect(markdown).not.toContain('美元')
+    expect(markdown).not.toContain('稳定币:')
+  })
+
   it('escapes markdown punctuation in titles', () => {
     const markdown = dailyBriefingToMarkdown(document({
       news: {

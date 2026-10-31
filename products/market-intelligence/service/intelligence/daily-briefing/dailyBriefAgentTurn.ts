@@ -4,6 +4,7 @@ import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './d
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
 import { selectMacroFloorItem } from './dailyBriefingDocument'
+import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
 import {
   dailyBriefBackfillPolicy,
   isCanonicalDailyBriefBackfillTime,
@@ -342,7 +343,7 @@ function fieldResponse(document: DailyBriefingDocument, requests: readonly unkno
 }
 
 function selectDocument(document: DailyBriefingDocument, selection: unknown): DailyBriefingDocument {
-  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown }
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; data?: unknown; hiddenData?: unknown }
   const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
   const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
   const macroCandidates = document.news.macroCandidates ?? document.news.macro
@@ -380,25 +381,40 @@ function selectDocument(document: DailyBriefingDocument, selection: unknown): Da
     ...nextCandidates.map((item) => item.eventKey)
   ]
   const shownIds = new Set(shown)
-  const audit = Object.freeze({
-    shown: Object.freeze(shown),
-    hidden: Object.freeze(allCandidates.filter((factId) => !shownIds.has(factId)).map((factId) => Object.freeze({ factId, reason: hiddenReason.get(factId) ?? 'not selected' })))
-  })
-  return Object.freeze({
+  const dataInclude = Array.isArray(value.data) ? value.data.filter((item): item is string => typeof item === 'string') : []
+  const dataHidden = Array.isArray(value.hiddenData) ? value.hiddenData.filter((entry): entry is { factId: string; reason: string } =>
+    Boolean(entry) && typeof entry === 'object' &&
+    typeof (entry as { factId?: unknown }).factId === 'string' &&
+    typeof (entry as { reason?: unknown }).reason === 'string').map((entry) => ({ factId: entry.factId, reason: entry.reason })) : []
+  // The selection round carries the editor's data choice too, so the writer starts from the rows the
+  // editor already judged instead of re-deriving them from an undifferentiated table.
+  const selectedDocument = selectBriefingDataFacts({
     ...document,
     news: Object.freeze({ ...document.news, items: Object.freeze(selectedNews), macro: Object.freeze(macro) }),
-    next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) }),
-    provenance: Object.freeze({ ...document.provenance, selectionAudit: audit })
+    next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) })
+  }, { include: dataInclude, hidden: dataHidden })
+  const dataAudit = briefingDataVisibilityAudit(selectedDocument)
+  const newsMacroNextAudit = {
+    shown: Object.freeze([...shown, ...dataAudit.shown]),
+    hidden: Object.freeze([
+      ...allCandidates.filter((factId) => !shownIds.has(factId)).map((factId) => Object.freeze({ factId, reason: hiddenReason.get(factId) ?? 'not selected' })),
+      ...dataAudit.hidden
+    ])
+  }
+  return Object.freeze({
+    ...selectedDocument,
+    provenance: Object.freeze({ ...selectedDocument.provenance, selectionAudit: Object.freeze(newsMacroNextAudit) })
   })
 }
 
 function unknownSelection(selection: unknown, document: DailyBriefingDocument): string | undefined {
-  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown }
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; data?: unknown; hiddenData?: unknown }
   const nextKeys = new Set((document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))).map((item) => item.eventKey))
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
   const macroIds = new Set((document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
+  const dataIds = new Set(briefingDataFactIds(document))
   if (typeof value.focus === 'string' && !nextKeys.has(value.focus)) return value.focus
-  for (const key of ['news', 'macro', 'next'] as const) {
+  for (const key of ['news', 'macro', 'next', 'data'] as const) {
     const list = value[key]
     if (!Array.isArray(list)) continue
     for (const id of list) {
@@ -406,6 +422,13 @@ function unknownSelection(selection: unknown, document: DailyBriefingDocument): 
       if (key === 'news' && !newsIds.has(id)) return id
       if (key === 'macro' && !macroIds.has(id)) return id
       if (key === 'next' && !nextKeys.has(id)) return id
+      if (key === 'data' && !dataIds.has(id)) return id
+    }
+  }
+  if (Array.isArray(value.hiddenData)) {
+    for (const entry of value.hiddenData) {
+      const factId = entry && typeof entry === 'object' ? (entry as { factId?: unknown }).factId : undefined
+      if (typeof factId !== 'string' || !dataIds.has(factId)) return String(factId)
     }
   }
   return undefined

@@ -45,6 +45,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
     ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
     ...(document.data.policyPath ? { policyPath: document.data.policyPath } : {}),
     mustFloor: dataFacts(document).filter((item) => item.must).map((item) => item.factId),
+    hiddenDataFacts: dataFacts(document).filter((item) => item.visibility === 'hidden').map((item) => item.factId),
     next: [document.next.focus, ...document.next.items].filter(Boolean).map((item) => ({
       eventKey: item!.eventKey,
       title: item!.title,
@@ -88,7 +89,10 @@ export function buildDailyBriefingPrompt(input: Readonly<{
             { factId: 'news:<id>|macro:<key>', reason: 'one sentence, at most 200 characters' }
           ],
           importance: [
-            { factId: 'data:<id>', tier: 'must|support|reference', reasonText: 'one short sentence, at most 200 characters' }
+            { factId: 'data:<id>', tier: 'must|support|reference', reasonText: 'why this data fact earns a line, at most 200 characters' }
+          ],
+          hiddenData: [
+            { factId: 'data:<id>', reason: 'why a material data fact is not shown, at most 200 characters' }
           ],
           dataNote: 'one sentence about what the numbers say, at most 240 characters',
           invalidationNote: 'one sentence about what would change the read, at most 240 characters',
@@ -106,8 +110,10 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         'RULES:',
         '- Act as a crypto trading analyst writing for BTC/ETH: for every candidate news:/macro: fact, decide whether a trader needs it today. Return one item (with why) for each fact you decide to show; omit the rest. There is no fixed count and no quota. Omit generic, duplicate, low-signal or already-known items.',
         '- items: only news:/macro: factIds, no duplicates, order by importance. An empty array is valid only when nothing is worth showing.',
-        '- importance: only data: factIds, unique, must/support/reference. The mustFloor rows may be lifted or kept, never downgraded.',
-        '- There is no required number of items or importance rows. The model, not a cap, decides visibility.',
+        '- importance: the data: factIds you decide to show, unique, must/support/reference. Every listed data row becomes visible. A mustFloor row is always shown; keep it out of hiddenData.',
+        '- hiddenData: for every data: fact whose materiality.material is true that you do NOT show, give one sentence explaining why. Omit immaterial rows: the rule already hides them with reason no-material-change.',
+        '- data:leverage and data:policy-path are selectable only when materiality.material is true. Below the threshold they cannot be shown, whatever the ranking says. A flat open interest, a rate path that has not moved, and a row with no change are context, not news.',
+        '- Include a data fact only when it has a material change or explains today’s read; every hidden data fact is audited with a reason, never silently dropped.',
         '- conclusionTranslation: only when the conclusion summary is in a different language from LOCALE.',
         '- dataNote and invalidationNote are optional but must not repeat the lede.',
         '- webEvidence is optional; only add entries actually seen in this turn’s WebSearch/WebFetch results. The URL and publishedAt must match a tool result; never invent a source. Local official actual overrides a web value.',
@@ -127,21 +133,49 @@ function dataFacts(document: DailyBriefingDocument): ReadonlyArray<{
   change: Readonly<{ value: number; unit: string; window: string }> | null
   window: string
   must: boolean
+  materiality: Readonly<{ material: boolean; reasonCode: string }> | null
+  visibility: 'shown' | 'hidden'
 }> {
   const rows = [
     ...document.data.market,
     ...document.data.funds,
     ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])
   ]
-  return rows.map((row) => ({
-    factId: `data:${row.id}`,
-    labelKey: row.labelKey,
-    state: row.state,
-    value: row.value ? { number: row.value.number, format: row.value.format } : null,
-    change: row.change ? { value: row.change.value, unit: row.change.unit, window: row.change.window } : null,
-    window: row.window,
-    must: row.importance.tier === 'must'
-  }))
+  return [
+    ...rows.map((row) => ({
+      factId: `data:${row.id}`,
+      labelKey: row.labelKey,
+      state: row.state,
+      value: row.value ? { number: row.value.number, format: row.value.format } : null,
+      change: row.change ? { value: row.change.value, unit: row.change.unit, window: row.change.window } : null,
+      window: row.window,
+      must: row.importance.tier === 'must',
+      materiality: row.materiality ?? null,
+      visibility: row.visibility ?? 'shown' as const
+    })),
+    ...(document.data.leverage ? [{
+      factId: 'data:leverage',
+      labelKey: 'dailyBriefing.row.leverage',
+      state: document.data.leverage.state,
+      value: null,
+      change: null,
+      window: '24h',
+      must: false,
+      materiality: document.data.leverage.materiality ?? null,
+      visibility: document.data.leverage.visibility ?? 'shown' as const
+    }] : []),
+    ...(document.data.policyPath ? [{
+      factId: 'data:policy-path',
+      labelKey: 'dailyBriefing.row.policyPath',
+      state: document.data.policyPath.state,
+      value: { number: document.data.policyPath.probability, format: 'percent' },
+      change: null,
+      window: 'latest',
+      must: false,
+      materiality: document.data.policyPath.materiality ?? null,
+      visibility: document.data.policyPath.visibility ?? 'shown' as const
+    }] : [])
+  ]
 }
 
 /** Stage 1: the editor chooses which candidates matter and which fields it needs. */
@@ -153,6 +187,19 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
   const candidates = {
     news: document.news.items.map((item) => ({ factId: `news:${item.itemId}`, title: item.translatedTitle ?? item.title, source: item.sourceName })),
     macro: document.news.macro.map((item) => ({ factId: `macro:${item.eventKey}`, title: item.title, actual: item.actual ?? null, consensus: item.consensus ?? null, previous: item.previous ?? null })),
+    data: dataFacts(document).map((item) => ({
+      factId: item.factId,
+      labelKey: item.labelKey,
+      state: item.state,
+      value: item.value,
+      change: item.change,
+      window: item.window,
+      must: item.must,
+      materiality: item.materiality,
+      visibility: item.visibility
+    })),
+    ...(document.data.leverage ? { leverage: document.data.leverage } : {}),
+    ...(document.data.policyPath ? { policyPath: document.data.policyPath } : {}),
     next: (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).map((item) => ({ eventKey: item.eventKey, title: item.title, at: item.at, category: item.category, consensus: item.consensus ?? null, previous: item.previous ?? null }))
   }
   return [
@@ -161,8 +208,8 @@ export function buildDailyBriefingSelectionPrompt(input: Readonly<{
       `LOCALE: ${locale}`,
       'CANDIDATES:',
       JSON.stringify(candidates, null, 2),
-      'Return this exact shape: {"stage":"select","focus":"<eventKey>","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}]}',
-      'Select only from the lists. Keep next/macro/news IDs exact. Choose at most 4 next events, 6 macro and 6 news that actually change the day; do not select everything. requests may ask for missing fields; do not invent values. List every unselected candidate in hidden with a reason.'
+      'Return this exact shape: {"stage":"select","focus":"<eventKey>","next":["<eventKey>"],"macro":["macro:<key>"],"news":["news:<id>"],"data":["data:<id>"],"requests":[{"factId":"<factId>","fields":["consensus","previous"]}],"hidden":[{"factId":"<factId>","reason":"why not shown"}],"hiddenData":[{"factId":"data:<id>","reason":"why not shown"}]}',
+      'Select only from the lists. Keep next/macro/news/data IDs exact. Choose at most 4 next events, 6 macro and 6 news that actually change the day; do not select everything. data: show only rows with a material change or an explanatory role; leverage and policy-path are selectable only when materiality.material is true, and floor rows (must=true) are always shown. requests may ask for missing fields; do not invent values. List every unselected news/macro/next candidate in hidden with a reason; list a material data row you deliberately leave out in hiddenData with a reason (immaterial rows are already hidden by the rule).'
     ].join('\n') }
   ]
 }

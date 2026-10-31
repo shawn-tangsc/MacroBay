@@ -79,12 +79,12 @@ afterEach(async () => {
   host = undefined
 })
 
-const render = async (): Promise<HTMLDivElement> => {
+const render = async (doc: DailyBriefingDocument = briefing()): Promise<HTMLDivElement> => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
-  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: briefing(), text, locale: 'en-US', formatTime })))
+  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text, locale: 'en-US', formatTime })))
   return host
 }
 
@@ -112,6 +112,34 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toContain('分析证据')
     expect(poster).not.toContain('美国')
     expect(poster).not.toMatch(CJK)
+  })
+
+  it('renders only the data rows the editor kept', async () => {
+    const base = briefing()
+    const rendered = await render({
+      ...base,
+      data: {
+        ...base.data,
+        market: [
+          ...base.data.market,
+          {
+            id: 'index' as const, labelKey: 'dailyBriefing.row.index',
+            importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+            materiality: { material: true as const, reasonCode: 'index-move' as const },
+            visibility: 'hidden' as const, visibilityReason: 'not-selected',
+            state: 'available' as const, value: { number: 1.42, format: 'percent' as const },
+            change: null, window: '24h' as const, observedAt: '2026-10-30T00:25:00.000Z'
+          }
+        ],
+        leverage: base.data.leverage ? { ...base.data.leverage, visibility: 'hidden' as const, visibilityReason: 'no-material-change' } : undefined,
+        policyPath: base.data.policyPath ? { ...base.data.policyPath, visibility: 'hidden' as const, visibilityReason: 'no-material-change' } : undefined
+      }
+    })
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+    expect(poster).toContain(text.rows.btc)
+    expect(poster).not.toContain(text.rows.index)
+    expect(poster).not.toContain(text.sections.leverage)
+    expect(poster).not.toContain(text.sections.policyPath)
   })
 
   it('separates the invalidation label with the locale separator', async () => {

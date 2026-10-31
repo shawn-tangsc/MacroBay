@@ -107,6 +107,56 @@ const repeatedWebTool = (count: number, url: string, publishedAt = '2026-10-29T0
     output: { results: [{ title: 'BLS', url, publishedAt }] }
   }))
 
+
+const withMaterialData = (): DailyBriefingDocument => {
+  const base = document()
+  return {
+    ...base,
+    data: {
+      ...base.data,
+      funds: base.data.funds.map((row) => row.id === 'stablecoin'
+        ? {
+            ...row,
+            importance: { tier: 'support' as const, source: 'rule' as const, reasonCode: 'context' as const },
+            materiality: { material: true as const, reasonCode: 'stablecoin-shift' as const },
+            visibility: 'hidden' as const,
+            visibilityReason: 'not-selected'
+          }
+        : row),
+      leverage: {
+        state: 'available' as const,
+        btc: { openInterestUsd: 1_200_000_000, change24hPct: 0.4 },
+        eth: { openInterestUsd: 800_000_000, change24hPct: 0.2 },
+        materiality: { material: false as const, reasonCode: 'no-material-change' as const },
+        visibility: 'hidden' as const,
+        visibilityReason: 'no-material-change'
+      },
+      policyPath: {
+        state: 'available' as const, meetingDate: '2026-12-09', outcome: 'hike-25',
+        probability: 76, observedAt: '2026-10-30T02:10:00.000Z',
+        materiality: { material: false as const, reasonCode: 'no-material-change' as const },
+        visibility: 'hidden' as const,
+        visibilityReason: 'no-material-change'
+      }
+    }
+  }
+}
+
+const withMaterialLeverage = (): DailyBriefingDocument => {
+  const base = withMaterialData()
+  return {
+    ...base,
+    data: {
+      ...base.data,
+      leverage: {
+        ...base.data.leverage!,
+        materiality: { material: true as const, reasonCode: 'open-interest-shift' as const },
+        visibilityReason: 'not-selected'
+      }
+    }
+  }
+}
+
 describe('daily briefing editorial validation and application', () => {
   it('accepts prose that only repeats facts and cannot downgrade the must floor', () => {
     const validated = validateDailyBriefingEditorial(validOutput, document(), 'zh-CN')
@@ -156,6 +206,103 @@ describe('daily briefing editorial validation and application', () => {
       importance: [{ factId: 'data:btc', tier: 'reference', reasonText: 'less important' }]
     }, { promptVersion: 'v1', model: 'm1', source: 'default' })
     expect(applied.data.market.find((row) => row.id === 'btc')?.importance.tier).toBe('must')
+  })
+
+
+  it('requires a reason when the agent hides a material data row', () => {
+    const source = withMaterialData()
+    expect(validateDailyBriefingEditorial({ ...validOutput, importance: [] }, source, 'zh-CN'))
+      .toMatchObject({ ok: false, failureCode: 'missing-hidden-reason', detail: 'data:stablecoin' })
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      importance: [],
+      hiddenData: [{ factId: 'data:stablecoin', reason: 'The move is inside the usual noise band.' }]
+    }, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.data.funds.find((row) => row.id === 'stablecoin')).toMatchObject({
+      visibility: 'hidden', visibilityReason: 'The move is inside the usual noise band.'
+    })
+    expect(applied.provenance.selectionAudit?.hidden).toContainEqual({ factId: 'data:stablecoin', reason: 'The move is inside the usual noise band.' })
+  })
+
+  it('keeps the BTC floor visible even when the agent hides it', () => {
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      importance: [],
+      hiddenData: [{ factId: 'data:btc', reason: 'The editor would rather not lead with price.' }]
+    }, document(), 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(document(), validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.data.market.find((row) => row.id === 'btc')?.visibility).toBe('shown')
+    expect(applied.provenance.selectionAudit?.shown).toContain('data:btc')
+  })
+
+  it('never shows leverage or the rate path below their materiality threshold, even when included', () => {
+    const source = withMaterialData()
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      importance: [
+        { factId: 'data:leverage', tier: 'support', reasonText: 'Positioning is worth a line.' },
+        { factId: 'data:policy-path', tier: 'support', reasonText: 'The path frames the week.' }
+      ],
+      hiddenData: [{ factId: 'data:stablecoin', reason: 'The supply move is inside the noise band.' }]
+    }, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.data.leverage).toMatchObject({ visibility: 'hidden', visibilityReason: 'no-material-change' })
+    expect(applied.data.policyPath).toMatchObject({ visibility: 'hidden', visibilityReason: 'no-material-change' })
+    expect(applied.provenance.selectionAudit?.hidden).toContainEqual({ factId: 'data:leverage', reason: 'no-material-change' })
+  })
+
+  it('shows a material leverage row the agent includes', () => {
+    const source = withMaterialLeverage()
+    const validated = validateDailyBriefingEditorial({
+      ...validOutput,
+      importance: [{ factId: 'data:leverage', tier: 'support', reasonText: 'Open interest moved 12% in a day.' }],
+      hiddenData: [{ factId: 'data:stablecoin', reason: 'The supply move is inside the noise band.' }]
+    }, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.data.leverage?.visibility).toBe('shown')
+    expect(applied.provenance.selectionAudit?.shown).toContain('data:leverage')
+  })
+
+  it('leaves counter-evidence and the nearest next event untouched by the data selection', () => {
+    const base = document()
+    const source: DailyBriefingDocument = {
+      ...base,
+      conclusion: base.conclusion ? {
+        ...base.conclusion,
+        counterEvidence: [{ statement: 'ETF flows stayed positive.', citations: [1] }]
+      } : null
+    }
+    const validated = validateDailyBriefingEditorial({ ...validOutput, importance: [] }, source, 'zh-CN')
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+    const applied = applyDailyBriefingEditorial(source, validated.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+    expect(applied.conclusion?.counterEvidence).toHaveLength(1)
+    expect(applied.next.focus?.eventKey).toBe('US.FOMC')
+  })
+
+  it('lifts an immaterial context row only when the agent includes it', () => {
+    const source = document()
+    const omitted = validateDailyBriefingEditorial({ ...validOutput, importance: [] }, source, 'zh-CN')
+    expect(omitted.ok).toBe(true)
+    if (omitted.ok) {
+      const applied = applyDailyBriefingEditorial(source, omitted.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+      expect(applied.data.market.find((row) => row.id === 'index')?.visibility).not.toBe('shown')
+    }
+    const included = validateDailyBriefingEditorial(validOutput, source, 'zh-CN')
+    expect(included.ok).toBe(true)
+    if (included.ok) {
+      const applied = applyDailyBriefingEditorial(source, included.value, { promptVersion: 'v1', model: 'm1', source: 'default' })
+      expect(applied.data.market.find((row) => row.id === 'index')?.visibility).toBe('shown')
+    }
   })
 
   it('keeps the key high-impact release visible when the editorial hides every release', () => {

@@ -16,6 +16,11 @@ import {
   type DailyBriefWebEvidenceField
 } from './dailyBriefWebEvidence'
 import { selectMacroFloorItem } from './dailyBriefingDocument'
+import {
+  briefingDataFactIds,
+  briefingDataVisibilityAudit,
+  selectBriefingDataFacts
+} from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
 
 export type DailyBriefingEditorialOutput = Readonly<{
@@ -25,6 +30,7 @@ export type DailyBriefingEditorialOutput = Readonly<{
   hidden: readonly Readonly<{ factId: string; reason: string }>[]
   webEvidence?: readonly DailyBriefWebEvidenceRef[]
   importance: readonly Readonly<{ factId: string; tier: 'must' | 'support' | 'reference'; reasonText?: string }>[]
+  hiddenData: readonly Readonly<{ factId: string; reason: string }>[]
   dataNote?: string
   invalidationNote?: string
   conclusionTranslation?: string
@@ -42,6 +48,7 @@ export type DailyBriefingValidationFailure =
   | 'unknown-number'
   | 'invalid-translation'
   | 'too-long'
+  | 'missing-hidden-reason'
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>
@@ -64,7 +71,7 @@ export function validateDailyBriefingEditorial(
   locale: 'zh-CN' | 'en-US',
   toolInvocations: readonly AgentRuntimeToolInvocation[] = []
 ): DailyBriefingValidation {
-  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus', 'webEvidence'])) {
+  if (!isExact(raw, ['lede', 'ledePattern', 'items', 'hidden', 'importance'], ['hiddenData', 'dataNote', 'invalidationNote', 'conclusionTranslation', 'nextFocus', 'webEvidence'])) {
     return fail('invalid-shape')
   }
   if (typeof raw.lede !== 'string' || raw.lede.trim().length === 0) return fail('invalid-shape')
@@ -74,9 +81,10 @@ export function validateDailyBriefingEditorial(
   if (!Array.isArray(raw.items) || raw.items.length > 50) return fail('invalid-shape')
   if (!Array.isArray(raw.hidden)) return fail('invalid-shape')
   if (!Array.isArray(raw.importance)) return fail('invalid-shape')
+  if (raw.hiddenData !== undefined && !Array.isArray(raw.hiddenData)) return fail('invalid-shape')
   const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
   const macroIds = new Set(document.news.macro.map((item) => `macro:${item.eventKey}`))
-  const dataIds = new Set(allDataRows(document).map((row) => `data:${row.id}`))
+  const dataIds = new Set(briefingDataFactIds(document))
   const items: Array<{ factId: string; why: string }> = []
   for (const item of raw.items) {
     if (!isExact(item, ['factId', 'why'])) return fail('invalid-shape')
@@ -145,6 +153,25 @@ export function validateDailyBriefingEditorial(
     if (importance.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
     importance.push({ factId: entry.factId, tier: entry.tier, ...(entry.reasonText ? { reasonText: entry.reasonText } : {}) })
   }
+  const hiddenData: Array<{ factId: string; reason: string }> = []
+  for (const entry of (raw.hiddenData ?? []) as unknown[]) {
+    if (!isExact(entry, ['factId', 'reason'])) return fail('invalid-shape')
+    if (!isText(entry.factId) || !isText(entry.reason)) return fail('invalid-shape')
+    if (entry.reason.length > 200) return fail('too-long')
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact')
+    if (importance.some((shown) => shown.factId === entry.factId) || hiddenData.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
+    hiddenData.push({ factId: entry.factId, reason: entry.reason })
+  }
+  // A material data fact may be hidden, but not silently: the editorial must say why. Immaterial
+  // rows are already hidden by the rule layer with their own reason, so they need no entry here.
+  const shownData = new Set([
+    ...importance.map((entry) => entry.factId),
+    ...documentVisibleDataFacts(document)
+  ])
+  const hiddenDataSet = new Set(hiddenData.map((entry) => entry.factId))
+  for (const factId of materialDataFactIds(document)) {
+    if (!shownData.has(factId) && !hiddenDataSet.has(factId)) return fail('missing-hidden-reason', factId)
+  }
   const dataNote = optionalText(raw.dataNote, 240)
   if (dataNote === false) return fail('too-long')
   const invalidationNote = optionalText(raw.invalidationNote, 240)
@@ -192,6 +219,7 @@ export function validateDailyBriefingEditorial(
       hidden: Object.freeze(hidden.map((entry) => Object.freeze(entry))),
       ...(webEvidence.length > 0 ? { webEvidence: Object.freeze(webEvidence.map((entry) => Object.freeze(entry))) } : {}),
       importance: Object.freeze(importance.map((entry) => Object.freeze(entry))),
+      hiddenData: Object.freeze(hiddenData.map((entry) => Object.freeze(entry))),
       ...(typeof dataNote === 'string' ? { dataNote } : {}),
       ...(typeof invalidationNote === 'string' ? { invalidationNote } : {}),
       ...(typeof conclusionTranslation === 'string' ? { conclusionTranslation } : {}),
@@ -209,6 +237,10 @@ export function applyDailyBriefingEditorial(
   const macroWhy = new Map(editorial.items.filter((item) => item.factId.startsWith('macro:')).map((item) => [item.factId.slice('macro:'.length), item.why]))
   const importance = new Map(editorial.importance.map((entry) => [entry.factId.slice('data:'.length), entry]))
   const hiddenReason = new Map(editorial.hidden.map((entry) => [entry.factId, entry.reason]))
+  const selected = selectBriefingDataFacts(document, {
+    include: editorial.importance.map((entry) => entry.factId),
+    hidden: editorial.hiddenData
+  })
   const macroFloor = selectMacroFloorItem(document.news.macro)
   const highImpactShown = document.news.macro.some((item) => item.importance === 'high' && macroWhy.has(item.eventKey))
   const citations = [...document.citations, ...(editorial.webEvidence ?? []).map((ref) => Object.freeze({
@@ -231,6 +263,15 @@ export function applyDailyBriefingEditorial(
     })
     return Object.freeze({ ...row, importance: value }) as T
   }
+  const data = Object.freeze({
+    ...selected.data,
+    market: Object.freeze(selected.data.market.map(applyRow)),
+    funds: Object.freeze(selected.data.funds.map(applyRow)),
+    sentiment: Object.freeze({
+      fearGreed: selected.data.sentiment.fearGreed ? applyRow(selected.data.sentiment.fearGreed) : null,
+      news: selected.data.sentiment.news
+    })
+  })
   const nextItems = editorial.nextFocus
     ? document.next.items.map((item) => item.eventKey === editorial.nextFocus!.eventKey
       ? Object.freeze({ ...item, why: editorial.nextFocus!.why, watch: editorial.nextFocus!.watch })
@@ -265,15 +306,7 @@ export function applyDailyBriefingEditorial(
         return Object.freeze({ ...item, visibility: 'hidden' as const, ...(hiddenReason.get(`macro:${item.eventKey}`) ? { visibilityReason: hiddenReason.get(`macro:${item.eventKey}`)! } : {}) })
       }))
     }),
-    data: Object.freeze({
-      ...document.data,
-      market: Object.freeze(document.data.market.map(applyRow)),
-      funds: Object.freeze(document.data.funds.map(applyRow)),
-      sentiment: Object.freeze({
-        fearGreed: document.data.sentiment.fearGreed ? applyRow(document.data.sentiment.fearGreed) : null,
-        news: document.data.sentiment.news
-      })
-    }),
+    data,
     ...(editorial.dataNote || editorial.invalidationNote ? {
       editorial: Object.freeze({
         ...(editorial.dataNote ? { dataNote: editorial.dataNote } : {}),
@@ -286,6 +319,7 @@ export function applyDailyBriefingEditorial(
     citations: Object.freeze(citations),
     provenance: Object.freeze({
       ...document.provenance,
+      selectionAudit: mergeSelectionAudit(document.provenance.selectionAudit, briefingDataVisibilityAudit({ ...document, data })),
       editorialMeta: Object.freeze({
         promptVersion: meta.promptVersion,
         model: meta.model,
@@ -295,8 +329,36 @@ export function applyDailyBriefingEditorial(
   })
 }
 
-function allDataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
-  return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
+function documentVisibleDataFacts(document: DailyBriefingDocument): readonly string[] {
+  return briefingDataVisibilityAudit(document).shown
+}
+
+/** Material data facts a silent omission would drop: the agent must include them or say why not. */
+function materialDataFactIds(document: DailyBriefingDocument): readonly string[] {
+  const rows: Array<BriefingMarketRow | BriefingPulseRow> = [
+    ...document.data.market,
+    ...document.data.funds,
+    ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])
+  ]
+  const ids: string[] = []
+  for (const row of rows) {
+    if (row.importance.tier === 'must') continue
+    if (row.materiality?.material && row.materiality.reasonCode !== 'gap') ids.push(`data:${row.id}`)
+  }
+  if (document.data.leverage?.materiality?.material && document.data.leverage.materiality.reasonCode !== 'gap') ids.push('data:leverage')
+  if (document.data.policyPath?.materiality?.material) ids.push('data:policy-path')
+  return ids
+}
+
+function mergeSelectionAudit(
+  prior: Readonly<{ shown: readonly string[]; hidden: readonly Readonly<{ factId: string; reason: string }>[] }> | undefined,
+  dataAudit: Readonly<{ shown: readonly string[]; hidden: readonly Readonly<{ factId: string; reason: string }>[] }>
+): Readonly<{ shown: readonly string[]; hidden: readonly Readonly<{ factId: string; reason: string }>[] }> {
+  const isData = (factId: string) => factId.startsWith('data:')
+  return Object.freeze({
+    shown: Object.freeze([...(prior?.shown ?? []).filter((factId) => !isData(factId)), ...dataAudit.shown]),
+    hidden: Object.freeze([...(prior?.hidden ?? []).filter((entry) => !isData(entry.factId)), ...dataAudit.hidden])
+  })
 }
 
 function fail(failureCode: DailyBriefingValidationFailure, detail?: string): DailyBriefingValidation {

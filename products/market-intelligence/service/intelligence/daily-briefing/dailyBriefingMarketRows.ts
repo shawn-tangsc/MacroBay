@@ -1,8 +1,21 @@
-import type { BriefingMarketRow, BriefingPulseRow, FactImportance } from '../../../contracts/dailyBriefing'
+import type {
+  BriefingMarketRow,
+  BriefingMateriality,
+  BriefingPulseRow,
+  BriefingValueFormat,
+  FactImportance
+} from '../../../contracts/dailyBriefing'
 import { buildMarketPulseRows } from '../../../contracts/marketPulse'
+import {
+  baselineVisibility,
+  briefingDataMaterialityPolicy,
+  immateriality,
+  marketMoveMateriality,
+  materiality as materialVerdict,
+  pulseRowMateriality
+} from './dailyBriefingDataSelection'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
-const reading: FactImportance = Object.freeze({ tier: 'must', source: 'rule', reasonCode: 'reading' })
 const gap: FactImportance = Object.freeze({ tier: 'must', source: 'rule', reasonCode: 'gap' })
 const context: FactImportance = Object.freeze({ tier: 'support', source: 'rule', reasonCode: 'context' })
 
@@ -33,12 +46,16 @@ export function buildBriefingReadingRows(packet: DailyBriefingFactPacket): Brief
 }
 
 function toPulseRow(row: ReturnType<typeof buildMarketPulseRows>[number]): BriefingPulseRow {
-  const isGap = row.state === 'unavailable' || row.state === 'source-disabled'
+  // A stale reading is a gap: the reader must see that the number is old, so it keeps the floor.
+  const isGap = row.state !== 'available'
+  const materiality = isGap ? materialVerdict('gap') : pulseRowMateriality(row.id, row)
   return Object.freeze({
     id: row.id as BriefingPulseRow['id'],
     group: row.id === 'fear-greed' ? 'sentiment' : 'funds',
     labelKey: row.labelKey,
-    importance: isGap ? gap : reading,
+    importance: isGap ? gap : context,
+    materiality,
+    ...baselineVisibility(materiality, isGap),
     state: row.state,
     value: row.value ? Object.freeze({ number: row.value.number, format: row.value.format }) : null,
     change: row.change ? Object.freeze({ ...row.change }) : null,
@@ -66,13 +83,13 @@ function buildMarketRows(packet: DailyBriefingFactPacket): readonly BriefingMark
     ? rates.readings.find((reading) => reading.metricKey === 'US_REAL_YIELD_10Y')
     : undefined
   return [
-    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, reason: 'largest-move' }),
-    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, reason: 'largest-move' }),
-    crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, reason: 'context' }),
-    macroRow('dxy', dxy?.synthetic ? 'dailyBriefing.row.dxySynthetic' : 'dailyBriefing.row.dxy', dxy, packet.asOf),
-    macroRow('gold', 'dailyBriefing.row.gold', gold, packet.asOf),
-    ratesRow('us10y', 'dailyBriefing.row.us10y', tenYear, packet.asOf),
-    ratesRow('us10y-real', 'dailyBriefing.row.us10yReal', realTenYear, packet.asOf)
+    crossRow('btc', 'dailyBriefing.row.btc', cross, packet.asOf, { must: true, code: 'largest-move' }),
+    crossRow('eth', 'dailyBriefing.row.eth', cross, packet.asOf, { must: true, code: 'largest-move' }),
+    crossRow('index', 'dailyBriefing.row.index', cross, packet.asOf, { must: false, code: 'index-move' }),
+    macroRow('dxy', dxy?.synthetic ? 'dailyBriefing.row.dxySynthetic' : 'dailyBriefing.row.dxy', dxy, packet.asOf, 'fx-move'),
+    macroRow('gold', 'dailyBriefing.row.gold', gold, packet.asOf, 'gold-move'),
+    ratesRow('us10y', 'dailyBriefing.row.us10y', tenYear, packet.asOf, 'yield-move'),
+    ratesRow('us10y-real', 'dailyBriefing.row.us10yReal', realTenYear, packet.asOf, 'yield-move')
   ]
 }
 
@@ -81,27 +98,24 @@ function crossRow(
   labelKey: string,
   snapshot: DailyBriefingFactPacket['market']['crossAsset'],
   asOf: string,
-  tier: Readonly<{ must: boolean; reason: 'largest-move' | 'context' }>
+  rule: Readonly<{ must: boolean; code: BriefingMateriality['reasonCode'] }>
 ): BriefingMarketRow {
   const metric = snapshot?.closedReturns[id]?.['24h']
-  const importance: FactImportance = Object.freeze({
-    tier: tier.must ? 'must' : 'support',
-    source: 'rule',
-    reasonCode: tier.must ? 'largest-move' : 'context'
-  })
+  const importance: FactImportance = rule.must
+    ? Object.freeze({ tier: 'must', source: 'rule', reasonCode: 'largest-move' })
+    : context
   if (snapshot && metric?.state === 'available') {
     const stale = age(asOf, snapshot.analysisEnd) > marketStaleAfterMs
+    const materiality = stale ? materialVerdict('gap') : marketMoveMateriality(normalize(metric.value), briefingDataMaterialityPolicy.marketPercent, rule.code)
     return Object.freeze({
-      id, labelKey, importance, state: stale ? 'stale' as const : 'available' as const,
+      id, labelKey, importance: stale ? gap : importance, materiality, ...baselineVisibility(materiality, rule.must || stale),
+      state: stale ? 'stale' as const : 'available' as const,
       value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
       change: null, window: '24h' as const, observedAt: snapshot.analysisEnd
     })
   }
   if (!snapshot) {
-    return Object.freeze({
-      id, labelKey, importance: tier.must ? gap : context, state: 'unavailable' as const,
-      value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
-    })
+    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
   }
   // The 24h pair is unavailable here; keep any persisted curve/last close.
   {
@@ -109,53 +123,69 @@ function crossRow(
     // missing. Keep that persisted reading instead of turning the whole row into "unavailable".
     const curve = [...(snapshot.curves[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
     if (curve) {
-      return Object.freeze({
-        id, labelKey, importance: tier.must ? gap : context, state: 'stale' as const,
-        value: Object.freeze({ number: normalize(curve.returnPercent!), format: 'percent' as const }),
-        change: null, window: '24h' as const, observedAt: snapshot.analysisEnd, reason: 'stale-fallback' as const
-      })
+      return gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd)
     }
     const last = snapshot.lastClosed?.[id]
     if (last) {
-      return Object.freeze({
-        id, labelKey, importance: tier.must ? gap : context, state: 'stale' as const,
-        value: Object.freeze({ number: normalize(Number(last.close)), format: 'level' as const }),
-        change: null, window: 'latest' as const, observedAt: last.at, reason: 'stale-fallback' as const
-      })
+      return gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at)
     }
-    return Object.freeze({
-      id, labelKey, importance: tier.must ? gap : context, state: 'unavailable' as const,
-      value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
-    })
+    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
   }
+}
+
+function gapRow(
+  id: BriefingMarketRow['id'],
+  labelKey: string,
+  reason: NonNullable<BriefingMarketRow['reason']>,
+  state: 'stale' | 'unavailable',
+  value: Readonly<{ number: number; format: BriefingValueFormat }> | null,
+  window: BriefingMarketRow['window'],
+  observedAt: string | null
+): BriefingMarketRow {
+  // Every gap, stale or missing row keeps the floor: a blank row is the reader's signal that the
+  // data is missing, and hiding it would make the brief look complete when it is not.
+  const materiality = materialVerdict('gap')
+  return Object.freeze({
+    id, labelKey, importance: gap, materiality, ...baselineVisibility(materiality, true),
+    state, value, change: null, window, observedAt, reason
+  })
 }
 
 function macroRow(
   id: 'dxy' | 'gold',
   labelKey: string,
   reading: { level: number; atMs: number; returns?: Readonly<Partial<Record<string, number>>> } | undefined,
-  asOf: string
+  asOf: string,
+  code: BriefingMateriality['reasonCode']
 ): BriefingMarketRow {
   if (!reading || !Number.isFinite(reading.level)) {
-    return Object.freeze({
-      id, labelKey, importance: context, state: 'unavailable' as const,
-      value: null, change: null, window: '24h' as const, observedAt: null, reason: 'query-failed' as const
-    })
+    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
   }
   const observedAt = new Date(reading.atMs).toISOString()
   const stale = age(asOf, observedAt) > marketStaleAfterMs
   const value = reading.returns?.['24h']
+  if (stale) {
+    return gapRow(id, labelKey, 'stale-fallback', 'stale',
+      typeof value === 'number' && Number.isFinite(value)
+        ? { number: normalize(value), format: 'percent' }
+        : { number: normalize(reading.level), format: 'level' },
+      typeof value === 'number' ? '24h' : 'latest', observedAt)
+  }
   if (typeof value === 'number' && Number.isFinite(value)) {
+    const materiality = marketMoveMateriality(normalize(value), briefingDataMaterialityPolicy.marketPercent, code)
     return Object.freeze({
-      id, labelKey, importance: context, state: stale ? 'stale' as const : 'available' as const,
+      id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
+      state: 'available' as const,
       value: Object.freeze({ number: normalize(value), format: 'percent' as const }),
       change: null, window: '24h' as const, observedAt
     })
   }
   // The stored history answered the as-of level but not its 24h window. Printing the level keeps the
-  // fact the conclusion cites; a dash here would say "no data" about a number that is in hand.
+  // fact the conclusion cites; a dash here would say "no data" about a number that is in hand. A
+  // level alone is not a change, so it stays a context row.
   return Object.freeze({
-    id, labelKey, importance: context, state: stale ? 'stale' as const : 'available' as const,
+    id, labelKey, importance: context, materiality: immateriality, ...baselineVisibility(immateriality),
+    state: 'available' as const,
     value: Object.freeze({ number: normalize(reading.level), format: 'level' as const }),
     change: null, window: 'latest' as const, observedAt
   })
@@ -165,22 +195,30 @@ function ratesRow(
   id: 'us10y' | 'us10y-real',
   labelKey: string,
   reading: { actual: number; previous?: number; period: string } | undefined,
-  asOf: string
+  asOf: string,
+  code: BriefingMateriality['reasonCode']
 ): BriefingMarketRow {
   if (!reading || !Number.isFinite(reading.actual)) {
-    return Object.freeze({
-      id, labelKey, importance: context, state: 'unavailable' as const,
-      value: null, change: null, window: 'daily' as const, observedAt: null, reason: 'query-failed' as const
-    })
+    return gapRow(id, labelKey, 'query-failed', 'unavailable', null, 'daily', null)
   }
   const observedAt = `${reading.period}T00:00:00.000Z`
   const stale = age(asOf, observedAt) > dailyStaleAfterMs
+  if (stale) {
+    return gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(reading.actual), format: 'yield' }, 'daily', observedAt)
+  }
+  const changeBp = reading.previous === undefined
+    ? undefined
+    : normalize(Math.round((reading.actual - reading.previous) * 100 * 100) / 100)
+  const materiality = typeof changeBp === 'number' && Math.abs(changeBp) >= briefingDataMaterialityPolicy.yieldBasisPoints
+    ? materialVerdict(code)
+    : immateriality
   return Object.freeze({
-    id, labelKey, importance: context, state: stale ? 'stale' as const : 'available' as const,
+    id, labelKey, importance: context, materiality, ...baselineVisibility(materiality),
+    state: 'available' as const,
     value: Object.freeze({ number: normalize(reading.actual), format: 'yield' as const }),
-    change: reading.previous === undefined
+    change: changeBp === undefined
       ? null
-      : Object.freeze({ value: normalize(Math.round((reading.actual - reading.previous) * 100 * 100) / 100), unit: 'bp' as const, window: 'daily' as const }),
+      : Object.freeze({ value: changeBp, unit: 'bp' as const, window: 'daily' as const }),
     window: 'daily' as const, observedAt
   })
 }

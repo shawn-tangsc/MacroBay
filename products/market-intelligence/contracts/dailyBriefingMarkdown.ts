@@ -95,7 +95,9 @@ export function dailyBriefingToMarkdown(document: DailyBriefingDocument, options
 }
 
 function dataRows(document: DailyBriefingDocument): Array<BriefingMarketRow | BriefingPulseRow> {
+  // The copy must agree with the screen: hidden data rows are audited, not rendered.
   return [...document.data.market, ...document.data.funds, ...(document.data.sentiment.fearGreed ? [document.data.sentiment.fearGreed] : [])]
+    .filter((row) => row.visibility !== 'hidden')
 }
 
 function readingsLabel(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {

@@ -18,7 +18,10 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 }>): React.ReactElement {
   const text = withWindowHours(baseText, doc.edition.windowHours ?? 24)
+  // The data region is a selection, not a dump: a row the editor did not include stays out of the
+  // poster even when its value is present, and a hidden row's reason lives only in the audit.
   const rows = [...doc.data.market, ...doc.data.funds, ...(doc.data.sentiment.fearGreed ? [doc.data.sentiment.fearGreed] : [])]
+    .filter((row) => row.visibility !== 'hidden')
   const must = rows.filter((row) => row.importance.tier === 'must')
   const chosen = must.length > 0 ? must : rows.filter((row) => row.importance.tier === 'support')
   const support = rows.filter((row) => row.importance.tier === 'support')
@@ -88,12 +91,12 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           <small>{keyMeta(row, text, locale, formatTime)}</small>
         </div>)}
       </div>
-      {doc.data.leverage ? <div className="mi-brief-poster__leverage">
+      {doc.data.leverage && doc.data.leverage.visibility !== 'hidden' ? <div className="mi-brief-poster__leverage">
         <span>{text.sections.leverage}</span>
         <b>BTC OI {doc.data.leverage.btc.openInterestUsd !== undefined ? `$${(doc.data.leverage.btc.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.btc.change24hPct !== undefined ? `${doc.data.leverage.btc.change24hPct.toFixed(1)}%` : '—'}</b>
         <b>ETH OI {doc.data.leverage.eth.openInterestUsd !== undefined ? `$${(doc.data.leverage.eth.openInterestUsd / 1e9).toFixed(2)}B` : '—'} · 24h {doc.data.leverage.eth.change24hPct !== undefined ? `${doc.data.leverage.eth.change24hPct.toFixed(1)}%` : '—'}</b>
       </div> : null}
-      {doc.data.policyPath ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, text)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
+      {doc.data.policyPath && doc.data.policyPath.visibility !== 'hidden' ? <div className="mi-brief-poster__policy"><span>{text.sections.policyPath}</span><b>{Math.round(doc.data.policyPath.probability)}% · {policyOutcomeLabel(doc.data.policyPath.outcome, text)} · {doc.data.policyPath.meetingDate}</b><small>{text.sections.marketImplied} · {doc.data.policyPath.targetLower !== undefined ? `${doc.data.policyPath.targetLower}–${doc.data.policyPath.targetUpper}%` : text.sections.rangeUnavailable}</small></div> : null}
       {metricRows.length > 0 ? <div className="mi-brief-poster__metrics">
         {metricRows.map((row) => <div key={row.id} data-tone={toneFor(row)}><span>{rowLabel(text, row.labelKey)}</span><b>{formatBriefingValue(row.value, text.noValue, locale)}</b></div>)}
       </div> : null}

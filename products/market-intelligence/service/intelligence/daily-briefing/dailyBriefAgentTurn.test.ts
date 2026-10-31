@@ -65,19 +65,19 @@ const document = (locale: DailyBriefingLocale): DailyBriefingDocument => ({
   provenance: { summaryId: 's1', readAt: '2026-10-30T00:30:00.000Z' }
 })
 
-function fakeRunner() {
-  const starts: { displayText?: string; context?: { label: string } }[] = []
+function fakeRunner(selection: unknown = { stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [], requests: [{ factId: 'macro:US.CPI', fields: ['actual', 'translation'] }] }) {
+  const starts: { displayText?: string; prompt?: string; context?: { label: string } }[] = []
   const continues: string[] = []
   return {
     starts,
     continues,
     runner: {
-      start: vi.fn(async (input: { displayText?: string; context?: { label: string } }) => {
+      start: vi.fn(async (input: { displayText?: string; prompt?: string; context?: { label: string } }) => {
         starts.push(input)
         return {
           sessionId: 's1',
           created: true,
-          assistantText: JSON.stringify({ stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [], requests: [{ factId: 'macro:US.CPI', fields: ['actual', 'translation'] }] }),
+          assistantText: JSON.stringify(selection),
           toolInvocations: []
         }
       }),
@@ -118,6 +118,20 @@ describe('daily brief agent turn copy', () => {
     expect(field).toContain('actual=3.4%')
     expect(field).toContain('translation=not collected')
     expect(field).not.toMatch(CJK)
+  })
+
+  it('shows the data facts in the selection pass and carries a data include into the writing pass', async () => {
+    const { starts, continues, runner } = fakeRunner({
+      stage: 'select', news: ['news:n1'], macro: ['macro:US.CPI'], next: [], data: ['data:leverage']
+    })
+    await runDailyBriefAgentTurn({ runner, document: document('en-US'), locale: 'en-US' })
+    const selection = starts[0]?.prompt ?? ''
+    expect(selection).toContain('data:leverage')
+    expect(selection).toContain('"materiality"')
+    const writing = continues.find((text) => text.includes('Write this exact JSON shape')) ?? ''
+    expect(writing).toContain('"factId": "data:leverage"')
+    expect(writing).toContain('"visibility": "shown"')
+    expect(writing).toContain('hiddenData')
   })
 
   it('keeps the Chinese session copy for zh-CN', async () => {
