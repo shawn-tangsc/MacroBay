@@ -245,7 +245,3 @@ function DashboardSidebar({ calendarState, fearGreedState, fundingRateState, fee
     <FeedStatusStrip rows={feedRows} text={text.feedStatus} tags={tags} nowMs={nowMs} onManageSource={onManageSource} />
   </section>
 }
-
-function formatTime(value: string): string {
-  return `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`
-}
