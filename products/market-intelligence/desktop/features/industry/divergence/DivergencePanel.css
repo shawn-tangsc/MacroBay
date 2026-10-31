@@ -1,0 +1,81 @@
+.mi-divergence {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 0 10px;
+}
+.mi-divergence h2 {
+  color: var(--mi-dashboard-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+.mi-divergence__note {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.mi-divergence__rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mi-divergence__row {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border-left: 2px solid var(--mi-dashboard-line);
+  background: color-mix(in srgb, var(--mi-dashboard-surface) 60%, transparent);
+}
+.mi-divergence__row[data-direction='bearish'] { border-left-color: var(--mi-dashboard-negative); }
+.mi-divergence__row[data-direction='bullish'] { border-left-color: var(--mi-dashboard-positive); }
+.mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-caution); }
+.mi-divergence__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.mi-divergence__direction { font-size: 11px; font-weight: 650; }
+.mi-divergence__direction[data-direction='bearish'] { color: var(--mi-dashboard-negative); }
+.mi-divergence__direction[data-direction='bullish'] { color: var(--mi-dashboard-positive); }
+.mi-divergence__direction[data-direction='unpriced'] { color: var(--mi-dashboard-caution); }
+.mi-divergence__legs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--mi-dashboard-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+.mi-divergence__leg i {
+  margin-right: 4px;
+  color: var(--mi-dashboard-muted);
+  font-family: inherit;
+  font-style: normal;
+}
+.mi-divergence__mechanism {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.mi-divergence__invalidation {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  opacity: 0.8;
+}
+.mi-divergence__withheld {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+}
+.mi-divergence__withheld-title { font-weight: 650; }
+.mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }

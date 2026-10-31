@@ -61,15 +61,14 @@ export type DivergenceRow = Readonly<{
   pairId: DivergencePairId
   direction: DivergenceDirection
   legs: readonly DivergenceLeg[]
-  /** i18n key for the one-line mechanism; never free text. */
-  mechanismKey: string
-  invalidationKey: string
 }>
 
 export type DivergenceWithheld = Readonly<{
   pairId: DivergencePairId
   reason: 'window-mismatch' | 'leg-missing' | 'leg-stale'
   leg: DivergenceLegId
+  /** The instant the leg stopped, when the refusal is about time rather than a missing leg. */
+  observedAt?: string
 }>
 
 export type MarketDivergenceResult =
@@ -109,7 +108,7 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     const open = input.openInterest
     const funding = input.funding
     if (!stable || !open || !funding) withheld.push({ pairId: 'liquidity-leverage', reason: 'leg-missing', leg: !stable ? 'stablecoin' : !open ? 'open-interest' : 'funding' })
-    else if (!withinDailyWindow(stable.observedAt, input.asOf)) withheld.push({ pairId: 'liquidity-leverage', reason: 'window-mismatch', leg: 'stablecoin' })
+    else if (!withinDailyWindow(stable.observedAt, input.asOf)) withheld.push({ pairId: 'liquidity-leverage', reason: 'window-mismatch', leg: 'stablecoin', observedAt: stable.observedAt })
     else if (!isFresh(open.observedAt, input.asOf) || !isFresh(funding.observedAt, input.asOf)) withheld.push({ pairId: 'liquidity-leverage', reason: 'leg-stale', leg: !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'funding' })
     else if (stable.change7dPercent <= divergencePolicy.thresholds.stablecoin7dPercent
       && open.change24hPct >= divergencePolicy.thresholds.openInterest24hUpPercent
@@ -128,7 +127,7 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
     else if (sessions.length < divergencePolicy.thresholds.etfWindowSessions) withheld.push({ pairId: 'flows-price', reason: 'leg-stale', leg: 'etf' })
     // The window is anchored on the newest finished session: a three-day sum ends the day the
     // market last closed, not the day it started.
-    else if (!withinDailyWindow(etfObservedAt(sessions.at(-1)!), input.asOf)) withheld.push({ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' })
+    else if (!withinDailyWindow(etfObservedAt(sessions.at(-1)!), input.asOf)) withheld.push({ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf', observedAt: etfObservedAt(sessions.at(-1)!) })
     else if (!isFresh(open.observedAt, input.asOf) || !isFresh(price.observedAt, input.asOf)) withheld.push({ pairId: 'flows-price', reason: 'leg-stale', leg: !isFresh(open.observedAt, input.asOf) ? 'open-interest' : 'price' })
     else {
       const net = sessions.reduce((total, row) => total + row.netFlowUsd, 0)
@@ -204,13 +203,9 @@ function fundingLeg(input: Readonly<{ ratePercent: number; observedAt: string }>
 }
 
 function freezeRow(pairId: DivergencePairId, direction: DivergenceDirection, legs: readonly DivergenceLeg[]): DivergenceRow {
-  return Object.freeze({
-    pairId,
-    direction,
-    legs: Object.freeze(legs.map(leg => Object.freeze(leg))),
-    mechanismKey: `divergence.${pairId}.mechanism`,
-    invalidationKey: `divergence.${pairId}.invalidation`
-  })
+  // The pair id is the name: the card and the analysis both look their sentence up by it, so
+  // there is no second identifier to keep in step.
+  return Object.freeze({ pairId, direction, legs: Object.freeze(legs.map(leg => Object.freeze(leg))) })
 }
 
 export function isCanonicalDivergenceTime(value: unknown): value is string {
@@ -241,7 +236,6 @@ function isRow(value: unknown): boolean {
   const row = value as Record<string, unknown>
   if (!divergencePolicy.pairs.includes(row.pairId as never)) return false
   if (row.direction !== 'bearish' && row.direction !== 'bullish' && row.direction !== 'unpriced') return false
-  if (typeof row.mechanismKey !== 'string' || typeof row.invalidationKey !== 'string') return false
   if (!Array.isArray(row.legs) || row.legs.length < 2 || row.legs.length > 3) return false
   return row.legs.every(isLeg)
 }
@@ -260,5 +254,6 @@ function isWithheld(value: unknown): boolean {
   const entry = value as Record<string, unknown>
   if (!divergencePolicy.pairs.includes(entry.pairId as never)) return false
   if (entry.reason !== 'window-mismatch' && entry.reason !== 'leg-missing' && entry.reason !== 'leg-stale') return false
-  return typeof entry.leg === 'string'
+  if (typeof entry.leg !== 'string') return false
+  return entry.observedAt === undefined || isCanonicalDivergenceTime(entry.observedAt)
 }

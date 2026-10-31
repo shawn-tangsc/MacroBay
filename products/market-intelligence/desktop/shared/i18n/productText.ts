@@ -436,12 +436,46 @@ export const productText = {
               ],
               liquidationFoot: '▲ 疑似强平为推断值，非交易所强平数据（持仓骤降 + 价格同向 + 成交量放大）',
               liquidationUnavailable: '强平标记暂不可用：成交量这一路没有采到。',
+
               noRate: '该时段无费率',
               sourceName: 'Binance Futures Positioning',
               sourceStates: { loading: '加载中', available: '持仓与费率可用', empty: '暂无观测值', unavailable: '持仓数据不可用' },
               manageSettings: '管理 Binance Futures Positioning 设置',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': '多头付费', 'short-pays-long': '空头付费', neutral: '中性' }
+            },
+            divergence: {
+              title: '跨面板背离',
+              loading: '正在比对四条腿…',
+              empty: '今日三对均未出现背离：资金、杠杆与价格指向同一方向。',
+              unavailable: '背离读数暂不可用：几条腿没有同时取到。',
+              withheldTitle: '未比对的配对',
+              withheldReasons: {
+                'window-mismatch': '{leg} 窗口不重叠（截至 {at}）',
+                'leg-missing': '缺少 {leg}',
+                'leg-stale': '{leg} 读数已过期'
+              },
+              legAsOf: '{leg} 截至 {at}',
+              legs: {
+                stablecoin: '稳定币 7 天', etf: 'ETF 3 日净流', 'open-interest': '持仓 24 小时',
+                funding: '费率', price: '价格 24 小时', sentiment: '舆情 24 小时'
+              },
+              directions: { bearish: '偏空', bullish: '偏强', unpriced: '未被计价' },
+              invalidationLabel: '失效条件',
+              pairs: {
+                'liquidity-leverage': {
+                  mechanism: '可动用稳定币在减少，永续空头却仍在加仓；价格一旦反弹，空头回补会放大涨幅。',
+                  invalidation: '稳定币 7 天转正，或持仓 24 小时内回落 3% 以上。'
+                },
+                'flows-price': {
+                  mechanism: '现货 ETF 在净流出、杠杆在退，价格却没跌，说明有现货在承接。',
+                  invalidation: 'ETF 转为净流入，或价格补跌 1% 以上。'
+                },
+                'narrative-price': {
+                  mechanism: '消息面偏空，但价格与持仓都没有反应：要么尚未计价，要么早已计价完毕。',
+                  invalidation: '价格或持仓出现 1% 以上的方向性移动。'
+                }
+              }
             },
             policyPath: {
               title: '利率路径',
@@ -1973,12 +2007,46 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               ],
               liquidationFoot: '▲ Suspected liquidation is inferred, not exchange liquidation data (position drop + price move + volume expansion)',
               liquidationUnavailable: 'Liquidation markers unavailable: the volume leg was not collected.',
+
               noRate: 'No funding rate in this window',
               sourceName: 'Binance Futures Positioning',
               sourceStates: { loading: 'Loading', available: 'Positioning and funding available', empty: 'No observation', unavailable: 'Positioning unavailable' },
               manageSettings: 'Manage Binance Futures Positioning settings',
               assets: { btc: 'BTC', eth: 'ETH' },
               paymentDirections: { 'long-pays-short': 'Longs pay shorts', 'short-pays-long': 'Shorts pay longs', neutral: 'Neutral' }
+            },
+            divergence: {
+              title: 'Cross-panel divergence',
+              loading: 'Comparing the four legs…',
+              empty: 'None of the three pairs diverged today: money, leverage and price point the same way.',
+              unavailable: 'The divergence reading is unavailable: the legs could not be read together.',
+              withheldTitle: 'Not compared',
+              withheldReasons: {
+                'window-mismatch': '{leg} window does not overlap (as of {at})',
+                'leg-missing': '{leg} is missing',
+                'leg-stale': '{leg} is out of date'
+              },
+              legAsOf: '{leg} as of {at}',
+              legs: {
+                stablecoin: 'Stablecoins 7d', etf: 'ETF net flow 3d', 'open-interest': 'Open interest 24h',
+                funding: 'Funding', price: 'Price 24h', sentiment: 'Sentiment 24h'
+              },
+              directions: { bearish: 'Bearish', bullish: 'Bullish', unpriced: 'Unpriced' },
+              invalidationLabel: 'Invalidated by',
+              pairs: {
+                'liquidity-leverage': {
+                  mechanism: 'Spendable stablecoins are shrinking while perpetual shorts keep building; a bounce would force them to cover.',
+                  invalidation: 'Stablecoins turn positive over 7 days, or open interest falls 3% inside a day.'
+                },
+                'flows-price': {
+                  mechanism: 'Spot funds are bleeding and leverage is coming off, yet price held: something bought the supply.',
+                  invalidation: 'ETF flows turn positive, or price falls through 1%.'
+                },
+                'narrative-price': {
+                  mechanism: 'The news was negative and neither price nor positioning moved: either not priced yet, or priced long ago.',
+                  invalidation: 'Price or open interest moves more than 1% in either direction.'
+                }
+              }
             },
             policyPath: {
               title: 'Policy path',
