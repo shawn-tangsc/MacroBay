@@ -235,3 +235,16 @@ describe('policy path card shapes', () => {
     expect(rendered.querySelector('.mi-policy-card__upgrade')).toBeNull()
   })
 })
+
+describe('policy path card markers', () => {
+  it('does not carry a repricing chip into the settlement strip', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'settlement', minutesSinceDecision: 42 },
+      markers: [{ kind: 'repricing', level: 'strong', changeInPp: 8.4 }],
+      settlement
+    })
+    // The series behind that marker is the next meeting's; on the strip it would read as the verdict.
+    expect(rendered.querySelector('.mi-policy-card__marker')).toBeNull()
+  })
+})

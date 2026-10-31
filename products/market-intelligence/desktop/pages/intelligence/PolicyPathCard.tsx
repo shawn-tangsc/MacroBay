@@ -75,7 +75,10 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   // The leading bucket is the market's answer, not necessarily a hike.
   const outcomeLabel = probability ? `${month} 月${text.outcomes[probability.outcome]}` : ''
   const phase = reading.phase
-  const marker = reading.markers?.[0]
+  // The markers describe the meeting the body is about. During the settlement strip the body is the
+  // decision just made, while the stored series already belongs to the next meeting - a repricing
+  // chip there would be read as part of the verdict.
+  const marker = phase.kind === 'settlement' ? undefined : reading.markers?.[0]
   // The strip is the settlement body; the verdict keeps the normal body and only remembers the
   // conclusion in its footer, which is why the two uses are kept apart.
   const settlement = reading.settlement
