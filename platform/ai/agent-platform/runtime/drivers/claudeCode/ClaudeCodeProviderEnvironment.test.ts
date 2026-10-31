@@ -94,6 +94,43 @@ describe('Claude Code provider environment', () => {
     })
   })
 
+  it('forwards the declared model output capability into provider metadata', () => {
+    const state: ProviderState = {
+      providers: [
+        {
+          ...readyProviderState.providers[0]!,
+          models: [
+            {
+              id: 'long-output',
+              name: 'Long Output',
+              maxCompletionTokens: 65536,
+              capabilities: { chat: true, agentRuntimes: { claudeCode: true } }
+            }
+          ],
+          defaultChatModelId: 'long-output'
+        }
+      ]
+    }
+
+    const resolved = createClaudeCodeProviderEnvironment(state, 'anthropic:long-output')
+
+    expect(resolved).toMatchObject({
+      ok: true,
+      metadata: {
+        modelId: 'long-output',
+        maxCompletionTokens: 65536
+      }
+    })
+  })
+
+  it('omits the output capability when the model does not declare one', () => {
+    const resolved = createClaudeCodeProviderEnvironment(readyProviderState, 'anthropic:claude-sonnet-4-5')
+
+    expect(resolved.ok).toBe(true)
+    if (!resolved.ok) return
+    expect(resolved.metadata).not.toHaveProperty('maxCompletionTokens')
+  })
+
   it('uses the messages endpoint base for the direct Anthropic env', () => {
     const state: ProviderState = {
       providers: [

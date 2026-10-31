@@ -26,6 +26,10 @@ export type ClaudeCodeProviderEnvironmentMetadata = {
   /** 模型能力 `capabilities.reasoning`；`undefined` = 厂商未声明，保持默认行为。 */
   modelReasoningSupported?: boolean
   /**
+   * 模型声明的单轮输出能力（`maxCompletionTokens`）。`undefined` = 厂商未声明，驱动用安全默认。
+   */
+  maxCompletionTokens?: number
+  /**
    * 该路由能否承载 Anthropic server-side web tools（WebSearch/WebFetch）。
    * gateway 路由恒为 false：适配层会把 server tool 转成普通 function，语义不成立。
    */
@@ -117,6 +121,7 @@ export function createClaudeCodeProviderEnvironment(
     requireReadyProvider: true
   })
   const modelReasoningSupported = resolveModelReasoningSupport(model)
+  const maxCompletionTokens = resolveModelMaxCompletionTokens(model)
 
   if (!compatibility.selectable) {
     return {
@@ -150,7 +155,8 @@ export function createClaudeCodeProviderEnvironment(
         baseUrl: options.gateway.baseUrl,
         route: 'gateway',
         serverWebToolsSupported: false,
-        ...(modelReasoningSupported === undefined ? {} : { modelReasoningSupported })
+        ...(modelReasoningSupported === undefined ? {} : { modelReasoningSupported }),
+        ...(maxCompletionTokens === undefined ? {} : { maxCompletionTokens })
       },
       compatibility
     }
@@ -194,7 +200,8 @@ export function createClaudeCodeProviderEnvironment(
       baseUrl,
       route: 'direct',
       serverWebToolsSupported: supportsAnthropicServerWebSearch(provider),
-      ...(modelReasoningSupported === undefined ? {} : { modelReasoningSupported })
+      ...(modelReasoningSupported === undefined ? {} : { modelReasoningSupported }),
+      ...(maxCompletionTokens === undefined ? {} : { maxCompletionTokens })
     },
     compatibility
   }
@@ -204,6 +211,12 @@ function resolveModelReasoningSupport(model: {
   capabilities?: { reasoning?: boolean }
 }): boolean | undefined {
   return typeof model.capabilities?.reasoning === 'boolean' ? model.capabilities.reasoning : undefined
+}
+
+function resolveModelMaxCompletionTokens(model: { maxCompletionTokens?: number }): number | undefined {
+  const value = model.maxCompletionTokens
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
+  return Math.floor(value)
 }
 
 function buildDirectEnv(

@@ -290,7 +290,10 @@ export class ClaudeCodeRuntimeDriver implements AgentRuntimeDriver {
       effectiveResume: context.lastResumeToken ?? undefined,
       ...(providerEnvironment?.metadata.modelReasoningSupported === undefined
         ? {}
-        : { modelSupportsReasoning: providerEnvironment.metadata.modelReasoningSupported })
+        : { modelSupportsReasoning: providerEnvironment.metadata.modelReasoningSupported }),
+      ...(providerEnvironment?.metadata.maxCompletionTokens === undefined
+        ? {}
+        : { modelMaxOutputTokens: providerEnvironment.metadata.maxCompletionTokens })
     })
     const requestToolApproval = (input: ToolApprovalRequestInput) => this.requestToolApproval(input)
     const toolHooks = createClaudeCodeToolHooks({

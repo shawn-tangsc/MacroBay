@@ -1087,6 +1087,51 @@ describe('Claude Code runtime driver skeleton', () => {
     await expect(turn).rejects.toThrow('aborted')
     expect(driver.cancelSession('session-1')).toBe(false)
   })
+
+  it('asks the SDK for the model output capability instead of a fixed per-model number', async () => {
+    const result = createRuntimeResult()
+    const executeTurn = vi.fn(async () => result) as Mock<NonNullable<ClaudeCodeRuntimeDriverDependencies['executeTurn']>>
+    const driver = new ClaudeCodeRuntimeDriver({
+      resolveProviderEnvironment: async () => ({
+        ok: true,
+        modelId: 'model-a',
+        env: {},
+        metadata: {
+          providerId: 'provider',
+          providerName: 'Provider',
+          modelId: 'model-a',
+          modelName: 'Model A',
+          baseUrl: 'https://provider.test',
+          route: 'direct',
+          serverWebToolsSupported: true,
+          maxCompletionTokens: 65536
+        },
+        compatibility: {
+          providerId: 'provider',
+          modelId: 'model-a',
+          runtimeId: 'claude-code',
+          selectable: true,
+          route: 'direct',
+          status: 'ready',
+          summary: 'Ready'
+        }
+      }),
+      executeTurn
+    })
+
+    await expect(driver.sendMessage(request, { composition })).resolves.toBe(result)
+
+    const input = executeTurn.mock.calls[0]?.[0]
+    expect(input?.query.sdkOptions.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('65536')
+    expect(input?.query.runtimeMetadata.outputLimit).toEqual({
+      maxOutputTokens: 65536,
+      source: 'model-capability'
+    })
+    expect(input?.executor.metadata.outputLimit).toEqual({
+      maxOutputTokens: 65536,
+      source: 'model-capability'
+    })
+  })
 })
 
 function createRuntimeResult(): AgentChatRuntimeResult {

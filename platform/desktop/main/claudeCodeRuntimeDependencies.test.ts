@@ -772,6 +772,7 @@ describe('claude code runtime dependency helpers', () => {
       })
     })
     expect(result.assistantMessage.searchableText).toBe('First part. Second part.')
+    expect(result.assistantMessage.status).toBe('success')
     expect(result.assistantMessage.runtimeResumeToken).toBe('sdk-session-1')
     expect(result.assistantMessage.modelSnapshot).toEqual({
       id: 'claude-sonnet-4-5',
@@ -783,6 +784,159 @@ describe('claude code runtime dependency helpers', () => {
       completionTokens: 9,
       totalTokens: 21
     })
+  })
+
+  it('fails an output-truncated turn explicitly and keeps the generated text for diagnosis', async () => {
+    const partialOutput = '{"stage":"write","lead":"The market'
+    const queryMessages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: partialOutput }]
+        },
+        uuid: 'assistant-uuid-1',
+        session_id: 'sdk-session-1',
+        parent_tool_use_id: null
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        duration_ms: 42,
+        duration_api_ms: 21,
+        is_error: false,
+        num_turns: 1,
+        result: partialOutput,
+        stop_reason: 'max_tokens',
+        total_cost_usd: 0,
+        usage: {
+          input_tokens: 1200,
+          output_tokens: 15137,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0
+        },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: 'result-uuid-1',
+        session_id: 'sdk-session-1'
+      }
+    ]
+    const query = vi.fn(() => createAsyncIterable(queryMessages))
+    const loadClaudeSdkModule = vi.fn(async () => ({
+      ok: true as const,
+      module: { query }
+    }))
+    let state = createAgentStateForSdkExecutor()
+    const executeTurn = createClaudeAgentSdkExecutor({
+      loadClaudeSdkModule,
+      getProviderState: async () => createProviderStateForSdkExecutor(),
+      getAgentState: async () => state,
+      saveAgentState: async (next, options) => {
+        state = options?.mergeSessionId ? mergeSessionMessagesState(state, next, options.mergeSessionId) : next
+      }
+    })
+
+    const result = await executeTurn(createExecutionInput())
+
+    expect(result.assistantMessage.status).toBe('error')
+    expect(result.assistantMessage.searchableText).toContain(partialOutput)
+    expect(result.assistantMessage.searchableText).toContain('输出被截断')
+    expect(result.assistantMessage.searchableText).toContain('stop_reason=max_tokens')
+    expect(result.assistantMessage.searchableText).toContain('已生成 15137 tokens')
+    expect(result.assistantMessage.searchableText).toContain('日报')
+    expect(result.assistantMessage.stats).toEqual({ completionTokens: 15137 })
+  })
+
+  it('keeps a turn successful when the CLI recovered from an output-limit hit and finished normally', async () => {
+    const queryMessages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: '{"a":' }],
+          stop_reason: 'max_tokens'
+        },
+        error: 'max_output_tokens',
+        uuid: 'assistant-uuid-1',
+        session_id: 'sdk-session-1',
+        parent_tool_use_id: null
+      },
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: '{"a":1}' }],
+          stop_reason: 'end_turn'
+        },
+        uuid: 'assistant-uuid-2',
+        session_id: 'sdk-session-1',
+        parent_tool_use_id: null
+      },
+      {
+        type: 'result',
+        subtype: 'success',
+        duration_ms: 42,
+        duration_api_ms: 21,
+        is_error: false,
+        num_turns: 2,
+        result: '{"a":1}',
+        stop_reason: 'end_turn',
+        total_cost_usd: 0,
+        usage: { input_tokens: 10, output_tokens: 20 },
+        modelUsage: {},
+        permission_denials: [],
+        uuid: 'result-uuid-1',
+        session_id: 'sdk-session-1'
+      }
+    ]
+    const query = vi.fn(() => createAsyncIterable(queryMessages))
+    const loadClaudeSdkModule = vi.fn(async () => ({ ok: true as const, module: { query } }))
+    let state = createAgentStateForSdkExecutor()
+    const executeTurn = createClaudeAgentSdkExecutor({
+      loadClaudeSdkModule,
+      getProviderState: async () => createProviderStateForSdkExecutor(),
+      getAgentState: async () => state,
+      saveAgentState: async (next, options) => {
+        state = options?.mergeSessionId ? mergeSessionMessagesState(state, next, options.mergeSessionId) : next
+      }
+    })
+
+    const result = await executeTurn(createExecutionInput())
+
+    expect(result.assistantMessage.status).toBe('success')
+    expect(result.assistantMessage.searchableText).toBe('{"a":1}')
+  })
+
+  it('fails a turn when the SDK reports max output tokens and the stream ends without a result', async () => {
+    const partialOutput = '{"stage":"write","lead":"cut'
+    const queryMessages = [
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'text', text: partialOutput }],
+          stop_reason: 'max_tokens'
+        },
+        error: 'max_output_tokens',
+        uuid: 'assistant-uuid-1',
+        session_id: 'sdk-session-1',
+        parent_tool_use_id: null
+      }
+    ]
+    const query = vi.fn(() => createAsyncIterable(queryMessages))
+    const loadClaudeSdkModule = vi.fn(async () => ({ ok: true as const, module: { query } }))
+    let state = createAgentStateForSdkExecutor()
+    const executeTurn = createClaudeAgentSdkExecutor({
+      loadClaudeSdkModule,
+      getProviderState: async () => createProviderStateForSdkExecutor(),
+      getAgentState: async () => state,
+      saveAgentState: async (next, options) => {
+        state = options?.mergeSessionId ? mergeSessionMessagesState(state, next, options.mergeSessionId) : next
+      }
+    })
+
+    const result = await executeTurn(createExecutionInput())
+
+    expect(result.assistantMessage.status).toBe('error')
+    expect(result.assistantMessage.searchableText).toContain(partialOutput)
+    expect(result.assistantMessage.searchableText).toContain('输出被截断')
+    expect(result.assistantMessage.searchableText).toContain('stop_reason=max_output_tokens')
   })
 
   it('fails closed when startup() returns the same WarmQuery object identity for a second turn', async () => {

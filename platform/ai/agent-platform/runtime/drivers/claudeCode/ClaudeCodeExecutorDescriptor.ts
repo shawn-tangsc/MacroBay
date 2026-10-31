@@ -68,6 +68,7 @@ function cloneRuntimeMetadata(metadata: ClaudeCodeRuntimeMetadata): ClaudeCodeRu
     skillToolIds: [...metadata.skillToolIds],
     ...(metadata.runtimeMcpToolNames ? { runtimeMcpToolNames: [...metadata.runtimeMcpToolNames] } : {}),
     ...(metadata.skillContext !== undefined ? { skillContext: metadata.skillContext } : {}),
+    ...(metadata.outputLimit ? { outputLimit: { ...metadata.outputLimit } } : {}),
     toolPolicy: cloneToolPolicy(metadata.toolPolicy)
   }
 }

@@ -12,10 +12,14 @@ import type {
   ClaudeCodeWorkspacePreparationResult
 } from '../../ai/agent-platform/runtime/drivers/claudeCode'
 import {
+  AgentTurnOutputTruncatedError,
+  buildAgentTurnOutputTruncatedDiagnosticText,
   buildClaudeCodeSkillContext,
   buildClaudeCodeSystemPromptAppend,
   createClaudeCodeAgentSdkOptions,
-  createClaudeCodeProviderEnvironment
+  createClaudeCodeProviderEnvironment,
+  isClaudeCodeOutputTruncationErrorCode,
+  isClaudeCodeOutputTruncationStopReason
 } from '../../ai/agent-platform/runtime/drivers/claudeCode'
 import { buildProductAgentToolSdkMcpServers } from './buildProductAgentToolSdkMcpServers'
 import { buildPlatformWebSearchSdkMcpServer, type PlatformWebSearchBridge } from './buildPlatformWebSearchSdkMcpServer'
@@ -112,8 +116,13 @@ type ClaudeAgentSdkMessage = {
   parent_tool_use_id?: string | null
   message?: string | {
     content?: ClaudeAgentSdkAssistantContentBlock[]
+    stop_reason?: string | null
+    usage?: ClaudeAgentSdkUsage
   }
   result?: string
+  stop_reason?: string | null
+  /** Assistant 消息的错误码；`max_output_tokens` 表示这一轮被输出上限截断。 */
+  error?: string
   usage?: ClaudeAgentSdkUsage
   errors?: string[]
   is_error?: boolean
@@ -709,7 +718,8 @@ export function createClaudeAgentSdkRuntime(deps: ClaudeAgentSdkExecutorDependen
           sessionId: input.request.sessionId,
           runId: input.runId,
           emitChunk: input.emitChunk,
-          toolHooks: input.toolHooks
+          toolHooks: input.toolHooks,
+          maxOutputTokens: input.query.runtimeMetadata.outputLimit?.maxOutputTokens ?? null
         }
       )
 
@@ -728,6 +738,14 @@ export function createClaudeAgentSdkRuntime(deps: ClaudeAgentSdkExecutorDependen
       )
       return buildRuntimeTurnResult(renamedState, input.request.sessionId, assistantMessageId)
     } catch (error) {
+      if (error instanceof AgentTurnOutputTruncatedError) {
+        const errorState = await patchRuntimeAssistantMessage(deps, input.request.sessionId, assistantMessageId, {
+          status: input.signal.aborted ? 'paused' : 'error',
+          data: createClaudeSdkRuntimeMessageData(buildAgentTurnOutputTruncatedDiagnosticText(error)),
+          ...(error.outputTokens === null ? {} : { stats: { completionTokens: error.outputTokens } })
+        })
+        return buildRuntimeTurnResult(errorState, input.request.sessionId, assistantMessageId)
+      }
       const message = error instanceof Error ? error.message : String(error)
       const queryFailureMetadata = extractClaudeSdkQueryFailureMetadata(error)
       const errorState = await patchRuntimeAssistantMessage(deps, input.request.sessionId, assistantMessageId, {
@@ -1459,12 +1477,17 @@ async function collectSdkQueryResult(
     runId: string
     emitChunk: (chunk: AgentRuntimeSessionChunk) => void
     toolHooks: ClaudeCodeRuntimeExecutionInput['toolHooks']
+    /** 本回合请求的单轮输出上限；只用于截断诊断。 */
+    maxOutputTokens: number | null
   }
 ): Promise<{ text: string; data: MessageData; sessionId: string | null; stats: MessageStats | null }> {
   let assistantText = ''
   let resultText: string | null = null
   let sessionId: string | null = null
   let stats: MessageStats | null = null
+  let sawResult = false
+  let lastAssistantStopReason: string | null = null
+  let assistantOutputTruncationError = false
   const streamState = createClaudeSdkToolStreamState()
 
   try {
@@ -1490,6 +1513,16 @@ async function collectSdkQueryResult(
 
       if (message.type === 'assistant') {
         emitClaudeSdkAssistantToolChunks(message, options.sessionId, streamState, options.emitChunk)
+        // 子代理的输出上限不是主回合的上限，只看主线程。CLI 在 stop_reason=max_tokens 时会
+        // 最多自动续写 3 次（`max_output_tokens_recovery`），所以这里只记录信号，
+        // 最终是否截断以 result 的 stop_reason 为准，避免把已续写成功的回合误判为失败。
+        if (!message.parent_tool_use_id) {
+          const assistantStopReason = readClaudeSdkAssistantStopReason(message)
+          if (assistantStopReason) lastAssistantStopReason = assistantStopReason
+          if (isClaudeCodeOutputTruncationErrorCode(message.error)) {
+            assistantOutputTruncationError = true
+          }
+        }
         const nextText = extractAssistantMessageText(message)
         if (nextText && nextText !== assistantText) {
           const textDelta = deriveAssistantTextDelta(assistantText, nextText)
@@ -1519,6 +1552,23 @@ async function collectSdkQueryResult(
       }
 
       if (message.type === 'result') {
+        sawResult = true
+        const truncationStopReason = isClaudeCodeOutputTruncationStopReason(message.stop_reason)
+          ? (message.stop_reason as string)
+          : null
+        if (truncationStopReason) {
+          // Anthropic 协议把截断报在 stop_reason=max_tokens，OpenAI 兼容协议报 length；
+          // SDK 仍可能把 subtype 标成 success，所以这里必须自己判失败。
+          throw new AgentTurnOutputTruncatedError({
+            stopReason: truncationStopReason,
+            partialText:
+              typeof message.result === 'string' && message.result.trim()
+                ? message.result.trim()
+                : assistantText,
+            maxOutputTokens: options.maxOutputTokens,
+            outputTokens: readClaudeSdkOutputTokens(message.usage)
+          })
+        }
         if (Array.isArray(message.errors) && message.errors.length > 0) {
           throw new Error(message.errors.join('\n'))
         }
@@ -1529,7 +1579,18 @@ async function collectSdkQueryResult(
         }
       }
     }
+
+    // 流没有 result 就结束、但最后一条主线程 assistant 已被截断：同样不能当成成功。
+    if (!sawResult && (assistantOutputTruncationError || isClaudeCodeOutputTruncationStopReason(lastAssistantStopReason))) {
+      throw new AgentTurnOutputTruncatedError({
+        stopReason: assistantOutputTruncationError ? 'max_output_tokens' : (lastAssistantStopReason as string),
+        partialText: assistantText,
+        maxOutputTokens: options.maxOutputTokens,
+        outputTokens: null
+      })
+    }
   } catch (error) {
+    if (error instanceof AgentTurnOutputTruncatedError) throw error
     throw new ClaudeSdkQueryCollectionError(error, {
       observedSessionId: sessionId,
       observedStats: stats
@@ -1549,6 +1610,16 @@ async function collectSdkQueryResult(
     sessionId,
     stats
   }
+}
+
+function readClaudeSdkAssistantStopReason(message: ClaudeAgentSdkMessage): string | null {
+  if (!message.message || typeof message.message === 'string') return null
+  return typeof message.message.stop_reason === 'string' ? message.message.stop_reason : null
+}
+
+function readClaudeSdkOutputTokens(usage: ClaudeAgentSdkUsage | undefined): number | null {
+  const value = usage?.output_tokens
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
 function extractClaudeSdkQueryFailureMetadata(error: unknown): {
