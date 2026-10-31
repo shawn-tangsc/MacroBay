@@ -46,7 +46,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <b>{text.unavailable}</b>
             {state.missing.length > 0 ? (
               <span className="mi-divergence__status-sub">
-                {text.missingLegs.replace('{legs}', state.missing.map(leg => text.legs[leg]).join('、'))}
+                {text.missingLegs.replace('{legs}', state.missing.map(leg => text.legs[leg]).join(text.withheldListSep))}
               </span>
             ) : (
               <span className="mi-divergence__status-sub">{text.unavailableWhy[state.reason]}</span>
@@ -64,7 +64,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
         {nothingCompared ? (
           <div className="mi-divergence__status" data-tone="error">
             <b>{text.nothingCompared}</b>
-            <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join('、')}</span>
+            <span className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join(text.withheldListSep)}</span>
           </div>
         ) : null}
         {state.state === 'available' ? (
@@ -72,7 +72,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <ul className="mi-divergence__rows">
               {state.rows.map(row => (
                 <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
-                  title={`${text.invalidationLabel}：${text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}`}>
+                  title={`${text.invalidationLabel}${text.labelSep}${text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}`}>
                   <div className="mi-divergence__line">
                     <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
                     {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
@@ -85,7 +85,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
         ) : null}
         {state.state === 'available' && withheld.length > 0 ? (
           <p className="mi-divergence__withheld">
-            <span className="mi-divergence__withheld-title">{text.withheldTitle}：</span>
+            <span className="mi-divergence__withheld-title">{text.withheldTitle}{text.labelSep}</span>
             {groupWithheld(withheld).map(group => (
               <span key={group.key} className="mi-divergence__withheld-item" data-reason={group.reason}>
                 {withheldLine(text, group, when)}
@@ -108,7 +108,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
  */
 function withheldLine(text: DivergencePanelText, group: ReturnType<typeof groupWithheld>[number], when: (value: string) => string): string {
   if (group.reason === 'leg-missing' && group.leg === 'sentiment') return text.sentimentNoScoredItems.replace('{leg}', text.legs[group.leg])
-  return text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : '—')
+  return text.withheldReasons[group.reason].replace('{leg}', text.legs[group.leg]).replace('{at}', group.observedAt ? when(group.observedAt) : text.missingValue)
 }
 
 /**

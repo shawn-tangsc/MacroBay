@@ -193,7 +193,7 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
             return (
               <span key={asset} data-series={asset}>
                 <b>{text.assets[asset]}</b>
-                <em>{text.oiShort}</em> {notional === undefined ? '—' : formatDashboardNotional(notional)}
+                <em>{text.oiShort}</em> {notional === undefined ? text.missingValue : formatDashboardNotional(notional)}
                 <em>{text.rateShort}</em> {rate === undefined ? text.noRate : formatRate(rate)}
               </span>
             )

@@ -8,8 +8,10 @@ import { productText } from '../../../shared/i18n/productText'
 import { DivergencePanel } from './DivergencePanel'
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.divergence
-const render = (state: Parameters<typeof DivergencePanel>[0]['state']) =>
-  renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, { state, text })))
+const render = (state: Parameters<typeof DivergencePanel>[0]['state'], locale: 'zh-CN' | 'en-US' = 'zh-CN') =>
+  renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+    state, text: productText[locale].pages.intelligence.portal.dashboard.divergence
+  })))
 
 const row = {
   pairId: 'liquidity-leverage' as const,
@@ -64,6 +66,20 @@ describe('divergence panel', () => {
     expect(markup).toContain('ETF 3 日净流')
     expect(markup).toContain('的时间对不上')
     expect(markup).toContain(text.legs.sentiment)
+  })
+
+  it('never prints Chinese punctuation on an English card', () => {
+    // The joiners are punctuation, not layout: a fullwidth colon on an English screen is a typo,
+    // and it used to be written straight into the component.
+    const markup = render({
+      state: 'available', rows: [row],
+      withheld: [
+        { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'funding' },
+        { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' }
+      ]
+    }, 'en-US')
+    expect(markup).not.toContain('：')
+    expect(markup).not.toContain('、')
   })
 
   it('never puts a space between a Chinese leg name and the particle after it', () => {

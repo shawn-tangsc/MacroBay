@@ -7,6 +7,10 @@ export type DivergencePanelText = Readonly<{
   helpLines: readonly string[]
   /** Appended when several pairs were held back for the same reason. */
   withheldGroup: string
+  /** What separates two withheld pairs, and what marks a missing instant. Per language. */
+  withheldListSep: string
+  labelSep: string
+  missingValue: string
   retry: string
   /** When we cannot even name a reading, say why in one short sentence. */
   unavailableWhy: Readonly<Record<'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large' | 'bad-payload' | 'bad-answer', string>>

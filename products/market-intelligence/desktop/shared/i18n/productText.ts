@@ -406,6 +406,8 @@ export const productText = {
               unavailable: '永续持仓数据暂时不可用。',
               observedAt: '观测时间',
               stale: '数据已滞后',
+              staleSuffix: ' · {stale}',
+              missingValue: '—',
               notional: '持仓名义额',
               rateLabel: '资金费率 · 8h',
               oiShort: '持仓',
@@ -463,6 +465,10 @@ export const productText = {
                 '比对前先对时间：按天更新的数据超过 36 小时、或某条腿超过它自己节奏的允许滞后时，这一对不下结论，并在下方写明原因。'
               ],
               withheldGroup: '（{count} 对）',
+              /** Joiners and placeholders live here: a fullwidth colon on an English screen is a typo. */
+              withheldListSep: '、',
+              labelSep: '：',
+              missingValue: '—',
               retry: '重试',
               unavailableWhy: {
                 'all-legs-missing': '六个数据源一个都没返回',
@@ -2146,6 +2152,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               unavailable: 'Perpetual positioning is unavailable.',
               observedAt: 'Observed at',
               stale: 'stale',
+              staleSuffix: ' · {stale}',
+              missingValue: '—',
               notional: 'Notional open interest',
               rateLabel: 'Funding rate · 8h',
               oiShort: 'OI',
@@ -2203,6 +2211,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'Windows are checked first: data updated daily that is older than 36 hours, or any leg older than its own cadence allows, withholds the pair and names the reason.'
               ],
               withheldGroup: ' ({count} pairs)',
+              withheldListSep: ', ',
+              labelSep: ': ',
+              missingValue: '—',
               retry: 'Retry',
               unavailableWhy: {
                 'all-legs-missing': 'all six sources came back empty',

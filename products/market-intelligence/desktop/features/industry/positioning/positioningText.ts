@@ -7,6 +7,9 @@ export type PositioningPanelText = Readonly<{
   unavailable: string
   observedAt: string
   stale: string
+  /** " · {stale}" appended after the observed instant; the separator is punctuation, so it is per language. */
+  staleSuffix: string
+  missingValue: string
   notional: string
   rateLabel: string
   oiShort: string

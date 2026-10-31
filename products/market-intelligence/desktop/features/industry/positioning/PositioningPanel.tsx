@@ -86,7 +86,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
       {header(
         <>
           {latest
-            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(latest)}{available && positioning.staleSince ? ` · ${text.stale}` : ''}</small>
+            ? <small className="mi-positioning-panel__asof">{text.observedAt} {formatTime(latest)}{available && positioning.staleSince ? text.staleSuffix.replace('{stale}', text.stale) : ''}</small>
             : null}
         </>
       )}
@@ -155,8 +155,8 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
             <span className="mi-positioning-panel__state-tip" role="tooltip">
               {text.stateWhy
                 .replace('{change}', formatDashboardChange(change?.h24Pct))
-                .replace('{now}', rate ? formatRate(rate.ratePercent) : '—')
-                .replace('{ago}', rateAgo ? formatRate(rateAgo.ratePercent) : '—')}
+                .replace('{now}', rate ? formatRate(rate.ratePercent) : text.missingValue)
+                .replace('{ago}', rateAgo ? formatRate(rateAgo.ratePercent) : text.missingValue)}
             </span>
           </span>
         ) : null}
@@ -167,11 +167,11 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
               <span className="mi-positioning-panel__rate" data-direction={rate.paymentDirection}>{formatRate(rate.ratePercent)}</span>
               <span className="mi-positioning-panel__pay">{text.paymentDirections[rate.paymentDirection]}</span>
             </>
-          : <span className="mi-positioning-panel__rate">—</span>}
+          : <span className="mi-positioning-panel__rate">{text.missingValue}</span>}
       </div>
       <div className="mi-positioning-panel__row" data-layout="level">
         <span className="mi-positioning-panel__label">{text.notional}</span>
-        <b className="mi-positioning-panel__value">{notional ? formatDashboardNotional(notional.notionalUsd) : '—'}</b>
+        <b className="mi-positioning-panel__value">{notional ? formatDashboardNotional(notional.notionalUsd) : text.missingValue}</b>
       </div>
       <div className="mi-positioning-panel__row" data-layout="pair">
         <span className="mi-positioning-panel__pair">
