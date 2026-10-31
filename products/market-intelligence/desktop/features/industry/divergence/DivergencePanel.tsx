@@ -24,7 +24,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
 }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
   const withheld = state.state === 'available' || state.state === 'empty' ? state.withheld : []
-  const judgedBy = state.state === 'available' && state.rows.every(row => row.judgedBy === 'ai') ? 'ai' : 'rules'
+  const judgedBy = state.state === 'available'
+    ? (state.rows.every(row => row.judgedBy === 'ai') ? 'ai' : 'rules')
+    : state.state === 'empty' ? state.judgedBy : 'rules'
   // Three pairs withheld is not "no divergence": nothing was compared. Saying so is the whole
   // point of the withheld list, and it must not read as a quiet day.
   const nothingCompared = state.state === 'empty' && withheld.length >= Object.keys(text.pairNames).length
@@ -40,17 +42,14 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           </button>
         </Tooltip>
         <h2 id="mi-divergence-heading">{text.title}</h2>
-        {state.state === 'available' && onRetry ? (
+        {(state.state === 'available' || state.state === 'empty') && onRetry ? (
           // The badge is the trigger, not a label: pressing it asks the model again.
           <button type="button" className="mi-divergence__judge" data-judged-by={judgedBy} onClick={onRetry}
             title={text.judgeAgain}>
             {text.judgedBy[judgedBy]}<RefreshCw size={9} aria-hidden="true" />
           </button>
         ) : null}
-        {state.state === 'available' && !onRetry ? <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span> : null}
-        {state.state === 'empty' && onRetry ? (
-          <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.judgeAgain}</button>
-        ) : null}
+        {(state.state === 'available' || state.state === 'empty') && !onRetry ? <span className="mi-divergence__judge" data-judged-by={judgedBy}>{text.judgedBy[judgedBy]}</span> : null}
       </header>
 
       {state.state === 'loading' ? <LoadingState label={text.loading} minHeight={40} /> : null}

@@ -78,7 +78,7 @@ export type DivergenceWithheld = Readonly<{
 
 export type MarketDivergenceResult =
   | Readonly<{ state: 'available'; asOf: string; rows: readonly DivergenceRow[]; withheld: readonly DivergenceWithheld[] }>
-  | Readonly<{ state: 'empty'; asOf: string; withheld: readonly DivergenceWithheld[] }>
+  | Readonly<{ state: 'empty'; asOf: string; withheld: readonly DivergenceWithheld[]; judgedBy: 'ai' | 'rules' }>
   /**
    * Nothing could be computed. `missing` names the readings that never arrived — a card that says
    * "some data is missing" without saying which is asking the reader to go and find out.
@@ -182,7 +182,7 @@ export function detectDivergences(input: DivergenceInputs): MarketDivergenceResu
 
   return rows.length > 0
     ? { state: 'available', asOf: input.asOf, rows: Object.freeze(rows), withheld: Object.freeze(withheld) }
-    : { state: 'empty', asOf: input.asOf, withheld: Object.freeze(withheld) }
+    : { state: 'empty', asOf: input.asOf, withheld: Object.freeze(withheld), judgedBy: 'rules' }
 }
 
 /** A daily leg's window must end within the lag bound; otherwise it describes another day. */
@@ -248,7 +248,7 @@ export function isMarketDivergenceResult(value: unknown, asOf: string): value is
   }
   if (!isCanonicalDivergenceTime(record.asOf) || record.asOf !== asOf) return false
   if (!Array.isArray(record.withheld) || !record.withheld.every(isWithheld)) return false
-  if (record.state === 'empty') return Object.keys(record).length === 3
+  if (record.state === 'empty') return (record.judgedBy === 'ai' || record.judgedBy === 'rules') && Object.keys(record).length === 4
   if (record.state !== 'available' || !Array.isArray(record.rows)) return false
   if (record.rows.length > divergencePolicy.pairs.length) return false
   return record.rows.every(isRow)

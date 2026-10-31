@@ -450,13 +450,13 @@ export const productText = {
               helpLabel: '这张卡怎么来的',
               helpLines: [
                 '只有两组数据指向相反方向时才会出现这一行；三对都没背离时只显示一句话。',
-                '判定默认由助手模型给出，只把这几组读数交给它，并禁止它编造数字；模型不可用时退回固定阈值，标记会写「规则判定」。',
-                'AI 只在两种时机运行：规则先发现至少一条背离时自动复核；或你点重试。读数没变不会重复调用（按读数缓存 30 分钟）。',
+                '每次打开看板都会让助手模型判定一次，30 分钟内复用同一次结果；点「重新判定」立即再来一次。模型不可用时退回固定阈值，标记会写「规则判定」。',
+                '模型看不到别的东西，只看到这几组读数；它也不能编造数字，答案不合格式就整份作废、退回固定阈值。',
                 '「舆情」是模型给新闻标题打的标签：24 小时内明确表态的标题里，看空的占多少；它不是交易所数据，其余几组才是。',
                 '比对前先对时间：按天更新的数据超过 36 小时、或分钟级数据断档时，这一对不下结论，并在下方写明原因。'
               ],
               withheldGroup: '（{count} 对）',
-              judgeAgain: 'AI 复核',
+              judgeAgain: '重新判定',
               retry: '重试',
               unavailableWhy: {
                 'all-legs-missing': '六个数据源一个都没返回',
@@ -2153,12 +2153,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               helpLines: [
                 'A line appears only when two readings point opposite ways; with none, the card is one sentence.',
                 'The judgement comes from the assistant model by default, fed only the four readings and forbidden from inventing numbers. Without a model the fixed thresholds answer and the badge says Rule-based.',
-                'It runs on two triggers: automatically when the rules already found a divergence, or when you retry. Unchanged readings do not re-call it (cached 30 minutes by reading).',
+                'It judges once every time the dashboard opens, and the same readings reuse that answer for 30 minutes; asking again runs it immediately.',
                 'Sentiment is the model labelling headlines: of the day’s items that took a side, how many were bearish. The rest are exchange and on-chain readings.',
                 'Windows are checked first: data updated daily that is older than 36 hours, or minute-level data with a gap, withholds the pair and names the reason.'
               ],
               withheldGroup: ' ({count} pairs)',
-              judgeAgain: 'AI second opinion',
+              judgeAgain: 'Judge again',
               retry: 'Retry',
               unavailableWhy: {
                 'all-legs-missing': 'all six sources came back empty',

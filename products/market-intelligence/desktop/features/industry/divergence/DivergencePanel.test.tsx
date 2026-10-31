@@ -26,7 +26,7 @@ const row = {
 
 describe('divergence panel', () => {
   it('puts the explanation behind the help icon before the title, and names who judged', () => {
-    const markup = render({ state: 'empty', withheld: [] })
+    const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
     expect(markup.indexOf('mi-divergence__help')).toBeLessThan(markup.indexOf('<h2'))
     expect(markup).toContain(`aria-label="${text.helpLabel}"`)
     // The prose is not on the card; the badge is.
@@ -45,7 +45,7 @@ describe('divergence panel', () => {
   })
 
   it('says plainly when nothing diverged instead of showing an empty card', () => {
-    const markup = render({ state: 'empty', withheld: [] })
+    const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
     expect(markup).toContain(text.empty)
     expect(markup).not.toContain('mi-divergence__row"')
   })
@@ -83,7 +83,7 @@ describe('withheld grouping', () => {
 describe('states that must not be confused', () => {
   it('says nothing was compared, in the error tone, when every pair was withheld', () => {
     const markup = render({
-      state: 'empty',
+      state: 'empty', judgedBy: 'rules' as const,
       withheld: [
         { pairId: 'flows-price', reason: 'leg-missing', leg: 'price' },
         { pairId: 'narrative-price', reason: 'leg-missing', leg: 'price' },
@@ -96,7 +96,7 @@ describe('states that must not be confused', () => {
   })
 
   it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
-    const markup = render({ state: 'empty', withheld: [] })
+    const markup = render({ state: 'empty', judgedBy: 'rules' as const, withheld: [], judgedBy: 'rules' })
     expect(markup).toContain(text.empty)
     expect(markup).not.toContain('data-tone="error"')
   })

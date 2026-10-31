@@ -126,8 +126,6 @@ async function judgeRows(
   ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
 ): Promise<MarketDivergenceResult> {
   if (!input.judge) return ruleResult
-  // Auto: nothing diverged, so there is no sentence to write. The reader can still ask.
-  if ((input.mode ?? 'auto') === 'auto' && ruleResult.state !== 'available') return ruleResult
   const pairs = buildPairs(legs, ruleResult)
   if (pairs.length === 0) return ruleResult
   const outcome = await input.judge({
@@ -139,7 +137,8 @@ async function judgeRows(
   const rows = rowsFromJudgements(outcome.judgements, pairs)
   return rows.length > 0
     ? { state: 'available', asOf: input.asOf, rows, withheld: ruleResult.withheld }
-    : { state: 'empty', asOf: input.asOf, withheld: ruleResult.withheld }
+    // A quiet day is still the model's verdict: the card must not mix two authors without saying so.
+    : { state: 'empty', asOf: input.asOf, withheld: ruleResult.withheld, judgedBy: 'ai' }
 }
 
 /** Every pair that has all its legs, plus the rule engine's own verdict as a hint. */

@@ -34,7 +34,7 @@ describe('divergence renderer client', () => {
   })
 
   it('passes an empty answer through with its withheld list', async () => {
-    const empty = { state: 'empty', asOf, withheld: [{ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' }] }
+    const empty = { state: 'empty', asOf, withheld: [{ pairId: 'flows-price', reason: 'window-mismatch', leg: 'etf' }], judgedBy: 'rules' }
     bridge(empty)
     await expect(marketDivergenceClient.query({ asOf })).resolves.toEqual(empty)
   })

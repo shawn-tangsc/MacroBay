@@ -5,7 +5,7 @@ import { isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 export type DashboardDivergenceViewState =
   | Readonly<{ state: 'loading' }>
   | Readonly<{ state: 'unavailable'; reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large'; missing: readonly DivergenceLeg['id'][] }>
-  | Readonly<{ state: 'empty'; withheld: readonly DivergenceWithheldView[] }>
+  | Readonly<{ state: 'empty'; withheld: readonly DivergenceWithheldView[]; judgedBy: 'ai' | 'rules' }>
   | Readonly<{ state: 'available'; rows: readonly DivergenceRowView[]; withheld: readonly DivergenceWithheldView[] }>
 
 export type DivergenceWithheldView = Readonly<{
@@ -42,7 +42,7 @@ export function projectDashboardDivergence(value: unknown, asOf: string): Dashbo
     leg: entry.leg,
     ...(entry.observedAt ? { observedAt: entry.observedAt } : {})
   }))
-  if (value.state === 'empty') return { state: 'empty', withheld }
+  if (value.state === 'empty') return { state: 'empty', withheld, judgedBy: value.judgedBy }
   return {
     state: 'available',
     rows: value.rows.map(row => ({
