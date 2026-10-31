@@ -9062,8 +9062,26 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   line-height: 1.5;
 }
 
+.notification-channel-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
 .notification-channel-switch.ant-switch {
   justify-self: end;
+}
+
+/* The switches cannot deliver until a producer exists; the note has to read as a state, not prose. */
+.notification-settings-unavailable {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 6px;
+  color: var(--muted-strong);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .notification-settings-footnote {

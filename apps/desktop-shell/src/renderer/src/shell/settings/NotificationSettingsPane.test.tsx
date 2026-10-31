@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -60,5 +63,23 @@ describe('notification settings availability', () => {
       (tag) => tag.textContent === labels.unavailableBadge
     ).length
     expect(badgeCount).toBe(notificationProducerWired ? 0 : 4)
+  })
+})
+
+describe('notification settings styles', () => {
+  const styles = readFileSync(resolve(__dirname, '../../styles.css'), 'utf8')
+  const paneSource = readFileSync(resolve(__dirname, './NotificationSettingsPane.tsx'), 'utf8')
+
+  it('defines every class the pane renders', () => {
+    // A class name with no rule is invisible in review and silently drops the layout it was added
+    // for: the delivery switches lost their right alignment exactly this way.
+    const used = [...paneSource.matchAll(/className="([a-z0-9 -]+)"/g)]
+      .flatMap((match) => match[1].split(' '))
+      .filter((name) => name.startsWith('notification-'))
+
+    expect(used.length).toBeGreaterThan(0)
+    // Match a whole class selector, not a prefix: `.notification-channel-controls-extra` must not
+    // satisfy `.notification-channel-controls`.
+    expect(used.filter((name) => !new RegExp(`\\.${name}(?![\\w-])`).test(styles))).toEqual([])
   })
 })
