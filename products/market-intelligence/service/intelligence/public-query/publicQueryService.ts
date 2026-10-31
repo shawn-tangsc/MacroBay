@@ -95,7 +95,7 @@ export type MarketIntelligencePublicQueryService = {
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
   queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
-  queryMarketDivergence: (input: { asOf: string; mode?: 'rules' | 'judge' }) => Promise<MarketDivergenceResult>
+  queryMarketDivergence: (input: { asOf: string; mode?: 'rules' | 'judge'; force?: boolean }) => Promise<MarketDivergenceResult>
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -397,6 +397,7 @@ export function createMarketIntelligencePublicQueryService(
   service.queryMarketDivergence = async (queryInput) => queryMarketDivergenceAsync({
     asOf: queryInput.asOf,
     mode: queryInput.mode ?? 'rules',
+    ...(queryInput.force ? { force: true } : {}),
     read: divergenceReader(service, queryInput.asOf, newsSentimentQuery),
     ...(divergenceJudgement ? { judge: divergenceJudgement } : {})
   })

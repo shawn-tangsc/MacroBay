@@ -74,3 +74,16 @@ describe('divergence judgement', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('caching', () => {
+  it('reuses an answer for the same readings, and re-asks when forced', async () => {
+    const invoke = invoker(answer)
+    const service = createDivergenceJudgementService({ invoke: invoke as never, getProviderState: providers, getModelDefaults: defaults })
+    await service.judge(input)
+    await service.judge(input)
+    expect(invoke).toHaveBeenCalledTimes(1)
+    // The reader pressed 重新判定: the cached answer is not what they asked for.
+    await service.judge(input, { force: true })
+    expect(invoke).toHaveBeenCalledTimes(2)
+  })
+})

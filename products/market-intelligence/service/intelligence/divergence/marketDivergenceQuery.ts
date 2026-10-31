@@ -39,7 +39,7 @@ export type DivergenceJudge = (input: Readonly<{
   asOf: string
   headlines?: readonly string[]
   pairs: readonly Readonly<{ pairId: import('../../../contracts/marketDivergence').DivergencePairId; legs: readonly import('../../../contracts/marketDivergence').DivergenceLeg[]; ruleVerdict: 'divergence' | 'agreement' }>[]
-}>) => Promise<import('./divergenceJudgementService').DivergenceJudgementResult>
+}>, options?: Readonly<{ force?: boolean }>) => Promise<import('./divergenceJudgementService').DivergenceJudgementResult>
 
 export async function queryMarketDivergenceAsync(input: Readonly<{
   asOf: string
@@ -53,6 +53,8 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
    */
   /** `rules` answers in milliseconds; `judge` adds the model's reading on top of the same legs. */
   mode?: 'rules' | 'judge'
+  /** Skip the judgement cache: the reader asked for a fresh answer. */
+  force?: boolean
 }>): Promise<MarketDivergenceResult> {
   if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable('invalid-clock')
   try {
@@ -132,7 +134,7 @@ export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePe
  * the sentence; the readings it was shown are the ones that get drawn.
  */
 async function judgeRows(
-  input: Readonly<{ asOf: string; judge?: DivergenceJudge; mode?: 'rules' | 'judge' }>,
+  input: Readonly<{ asOf: string; judge?: DivergenceJudge; mode?: 'rules' | 'judge'; force?: boolean }>,
   legs: DivergenceInputs,
   ruleResult: Exclude<MarketDivergenceResult, { state: 'unavailable' }>
 ): Promise<MarketDivergenceResult> {
@@ -143,7 +145,7 @@ async function judgeRows(
     asOf: input.asOf,
     pairs,
     ...(legs.sentiment?.headlines?.length ? { headlines: legs.sentiment.headlines } : {})
-  })
+  }, input.force ? { force: true } : undefined)
   if (outcome.state !== 'judged') return ruleResult
   const rows = rowsFromJudgements(outcome.judgements, pairs)
   return rows.length > 0

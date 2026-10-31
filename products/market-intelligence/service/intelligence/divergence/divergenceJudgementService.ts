@@ -59,11 +59,12 @@ export function createDivergenceJudgementService(deps: {
   const cache = new Map<string, { at: number; value: DivergenceJudgementResult }>()
 
   return {
-    async judge(input: DivergenceJudgementInput): Promise<DivergenceJudgementResult> {
+    async judge(input: DivergenceJudgementInput, options?: Readonly<{ force?: boolean }>): Promise<DivergenceJudgementResult> {
       const key = judgementKey(input)
       const now = deps.now?.() ?? Date.now()
       const cached = cache.get(key)
-      if (cached && now - cached.at < CACHE_TTL_MS) return cached.value
+      // `force` is the reader pressing 重新判定: they asked now, so the cached answer is not it.
+      if (!options?.force && cached && now - cached.at < CACHE_TTL_MS) return cached.value
 
       const value = await judgeUncached(deps, input)
       if (value.state === 'judged') cache.set(key, { at: now, value })
