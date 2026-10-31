@@ -317,6 +317,26 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
   expect(host.querySelectorAll('[data-calendar-surprise]')).toHaveLength(1)
 })
 
+it('scrolls only the rows: the header stays outside the scroll region', async () => {
+  const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [row({ eventKey: 'later' })], state: 'available' }}
+    onOpenCalendar={() => undefined} text={text} />)
+
+  const body = host.querySelector('.mi-calendar-card__body')
+  expect(body).not.toBeNull()
+  // The title and the calendar action sit in the card's own header, not inside the scroller.
+  expect(body!.querySelector('header')).toBeNull()
+  expect(host.querySelector('.mi-calendar-card > header h2')?.textContent).toBe(text.title)
+  // Everything that can grow with the schedule is inside it, sections included.
+  expect(body!.querySelectorAll('[data-calendar-card-row]')).toHaveLength(2)
+  expect(body!.querySelectorAll('.mi-calendar-card__section')).toHaveLength(2)
+  // The card clips; the body owns the scrollbar, so the header cannot scroll away with the rows.
+  expect(styles).toContain('.mi-calendar-card { display: flex; flex-direction: column; min-height: 0; overflow: hidden;')
+  const bodyStart = styles.indexOf('.mi-calendar-card__body {')
+  const bodyRule = styles.slice(bodyStart, styles.indexOf('}', bodyStart))
+  expect(bodyRule).toContain('overflow: auto')
+  expect(bodyRule).toContain('min-height: 0')
+})
+
 it('styles the verdict as a coloured badge, with the direction distinguishable', () => {
   const beat = styles.slice(styles.indexOf(".mi-calendar-card__row-surprise[data-calendar-surprise='beat']"))
   const miss = styles.slice(styles.indexOf(".mi-calendar-card__row-surprise[data-calendar-surprise='miss']"))
