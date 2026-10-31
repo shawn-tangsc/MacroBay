@@ -472,9 +472,9 @@ export const productText = {
               unavailable: '暂时比不了：需要的几组数字没同时拿到，先不给结论。',
               withheldTitle: '未比对的配对',
               withheldReasons: {
-                'window-mismatch': '{leg} 窗口不重叠（截至 {at}）',
-                'leg-missing': '缺少 {leg}',
-                'leg-stale': '{leg} 读数已过期'
+                'window-mismatch': '{leg} 的时间对不上（数据截至 {at}）',
+                'leg-missing': '没有取到{leg}',
+                'leg-stale': '{leg} 太旧了'
               },
               legAsOf: '{leg} 截至 {at}',
               legs: {
@@ -2174,9 +2174,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               unavailable: 'Cannot compare right now: the figures needed did not arrive together, so no conclusion today.',
               withheldTitle: 'Not compared',
               withheldReasons: {
-                'window-mismatch': '{leg} window does not overlap (as of {at})',
-                'leg-missing': '{leg} is missing',
-                'leg-stale': '{leg} is out of date'
+                'window-mismatch': '{leg} covers a different day (data as of {at})',
+                'leg-missing': '{leg} was not collected',
+                'leg-stale': '{leg} is too old'
               },
               legAsOf: '{leg} as of {at}',
               legs: {
