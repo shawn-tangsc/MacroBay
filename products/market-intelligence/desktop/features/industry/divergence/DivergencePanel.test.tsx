@@ -66,6 +66,23 @@ describe('divergence panel', () => {
     expect(markup).toContain(text.legs.sentiment)
   })
 
+  it('never puts a space between a Chinese leg name and the particle after it', () => {
+    // The placeholder is substituted with a label such as 费率; a space in the template then reads
+    // 费率 太旧了, which is a typo in Chinese even though the English template needs the space.
+    const markup = render({
+      state: 'available', rows: [row],
+      withheld: [
+        { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'funding' },
+        { pairId: 'narrative-price', reason: 'leg-unavailable', leg: 'price' }
+      ]
+    })
+    expect(markup).not.toContain('费率 太旧了')
+    expect(markup).not.toContain('价格 24 小时 读取失败')
+    for (const sentence of Object.values(text.withheldReasons)) {
+      expect(/^\{leg\}\s/.test(sentence) && /[\u4e00-\u9fff]/.test(sentence)).toBe(false)
+    }
+  })
+
   it('reads a quiet news day and a failed read as two different sentences', () => {
     const quiet = render({
       state: 'available', rows: [row],

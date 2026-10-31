@@ -479,13 +479,15 @@ export const productText = {
               unavailable: '暂时比不了：需要的几组数字没同时拿到，先不给结论。',
               withheldTitle: '未比对的配对',
               withheldReasons: {
-                'window-mismatch': '{leg} 的时间对不上（数据截至 {at}）',
+                // No space after the leg name: Chinese does not separate a noun from its particle,
+                // and the placeholder substituted a label that already ended in one.
+                'window-mismatch': '{leg}的时间对不上（数据截至 {at}）',
                 'leg-missing': '没有取到{leg}',
-                'leg-stale': '{leg} 太旧了',
-                'leg-unavailable': '{leg} 读取失败，不是没数据'
+                'leg-stale': '{leg}太旧了',
+                'leg-unavailable': '{leg}读取失败，不是没数据'
               },
               sentimentNoScoredItems: '{leg}：今天没有明确表态的标题',
-              legAsOf: '{leg} 截至 {at}',
+              legAsOf: '{leg}截至 {at}',
               legs: {
                 stablecoin: '稳定币 7 天', etf: 'ETF 3 日净流', 'open-interest': '持仓 24 小时',
                 funding: '费率', price: '价格 24 小时', sentiment: '舆情看空占比'
