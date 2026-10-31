@@ -76,6 +76,26 @@ export function normalizeContextMaxFacts(value: number | undefined): number | un
   return Number.isSafeInteger(value) && value > 0 ? Math.min(value, MARKET_ANALYSIS_CONTEXT_POLICY.defaultMaxFacts) : undefined
 }
 
+/**
+ * How many daily ETF flow rows one asset contributes to the analysis snapshot.
+ *
+ * The long window is carried by the cumulative facts (the 5- and 20-trading-day totals); the daily
+ * rows only carry the recent rhythm, which is why five is enough and why the number is not tied to
+ * how many rows the panel draws. A panel view change must not silently rewrite what the model reads,
+ * so the two numbers are given two names: the snapshot query keeps its own row cap.
+ *
+ * The rows arrive in ascending `tradingDate` order (the ETF window validates that), so the newest
+ * five are the tail. Re-sorting here would be a second implementation of an ordering the window
+ * already guarantees.
+ */
+export const analysisRowsPerAsset = 5
+
+function projectEtfDailyFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number; observedAt: string }>[] }, sourceId: string, asOf: string, facts: AgentFact[]): number {
+  const rows = asset.rows.slice(-analysisRowsPerAsset)
+  for (const row of rows) facts.push(fact('capital', asset.asset, 'etf-net-flow-usd', row.netFlowUsd, 'USD', sourceId, row.observedAt, asOf, 'comparable', row.tradingDate))
+  return rows.length
+}
+
 export function projectCapital(result: CapitalConditionsSnapshotResult | undefined, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.capital = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
@@ -92,14 +112,9 @@ export function projectCapital(result: CapitalConditionsSnapshotResult | undefin
     ['stablecoins', 'change-30d-usd', result.coreStablecoins.change30dUsd, 'USD']
   ]
   for (const [subject, metric, value, unit] of rows) facts.push(fact('capital', subject, metric, value, unit, 'defillama-stablecoins', result.coreStablecoins.observedAt, asOf, 'comparable'))
-  if (result.etf.state === 'available') {
-    for (const asset of [result.etf.btc, result.etf.eth]) {
-      for (const row of asset.rows) facts.push(fact('capital', asset.asset, 'etf-net-flow-usd', row.netFlowUsd, 'USD', result.etf.sourceId, row.observedAt, asOf, 'comparable', row.tradingDate))
-    }
-  }
+  const etfFactCount = result.etf.state === 'available' ? projectEtfDailyFlows(result.etf.btc, result.etf.sourceId, asOf, facts) + projectEtfDailyFlows(result.etf.eth, result.etf.sourceId, asOf, facts) : 0
   const caveat = result.etf.state === 'unavailable' ? 'etf-unavailable' : undefined
   if (caveat) caveats.add(caveat)
-  const etfFactCount = result.etf.state === 'available' ? result.etf.btc.rows.length + result.etf.eth.rows.length : 0
   // A divergence is a combination of legs that are already facts. It enters the domain of its
   // slowest leg, so the card and the model look the same sentence up in the same place.
   const divergenceFactCount = pushDivergenceFacts('capital', divergence, asOf, facts, ['liquidity-leverage', 'flows-price'])

@@ -734,6 +734,36 @@ describe('market analysis data-access matrix', () => {
     expect(result.facts.filter((fact) => fact.metric === 'etf-net-flow-usd')).toHaveLength(2)
   })
 
+  it('keeps the stablecoin readings when another domain overflows the budget', async () => {
+    const days = Array.from({ length: 10 }, (_, index) => ({
+      tradingDate: `2026-09-${String(index + 10).padStart(2, '0')}`, netFlowUsd: (index + 1) * 10, observedAt: AS_OF
+    }))
+    const points = Array.from({ length: 180 }, (_, index) => ({ observedAt: AS_OF, ratePercent: index / 100 }))
+    const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF, maxFacts: 160 }, contextQueryService({
+      queryFundingRateHistory: async () => ({ state: 'available', asOf: AS_OF, btc: points, eth: points }),
+      queryCapitalConditionsSnapshot: async () => ({
+        state: 'available', asOf: AS_OF,
+        etf: {
+          state: 'available', schemaVersion: 1, sourceId: '0xrouter', windowEnd: '2026-09-19', verifiedAt: AS_OF,
+          btc: { asset: 'BTC', rows: days },
+          eth: { asset: 'ETH', rows: days }
+        },
+        coreStablecoins: { observedAt: AS_OF, verifiedAt: AS_OF, currentUsd: 100, change1dUsd: 1, change1dPercent: 1, change7dUsd: 2, change7dPercent: 2, change30dUsd: 3, change30dPercent: 3 },
+        conclusion: 'partial'
+      })
+    }))
+
+    expect(result.state).toBe('available')
+    if (result.state !== 'available') return
+    expect(result.caveats).toContain('max-items-truncated')
+    // Capping the ETF window is what keeps capital out of the budget fight: the overflow is
+    // funding's own volume, and the four stablecoin readings — the first thing the page reads —
+    // must still be in the snapshot the model is handed.
+    expect(result.facts.filter((fact) => fact.subject === 'stablecoins').map((fact) => fact.metric).sort())
+      .toEqual(['change-1d-usd', 'change-30d-usd', 'change-7d-usd', 'current-usd'])
+    expect(result.facts.filter((fact) => fact.metric === 'etf-net-flow-usd')).toHaveLength(10)
+  })
+
   it('caps facts at 160 and records the truncation caveat', async () => {
     const points = Array.from({ length: 180 }, (_, index) => ({ observedAt: AS_OF, ratePercent: index / 100 }))
     const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF, maxFacts: 200 }, contextQueryService({

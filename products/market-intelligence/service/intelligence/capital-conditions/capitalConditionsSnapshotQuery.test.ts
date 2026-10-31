@@ -91,7 +91,15 @@ describe('capital conditions snapshot query', () => {
     await etfStore.replace({ window: etfWindow(verifiedAt, 30), verifiedAt })
     const service = createCapitalConditionsSnapshotQueryService({ store: stablecoinStore, etfStore })
 
-    await expect(service.query({ asOf: '2026-08-17T01:00:00.000Z' })).resolves.toMatchObject({ state: 'available', etf: { state: 'available' } })
+    const result = await service.query({ asOf: '2026-08-17T01:00:00.000Z' })
+
+    await expect(result).toMatchObject({ state: 'available', etf: { state: 'available' } })
+    // The analysis snapshot projects only a few rows per asset, but that cap belongs to the
+    // projection: the query keeps answering with the whole window, because the panel and the
+    // agent tool read this same result. Shrinking it here would empty both of them.
+    if (result.state !== 'available' || result.etf.state !== 'available') throw new Error('expected a full ETF window')
+    expect(result.etf.btc.rows).toHaveLength(30)
+    expect(result.etf.eth.rows).toHaveLength(30)
   })
   it('returns a frozen, redacted current snapshot only at a canonical visible time', async () => {
     const store = createCapitalConditionsCurrentStateStore({ storage: createInMemoryCapitalConditionsStateStorage() })
