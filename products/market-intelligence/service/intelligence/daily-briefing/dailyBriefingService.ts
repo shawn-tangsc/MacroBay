@@ -125,6 +125,24 @@ export function createDailyBriefingService(deps: Readonly<{
   const now = deps.now ?? (() => new Date().toISOString())
   const inFlight = new Map<string, Promise<DailyBriefingTodayResult>>()
 
+  /**
+   * The most recent edition published before today — not necessarily yesterday's.
+   *
+   * A publication-day baseline is the previous *release*, so a day the app was not open must not
+   * erase the comparison: the store is walked back through the retention window and the newest
+   * edition that actually exists is used. Its date travels with the baseline, which is what lets the
+   * row state the real span instead of calling every move a day move.
+   */
+  async function previousEditionBefore(
+    date: string,
+    locale: DailyBriefingLocale
+  ): Promise<DailyBriefingStoredEdition | undefined> {
+    const start = Date.parse(`${date}T00:00:00.000Z`) - dailyBriefingPolicy.retentionDays * 24 * 60 * 60 * 1_000
+    const from = Number.isFinite(start) ? new Date(start).toISOString().slice(0, 10) : date
+    const listed = await deps.store.list(from, previousDateOf(date), locale).catch(() => [])
+    return listed.at(-1)
+  }
+
   async function generation(): Promise<DailyBriefingGeneration> {
     if (!deps.generationSettings) return defaultGeneration
     try {
@@ -170,7 +188,7 @@ export function createDailyBriefingService(deps: Readonly<{
     }
     let document: DailyBriefingDocument
     try {
-      const previous = await deps.store.get(previousDateOf(input.date), input.locale).catch(() => undefined)
+      const previous = await previousEditionBefore(input.date, input.locale)
       document = buildDailyBriefingDocument({ packet, date: input.date, ...(previous ? { previous: previous.document } : {}) })
     } catch {
       return { state: 'unavailable', failureCode: 'build-failed' }

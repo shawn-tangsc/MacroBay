@@ -15,7 +15,7 @@ import type {
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import type { DirectionAdvice } from '../../../contracts/marketAnalysisContracts'
 import { baselineVisibility, leverageMateriality, policyPathMateriality } from './dailyBriefingDataSelection'
-import { buildBriefingReadingRows } from './dailyBriefingMarketRows'
+import { buildBriefingReadingRows, type FearGreedBaseline } from './dailyBriefingMarketRows'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
 export function buildDailyBriefingDocument(input: Readonly<{
@@ -24,7 +24,7 @@ export function buildDailyBriefingDocument(input: Readonly<{
   previous?: DailyBriefingDocument
 }>): DailyBriefingDocument {
   const { packet, date } = input
-  const readings = buildBriefingReadingRows(packet, previousFearGreedScore(input.previous, date))
+  const readings = buildBriefingReadingRows(packet, previousFearGreedBaseline(packet, input.previous))
   const news = selectNews(packet)
   const macroCandidates = selectMacroCandidates(packet)
   const macro = selectMacro(packet, macroCandidates)
@@ -93,16 +93,27 @@ export function buildDailyBriefingDocument(input: Readonly<{
 }
 
 /**
- * The score fear-and-greed moved from, when the previous edition really is yesterday's.
+ * The publication fear-and-greed moved from.
  *
- * The source publishes one snapshot, so the day-over-day move can only come from the stored
- * previous edition. A gap in the history is not a baseline: when yesterday has no edition, the row
- * keeps `no-baseline` rather than comparing against a two-week-old score and calling it 1d.
+ * Fear-and-greed is a release, not a daily source: it publishes when it publishes, and the brief may
+ * skip a day (the app was closed) without that absence erasing the comparison. So the baseline is the
+ * score the last stored edition read — whatever its date — provided it is an earlier publication. An
+ * edition that read the same publication is not a second value, and a missing score stays
+ * `no-baseline` rather than being filled with a zero.
  */
-function previousFearGreedScore(previous: DailyBriefingDocument | undefined, date: string): number | undefined {
-  if (!previous || previous.edition.date !== addDays(date, -1)) return undefined
-  const score = previous.data.sentiment.fearGreed?.value?.number
-  return typeof score === 'number' && Number.isFinite(score) ? score : undefined
+function previousFearGreedBaseline(
+  packet: DailyBriefingFactPacket,
+  previous: DailyBriefingDocument | undefined
+): FearGreedBaseline | undefined {
+  const row = previous?.data.sentiment.fearGreed
+  const score = row?.value?.number
+  if (!previous || !row || typeof score !== 'number' || !Number.isFinite(score)) return undefined
+  // Older editions may predate `observedAt` on the row; the edition's own date is then the only
+  // publication stamp there is, and it is still earlier than today's.
+  const publishedAt = row.observedAt ?? `${previous.edition.date}T00:00:00.000Z`
+  const current = packet.readings.fearGreed.state === 'available' ? packet.readings.fearGreed.observedAt : undefined
+  if (current && publishedAt >= current) return undefined
+  return Object.freeze({ score, publishedAt })
 }
 
 function buildComparison(current: DailyBriefingDocument, previous: DailyBriefingDocument): DailyBriefingDocument['comparison'] {

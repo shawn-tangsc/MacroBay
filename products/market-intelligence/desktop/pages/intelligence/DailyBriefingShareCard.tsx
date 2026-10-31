@@ -187,7 +187,10 @@ function toneFor(row: BriefingMarketRow | BriefingPulseRow): 'positive' | 'negat
 }
 
 function keyMeta(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText, locale: 'zh-CN' | 'en-US', formatTime: (value: string, precision?: 'minute' | 'second') => string): string {
-  const change = formatRowChange(row.change, text, locale)
+  // The qualifier names the baseline: a session close is never described as a day move.
+  const change = row.change
+    ? `${text.changeWindows[row.change.window] ?? row.change.window} ${formatRowChange(row.change, text, locale)}`.trim()
+    : ''
   if (row.id === 'etf-btc' || row.id === 'etf-eth') {
     const flow = (row.value?.number ?? 0) >= 0 ? text.flow.in : text.flow.out
     return `${flow}${row.observedAt ? ` · ${row.observedAt.slice(0, 10)}` : ''}`

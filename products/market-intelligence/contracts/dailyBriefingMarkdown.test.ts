@@ -122,10 +122,35 @@ describe('daily briefing markdown', () => {
       }
     }, options)
 
-    expect(markdown).toContain('- 稳定币: 无基线 (总量 253B USD)')
-    expect(markdown).toContain('- 恐惧贪婪: 无基线 (当前 30)')
-    // Neither row may fall back to printing the level as if it were a flat move.
+    // A change-led row with no baseline is not printed as a bare level or a flat move: the document
+    // keeps `no-baseline` for the screen, and the export leaves the row out rather than claim a zero.
+    expect(markdown).not.toContain('- 稳定币:')
+    expect(markdown).not.toContain('- 恐惧贪婪:')
     expect(markdown).not.toContain('0.00%')
+  })
+
+  it('names what a change is measured against instead of calling every move a day move', () => {
+    const base = document()
+    const markdown = dailyBriefingToMarkdown({
+      ...base,
+      data: {
+        ...base.data,
+        sentiment: {
+          ...base.data.sentiment,
+          fearGreed: {
+            ...base.data.sentiment.fearGreed!,
+            cadence: 'publication-day',
+            change: { value: 4, unit: 'points', window: 'publication-day' },
+            window: 'publication-day',
+            observedAt: '2026-11-02T00:00:00.000Z',
+            baselineAt: '2026-10-30T00:00:00.000Z'
+          }
+        }
+      }
+    }, options)
+
+    // The release cadence and its real span, not a fixed `1d`.
+    expect(markdown).toContain('- 恐惧贪婪: 较上次发布 +4 点（10-30 → 11-02） (当前 30)')
   })
 
   it('states an empty edition instead of leaving blank sections', () => {

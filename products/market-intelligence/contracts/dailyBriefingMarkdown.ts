@@ -13,6 +13,14 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   states: Readonly<Record<string, string>>
   reasons: Readonly<Record<string, string>>
   changeReasons: Readonly<Record<string, string>>
+  /**
+   * What a change is measured against, keyed by its window. A rolling 24/7 window reads `1d`; a
+   * session close reads `vs prior session close`; a release reads `vs last publication`. The key is
+   * the row's own window, so a row with no named window falls back to the raw token.
+   */
+  changeWindows: Readonly<Record<string, string>>
+  /** The publication span behind a move, e.g. ` (10-30 → 10-31)`; `{from}`/`{to}` are the stamps. */
+  changeBaselineSpan: string
   /** Unit suffixes for change values: a fear-and-greed move is points, not a percentage. */
   units: Readonly<{ points: string }>
   /** Captions for the level that sits behind a change-led row, e.g. `Total {value}`. */
@@ -31,7 +39,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
 }>
 
 /** The labels one row's copy needs; the full page copy satisfies this structurally. */
-export type BriefingRowCopyLabels = Pick<DailyBriefingMarkdownLabels, 'noValue' | 'changeReasons' | 'units' | 'rowTotal' | 'rowCurrent'>
+export type BriefingRowCopyLabels = Pick<DailyBriefingMarkdownLabels,
+  'noValue' | 'changeReasons' | 'changeWindows' | 'changeBaselineSpan' | 'units' | 'rowTotal' | 'rowCurrent'>
 
 export type DailyBriefingMarkdownOptions = Readonly<{
   labels: DailyBriefingMarkdownLabels
@@ -136,7 +145,7 @@ export function changeLedRowCopy(
   const secondary = row.id === 'stablecoin'
     ? [caption, ...(row.auxiliaryChanges ?? []).map((change) => rowChangeText(change, labels, locale))].join(' · ')
     : caption
-  return Object.freeze({ primary: rowChangeText(row.change, labels, locale), secondary })
+  return Object.freeze({ primary: rowChangeText(row.change, labels, locale, row), secondary })
 }
 
 /** A change value without its window, for rows whose headline is a level. */
@@ -153,13 +162,33 @@ export function formatRowChange(
     : formatBriefingChange({ value, unit }, locale)
 }
 
-/** A change with its window, so a 7d move can never be read as a day move. */
+/**
+ * A change with what it is measured against, so a session close is never read as a 24-hour move and
+ * a release is never read as a day-over-day move.
+ *
+ * The publication span is appended only when the baseline names a real instant and that instant is
+ * on a different day: `vs last publication -2 pts (10-30 → 10-31)`. That is the honest alternative
+ * to calling a three-day-old publication a `1d` move.
+ */
 function rowChangeText(
   change: BriefingRowChange,
   labels: BriefingRowCopyLabels,
-  locale: string
+  locale: string,
+  row?: BriefingMarketRow | BriefingPulseRow
 ): string {
-  return `${change.window} ${formatRowChange(change, labels, locale)}`
+  const window = labels.changeWindows[change.window] ?? change.window
+  return `${`${window} ${formatRowChange(change, labels, locale)}`.trim()}${publicationSpan(row, labels)}`
+}
+
+function publicationSpan(
+  row: BriefingMarketRow | BriefingPulseRow | undefined,
+  labels: BriefingRowCopyLabels
+): string {
+  if (!row || row.cadence !== 'publication-day' || !row.baselineAt || !row.observedAt) return ''
+  const from = row.baselineAt.slice(5, 10)
+  const to = row.observedAt.slice(5, 10)
+  if (!from || !to || from === to) return ''
+  return labels.changeBaselineSpan.replace('{from}', from).replace('{to}', to)
 }
 
 function readingsLabel(document: DailyBriefingDocument, labels: DailyBriefingMarkdownLabels): string {
@@ -189,7 +218,7 @@ function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBrief
       return `- ${label}: ${copy.primary}${meta ? ` (${meta})` : ''}`
     }
     const value = formatBriefingValue(row.value, options.labels.noValue, options.locale)
-    const change = formatRowChange(row.change, options.labels, options.locale)
+    const change = row.change ? rowChangeText(row.change, options.labels, options.locale, row) : ''
     const reason = row.changeReason ? options.labels.changeReasons[row.changeReason] ?? '' : ''
     const suffix = [change, reason, row.state === 'stale' ? options.labels.states.stale ?? '' : ''].filter(Boolean).join(' · ')
     return `- ${label}: ${value}${suffix ? ` (${suffix})` : ''}`

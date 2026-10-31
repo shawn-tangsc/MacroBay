@@ -207,11 +207,14 @@ describe('daily brief share card in English', () => {
         }
       }
     })
-    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+    const numbers = rendered.querySelector('.mi-brief-poster__numbers')!.textContent ?? ''
 
-    expect(poster).toContain(text.changeReasons['no-baseline'])
-    expect(poster).toContain('Total 253B USD')
-    expect(poster).not.toContain('0.00%')
+    // A change-led row with no baseline is left out of the poster rather than printed as a level or
+    // a fabricated flat move; the document itself keeps `no-baseline` for the reader's audit.
+    expect(numbers).not.toContain(text.rows.stablecoin)
+    expect(numbers).not.toContain(text.rows.fearGreed)
+    expect(numbers).not.toContain('Total 253B USD')
+    expect(numbers).not.toContain('0.00%')
   })
 
   it('separates the invalidation label with the locale separator', async () => {

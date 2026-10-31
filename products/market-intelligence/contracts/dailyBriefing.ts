@@ -14,8 +14,8 @@ import type { AnalysisConclusionDirection } from './marketAnalysisContracts'
  * validates an incoming document, which keeps the client and the builder from drifting apart.
  */
 export const dailyBriefingPolicy = Object.freeze({
-  schemaVersion: 8,
-  policyVersion: 'daily-briefing.v19',
+  schemaVersion: 9,
+  policyVersion: 'daily-briefing.v20',
   /** The default statistical window. The reader's generation settings may override it per edition. */
   windowHours: 24,
   maximumBytes: 256 * 1024,
@@ -69,8 +69,8 @@ export function isDailyBriefingWindowHours(value: unknown): value is DailyBriefi
 
 export type DailyBriefingLocale = 'zh-CN' | 'en-US'
 export type DailyBriefLedePattern = 'event-shock' | 'surprise-gap' | 'tension' | 'structure' | 'setup' | 'outlier' | 'falsification'
-export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19'
+export type DailyBriefingDocumentSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+export type DailyBriefingPolicyVersion = 'daily-briefing.v1' | 'daily-briefing.v2' | 'daily-briefing.v3' | 'daily-briefing.v4' | 'daily-briefing.v5' | 'daily-briefing.v6' | 'daily-briefing.v7' | 'daily-briefing.v8' | 'daily-briefing.v9' | 'daily-briefing.v10' | 'daily-briefing.v11' | 'daily-briefing.v12' | 'daily-briefing.v13' | 'daily-briefing.v14' | 'daily-briefing.v15' | 'daily-briefing.v16' | 'daily-briefing.v17' | 'daily-briefing.v18' | 'daily-briefing.v19' | 'daily-briefing.v20'
 
 /** The four readings, and whether each source could answer at generation time. */
 export type DailyBriefingReadingId = 'fear-greed' | 'funding' | 'capital' | 'calendar'
@@ -130,10 +130,46 @@ export type BriefingMateriality = Readonly<{
 /** Editorial visibility of a data fact. Absent on editions built before the field existed: shown. */
 export type BriefingDataVisibility = 'shown' | 'hidden'
 
+/**
+ * How a row's comparison is anchored in time.
+ *
+ * A daily brief is generated every morning, but its rows do not all publish on that clock:
+ *
+ * - `24h` — a 24/7 market (crypto, stablecoins, funding, open interest). The baseline is the point
+ *   nearest `asOf - 24h`, so Saturday is compared with Friday, not with "yesterday".
+ * - `trading-day` — a US session close (ETF flows, the dollar, gold, the ten-year). The baseline is
+ *   the last close of the previous session, reached by walking back over weekends and market
+ *   holidays. A day without a close is not a stale reading: the newest close is simply the newest.
+ * - `publication-day` — a released value (fear-and-greed, a calendar release). The baseline is the
+ *   previous publication, whatever day it landed on; the real interval is carried in `baselineAt`.
+ *
+ * `baselineAt` is the instant of the value compared against. Without it the window is known but the
+ * anchor is not, and a reader must not be told a "1d" move that was measured over an unknown span.
+ */
+export type BriefingRowCadence = '24h' | 'trading-day' | 'publication-day'
+
+/**
+ * The expected publication windows a row is allowed before its absence becomes a gap.
+ *
+ * These are tolerances for lateness, not rules for weekends: a `trading-day` row is never stale
+ * because the market is shut, only because sessions that should have printed are missing.
+ */
+export const briefingCadencePolicy = Object.freeze({
+  /** A 24/7 feed may lag this long and still answer a rolling-24h comparison. */
+  rolling24hMaxLagMs: 6 * 60 * 60 * 1_000,
+  /** Sessions a `trading-day` row may miss before its value is a gap rather than the newest close. */
+  tradingDayMaxMissingSessions: 2
+})
+
 export type BriefingValueFormat = 'score' | 'percent' | 'usd' | 'flow-usd' | 'yield' | 'level'
 /** `points` is a fear-and-greed index move, which is a score change rather than a percentage. */
 export type BriefingChangeUnit = 'pp' | 'percent' | 'bp' | 'usd' | 'points'
-export type BriefingWindow = 'latest' | '24h' | '1d' | '7d' | '30d' | 'daily' | 'trading-day'
+/**
+ * The comparison window of a data row. `24h` is a rolling 24/7 window, `1d` the source's own
+ * day-over-day figure, `trading-day` one session's close, `publication-day` the span since the
+ * previous release.
+ */
+export type BriefingWindow = 'latest' | '24h' | '1d' | '7d' | '30d' | 'daily' | 'trading-day' | 'publication-day'
 
 /**
  * One comparison window of a data row.
@@ -165,6 +201,10 @@ export type BriefingMarketRow = Readonly<{
   auxiliaryChanges?: readonly BriefingRowChange[]
   changeReason?: 'no-baseline' | 'insufficient-window'
   window: BriefingWindow
+  /** The comparison cadence; absent on editions built before schema 9. */
+  cadence?: BriefingRowCadence
+  /** The instant of the value `change` was measured against; absent when only the window is known. */
+  baselineAt?: string
   observedAt: string | null
   reason?: 'not-collected' | 'query-failed' | 'stale-fallback' | 'coverage-incomplete'
 }>
@@ -186,6 +226,10 @@ export type BriefingPulseRow = Readonly<{
   auxiliaryChanges?: readonly BriefingRowChange[]
   changeReason?: 'no-baseline' | 'insufficient-window'
   window: BriefingWindow
+  /** The comparison cadence; absent on editions built before schema 9. */
+  cadence?: BriefingRowCadence
+  /** The instant of the value `change` was measured against; absent when only the window is known. */
+  baselineAt?: string
   observedAt: string | null
   reason?: 'not-collected' | 'query-failed' | 'capital-gate' | 'etf-unavailable'
 }>

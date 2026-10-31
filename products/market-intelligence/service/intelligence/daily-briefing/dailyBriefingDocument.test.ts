@@ -10,6 +10,7 @@ import type { AnalysisSummary, Prediction } from '../../../contracts/marketAnaly
 import type { MacroMarketSnapshotView } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroRatesSnapshotView } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
+import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
 import { buildDailyBriefingDocument, selectMacroFloorItem } from './dailyBriefingDocument'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 
@@ -216,7 +217,7 @@ describe('daily briefing document', () => {
       date: '2026-10-30'
     })
 
-    expect(document.schemaVersion).toBe(8)
+    expect(document.schemaVersion).toBe(dailyBriefingPolicy.schemaVersion)
     expect(document.edition).toMatchObject({
       windowStart: '2026-10-28T00:30:00.000Z',
       windowEnd: asOf,
@@ -256,31 +257,59 @@ describe('daily briefing document', () => {
     ])
   })
 
-  it('reads fear and greed as a point change against yesterday, never as its level', () => {
-    const score = (value: number): FearGreedSnapshotResult => ({
-      state: 'available', asOf, score: value, bucket: 'fear', observedAt: '2026-10-30T00:00:00.000Z'
+  it('reads fear and greed as a point change against the previous publication', () => {
+    const score = (value: number, observedAt: string): FearGreedSnapshotResult => ({
+      state: 'available', asOf, score: value, bucket: 'fear', observedAt
     })
-    const readings = (value: number): DailyBriefingFactPacket['readings'] => ({ fearGreed: score(value), funding, capital })
-    const previous = buildDailyBriefingDocument({ packet: packet({ readings: readings(30) }), date: '2026-10-29' })
+    const readings = (value: number, observedAt: string): DailyBriefingFactPacket['readings'] =>
+      ({ fearGreed: score(value, observedAt), funding, capital })
+    const previous = buildDailyBriefingDocument({
+      packet: packet({ readings: readings(30, '2026-10-29T00:00:00.000Z') }),
+      date: '2026-10-29'
+    })
     const document = buildDailyBriefingDocument({
-      packet: packet({ readings: readings(28) }),
+      packet: packet({ readings: readings(28, '2026-10-30T00:00:00.000Z') }),
       date: '2026-10-30',
       previous
     })
 
-    expect(document.data.sentiment.fearGreed?.change).toMatchObject({ value: -2, unit: 'points', window: '1d' })
+    // The window names the release cadence, not a day: the baseline is the previous publication.
+    expect(document.data.sentiment.fearGreed?.change).toMatchObject({ value: -2, unit: 'points', window: 'publication-day' })
     expect(document.data.sentiment.fearGreed?.changeReason).toBeUndefined()
+    expect(document.data.sentiment.fearGreed?.baselineAt).toBe('2026-10-29T00:00:00.000Z')
     expect(document.data.sentiment.fearGreed?.value).toMatchObject({ number: 28, format: 'score' })
   })
 
-  it('states a missing baseline instead of inventing a zero change', () => {
-    const withoutYesterday = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
-    expect(withoutYesterday.data.sentiment.fearGreed?.change).toBeNull()
-    expect(withoutYesterday.data.sentiment.fearGreed?.changeReason).toBe('no-baseline')
+  it('keeps the last publication as the baseline when a day has no edition', () => {
+    const score = (value: number, observedAt: string): FearGreedSnapshotResult => ({
+      state: 'available', asOf, score: value, bucket: 'fear', observedAt
+    })
+    const readings = (value: number, observedAt: string): DailyBriefingFactPacket['readings'] =>
+      ({ fearGreed: score(value, observedAt), funding, capital })
+    // Sunday's edition was never generated: Friday's publication is still the last real value.
+    const friday = buildDailyBriefingDocument({
+      packet: packet({ readings: readings(30, '2026-10-30T00:00:00.000Z') }),
+      date: '2026-10-30'
+    })
+    const document = buildDailyBriefingDocument({
+      packet: packet({ readings: readings(34, '2026-11-02T00:00:00.000Z') }),
+      date: '2026-11-02',
+      previous: friday
+    })
 
-    // A gap in the history is not yesterday: an older edition may not be relabelled as the 1d baseline.
-    const older = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-27' })
-    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30', previous: older })
+    expect(document.data.sentiment.fearGreed?.change).toMatchObject({ value: 4, unit: 'points', window: 'publication-day' })
+    expect(document.data.sentiment.fearGreed?.baselineAt).toBe('2026-10-30T00:00:00.000Z')
+  })
+
+  it('states a missing baseline instead of inventing a zero change', () => {
+    const withoutPrevious = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30' })
+    expect(withoutPrevious.data.sentiment.fearGreed?.change).toBeNull()
+    expect(withoutPrevious.data.sentiment.fearGreed?.changeReason).toBe('no-baseline')
+
+    // An edition that read the same publication is not a second value: subtracting it would print a
+    // zero that means "no new release" instead of "the index did not move".
+    const samePublication = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-27' })
+    const document = buildDailyBriefingDocument({ packet: packet(), date: '2026-10-30', previous: samePublication })
     expect(document.data.sentiment.fearGreed?.change).toBeNull()
     expect(document.data.sentiment.fearGreed?.changeReason).toBe('no-baseline')
   })
