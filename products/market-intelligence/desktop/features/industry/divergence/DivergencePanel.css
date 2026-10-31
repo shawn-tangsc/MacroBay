@@ -6,7 +6,7 @@
   padding: 6px 0 2px;
 }
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
-.mi-divergence__lead { flex: none; padding-top: 3px; }
+.mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
 .mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -1px; }
 /* A quiet day is one sentence with its badge at the end of the same line. */
@@ -20,8 +20,11 @@
 }
 /* The `?` sits before the title: the explanation is an aside to the heading, not content. */
 .mi-divergence__help {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
   padding: 0;
   border: 0;
   background: none;
