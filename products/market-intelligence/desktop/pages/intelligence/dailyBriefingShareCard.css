@@ -152,16 +152,12 @@
 
 .mi-brief-poster__next-why { margin: 6px 0 0 !important; color: #4e3a24 !important; font-size: 10px !important; line-height: 1.5 !important; }
 .mi-brief-poster__next-why b { color: #8a5a12; }
-/* The three surprises read as one low → baseline → high axis: one row, never one condition per row. */
+/* Two scenarios share one row; `符合预期` is the baseline and only survives as a footnote. */
 .mi-brief-poster__next-watch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.mi-brief-poster__next-watch-grid[data-watch-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mi-brief-poster__next-watch { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 5px 7px; border-radius: 4px; background: #f6e2c8; color: #6b3a0c; font-size: 9px; }
 .mi-brief-poster__next-watch span { color: #9a4a20; font-weight: 800; white-space: nowrap; }
 .mi-brief-poster__next-watch b { font-weight: 500; }
-.mi-brief-poster__next-watch[data-watch-kind="inline"] { background: #ece7d6; color: #57513f; }
-.mi-brief-poster__next-watch[data-watch-kind="inline"] span { color: #6b6555; }
-.mi-brief-poster__next-watch[data-watch-kind="other"] { background: #eee9dd; color: #57513f; }
-.mi-brief-poster__next-watch[data-watch-kind="other"] span { color: #6b6555; }
+.mi-brief-poster__next-watch-baseline { margin: 5px 0 0; color: #8a6633; font-size: 9px; line-height: 1.5; }
 
 .mi-brief-poster__next-row > div { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .mi-brief-poster__next-pill { padding: 1px 5px; border-radius: 3px; background: #f7e8c8; color: #8a5a12; font-size: 8px; font-weight: 700; }
@@ -182,8 +178,7 @@
 
 .mi-brief-poster__news-focus { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 3px; background: #f7e8c8; color: #8a5a12; font-size: 8px; font-weight: 700; vertical-align: 1px; }
 
-/* Under this width three scenarios cannot each hold a sentence: stack them instead of squeezing. */
+/* Under this width the two scenarios cannot each hold a sentence: stack instead of squeezing. */
 @container (max-width: 640px) {
-  .mi-brief-poster__next-watch-grid,
-  .mi-brief-poster__next-watch-grid[data-watch-count="3"] { grid-template-columns: minmax(0, 1fr); }
+  .mi-brief-poster__next-watch-grid { grid-template-columns: minmax(0, 1fr); }
 }

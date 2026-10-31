@@ -48,9 +48,11 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const newsCounts = doc.data.sentiment.news.counts
   const newsTotal = doc.data.sentiment.news.itemCount ?? 0
   const flowMax = niceFlowMax(etfRows)
-  // `符合预期` is the baseline between the two surprises, so the three read as one axis
-  // instead of the order the model happened to list them in.
+  // `符合预期` is the baseline, not a third scenario: only the two surprises get a card, and the
+  // baseline survives at most as one small footnote when it carries an actionable implication.
   const focusWatch = orderWatch(focusEvent?.watch ?? [], text)
+  const watchScenarios = focusWatch.filter((entry) => entry.kind === 'lower' || entry.kind === 'higher')
+  const watchBaseline = focusWatch.find((entry) => entry.kind === 'inline' && entry.implication.trim().length > 0)
   return <article className="mi-brief-poster">
     <header className="mi-brief-poster__head">
       <div>
@@ -150,10 +152,15 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         <h3>{nextTitle(focusEvent, eventTitles)}</h3>
         <p className="mi-brief-poster__next-meta">{nextMeta(focusEvent, text)}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
-        {focusWatch.length > 0 ? <div className="mi-brief-poster__next-watch-grid" data-watch-count={focusWatch.length}>
-          {focusWatch.map((entry) => <div className="mi-brief-poster__next-watch" data-watch-kind={entry.kind} key={entry.key}>
-            <span>{entry.label}</span><b>{entry.implication}</b>
-          </div>)}
+        {watchScenarios.length > 0 || watchBaseline ? <div className="mi-brief-poster__next-watch-block">
+          {watchScenarios.length > 0 ? <div className="mi-brief-poster__next-watch-grid" data-watch-count={watchScenarios.length}>
+            {watchScenarios.map((entry) => <div className="mi-brief-poster__next-watch" data-watch-kind={entry.kind} key={entry.key}>
+              <span>{entry.label}</span><b>{entry.implication}</b>
+            </div>)}
+          </div> : null}
+          {watchBaseline ? <p className="mi-brief-poster__next-watch-baseline" data-watch-baseline="true">
+            {text.next.watchInline}{text.labelSeparator}{watchBaseline.implication}
+          </p> : null}
         </div> : null}
         <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
       </div> : null}
@@ -326,15 +333,15 @@ function nextMeta(item: DailyBriefingDocument['next']['items'][number], text: Da
 
 /**
  * The model writes the watch conditions as free text, and its third one (`inline with consensus`)
- * used to leak into the Chinese poster because only the two English phrases were mapped. Map all
- * three surprises onto one low → baseline → high axis; a condition that is already localized is
- * kept, while an unrecognized English phrase gets a neutral label instead of leaking through.
+ * used to leak into the Chinese poster because only the two English phrases were mapped. Map the
+ * conditions so the two surprises lead the row in low → high order; `inline` is the baseline, and
+ * an unrecognized phrase is dropped rather than printed raw.
  */
 function orderWatch(
   watch: readonly Readonly<{ condition: string; implication: string }>[],
   text: DailyBriefingText
 ): readonly WatchEntry[] {
-  const rank: Readonly<Record<WatchKind, number>> = { lower: 0, inline: 1, higher: 2, other: 3 }
+  const rank: Readonly<Record<WatchKind, number>> = { lower: 0, higher: 1, inline: 2, other: 3 }
   return watch
     .map((entry, index) => ({ key: `${index}:${entry.condition}`, implication: entry.implication, ...watchLabel(entry.condition, text) }))
     .sort((left, right) => rank[left.kind] - rank[right.kind])

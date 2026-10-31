@@ -234,7 +234,7 @@ describe('daily brief share card in English', () => {
     expect(rendered.textContent).toContain(`${text.conclusion.invalidation}: Stablecoins turn positive.`)
   })
 
-  it('puts the three watch conditions on one row with the baseline in the middle', async () => {
+  it('shows only the two surprise cards and keeps the baseline out of the row', async () => {
     const rendered = await render(withFocus({
       consensus: '3.2%',
       previous: '3.1%',
@@ -246,16 +246,20 @@ describe('daily brief share card in English', () => {
     }))
     const grid = rendered.querySelector('.mi-brief-poster__next-watch-grid')
     const cards = [...rendered.querySelectorAll('[data-watch-kind]')]
+    const baseline = rendered.querySelector('[data-watch-baseline]')!
 
-    expect(grid?.getAttribute('data-watch-count')).toBe('3')
-    expect(cards).toHaveLength(3)
+    expect(grid?.getAttribute('data-watch-count')).toBe('2')
+    expect(cards).toHaveLength(2)
     expect(cards.every((card) => card.parentElement === grid)).toBe(true)
-    expect(cards.map((card) => card.getAttribute('data-watch-kind'))).toEqual(['lower', 'inline', 'higher'])
+    expect(cards.map((card) => card.getAttribute('data-watch-kind'))).toEqual(['lower', 'higher'])
     expect(cards.map((card) => card.querySelector('span')?.textContent))
-      .toEqual(['Lower than expected', 'In line with consensus', 'Higher than expected'])
+      .toEqual(['Lower than expected', 'Higher than expected'])
+    // The baseline is a footnote under the row, not a third card.
+    expect(baseline.parentElement).not.toBe(grid)
+    expect(baseline.textContent).toBe('In line with consensus: The range holds.')
   })
 
-  it('localizes the inline condition in Chinese instead of leaking the AI phrase', async () => {
+  it('localizes the inline condition into a Chinese footnote instead of leaking the AI phrase', async () => {
     const rendered = await renderWith(withFocus({
       consensus: '3.2%',
       previous: '29',
@@ -268,30 +272,44 @@ describe('daily brief share card in English', () => {
     const cards = [...rendered.querySelectorAll('[data-watch-kind]')]
     const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
 
-    expect(cards.map((card) => card.getAttribute('data-watch-kind'))).toEqual(['lower', 'inline', 'higher'])
-    expect(cards.map((card) => card.querySelector('span')?.textContent))
-      .toEqual(['低于预期', '符合预期', '高于预期'])
-    expect(poster).toContain('符合预期')
+    expect(cards.map((card) => card.getAttribute('data-watch-kind'))).toEqual(['lower', 'higher'])
+    expect(cards.map((card) => card.querySelector('span')?.textContent)).toEqual(['低于预期', '高于预期'])
+    expect(rendered.querySelector('[data-watch-baseline]')?.textContent).toBe('符合预期：区间维持。')
     expect(poster).not.toContain('Inline with consensus')
   })
 
-  it('never prints an unrecognized English watch condition', async () => {
+  it('omits the baseline footnote when inline has no actionable implication', async () => {
+    const rendered = await render(withFocus({
+      watch: [
+        { condition: 'higher than expected', implication: 'Rates rise.' },
+        { condition: 'lower than expected', implication: 'Rates fall.' },
+        { condition: 'inline with consensus', implication: '   ' }
+      ]
+    }))
+
+    expect(rendered.querySelectorAll('[data-watch-kind]')).toHaveLength(2)
+    expect(rendered.querySelector('[data-watch-baseline]')).toBeNull()
+  })
+
+  it('hides an unrecognized English watch condition instead of printing it', async () => {
     const rendered = await render(withFocus({
       watch: [{ condition: 'markets reprice around the print', implication: 'Spreads widen.' }]
     }))
-    const card = rendered.querySelector('[data-watch-kind]')!
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
 
-    expect(card.getAttribute('data-watch-kind')).toBe('other')
-    expect(card.textContent).toContain(text.next.watchOther)
-    expect(card.textContent).not.toContain('markets reprice')
+    expect(rendered.querySelector('[data-watch-kind]')).toBeNull()
+    expect(rendered.querySelector('.mi-brief-poster__next-watch-grid')).toBeNull()
+    expect(poster).not.toContain('markets reprice')
+    expect(poster).not.toContain(text.next.watchOther)
   })
 
-  it('keeps a watch condition that is already localized', async () => {
+  it('hides a condition it cannot classify instead of printing it raw', async () => {
     const rendered = await renderWith(withFocus({
       watch: [{ condition: '波动放大但方向不明', implication: '等待收盘确认。' }]
     }), zhText, 'zh-CN')
 
-    expect(rendered.textContent).toContain('波动放大但方向不明')
+    expect(rendered.textContent).not.toContain('波动放大但方向不明')
+    expect(rendered.querySelector('[data-watch-kind]')).toBeNull()
   })
 
   it('carries expected and previous into the event header instead of a trailing line', async () => {
