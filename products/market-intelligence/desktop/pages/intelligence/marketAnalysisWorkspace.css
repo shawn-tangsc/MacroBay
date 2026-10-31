@@ -198,7 +198,7 @@
 .mi-analysis-timeline__headline { display: grid; gap: 6px; justify-items: start; margin-top: 4px; }
 /* Which event a row belongs to. One muted line, cut rather than wrapped: a news headline can run
    long, and a caption taller than the conclusion would become the thing the reader reads. */
-.mi-analysis-timeline__group { display: block; max-width: 100%; margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-analysis-timeline__group { display: block; max-width: 100%; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-analysis-timeline__conclusion-line { width: 100%; min-width: 0; overflow-wrap: anywhere; color: var(--text, #edf3ef); font-size: 13px; line-height: 1.45; }
 /* The analysis action is disabled for the whole request/run, so its own glyph carries the
    in-flight state: the reader sees work happening instead of a frozen icon. */
