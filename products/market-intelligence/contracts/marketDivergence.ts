@@ -90,7 +90,7 @@ export type DivergenceInputs = Readonly<{
   funding?: Readonly<{ ratePercent: number; observedAt: string }>
   price?: Readonly<{ return24hPercent: number; observedAt: string }>
   /** Share of the last 24 hours' scored headlines that are bearish, 0–100. */
-  sentiment?: Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }>
+  sentiment?: Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }>
 }>
 
 export function divergenceUnavailable(): Extract<MarketDivergenceResult, { state: 'unavailable' }> {

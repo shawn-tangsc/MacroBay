@@ -32,11 +32,12 @@ export type DivergenceLegReader = Readonly<{
    * Not the sentiment snapshot: its aggregates only exist for market-wide scopes, so an
    * asset-scoped or 24h-labelled read answers `unknown` and the leg silently disappears.
    */
-  sentiment: () => Promise<Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }> | undefined>
+  sentiment: () => Promise<Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }> | undefined>
 }>
 
 export type DivergenceJudge = (input: Readonly<{
   asOf: string
+  headlines?: readonly string[]
   pairs: readonly Readonly<{ pairId: import('../../../contracts/marketDivergence').DivergencePairId; legs: readonly import('../../../contracts/marketDivergence').DivergenceLeg[]; ruleVerdict: 'divergence' | 'agreement' }>[]
 }>) => Promise<import('./divergenceJudgementService').DivergenceJudgementResult>
 
@@ -84,15 +85,24 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
  * `directionalCount` excludes neutral items on purpose: "most of what was said was bearish" is a
  * statement about the headlines that took a side, not about the volume of coverage.
  */
-export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string }> | undefined {
+export function bearishShare(view: NewsSentimentView): Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines: readonly string[] }> | undefined {
   if (view.state !== 'available' || !view.summary) return undefined
   const directional = view.summary.directionalCount
-  const bearish = view.items.filter(item => item.polarity === 'bearish').length
-  if (directional <= 0 || bearish <= 0) return undefined
+  const bearishItems = view.items.filter(item => item.polarity === 'bearish')
+  if (directional <= 0 || bearishItems.length === 0) return undefined
+  // The titles travel with the share: a judge that only knows "72% bearish" can write a number,
+  // not a sentence about what the market was actually told.
+  const headlines = bearishItems
+    .slice()
+    .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
+    .slice(0, 3)
+    .map(item => item.title.trim().slice(0, 90))
+    .filter(title => title.length > 0)
   return {
-    bearishSharePercent: Math.round((bearish / directional) * 100),
+    bearishSharePercent: Math.round((bearishItems.length / directional) * 100),
     scoredCount: directional,
-    observedAt: view.summary.latestItemAt ?? view.generatedAt
+    observedAt: view.summary.latestItemAt ?? view.generatedAt,
+    headlines
   }
 }
 
@@ -113,7 +123,11 @@ async function judgeRows(
   if ((input.mode ?? 'auto') === 'auto' && ruleResult.state !== 'available') return ruleResult
   const pairs = buildPairs(legs, ruleResult)
   if (pairs.length === 0) return ruleResult
-  const outcome = await input.judge({ asOf: input.asOf, pairs })
+  const outcome = await input.judge({
+    asOf: input.asOf,
+    pairs,
+    ...(legs.sentiment?.headlines?.length ? { headlines: legs.sentiment.headlines } : {})
+  })
   if (outcome.state !== 'judged') return ruleResult
   const rows = rowsFromJudgements(outcome.judgements, pairs)
   return rows.length > 0

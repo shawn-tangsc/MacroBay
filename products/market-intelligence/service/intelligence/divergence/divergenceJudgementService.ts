@@ -15,6 +15,8 @@ import { divergencePolicy } from '../../../contracts/marketDivergence'
  */
 export type DivergenceJudgementInput = Readonly<{
   asOf: string
+  /** Headlines behind the sentiment leg, newest first; only used to explain, never as numbers. */
+  headlines?: readonly string[]
   /** Every pair with its legs, including the ones the rules found no divergence in. */
   pairs: readonly Readonly<{
     pairId: DivergencePairId
@@ -41,7 +43,7 @@ export type DivergenceModelInvoker = <T>(
   request: StructuredModelTaskRequest<T>
 ) => Promise<StructuredModelTaskResult<T>>
 
-const MAXIMUM_SENTENCE = 120
+const MAXIMUM_SENTENCE = 200
 const CACHE_TTL_MS = 30 * 60 * 1_000
 
 /**
@@ -125,12 +127,15 @@ export function buildDivergenceMessages(input: DivergenceJudgementInput): readon
         '1. 只能使用输入里给出的数字，禁止编造或换算成其它数字；数字必须逐字来自输入。',
         '2. verdict=agreement 时不要写 mechanism 与 invalidation。',
         '3. verdict=divergence 时，direction 取 bearish（偏空）/ bullish（偏强）/ unpriced（消息未被计价）。',
-        '4. mechanism 一句话（≤60 字）说明两条腿为何矛盾；invalidation 一句话（≤60 字）说明什么情况下这条不成立。',
-        '5. 不要给交易建议，不要预测价格。',
-        '6. pair 必须是输入里出现过的 id，每个 id 恰好一次。'
+        '4. mechanism 用**普通人能看懂的中文**写清因果，按三句话的顺序：①发生了什么（两条腿各自说明什么事实）；②这两件事为什么互相矛盾；③这通常意味着什么、接下来该盯什么。可以写 2–3 句、共 80–160 字，不要写成词组罗列。',
+        '5. 涉及舆情时，必须写出消息的具体内容（例如「多条新闻在说 ETF 资金在流出」），让读者知道「坏消息」到底指什么；不要只写一个百分比。',
+        '6. 禁止使用未解释的术语（如「空头回补」「基差」「去杠杆」）；必须用就先在半句话里说明白。',
+        '7. invalidation 一句话（≤60 字）说明什么情况下这条判断不成立。',
+        '8. 不要给交易建议，不要预测价格；不要写「建议关注」这类空话。',
+        '9. pair 必须是输入里出现过的 id，每个 id 恰好一次。'
       ].join('\n')
     },
-    { role: 'user', content: JSON.stringify({ asOf: input.asOf, pairs: legs }) }
+    { role: 'user', content: JSON.stringify({ asOf: input.asOf, pairs: legs, ...(input.headlines?.length ? { headlines: input.headlines } : {}) }) }
   ]
 }
 
@@ -164,6 +169,8 @@ export function parseJudgementOutput(raw: string, input: DivergenceJudgementInpu
     const invalidation = typeof record.invalidation === 'string' ? record.invalidation.trim() : ''
     if (!mechanism || !invalidation) return null
     if (mechanism.length > MAXIMUM_SENTENCE || invalidation.length > MAXIMUM_SENTENCE) return null
+    // A sentence of three words is the failure the reader reported: a term, not an explanation.
+    if (mechanism.length < 24) return null
     out.push({ pairId: pairId as DivergencePairId, verdict: 'divergence', direction: record.direction, mechanism, invalidation })
   }
   // Every pair must be answered: a silent pair would read as "no divergence", which is a claim.

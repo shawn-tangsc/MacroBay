@@ -24,7 +24,7 @@ const input: DivergenceJudgementInput = {
 }
 
 const answer = JSON.stringify({ judgements: [
-  { pair: 'liquidity-leverage', verdict: 'divergence', direction: 'bearish', mechanism: '稳定币在缩而空头在加，反弹会被回补放大。', invalidation: '稳定币 7 天转正。' },
+  { pair: 'liquidity-leverage', verdict: 'divergence', direction: 'bearish', mechanism: '稳定币七天里少了 1.21%，说明能用来买币的现金在减少；但永续空头反而在加仓 3.4%，两边方向相反。这意味着价格一旦反弹，空头被迫平仓会放大涨幅。', invalidation: '稳定币 7 天转正。' },
   { pair: 'narrative-price', verdict: 'agreement' }
 ] })
 
