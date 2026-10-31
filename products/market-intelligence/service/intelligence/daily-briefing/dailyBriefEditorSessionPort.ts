@@ -35,9 +35,11 @@ export function createDailyBriefEditorSessionPort(deps: Readonly<{
     async state(sessionId, state) {
       const link = await deps.links.findBySession(sessionId)
       if (!link) return
-      // A timed-out generation abandons an in-flight link, but never rewrites a link that already
-      // reached a terminal editorial state (the turn may have finished as the deadline fired).
-      if (state === 'abandoned' && link.state !== 'running') return
+      // Terminal is terminal: a link is created `running`, and whichever outcome lands first wins.
+      // The deadline and a turn that finishes on the same tick can both report, and the loser must
+      // not rewrite the winner — neither `abandoned` over `accepted` nor `accepted` over
+      // `abandoned`.
+      if (link.state !== 'running') return
       await deps.links.put({ ...link, state, updatedAt: now() })
     },
   })

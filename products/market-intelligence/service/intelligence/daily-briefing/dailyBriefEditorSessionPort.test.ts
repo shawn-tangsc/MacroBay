@@ -31,15 +31,21 @@ describe('daily brief editor session port', () => {
     await expect(port.cancel('s-1')).resolves.toBeUndefined()
   })
 
-  it('abandons a running link but never rewrites a link that already finished', async () => {
+  it('keeps the first terminal state and ignores every later outcome', async () => {
     const d = deps()
     const port = createDailyBriefEditorSessionPort(d as never)
-    const { sessionId } = await port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'edition', agentId: 'daily-brief-editor' })
-    await port.state(sessionId, 'abandoned')
-    expect((await d.links.findBySession(sessionId))?.state).toBe('abandoned')
-    await port.state(sessionId, 'accepted')
-    await port.state(sessionId, 'abandoned')
-    expect((await d.links.findBySession(sessionId))?.state).toBe('accepted')
+    const ensure = () => port.ensure({ editionKey: '2026-10-30:zh-CN', editionDate: '2026-10-30', locale: 'zh-CN', title: 'edition', agentId: 'daily-brief-editor' })
+
+    const first = await ensure()
+    await port.state(first.sessionId, 'abandoned')
+    await port.state(first.sessionId, 'accepted')
+    await port.state(first.sessionId, 'failed')
+    expect((await d.links.findBySession(first.sessionId))?.state).toBe('abandoned')
+
+    const second = await port.ensure({ editionKey: '2026-10-30:en-US', editionDate: '2026-10-30', locale: 'en-US', title: 'edition', agentId: 'daily-brief-editor' })
+    await port.state(second.sessionId, 'accepted')
+    await port.state(second.sessionId, 'abandoned')
+    expect((await d.links.findBySession(second.sessionId))?.state).toBe('accepted')
   })
 
   it('creates once per edition, reuses the link, renames and deletes', async () => {
