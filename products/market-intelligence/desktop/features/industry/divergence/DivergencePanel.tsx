@@ -57,7 +57,13 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
       {state.state === 'unavailable' ? (
         <div className="mi-divergence__status" data-tone="error">
           <b>{text.unavailable}</b>
-          {withheld.length > 0 ? <span className="mi-divergence__status-sub">{text.missingLegs.replace('{legs}', groupWithheld(withheld).map(group => text.legs[group.leg]).join('、'))}</span> : null}
+          {state.missing.length > 0 ? (
+            <span className="mi-divergence__status-sub">
+              {text.missingLegs.replace('{legs}', state.missing.map(leg => text.legs[leg]).join('、'))}
+            </span>
+          ) : (
+            <span className="mi-divergence__status-sub">{text.unavailableWhy[state.reason]}</span>
+          )}
           {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
         </div>
       ) : null}

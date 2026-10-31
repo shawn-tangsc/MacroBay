@@ -4,7 +4,7 @@ import { isMarketDivergenceResult } from '../../../contracts/marketDivergence'
 /** What the card renders: the rows it may show, and the pairs it had to refuse. */
 export type DashboardDivergenceViewState =
   | Readonly<{ state: 'loading' }>
-  | Readonly<{ state: 'unavailable' }>
+  | Readonly<{ state: 'unavailable'; reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large'; missing: readonly DivergenceLeg['id'][] }>
   | Readonly<{ state: 'empty'; withheld: readonly DivergenceWithheldView[] }>
   | Readonly<{ state: 'available'; rows: readonly DivergenceRowView[]; withheld: readonly DivergenceWithheldView[] }>
 
@@ -34,8 +34,8 @@ export type DivergenceRowView = Readonly<{
  * card appears, and so the panel stays a rendering of a view model.
  */
 export function projectDashboardDivergence(value: unknown, asOf: string): DashboardDivergenceViewState {
-  if (!isMarketDivergenceResult(value, asOf)) return { state: 'unavailable' }
-  if (value.state === 'unavailable') return { state: 'unavailable' }
+  if (!isMarketDivergenceResult(value, asOf)) return { state: 'unavailable', reason: 'query-failed', missing: [] }
+  if (value.state === 'unavailable') return { state: 'unavailable', reason: value.reason, missing: value.missing }
   const withheld = value.withheld.map(entry => ({
     pairId: entry.pairId,
     reason: entry.reason,

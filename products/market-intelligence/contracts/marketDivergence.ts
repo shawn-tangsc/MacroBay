@@ -79,7 +79,16 @@ export type DivergenceWithheld = Readonly<{
 export type MarketDivergenceResult =
   | Readonly<{ state: 'available'; asOf: string; rows: readonly DivergenceRow[]; withheld: readonly DivergenceWithheld[] }>
   | Readonly<{ state: 'empty'; asOf: string; withheld: readonly DivergenceWithheld[] }>
-  | Readonly<{ state: 'unavailable'; failureCode: 'market-divergence-query-unavailable' }>
+  /**
+   * Nothing could be computed. `missing` names the readings that never arrived — a card that says
+   * "some data is missing" without saying which is asking the reader to go and find out.
+   */
+  | Readonly<{
+      state: 'unavailable'
+      failureCode: 'market-divergence-query-unavailable'
+      reason: 'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large'
+      missing: readonly DivergenceLegId[]
+    }>
 
 /** Already-validated legs, one per source. A missing key means "this leg could not answer". */
 export type DivergenceInputs = Readonly<{
@@ -93,8 +102,11 @@ export type DivergenceInputs = Readonly<{
   sentiment?: Readonly<{ bearishSharePercent: number; scoredCount: number; observedAt: string; headlines?: readonly string[] }>
 }>
 
-export function divergenceUnavailable(): Extract<MarketDivergenceResult, { state: 'unavailable' }> {
-  return { state: 'unavailable', failureCode: divergencePolicy.unavailableFailureCode }
+export function divergenceUnavailable(
+  reason: Extract<MarketDivergenceResult, { state: 'unavailable' }>['reason'] = 'query-failed',
+  missing: readonly DivergenceLegId[] = []
+): Extract<MarketDivergenceResult, { state: 'unavailable' }> {
+  return { state: 'unavailable', failureCode: divergencePolicy.unavailableFailureCode, reason, missing }
 }
 
 /**
@@ -104,7 +116,7 @@ export function divergenceUnavailable(): Extract<MarketDivergenceResult, { state
  * because "no divergence today" and "we could not compare" must not look alike.
  */
 export function detectDivergences(input: DivergenceInputs): MarketDivergenceResult {
-  if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable()
+  if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable('invalid-clock')
   const withheld: DivergenceWithheld[] = []
   const rows: DivergenceRow[] = []
 
@@ -229,7 +241,11 @@ export function isCanonicalDivergenceTime(value: unknown): value is string {
 export function isMarketDivergenceResult(value: unknown, asOf: string): value is MarketDivergenceResult {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
   const record = value as Record<string, unknown>
-  if (record.state === 'unavailable') return record.failureCode === divergencePolicy.unavailableFailureCode
+  if (record.state === 'unavailable') {
+    if (record.failureCode !== divergencePolicy.unavailableFailureCode) return false
+    if (record.reason !== 'all-legs-missing' && record.reason !== 'query-failed' && record.reason !== 'invalid-clock' && record.reason !== 'too-large') return false
+    return Array.isArray(record.missing) && record.missing.every(entry => typeof entry === 'string')
+  }
   if (!isCanonicalDivergenceTime(record.asOf) || record.asOf !== asOf) return false
   if (!Array.isArray(record.withheld) || !record.withheld.every(isWithheld)) return false
   if (record.state === 'empty') return Object.keys(record).length === 3

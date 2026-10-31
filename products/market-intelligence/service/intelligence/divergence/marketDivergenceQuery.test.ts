@@ -42,7 +42,7 @@ describe('market divergence query', () => {
   it('refuses a non-canonical instant without reading a single leg', async () => {
     const spy = vi.fn(async () => undefined)
     const result = await queryMarketDivergenceAsync({ asOf: '2026-10-30 12:00', read: reader({ stablecoin: spy }) })
-    expect(result).toEqual({ state: 'unavailable', failureCode: 'market-divergence-query-unavailable' })
+    expect(result).toEqual({ state: 'unavailable', failureCode: 'market-divergence-query-unavailable', reason: 'invalid-clock', missing: [] })
     expect(spy).not.toHaveBeenCalled()
   })
 })

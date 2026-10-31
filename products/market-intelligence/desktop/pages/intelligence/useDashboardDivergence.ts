@@ -19,13 +19,13 @@ export function useDashboardDivergence(input: Readonly<{
     let active = true
     const asOf = readClock(mountInput.now)
     if (!asOf || typeof mountInput.client?.query !== 'function') {
-      setState({ state: 'unavailable' })
+      setState({ state: 'unavailable', reason: 'query-failed', missing: [] })
       return () => { active = false }
     }
     setState({ state: 'loading' })
     void mountInput.client.query({ asOf, ...(attempt > 0 ? { mode: 'manual' as const } : {}) })
       .then((result) => { if (active) setState(projectDashboardDivergence(result, asOf)) })
-      .catch(() => { if (active) setState({ state: 'unavailable' }) })
+      .catch(() => { if (active) setState({ state: 'unavailable', reason: 'query-failed', missing: [] }) })
     return () => { active = false }
   }, [mountInput, attempt])
 

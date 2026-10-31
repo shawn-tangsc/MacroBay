@@ -458,6 +458,12 @@ export const productText = {
               withheldGroup: '（{count} 对）',
               judgeAgain: 'AI 复核',
               retry: '重试',
+              unavailableWhy: {
+                'all-legs-missing': '六个数据源一个都没返回',
+                'query-failed': '查询出错，和有没有数据无关',
+                'invalid-clock': '系统时间格式不对，属于程序问题',
+                'too-large': '结果太大，超出了这张卡的容量'
+              },
               nothingCompared: '三对都没能比：缺的数据没凑齐，今天不给结论',
               missingLegs: '还缺：{legs}',
               judgedBy: { ai: 'AI 判定', rules: '规则判定' },
@@ -767,8 +773,21 @@ export const productText = {
                 missing: '本次未记录时间线',
                 failedAt: '失败于：{stage}',
                 notRecorded: '未记录',
-                states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录' },
+                states: { success: '成功', failed: '失败', skipped: '跳过', pending: '未记录', notNeeded: '无需修正', notRun: '未执行' },
                 stages: { source: '数据采集', candidates: '候选池', selection: 'AI 选择', 'field-backfill': '字段响应/回补', writing: '写作', validation: '校验', 'repair-1': '修正 1', 'repair-2': '修正 2', store: '落库/发布' },
+                stageHelpLabel: '查看{stage}的阶段说明',
+                // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
+                stageHelp: {
+                  source: '按 edition cutoff 读取 as-of 快照：窗口、源与禁用/缺失状态，不取晚于 cutoff 的值。',
+                  candidates: '汇总 24h 宏观/新闻、7 日事件、数据行、杠杆与利率路径，去重后算 relevance/materiality 并套用上限。',
+                  selection: '把完整候选交给 AI，由它给出 shown/items、focus 与 hidden reason；缺 consensus 不是隐藏理由。',
+                  'field-backfill': '执行 AI 请求的字段/回补，校验 asOf ≤ cutoff；本地 store 优先，缺失才查历史 API，失败记 gap。',
+                  writing: '用已选 facts 生成 lede/items/hidden/importance/nextFocus；数字只能取自 facts，输出 JSON。',
+                  validation: '校验 schema、未知 fact/数字、hidden 覆盖、语言、citation、缺 why 与截断。',
+                  'repair-1': '带校验错误重写一次。',
+                  'repair-2': '第二次带校验错误重写；仍失败就终止，不落库。',
+                  store: '写 edition、更新 banner、清理 attempt；失败不落库。'
+                },
                 durationUnits: { milliseconds: '{count} ms', seconds: '{count} 秒', minutes: '{count} 分 {seconds} 秒' }
               },
               failurePanel: {
@@ -2141,6 +2160,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               withheldGroup: ' ({count} pairs)',
               judgeAgain: 'AI second opinion',
               retry: 'Retry',
+              unavailableWhy: {
+                'all-legs-missing': 'all six sources came back empty',
+                'query-failed': 'the query failed, independently of the data',
+                'invalid-clock': 'the clock value was malformed, a program fault',
+                'too-large': 'the answer was too large for this card'
+              },
               nothingCompared: 'None of the three pairs could be compared: the missing figures were not available',
               missingLegs: 'Still missing: {legs}',
               judgedBy: { ai: 'AI judged', rules: 'Rule-based' },
@@ -2450,8 +2475,21 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 missing: 'No stage timeline was recorded for this attempt',
                 failedAt: 'Failed at: {stage}',
                 notRecorded: 'Not recorded',
-                states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded' },
+                states: { success: 'Success', failed: 'Failed', skipped: 'Skipped', pending: 'Not recorded', notNeeded: 'No repair needed', notRun: 'Not run' },
                 stages: { source: 'Data collection', candidates: 'Candidate pool', selection: 'AI selection', 'field-backfill': 'Field response/backfill', writing: 'Writing', validation: 'Validation', 'repair-1': 'Repair 1', 'repair-2': 'Repair 2', store: 'Store/publish' },
+                stageHelpLabel: 'About the {stage} stage',
+                // One fixed line per stage, shown only in the question-mark tooltip.
+                stageHelp: {
+                  source: 'Reads the as-of snapshot at the edition cutoff: window, sources and disabled/missing state; never values after the cutoff.',
+                  candidates: 'Collects 24h macro/news, 7-day events, data rows, leverage and rate path; dedupes, scores relevance/materiality and applies caps.',
+                  selection: 'Hands the full candidate set to the AI to pick shown/items, focus and hidden reasons; missing consensus is not a hidden reason.',
+                  'field-backfill': 'Runs the AI’s field/backfill requests and checks asOf ≤ cutoff; local store first, history API only when missing, failures become gaps.',
+                  writing: 'Writes lede/items/hidden/importance/nextFocus from the selected facts, numbers only from facts, as JSON.',
+                  validation: 'Checks schema, unknown facts/numbers, hidden coverage, language, citations, missing why and truncation.',
+                  'repair-1': 'Rewrites once with the validation errors.',
+                  'repair-2': 'Rewrites a second time with the validation errors; a further failure stops the run.',
+                  store: 'Writes the edition, updates the banner and clears the attempt; a failure stores nothing.'
+                },
                 durationUnits: { milliseconds: '{count} ms', seconds: '{count} s', minutes: '{count} min {seconds} s' }
               },
               failurePanel: {

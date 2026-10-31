@@ -12,6 +12,8 @@ export type DivergencePanelText = Readonly<{
   /** The manual trigger, offered only when the rules found nothing to explain. */
   judgeAgain: string
   retry: string
+  /** When we cannot even name a reading, say why in one short sentence. */
+  unavailableWhy: Readonly<Record<'all-legs-missing' | 'query-failed' | 'invalid-clock' | 'too-large', string>>
   /** Every pair withheld: nothing was compared, which is not the same as no divergence. */
   nothingCompared: string
   /** "Missing: {legs}" — the legs that made the whole card unavailable. */

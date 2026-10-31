@@ -53,14 +53,21 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
    */
   mode?: 'auto' | 'manual'
 }>): Promise<MarketDivergenceResult> {
-  if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable()
+  if (!isCanonicalDivergenceTime(input.asOf)) return divergenceUnavailable('invalid-clock')
   try {
     // Every leg is attempted: one that fails must show up as `withheld` with its own name, not
     // take the other two pairs down with it.
+    const missing: Array<import('../../../contracts/marketDivergence').DivergenceLegId> = []
+    const read = async <T>(id: import('../../../contracts/marketDivergence').DivergenceLegId, fn: () => Promise<T | undefined>) => {
+      const value = await safe(fn)
+      if (!value) missing.push(id)
+      return value
+    }
     const [stablecoin, etf, openInterest, funding, price, sentiment] = await Promise.all([
-      safe(input.read.stablecoin), safe(input.read.etf), safe(input.read.openInterest),
-      safe(input.read.funding), safe(input.read.price), safe(input.read.sentiment)
+      read('stablecoin', input.read.stablecoin), read('etf', input.read.etf), read('open-interest', input.read.openInterest),
+      read('funding', input.read.funding), read('price', input.read.price), read('sentiment', input.read.sentiment)
     ])
+    if (missing.length === 6) return divergenceUnavailable('all-legs-missing', missing)
     const legs: DivergenceInputs = {
       asOf: input.asOf,
       ...(stablecoin ? { stablecoin } : {}),
@@ -73,9 +80,9 @@ export async function queryMarketDivergenceAsync(input: Readonly<{
     const ruleResult = detectDivergences(legs)
     if (ruleResult.state === 'unavailable') return ruleResult
     const judged = await judgeRows(input, legs, ruleResult)
-    return isWithinUtf8JsonBudget(judged, divergencePolicy.maximumDtoBytes) ? judged : divergenceUnavailable()
+    return isWithinUtf8JsonBudget(judged, divergencePolicy.maximumDtoBytes) ? judged : divergenceUnavailable('too-large', missing)
   } catch {
-    return divergenceUnavailable()
+    return divergenceUnavailable('query-failed')
   }
 }
 

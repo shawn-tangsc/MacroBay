@@ -34,7 +34,7 @@ describe('divergence view model', () => {
   })
 
   it('refuses a DTO answered for a different instant', () => {
-    expect(projectDashboardDivergence(dto, '2026-10-30T13:00:00.000Z')).toEqual({ state: 'unavailable' })
+    expect(projectDashboardDivergence(dto, '2026-10-30T13:00:00.000Z')).toEqual({ state: 'unavailable', reason: 'query-failed', missing: [] })
   })
 
   it('reads a dollar flow in millions and a sentiment label as its own word', () => {
