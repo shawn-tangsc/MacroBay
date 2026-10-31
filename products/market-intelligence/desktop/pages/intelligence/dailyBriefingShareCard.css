@@ -15,6 +15,7 @@
   color: #1b1d18;
   font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overflow: hidden;
+  container-type: inline-size;
 }
 
 .mi-brief-poster * { box-sizing: border-box; }
@@ -118,7 +119,7 @@
 .mi-brief-poster__next-focus-head time { color: #9a4a20; font-size: 10px; font-weight: 700; }
 .mi-brief-poster__next-focus h3 { margin: 5px 0 2px; color: #241f16; font-size: 17px; letter-spacing: -.01em; }
 .mi-brief-poster__next-focus p { margin: 0; color: #6b5a45; font-size: 10px; }
-.mi-brief-poster__next-values { margin-top: 4px; color: #6b3a0c; font-size: 10px; font-weight: 600; }
+.mi-brief-poster__next-focus p.mi-brief-poster__next-meta { margin: 2px 0 0; }
 .mi-brief-poster__next-soon { position: absolute; top: 12px; right: 14px; color: #8a6633; font-size: 9px; }
 .mi-brief-poster__next-rows { margin-top: 4px; }
 .mi-brief-poster__next-row { display: grid; grid-template-columns: 108px 1fr auto; gap: 12px; align-items: baseline; padding: 7px 2px; border-bottom: 1px solid #ded4c2; }
@@ -151,12 +152,16 @@
 
 .mi-brief-poster__next-why { margin: 6px 0 0 !important; color: #4e3a24 !important; font-size: 10px !important; line-height: 1.5 !important; }
 .mi-brief-poster__next-why b { color: #8a5a12; }
+/* The three surprises read as one low → baseline → high axis: one row, never one condition per row. */
 .mi-brief-poster__next-watch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
-.mi-brief-poster__next-watch { margin-top: 0; display: grid; grid-template-columns: 58px 1fr; gap: 8px; margin-top: 5px; padding: 5px 7px; border-radius: 4px; background: #f6e2c8; color: #6b3a0c; font-size: 9px; }
-.mi-brief-poster__next-watch span { color: #9a4a20; font-weight: 800; }
+.mi-brief-poster__next-watch-grid[data-watch-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mi-brief-poster__next-watch { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 5px 7px; border-radius: 4px; background: #f6e2c8; color: #6b3a0c; font-size: 9px; }
+.mi-brief-poster__next-watch span { color: #9a4a20; font-weight: 800; white-space: nowrap; }
 .mi-brief-poster__next-watch b { font-weight: 500; }
-.mi-brief-poster__next-watch:nth-of-type(even) { background: #eef0df; color: #3f5522; }
-.mi-brief-poster__next-watch:nth-of-type(even) span { color: #4e6b2a; }
+.mi-brief-poster__next-watch[data-watch-kind="inline"] { background: #ece7d6; color: #57513f; }
+.mi-brief-poster__next-watch[data-watch-kind="inline"] span { color: #6b6555; }
+.mi-brief-poster__next-watch[data-watch-kind="other"] { background: #eee9dd; color: #57513f; }
+.mi-brief-poster__next-watch[data-watch-kind="other"] span { color: #6b6555; }
 
 .mi-brief-poster__next-row > div { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .mi-brief-poster__next-pill { padding: 1px 5px; border-radius: 3px; background: #f7e8c8; color: #8a5a12; font-size: 8px; font-weight: 700; }
@@ -176,3 +181,9 @@
 .mi-brief-poster__comparison { margin: 8px 0 0; color: #8a5a35; font-size: 9.5px; line-height: 1.5; }
 
 .mi-brief-poster__news-focus { display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 3px; background: #f7e8c8; color: #8a5a12; font-size: 8px; font-weight: 700; vertical-align: 1px; }
+
+/* Under this width three scenarios cannot each hold a sentence: stack them instead of squeezing. */
+@container (max-width: 640px) {
+  .mi-brief-poster__next-watch-grid,
+  .mi-brief-poster__next-watch-grid[data-watch-count="3"] { grid-template-columns: minmax(0, 1fr); }
+}

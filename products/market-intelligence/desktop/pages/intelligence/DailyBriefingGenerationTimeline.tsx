@@ -41,7 +41,7 @@ export function DailyBriefingGenerationTimeline({ trace, text, formatTime }: Rea
     </header>
     {trace ? <>
       <p className="mi-generation-trace__summary">
-        {labels.attempt} · {formatTime(trace.startedAt, 'second')} – {formatTime(trace.finishedAt, 'second')}
+        {labels.attempt} · {formatRange(trace.startedAt, trace.finishedAt, formatTime)}
         {duration !== undefined ? ` · ${labels.duration.replace('{duration}', formatDuration(duration, text))}` : ''}
       </p>
       {trace.state === 'failed' ? <p className="mi-generation-trace__failed" data-failed-stage-label>
@@ -71,12 +71,43 @@ function stageTiming(
   text: DailyBriefingText,
   formatTime: (value: string, precision?: 'minute' | 'second') => string
 ): string {
-  const start = stage.startedAt ? formatTime(stage.startedAt, 'second') : undefined
-  const finish = stage.finishedAt ? formatTime(stage.finishedAt, 'second') : undefined
-  const range = start && finish ? `${start} – ${finish}` : start ?? finish ?? ''
+  const range = formatRange(stage.startedAt, stage.finishedAt, formatTime)
   const duration = stageDurationMs(stage)
   const parts = [range, duration !== undefined ? formatDuration(duration, text) : ''].filter(Boolean)
   return parts.length > 0 ? parts.join(' · ') : text.generationTrace.notRecorded
+}
+
+/**
+ * A generation run rarely crosses midnight, so the date is noise on almost every row: print
+ * `20:56:53 → 20:58:31` and only add `MM-DD` on the side that falls on another day.
+ */
+function formatRange(
+  startedAt: string | undefined,
+  finishedAt: string | undefined,
+  formatTime: (value: string, precision?: 'minute' | 'second') => string
+): string {
+  const start = startedAt ? timePoint(startedAt, formatTime) : undefined
+  const finish = finishedAt ? timePoint(finishedAt, formatTime) : undefined
+  if (start && finish) {
+    const sameDay = !start.date || !finish.date || start.date === finish.date
+    return `${sameDay ? start.time : withDate(start)} → ${sameDay ? finish.time : withDate(finish)}`
+  }
+  const only = start ?? finish
+  return only ? only.time : ''
+}
+
+function timePoint(
+  value: string,
+  formatTime: (value: string, precision?: 'minute' | 'second') => string
+): Readonly<{ date?: string; time: string }> {
+  // The shell formatter writes `YYYY-MM-DD HH:mm:ss GMT±n`; a test double may pass the clock alone.
+  const [first, second] = formatTime(value, 'second').split(' ')
+  if (second && /^\d{4}-\d{2}-\d{2}$/.test(first ?? '')) return { date: first, time: second }
+  return { time: first ?? '' }
+}
+
+function withDate(point: Readonly<{ date?: string; time: string }>): string {
+  return point.date ? `${point.date.slice(5)} ${point.time}` : point.time
 }
 
 function formatDuration(milliseconds: number, text: DailyBriefingText): string {

@@ -15,8 +15,9 @@ import {
 
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const englishText = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+// Mirrors the shell formatter's `YYYY-MM-DD HH:mm[:ss]` shape so the same-day rule is exercised.
 const formatTime = (value: string, precision: 'minute' | 'second' = 'minute'): string =>
-  value.slice(11, precision === 'second' ? 19 : 16)
+  `${value.slice(0, 10)} ${value.slice(11, precision === 'second' ? 19 : 16)}`
 
 function stage(
   id: GenerationStageId,
@@ -34,13 +35,18 @@ function stage(
   }
 }
 
-function trace(state: GenerationTrace['state'], stages: readonly GenerationTraceStage[]): GenerationTrace {
+function trace(
+  state: GenerationTrace['state'],
+  stages: readonly GenerationTraceStage[],
+  overrides: Partial<GenerationTrace> = {}
+): GenerationTrace {
   return {
     attemptId: 'attempt-1',
     startedAt: '2026-10-30T00:00:00.000Z',
     finishedAt: '2026-10-30T00:01:00.000Z',
     state,
-    stages
+    stages,
+    ...overrides
   }
 }
 
@@ -97,11 +103,26 @@ describe('generation stage timeline', () => {
     expect(stages.every((entry) => entry.getAttribute('data-stage-state') === 'success')).toBe(true)
     expect(dom.textContent).toContain(text.generationTrace.title)
     expect(dom.textContent).toContain(text.generationTrace.completed)
-    expect(dom.textContent).toContain('00:00:00 – 00:01:00')
+    // Same-day attempts print only the clock; the date is noise inside one edition.
+    expect(dom.textContent).toContain('本次尝试 · 00:00:00 → 00:01:00')
     expect(dom.textContent).toContain('耗时 1 分 0 秒')
-    expect(stages[0]?.textContent).toContain('00:00:05 – 00:00:06')
+    expect(dom.textContent).not.toContain('2026-10-30 00:00:00')
+    expect(stages[0]?.textContent).toContain('00:00:05 → 00:00:06')
     expect(stages[0]?.textContent).toContain('1 秒')
     expect(dom.textContent).not.toContain(text.generationTrace.notRecorded)
+  })
+
+  it('adds the date only to the side that crosses midnight', () => {
+    const dom = render(trace('success', [
+      stage('source', 'success', { startedAt: '2026-10-30T23:59:50.000Z', finishedAt: '2026-10-31T00:00:10.000Z' }),
+      stage('candidates', 'success')
+    ], { startedAt: '2026-10-30T23:59:00.000Z', finishedAt: '2026-10-31T00:01:00.000Z' }))
+    act(() => dom.querySelector<HTMLButtonElement>('.mi-generation-trace__toggle')!.click())
+
+    expect(dom.textContent).toContain('10-30 23:59:00 → 10-31 00:01:00')
+    expect(dom.querySelector('[data-stage="source"]')?.textContent).toContain('10-30 23:59:50 → 10-31 00:00:10')
+    expect(dom.querySelector('[data-stage="candidates"]')?.textContent).toContain('00:00:05 → 00:00:06')
+    expect(dom.querySelector('[data-stage="candidates"]')?.textContent).not.toContain('2026-10-30')
   })
 
   it('locates a source failure and marks later stages skipped', () => {

@@ -8,6 +8,7 @@ import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 
 const text = productText['en-US'].pages.intelligence.portal.dashboard.dailyBriefing
+const zhText = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const CJK = /[\u4e00-\u9fff]/
 
 const briefing = (): DailyBriefingDocument => ({
@@ -79,13 +80,24 @@ afterEach(async () => {
   host = undefined
 })
 
-const render = async (doc: DailyBriefingDocument = briefing()): Promise<HTMLDivElement> => {
+const renderWith = async (
+  doc: DailyBriefingDocument,
+  copy: typeof text,
+  locale: 'zh-CN' | 'en-US'
+): Promise<HTMLDivElement> => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
-  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text, locale: 'en-US', formatTime })))
+  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime })))
   return host
+}
+
+const render = (doc: DailyBriefingDocument = briefing()): Promise<HTMLDivElement> => renderWith(doc, text, 'en-US')
+
+const withFocus = (overrides: Partial<NonNullable<DailyBriefingDocument['next']['focus']>>): DailyBriefingDocument => {
+  const base = briefing()
+  return { ...base, next: { ...base.next, focus: { ...base.next.focus!, ...overrides } } }
 }
 
 describe('daily brief share card in English', () => {
@@ -220,5 +232,82 @@ describe('daily brief share card in English', () => {
   it('separates the invalidation label with the locale separator', async () => {
     const rendered = await render()
     expect(rendered.textContent).toContain(`${text.conclusion.invalidation}: Stablecoins turn positive.`)
+  })
+
+  it('puts the three watch conditions on one row with the baseline in the middle', async () => {
+    const rendered = await render(withFocus({
+      consensus: '3.2%',
+      previous: '3.1%',
+      watch: [
+        { condition: 'higher than expected', implication: 'Rates rise, BTC falls.' },
+        { condition: 'lower than expected', implication: 'Rates fall, BTC rallies.' },
+        { condition: 'inline with consensus', implication: 'The range holds.' }
+      ]
+    }))
+    const grid = rendered.querySelector('.mi-brief-poster__next-watch-grid')
+    const cards = [...rendered.querySelectorAll('[data-watch-kind]')]
+
+    expect(grid?.getAttribute('data-watch-count')).toBe('3')
+    expect(cards).toHaveLength(3)
+    expect(cards.every((card) => card.parentElement === grid)).toBe(true)
+    expect(cards.map((card) => card.getAttribute('data-watch-kind'))).toEqual(['lower', 'inline', 'higher'])
+    expect(cards.map((card) => card.querySelector('span')?.textContent))
+      .toEqual(['Lower than expected', 'In line with consensus', 'Higher than expected'])
+  })
+
+  it('localizes the inline condition in Chinese instead of leaking the AI phrase', async () => {
+    const rendered = await renderWith(withFocus({
+      consensus: '3.2%',
+      previous: '29',
+      watch: [
+        { condition: 'higher than expected', implication: '利率上行，BTC 承压。' },
+        { condition: 'inline with consensus', implication: '区间维持。' },
+        { condition: 'lower than expected', implication: '利率下行，BTC 反弹。' }
+      ]
+    }), zhText, 'zh-CN')
+    const cards = [...rendered.querySelectorAll('[data-watch-kind]')]
+    const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+
+    expect(cards.map((card) => card.getAttribute('data-watch-kind'))).toEqual(['lower', 'inline', 'higher'])
+    expect(cards.map((card) => card.querySelector('span')?.textContent))
+      .toEqual(['低于预期', '符合预期', '高于预期'])
+    expect(poster).toContain('符合预期')
+    expect(poster).not.toContain('Inline with consensus')
+  })
+
+  it('never prints an unrecognized English watch condition', async () => {
+    const rendered = await render(withFocus({
+      watch: [{ condition: 'markets reprice around the print', implication: 'Spreads widen.' }]
+    }))
+    const card = rendered.querySelector('[data-watch-kind]')!
+
+    expect(card.getAttribute('data-watch-kind')).toBe('other')
+    expect(card.textContent).toContain(text.next.watchOther)
+    expect(card.textContent).not.toContain('markets reprice')
+  })
+
+  it('keeps a watch condition that is already localized', async () => {
+    const rendered = await renderWith(withFocus({
+      watch: [{ condition: '波动放大但方向不明', implication: '等待收盘确认。' }]
+    }), zhText, 'zh-CN')
+
+    expect(rendered.textContent).toContain('波动放大但方向不明')
+  })
+
+  it('carries expected and previous into the event header instead of a trailing line', async () => {
+    const rendered = await render(withFocus({ consensus: '3.2%', previous: '29' }))
+    const meta = rendered.querySelector('.mi-brief-poster__next-meta')!.textContent
+
+    expect(meta).toBe('High impact · United States · Consensus 3.2% · Previous 29')
+    expect(rendered.querySelector('.mi-brief-poster__next-values')).toBeNull()
+    expect((rendered.querySelector('.mi-brief-poster')!.textContent?.match(/Previous 29/g) ?? [])).toHaveLength(1)
+  })
+
+  it('shows a lone previous in the event header', async () => {
+    const rendered = await renderWith(withFocus({ previous: '29', consensus: undefined }), zhText, 'zh-CN')
+    const meta = rendered.querySelector('.mi-brief-poster__next-meta')!.textContent
+
+    expect(meta).toBe('高影响 · 美国 · 前值 29')
+    expect(rendered.querySelector('.mi-brief-poster__next-values')).toBeNull()
   })
 })

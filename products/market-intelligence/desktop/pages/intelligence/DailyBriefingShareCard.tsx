@@ -48,6 +48,9 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const newsCounts = doc.data.sentiment.news.counts
   const newsTotal = doc.data.sentiment.news.itemCount ?? 0
   const flowMax = niceFlowMax(etfRows)
+  // `符合预期` is the baseline between the two surprises, so the three read as one axis
+  // instead of the order the model happened to list them in.
+  const focusWatch = orderWatch(focusEvent?.watch ?? [], text)
   return <article className="mi-brief-poster">
     <header className="mi-brief-poster__head">
       <div>
@@ -145,12 +148,12 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           <time>{nextTime(focusEvent.at, formatTime)}</time>
         </div>
         <h3>{nextTitle(focusEvent, eventTitles)}</h3>
-        <p>{text.next.importance[focusEvent.importance]}{nextCountry(focusEvent, text) ? ` · ${nextCountry(focusEvent, text)}` : ''}</p>
+        <p className="mi-brief-poster__next-meta">{nextMeta(focusEvent, text)}</p>
         {focusEvent.why ? <p className="mi-brief-poster__next-why"><b>{text.next.why}</b> {focusEvent.why}</p> : null}
-        {focusEvent.watch && focusEvent.watch.length > 0 ? <div className="mi-brief-poster__next-watch-grid">{focusEvent.watch.map((entry) => <div className="mi-brief-poster__next-watch" key={entry.condition}><span>{watchLabel(entry.condition, text)}</span><b>{entry.implication}</b></div>)}</div> : null}
-        {focusEvent.consensus || focusEvent.previous ? <div className="mi-brief-poster__next-values">
-          {focusEvent.consensus ? `${text.next.expected} ${focusEvent.consensus}` : ''}
-          {focusEvent.previous ? `${focusEvent.consensus ? ' · ' : ''}${text.next.previous} ${focusEvent.previous}` : ''}
+        {focusWatch.length > 0 ? <div className="mi-brief-poster__next-watch-grid" data-watch-count={focusWatch.length}>
+          {focusWatch.map((entry) => <div className="mi-brief-poster__next-watch" data-watch-kind={entry.kind} key={entry.key}>
+            <span>{entry.label}</span><b>{entry.implication}</b>
+          </div>)}
         </div> : null}
         <small className="mi-brief-poster__next-soon">{text.next.soon.replace('{days}', String(daysUntil(focusEvent.at, doc.edition.windowEnd)))}</small>
       </div> : null}
@@ -308,11 +311,45 @@ function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefi
   return row.observedAt ? text.states[row.state] : ''
 }
 
-function watchLabel(condition: string, text: { next: { watchHigher: string; watchLower: string } }): string {
-  const normalized = condition.trim().toLowerCase()
-  if (normalized === 'higher than expected') return text.next.watchHigher
-  if (normalized === 'lower than expected') return text.next.watchLower
-  return condition
+type WatchKind = 'lower' | 'inline' | 'higher' | 'other'
+type WatchEntry = Readonly<{ key: string; kind: WatchKind; label: string; implication: string }>
+
+function nextMeta(item: DailyBriefingDocument['next']['items'][number], text: DailyBriefingText): string {
+  const country = nextCountry(item, text)
+  return [
+    text.next.importance[item.importance],
+    country,
+    item.consensus ? `${text.next.expected} ${item.consensus}` : '',
+    item.previous ? `${text.next.previous} ${item.previous}` : ''
+  ].filter(Boolean).join(' · ')
+}
+
+/**
+ * The model writes the watch conditions as free text, and its third one (`inline with consensus`)
+ * used to leak into the Chinese poster because only the two English phrases were mapped. Map all
+ * three surprises onto one low → baseline → high axis; a condition that is already localized is
+ * kept, while an unrecognized English phrase gets a neutral label instead of leaking through.
+ */
+function orderWatch(
+  watch: readonly Readonly<{ condition: string; implication: string }>[],
+  text: DailyBriefingText
+): readonly WatchEntry[] {
+  const rank: Readonly<Record<WatchKind, number>> = { lower: 0, inline: 1, higher: 2, other: 3 }
+  return watch
+    .map((entry, index) => ({ key: `${index}:${entry.condition}`, implication: entry.implication, ...watchLabel(entry.condition, text) }))
+    .sort((left, right) => rank[left.kind] - rank[right.kind])
+}
+
+function watchLabel(condition: string, text: DailyBriefingText): Readonly<{ kind: WatchKind; label: string }> {
+  // Chinese conditions are matched on the raw string: word boundaries do not apply to CJK text.
+  if (/高于|超出|上行|超预期/.test(condition)) return { kind: 'higher', label: text.next.watchHigher }
+  if (/低于|不及|下行|弱于/.test(condition)) return { kind: 'lower', label: text.next.watchLower }
+  if (/符合|持平|一致|如期/.test(condition)) return { kind: 'inline', label: text.next.watchInline }
+  const normalized = condition.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ')
+  if (/\b(higher|above|beat|beats|exceed|exceeds|greater|upside)\b/.test(normalized)) return { kind: 'higher', label: text.next.watchHigher }
+  if (/\b(lower|below|miss|misses|less|downside)\b/.test(normalized)) return { kind: 'lower', label: text.next.watchLower }
+  if (/\b(inline|consensus|expected|expectations|meets?|neutral|flat)\b/.test(normalized)) return { kind: 'inline', label: text.next.watchInline }
+  return { kind: 'other', label: /[a-z]/i.test(condition) ? text.next.watchOther : condition.trim() }
 }
 
 function macroTime(value: string, formatTime: (value: string, precision: 'minute') => string): React.ReactNode {
