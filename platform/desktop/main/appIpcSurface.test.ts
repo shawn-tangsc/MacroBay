@@ -356,7 +356,9 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("import { wireRendererProcessDiagnostics } from '../window/rendererProcessDiagnostics'")
     expect(appSource).toContain("import { createRendererProcessLog } from '../window/rendererProcessLog'")
     expect(appSource).toContain('wireRendererProcessDiagnostics(window')
-    expect(appSource).toContain("'renderer-lifecycle.ndjson'")
+    // 渲染层诊断不再有自己的 ndjson 管道：改走唯一的应用日志写入器，来源由 category 区分。
+    expect(appSource).toContain('createRendererProcessLog(appLog)')
+    expect(appSource).not.toContain('renderer-lifecycle.ndjson')
   })
 
   it('answers product IPC with structured unavailability once quit cleanup has closed the runtime', () => {

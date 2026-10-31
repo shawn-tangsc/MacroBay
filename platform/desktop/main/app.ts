@@ -167,6 +167,8 @@ import { createAppTray } from '../tray/appTray'
 import { createMainWindow, loadMainWindowRenderer } from '../window/createMainWindow'
 import { wireRendererProcessDiagnostics } from '../window/rendererProcessDiagnostics'
 import { createRendererProcessLog } from '../window/rendererProcessLog'
+import { createAppLog } from '../../observability/logging/appLog'
+import { redactText } from '../../secrets/redaction/redactText'
 import { composePanelWorkspace } from './workspace/composePanelWorkspace'
 import { createDetachedWindowFactory } from './workspace/panelDetachedWindowFactory'
 import { createPanelDetachedWindowHost } from './workspace/panelDetachedWindowHost'
@@ -293,9 +295,13 @@ const providerStore = createProviderStore(
   createProviderSqliteStorage({ path: join(app.getPath('userData'), 'platform', 'model-providers.sqlite') }),
   providerSecretVault
 )
-const rendererProcessLog = createRendererProcessLog(
-  join(app.getPath('userData'), 'platform', 'logs', 'renderer-lifecycle.ndjson')
-)
+/** 唯一的日志落盘口：主进程与渲染层诊断共用 `userData/logs/app.log`，写入前统一脱敏。 */
+const appLog = createAppLog({
+  directory: join(app.getPath('userData'), 'logs'),
+  redact: (text) => redactText(text).text
+})
+appLog.log('info', 'app.start', { version: app.getVersion(), platform: process.platform })
+const rendererProcessLog = createRendererProcessLog(appLog)
 
 /** 运行时 IANA 时区（设置项 `system` 的解析输入）；解析不出时由调用方回落到 `fallbackTimeZone`。 */
 function systemTimeZoneSource(): { timeZone: string } {
@@ -2419,6 +2425,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   })
 
   await app.whenReady()
+  appLog.log('info', 'app.ready')
   // T1：`app-image://` 只读协议只在这里 handle 一次；scheme 已在模块加载时注册为特权 scheme。
   registerGeneratedImageProtocol(generatedImagesDirectory)
 

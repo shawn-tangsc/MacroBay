@@ -1,23 +1,30 @@
-import { appendFile, mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
-
+import type { AppLog, AppLogLevel } from '../../observability/logging/appLog'
 import type { RendererProcessDiagnosticEvent } from './rendererProcessDiagnostics'
 
-export function createRendererProcessLog(filePath: string): {
+/**
+ * 渲染进程诊断没有自己的落盘管道：事件进唯一的应用日志写入器，用 `category` 标出来源，
+ * 因此它和主进程日志共享同一套脱敏、轮转与总量上限。
+ */
+export function createRendererProcessLog(appLog: AppLog): {
   write: (event: RendererProcessDiagnosticEvent) => void
 } {
   return {
     write(event) {
-      void appendRendererProcessLog(filePath, event)
+      const { event: kind, ...fields } = event
+      appLog.log(eventLevel(event), kind, { category: 'renderer', ...fields })
     }
   }
 }
 
-async function appendRendererProcessLog(filePath: string, event: RendererProcessDiagnosticEvent): Promise<void> {
-  try {
-    await mkdir(dirname(filePath), { recursive: true })
-    await appendFile(filePath, `${JSON.stringify(event)}\n`, 'utf8')
-  } catch (error) {
-    console.error('[desktop] failed to write renderer diagnostics log', error)
+function eventLevel(event: RendererProcessDiagnosticEvent): AppLogLevel {
+  switch (event.event) {
+    case 'render-process-gone':
+    case 'unresponsive':
+    case 'did-fail-load':
+      return 'error'
+    case 'console-message':
+      return event.level === 'error' ? 'error' : 'warn'
+    default:
+      return 'info'
   }
 }
