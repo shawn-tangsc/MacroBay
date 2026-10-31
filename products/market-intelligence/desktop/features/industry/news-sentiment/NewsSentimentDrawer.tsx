@@ -95,11 +95,14 @@ export function NewsSentimentDrawer(props: {
   useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
     let cancelled = false
+    // Drop the previous article before the next read: a stale body under a new heading reads as
+    // "this row says that", and a failed read must not leave it in place either.
+    setDetail(undefined)
     setDetailFailed(false)
     void props.client
       .getItem({ itemId: activeId, asOf: view.asOf })
       .then((next) => {
-        if (!cancelled) setDetail(next)
+        if (!cancelled && next?.itemId === activeId) setDetail(next)
       })
       .catch(() => {
         if (!cancelled) setDetailFailed(true)

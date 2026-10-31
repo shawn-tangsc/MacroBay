@@ -127,6 +127,27 @@ describe('NewsSentimentFeature', () => {
   })
 
 
+  it('does not show the previous article body when the next detail read fails', async () => {
+    // The detail panel kept the last successful read while the new one was in flight and after it
+    // failed, so row B's heading sat above row A's body text.
+    const getItem = vi.fn(async (input: { itemId: string }) => {
+      if (input.itemId === 'item-b') throw new Error('detail read failed')
+      const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
+      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+    })
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent).toContain('body:item-a')
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row')]
+    await act(async () => { rows[1]?.click() })
+    await act(async () => {})
+    const body = document.body.querySelector('.mi-news-drawer__bodytext')?.textContent ?? ''
+    expect(body).not.toContain('body:item-a')
+    expect(body).toContain(text.unavailable)
+  })
+
   it('changes the window from the drawer controls', async () => {
     const query = vi.fn(async () => VIEW)
     const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
