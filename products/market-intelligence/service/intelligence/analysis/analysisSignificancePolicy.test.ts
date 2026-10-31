@@ -24,7 +24,7 @@ const baseline = (official_: readonly MacroEconomicCalendarEventView[]): Signifi
   ({ official: official_, provider: [], months: ['2026-09', '2026-10'], asOf: now })
 
 const key = (metric: string) => semanticKeyOf('macro', 'consumer-price-index', metric, eventKey)
-const roomy = { now, lastAutoRunAt: null, hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0 }
+const roomy = { now, lastAutoRunAt: null, hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0, eventRunsThisHour: 0 }
 const evaluate = (overrides: Partial<SignificanceEvaluationInput> = {}) => evaluateSignificance({
   triggerKey: 'calendar.refresh', previousAsOf, current: baseline([official()]), previous: new Map([[key('actual'), '3.1%']]), ...roomy, ...overrides
 })
@@ -58,7 +58,7 @@ it('ignores medium and low importance even when the value really changed', () =>
 })
 
 it('drops a below-threshold change when a limit is already reached, and says which limit', () => {
-  expect(evaluate({ hourRuns: 3 })).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  expect(evaluate({ eventRunsThisHour: 3 })).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
   expect(evaluate({ dayRuns: 12 })).toMatchObject({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
   expect(evaluate({ lastAutoRunAt: '2026-10-09T11:45:00.000Z' })).toMatchObject({ decision: 'skipped', reasonCode: 'interval-active' })
 })
@@ -159,7 +159,7 @@ describe('a provider release that surprised the market', () => {
   it('obeys the same budget as the official line', () => {
     // 与官方线共享冷却与额度：这是"同一条发布不产生两次运行"的一半（另一半是上一条的 freshness）。
     const input = { current: route([released()]), previous: new Map<string, string | null>() }
-    expect(evaluate({ ...input, hourRuns: 3 })).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+    expect(evaluate({ ...input, eventRunsThisHour: 3 })).toMatchObject({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
     expect(evaluate({ ...input, lastAutoRunAt: '2026-10-09T11:45:00.000Z' })).toMatchObject({ decision: 'skipped', reasonCode: 'interval-active' })
     expect(evaluate(input)).toMatchObject({ decision: 'queued', reasonCode: 'provider-surprise-confirmed' })
   })

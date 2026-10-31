@@ -4,7 +4,7 @@ import { analysisBudgetPolicy, decideBudget, type AnalysisBudgetInput } from './
 const now = '2026-10-09T12:00:00.000Z'
 /** Enough headroom that only the rule under test can skip. */
 const roomy: Omit<AnalysisBudgetInput, 'triggerKey'> = {
-  now, lastAutoRunAt: null, hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0
+  now, lastAutoRunAt: null, hourRuns: 0, dayRuns: 0, eventRunsToday: 0, scheduledRunsToday: 0, eventRunsThisHour: 0
 }
 const calendar = (overrides: Partial<AnalysisBudgetInput> = {}) => decideBudget({ triggerKey: 'calendar.refresh', ...roomy, ...overrides })
 const slot = (overrides: Partial<AnalysisBudgetInput> = {}) => decideBudget({ triggerKey: 'schedule.asia.open', ...roomy, ...overrides })
@@ -35,10 +35,18 @@ it('enforces the event line allowance and never spends the slots\' reserve on it
 })
 
 it('enforces the hourly gate for the event and item lines', () => {
-  expect(calendar({ hourRuns: 2 })).toEqual({ decision: 'queued', reasonCode: null })
-  expect(calendar({ hourRuns: 3 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
-  expect(decideBudget({ triggerKey: 'macro.actual.first-confirmed', ...roomy, hourRuns: 3 }))
+  expect(calendar({ eventRunsThisHour: 2 })).toEqual({ decision: 'queued', reasonCode: null })
+  expect(calendar({ eventRunsThisHour: 3 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+  expect(decideBudget({ triggerKey: 'macro.actual.first-confirmed', ...roomy, eventRunsThisHour: 3 }))
     .toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
+})
+
+it('keeps the session slots out of the hourly gate the event line pays for', () => {
+  // 2026-10-28T07:00Z: eleven event runs and one slot inside the hour. The old gate counted the
+  // slot and refused the twelfth event attempt at twelve; the slot has its own daily reserve and
+  // must not close the event line's hour.
+  expect(calendar({ hourRuns: 3, eventRunsThisHour: 2 })).toEqual({ decision: 'queued', reasonCode: null })
+  expect(calendar({ hourRuns: 4, eventRunsThisHour: 3 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
 })
 
 it('coalesces repeats inside the minimum interval', () => {
@@ -69,7 +77,7 @@ it('applies the daily total to every automatic source except the session slots',
 })
 
 it('never limits a manual request', () => {
-  const exhausted = { hourRuns: 99, dayRuns: 99, eventRunsToday: 99, scheduledRunsToday: 99, lastAutoRunAt: now }
+  const exhausted = { hourRuns: 99, dayRuns: 99, eventRunsToday: 99, scheduledRunsToday: 99, eventRunsThisHour: 99, lastAutoRunAt: now }
   expect(decideBudget({ triggerKey: 'manual.refresh', ...roomy, ...exhausted })).toEqual({ decision: 'queued', reasonCode: null })
   expect(decideBudget({ triggerKey: 'manual.initial', ...roomy, ...exhausted })).toEqual({ decision: 'queued', reasonCode: null })
 })

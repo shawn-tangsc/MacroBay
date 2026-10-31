@@ -57,6 +57,7 @@ export type SignificanceEvaluationInput = Readonly<{
   dayRuns: number
   eventRunsToday: number
   scheduledRunsToday: number
+  eventRunsThisHour: number
 }>
 
 export function significanceChangeHash(signals: readonly SignificanceSignal[]): string {
@@ -76,7 +77,7 @@ export function evaluateSignificance(input: SignificanceEvaluationInput): Signif
   if (!isGateEligible(input.triggerKey) && !isScheduledSlotTriggerKey(input.triggerKey)) return decide('queued', null, [])
   const budget: BudgetDecision = decideBudget({
     triggerKey: input.triggerKey, now: input.now, lastAutoRunAt: input.lastAutoRunAt,
-    hourRuns: input.hourRuns, dayRuns: input.dayRuns, eventRunsToday: input.eventRunsToday, scheduledRunsToday: input.scheduledRunsToday
+    hourRuns: input.hourRuns, dayRuns: input.dayRuns, eventRunsToday: input.eventRunsToday, scheduledRunsToday: input.scheduledRunsToday, eventRunsThisHour: input.eventRunsThisHour
   })
   if (budget.decision === 'skipped') return decide('skipped', budget.reasonCode ?? analysisSignificancePolicy.reasonCodes.invalidInput, [])
   const slot = slotForTriggerKey(input.triggerKey)

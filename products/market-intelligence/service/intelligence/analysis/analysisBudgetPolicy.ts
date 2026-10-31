@@ -56,12 +56,18 @@ export type AnalysisBudgetInput = Readonly<{
   eventRunsToday: number
   /** Deliveries inside the reserved session-slot line (`schedule.*`). */
   scheduledRunsToday: number
+  /**
+   * Events in the trailing hour: the exact mirror of `eventRunsToday`. The hourly quota reads this
+   * rather than `hourRuns`, because the slot line has its own daily reserve — charging it here too
+   * let one slot close an hour the event line had not exhausted.
+   */
+  eventRunsThisHour: number
 }>
 
 export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   const skip = (reasonCode: string): BudgetDecision => ({ decision: 'skipped', reasonCode })
   const queued: BudgetDecision = { decision: 'queued', reasonCode: null }
-  const counts = [input.hourRuns, input.dayRuns, input.eventRunsToday, input.scheduledRunsToday]
+  const counts = [input.hourRuns, input.dayRuns, input.eventRunsToday, input.scheduledRunsToday, input.eventRunsThisHour]
   const validInstant = (value: string | null) => value === null || (isMarketAnalysisCanonicalUtc(value) && Number.isFinite(Date.parse(value)))
   // Fail closed: a caller that cannot state its counts gets no permission to spend.
   if (!isMarketAnalysisCanonicalUtc(input.now) || !Number.isFinite(Date.parse(input.now)) ||
@@ -82,7 +88,7 @@ export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   // The daily total applies to every other automatic source, before any per-line allowance.
   if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.daily)
   if (input.eventRunsToday >= analysisBudgetPolicy.eventRunsPerDayAllowance) return skip(analysisBudgetPolicy.reasonCodes.daily)
-  if (input.hourRuns >= analysisBudgetPolicy.maximumHourlyRuns) return skip(analysisBudgetPolicy.reasonCodes.hourly)
+  if (input.eventRunsThisHour >= analysisBudgetPolicy.maximumHourlyRuns) return skip(analysisBudgetPolicy.reasonCodes.hourly)
   if (input.lastAutoRunAt !== null && Date.parse(input.now) - Date.parse(input.lastAutoRunAt) < analysisBudgetPolicy.minimumIntervalMs) {
     return skip(analysisBudgetPolicy.reasonCodes.interval)
   }

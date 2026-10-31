@@ -17,10 +17,23 @@ import { analysisTriggerSourcePolicy } from './analysisTriggerSourcePolicy'
  * `skipped` (by row id). A second skipped row would leave the attempt counted, which is how a day
  * could be charged for calls that never happened.
  *
- * The window is the UTC calendar day, matching the UTC instants stored everywhere else.
+ * The window is the UTC calendar day, matching the UTC instants stored everywhere else. The
+ * per-hour event count is the same filter over the trailing hour, so the day and the hour can only
+ * ever disagree about the window, never about which line a delivery belongs to.
  */
 
-export type AnalysisRunCounts = Readonly<{ hourRuns: number; dayRuns: number; eventRunsToday: number; scheduledRunsToday: number }>
+export type AnalysisRunCounts = Readonly<{
+  hourRuns: number
+  dayRuns: number
+  eventRunsToday: number
+  scheduledRunsToday: number
+  /**
+   * The exact mirror of `eventRunsToday` over the trailing hour. The hourly quota reads this one:
+   * the slot line already reserves three calls a day, and charging it to the hourly quota too let a
+   * single open close an hour in which the event line had not reached its limit.
+   */
+  eventRunsThisHour: number
+}>
 
 export type RunCounterLedgerRow = Readonly<{ triggerKey: string; reasonCode: string; decision: string; createdAt: string }>
 
@@ -56,11 +69,13 @@ export function countAnalysisRuns(repository: RunCounterRepository, now: string)
   const nowMs = Date.parse(now)
   const day = now.slice(0, 10)
   const rows = ledgerOf(repository).filter(isDelivered).filter(row => row.createdAt.slice(0, 10) === day)
+  const hourRows = rows.filter(row => nowMs - Date.parse(row.createdAt) < 60 * 60 * 1_000)
   return {
-    hourRuns: rows.filter(row => nowMs - Date.parse(row.createdAt) < 60 * 60 * 1_000).length,
+    hourRuns: hourRows.length,
     dayRuns: rows.length,
     eventRunsToday: rows.filter(row => !isScheduledRun(row)).length,
-    scheduledRunsToday: rows.filter(isScheduledRun).length
+    scheduledRunsToday: rows.filter(isScheduledRun).length,
+    eventRunsThisHour: hourRows.filter(row => !isScheduledRun(row)).length
   }
 }
 
