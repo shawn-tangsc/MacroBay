@@ -80,12 +80,12 @@ const bullishBriefPrior = (): BriefingPriorConclusion => ({
 const synthesis = (overrides: Record<string, unknown> = {}) => ({
   direction: 'bearish',
   confidence: 'high',
-  summary: 'CPI 超预期后，BTC 的买盘被资金面收缩压住，前一日对流动性改善的乐观判断已被证伪。',
-  regimeChange: '窗口内资金面由扩张转向收缩，风险偏好从修复转为防守。',
-  confirmed: ['CPI 走高压制降息预期得到确认'],
-  refuted: ['稳定币扩张带来买盘的判断被资金净流出证伪'],
-  coreTension: '价格下跌但未出现恐慌性抛售，资金面与价格同向，情绪仍有分歧。',
-  whatWouldChange: '稳定币连续两日净流入且 BTC 收复跌幅，会推翻当前看空。',
+  summary: 'BTC 偏空：美国 CPI 同比 3.4%，高于预期 3.2%，降息预期被压低；24 小时内 BTC 下跌 1.1%。盘中一度转多，但 CPI 公布后买盘回吐。',
+  regimeChange: '与上一交易日相比，BTC 由持平转为下跌 1.1%，CPI 超预期后反弹没有延续。',
+  confirmed: ['CPI 3.4% 高于预期 3.2%，BTC 的反弹在数据公布后停止。'],
+  refuted: ['CPI 回落后 BTC 会反弹的判断被 3.4% 的实际值推翻。'],
+  coreTension: 'CPI 3.4% 高于预期 3.2%，但 BTC 只下跌 1.1%，卖盘没有加速。',
+  whatWouldChange: 'BTC 收复 1.1% 跌幅且 CPI 修正回 3.2%，会推翻偏空判断。',
   evidenceRefs: ['data:btc', 'macro:US.CPI'],
   ...overrides
 })
@@ -159,8 +159,8 @@ describe('daily briefing conclusion synthesis', () => {
     const priors = [bearishPrior(), bullishBriefPrior()]
     const averaged = synthesis({
       direction: 'range',
-      regimeChange: '窗口内信号交织。',
-      summary: '资金面与流动性给出的方向并不一致，价格暂时没有明确选择。',
+      regimeChange: '信号交织，方向没有延续。',
+      summary: '资金面与价格给出的方向并不一致，价格暂时没有明确选择。',
       coreTension: '两股力量大致抵消。',
       whatWouldChange: '任意一方重新占优就会改变判断。',
       confirmed: [],
