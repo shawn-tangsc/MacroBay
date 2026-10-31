@@ -36,4 +36,14 @@ describe('sanitizeChannelOutput', () => {
       redacted: false
     })
   })
+
+  it('keeps the delimiter that followed a redacted bearer token', () => {
+    // 频道侧此前没有 bearer 用例：占位符一度把后面的空格/换行一起吃掉，两个词被并成一个。
+    expect(sanitizeChannelOutput('Authorization: Bearer abcdefghijklmnopqrstuvwxyz next word').text).toBe(
+      'Authorization: [REDACTED] next word'
+    )
+    expect(sanitizeChannelOutput('Bearer abcdefghijklmnopqrstuvwxyz\n下一行').text).toBe(
+      '[REDACTED]\n下一行'
+    )
+  })
 })
