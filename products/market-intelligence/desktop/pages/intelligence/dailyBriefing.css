@@ -287,7 +287,7 @@
 .mi-daily-briefing-page__ai-failure { margin: 8px 0 0; padding: 6px 9px; border: 1px solid #4a3d24; border-radius: 6px; background: rgba(255, 196, 0, .05); color: var(--mi-dashboard-caution); font-size: 10px; }
 
 /* The rail is a stage-by-stage audit, so it gets a readable column and the report fills the rest. */
-.mi-daily-briefing-page__body--with-appendix { grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) clamp(280px, 21vw, 360px); justify-content: stretch; }
+.mi-daily-briefing-page__body--with-appendix { grid-template-columns: clamp(240px, 18vw, 320px) minmax(0, 1fr) clamp(240px, 18vw, 320px); justify-content: stretch; }
 .mi-daily-briefing-page__appendix { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 14px 0 0 16px; border-left: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted); }
 .mi-daily-briefing-page__appendix-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
 .mi-daily-briefing-page__appendix-head h2 { margin: 0; color: var(--mi-dashboard-muted); font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; }
