@@ -126,6 +126,23 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
             x={barX(x(settlesAt), asset)} y={Math.min(y, VIEW.zero)}
             width={barWidth} height={Math.max(Math.abs(VIEW.zero - y), 0.8)} rx="1" />
         }))}
+        {/* Each line ends with its own number. The two lines are scaled to their own ranges, so
+            the heights are not comparable — the labels are what tie a point on the curve back to
+            the notional in the summary column. */}
+        {(['btc', 'eth'] as const).map(asset => {
+          const last = positioning[asset].at(-1)
+          if (!last) return null
+          const cx = x(Date.parse(last.observedAt))
+          const cy = upperY(last.notionalUsd, asset === 'btc' ? btcScale : ethScale)
+          const flip = cx > VIEW.right - 64
+          return (
+            <text key={asset} data-line-end={asset} data-series={asset}
+              className="mi-positioning-panel__end"
+              x={flip ? cx - 4 : cx + 4}
+              y={Math.max(VIEW.upperTop + 12, Math.min(cy - 6, VIEW.upperBottom - 2))}
+              textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
+          )
+        })}
         {positioning.hints.map((hint, index) => {
           // Pinned to the bucket's own value. The hourly line takes the hour's last reading, so a
           // dip that recovered inside that hour is invisible on the line — without this dot the

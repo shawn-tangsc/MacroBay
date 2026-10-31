@@ -429,6 +429,7 @@ export const productText = {
                 '这张卡把 Binance USDT-M 永续的持仓名义额（线，1 小时）与资金费率（柱，8 小时）放在一起。',
                 '费率单独看分不出两件事：费率转负可能是多头已经走完，也可能是空头在堆。持仓下降 + 费率回落是去杠杆，持仓上升 + 费率转负才是空头拥挤。',
                 '疑似强平：15 分钟持仓骤降 + 价格同向 + 成交量放大，三条同时成立才标。它是推断值，不是交易所强平数据；季度展期、大额移仓也会满足这三条。',
+                '两条持仓线各自按本资产的区间缩放，高低不能直接比较：紫线穿过橙线不代表 ETH 持仓超过了 BTC。可比的绝对值是线末端的读数与左侧卡片上的数字。',
                 '窗口：7 天把 15 分钟数据折叠成每小时 1 点；24 小时用 15 分钟原生点。持仓与费率都只代表 Binance 一家，不是全网。',
                 '六档判定：持仓 24h ≤ −5% 且费率回落 = 去杠杆；≥ +5% 且费率 < 0 = 空头拥挤；≥ +5% 且费率 > +0.03% = 多头拥挤；≥ +5% 且费率在 0 ~ +0.03% = 杠杆回补；|Δ| < 5% = 中性；其余不给标签。把鼠标放在标签上可以看到该资产的两个依据数字。'
               ],
@@ -1953,6 +1954,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 'Notional open interest (the line, hourly) and the funding rate (the bars, 8-hourly) for Binance USDT-M perpetuals, side by side.',
                 'A funding rate alone cannot tell two stories apart: a negative rate can mean the longs have already left, or that shorts are piling in. Open interest falling with the rate is deleveraging; open interest rising with a negative rate is crowded shorts.',
                 'Suspected liquidation: a 15-minute drop in open interest, price moving the same way and volume expanding, all three at once. It is inferred, not exchange liquidation data; quarterly rolls and large position moves also satisfy it.',
+                'Each open-interest line is scaled to its own asset, so their heights are not comparable: the purple line crossing the amber one does not mean ETH holds more than BTC. The comparable figures are the readings at the end of each line and the numbers in the summary beside them.',
                 'Windows: 7 days folds the 15-minute rows to one point per hour; 24 hours keeps the native points. Both series cover Binance alone, not the whole market.',
                 'Six states: open interest 24h ≤ −5% with the rate falling = deleveraging; ≥ +5% with the rate below zero = crowded shorts; ≥ +5% with the rate above +0.03% = crowded longs; ≥ +5% with the rate between zero and +0.03% = refilling; |Δ| < 5% = neutral; anything else is left unlabelled. Hover a label to see the two numbers behind it.'
               ],

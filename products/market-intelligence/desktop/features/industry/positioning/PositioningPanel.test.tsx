@@ -227,3 +227,17 @@ describe('time axis', () => {
     expect(ticks[0]).not.toBe(ticks.at(-1))
   })
 })
+
+describe('line-end readings', () => {
+  it('labels the last point of each line so the curve can be matched to the summary', () => {
+    const markup = render()
+    const ends = [...markup.matchAll(/data-line-end="(\w+)"[^>]*>([^<]*)</g)]
+    expect(ends).toHaveLength(2)
+    expect(ends.map(match => match[1]).sort()).toEqual(['btc', 'eth'])
+    for (const [, , label] of ends) expect(label).toMatch(/^\$[\d.]+[BM]$/)
+  })
+
+  it('says in the help that the two lines are scaled to their own ranges', () => {
+    expect(text.helpLines.some(line => line.includes('不能直接比较'))).toBe(true)
+  })
+})
