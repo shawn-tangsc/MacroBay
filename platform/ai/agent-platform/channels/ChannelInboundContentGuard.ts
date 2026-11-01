@@ -3,9 +3,9 @@ import { guardExternalContent } from './ExternalContentGuard'
 
 /**
  * Adapters hand raw external text to the platform; this turns it into the guarded form that gets
- * persisted. Wrapping is unconditional (the agent must always see where text came from) and
- * rejection is deliberately narrow: only a forged boundary marker is a definite attempt to
- * impersonate the guard itself. Everything else is wrapped and flagged, never dropped.
+ * persisted. Wrapping is unconditional (the agent must always see where text came from). Whether a
+ * payload is rejected is the guard's decision, not this adapter's: the policy belongs with the
+ * provenance, so a fourth entry point cannot invent a fifth rule.
  */
 export function createChannelInboundContentGuard(deps: {
   channelTypeForChannel: (channelId: string) => string | null
@@ -14,6 +14,7 @@ export function createChannelInboundContentGuard(deps: {
     if (!facts.text) return { text: facts.text ?? null, rejection: null }
 
     const guarded = guardExternalContent(facts.text, {
+      kind: 'channel',
       chatId: facts.providerConversationKey,
       userId: facts.providerUserKey,
       userName: facts.providerUserLabel ?? facts.providerUserKey,
@@ -21,8 +22,8 @@ export function createChannelInboundContentGuard(deps: {
     })
 
     return {
-      text: guarded.wrappedText,
-      rejection: guarded.suspiciousPatternNames.includes('fake-boundary') ? 'channel-content-rejected' : null
+      text: guarded.guardedText,
+      rejection: guarded.disposition === 'reject' ? 'channel-content-rejected' : null
     }
   }
 }
