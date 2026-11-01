@@ -710,7 +710,7 @@ export const productText = {
               // 分享卡上这条读数不是当时精确的 24 小时值，而是回退值；海报不标出来，读者会当成实时读数。
               staleMarker: '回退值',
               // 回退值的来源：曲线最后一点不是精确的 24 小时配对，最近收盘也不是当日读数。
-              staleBasis: { curve: '回退值 · 约 24 小时（取自曲线）', lastClose: '回退值 · 最近收盘' },
+              staleBasis: { curve: '回退值 · 约 24 小时（取自曲线）', lastClose: '回退值 · 最近收盘', snapshot: '回退值 · 快照读数（24 小时，已过新鲜度下限）', seriesReturn: '回退值 · 约 24 小时（日频序列算出）', seriesLevel: '回退值 · 最新水平（当日无 24 小时涨跌）', published: '回退值 · 上一交易日官方收盘' },
               reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面快照不可用', 'etf-unavailable': 'ETF 读数不可用' },
               changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
               // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
@@ -2539,7 +2539,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               staleMarker: 'Fallback',
               // Where the fallback came from: the curve's last point is not the exact 24h pair, and the
               // last close is not today's reading.
-              staleBasis: { curve: 'Fallback · about 24h (from curve)', lastClose: 'Fallback · last close' },
+              staleBasis: { curve: 'Fallback · about 24h (from curve)', lastClose: 'Fallback · last close', snapshot: 'Fallback · snapshot reading (24h, past the freshness floor)', seriesReturn: 'Fallback · about 24h (computed from the daily series)', seriesLevel: 'Fallback · latest level (no 24h move that day)', published: 'Fallback · prior session official close' },
               reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
               changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
               // What each change is measured against: a rolling window, a session close, a release.

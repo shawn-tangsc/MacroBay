@@ -163,6 +163,34 @@ describe('daily brief share card in English', () => {
     expect(text.staleBasis.curve).toContain('24h')
   })
 
+  it('names every fallback source, not just the two curve ones', async () => {
+    // The three new bases (snapshot, series return, series level, published) used to fall back to the
+    // generic chip, which told the reader a number was old but not what it was.
+    const base = briefing()
+    const cases: readonly [NonNullable<DailyBriefingDocument['data']['market'][number]['valueBasis']>, string][] = [
+      ['snapshot', text.staleBasis.snapshot],
+      ['series-return', text.staleBasis.seriesReturn],
+      ['series-level', text.staleBasis.seriesLevel],
+      ['published', text.staleBasis.published]
+    ]
+    for (const [basis, phrase] of cases) {
+      const doc: DailyBriefingDocument = {
+        ...base,
+        data: {
+          ...base.data,
+          market: base.data.market.map((row) => row.id === 'btc'
+            ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: basis }
+            : row)
+        }
+      }
+      const rendered = await render(doc)
+      expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(phrase)
+      await act(async () => root?.unmount())
+      root = undefined
+      document.body.replaceChildren()
+    }
+  })
+
   it('renders only the data rows the editor kept', async () => {
     const base = briefing()
     const rendered = await render({

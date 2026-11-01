@@ -335,8 +335,25 @@ function staleMarker(row: BriefingMarketRow | BriefingPulseRow, text: DailyBrief
   // A fallback says where it came from: the curve's last point is about 24 hours, not the exact
   // pair, and a last close is not today's reading. A plain aged reading gets the short chip.
   const basis = 'valueBasis' in row ? row.valueBasis : undefined
-  const label = basis === 'curve' ? text.staleBasis.curve : basis === 'last-close' ? text.staleBasis.lastClose : text.staleMarker
+  // One phrase per source, and the same phrases the exported copy uses: a reader who pastes the
+  // brief elsewhere must not get a different account of where the number came from.
+  const label = basis ? staleBasisText(basis, text) : text.staleMarker
   return <em className="mi-brief-poster__stale" data-state="stale" data-basis={basis ?? 'none'}>{label}</em>
+}
+
+type StaleBasis = NonNullable<BriefingMarketRow['valueBasis']>
+
+/** Where a stale reading came from, in the same words the export uses. */
+export function staleBasisText(basis: StaleBasis, text: DailyBriefingText): string {
+  const table: Record<StaleBasis, string> = {
+    snapshot: text.staleBasis.snapshot,
+    curve: text.staleBasis.curve,
+    'last-close': text.staleBasis.lastClose,
+    'series-return': text.staleBasis.seriesReturn,
+    'series-level': text.staleBasis.seriesLevel,
+    published: text.staleBasis.published
+  }
+  return table[basis]
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {

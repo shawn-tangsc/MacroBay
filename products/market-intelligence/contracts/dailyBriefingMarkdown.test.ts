@@ -91,6 +91,18 @@ describe('daily briefing markdown', () => {
     expect(markdown).toContain(labels.staleBasis.curve)
   })
 
+  it('uses the same phrase for a published fallback as the screen does', () => {
+    const base = document()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: [{ ...base.data.market[0]!, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'published' as const }]
+      }
+    }
+    expect(dailyBriefingToMarkdown(doc, options)).toContain(labels.staleBasis.published)
+  })
+
   it('exports a text edition with rows, conclusion and citations', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     expect(markdown).toContain('# 每日简报 — 2026-10-30')

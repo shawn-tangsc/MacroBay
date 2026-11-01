@@ -12,7 +12,7 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   tiers: Readonly<{ must: string; support: string; reference: string }>
   states: Readonly<Record<string, string>>
   /** Where a fallback reading came from; the copy says it so the exported text matches the screen. */
-  staleBasis?: Readonly<{ curve: string; lastClose: string }>
+  staleBasis?: Readonly<{ curve: string; lastClose: string; snapshot: string; seriesReturn: string; seriesLevel: string; published: string }>
   reasons: Readonly<Record<string, string>>
   changeReasons: Readonly<Record<string, string>>
   /**
@@ -219,9 +219,15 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
 function staleNote(row: BriefingMarketRow | BriefingPulseRow, labels: DailyBriefingMarkdownOptions['labels']): string {
   if (row.state !== 'stale') return ''
   const basis = 'valueBasis' in row ? row.valueBasis : undefined
-  if (basis === 'curve') return labels.staleBasis?.curve ?? labels.states.stale ?? ''
-  if (basis === 'last-close') return labels.staleBasis?.lastClose ?? labels.states.stale ?? ''
-  return labels.states.stale ?? ''
+  const table: Record<string, string | undefined> = {
+    curve: labels.staleBasis?.curve,
+    'last-close': labels.staleBasis?.lastClose,
+    snapshot: labels.staleBasis?.snapshot,
+    'series-return': labels.staleBasis?.seriesReturn,
+    'series-level': labels.staleBasis?.seriesLevel,
+    published: labels.staleBasis?.published
+  }
+  return (basis ? table[basis] : undefined) ?? labels.states.stale ?? ''
 }
 
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
