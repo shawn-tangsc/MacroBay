@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -133,4 +133,47 @@ describe('the recorded baseline', () => {
       expect(baseline[key]).toBeGreaterThan(0)
     }
   })
+})
+
+describe('baseline class names appear somewhere in source', () => {
+  /**
+   * 名字只说它证明的事：它查的是**类名在源码里出现过**，不是「这条选择器会命中元素」。
+   * 类名还在、但被挪到别的元素上，它抓不到——那种只能靠界面验收。
+   *
+   * 允许名单故意留空：动态拼类名时人工核对后加，那一步正是我们要的人的动作。
+   */
+  const SOURCE_ROOTS = ['apps', 'platform', 'products']
+  const SOURCE_EXTENSIONS = ['.ts', '.tsx']
+
+  function collectSourceTokens(): Set<string> {
+    const tokens = new Set<string>()
+    const walk = (directory: string): void => {
+      for (const name of readdirSync(directory)) {
+        if (name === 'node_modules' || name.startsWith('.')) continue
+        const full = join(directory, name)
+        const stat = statSync(full)
+        if (stat.isDirectory()) {
+          walk(full)
+          continue
+        }
+        if (!SOURCE_EXTENSIONS.some((extension) => name.endsWith(extension))) continue
+        if (name.includes('.test.') || name.includes('.spec.')) continue
+        for (const token of readFileSync(full, 'utf8').match(/[A-Za-z][A-Za-z0-9_-]{2,}/g) ?? []) {
+          tokens.add(token)
+        }
+      }
+    }
+    for (const root of SOURCE_ROOTS) walk(root)
+    return tokens
+  }
+
+  it('finds no baseline entry whose class name exists nowhere in the source', () => {
+    const tokens = collectSourceTokens()
+    const dead = Object.keys(baseline)
+      .map((key) => key.split(' :: ')[1] ?? '')
+      .map((selector) => ({ selector, className: /\.[A-Za-z0-9_-]+/.exec(selector)?.[0].slice(1) ?? '' }))
+      .filter((entry) => entry.className !== '' && !tokens.has(entry.className))
+
+    expect(dead).toEqual([])
+  }, 60_000)
 })
