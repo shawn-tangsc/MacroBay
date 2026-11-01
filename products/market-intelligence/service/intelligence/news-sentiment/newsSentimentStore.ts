@@ -28,7 +28,7 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 export function createNewsSentimentSqliteStore(filePath: string) {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
   const db = openOrReset(filePath)
-  db.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  db.exec('pragma synchronous = full;')
   const storedVersion = Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
   if (storedVersion !== newsSentimentStoragePolicy.schemaVersion) {
     // One schema, no upgrade paths: derived rows are rebuilt from the pipeline instead.
