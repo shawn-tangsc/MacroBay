@@ -67,11 +67,13 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `filtered-out` | 必填：清除筛选 | 有数据，被当前筛选挡住。 |
 | `empty` | `no-target-bound` | 必填：去绑定 | 目标还没绑。 |
 | `empty` | `nothing-enabled` | 必填：去启用 | 一个都没启用。 |
+| `empty` | `none-installed` | 必填：安装 / 绑定 / 打开设置，按站点选一种恢复方式 | 这里从来没有装过或绑定过；读者自己能解决。 |
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现。 |
 | `error` | `unreadable` | 必填：重试 | 没读出来，不是「没有」。 |
 | `error` | `unavailable` | 必填：检查来源 | 数据源本身不可用，盲目重试没有意义。 |
 | `disabled` | `capability-not-wired` | 不许有 | 平台侧没接通，读者没做错。 |
 | `disabled` | `target-disabled` | 必填：去启用 | 目标被停用了。 |
+| `disabled` | `precondition-unsaved` | 必填：保存 | 表单还没保存，保存之后才能继续。 |
 | `permission` | `not-granted` | 必填：去系统设置 | 只用于系统能回答「授没授权」的能力。 |
 
 ### 尺寸

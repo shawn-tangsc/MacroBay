@@ -41,6 +41,7 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.empty.reason.filtered-out',
   'ui.state.empty.reason.no-target-bound',
   'ui.state.empty.reason.nothing-enabled',
+  'ui.state.empty.reason.none-installed',
   'ui.state.empty.reason.not-yet',
   'ui.state.error',
   'ui.state.error.reason.unreadable',
@@ -49,6 +50,7 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.disabled',
   'ui.state.disabled.reason.capability-not-wired',
   'ui.state.disabled.reason.target-disabled',
+  'ui.state.disabled.reason.precondition-unsaved',
   'ui.state.permission',
   'ui.state.permission.reason.not-granted',
   'ui.state.action.create',
@@ -57,6 +59,9 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.enable',
   'ui.state.action.retry',
   'ui.state.action.check-source',
+  'ui.state.action.install',
+  'ui.state.action.save',
+  'ui.state.action.open-settings',
   'ui.state.action.open-system-settings'
 ] as const
 
@@ -81,10 +86,11 @@ export type EmptyReasonCode =
   | 'filtered-out'
   | 'no-target-bound'
   | 'nothing-enabled'
+  | 'none-installed'
   | 'not-yet'
 
 export type ErrorReasonCode = 'unreadable' | 'unavailable'
-export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled'
+export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
 export type PermissionReasonCode = 'not-granted'
 
 export type StateViewProps =
@@ -104,7 +110,11 @@ export type StateViewProps =
       details?: { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
     })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: never })
-  | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action: StateViewAction })
+  | (StateViewBase & {
+      state: 'disabled'
+      reasonCode: Exclude<DisabledReasonCode, 'capability-not-wired'>
+      action: StateViewAction
+    })
   | (StateViewBase & { state: 'permission'; reasonCode: PermissionReasonCode; action: StateViewAction })
 
 /** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，本批不给固定高度。 */
