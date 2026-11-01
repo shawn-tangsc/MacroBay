@@ -6,6 +6,8 @@ import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { PlatformText } from '../../i18n/platformText'
 import { agentText } from '../agents/agentText'
 import type { RenderedAssistantMessage } from './assistantMessageRendering'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+
 import { formatAssistantMessageTimestamp } from './assistantMessageTimestamp'
 import { AssistantSiblingNavigator } from './AssistantSiblingNavigator'
 import {
@@ -53,7 +55,8 @@ export function AssistantMessageRow({
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(message.text)
   const showsModelMeta = Boolean(message.modelName)
-  const timestamp = formatAssistantMessageTimestamp(message.createdAt, language)
+  const timeZone = useShellTimeZone()
+  const timestamp = formatAssistantMessageTimestamp(message.createdAt, timeZone)
   const isInterruption = message.parts.some((part) => part.type === 'interruption')
   const imageParts = message.parts.filter(isAssistantImageMessagePart)
   const imageGeneratingPart = message.parts.find(isAssistantImageGenerationPart)
