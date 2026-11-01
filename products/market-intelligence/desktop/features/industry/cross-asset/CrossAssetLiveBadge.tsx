@@ -1,3 +1,5 @@
+import { Tooltip } from 'antd'
+
 import type { MacroMarketLiveState, MacroMarketLiveTick } from '../../../../contracts/macro/macroMarketSnapshotContracts'
 
 type Text = { liveStateLabels: Record<MacroMarketLiveState, string>; liveHint: string }
@@ -14,6 +16,10 @@ export function LiveBadge({ state, tick, formatTime, text }: {
   text: Text
 }): React.ReactElement {
   const observed = formatTime(new Date(tick.atMs).toISOString(), 'second')
-  return <em className="mi-cross-asset__live" data-live-state={state} data-live-observed={tick.atMs}
-    title={`${text.liveHint} ${observed}`}>{text.liveStateLabels[state]}</em>
+  // 悬停说明挂在可聚焦的气泡上：焦点进来同一句话也出现，读屏与键盘拿到的与鼠标一致。
+  return <Tooltip title={`${text.liveHint} ${observed}`} trigger={['hover', 'focus']}>
+    <em className="mi-cross-asset__live" data-live-state={state} data-live-observed={tick.atMs} tabIndex={0}>
+      {text.liveStateLabels[state]}
+    </em>
+  </Tooltip>
 }

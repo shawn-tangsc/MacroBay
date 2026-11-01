@@ -196,8 +196,9 @@ describe('cross-asset event lines', () => {
       expect(line?.textContent).toContain('消费者物价指数（CPI）')
       expect(line?.textContent).toContain('9月零售销售(月率)')
       expect(line?.dataset.identity).toBe('unconfirmed')
-      // 痕迹要能被读到，不是内部标志：悬停/朗读里说明为什么同一次发布有两个名字。
-      expect(line?.getAttribute('title')).toContain(crossAssetText.eventLineIdentityUnconfirmed)
+      // 痕迹要能被读到，不是内部标志：它写在按钮的可访问名里，鼠标悬停与键盘聚焦读到的是同一句。
+      expect(line?.getAttribute('title')).toBeNull()
+      expect(line?.getAttribute('aria-label')).toContain(crossAssetText.eventLineIdentityUnconfirmed)
       expect(line?.getAttribute('aria-label')).toContain(crossAssetText.eventLineIdentityUnconfirmed)
     } finally { await rendered.unmount() }
   })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Segmented, Tooltip } from 'antd'
+import { Button, Popover, Segmented, Tooltip } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import type { productText } from '../../../shared/i18n/productText'
@@ -81,13 +81,17 @@ function macroMetrics(reading: MacroMarketSnapshotReading | undefined): RowMetri
 function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMetrics; text: Text }): React.ReactElement {
   return <>{crossAssetWindows.map(window => {
     const metric = metrics?.[window]
-    // A missing window is a dash in the cell and 无数据 on its title: the column stays narrow and the
-    // dash cannot be misread as a printed zero.
+    // A missing window is a dash in the cell and 无数据 in a tooltip: the column stays narrow and the
+    // dash cannot be misread as a printed zero. The tooltip opens on focus as well as hover, so the
+    // same sentence is reachable with the keyboard (a bare `title` reaches only the mouse).
     const percent = metric && metric.state === 'available' ? value(metric, '%', text.noData) : undefined
-    return <td key={window} data-asset-return={`${id}:${window}`}
+    const cell = <td key={window} data-asset-return={`${id}:${window}`}
       data-direction={metric?.state === 'available' ? Math.sign(metric.value) : 0}
       data-unavailable={percent === undefined ? 'true' : undefined}
-      title={percent === undefined ? text.noData : undefined}>{percent ?? text.windowNoData}</td>
+      tabIndex={percent === undefined ? 0 : undefined}>{percent ?? text.windowNoData}</td>
+    return percent === undefined
+      ? <Tooltip key={window} title={text.noData} trigger={['hover', 'focus']}>{cell}</Tooltip>
+      : cell
   })}</>
 }
 /** No figure and no value cell at all: the row states the gap instead of filling it. */
@@ -122,16 +126,23 @@ function RatesStatusRow({ id, reading, rates, text }: {
   const change = reading.previous === undefined
     ? format(text.dailyChangeUnknownWithDate, { date: reading.period })
     : format(text.dailyChangeWithDate, { change: `${basisPointsText(reading.actual - reading.previous)}${text.bpUnit}`, date: reading.period })
+  const dailyFacts = [text.dailyFrequency, detail, extras.mixedObservationDates ? text.dailyMixedDates : undefined, text.dailyCaveat]
+    .filter((fact): fact is string => Boolean(fact))
+  // 说明有五行，`title` 只能塞一行、触屏不出现、读屏也不念；这里换成可聚焦的气泡，焦点进去就展开。
+  const dailyCell = <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
+    data-direction={reading.previous === undefined ? 0 : Math.sign(reading.actual - reading.previous)}
+    data-caveat={macroRatesSnapshotPublicPolicy.caveats.officialDailyClose}
+    {...(extras.mixedObservationDates ? { 'data-mixed-observation-dates': MARKET_ANALYSIS_CONTEXT_CAVEATS.macroRatesMixedPeriods } : {})}
+    tabIndex={0}>
+    <strong>{change}</strong>{detail ? <small data-asset-daily-detail={id}>{detail}</small> : null}
+  </td>
   return <tr data-status-row={id} data-connected="true" data-observation-date={reading.period}>
     <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
     <td data-asset-price={id}>{reading.actual.toFixed(2)}%</td>
-    <td className="mi-cross-asset__daily" colSpan={crossAssetWindows.length} data-asset-daily={id}
-      data-direction={reading.previous === undefined ? 0 : Math.sign(reading.actual - reading.previous)}
-      data-caveat={macroRatesSnapshotPublicPolicy.caveats.officialDailyClose}
-      {...(extras.mixedObservationDates ? { 'data-mixed-observation-dates': MARKET_ANALYSIS_CONTEXT_CAVEATS.macroRatesMixedPeriods } : {})}
-      title={[text.dailyFrequency, detail, extras.mixedObservationDates ? text.dailyMixedDates : undefined, text.dailyCaveat].filter(Boolean).join(' · ')}>
-      <strong>{change}</strong>{detail ? <small data-asset-daily-detail={id}>{detail}</small> : null}
-    </td>
+    <Popover placement="left" trigger={['hover', 'focus']}
+      content={<div className="mi-cross-asset__daily-facts">{dailyFacts.map(fact => <div key={fact}>{fact}</div>)}</div>}>
+      {dailyCell}
+    </Popover>
   </tr>
 }
 function MacroStatusRow({ id, reading, text, formatTime }: {
@@ -145,8 +156,9 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <th scope="row"><span>{text.assetLabels[id]}
       {/* The synthetic label rides with the level: a level this product computed is never shown as
           if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
-        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex} title={text.syntheticCaveat}>{text.syntheticTag}</em> : null}
+      {reading?.synthetic ? <Tooltip title={text.syntheticCaveat} trigger={['hover', 'focus']}>
+        <em className="mi-cross-asset__synthetic" data-synthetic={id}
+          data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex} tabIndex={0}>{text.syntheticTag}</em></Tooltip> : null}
       {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
           after the price reads as if it qualified the number itself. */}
       {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
@@ -196,10 +208,12 @@ function IndexStatusRow({ snapshot, text, formatTime }: {
   return <tr data-status-row="index" data-connected="true" data-index-source={source} data-market-state={marketState}
     data-index-name={indexRowName(snapshot, text)}>
     <th scope="row"><span>{indexRowName(snapshot, text)}
-      {proxy ? <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
-        title={text.proxyCaveat}>{text.proxyTag}</em> : null}
-      {marketState === 'closed' ? <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
-        title={text.marketClosedHint}>{text.marketClosed}</em> : null}
+      {proxy ? <Tooltip title={text.proxyCaveat} trigger={['hover', 'focus']}>
+        <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
+          tabIndex={0}>{text.proxyTag}</em></Tooltip> : null}
+      {marketState === 'closed' ? <Tooltip title={text.marketClosedHint} trigger={['hover', 'focus']}>
+        <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
+          tabIndex={0}>{text.marketClosed}</em></Tooltip> : null}
     </span>{text.statusReads.index ? <small>{text.statusReads.index}</small> : null}</th>
     <td data-asset-price="index" data-last-closed-at={lastClosed?.at}>{value === undefined ? text.notConnected : livePriceText(value)}</td>
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />

@@ -111,14 +111,20 @@ describe('cross-asset observation workspace', () => {
       // The synthetic label rides with the level and carries the caveat the wire published.
       const tag = host.querySelector('[data-synthetic="dxy"]')
       expect(tag?.textContent).toBe(text.syntheticTag)
-      expect(tag?.getAttribute('title')).toBe(text.syntheticCaveat)
+      // 说明挂在可聚焦气泡上：没有 title，焦点进去同一句话就出现。
+      expect(tag?.getAttribute('title')).toBeNull()
+      expect(tag?.getAttribute('tabindex')).toBe('0')
+      await act(async () => { (tag as HTMLElement | null)?.focus() })
+      expect(document.body.textContent).toContain(text.syntheticCaveat)
       expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
-      // 7d was not in the gold reading: the cell is a dash whose title still says 无数据, not a zero.
+      // 7d was not in the gold reading: the cell is a dash whose tooltip still says 无数据, not a zero.
       const missing = host.querySelector('[data-asset-return="gold:7d"]')
       expect(missing?.textContent).toBe(text.windowNoData)
-      expect(missing?.getAttribute('title')).toBe(text.noData)
+      expect(missing?.getAttribute('title')).toBeNull()
+      await act(async () => { (missing as HTMLElement | null)?.focus() })
+      expect(document.body.textContent).toContain(text.noData)
       expect(missing?.getAttribute('data-unavailable')).toBe('true')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.getAttribute('data-unavailable')).toBeNull()
       expect(host.querySelector('[data-status-row="gold"] [data-synthetic]')).toBeNull()
@@ -252,7 +258,10 @@ describe('cross-asset observation workspace', () => {
       const badge = host.querySelector('[data-status-row="gold"] th [data-live-state]')!
       expect(badge.getAttribute('data-live-state')).toBe('live')
       expect(badge.textContent).toBe(text.liveStateLabels.live)
-      expect(badge.getAttribute('title')).toContain(text.liveHint)
+      expect(badge.getAttribute('title')).toBeNull()
+      expect(badge.getAttribute('tabindex')).toBe('0')
+      await act(async () => { (badge as HTMLElement).focus() })
+      expect(document.body.textContent).toContain(text.liveHint)
       expect(badge.getAttribute('data-live-observed')).toBe(String(atMs + 5_000))
       // The four windows are still the closed-bar figures: the live tick moved none of them.
       expect(host.querySelector('[data-asset-return="gold:15m"]')?.textContent).toBe('+0.05%')
@@ -328,7 +337,9 @@ describe('cross-asset observation workspace', () => {
       // expectation is its own series, so it carries its own observation date (10-13 here) rather than
       // borrowing the row's day — the row is 10-09.
       expect(host.querySelector('[data-asset-daily-detail="us10y"]')?.textContent).toBe('期限利差 +44bp · 通胀预期 2.33%（截至 2026-10-13）')
-      expect(daily?.getAttribute('title')).toContain('期限利差 +44bp')
+      expect(daily?.getAttribute('title')).toBeNull()
+      await act(async () => { daily?.focus() })
+      expect(document.body.textContent).toContain('期限利差 +44bp')
       expect(daily?.getAttribute('data-caveat')).toBe('official-daily-close')
       // Two legs on one day is not a mixed-observation-date row.
       expect(daily?.getAttribute('data-mixed-observation-dates')).toBeNull()
@@ -365,7 +376,9 @@ describe('cross-asset observation workspace', () => {
       expect(daily.textContent).not.toContain(text.termSpread)
       // The caveat id comes from its owner, and its sentence is one hover away.
       expect(daily.getAttribute('data-mixed-observation-dates')).toBe('macro-rates-mixed-observation-dates')
-      expect(daily.getAttribute('title')).toContain(text.dailyMixedDates)
+      expect(daily.getAttribute('title')).toBeNull()
+      await act(async () => { daily.focus() })
+      expect(document.body.textContent).toContain(text.dailyMixedDates)
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
