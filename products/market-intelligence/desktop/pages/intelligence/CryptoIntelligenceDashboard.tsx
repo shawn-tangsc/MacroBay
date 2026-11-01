@@ -32,6 +32,7 @@ import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnap
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
@@ -224,7 +225,9 @@ function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFea
         <span data-gauge-bucket-text={FearGreedGaugePresentationPolicy.bucketTones[fearGreedState.bucket]}>{text.fearGreed.buckets[fearGreedState.bucket]}</span><small>{text.fearGreed.observedAt} {formatTime(fearGreedState.observedAt)}</small><p>{text.sentiment.gaugeMarkers.fear} · {text.sentiment.gaugeMarkers.neutral} · {text.sentiment.gaugeMarkers.greed}</p>
       </> : fearGreedState.state === 'loading'
         ? <LoadingState label={text.fearGreed.loading} minHeight={120} />
-        : <span>{text.fearGreed[fearGreedState.state]}</span>}
+        : fearGreedState.state === 'empty'
+          ? <StateView state="empty" reasonCode="not-yet" />
+          : <span>{text.fearGreed.unavailable}</span>}
       </div>
     </section>
   </>
