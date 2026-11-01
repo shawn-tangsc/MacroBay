@@ -60,7 +60,7 @@ function DefaultModelFieldRow({
           pickerId={`default-model-${field}`}
           value={value || null}
           onChange={(next) => onChange(field, next)}
-          models={buildDefaultModelCandidates(providers, field)}
+          models={buildDefaultModelCandidates(providers, field, labels.providerNames)}
           providers={providers}
           labels={labels}
           constraints={defaultModelConstraints(field)}

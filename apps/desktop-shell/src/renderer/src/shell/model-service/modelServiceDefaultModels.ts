@@ -56,11 +56,12 @@ export function defaultModelConstraints(field: DefaultModelField): ModelPickerCo
 
 export function buildDefaultModelCandidates(
   providers: readonly SafeModelProvider[],
-  field: DefaultModelField
+  field: DefaultModelField,
+  providerNames: Readonly<Record<string, string>> = {}
 ): ModelPickerCandidate[] {
   // 智能体候选有自己的判据（运行期标记 / messages 能力 / 兼容性证据），复用那一份，不在这里复制规则。
   if (field === 'agentModelId') {
-    return flattenAgentModelOptions(buildAgentModelOptions(providers, 'claude-code'))
+    return flattenAgentModelOptions(buildAgentModelOptions(providers, 'claude-code', undefined, providerNames))
       .filter((option) => option.selectable)
       .map((option) => ({ providerId: option.providerId, model: option.model }))
   }

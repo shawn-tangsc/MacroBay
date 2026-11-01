@@ -25,6 +25,7 @@ import {
   setSessionWorkspaceViaApi
 } from '../../agentSessionDataApi'
 import { useAgentLanguage, useAgentText } from '../../agentTextProvider'
+import { useAgentProviderNames } from '../../useAgentProviderNames'
 import { platformText } from '../../../../i18n/platformText'
 import {
   isUnconfiguredAgentModel,
@@ -72,17 +73,18 @@ export default function AgentChatNavbar({
 }: AgentChatNavbarProps): React.ReactElement {
   const t = useAgentText()
   const language = useAgentLanguage()
+  const providerNames = useAgentProviderNames()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [taskCenterOpen, setTaskCenterOpen] = useState(false)
   // 智能体候选仍是 `buildAgentModelOptions` 那一份判据；messages 硬约束由选择器数据层执行。
   const modelCandidates = useMemo<ModelPickerCandidate[]>(
     () =>
       flattenAgentModelOptions(
-        buildAgentModelOptions(providers, activeAgent.type, compatibilityByModelKey)
+        buildAgentModelOptions(providers, activeAgent.type, compatibilityByModelKey, providerNames)
       )
         .filter((option) => option.selectable)
         .map((option) => ({ providerId: option.providerId, model: option.model })),
-    [activeAgent.type, compatibilityByModelKey, providers]
+    [activeAgent.type, compatibilityByModelKey, providers, providerNames]
   )
   // 智能体没有显式模型时，工具栏显示「跟随默认：<模型>」而不是 `unconfigured:` 原始值。
   const followsDefaultModel = isUnconfiguredAgentModel(activeAgent.model)
