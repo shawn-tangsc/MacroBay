@@ -147,8 +147,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
               history: t.sessionHistory,
               delete: t.deleteSession,
               deleteConfirm: t.deleteSessionConfirm,
-              cancel: t.cancel,
-              empty: t.noSessions
+              cancel: t.cancel
             }}
             onNewConversation={() => void chat.startNewConversation()}
             onSelectConversation={chat.selectConversation}

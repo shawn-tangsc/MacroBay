@@ -42,7 +42,7 @@ it('opens the history list, selects a conversation, and starts a new one', async
     root?.render(createElement(MarketAnalysisSessionMenu, {
       sessions: [session('s-1', '市场解读对话', '2026-10-23T10:00:00.000Z'), session('s-2', '旧会话', '2026-10-22T10:00:00.000Z')],
       currentSessionId: 's-1',
-      text: { newChat: '新对话', history: '历史会话', delete: '删除会话', deleteConfirm: '删除这个会话？', cancel: '取消', empty: '还没有历史会话' },
+      text: { newChat: '新对话', history: '历史会话', delete: '删除会话', deleteConfirm: '删除这个会话？', cancel: '取消' },
       onNewConversation,
       onSelectConversation,
       onDeleteConversation
@@ -62,4 +62,35 @@ it('opens the history list, selects a conversation, and starts a new one', async
   await act(async () => { rows[1]!.click() })
   expect(onSelectConversation).toHaveBeenCalledWith('s-2')
   expect(onDeleteConversation).not.toHaveBeenCalled()
+})
+
+it('shows one empty state with a create action when no conversation exists', async () => {
+  const onNewConversation = vi.fn()
+  const container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(createElement(MarketAnalysisSessionMenu, {
+      sessions: [],
+      text: { newChat: '新对话', history: '历史会话', delete: '删除会话', deleteConfirm: '删除这个会话？', cancel: '取消' },
+      onNewConversation,
+      onSelectConversation: vi.fn(),
+      onDeleteConversation: vi.fn()
+    }))
+  })
+
+  await act(async () => {
+    container.querySelector<HTMLButtonElement>('[aria-label="历史会话"]')!.click()
+  })
+
+  const states = document.querySelectorAll('.state-view')
+  expect(states).toHaveLength(1)
+  const reason = states[0]!.querySelector('.state-view__reason')!
+  expect(reason.getAttribute('data-reason-source')).toBe('product')
+  expect(reason.textContent).toBe('还没有历史会话')
+
+  const action = states[0]!.querySelector<HTMLButtonElement>('.state-view__action')!
+  expect(action.textContent).toBe('创建')
+  await act(async () => action.click())
+  expect(onNewConversation).toHaveBeenCalledTimes(1)
 })

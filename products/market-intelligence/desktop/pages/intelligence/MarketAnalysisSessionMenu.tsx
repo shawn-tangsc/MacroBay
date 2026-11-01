@@ -3,6 +3,9 @@ import { Button, Popconfirm, Popover, Tooltip } from 'antd'
 import { Check, History, Plus, Trash2 } from 'lucide-react'
 
 import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 export type MarketAnalysisSessionMenuText = Readonly<{
   newChat: string
@@ -10,7 +13,6 @@ export type MarketAnalysisSessionMenuText = Readonly<{
   delete: string
   deleteConfirm: string
   cancel: string
-  empty: string
 }>
 
 export function MarketAnalysisSessionMenu({
@@ -29,6 +31,7 @@ export function MarketAnalysisSessionMenu({
   onDeleteConversation: (sessionId: string) => void
 }>): React.ReactElement {
   const [open, setOpen] = useState(false)
+  const resolveProductText = useProductTextKey()
   const selectConversation = (sessionId: string): void => {
     setOpen(false)
     onSelectConversation(sessionId)
@@ -41,7 +44,12 @@ export function MarketAnalysisSessionMenu({
     <div className="mi-agent-sessions">
       <div className="mi-agent-sessions__heading">{text.history}</div>
       {sessions.length === 0
-        ? <p className="mi-agent-sessions__empty">{text.empty}</p>
+        ? <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: startNewConversation }}
+          productReason={{ key: 'pages.intelligence.portal.analysisWorkspace.noSessions', resolve: resolveProductText }}
+          reasonCode="never-created"
+          size="md"
+          state="empty" />
         : sessions.map(session => (
           <div className={`mi-agent-sessions__row${session.id === currentSessionId ? ' is-current' : ''}`} key={session.id}>
             <button

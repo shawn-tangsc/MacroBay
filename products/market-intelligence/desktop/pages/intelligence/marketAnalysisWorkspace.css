@@ -74,7 +74,6 @@
 /* The title bar also owns conversation navigation: new chat, history, and per-row delete. */
 .mi-agent-sessions { display: flex; flex-direction: column; width: 280px; max-height: 320px; overflow: auto; }
 .mi-agent-sessions__heading { padding: 4px 6px 8px; color: var(--muted); font-size: 11px; }
-.mi-agent-sessions__empty { margin: 0; padding: 8px 6px; color: var(--muted); font-size: 12px; }
 .mi-agent-sessions__row { display: flex; align-items: center; gap: 4px; border-radius: 6px; }
 .mi-agent-sessions__row:hover { background: var(--surface-soft); }
 .mi-agent-sessions__select { display: grid; grid-template-columns: minmax(0, 1fr) auto 14px; align-items: center; gap: 8px; flex: 1; min-width: 0; padding: 6px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
