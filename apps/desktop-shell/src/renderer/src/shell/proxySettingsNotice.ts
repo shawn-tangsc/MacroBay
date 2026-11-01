@@ -17,6 +17,8 @@ export function proxyRejectionNotice(
       return labels.proxyRejectedUnsupportedProtocol
     case 'unparsable':
       return labels.proxyRejectedUnparsable
+    case 'bypass-rule-unsupported':
+      return labels.proxyRejectedBypassRule
     default:
       return null
   }

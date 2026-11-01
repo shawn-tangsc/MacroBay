@@ -1,5 +1,7 @@
 import type { NetworkSettings } from '../settings/schema/appSettings'
 
+import { checkBypassRules } from './proxyBypass'
+
 export type SessionProxyConfig = {
   mode?: 'direct' | 'auto_detect' | 'pac_script' | 'fixed_servers' | 'system'
   pacScript?: string
@@ -7,8 +9,15 @@ export type SessionProxyConfig = {
   proxyBypassRules?: string
 }
 
-/** 代理地址为什么不可用；调用方据此给用户一句人话，别把内部原因拼进句子。 */
-export type ProxyUrlRejectionReason = 'empty' | 'unsupported-protocol' | 'unparsable'
+/**
+ * 这份网络设置为什么不可保存；调用方据此给用户一句人话，别把内部原因拼进句子。
+ * `bypass-rule-unsupported` 是绕过规则层面的拒绝（端口、CIDR 等超出 Chromium 那套语法）。
+ */
+export type ProxySettingsRejectionReason =
+  | 'empty'
+  | 'unsupported-protocol'
+  | 'unparsable'
+  | 'bypass-rule-unsupported'
 
 /**
  * 自定义代理地址的解析结果。**不用字符串冒充失败**：旧实现解析不出来就回 `direct://`，
@@ -22,11 +31,11 @@ export type CustomProxyResolution =
       /** 只写了 `host:port`、没写协议时为真：按 socks5 解释，但必须让用户看见这句话。 */
       protocolWasImplicit: boolean
     }
-  | { ok: false; reason: ProxyUrlRejectionReason }
+  | { ok: false; reason: ProxySettingsRejectionReason }
 
 export type NetworkSettingsValidation =
   | { ok: true; interpretation: 'explicit' | 'socks5-implicit' }
-  | { ok: false; reason: ProxyUrlRejectionReason }
+  | { ok: false; reason: ProxySettingsRejectionReason }
 
 export function buildSessionProxyConfig(network: NetworkSettings): SessionProxyConfig {
   switch (network.proxyMode) {
@@ -92,6 +101,8 @@ export function validateNetworkSettings(network: NetworkSettings): NetworkSettin
   if (network.proxyMode !== 'custom') return { ok: true, interpretation: 'explicit' }
   const resolution = resolveCustomProxyRules(network.proxyUrl)
   if (!resolution.ok) return { ok: false, reason: resolution.reason }
+  // 绕过规则必须落在 Chromium 与 WebSocket 都能正确解释的语法内，否则保存即拒。
+  if (!checkBypassRules(network.proxyBypassRules).ok) return { ok: false, reason: 'bypass-rule-unsupported' }
   return { ok: true, interpretation: resolution.protocolWasImplicit ? 'socks5-implicit' : 'explicit' }
 }
 

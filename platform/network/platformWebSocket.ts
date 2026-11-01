@@ -6,6 +6,8 @@ import NodeWebSocket from 'ws'
 
 import type { NetworkSettings } from '../settings/schema/appSettings'
 
+import { hostnameOfUrl, shouldBypass } from './proxyBypass'
+
 type BrowserStyleWebSocket = Pick<globalThis.WebSocket, 'close' | 'onclose' | 'onerror' | 'onmessage' | 'onopen' | 'send'>
 type BrowserOpenEvent = Parameters<NonNullable<BrowserStyleWebSocket['onopen']>>[0]
 type BrowserCloseEvent = Parameters<NonNullable<BrowserStyleWebSocket['onclose']>>[0]
@@ -195,7 +197,8 @@ export async function resolveWebSocketProxyUrl(
   resolveSystemProxy: ResolveSystemProxy = (targetUrl) => session.defaultSession.resolveProxy(targetUrl)
 ): Promise<string | null> {
   if (network.proxyMode === 'none') return null
-  if (shouldBypassProxy(url, network.proxyBypassRules)) return null
+  // 与 Chromium 同一份绕过规则、同一套判定：这里不再自己解析一遍。
+  if (shouldBypass(hostnameOfUrl(url), network.proxyBypassRules)) return null
 
   if (network.proxyMode === 'custom') {
     return normalizeCustomProxyUrl(network.proxyUrl)
@@ -249,35 +252,6 @@ export function parseResolvedProxyRules(value: string): string | null {
   }
 
   return null
-}
-
-function shouldBypassProxy(url: string, proxyBypassRules: string): boolean {
-  let hostname = ''
-  try {
-    hostname = new URL(url).hostname.toLowerCase()
-  } catch {
-    return false
-  }
-
-  const rules = proxyBypassRules
-    .split(/[,\s]+/)
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean)
-
-  return rules.some((rule) => matchesBypassRule(hostname, rule))
-}
-
-function matchesBypassRule(hostname: string, rule: string): boolean {
-  if (rule === '<local>') return !hostname.includes('.')
-  if (rule === hostname) return true
-  if (rule.startsWith('*.')) {
-    const suffix = rule.slice(1)
-    return hostname.endsWith(suffix)
-  }
-  if (rule.startsWith('.')) {
-    return hostname.endsWith(rule)
-  }
-  return false
 }
 
 function isSupportedProxyProtocol(protocol: string): boolean {

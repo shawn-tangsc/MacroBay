@@ -1,6 +1,6 @@
 import { supportedProxyModes, type AppSettingsPatch, type NetworkSettings } from '../settings/schema/appSettings'
 
-import { validateNetworkSettings, type ProxyUrlRejectionReason } from './proxyConfig'
+import { validateNetworkSettings, type ProxySettingsRejectionReason } from './proxyConfig'
 
 /**
  * 保存前拒绝非法代理设置。错误信息里带稳定前缀 + 原因码，渲染层按码出人话；
@@ -37,10 +37,17 @@ export function mergeNetworkSettingsPatch(
   }
 }
 
-export function readProxyRejectionReason(error: unknown): ProxyUrlRejectionReason | null {
+export function readProxyRejectionReason(error: unknown): ProxySettingsRejectionReason | null {
   const message = error instanceof Error ? error.message : ''
   const match = new RegExp(`${PROXY_SETTINGS_REJECTED_PREFIX}:([a-z-]+)`).exec(message)
   const reason = match?.[1]
-  if (reason === 'empty' || reason === 'unsupported-protocol' || reason === 'unparsable') return reason
+  if (
+    reason === 'empty' ||
+    reason === 'unsupported-protocol' ||
+    reason === 'unparsable' ||
+    reason === 'bypass-rule-unsupported'
+  ) {
+    return reason
+  }
   return null
 }

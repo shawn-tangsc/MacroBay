@@ -78,6 +78,10 @@ describe('proxyConfig', () => {
     expect(
       validateNetworkSettings({ proxyMode: 'custom', proxyUrl: 'http://127.0.0.1:7890', proxyBypassRules: '' })
     ).toEqual({ ok: true, interpretation: 'explicit' })
+    // 绕过规则超出 Chromium 与 WebSocket 共用的语法时，保存即拒，而不是保存后悄悄不生效。
+    expect(
+      validateNetworkSettings({ proxyMode: 'custom', proxyUrl: 'http://127.0.0.1:7890', proxyBypassRules: '10.0.0.0/8' })
+    ).toEqual({ ok: false, reason: 'bypass-rule-unsupported' })
     // 不用代理的模式不看地址字段：切到「系统代理」不该被残留的坏地址拦住。
     expect(validateNetworkSettings({ proxyMode: 'system', proxyUrl: 'myproxy', proxyBypassRules: '' })).toEqual({
       ok: true,

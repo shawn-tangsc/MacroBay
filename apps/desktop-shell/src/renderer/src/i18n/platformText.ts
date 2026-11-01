@@ -949,6 +949,7 @@ export type PlatformText = {
     proxyRejectedEmpty: string
     proxyRejectedUnsupportedProtocol: string
     proxyRejectedUnparsable: string
+    proxyRejectedBypassRule: string
     proxySocks5Implicit: string
     proxyAddressPlaceholder: string
     proxyBypassPlaceholder: string
@@ -1979,6 +1980,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxyRejectedEmpty: '请先填写代理地址。',
       proxyRejectedUnsupportedProtocol: '代理地址只支持 http、https、socks5 三种协议，请写成 `http://主机:端口`。',
       proxyRejectedUnparsable: '代理地址格式不对，请写成 `http://主机:端口` 或 `socks5://主机:端口`。',
+      proxyRejectedBypassRule: '绕过规则只支持主机名、`*.域名`、`<local>` 和 `*`；端口与 CIDR（如 `10.0.0.0/8`）这类写法不受支持。',
       proxySocks5Implicit: '未写协议，按 socks5 解释；若你的代理是 HTTP，请写成 `http://主机:端口`。',
       proxyAddressPlaceholder: '例如 socks5://127.0.0.1:6153',
       proxyBypassPlaceholder: 'localhost,127.0.0.1,::1',
@@ -3017,6 +3019,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxyRejectedEmpty: 'Enter a proxy address first.',
       proxyRejectedUnsupportedProtocol: 'Only http, https and socks5 addresses are supported; write it as `http://host:port`.',
       proxyRejectedUnparsable: 'That proxy address cannot be parsed; write it as `http://host:port` or `socks5://host:port`.',
+      proxyRejectedBypassRule:
+        'Bypass rules support host names, `*.domain`, `<local>` and `*` only; ports and CIDR ranges such as `10.0.0.0/8` are not supported.',
       proxySocks5Implicit: 'No protocol given, so this is read as socks5; if your proxy speaks HTTP, write `http://host:port`.',
       proxyAddressPlaceholder: 'e.g. socks5://127.0.0.1:6153',
       proxyBypassPlaceholder: 'localhost,127.0.0.1,::1',
