@@ -66,6 +66,9 @@ import { IconButton } from '@platform/ui/components/icon-button'
 - **焦点环只有一处**：`:focus-visible` 2px accent 描边、offset 2；样式表里没有任何 `outline: none`。
 - **`type="button"`**：放在表单里不会顺手提交。
 - **不承载语义色**：图标按钮一律中性色。危险动作是带文字的按钮，不是红色图标。
+- **加载中必须看得见：对比度不低于 3:1。** 禁用态低于非文字控件 3:1 的下限可以豁免，加载态不行——
+  读者得看出**哪个**按钮在忙。所以 `loading` 自带 `data-state="loading"` 标记和自己的颜色 token，
+  不许继承禁用态那套绘制。加载中转圈若是渲染成禁用灰（实测深色 2.27:1 / 浅色 1.84:1），验收不通过。
 
 ```tsx
 // 对：一个图标、一个键、一个尺寸词。

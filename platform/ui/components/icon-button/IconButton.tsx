@@ -128,7 +128,10 @@ export function IconButton({
       ]
         .filter(Boolean)
         .join(' ')}
+      // loading 仍要不可点，但**不能只靠 `:disabled` 表达**：两者语义不同，绑在一起以后就没法只给
+      // loading 换色（禁用低对比度可豁免，loading 不行——读者得看出「哪个按钮在忙」）。
       disabled={disabled === true || loading === true}
+      data-state={loading === true ? 'loading' : disabled === true ? 'disabled' : undefined}
       icon={
         loading === true ? (
           <LoadingSpinner className="icon-button__glyph" size="sm" />

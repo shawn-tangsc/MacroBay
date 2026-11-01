@@ -74,6 +74,11 @@ The pixel values live in one table in the component and are written to the eleme
 - **`type="button"`:** an icon button inside a form never submits it.
 - **No colour semantics:** the icon button is neutral. A destructive action is a button with text,
   not a red icon.
+- **Loading must stay visible: contrast ≥ 3:1.** A disabled control may sit below the 3:1
+  non-text floor and be exempt; a loading one may not — the reader has to see *which* button is
+  busy. So `loading` carries its own `data-state="loading"` marker and its own colour token, and it
+  must never inherit the disabled paint. A loading state that renders at the disabled grey
+  (measured 2.27:1 dark / 1.84:1 light) fails acceptance.
 
 ```tsx
 // Correct: one icon, one key, one size word.

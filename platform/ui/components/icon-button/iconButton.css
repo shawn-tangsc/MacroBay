@@ -71,3 +71,22 @@
   display: block;
   flex: none;
 }
+
+/*
+ * loading 态：antd 的禁用样式会把图标压到 `rgba(255,255,255,.25)`（深色合成后 2.27:1、
+ * 浅色 1.84:1），低于非文字控件 3:1——转圈几乎看不见，等于没有加载态。禁用态低对比度可豁免，
+ * loading 不行：读者必须看出哪个按钮在忙。
+ *
+ * 所以这里按 `data-state="loading"` 单独给色，不借用 `:disabled`：`--muted-strong` 是中性前景色，
+ * 深浅两个主题都在 3:1 以上；以后要调也只动这一处。
+ */
+.icon-button[data-state='loading'] {
+  color: var(--muted-strong) !important;
+  opacity: 1 !important;
+}
+
+/* antd 禁用时会再压一层 opacity，loading 不吃这一层。 */
+.icon-button[data-state='loading'] .ant-btn-icon,
+.icon-button[data-state='loading'] .icon-button__glyph {
+  opacity: 1;
+}

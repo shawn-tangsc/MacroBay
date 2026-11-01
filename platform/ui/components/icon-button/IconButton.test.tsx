@@ -245,6 +245,19 @@ describe('IconButton', () => {
     expect(blocked).toBeDefined()
   })
 
+  it('gives the loading state its own marker and its own colour, never the disabled one', () => {
+    const html = markup({ loading: true } as Partial<IconButtonProps>)
+
+    // 加载中必须不可点，但状态标记与 disabled 分开：绑在一起就没法只给 loading 换色。
+    expect(html).toContain('data-state="loading"')
+    expect(html).toMatch(/<button[^>]*disabled/)
+
+    // 负判据：loading 的颜色不许来自禁用样式，也不许写死色值——读者得看出哪个按钮在忙。
+    expect(rules).toContain(".icon-button[data-state='loading']")
+    expect(rules).toMatch(/\.icon-button\[data-state='loading'\][^}]*--muted-strong/)
+    expect(rules).not.toMatch(/\.icon-button:disabled[^{]*\{[^}]*color:/)
+  })
+
   it('carries no copy of its own: no literal Chinese outside comments, no spinner, no motion', () => {
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
