@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button } from 'antd'
 import { ArrowLeft, Settings2 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
@@ -306,26 +307,26 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
-      <button className="mi-daily-briefing-page__back" type="button" onClick={onBack}>
+      <Button className="mi-daily-briefing-page__back" onClick={onBack}>
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
-      </button>
+      </Button>
       <div className="mi-daily-briefing-page__actions">
         {view.status === 'ready' && view.kind === 'today' ? <>
-          <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
+          <Button className="mi-daily-briefing__regenerate" disabled={regenerating} onClick={() => void regenerate()}>
             {regenerating ? text.regenerating : text.regenerate}
-          </button>
+          </Button>
           {zoneInvalid ? <small className="mi-daily-briefing__manual-utc" role="status">{text.generationSettings.manualUtcNote}</small> : null}
         </> : null}
-        {view.status === 'ready' && !contentBlocked ? <button className="mi-daily-briefing__export" type="button" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
+        {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__export" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
           {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
-        </button> : null}
-        {view.status === 'ready' && !contentBlocked ? <button className="mi-daily-briefing__copy" type="button" onClick={() => void copy()} aria-live="polite">
+        </Button> : null}
+        {view.status === 'ready' && !contentBlocked ? <Button className="mi-daily-briefing__copy" onClick={() => void copy()} aria-live="polite">
           {copyState === 'copied' ? text.copied : copyState === 'failed' ? text.copyFailed : text.copy}
-        </button> : null}
-        <button className="mi-daily-briefing__regenerate" type="button" onClick={() => setGenerationSettingsOpen(true)} aria-label={text.generationSettings.open}>
+        </Button> : null}
+        <Button className="mi-daily-briefing__regenerate" onClick={() => setGenerationSettingsOpen(true)} aria-label={text.generationSettings.open}>
           {text.generationSettings.open}
-        </button>
-        <button className="mi-daily-briefing__gear" type="button" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open}><Settings2 size={14} aria-hidden="true" /></button>
+        </Button>
+        <Button className="mi-daily-briefing__gear" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open} icon={<Settings2 size={14} aria-hidden="true" />} />
       </div>
     </header>
     <div className={bodyClass}>
@@ -334,7 +335,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       <section className="mi-daily-briefing-page__content">
         {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
-          <button type="button" onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</button>
+          <Button onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</Button>
         </div> : null}
         {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.generating} minHeight={220} /><p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p></div> : null}
         {view.status === 'unavailable' && !failure ? <div className="mi-daily-briefing-page__empty" role="alert">
@@ -346,8 +347,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
             <p>{text.unavailableHint}</p>
           </>}
           <div className="mi-daily-briefing-page__empty-actions">
-            {onConfigureSources ? <button type="button" className="mi-daily-briefing-page__primary" onClick={onConfigureSources}>{text.configureSources}</button> : null}
-            <button type="button" disabled={regenerating} onClick={() => { emptyGenerateRef.current = true; setRegenerateFailure(null); setRegenerating(true); setReloadKey((key) => key + 1) }}>{regenerating ? text.regenerating : text.generateNow}</button>
+            {onConfigureSources ? <Button type="primary" className="mi-daily-briefing-page__primary" onClick={onConfigureSources}>{text.configureSources}</Button> : null}
+            <Button disabled={regenerating} onClick={() => { emptyGenerateRef.current = true; setRegenerateFailure(null); setRegenerating(true); setReloadKey((key) => key + 1) }}>{regenerating ? text.regenerating : text.generateNow}</Button>
           </div>
         </div> : null}
         {failure ? <DailyBriefingFailurePanel
@@ -363,7 +364,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
         {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
           <p>{text.emptyGuide}</p>
-          {onConfigureSources ? <button type="button" onClick={onConfigureSources}>{text.configureSources}</button> : null}
+          {onConfigureSources ? <Button onClick={onConfigureSources}>{text.configureSources}</Button> : null}
         </div> : null}
         {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-page__paper">
           <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
@@ -374,14 +375,14 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {issues.length > 0 ? <>
           <header className="mi-daily-briefing-page__appendix-head">
             <h2>{text.sections.limits}</h2>
-            <button className="mi-daily-briefing-page__appendix-toggle" type="button" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
+            <Button className="mi-daily-briefing-page__appendix-toggle" autoInsertSpace={false} aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
               {issuesOpen ? text.limits.collapse : text.limits.expand}
-            </button>
+            </Button>
           </header>
           <p className="mi-daily-briefing-page__appendix-counts">{issueCountsText(issueCounts, text)}</p>
           {issuesOpen ? <ol className="mi-daily-briefing-page__groups">
             {groups.map((group) => <li key={group.key}>
-              <button className="mi-daily-briefing-page__group" type="button" aria-haspopup="dialog"
+              <Button className="mi-daily-briefing-page__group" aria-haspopup="dialog"
                 aria-label={text.limits.openGroup.replace('{label}', group.label).replace('{count}', String(group.count))}
                 data-group-key={group.key} data-group-severity={group.severity} data-group-category={group.category}
                 onClick={(event) => setOpenGroup({ key: group.key, trigger: event.currentTarget })}>
@@ -392,7 +393,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
                 <span className="mi-daily-briefing-page__group-label">{group.label}</span>
                 <span className="mi-daily-briefing-page__group-count">{text.limits.groupCount.replace('{count}', String(group.count))}</span>
                 <span className="mi-daily-briefing-page__group-example">{text.limits.groupExample.replace('{text}', group.example)}</span>
-              </button>
+              </Button>
             </li>)}
           </ol> : null}
         </> : null}
@@ -435,12 +436,12 @@ function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, on
     <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
     <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
     <div className="mi-daily-briefing-page__empty-actions">
-      <button type="button" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
+      <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
         {regenerating ? text.regenerating : text.regenerate}
-      </button>
-      <button type="button" data-failure-action="ai-settings" onClick={onOpenAiSettings}>{text.failurePanel.openAiSettings}</button>
-      {advice !== 'data' ? <button type="button" data-failure-action="model-service" onClick={onOpenModelSettings}>{text.failurePanel.openModelService}</button> : null}
-      {advice === 'data' && onConfigureSources ? <button type="button" data-failure-action="sources" onClick={onConfigureSources}>{text.configureSources}</button> : null}
+      </Button>
+      <Button data-failure-action="ai-settings" onClick={onOpenAiSettings}>{text.failurePanel.openAiSettings}</Button>
+      {advice !== 'data' ? <Button data-failure-action="model-service" onClick={onOpenModelSettings}>{text.failurePanel.openModelService}</Button> : null}
+      {advice === 'data' && onConfigureSources ? <Button data-failure-action="sources" onClick={onConfigureSources}>{text.configureSources}</Button> : null}
     </div>
   </div>
 }
