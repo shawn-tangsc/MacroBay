@@ -158,6 +158,18 @@ describe('PLAT-42 ②：antd token 由同一单源产出', () => {
     }
   })
 
+  it('浅色 accent 与 antd 取自同一处，且 --accent-contrast 在浅色只有一处定义', () => {
+    // 浅色主题里 --accent 必须就是 accent 单源里的那一格，不允许再手写一个绿。
+    expect(cssVariable(':root[data-theme="light"]', '--accent')).toBe(WINDOW_ACCENT_COLOR_LIGHT.lime)
+
+    // 只留一处定义：重复定义会因「后出现的胜出」把前面的修正整块盖掉（2026-11-01 出过一次）。
+    const lightBlocks = withoutComments(shellCss).match(/:root\[data-theme=["']light["']\]\s*\{[^}]*\}/g) ?? []
+    const definitions = lightBlocks.flatMap((block) =>
+      block.match(/(?:^|[;{\s])--accent-contrast\s*:/g) ?? []
+    )
+    expect(definitions).toHaveLength(1)
+  })
+
   it('分段控件选中色按主题分化：深色用 accent、浅色用深色块（与修复前 antd 观感逐字一致）', () => {
     expect(buildWindowAntdTheme('dark', 'cyan').components?.Segmented).toMatchObject({
       itemSelectedBg: '#58d7f5', itemSelectedColor: '#141512'
