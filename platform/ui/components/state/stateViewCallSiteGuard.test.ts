@@ -89,10 +89,7 @@ const BASELINE_FILE =
 const BASELINE = new Map<string, number>([
   [`${BASELINE_FILE}|empty.filtered-out`, 1],
   [`${BASELINE_FILE}|disabled.target-disabled`, 1],
-  [`${BASELINE_FILE}|empty.nothing-in-window`, 1],
-  // 「还没跑过」那处给了 `run-now`：契约把它判成 `not-yet · 禁止`，但真实处境需要动作。
-  // 已报架构师（要么把 `not-yet` 改回场景定，要么单开一个 `never-ran` 码）；定案前先挂基线。
-  [`${BASELINE_FILE}|empty.not-yet`, 1]
+  [`${BASELINE_FILE}|empty.nothing-in-window`, 1]
 ])
 
 function baselineKeyOf(site: CallSite): string {

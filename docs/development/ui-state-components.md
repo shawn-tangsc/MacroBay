@@ -78,6 +78,7 @@ needs one gets the code and the key in the same change, never the key on its own
 | `empty` | `none-installed` | required: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
 | `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | forbidden | It only appears once something has happened; a button here would be a fake action. |
+| `empty` | `never-ran` | required: run it now | Nothing has run yet; the reader can start it. Kept apart from `not-yet`, which is a fact with nothing to do. |
 | `empty` | `older-than-window` | required: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
 | `empty` | `nothing-in-window` | required: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
 | `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |

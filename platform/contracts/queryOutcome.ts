@@ -19,6 +19,8 @@ export type EmptyReasonCode =
   | 'none-installed'
   | 'no-target-selected'
   | 'not-yet'
+  // 「还没跑过」（正解是现在跑一次）与「这段期间确实没有」是两种处境：前者要动作，后者没有。
+  | 'never-ran'
   // 「有数据，但都在窗口之外」与「这段确实没有」是两句话：都不能用 `not-yet`（那是「还没到」）顶替。
   | 'older-than-window'
   | 'nothing-in-window'
@@ -61,6 +63,7 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'empty.none-installed': 'required',
   'empty.no-target-selected': 'required',
   'empty.not-yet': 'forbidden',
+  'empty.never-ran': 'required',
   'empty.older-than-window': 'required',
   'empty.nothing-in-window': 'required',
   'error.unreadable': 'required',
@@ -75,6 +78,7 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
 
 /** 允许出现在某个码上的动作键；没列出的码不限制（必填/禁止已由上一张表判）。 */
 export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
+  'empty.never-ran': ['ui.state.action.run-now'],
   'empty.none-installed': [
     'ui.state.action.install',
     'ui.state.action.bind-target',

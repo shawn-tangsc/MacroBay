@@ -73,7 +73,8 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `nothing-enabled` | 必填：去启用 | 一个都没启用。 |
 | `empty` | `none-installed` | 必填：安装 / 绑定 / 打开设置，按站点选一种恢复方式 | 这里从来没有装过或绑定过；读者自己能解决。 |
 | `empty` | `no-target-selected` | 必填：聚焦选择区 | 目标可以挑，但还没选。 |
-| `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现。 |
+| `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现；在这里给按钮就是假动作。 |
+| `empty` | `never-ran` | 必填：现在跑一次 | 一次都还没跑过，读者能自己启动。与 `not-yet`（事实、无事可做）分开，是一个码装两种处境时拆出来的。 |
 | `empty` | `older-than-window` | 必填：查看全部 | 有数据，但都在这段窗口之外——这是「查过了，有」，不是「还没到」。 |
 | `empty` | `nothing-in-window` | 必填：查看全部 | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。 |
 | `error` | `unreadable` | 必填：重试 | 没读出来，不是「没有」。 |
