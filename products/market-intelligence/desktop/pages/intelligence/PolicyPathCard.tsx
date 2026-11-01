@@ -1,3 +1,4 @@
+import { Button } from 'antd'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
@@ -225,18 +226,18 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
 
     {/* The verdict survives the strip as one clickable grey line: the full explanation lives in the
         drawer, so the card keeps the normal reading position and only adds a memory. */}
-    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <button type="button" className="mi-policy-card__judged" onClick={onOpen}>
+    {phase.kind === 'verdict' && judged && judged.direction !== 'missing' ? <Button type="text" className="mi-policy-card__judged" onClick={onOpen}>
       <span>{text.judgedLabel}</span>
       <b data-direction={judged.direction}>{judged.label}</b>
-    </button> : null}
+    </Button> : null}
 
     <footer className="mi-policy-card__foot">
       {phase.kind === 'settlement'
         ? <span className="mi-policy-card__status"><i aria-hidden="true" />{settledFor(phase.minutesSinceDecision, text)}</span>
         : <span className="mi-policy-card__status"><i aria-hidden="true" />{freshness}{probability ? ` · ${probability.venue}` : ''}</span>}
-      {onOpen ? <button className="mi-policy-card__open" onClick={onOpen} type="button">
+      {onOpen ? <Button type="link" className="mi-policy-card__open" onClick={onOpen}>
         {text.detail}<ArrowUpRight aria-hidden="true" size={12} />
-      </button> : null}
+      </Button> : null}
     </footer>
   </section>
 }
