@@ -1206,6 +1206,8 @@ const assistantChatRuntime = createAssistantChatRuntimeService({
   topicNaming: assistantTopicNamingService,
   getTopicNamingModelId: async () => (await settingsStore.get()).assistant.topicNamingModelId,
   getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId,
+  logContextPlan: (summary) =>
+    appLog.log('info', 'assistant.context-plan', { ...summary }),
   events: {
     onChunk: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamChunk, payload),
     onDone: (payload) => broadcastAssistantStreamEvent(IpcChannels.assistantsStreamDone, payload),
@@ -2587,14 +2589,9 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
 
-  // 产品注册 → 封口 IPC 面 → 验收报告。失败必须先留下具名日志再降级：这条路径以前是裸 `catch {}`，
-  // 一次「产品清单少声明一条路由」就让窗口停在空白页，日志里一个字都没有，用户只能从白屏反推。
-  const productBootstrap = await runProductBootstrap(
-    {
-      registerProductServices: taskAutomationSmokeProfile.enabled
-        ? undefined
-        : async () => {
-            await options.registerProductServices?.({
+  // 产品注册 → 封口 → 验收：失败先写具名日志再降级（这条路径曾是裸 catch，白窗口时日志里一行都没有）。
+  const productBootstrap = await runProductBootstrap({
+      registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({
               register: productIpcRegistry.register,
               jobRuntime,
               eventBusRuntime: getEventBusRuntime(),
@@ -2626,21 +2623,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               isWebSearchProviderReady: isAgentWebSearchProviderReady,
               invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
               invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
-            })
-          },
+            }),
       sealIpcSurface: () => productIpcRegistry.seal(expectedProductIpcMethods(productManifests)),
       reportAcceptance: productAcceptanceProfile.enabled
-        ? (productIpcMethods) => {
-            reportProductAcceptanceRegistration({
-              productIds: productManifests.map((manifest) => manifest.id),
-              productIpcMethodCount: productIpcMethods.length
-            })
-          }
+        ? (methods) => reportProductAcceptanceRegistration({ productIds: productManifests.map((manifest) => manifest.id), productIpcMethodCount: methods.length })
         : undefined
     },
-    { log: appLog, markUnavailable: () => productIpcRegistry.markUnavailable() }
-  )
-  // 日志里已经有 `product-bootstrap-failed` + 阶段 + 原因；这里只负责停止启动。
+    { log: appLog, markUnavailable: () => productIpcRegistry.markUnavailable() })
   if (productBootstrap === 'failed') return
 
   reportPanelWorkspaceStart({ report: await panelWorkspace.start() }) // P1-06h N4：恢复/降级原因必须运行期可观测，启动顺序与 fail-closed 语义不变
