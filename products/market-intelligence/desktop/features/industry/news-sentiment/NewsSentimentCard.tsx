@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Segmented } from 'antd'
 import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -71,6 +72,12 @@ export function NewsSentimentCard(props: {
     : false
   const emptyAction = emptyState && !causeUnknown ? emptyStateAction(emptyState.kind, props, text) : undefined
   const emptySentence = emptyState && !causeUnknown ? emptyStateText(emptyState, text, formatTime) : undefined
+  // IconButton takes keys, not sentences: the two icon-only triggers own this tiny map.
+  const iconLabelText: Record<string, string> = {
+    'news.sentiment.settings': text.settings,
+    'news.sentiment.refresh': text.refresh
+  }
+  const resolveIconText = (key: string): string => iconLabelText[key] ?? key
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>
@@ -90,21 +97,21 @@ export function NewsSentimentCard(props: {
             value={includeNeutral ? 'all' : 'exclude'}
           />
           <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
-          <Button
-            aria-label={text.settings}
-            className="ant-shell-icon-button mi-news-sentiment__icon"
-            icon={<Settings aria-hidden="true" size={13} />}
-            onClick={props.onOpenSettings}
-            size="small"
-            type="text"
+          <IconButton
+            ariaLabelKey="news.sentiment.settings"
+            icon={Settings}
+            onSelect={props.onOpenSettings}
+            resolveText={resolveIconText}
+            size="md"
+            tooltipKey="news.sentiment.settings"
           />
-          <Button
-            aria-label={text.refresh}
-            className="ant-shell-icon-button mi-news-sentiment__icon"
-            icon={<RefreshCw aria-hidden="true" size={13} />}
-            onClick={props.onRefresh}
-            size="small"
-            type="text"
+          <IconButton
+            ariaLabelKey="news.sentiment.refresh"
+            icon={RefreshCw}
+            onSelect={props.onRefresh}
+            resolveText={resolveIconText}
+            size="md"
+            tooltipKey="news.sentiment.refresh"
           />
         </div>
       </header>

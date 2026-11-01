@@ -82,6 +82,24 @@ const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof New
       onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
   )
 
+describe('icon triggers', () => {
+  // The two icon-only triggers must carry both a screen-reader name and a visible hint: a name alone
+  // tells a screen reader what the control is, but a sighted keyboard user still sees only a glyph.
+  it('gives the settings and refresh triggers a name and a hint', async () => {
+    const container = await mountCard(VIEW)
+    const settings = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.settings}"]`)
+    const refresh = container.querySelector<HTMLButtonElement>(`button[aria-label="${text.refresh}"]`)
+    expect(settings).not.toBeNull()
+    expect(refresh).not.toBeNull()
+
+    await act(async () => { settings?.focus() })
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    await act(async () => {})
+    const tooltip = document.body.querySelector('.ant-tooltip')
+    expect(tooltip?.textContent).toContain(text.settings)
+  })
+})
+
 describe('card empty states', () => {
   const readiness = (overrides: Partial<NonNullable<NewsSentimentView['readiness']>> = {}) => ({
     total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0,
