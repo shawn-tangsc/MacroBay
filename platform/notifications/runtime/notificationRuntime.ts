@@ -50,8 +50,8 @@ export function createNotificationJsonStorage(filePath: string): NotificationSto
 export type NotificationRuntimeDependencies = {
   storage: NotificationStorage
   getSettings: () => Promise<NotificationRuntimeSettings>
-  /** 读者时区与当前时刻；免打扰窗口按它判断，缺省 UTC。 */
-  clock?: NotificationClock
+  /** 读者时区与当前时刻；免打扰窗口按它判断。**必传**：缺省成 UTC 会把「不知道」当成「用户在格林尼治」。 */
+  clock: NotificationClock
   deliveryHooks?: DeliveryHooks
   requestDesktopPermission?: () => Promise<{ granted: boolean; supported: boolean }>
 }

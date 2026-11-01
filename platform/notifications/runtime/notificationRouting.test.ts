@@ -5,6 +5,9 @@ import { createDefaultNotificationRuntimeSettings } from '../contracts/notificat
 import { normalizeRequestedChannels, routeTransientDelivery } from './notificationRouting'
 import { createNotificationFromRequest } from '../store/notificationStore'
 
+/** 用例显式声明「读者在 UTC」；不再有「没传就按 UTC」的缺省（MI-11-R68）。 */
+const utcClock = { now: () => new Date('2026-11-01T23:30:00.000Z'), timeZone: () => 'UTC' }
+
 describe('notification routing settings boundary', () => {
   it('applies product permissions and quiet hours to disruptive channels', () => {
     const request: NotificationRequest = {
@@ -30,7 +33,7 @@ describe('notification routing settings boundary', () => {
       }
     }
 
-    expect(normalizeRequestedChannels(request, settings)).toEqual(['center'])
+    expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center'])
   })
 
   it('allows urgent notifications during quiet hours', () => {
@@ -49,7 +52,7 @@ describe('notification routing settings boundary', () => {
       quietHours: { enabled: true, startLocalTime: '00:00', endLocalTime: '23:59' }
     }
 
-    expect(normalizeRequestedChannels(request, settings)).toEqual(['center', 'popup'])
+    expect(normalizeRequestedChannels(request, settings, utcClock)).toEqual(['center', 'popup'])
   })
 })
 
@@ -105,7 +108,7 @@ describe('notification transient delivery wiring', () => {
   })
 
   it('records an unwired channel as skipped instead of a false success', async () => {
-    const attempts = await routeTransientDelivery(record, settings, {})
+    const attempts = await routeTransientDelivery(record, settings, {}, utcClock)
 
     expect(attempts).toEqual([
       { channel: 'toast', attemptedAt: expect.any(String), result: 'skipped', reason: 'toast-unavailable' },
@@ -121,7 +124,7 @@ describe('notification transient delivery wiring', () => {
       toast: (item) => shown.push(`toast:${item.title}`),
       popup: (item) => shown.push(`popup:${item.title}`),
       desktop: async () => ({ ok: true })
-    })
+    }, utcClock)
 
     expect(shown).toEqual(['toast:Resource job failed', 'popup:Resource job failed'])
     expect(attempts.map((attempt) => [attempt.channel, attempt.result])).toEqual([
@@ -135,7 +138,8 @@ describe('notification transient delivery wiring', () => {
     const attempts = await routeTransientDelivery(
       record,
       { ...settings, desktopEnabled: false, toastEnabled: false },
-      { popup: () => undefined }
+      { popup: () => undefined },
+      utcClock
     )
 
     expect(attempts).toEqual([
@@ -143,5 +147,26 @@ describe('notification transient delivery wiring', () => {
       { channel: 'popup', attemptedAt: expect.any(String), result: 'sent' },
       { channel: 'desktop', attemptedAt: expect.any(String), result: 'skipped', reason: 'desktop-disabled' }
     ])
+  })
+})
+
+describe('the reader clock has no UTC default', () => {
+  it('both entry points stop compiling when the clock is omitted', () => {
+    const request: NotificationRequest = {
+      owner: 'platform',
+      sourceId: 'job-runtime',
+      title: 'Scheduled run',
+      severity: 'info',
+      priority: 'normal',
+      requestedChannels: ['center', 'toast']
+    }
+    const settings = createDefaultNotificationRuntimeSettings()
+    const record = createNotificationFromRequest(request)
+
+    // @ts-expect-error 时钟必传。若有人重新加回「缺省 UTC」，这两条会变成「未使用的 @ts-expect-error」
+    // 并让 typecheck 变红——缺省值不能靠人盯着文档来守，得靠编译期。
+    void normalizeRequestedChannels(request, settings)
+    // @ts-expect-error 同上：删掉时钟参数就编译不过，而不是悄悄按格林尼治算。
+    void routeTransientDelivery(record, settings, {})
   })
 })

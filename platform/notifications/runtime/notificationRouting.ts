@@ -16,16 +16,18 @@ export type DeliveryHooks = {
   desktop?: (record: NotificationRecord) => Promise<{ ok: boolean; reason?: string }>
 }
 
-/** 读者的一天的「现在」：设置时区 + 当前时刻。缺省 UTC，绝不读机器时区。 */
+/**
+ * 读者的一天的「现在」：设置时区 + 当前时刻。**必传，没有缺省值**。
+ * 以前这里缺省成 UTC：调用方忘传时钟时，免打扰会把「我不知道」伪装成「你在格林尼治」，
+ * 而忘传与「时区算不出来」是两件事，混在一起连证据链都少一层（`MI-11-R68`）。
+ */
 export type NotificationClock = { now: () => Date; timeZone: () => string }
-
-const defaultClock: NotificationClock = { now: () => new Date(), timeZone: () => 'UTC' }
 
 export function routeTransientDelivery(
   record: NotificationRecord,
   settings: NotificationRuntimeSettings,
   hooks: DeliveryHooks,
-  clock: NotificationClock = defaultClock
+  clock: NotificationClock
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
   const now = new Date().toISOString()
@@ -88,7 +90,7 @@ export function routeTransientDelivery(
 export function normalizeRequestedChannels(
   request: NotificationRequest,
   settings: NotificationRuntimeSettings,
-  clock: NotificationClock = defaultClock
+  clock: NotificationClock
 ): NotificationChannel[] {
   const requested = request.requestedChannels.includes('center')
     ? request.requestedChannels
