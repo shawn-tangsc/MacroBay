@@ -226,7 +226,7 @@ export class AgentTaskDispatchService {
     const startedAt = this.timestamp()
     const renderedPrompt = renderTaskPromptTemplate(task.prompt, {
       now: startedAt,
-      timezone: resolveTaskTimezone(task, this.deps.timeZone?.() ?? readSystemTimeZone()),
+      timezone: resolveTaskTimezone(task, this.deps.timeZone?.() ?? 'UTC'),
       taskName: task.name
     })
     const runningLogId = options.existingRunningLogId ?? (await this.createRunningLog(task, startedAt)).id
@@ -541,14 +541,6 @@ function cloneWorkspaceSource(workspace: AgentSessionWorkspaceSource): AgentSess
 function resolveTaskTimezone(task: AgentTaskSchedulerRuntimeTask, fallbackTimeZone: string): string {
   const timezone = task.trigger.kind === 'cron' ? task.trigger.timezone : undefined
   return timezone || fallbackTimeZone
-}
-
-function readSystemTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
 }
 
 function readAbortReason(signal: AbortSignal | null | undefined): JobCancelReason | null {

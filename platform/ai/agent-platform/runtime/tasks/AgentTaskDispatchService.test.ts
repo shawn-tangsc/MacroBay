@@ -254,6 +254,23 @@ describe('AgentTaskDispatchService', () => {
     )
   })
 
+  it('renders UTC, not the machine zone, when no reader is injected', async () => {
+    const task = createTask({ prompt: 'Run at {time} ({timezone}).' })
+    const services = createAgentPlatformServices(
+      createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace], tasks: [task] }))
+    )
+    const prompts: string[] = []
+    const dispatcher = new AgentTaskDispatchService({
+      services,
+      runtime: { sendMessage: async (request) => { prompts.push(request.text); return createRuntimeResult(request.sessionId) } },
+      now: () => '2026-01-01T10:30:00.000Z'
+    })
+
+    await dispatcher.runTask(agent.id, task.id, task.revision ?? 1)
+
+    expect(prompts[0]).toContain('UTC')
+  })
+
   it('renders the prompt time zone from the shell reader, following a change without a restart', async () => {
     let zone = 'Asia/Tokyo'
     const task = createTask({ prompt: 'Run at {time} ({timezone}).' })

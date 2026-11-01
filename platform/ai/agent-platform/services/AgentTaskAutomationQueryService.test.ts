@@ -3,6 +3,20 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentTaskAutomationQueryService } from './AgentTaskAutomationQueryService'
 
 describe('AgentTaskAutomationQueryService', () => {
+  it('falls back to UTC, not the machine zone, when no reader is injected', async () => {
+    const service = new AgentTaskAutomationQueryService({
+      queries: {},
+      getPolicyPreset: async () => 'balanced',
+      setPolicyPreset: async () => undefined,
+      now: () => new Date('2026-07-16T00:00:00.000Z')
+    })
+
+    await expect(service.previewTaskSchedule({ kind: 'cron', expr: '0 9 * * *' })).resolves.toMatchObject({
+      ok: true,
+      nextRunAt: '2026-07-16T09:00:00.000Z'
+    })
+  })
+
   it('previews cron schedules with the configured default timezone', async () => {
     const service = new AgentTaskAutomationQueryService({
       queries: {},

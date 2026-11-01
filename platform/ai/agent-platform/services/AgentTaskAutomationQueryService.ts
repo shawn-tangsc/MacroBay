@@ -28,8 +28,8 @@ export class AgentTaskAutomationQueryService {
   private readonly now: () => Date
 
   constructor(private readonly deps: Dependencies) {
-    const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-    this.timeZone = deps.timeZone ?? (() => fallback)
+    // 没有注入时固定 UTC：不回落机器时区，避免旧行为无人察觉地复活。
+    this.timeZone = deps.timeZone ?? (() => 'UTC')
     this.now = deps.now ?? (() => new Date())
   }
 

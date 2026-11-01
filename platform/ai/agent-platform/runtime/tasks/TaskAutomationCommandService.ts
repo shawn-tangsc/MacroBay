@@ -72,9 +72,8 @@ export class TaskAutomationCommandService {
   private readonly timeZone: () => string
 
   constructor(private readonly deps: Dependencies) {
-    const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-    const fallback = validateTaskTimezone(systemTimezone).ok ? systemTimezone : 'UTC'
-    this.timeZone = deps.timeZone ?? (() => fallback)
+    // 没有注入时固定 UTC：绝不回落到运行这台机器的时区——那正是「谁少注入一次就悄悄复活旧行为」。
+    this.timeZone = deps.timeZone ?? (() => 'UTC')
   }
 
   async execute(command: TaskAutomationCommand): Promise<TaskCommandResult> {

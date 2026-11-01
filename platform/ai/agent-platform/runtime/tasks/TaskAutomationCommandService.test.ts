@@ -100,6 +100,23 @@ describe('TaskAutomationCommandService', () => {
     expect(result.nextRun).toBe('2026-01-02T01:00:00.000Z')
   })
 
+  it('falls back to UTC, not the machine zone, when no reader is injected', async () => {
+    const service = new TaskAutomationCommandService({
+      store: createStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
+      now: () => new Date('2026-01-01T10:30:00.000Z'),
+      getPolicyPreset: async () => 'balanced'
+    })
+
+    const created = await service.execute({
+      type: 'create',
+      actor: { kind: 'user', source: 'renderer-agent-drawer' },
+      agentId: agent.id,
+      task: { name: 'Untitled zone', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
+    })
+
+    expect(created.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'UTC' } })
+  })
+
   it('follows the shell time zone instead of reading the machine zone once at construction', async () => {
     let zone = 'Asia/Tokyo'
     const service = new TaskAutomationCommandService({
