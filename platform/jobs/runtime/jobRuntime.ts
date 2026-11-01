@@ -2,6 +2,8 @@ import type {
   JobCancelReason,
   JobDefinition,
   JobHandler,
+  JobRunAggregateQuery,
+  JobRunAggregateResult,
   JobRunPage,
   JobRunQuery,
   JobRunRecord
@@ -29,6 +31,13 @@ export type JobRuntime = {
   listRecentRuns: (limit?: number) => JobRunRecord[]
   listRuns: (query?: JobRunQuery) => JobRunRecord[]
   listRunPage: (query?: JobRunQuery) => JobRunPage
+  /**
+   * Read-only daily counters that survive the detail retention window.
+   *
+   * The product reads its run history through this and never touches the aggregate table itself;
+   * a store without history answers `unavailable` with a reason instead of an empty list.
+   */
+  listRunAggregates: (query?: JobRunAggregateQuery) => JobRunAggregateResult
   recover: () => JobRunRecord[]
   stopAll: () => void
   createQueuedRun: (definition: JobDefinition) => JobRunRecord
@@ -136,6 +145,9 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
     },
     listRunPage(query) {
       return store.queryRunPage(query)
+    },
+    listRunAggregates(query) {
+      return store.listRunAggregates(query)
     },
     recover() {
       // Runs left `running` by a previous process are unfinishable; runs left `queued` were

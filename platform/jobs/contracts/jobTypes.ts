@@ -109,6 +109,50 @@ export type JobRunPage = {
   nextCursor: string | null
 }
 
+/** One day of history for one definition, kept after the run details are dropped. */
+export type JobRunDailyAggregate = Readonly<{
+  day: string
+  definitionId: string
+  runs: number
+  failures: number
+}>
+
+/**
+ * Why a store cannot answer a daily-aggregate query at all.
+ *
+ * An enum member, never free text: callers switch on it, and a `string` would let a new
+ * cause appear without anyone deciding what it means.
+ */
+export type JobRunAggregateUnavailableReason = 'memory-store-has-no-aggregates'
+
+/**
+ * Half-open UTC day window `[fromDay, toDay)` — both `YYYY-MM-DD`, `toDay` excluded — plus an
+ * optional definition-id prefix. Day granularity is half-open so a caller cannot be one day off
+ * at either end; the window needs no timezone argument because the stored day is already UTC.
+ */
+export type JobRunAggregateQuery = {
+  /** Inclusive first day. */
+  fromDay?: string
+  /** Exclusive last day. */
+  toDay?: string
+  /** Restricts to definitions whose id starts with this literal prefix (no wildcard meaning). */
+  definitionIdPrefix?: string
+}
+
+/**
+ * A daily-aggregate answer.
+ *
+ * `unavailable` is not the same thing as "no runs happened": the store says which of the two it
+ * means, so a caller never renders an empty history over a store that cannot answer at all.
+ */
+export type JobRunAggregateResult =
+  | Readonly<{ state: 'available'; rows: readonly JobRunDailyAggregate[] }>
+  | Readonly<{
+      state: 'unavailable'
+      reason: JobRunAggregateUnavailableReason
+      rows: readonly JobRunDailyAggregate[]
+    }>
+
 export const DEFAULT_RETRY_POLICY: RetryPolicy = {
   maxAttempts: 1,
   backoff: 'none',

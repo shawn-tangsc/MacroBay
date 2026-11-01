@@ -14,7 +14,6 @@ import { createJobRunSqliteRepository, type JobRunSqliteRepository } from './job
 export type JobRunSqliteStore = JobRunStore & {
   /** Folds runs older than `cutoff` into daily counters and removes the details. */
   purgeRunsOlderThan: JobRunSqliteRepository['purgeRunsOlderThan']
-  listRunAggregates: JobRunSqliteRepository['listRunAggregates']
   close: () => void
 }
 
@@ -155,8 +154,8 @@ export function createJobRunSqliteStore(path: string): JobRunSqliteStore {
     purgeRunsOlderThan(cutoff, batchLimit) {
       return repository.purgeRunsOlderThan(cutoff, batchLimit)
     },
-    listRunAggregates() {
-      return repository.listRunAggregates()
+    listRunAggregates(query) {
+      return { state: 'available', rows: repository.listRunAggregates(query) }
     },
     close() {
       repository.close()
