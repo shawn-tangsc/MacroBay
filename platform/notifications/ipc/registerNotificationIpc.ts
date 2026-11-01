@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 
-import { app } from 'electron'
+import { app, BrowserWindow } from 'electron'
 
+import { IpcChannels } from '../../desktop/ipc/channels'
 import { createDesktopNotificationAdapter } from '../desktop/desktopNotificationAdapter'
 import { createNotificationJsonStorage, createNotificationRuntime } from '../runtime/notificationRuntime'
 import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
@@ -18,6 +19,14 @@ export function configureNotificationRuntime(deps: {
 }): void {
   getNotificationSettings = deps.getSettings
   notificationClock = deps.clock
+}
+
+/** 记录变化后广播一次：角标与列表订阅它，不轮询。事件只说明「变了」，真值仍由 `list()` 读。 */
+function broadcastNotificationChanged(change: { version: number }): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (window.isDestroyed()) continue
+    window.webContents.send(IpcChannels.notificationsChanged, change)
+  }
 }
 
 export function getNotificationRuntime() {
@@ -43,7 +52,8 @@ export function getNotificationRuntime() {
       deliveryHooks: {
         desktop: (record) => desktopAdapter.show(record)
       },
-      readDesktopPermission: () => desktopAdapter.readPermission()
+      readDesktopPermission: () => desktopAdapter.readPermission(),
+      onChanged: broadcastNotificationChanged
     })
     void notificationRuntime.initialize()
   }

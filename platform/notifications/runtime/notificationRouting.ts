@@ -6,7 +6,11 @@ import type { NotificationRequest } from '../contracts/notificationContracts'
 export type DeliveryAttempt = {
   channel: NotificationChannel
   attemptedAt: string
-  result: 'sent' | 'skipped' | 'failed'
+  /**
+   * `handed-to-system` = 调用成功交给系统，**不等于用户看到了**：桌面通知可能被系统或用户静音。
+   * `sent` 只用于应用内通道——那里的钩子真的跑了，用户界面确实渲染了。
+   */
+  result: 'sent' | 'handed-to-system' | 'skipped' | 'failed'
   reason?: string
 }
 
@@ -80,7 +84,8 @@ export function routeTransientDelivery(
     attempts.push({
       channel: 'desktop',
       attemptedAt: now,
-      result: result.ok ? 'sent' : 'failed',
+      // `show()` 不抛错只证明交出去了，证明不了被看到——所以不是 `sent`。
+      result: result.ok ? 'handed-to-system' : 'failed',
       reason: result.reason
     })
     return attempts

@@ -199,12 +199,14 @@ export const IpcChannels = {
   storageCompactCache: 'platform:storage-compact-cache',
   storageListCacheOperations: 'platform:storage-list-cache-operations',
   notificationsList: 'platform:notifications-list',
-  notificationsGetUnreadCount: 'platform:notifications-get-unread-count',
+  notificationsGetUnreadState: 'platform:notifications-get-unread-state',
   notificationsMarkRead: 'platform:notifications-mark-read',
   notificationsAcknowledge: 'platform:notifications-acknowledge',
   notificationsDismiss: 'platform:notifications-dismiss',
   notificationsSnooze: 'platform:notifications-snooze',
   notificationsRequestDesktopPermission: 'platform:notifications-request-desktop-permission',
+  /** 单向事件：记录有变化（投递/标读/撤销/稍后/清理）由 Main 推给所有窗口，载荷是递增版本号。 */
+  notificationsChanged: 'platform:notifications-changed',
   jobsGetRun: 'platform:jobs-get-run',
   jobsListRunPage: 'platform:jobs-list-run-page',
   /** 只读：`jobRuntime.listSchedules()` 的平台投影（无 payload/密钥/路径/写入口）。 */

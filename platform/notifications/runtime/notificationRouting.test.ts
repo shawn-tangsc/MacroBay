@@ -130,8 +130,22 @@ describe('notification transient delivery wiring', () => {
     expect(attempts.map((attempt) => [attempt.channel, attempt.result])).toEqual([
       ['toast', 'sent'],
       ['popup', 'sent'],
-      ['desktop', 'sent']
+      ['desktop', 'handed-to-system']
     ])
+  })
+
+  it('records a successful desktop handoff as handed-to-system, never as sent', async () => {
+    // `show()` 返回 ok 只说明交给了系统，证明不了用户看到了：静音、勿扰、系统关闭都会吞掉它。
+    const attempts = await routeTransientDelivery(record, settings, {
+      desktop: async () => ({ ok: true })
+    }, utcClock)
+
+    expect(attempts).toEqual([
+      { channel: 'toast', attemptedAt: expect.any(String), result: 'skipped', reason: 'toast-unavailable' },
+      { channel: 'popup', attemptedAt: expect.any(String), result: 'skipped', reason: 'popup-unavailable' },
+      { channel: 'desktop', attemptedAt: expect.any(String), result: 'handed-to-system' }
+    ])
+    expect(attempts.some((attempt) => attempt.result === 'sent')).toBe(false)
   })
 
   it('keeps the disabled reason distinct from an unwired channel', async () => {

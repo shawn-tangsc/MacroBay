@@ -60,9 +60,11 @@ describe('notification producer boundary', () => {
     expect(exposed).toEqual([
       'acknowledge',
       'dismiss',
-      'getUnreadCount',
+      'getUnreadState',
       'list',
       'markRead',
+      // 订阅「记录有变化」是只读的：事件由 Main 推，渲染层不能借此写入任何东西。
+      'onChanged',
       'requestDesktopPermission',
       'snooze'
     ])

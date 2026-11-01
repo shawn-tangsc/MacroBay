@@ -71,12 +71,21 @@ export type NotificationListQuery = {
   state?: NotificationState[]
   productId?: string
   limit?: number
+  /** 键游标 `createdAt|id`：同一毫秒的多条不会丢，也不随新记录插入而错位。不是数组下标。 */
   cursor?: string
+  /** 未读排在已读之前，组内仍按时间倒序。排序在查询里做，渲染层不许拼两次查询。 */
+  unreadFirst?: boolean
 }
 
 export type NotificationListPage = {
   items: SafeNotificationRecord[]
   nextCursor?: string
+}
+
+/** 角标状态：未读数 + 版本号。版本号随每次记录变化递增，订阅方据此判断「是不是比上次新」。 */
+export type NotificationUnreadState = {
+  unread: number
+  version: number
 }
 
 /**

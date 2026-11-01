@@ -406,13 +406,23 @@ const api = {
   },
   notifications: {
     list: (query?: unknown) => ipcRenderer.invoke(IpcChannels.notificationsList, query),
-    getUnreadCount: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsGetUnreadCount, input),
+    /** 返回 `{ unread, version }`：角标只需一次调用；版本号随每次记录变化递增。 */
+    getUnreadState: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsGetUnreadState, input),
     markRead: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }),
     acknowledge: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }),
     dismiss: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }),
     snooze: (id: string, until: string) => ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }),
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
-    requestDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsRequestDesktopPermission)
+    requestDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsRequestDesktopPermission),
+    /**
+     * 订阅「记录有变化」：投递、标读、撤销、稍后、清理之后各推一次，载荷是递增版本号。
+     * 返回退订函数；事件只说明「变了」，真值仍由 `list()` / `getUnreadState()` 读。
+     */
+    onChanged: (callback: (change: { version: number }) => void) => {
+      const listener = (_event: unknown, change: { version: number }): void => callback(change)
+      ipcRenderer.on(IpcChannels.notificationsChanged, listener)
+      return () => { ipcRenderer.removeListener(IpcChannels.notificationsChanged, listener) }
+    }
   },
   jobs: {
     getRun: (runId: string) => ipcRenderer.invoke(IpcChannels.jobsGetRun, runId),
