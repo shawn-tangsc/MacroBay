@@ -18,6 +18,8 @@ export function registerNotificationIpcHandlers(): void {
   ipcMain.handle(IpcChannels.notificationsAcknowledge, (_event, input) =>
     getNotificationRuntime().acknowledge(String((input as { id?: string })?.id ?? ''))
   )
+  // 破坏性且不可撤销：只删已读，未读一条不动；返回实际删掉的条数，不整批失败。
+  ipcMain.handle(IpcChannels.notificationsDeleteRead, () => getNotificationRuntime().deleteRead())
   ipcMain.handle(IpcChannels.notificationsDismiss, (_event, input) =>
     getNotificationRuntime().dismiss(String((input as { id?: string })?.id ?? ''))
   )
@@ -27,7 +29,7 @@ export function registerNotificationIpcHandlers(): void {
     return getNotificationRuntime().snooze(payload.id, payload.until)
   })
   ipcMain.handle(IpcChannels.notificationsSendTest, () =>
-    getNotificationRuntime().submit(buildTestNotificationRequest())
+    getNotificationRuntime().submitSelfTest(buildTestNotificationRequest())
   )
   ipcMain.handle(IpcChannels.notificationsRequestDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
 }

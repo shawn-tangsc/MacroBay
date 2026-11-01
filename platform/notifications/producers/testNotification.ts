@@ -20,8 +20,6 @@ export function buildTestNotificationRequest(nowMs: number = Date.now()): Notifi
     priority: 'normal',
     // 走完整链路：桌面被系统拦了，中心里那条仍要在——那是用户判断「系统放没放行」的唯一手段。
     requestedChannels: ['center', 'desktop'],
-    dedupeKey: `test-${nowMs}`,
-    // 熔断按 ownerId 计数，`sourceId` 不参与：不带这个开关，测试通知会和真实任务失败共用额度。
-    skipDailyCap: true
+    dedupeKey: `test-${nowMs}`
   }
 }

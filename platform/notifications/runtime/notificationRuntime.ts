@@ -114,19 +114,6 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       }
 
       const ownerId = request.productId ?? 'platform'
-      // 用户手动触发的自检不占当日额度：否则频繁测试会把真实通知折叠掉。
-      if (request.skipDailyCap === true) {
-        const record = createNotificationFromRequest(
-          {
-            ...request,
-            requestedChannels: withCenterForDisruptiveChannels(request, normalizeRequestedChannels(request, settings, deps.clock))
-          },
-          now
-        )
-        await persist({ ...state, records: [record, ...state.records] })
-        notifyChanged()
-        return toSafeNotificationRecord(record)
-      }
       const breaker = decideNotificationBreaker({
         counters: state.dailyCounters ?? {},
         ownerId,
@@ -205,6 +192,26 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     },
 
     /** 角标状态：未读数 + 版本号。**不是**第二个函数：原来是单独一个 `getUnreadCount`，现在合成一个返回值。 */
+    /**
+     * 用户手动自检专用：**不占当日写入额度**。绕过口只在这里，
+     * 公开的 `submit()` 没有参数能让产品线传进来——不是“不该传”，是没有地方传。
+     */
+    async submitSelfTest(request: NotificationRequest): Promise<SafeNotificationRecord> {
+      const state = await load()
+      const settings = await deps.getSettings()
+      const now = new Date().toISOString()
+      const record = createNotificationFromRequest(
+        {
+          ...request,
+          requestedChannels: withCenterForDisruptiveChannels(request, normalizeRequestedChannels(request, settings, deps.clock))
+        },
+        now
+      )
+      await persist({ ...state, records: [record, ...state.records] })
+      notifyChanged()
+      return toSafeNotificationRecord(record)
+    },
+
     async getUnreadState(productId?: string): Promise<NotificationUnreadState> {
       const state = await load()
       const now = new Date().toISOString()
@@ -233,6 +240,24 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         notifyChanged()
       }
       return unreadStateOf(records, now, productId, version)
+    },
+
+    /**
+     * 删除**已读**记录（不是清空、不是单条收起）。三件事必须分清：
+     * 清空 = 全部标已读（`markAllRead`），单条收起 = 状态迁移（`dismiss`），这里才是真删。
+     *
+     * 口径（架构师 2026-11-02 裁定）：只删 `state === 'read'`，未读一条不动；**不整批失败**——
+     * 部分能删就返回实际删掉的条数；删完必须走一次 `notifyChanged()`，否则角标不清零，
+     * 用户会看到「删了但数字还在」。计数桶与保留期剪枝都不受影响。
+     */
+    async deleteRead(): Promise<{ deleted: number }> {
+      const state = await load()
+      const kept = state.records.filter((record: NotificationRecord) => record.state !== 'read')
+      const deleted = state.records.length - kept.length
+      if (deleted === 0) return { deleted: 0 }
+      await persist({ ...state, records: kept })
+      notifyChanged()
+      return { deleted }
     },
 
     async markRead(id: string): Promise<SafeNotificationRecord> {

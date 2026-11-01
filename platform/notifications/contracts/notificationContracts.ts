@@ -41,13 +41,6 @@ export type NotificationRecord = {
   actions: NotificationAction[]
   dedupeKey?: string
   correlationId?: string
-  /**
-   * 跳过当日写入上限（熔断）。只给「用户手动触发的自检」用：
-   * 熔断按 `ownerId` 计数，`sourceId` 不参与——测试通知与真实任务失败共用同一个桶，
-   * 用户连点十次检查链路，就会把当晚真实那条折叠成「今日另有 N 条」。
-   * 这是显式开关，不是默认行为；记录里不存这个字段。
-   */
-  skipDailyCap?: boolean
   safeMetadata?: Record<string, unknown>
   occurrenceCount: number
   /** 熔断折叠掉的原文条数；只有聚合记录有。原文不落库，但这个事实必须留下。 */

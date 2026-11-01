@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createDefaultNotificationRuntimeSettings, type NotificationRequest } from '../contracts/notificationContracts'
 import { createDefaultNotificationStoreState } from '../store/notificationStore'
-import { createNotificationRuntime } from './notificationRuntime'
+import { createNotificationRuntime, type NotificationRuntime } from './notificationRuntime'
 
 const clock = { now: () => new Date('2026-11-01T12:00:00.000Z'), timeZone: () => 'UTC' }
 
@@ -155,12 +155,21 @@ describe('mark all read (clear)', () => {
   })
 })
 
+describe('the breaker bypass is not reachable through submit()', () => {
+  it('rejects a bypass parameter at compile time', () => {
+    // @ts-expect-error 绕过熔断的参数不在公开契约上：绕过口只开在 submitSelfTest 上。
+    // 字段哪天被挪回 `NotificationRequest`，这一行立刻让 typecheck 红。
+    const typed = (runtime: NotificationRuntime) => runtime.submit({ ...request(), skipDailyCap: true })
+    expect(typeof typed).toBe('function')
+  })
+})
+
 describe('test notifications do not spend the daily cap', () => {
   it('leaves the real source room after many test clicks', async () => {
     const runtime = createRuntime()
     // 60 次手动自检：带 skipDailyCap，不进熔断计数。
     for (let index = 0; index < 60; index += 1) {
-      await runtime.submit({ ...request({ sourceId: 'platform.test' }), dedupeKey: `test-${index}`, skipDailyCap: true })
+      await runtime.submitSelfTest({ ...request({ sourceId: 'platform.test' }), dedupeKey: `test-${index}` })
     }
     // 真实任务失败仍然是「原文落库」，没有被折叠成「今日另有 N 条」。
     const real = await runtime.submit(request({ sourceId: 'job-run-failed:definition-1' }))
