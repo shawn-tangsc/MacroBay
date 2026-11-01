@@ -1,5 +1,6 @@
 import { Empty } from 'antd'
 import type { AssistantTemplateCatalogItem } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
+import { EmptyState } from '@platform/ui/components/empty-state'
 import { LoadingState } from '@platform/ui/components/loading'
 import type { PlatformText } from '../../../i18n/platformText'
 import { AssistantTemplateCard } from './AssistantTemplateCard'
@@ -33,8 +34,11 @@ export function AssistantTemplateGrid({
   if (items.length === 0) {
     return (
       <div className="assistant-library-empty">
-        <Empty description={labels.emptyTitle} />
-        <p>{labels.emptyDescription}</p>
+        <EmptyState
+          icon={Empty.PRESENTED_IMAGE_DEFAULT}
+          title={labels.emptyTitle}
+          reason={labels.emptyDescription}
+        />
       </div>
     )
   }
