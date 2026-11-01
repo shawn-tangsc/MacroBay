@@ -92,6 +92,34 @@ describe('taskAutomationSettingsViewModel', () => {
     expect(state.latestRunAt).toBe('2026-07-17T09:00:00.000Z')
   })
 
+  it('keeps a row whose latest run could not be read, marked unreadable, without inventing counts', () => {
+    const readable = task({ id: 'task-1', name: 'Readable' })
+    const unreadable = task({ id: 'task-2', name: 'Unreadable' })
+    const never = task({ id: 'task-3', name: 'Never' })
+    const state = buildTaskAutomationSettingsState({
+      tasks: [readable, unreadable, never],
+      selectedTaskId: unreadable.id,
+      status: 'all',
+      nameQuery: '',
+      audits: [],
+      taskRuns: {
+        [readable.id]: snapshot({ delivered: 2 }),
+        [unreadable.id]: { unreadable: true }
+      }
+    })
+
+    // The row is present and distinguishable from "never ran", which is the fact the old code
+    // silently replaced it with by dropping the entry.
+    expect(state.rows.map((row) => [row.task.id, row.runUnreadable, row.lastRun])).toEqual([
+      ['task-1', false, expect.objectContaining({ status: 'completed' })],
+      ['task-2', true, null],
+      ['task-3', false, null]
+    ])
+    // An unreadable run adds nothing to the aggregate: zero-filling it would report a silent pass.
+    expect(state.aggregateHealth.delivered).toBe(2)
+    expect(state.deliveryHealth).toEqual({ delivered: 0, failed: 0, pending: 0, skipped: 0, unknown: 0 })
+  })
+
   it('keeps no expansion and zeroed per-task health when nothing is expanded', () => {
     const state = buildTaskAutomationSettingsState({
       tasks: [task({ id: 'task-1' })],

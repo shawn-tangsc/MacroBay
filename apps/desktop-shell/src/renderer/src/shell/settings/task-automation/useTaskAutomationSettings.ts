@@ -16,7 +16,7 @@ import {
 import {
   buildTaskAutomationSettingsState,
   type TaskAutomationStatusFilter,
-  type TaskRunSnapshot
+  type TaskRunState
 } from './taskAutomationSettingsViewModel'
 import { loadTaskRunSnapshots } from './taskAutomationTaskRuns'
 
@@ -56,7 +56,7 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
   const [status, setStatusState] = useState<TaskAutomationStatusFilter>('all')
   const [nameQuery, setNameQuery] = useState('')
   const [tasks, setTasks] = useState<ScheduledTaskEntity[]>([])
-  const [taskRuns, setTaskRuns] = useState<Record<string, TaskRunSnapshot>>({})
+  const [taskRuns, setTaskRuns] = useState<Record<string, TaskRunState>>({})
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [detailRefreshVersion, setDetailRefreshVersion] = useState(0)

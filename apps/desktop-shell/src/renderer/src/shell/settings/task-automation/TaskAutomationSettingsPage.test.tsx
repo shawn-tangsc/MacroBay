@@ -34,6 +34,36 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).not.toContain('没有匹配的任务。')
   })
 
+  it('keeps a task whose latest run could not be read and says so instead of never', () => {
+    const task = { id: 'task-1', name: '读取失败的任务', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
+    hooks.settings.mockReturnValue(settings({
+      tasks: [task],
+      taskRuns: { 'task-1': { unreadable: true } }
+    }))
+    hooks.schedules.mockReturnValue(schedules({ items: [] }))
+
+    const markup = renderPage()
+
+    // The row survives the failed read, and its cell says the read failed rather than "never ran".
+    expect(markup).toContain('读取失败的任务')
+    expect(markup).toMatch(/读取失败的任务[\s\S]{0,800}暂时读不到/)
+  })
+
+  it('shows the unreadable state in the expanded detail instead of a row of zeros', () => {
+    const task = { id: 'task-1', name: '读取失败的任务', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
+    hooks.settings.mockReturnValue(settings({
+      tasks: [task],
+      taskRuns: { 'task-1': { unreadable: true } },
+      expandedTaskId: 'task-1'
+    }))
+    hooks.schedules.mockReturnValue(schedules({ items: [] }))
+
+    const markup = renderPage()
+
+    // The detail block must not print five zeros, which would read as "the task delivered nothing".
+    expect(markup).toMatch(/本任务投递健康[\s\S]{0,500}暂时读不到/)
+  })
+
   it('explains why a delivery was skipped instead of leaving only the tag', () => {
     const task = { id: 'task-1', name: '每日行情总结', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
     hooks.settings.mockReturnValue(settings({
@@ -340,10 +370,14 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
       : overrides.policy,
     state: {
       filteredTasks: overrides.emptyState === 'never-created' ? [] : tasks,
-      rows: (overrides.emptyState === 'never-created' ? [] : tasks).map((item) => ({
-        task: item,
-        lastRun: (overrides.taskRuns as Record<string, unknown> | undefined)?.[String(item.id)] ?? null
-      })),
+      rows: (overrides.emptyState === 'never-created' ? [] : tasks).map((item) => {
+        const run = (overrides.taskRuns as Record<string, any> | undefined)?.[String(item.id)]
+        return {
+          task: item,
+          lastRun: run && run.unreadable !== true ? run : null,
+          runUnreadable: run?.unreadable === true
+        }
+      }),
       selectedTask: null,
       expandedTaskId: overrides.expandedTaskId ?? null,
       auditCount: (overrides.audits as unknown[] | undefined)?.length ?? 0,

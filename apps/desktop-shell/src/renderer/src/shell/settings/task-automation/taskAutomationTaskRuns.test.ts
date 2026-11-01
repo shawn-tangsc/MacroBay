@@ -15,6 +15,7 @@ vi.mock('../../agents/agentTaskDataApi', () => ({
 }))
 
 import { loadTaskRunSnapshots } from './taskAutomationTaskRuns'
+import { isReadableTaskRun } from './taskAutomationSettingsViewModel'
 
 describe('loadTaskRunSnapshots', () => {
   afterEach(() => {
@@ -53,10 +54,11 @@ describe('loadTaskRunSnapshots', () => {
       skipReasons: [],
       unexplainedSkips: 1
     })
-    expect(snapshots['task-2']?.health.delivered).toBe(1)
+    const second = snapshots['task-2']
+    expect(isReadableTaskRun(second) ? second.health.delivered : null).toBe(1)
   })
 
-  it('omits a task whose latest run could not be read instead of failing the whole page', async () => {
+  it('keeps a task whose latest run could not be read as unreadable instead of dropping the row', async () => {
     api.getLogs.mockImplementation(async (_platform, _agentId, taskId) => {
       if (taskId === 'task-broken') throw new Error('sqlite-busy /private/secret')
       return { logs: [{ id: 'run-ok' }], total: 1 }
@@ -65,7 +67,12 @@ describe('loadTaskRunSnapshots', () => {
 
     const snapshots = await loadTaskRunSnapshots(window.platform, [task('task-broken'), task('task-ok')])
 
-    expect(Object.keys(snapshots)).toEqual(['task-ok'])
+    // The failed task keeps its own entry: dropping it would render "never ran", a different fact.
+    expect(Object.keys(snapshots).sort()).toEqual(['task-broken', 'task-ok'])
+    expect(snapshots['task-broken']).toEqual({ unreadable: true })
+    // The error text is not carried into the projection (it can hold a path or a query).
+    expect(JSON.stringify(snapshots['task-broken'])).not.toContain('sqlite-busy')
+    expect(snapshots['task-ok']).not.toHaveProperty('unreadable')
   })
 
   it('reports a task without any run log as having no snapshot health', async () => {

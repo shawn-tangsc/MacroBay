@@ -220,6 +220,8 @@ export type PlatformText = {
     emptyTasksBody: string
     status: Record<'active' | 'paused' | 'completed', string>
     outcome: Record<'success' | 'failed' | 'skipped' | 'never', string>
+    /** Store this state instead of "never": a failed read must not look like a task that never ran. */
+    runUnreadable: string
     details: string
     collapse: string
     taskDeliveryHealth: string
@@ -1345,6 +1347,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       emptyTasksBody: '在对话里对助手说「每天早上 9 点总结行情」，就会在这里出现一条定时任务；你也可以随时暂停或查看它的投递健康。',
       status: { active: '运行中', paused: '已暂停', completed: '已完成' },
       outcome: { success: '成功', failed: '失败', skipped: '已跳过', never: '从未运行' },
+      runUnreadable: '暂时读不到',
       details: '详情', collapse: '收起', taskDeliveryHealth: '本任务投递健康', recentChanges: '最近变更', noChanges: '暂无变更记录。',
       delivered: '已投递', failed: '失败', pending: '待投递', skipped: '已跳过', unknown: '未知',
       deliverySkipReason: {
@@ -2404,6 +2407,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       emptyTasksBody: 'Ask the assistant something like “summarize the market every day at 9am” and it will appear here. You can pause it or check its delivery health at any time.',
       status: { active: 'Active', paused: 'Paused', completed: 'Completed' },
       outcome: { success: 'Succeeded', failed: 'Failed', skipped: 'Skipped', never: 'Never' },
+      runUnreadable: 'Temporarily unreadable',
       details: 'Details', collapse: 'Collapse', taskDeliveryHealth: 'Delivery health for this task', recentChanges: 'Recent changes', noChanges: 'No changes yet.',
       delivered: 'Delivered', failed: 'Failed', pending: 'Pending', skipped: 'Skipped', unknown: 'Unknown',
       deliverySkipReason: {

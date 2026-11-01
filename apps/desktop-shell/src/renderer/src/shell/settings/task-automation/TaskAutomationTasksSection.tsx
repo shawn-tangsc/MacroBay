@@ -113,7 +113,13 @@ export function TaskAutomationTasksSection(props: {
                       {formatTimestamp(row.task.nextRun ?? null, language) ?? labels.emptyValue}
                     </td>
                     <td>
-                      <LastRun task={row.task} snapshot={row.lastRun} labels={labels} language={language} />
+                      <LastRun
+                        task={row.task}
+                        snapshot={row.lastRun}
+                        unreadable={row.runUnreadable}
+                        labels={labels}
+                        language={language}
+                      />
                     </td>
                     <td className="task-automation-col-actions">
                       <Button
@@ -139,6 +145,7 @@ export function TaskAutomationTasksSection(props: {
                               language={language}
                               task={row.task}
                               health={controller.state.deliveryHealth}
+                              unreadable={row.runUnreadable}
                             />
                           </div>
                           <div>
@@ -169,10 +176,13 @@ export function TaskAutomationTasksSection(props: {
 function LastRun(props: {
   task: ScheduledTaskEntity
   snapshot: TaskRunSnapshot | null
+  /** The latest run exists but could not be read: say so, do not claim the task never ran. */
+  unreadable: boolean
   labels: TaskAutomationLabels
   language: AppLanguage
 }): React.ReactElement {
-  const { labels, language, snapshot } = props
+  const { labels, language, snapshot, unreadable } = props
+  if (unreadable) return <span className="task-automation-muted">{labels.runUnreadable}</span>
   if (!snapshot) return <span className="task-automation-muted">{labels.outcome.never}</span>
   const at = formatTimestamp(snapshot.at, language)
   const outcome = outcomeFromRunStatus(snapshot.status)
@@ -202,8 +212,22 @@ function TaskHealth(props: {
   language: AppLanguage
   task: ScheduledTaskEntity
   health: DeliveryHealthCounts
+  /** The run history could not be read: show that, never a row of zeros that reads as "nothing happened". */
+  unreadable: boolean
 }): React.ReactElement {
   const { health, labels, language } = props
+  if (props.unreadable) {
+    return (
+      <dl className="task-automation-kv">
+        <dt>{labels.columns.lastResult}</dt>
+        <dd className="task-automation-muted">{labels.runUnreadable}</dd>
+        <dt>{labels.columns.nextRun}</dt>
+        <dd className="task-automation-mono">
+          {formatTimestamp(props.task.nextRun ?? null, language) ?? labels.emptyValue}
+        </dd>
+      </dl>
+    )
+  }
   return (
     <dl className="task-automation-kv">
       <dt>{labels.delivered}</dt>
