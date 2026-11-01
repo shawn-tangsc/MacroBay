@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * 码表只有一处权威：`StateView.tsx` 的四个 `*ReasonCode` 联合。
+ * 码表只有一处权威：`platform/contracts/queryOutcome.ts` 的四个 `*ReasonCode` 联合（`StateView` 只 re-export）。
  *
  * 公开文档两份（英文、中文）各有一张 `(state, reasonCode)` 表，和类型是**同一个事实的两个落点**。
  * 今晚已经出现过一次「文档说 12、代码说 12、名字对不上」：台账记了一份，组件里是另一份，
@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const ROOT = process.cwd()
-const SOURCE = join(ROOT, 'platform/ui/components/state/StateView.tsx')
+const SOURCE = join(ROOT, 'platform/contracts/queryOutcome.ts')
 const DOCS = [
   join(ROOT, 'docs/development/ui-state-components.md'),
   join(ROOT, 'docs/development/ui-state-components.zh-CN.md')

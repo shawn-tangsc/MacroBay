@@ -27,7 +27,7 @@
 import { StateView } from '@platform/ui/components/state'
 ```
 
-源码：`platform/ui/components/state/`（`StateView.tsx`、`stateView.css`、组件用例）。
+源码：`platform/ui/components/state/`（`StateView.tsx`、`stateView.css`、`stateViewText.ts`、组件用例）。状态与原因码联合只定义一次，在 `platform/contracts/queryOutcome.ts`；`StateView` 只转出，查询层返回的形态是 `QueryOutcome<T>`。
 契约：`docs-private/05-desktop/ui-state-components-contract.md` §13；
 外观规格：`docs-private/05-desktop/ui-audit/prototypes/2026-11-01-1b-stateview-iconbutton-statuspill.html`。
 

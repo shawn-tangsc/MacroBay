@@ -23,7 +23,7 @@ its own sentence, and a page that catches an error and shows "no data" lies to t
 import { StateView } from '@platform/ui/components/state'
 ```
 
-Source: `platform/ui/components/state/` (`StateView.tsx`, `stateView.css`, the component test).
+Source: `platform/ui/components/state/` (`StateView.tsx`, `stateView.css`, `stateViewText.ts`, the component tests). The state/reason-code unions are defined once in `platform/contracts/queryOutcome.ts`; `StateView` re-exports them, and `QueryOutcome<T>` is the shape a query layer returns.
 The contract is `docs-private/05-desktop/ui-state-components-contract.md` §13; the visual spec is
 `docs-private/05-desktop/ui-audit/prototypes/2026-11-01-1b-stateview-iconbutton-statuspill.html`.
 
