@@ -39,7 +39,7 @@ export const NEWS_SENTIMENT_SOURCE_IDS = [
   'okx-latest-announcements'
 ] as const
 
-/** 正文可抓的三个源；Binance 文章页被 WAF 拦截，只做标题级。 */
+/** 正文可抓的四个源；Binance 公告页有 WAF，正文改走公开 CMS detail API（§21.1 D7）。 */
 export const NEWS_SENTIMENT_BODY_SOURCE_IDS = ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] as const
 
 /** OKX 只对这三类公告打分（采集与时间线不变）。 */
