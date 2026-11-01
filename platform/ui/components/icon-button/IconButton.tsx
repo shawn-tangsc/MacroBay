@@ -85,6 +85,18 @@ type IconButtonCommon = {
   loading?: boolean
   /** 默认无边框透明底；工具栏用 `solid`。 */
   variant?: IconButtonVariant
+  /**
+   * 这是不是个「展开/收起」触发器（通知铃铛、折叠面板、抽屉入口）。
+   *
+   * 只影响可访问性：映射到 `aria-expanded`，读屏用户才知道抽屉现在开着还是关着。
+   * 视觉、尺寸、tone 一律不动。**不传时输出里没有这个属性**——不能出现 `aria-expanded="undefined"`。
+   */
+  expanded?: boolean
+  /**
+   * 被展开区域的 `id`，映射到 `aria-controls`。与 `expanded` 一样：不传就不输出。
+   * 只在确实能指向一个元素时传；指向不存在的 id 比不写更糟。
+   */
+  controls?: string
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
@@ -117,6 +129,8 @@ export function IconButton({
   loading,
   tooltipKey,
   variant = 'plain',
+  expanded,
+  controls,
   resolveText
 }: IconButtonProps): ReactElement {
   const ariaLabel = fillPlaceholders(resolveText(ariaLabelKey), ariaLabelParams)
@@ -148,6 +162,9 @@ export function IconButton({
         )
       }
       onClick={onSelect}
+      // 只有真的传了才写：`aria-expanded={undefined}` 在 DOM 里会变成字符串 "undefined"。
+      {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
+      {...(controls === undefined ? {} : { 'aria-controls': controls })}
       style={{ width: pixels, height: pixels }}
       type={variant === 'solid' ? 'default' : 'text'}
     />

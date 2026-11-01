@@ -45,6 +45,8 @@ window) — never per button.
 | `loading` | `boolean` | no | The click is in flight: the button is disabled, the glyph becomes the platform spinner (`LoadingSpinner`, `sm`), and `onSelect` stops firing. The name and the 22/24 size stay, so a screen reader still knows which button is busy. Not a third size and not a variant. |
 | `tooltipKey` | `string` | no | Explanation on hover **and focus**, key only. There is no native `title`. Never together with `disabled`. |
 | `variant` | `'plain' \| 'solid'` | no, default `plain` | `solid` adds a border and a surface tint for toolbar rows. |
+| `expanded` | `boolean` | no | Set when the button opens a disclosure (a bell that opens a drawer). Maps to `aria-expanded`; omitted from the DOM when not passed. |
+| `controls` | `string` | no | The `id` of the region the button expands. Maps to `aria-controls`; omitted when not passed. |
 
 ### Sizes
 

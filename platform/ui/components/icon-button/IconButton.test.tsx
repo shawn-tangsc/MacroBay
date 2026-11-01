@@ -224,6 +224,30 @@ describe('IconButton', () => {
     expect(calls).toBe(1)
   })
 
+  it('says whether the region it controls is open, for the reader who cannot see it', () => {
+    const open = document.createElement('div')
+    const closed = document.createElement('div')
+
+    const openButton = mountElement({ expanded: true, controls: 'notification-drawer' }, open)
+    const closedButton = mountElement({ expanded: false, controls: 'notification-drawer' }, closed)
+
+    expect(openButton.getAttribute('aria-expanded')).toBe('true')
+    expect(closedButton.getAttribute('aria-expanded')).toBe('false')
+    expect(openButton.getAttribute('aria-controls')).toBe('notification-drawer')
+    // 名称不会因为多了这两个属性就消失。
+    expect(openButton.getAttribute('aria-label')).toBe('ui.test.more-actions')
+  })
+
+  it('writes neither attribute when neither prop is given — never "undefined"', () => {
+    const html = markup()
+    const button = mountElement()
+
+    expect(html).not.toContain('aria-expanded')
+    expect(html).not.toContain('aria-controls')
+    expect(button.hasAttribute('aria-expanded')).toBe(false)
+    expect(button.hasAttribute('aria-controls')).toBe(false)
+  })
+
   it('resolves the tooltip copy through the same resolver and never uses a native title', () => {
     const seen: string[] = []
     const resolved = (value: string): string => {

@@ -43,6 +43,8 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `loading` | `boolean` | 否 | 这次点击还在等结果：按钮 disabled、图形换成平台唯一的转圈（`LoadingSpinner`，`sm` 档）、不再触发 `onSelect`。**读屏名与 22/24 尺寸不变**——用户要知道是哪个按钮在忙。它不是第三个尺寸，也不是新变体。 |
 | `tooltipKey` | `string` | 否 | 悬停**和聚焦**都出现的解释，同样只收键。不用原生 `title`；禁用时不许传。 |
 | `variant` | `'plain' \| 'solid'` | 否，默认 `plain` | `solid` 给工具栏一排加边框与底色。 |
+| `expanded` | `boolean` | 否 | 这是个展开/收起触发器时传（铃铛打开抽屉）。映射到 `aria-expanded`；不传时输出里没有这个属性。 |
+| `controls` | `string` | 否 | 被展开区域的 `id`。映射到 `aria-controls`；不传时不输出。 |
 
 ### 尺寸
 
