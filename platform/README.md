@@ -21,11 +21,17 @@ product-specific business concepts. Products register themselves through the gen
 | `notifications` | Notification contracts, runtime, store, desktop surface, IPC. |
 | `product-registry` | Product discovery, manifest types, registry code generation, reserved routes, shell icon ids. |
 | `workspace` | Workspace contracts and policies, panel/page registry, runtime, persistence. |
+| `files` | Attachment handling: reading a text file preview with a size cap and a binary guard. |
+| `observability` | Structured application log: one writer, in-writer rotation, redaction before write. |
+| `time` | Time zone reading for server-side decisions: minutes-of-day in the configured zone. |
 | `ai` | Model providers, chat runtime, agent platform, assistant platform, web search. |
 
-`files` and `observability` are declared areas with no implementation yet: their only content is a
-placeholder for `files/attachments` and `observability/logging`. Until code lands there, nothing in
-`platform` provides attachment handling or logging, and no document should describe it as provided.
+Every area above has code behind it. `files` and `observability` were declared placeholders earlier and
+are now implemented; if a directory ever holds only a placeholder again, this table must say so rather
+than list it as an area.
+
+Adding a top-level area means updating this file in the same commit that creates the directory. A new
+directory that is not listed here makes the table wrong the moment it lands.
 
 ## Directory Notes
 
@@ -51,6 +57,9 @@ placeholder for `files/attachments` and `observability/logging`. Until code land
 - `message-bus/boundary`: the cross-module boundary guard.
 - `network`: `platformFetch` and `platformWebSocket` — the only allowed outbound transports.
 - `workspace/registry`: workspace panel and page registration.
+- `files/attachments`: the text file preview reader and its size cap.
+- `observability/logging`: the single application log writer (rotation and redaction live inside it).
+- `time`: time zone arithmetic used by server-side decisions, not display formatting (`ui/time` owns display).
 - `workspace/runtime`, `workspace/persistence`: workspace runtime and its storage.
 - `ai/providers`: model provider adapters and provider store.
 - `ai/chat`: reusable chat runtime.
