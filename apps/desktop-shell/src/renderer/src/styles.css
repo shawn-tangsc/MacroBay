@@ -46,11 +46,12 @@
   --border-strong: #d3d8df;
   --text: #24282f;
   --text-strong: #14171c;
-  --muted: #7b838e;
+  --muted: #646c78;
   --muted-strong: #555f6d;
   --danger: #c73238;
   --accent: #2f7d6a;
-  --accent-contrast: #11130f;
+  /* 浅色强调底是深绿，上面放近黑字只有 3.79:1；换成白字 4.93:1（用户 2026-11-01 批）。 */
+  --accent-contrast: #ffffff;
   --window-control-hover: rgba(0, 0, 0, 0.05);
   --window-control-active: rgba(0, 0, 0, 0.09);
 }
