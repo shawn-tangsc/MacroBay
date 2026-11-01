@@ -104,7 +104,7 @@ const english = (overrides: Record<string, unknown> = {}) => ({
   conditions: ['ETF outflows stay negative near -$643.2M.'],
   counterEvidence: ['If ETF flows turn positive by $643.2M and BTC recovers the 1.10% loss, the bearish call is wrong.'],
   watch: ['ETF net flow -$643.2M', 'BTC funding rate at 0.00%', 'US CPI at 3.4%'],
-  regimeChange: 'Versus the prior session, BTC moved from flat to a 1.10% loss; the bounce after the CPI print did not hold.',
+  regimeChange: 'Turned bearish on the CPI beat.',
   confirmed: ['CPI at 3.4% versus 3.2% expected stopped the BTC bounce.'],
   refuted: ['The call that a CPI miss would lift BTC was overturned by the 3.4% print.'],
   coreTension: 'CPI at 3.4% versus 3.2% expected, yet BTC fell only 1.10%, so sellers have not accelerated.',
@@ -136,12 +136,12 @@ describe('daily briefing conclusion wording', () => {
 
   it('rejects a pure recap that only reports what happened', () => {
     const recap = chinese({ summary: '美国 CPI 同比 3.4%，高于预期 3.2%；24 小时内 BTC 下跌 1.10%。' })
-    expect(validate(recap)).toMatchObject({ ok: false, failureCode: 'missing-forward-view' })
+    expect(validate(recap)).toMatchObject({ ok: false, failureCode: 'missing-mechanism' })
   })
 
-  it('rejects a forward view that skips the mechanism chain', () => {
+  it('rejects a verdict that skips the mechanism chain', () => {
     const noMechanism = chinese({
-      summary: '未来两到三个交易日基准情形偏空：BTC 弱于 ETH，ETF 流出 -6.43 亿美元尚未收窄。'
+      summary: '美国 CPI 3.4% 高于预期，BTC 与 ETH 同时走弱。'
     })
     expect(validate(noMechanism)).toMatchObject({ ok: false, failureCode: 'missing-mechanism' })
   })
@@ -149,6 +149,21 @@ describe('daily briefing conclusion wording', () => {
   it('rejects a one-sentence data recital even when it names the next day', () => {
     const dataOnly = chinese({ summary: '因为 CPI 3.4% 高于预期 3.2%，未来基准情形偏空。' })
     expect(validate(dataOnly)).toMatchObject({ ok: false, failureCode: 'data-only-summary' })
+  })
+
+  it('rejects a summary that states the outlook word for word', () => {
+    const outlook = '未来两到三个交易日基准情形偏空：BTC 弱于 ETH，ETF 流出 -6.43 亿美元尚未收窄。'
+    const duplicated = chinese({
+      summary: `美国 CPI 3.4% 通过压低降息预期导致实际利率上行，BTC 因此下跌 1.10%。${outlook}`,
+      outlook
+    })
+    expect(validate(duplicated)).toMatchObject({ ok: false, failureCode: 'duplicate-statement' })
+  })
+
+  it('rejects an overturn threshold that repeats one of the falsifiers', () => {
+    const falsifier = '若 ETF 转为净流入 6.43 亿美元且 BTC 收复 1.10% 跌幅，则偏空判断失效。'
+    const duplicated = chinese({ counterEvidence: [falsifier], whatWouldChange: falsifier })
+    expect(validate(duplicated)).toMatchObject({ ok: false, failureCode: 'duplicate-statement' })
   })
 
   it('rejects a summary that repeats the direction tag', () => {
@@ -291,7 +306,7 @@ describe('daily briefing conclusion wording', () => {
     const text = promptText()
     expect(text).toContain('mechanism chain')
     expect(text).toContain('next-1-3-day base case')
-    expect(text).toContain('forward marker')
+    expect(text).toContain('Each point appears exactly once')
     expect(text).toContain('conditions are the premises')
     expect(text).toContain('counterEvidence are the falsifiers')
     expect(text).toContain('BTC versus ETH relative strength')

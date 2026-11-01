@@ -7,7 +7,8 @@ import type {
 import {
   detectPriorConclusionConflict,
   isConclusionDirection,
-  isCopiedConclusionText
+  isCopiedConclusionText,
+  normalizeConclusionText
 } from './dailyBriefingPriorConclusions'
 import { briefingDataFactIds } from './dailyBriefingDataSelection'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
@@ -18,11 +19,11 @@ export type ConclusionSynthesisFailure =
   | 'copied-conclusion'
   | 'missing-conclusion-evidence'
   | 'missing-conclusion-divergence'
-  | 'missing-forward-view'
   | 'missing-mechanism'
   | 'data-only-summary'
   | 'missing-outlook'
   | 'repeated-direction'
+  | 'duplicate-statement'
   | 'forbidden-content'
   | 'forbidden-forecast'
   | 'invalid-number-format'
@@ -41,6 +42,8 @@ const maximumCounterEvidence = 3
 const maximumWatchItems = 4
 const maximumListItems = 4
 const maximumRationaleLength = 200
+/** A marker, not a paragraph: the reader sees it as a chip beside the direction tag. */
+const maximumRegimeMarkerLength = 48
 
 /**
  * Wording that only makes sense to the system that produced the brief.
@@ -80,12 +83,6 @@ const concreteAnchorPattern = /稳定币|美元|美债|国债|收益率|利率|�
 
 const clockTimePattern = /\b(?:[01]?\d|2[0-3]):[0-5]\d\b/
 const marketEventPattern = /CPI|PCE|GDP|PMI|FOMC|非农|议息|美联储|利率决议|公布|发布|数据|财报|开盘|收盘|盘前|盘后|拍卖|结算|交割|减半|升级|硬分叉|release|print|data|report|open|close|auction|settlement|decision|meeting|announcement|payrolls|inflation/i
-
-/**
- * A forward view, not a recap. The family is deliberately wide because the requirement is "say
- * what happens next", not a particular phrasing; the repair hint names the required vocabulary.
- */
-const forwardViewPattern = /未来|接下来|基准情形|后市|明日|今后|展望|若|一旦|假若|\bnext\b|\bbase\s+case\b|\bif\b|\bgoing\s+forward\b|\bover\s+the\s+next\b/i
 
 /**
  * The mechanism chain: what changed → through what channel → BTC/ETH pressure or support. A
@@ -136,8 +133,8 @@ export function validateConclusionSynthesis(
   if (summary === false) return fail('invalid-conclusion-synthesis')
   const outlook = boundedText(raw.outlook, maximumFieldLength)
   if (outlook === false) return fail('invalid-conclusion-synthesis')
-  const regimeChange = boundedText(raw.regimeChange, maximumFieldLength)
-  if (regimeChange === false) return fail('invalid-conclusion-synthesis')
+  const regimeChange = boundedText(raw.regimeChange, maximumRegimeMarkerLength)
+  if (regimeChange === false) return fail('invalid-conclusion-synthesis', `regimeChange: keep the marker to one short phrase (max ${maximumRegimeMarkerLength} characters) or write 无重要变化 / "no material change".`)
   const coreTension = boundedText(raw.coreTension, maximumFieldLength)
   if (coreTension === false) return fail('invalid-conclusion-synthesis')
   const whatWouldChange = boundedText(raw.whatWouldChange, maximumFieldLength)
@@ -191,16 +188,19 @@ export function validateConclusionSynthesis(
   if (unknownNumber) return fail('unknown-number', unknownNumber)
   // The direction is already rendered as a tag before the summary; opening with it repeats chrome.
   if (startsWithDirectionLabel(summary)) return fail('repeated-direction', 'summary')
-  // The reader buys a view of the next few sessions. A recap with no forward marker, no causal
-  // link, or fewer than two sentences is the failure this validator exists to catch.
-  if (!forwardViewPattern.test(summary)) {
-    return fail('missing-forward-view', 'summary: add the next-1-3-day base case (未来/接下来/基准情形/若/一旦 or next/base case/if).')
-  }
+  // Each point is rendered once: the summary states the mechanism, and the forecast fields below it
+  // carry the base case, the catalysts and the overturn threshold. Repeating one of them inside the
+  // summary shows the reader the same sentence twice, which reads as none of them.
+  const duplicate = repeatedStatement(summary, whatWouldChange, counterEvidence, watch, outlook)
+  if (duplicate) return fail('duplicate-statement', duplicate)
+  // The base case has its own rendered field, so the summary carries the verdict and the mechanism
+  // instead of restating the forecast; a causal link and a second sentence are still required, so a
+  // bare recap is rejected.
   if (!mechanismPattern.test(summary)) {
     return fail('missing-mechanism', 'summary: link what changed to BTC/ETH through a channel (因为/导致/通过 or because/leads to/through).')
   }
   if (sentenceCount(summary) < 2) {
-    return fail('data-only-summary', 'summary: a recital of numbers is not a conclusion; add the mechanism and the forward view.')
+    return fail('data-only-summary', 'summary: a recital of numbers is not a conclusion; add the mechanism that moved BTC/ETH.')
   }
   if (!outlookStancePattern.test(outlook)) {
     return fail('missing-outlook', 'outlook: state the next-1-3-day bias explicitly (偏多/偏空/震荡 or bullish/bearish/range).')
@@ -241,12 +241,15 @@ export function validateConclusionSynthesis(
 }
 
 /**
- * True when a summary carries a next-1-3-day view. The editorial layer reads this before it maps
+ * True when the synthesis carries a next-1-3-day view. The editorial layer reads this before it maps
  * premises and falsifiers onto the published conclusion: a recap alone must not render the
  * "conditions"/"counter evidence" blocks that belong to a forecast.
+ *
+ * The forecast lives in `outlook` (it is rendered as its own block), not in the summary prose, so the
+ * gate reads that field instead of hunting for a forward word in the summary.
  */
-export function hasBriefingForecast(summary: unknown): boolean {
-  return typeof summary === 'string' && forwardViewPattern.test(summary)
+export function synthesisHasForecast(synthesis: Pick<BriefingConclusionSynthesis, 'outlook'>): boolean {
+  return typeof synthesis.outlook === 'string' && outlookStancePattern.test(synthesis.outlook) && relativeStrength(synthesis.outlook)
 }
 
 /**
@@ -262,7 +265,7 @@ export function briefingConclusionBasis(synthesis: BriefingConclusionSynthesis):
   counterEvidence: readonly BriefingCounterEvidence[]
   invalidations: readonly Readonly<{ asset: 'BTC' | 'ETH'; horizonEnd: string; text: string }>[]
 }> {
-  if (!hasBriefingForecast(synthesis.summary)) {
+  if (!synthesisHasForecast(synthesis)) {
     return Object.freeze({
       conditions: Object.freeze([]),
       counterEvidence: Object.freeze([]),
@@ -286,6 +289,42 @@ export function briefingConclusionBasis(synthesis: BriefingConclusionSynthesis):
  */
 export function acknowledgesMarketReversal(text: string): boolean {
   return /转多|转空|转为(?:看多|看空|偏多|偏空)|翻多|翻空|回到(?:偏多|偏空|看多|看空)|逆转|反转|扭转|改判|推翻|证伪|先[^。；;]{0,24}后|由[^。；;]{0,24}(?:转为|变成|回到|跌至|升至)|\bturn(?:ed|s|ing)?\b|\bflipp(?:ed|ing)\b|\brevers(?:ed|al|ing)\b|\bback to\b|\bfrom\b[^.]{0,40}\bto\b|\bfaded\b|\bgave back\b|\bwalked back\b/i.test(text)
+}
+
+/**
+ * The same point typed twice. Comparison is on the whole normalized sentence (equality or one
+ * containing the other), not on shared vocabulary: two lines may legitimately quote the same flow
+ * while saying different things, but they may not be the same sentence.
+ */
+function repeatedStatement(
+  summary: string,
+  whatWouldChange: string,
+  counterEvidence: readonly string[],
+  watch: readonly string[],
+  outlook: string
+): string | undefined {
+  const summaryText = normalizeConclusionText(summary)
+  const repeated = (candidate: string): boolean => {
+    const text = normalizeConclusionText(candidate)
+    if (text.length < 12 || summaryText.length < 12) return false
+    if (text === summaryText) return true
+    if (text.length >= 20 && summaryText.includes(text)) return true
+    return summaryText.length >= 20 && text.includes(summaryText)
+  }
+  if (repeated(outlook)) return 'outlook: repeats the summary; keep the mechanism in summary and put the base case only in outlook.'
+  if (repeated(whatWouldChange)) return 'whatWouldChange: repeats the summary; state the single overturn threshold here and leave it out of summary.'
+  for (const entry of watch) {
+    if (repeated(entry)) return 'watch: repeats the summary; each catalyst is named once, in watch.'
+  }
+  const threshold = normalizeConclusionText(whatWouldChange)
+  for (const entry of counterEvidence) {
+    const falsifier = normalizeConclusionText(entry)
+    if (threshold.length < 12 || falsifier.length < 12) continue
+    if (threshold === falsifier || (threshold.length >= 20 && falsifier.includes(threshold)) || (falsifier.length >= 20 && threshold.includes(falsifier))) {
+      return 'whatWouldChange: repeats a counterEvidence falsifier; the threshold is the single decisive number, the falsifiers are the conditions around it.'
+    }
+  }
+  return undefined
 }
 
 function forbiddenForecast(prose: string): string | undefined {

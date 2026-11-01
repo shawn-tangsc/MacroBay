@@ -55,6 +55,25 @@
 .mi-brief-poster__translation { margin: 8px 0 0; color: #625f55; font-size: 14px; line-height: 1.6; }
 .mi-brief-poster__invalidate { margin: 12px 0 0; padding: 10px 12px; background: #ece5d7; color: #7c3b1d; font-size: 13px; line-height: 1.55; }
 
+/* The call-changing marker sits beside the direction tag: it answers "did the view change", and the
+   long version of that answer belongs in the tooltip, not in a paragraph. */
+.mi-brief-poster__regime { display: inline-block; margin: 0 7px 0 0; padding: 1px 6px; vertical-align: 1px; border: 1px solid #d8b48a; border-radius: 3px; background: #fbf3e6; color: #8a5a35; font-size: 10px; font-weight: 700; }
+
+/* The forecast the conclusion lands on: base case, catalysts, and the threshold that would overturn
+   it. One block, because they are one thought; each line is labelled so nothing has to be inferred. */
+.mi-brief-poster__forward { display: grid; gap: 8px; margin-top: 14px; padding: 11px 13px; border: 1px solid #ded4c2; border-radius: 7px; background: #fffaf1; }
+.mi-brief-poster__forward-label { display: block; margin-bottom: 2px; color: #a5431f; font-size: 9.5px; font-weight: 700; letter-spacing: .08em; }
+.mi-brief-poster__outlook, .mi-brief-poster__overturn { margin: 0; color: #3b382f; font-size: 13px; line-height: 1.6; }
+.mi-brief-poster__watch ul { margin: 0; padding-left: 16px; color: #4e493e; font-size: 12px; line-height: 1.55; }
+.mi-brief-poster__watch li { margin: 0; }
+.mi-brief-poster__overturn { margin-top: 2px; padding-top: 8px; border-top: 1px dashed #ded4c2; }
+
+/* What the earlier read deserved, as one line rather than two blocks that repeat the same point. */
+.mi-brief-poster__standing { margin: 0 0 9px; color: #4e493e; font-size: 11.5px; line-height: 1.55; }
+.mi-brief-poster__standing b { margin-right: 6px; color: #625f55; }
+.mi-brief-poster__standing[data-standing="held"] b { color: #2f6b3c; }
+.mi-brief-poster__standing[data-standing="overturned"] b { color: #9f2d21; }
+
 .mi-brief-poster__next { margin-top: 22px; padding-top: 14px; border-top: 1px solid #d8cfbd; }
 .mi-brief-poster__next p { margin: 4px 0; color: #3d3c33; font-size: 13px; }
 .mi-brief-poster__next b { margin-right: 8px; color: #a5431f; font-weight: 600; }

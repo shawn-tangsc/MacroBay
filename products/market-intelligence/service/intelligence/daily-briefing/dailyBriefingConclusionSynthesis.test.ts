@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
+import { briefingConclusionBasis, validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
 
 const document = (): DailyBriefingDocument => ({
   schemaVersion: 1,
@@ -209,25 +210,16 @@ describe('daily briefing conclusion synthesis', () => {
     expect(applied.conclusion?.invalidations).toEqual([])
   })
 
-  it('renders no basis blocks when a legacy synthesis has no forward view', () => {
-    const stale = document()
-    const withStaleBasis: DailyBriefingDocument = {
-      ...stale,
-      conclusion: {
-        ...stale.conclusion!,
-        conditions: ['旧分析：稳定币收缩'],
-        counterEvidence: [{ statement: '旧反证：ETF 流入', citations: [1] }]
-      }
-    }
-    const recap = synthesis({ summary: '美国 CPI 同比 3.4%，高于预期 3.2%；BTC 下跌 1.10%。' })
-    const applied = applyDailyBriefingEditorial(
-      withStaleBasis,
-      { ...editorial(), conclusionSynthesis: recap } as never,
-      { promptVersion: 'v2', model: 'm', source: 'default' },
-      [bearishPrior()]
-    )
-    expect(applied.conclusion?.conditions).toEqual([])
-    expect(applied.conclusion?.counterEvidence).toEqual([])
+  it('renders no basis blocks for a synthesis whose outlook states no base case', () => {
+    // The basis belongs to a forecast. Without a stated base case there is nothing for the premises
+    // and falsifiers to support, so the mapping returns empty blocks — and the validator rejects the
+    // synthesis before it can reach a reader.
+    const noForecast = synthesis({ outlook: '资金面还需要再观察。' })
+    expect(validateConclusionSynthesis(noForecast, document(), [bearishPrior()]))
+      .toMatchObject({ ok: false, failureCode: 'missing-outlook' })
+    expect(briefingConclusionBasis(noForecast)).toMatchObject({
+      conditions: [], counterEvidence: [], invalidations: []
+    })
   })
 
   it('does not attach a fallback translation to the synthesized summary', () => {

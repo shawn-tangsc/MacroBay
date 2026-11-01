@@ -60,11 +60,11 @@ export type DailyBriefingValidationFailure =
   | 'copied-conclusion'
   | 'missing-conclusion-evidence'
   | 'missing-conclusion-divergence'
-  | 'missing-forward-view'
   | 'missing-mechanism'
   | 'data-only-summary'
   | 'missing-outlook'
   | 'repeated-direction'
+  | 'duplicate-statement'
   | 'forbidden-forecast'
   | 'invalid-number-format'
 

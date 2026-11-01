@@ -234,6 +234,72 @@ describe('daily brief share card in English', () => {
     expect(rendered.textContent).toContain(`${text.conclusion.invalidation}: Stablecoins turn positive.`)
   })
 
+  const withForecast = (overrides: Partial<NonNullable<NonNullable<DailyBriefingDocument['conclusion']>['synthesisDetail']>> = {}): DailyBriefingDocument => {
+    const base = briefing()
+    return {
+      ...base,
+      conclusion: {
+        ...base.conclusion!,
+        synthesis: 'agent',
+        synthesisDetail: {
+          direction: 'bearish',
+          confidence: 'medium',
+          summary: base.conclusion!.summary,
+          outlook: '未来 1-3 日基准情形偏空：BTC 弱于 ETH。',
+          conditions: ['ETF 流出维持在 -6.43 亿美元附近'],
+          counterEvidence: ['若 ETF 连续两日净流入 6.43 亿美元且 BTC 收复 1.10% 跌幅，则判断失效'],
+          watch: ['ETF 净流出 -6.43 亿美元是否收窄', 'BTC 资金费率 0.00% 是否转负'],
+          regimeChange: '方向由持平转为偏空',
+          confirmed: ['CPI 3.4% 高于预期后 BTC 反弹停止'],
+          refuted: [],
+          coreTension: 'CPI 3.4% 高于预期，但 BTC 只跌 1.10%',
+          whatWouldChange: 'BTC 收复 1.10% 跌幅且 ETF 转为净流入',
+          evidenceRefs: ['data:btc'],
+          ...overrides
+        }
+      }
+    }
+  }
+
+  it('renders the forecast the conclusion lands on, once each', async () => {
+    const rendered = await render(withForecast())
+    const poster = rendered.querySelector('.mi-brief-poster')!
+
+    const outlook = poster.querySelector('.mi-brief-poster__outlook')?.textContent ?? ''
+    expect(outlook).toContain('未来 1-3 日基准情形偏空')
+    expect(poster.querySelectorAll('.mi-brief-poster__watch li')).toHaveLength(2)
+    expect(poster.querySelector('.mi-brief-poster__overturn')?.textContent).toContain('BTC 收复 1.10% 跌幅')
+    // The summary is stated once; the forecast block says the next part without repeating it.
+    const summary = poster.querySelector('.mi-brief-poster__summary')!.textContent ?? ''
+    expect(summary.match(/Stablecoin contraction pulls bids away\./g)).toHaveLength(1)
+  })
+
+  it('marks a changed call with a chip and hides the no-change sentinel', async () => {
+    const changed = await render(withForecast())
+    const chip = changed.querySelector('[data-regime-change="true"]')
+    expect(chip?.textContent).toBe(text.conclusion.regimeChanged)
+    expect(chip?.getAttribute('title')).toBe('方向由持平转为偏空')
+
+    const unchanged = await render(withForecast({ regimeChange: '无重要变化' }))
+    expect(unchanged.querySelector('[data-regime-change="true"]')).toBeNull()
+  })
+
+  it('states whether the earlier read held as one line', async () => {
+    const held = await render(withForecast())
+    expect(held.querySelector('[data-standing="held"]')?.textContent)
+      .toContain(text.conclusion.basisHeld)
+    expect(held.querySelector('[data-standing="held"]')?.textContent)
+      .toContain('CPI 3.4% 高于预期后 BTC 反弹停止')
+
+    const overturned = await render(withForecast({ confirmed: [], refuted: ['CPI 回落后 BTC 反弹没有出现'] }))
+    expect(overturned.querySelector('[data-standing="overturned"]')?.textContent)
+      .toContain(text.conclusion.basisOverturned)
+
+    const partly = await render(withForecast({ refuted: ['CPI 回落后 BTC 反弹没有出现'] }))
+    expect(partly.querySelector('[data-standing="partly"]')?.textContent)
+      .toContain(text.conclusion.basisPartlyHeld)
+  })
+
   it('names the basis of a forecast as its premises and falsifiers', async () => {
     const base = briefing()
     const withFalsifier: DailyBriefingDocument = {

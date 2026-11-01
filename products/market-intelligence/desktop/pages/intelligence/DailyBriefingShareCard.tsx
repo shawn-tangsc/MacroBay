@@ -1,4 +1,4 @@
-import type { BriefingMarketRow, BriefingPulseRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import type { BriefingConclusionSynthesis, BriefingMarketRow, BriefingPulseRow, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { formatBriefingValue } from '../../../contracts/dailyBriefingFormat'
 import { changeLedRowCopy, formatRowChange } from '../../../contracts/dailyBriefingMarkdown'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -33,7 +33,13 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
   const visibleMacro = doc.news.macro.filter((item) => item.visibility !== 'hidden')
   const hasNews = visibleNews.length > 0 || visibleMacro.length > 0
   const hasData = chosen.length > 0
-  const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0))
+  // What the forecast stands on: the synthesis's own premises and falsifiers, plus the one line that
+  // says whether the earlier read held. The audit-only detail also carries the forward view, the
+  // catalysts and the overturn threshold; they are rendered under the conclusion, not repeated here.
+  const synthesis = conclusion?.synthesisDetail
+  const standing = conclusion && synthesis ? basisStanding(synthesis, text) : undefined
+  const regimeMarker = synthesis ? regimeChangeMarker(synthesis.regimeChange) : undefined
+  const hasBasis = Boolean(conclusion && (conclusion.conditions.length > 0 || conclusion.counterEvidence.length > 0 || standing))
   const keyIds = ['btc', 'eth', 'stablecoin', 'etf-btc'] as const
   const keyRows = keyIds.flatMap((id) => {
     const row = chosen.find((candidate) => candidate.id === id)
@@ -126,13 +132,22 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
-        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{conclusion.summary}</p>
+        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{regimeMarker ? <span className="mi-brief-poster__regime" data-regime-change="true" title={regimeMarker.title} aria-label={`${text.conclusion.regimeChanged}${text.labelSeparator}${regimeMarker.title}`}>{text.conclusion.regimeChanged}</span> : null}{conclusion.summary}</p>
         {conclusion.translation ? <p className="mi-brief-poster__translation">{text.translated} · {conclusion.translation}</p> : null}
+        {synthesis ? <div className="mi-brief-poster__forward">
+          <p className="mi-brief-poster__outlook"><span className="mi-brief-poster__forward-label">{text.conclusion.outlook}</span>{synthesis.outlook}</p>
+          {synthesis.watch.length > 0 ? <div className="mi-brief-poster__watch">
+            <span className="mi-brief-poster__forward-label">{text.conclusion.watch}</span>
+            <ul>{synthesis.watch.map((entry) => <li key={entry}>{entry}</li>)}</ul>
+          </div> : null}
+          <p className="mi-brief-poster__overturn"><span className="mi-brief-poster__forward-label">{text.conclusion.whatWouldChange}</span>{synthesis.whatWouldChange}</p>
+        </div> : null}
         {conclusion.invalidations[0] ? <p className="mi-brief-poster__invalidate">{text.conclusion.invalidation}{text.labelSeparator}{conclusion.invalidations[0].text}</p> : null}
     </section> : null}
 
     {hasBasis && conclusion ? <section className="mi-brief-poster__basis">
       <h2>{text.sections.basis}</h2>
+      {standing ? <p className="mi-brief-poster__standing" data-standing={standing.kind}><b>{standing.label}</b>{text.labelSeparator}{standing.text}</p> : null}
       <div className="mi-brief-poster__basis-grid">
         {conclusion.conditions.length > 0 ? <div className="mi-brief-poster__basis-card cond"><h3>{text.conclusion.conditions}</h3><p>{conclusion.conditions.join(' · ')}</p></div> : null}
         {conclusion.counterEvidence.length > 0 ? <div className="mi-brief-poster__basis-card counter"><h3>{text.conclusion.counter}</h3><p>{conclusion.counterEvidence.map((claim) => `${claim.statement}${claim.citations.length ? ` [${claim.citations.join('][')}]` : ''}`).join(' · ')}</p></div> : null}
@@ -367,4 +382,33 @@ function clockWithZone(value: string, formatTime: (value: string, precision: 'mi
 
 function policyOutcomeLabel(outcome: string, text: DailyBriefingText): string {
   return text.policyOutcomes[outcome as keyof DailyBriefingText['policyOutcomes']] ?? outcome
+}
+
+/**
+ * The call-changing marker. The model writes the no-change sentinel when nothing moved, and a chip
+ * that always says "view changed" is worse than no chip, so the sentinel renders nothing.
+ */
+function regimeChangeMarker(value: string): Readonly<{ title: string }> | undefined {
+  const text = value.trim()
+  if (text.length === 0) return undefined
+  if (/^(?:无重要变化|无变化|没有变化|no\s+(?:material\s+|important\s+)?change)/i.test(text)) return undefined
+  return { title: text }
+}
+
+/**
+ * One line for what the earlier read deserved: held, overturned, or partly both.
+ *
+ * The two lists are rendered together because splitting them into two paragraphs repeats the same
+ * point twice; a reader only needs to know whether the basis still stands.
+ */
+function basisStanding(
+  synthesis: BriefingConclusionSynthesis,
+  text: DailyBriefingText
+): Readonly<{ kind: 'held' | 'overturned' | 'partly'; label: string; text: string }> | undefined {
+  const held = synthesis.confirmed.filter((entry) => entry.trim().length > 0)
+  const refuted = synthesis.refuted.filter((entry) => entry.trim().length > 0)
+  if (held.length === 0 && refuted.length === 0) return undefined
+  if (refuted.length === 0) return { kind: 'held', label: text.conclusion.basisHeld, text: held.join(' · ') }
+  if (held.length === 0) return { kind: 'overturned', label: text.conclusion.basisOverturned, text: refuted.join(' · ') }
+  return { kind: 'partly', label: text.conclusion.basisPartlyHeld, text: `${held.join(' · ')} · ${refuted.join(' · ')}` }
 }
