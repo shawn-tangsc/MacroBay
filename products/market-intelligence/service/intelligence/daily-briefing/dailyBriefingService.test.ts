@@ -443,6 +443,31 @@ describe('daily briefing service', () => {
     expect(source.calls).toBe(1)
   })
 
+  it('coalesces concurrent regenerations into one run', async () => {
+    // The reported defect: a reader pressed 重新生成 three times and got three concurrent runs, each
+    // publishing its own session — three "11-01 Daily brief" entries for one edition.
+    const store = memoryStore()
+    const source = fakeSource()
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+    await Promise.all([
+      service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' }),
+      service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' }),
+      service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    ])
+    expect(source.calls).toBe(1)
+  })
+
+  it('joins a generation already running instead of starting a second one', async () => {
+    const store = memoryStore()
+    const source = fakeSource()
+    const service = createDailyBriefingService({ source, store, now: () => asOf })
+    await Promise.all([
+      service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' }),
+      service.regenerate({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    ])
+    expect(source.calls).toBe(1)
+  })
+
   it('lists the last 14 local days with explicit gaps', async () => {
     const store = memoryStore()
     const source = fakeSource()

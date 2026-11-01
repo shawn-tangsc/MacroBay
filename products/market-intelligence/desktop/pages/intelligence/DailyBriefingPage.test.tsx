@@ -321,6 +321,29 @@ describe('daily briefing page', () => {
     expect(dom.textContent).toContain('重新生成版')
   })
 
+  it('says the brief is being generated and refuses a second click while it runs', async () => {
+    // The reader could press the button again while the first run was still going; each press
+    // started another run. The control has to close that door itself, not just the service.
+    let release: (() => void) | undefined
+    const client = fakeClient({
+      regenerate: vi.fn(async () => {
+        await new Promise<void>((resolve) => { release = resolve })
+        return { state: 'available' as const, document: briefingDocument('2026-10-30', '重新生成版') }
+      })
+    })
+    const dom = await renderPage(client)
+    const button = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    await act(async () => { button.click(); await Promise.resolve() })
+    const running = dom.querySelector<HTMLButtonElement>('.mi-daily-briefing__regenerate')!
+    expect(running.textContent).toBe(text.regenerating)
+    expect(running.disabled).toBe(true)
+    await act(async () => { running.click(); await Promise.resolve() })
+    expect(client.regenerate).toHaveBeenCalledTimes(1)
+    await act(async () => { release?.(); await Promise.resolve(); await Promise.resolve() })
+    expect(dom.textContent).toContain('重新生成版')
+    expect(client.regenerate).toHaveBeenCalledTimes(1)
+  })
+
   it('renders the shareable poster and its export action', async () => {
     const dom = await renderPage(fakeClient())
     expect(dom.querySelector('.mi-brief-poster')?.textContent).toContain('每日简报')

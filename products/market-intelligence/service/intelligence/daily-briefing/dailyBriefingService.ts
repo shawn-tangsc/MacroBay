@@ -194,7 +194,17 @@ export function createDailyBriefingService(deps: Readonly<{
   async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
     const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    return resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true)
+    // One run per edition, whichever path asked for it. The open path already coalesced, but a
+    // reader who presses 重新生成 three times started three concurrent runs, and each of them
+    // published its own agent session and its own edition. A second request now joins the run that
+    // is already working on that edition instead of starting another one.
+    const key = `${window.date}:${input.locale}`
+    const running = inFlight.get(key)
+    if (running) return running
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true)
+      .finally(() => inFlight.delete(key))
+    inFlight.set(key, promise)
+    return promise
   }
 
   async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
