@@ -14,6 +14,8 @@ import type { PlatformText } from '../../i18n/platformText'
 
 import { createNotificationCenterSource, type NotificationCenterSource } from './notificationCenterSource'
 
+import './notificationCenter.css'
+
 export const CENTER_TITLE_KEY = 'notifications.centerTitle'
 
 type NotificationCenterDrawerProps = {
@@ -163,7 +165,12 @@ export function NotificationCenterDrawer({
       ) : state === 'error' ? (
         <StateView state="error" reasonCode="unreadable" size="md" action={{ labelKey: 'ui.state.action.retry', onSelect: () => void load() }} />
       ) : items.length === 0 ? (
-        <StateView state="empty" reasonCode="not-yet" size="md" />
+        <>
+          <StateView state="empty" reasonCode="not-yet" size="md" />
+          {/* 通用空态句说不出「等的是谁」：这个页面的来源是外部事件，所以下面补一句本页专属的说明。
+              放在 `StateView` 之外，是因为改了平台键会让另外七处 `not-yet` 开始说别人的话。 */}
+          <p className="notification-center-empty-hint">{labels.centerEmptyHint}</p>
+        </>
       ) : (
         <div className="notification-center-groups">
           {unreadItems.length === 0 ? null : (

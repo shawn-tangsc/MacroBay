@@ -1022,6 +1022,7 @@ export type PlatformText = {
     centerExpand: string
     centerCollapse: string
     centerMergedCount: (count: string) => string
+    centerEmptyHint: string
     channelsHeading: string
   }
   webSearch: {
@@ -2099,7 +2100,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerRecordedGroup: '仅记录',
       centerExpand: '展开',
       centerCollapse: '收起',
-      centerMergedCount: (count) => `×${count}`
+      centerMergedCount: (count) => `×${count}`,
+      centerEmptyHint: '任务失败、日报生成、来源异常会出现在这里。'
     },
     webSearch: {
       title: '网页搜索',
@@ -3195,7 +3197,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerRecordedGroup: 'Recorded only',
       centerExpand: 'Show more',
       centerCollapse: 'Show less',
-      centerMergedCount: (count) => `×${count}`
+      centerMergedCount: (count) => `×${count}`,
+      centerEmptyHint: 'Failed tasks, generated briefings and source problems will appear here.'
     },
     webSearch: {
       title: 'Web Search',

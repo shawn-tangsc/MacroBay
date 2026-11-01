@@ -109,6 +109,16 @@ describe('通知中心的分组与空态', () => {
     expect(rows()).toHaveLength(0)
   })
 
+  it('空态下面补一句本页专属的说明：通用句说不出等的是谁', async () => {
+    await mount(fakeSource())
+
+    // 界面设计退回项：通用 `not-yet` 只说「还没到」，说不出这个页面等的是什么事件。
+    const hint = document.body.querySelector('.notification-center-empty-hint')
+    expect(hint?.textContent).toBe(labels.centerEmptyHint)
+    // 说明必须挂在 `StateView` 之外：改平台键会让另外七处 `not-yet` 说别人的话。
+    expect(hint?.closest('.state-view')).toBeNull()
+  })
+
   it('未读在上、已读在下；没有目标的通知只进「仅记录」组且没有动作', async () => {
     const source = fakeSource({
       list: async () => ({
