@@ -100,7 +100,7 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
   }
 
   return <CalendarInspector open title={text.details.title} onClose={onClose}>
-    {detail.state === 'loading' ? <EconomicCalendarEventDetailState text={text.status.loading} /> : null}
+    {detail.state === 'loading' ? <EconomicCalendarEventDetailState state="loading" text={text.status.loading} /> : null}
     {detail.state === 'available' ? <EconomicCalendarEventDetail
       event={detail.event}
       now={now}
