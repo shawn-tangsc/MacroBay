@@ -1,5 +1,6 @@
+import { StateView } from '@platform/ui/components/state'
 import type { DailyBriefingEditionSummary, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
-import type { DailyBriefingText } from './dailyBriefingText'
+import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, locale, text, formatTime, onSelect }: Readonly<{
@@ -13,7 +14,16 @@ export function DailyBriefingHistoryRail({ editions, selectedDate, todayDate, lo
 }>): React.ReactElement {
   return <aside className="mi-daily-briefing__rail" aria-label={text.history.title}>
     <p className="mi-daily-briefing__rail-title">{text.history.title}</p>
-    {editions.length === 0 ? <p className="mi-daily-briefing__rail-empty">{text.history.empty}</p> : null}
+    {editions.length === 0 ? <StateView
+      state="empty"
+      reasonCode="not-yet"
+      size="md"
+      className="mi-daily-briefing__rail-state"
+      productReason={{
+        key: 'mi.dailyBriefing.noEditions',
+        resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+      }}
+    /> : null}
     <div role="list" className="mi-daily-briefing__rail-list">
       {editions.map((edition) => {
         const missing = edition.state === 'missing'

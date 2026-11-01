@@ -737,6 +737,13 @@ export const productText = {
               horizons: { short: '短期', medium: '中期', long: '长期' },
               visuals: { direction: '方向带：左→右为短/中/长周期', etf: 'ETF 最近交易日净流入/流出', scale: '刻度 ±{max}', news: '过去 24 小时舆情极性', next: '未来 7 天高影响事件' },
               history: { title: '过去 14 天', today: '今天', missing: '缺口', missingRun: '未生成 · 当天未运行', noConclusion: '无结论', generated: '生成', readOnly: '历史版次只读', otherLocale: '另有英文版', empty: '还没有历史版次' },
+              stateReasons: {
+                noBrief: '简报只读取已启用的来源和已发布的结论。打开需要的来源并完成一次采集后，今天的消息、数据和结论会出现在这里。',
+                unreadable: '这次读取没有完成。可以重试，或先检查看板来源是否已启用。',
+                unreadableSince: '这次读取没有完成；上次成功生成于 {moment}。',
+                nothingEnabled: '四块读数都没有接通。先检查情报源，再打开今天。',
+                noEditions: '还没有历史版次。'
+              },
               emptyGuide: '四块读数都没有接通。先检查情报源，再打开今天。',
               noBriefTitle: '还没有可用的日报',
               noBriefBody: '简报只读取已启用的来源和已发布的结论。先在「配置看板来源」里打开需要的源，等一次采集完成后，今天的消息、数据和结论会出现在这里。',
@@ -2572,6 +2579,13 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               horizons: { short: 'Short', medium: 'Medium', long: 'Long' },
               visuals: { direction: 'Direction ribbon: short / medium / long', etf: 'ETF net flow, latest trading day', scale: 'Scale ±{max}', news: 'News polarity, past 24 hours', next: 'High-impact events, next 7 days' },
               history: { title: 'Past 14 days', today: 'Today', missing: 'Missing', missingRun: 'Not generated · app was not running', noConclusion: 'No conclusion', generated: 'generated', readOnly: 'History is read-only', otherLocale: 'English edition available', empty: 'No earlier editions yet' },
+              stateReasons: {
+                noBrief: 'The brief reads only enabled sources and published conclusions. Open the sources you need and let one collection finish; today’s messages, numbers and conclusion will appear here.',
+                unreadable: 'This read did not finish. Retry, or check whether the dashboard sources are enabled.',
+                unreadableSince: 'This read did not finish; it last generated at {moment}.',
+                nothingEnabled: 'All four readings are disconnected. Check the sources, then open today again.',
+                noEditions: 'No earlier editions yet.'
+              },
               emptyGuide: 'All four readings are disconnected. Check the sources, then open today again.',
               noBriefTitle: 'No daily brief yet',
               noBriefBody: 'The brief reads only enabled sources and published conclusions. Open the dashboard sources, wait for one collection, and today’s messages, numbers and conclusion will appear here.',

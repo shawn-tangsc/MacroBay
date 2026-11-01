@@ -4,6 +4,7 @@ import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { STATE_VIEW_ACTION_CHOICES, STATE_VIEW_ACTION_RULES } from '../../../contracts/queryOutcome'
+import { STATE_VIEW_ACTION_KEYS } from './stateViewText'
 
 /**
  * 调用点扫描（契约 §16 第二条守卫）。
@@ -63,7 +64,14 @@ function callSitesIn(file: string): CallSite[] {
     const reasonCode = /reasonCode="([a-z-]+)"/.exec(window)?.[1]
     if (state === undefined || reasonCode === undefined) continue
     const hasAction = /\baction=/.test(window)
-    const actionKeys = [...window.matchAll(/labelKey=\{?['"]([^'"]+)['"]\}?/g)].map((m) => m[1] ?? '')
+    // 两种写法都要认：字面量（`labelKey: 'ui.state.action.x'`）与常量引用
+    // （`labelKey: STATE_VIEW_ACTION_KEYS.x`）。后者是我们推荐给调用点的写法，
+    // 只认字面量的话，守卫保护的范围内恰好不含它自己鼓励的那种写法。
+    const literalKeys = [...window.matchAll(/labelKey=\{?['"]([^'"]+)['"]\}?/g)].map((m) => m[1] ?? '')
+    const constantKeys = [...window.matchAll(/STATE_VIEW_ACTION_KEYS\.(\w+)/g)]
+      .map((m) => STATE_VIEW_ACTION_KEYS[m[1] as keyof typeof STATE_VIEW_ACTION_KEYS])
+      .filter((key): key is string => typeof key === 'string')
+    const actionKeys = [...literalKeys, ...constantKeys]
     sites.push({
       file: relative(ROOT, file),
       line: text.slice(0, start).split('\n').length,
@@ -90,17 +98,14 @@ const BASELINE_FILE =
 
 /** 按「文件 + 码」记，不按行号：那一行随时会被别的线往上挪，行号基线第二天就变成假红。 */
 const BASELINE = new Map<string, number>([
-  [`${BASELINE_FILE}|empty.filtered-out`, 1],
-  [`${BASELINE_FILE}|disabled.target-disabled`, 1],
   [`${BASELINE_FILE}|empty.nothing-in-window`, 1],
-  // 条件展开的既有两处：`filtered-out` / `target-disabled` 在新闻情绪卡里按可选回调给按钮，
-  // 即同一个码有「有按钮/没按钮」两种形态。判据已写进 §16，清理由该线随迁移同笔做。
-  [`${BASELINE_FILE}|empty.filtered-out`, 1],
-  [`${BASELINE_FILE}|disabled.target-disabled`, 1],
+  // 情报线迁移中：`nothing-in-window` 目前只有 `productReason`，没有动作（文档要求「看全部」）。
+  // 已在群里报给他们；修掉后这两行必须同笔删掉，否则「只减不增」那条会红。
   [
-    'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendarEventDetail.tsx|error.unreadable',
+    'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx|empty.nothing-in-window',
     1
-  ]
+  ],
+  ['products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx|empty.nothing-in-window', 1],
 ])
 
 /** 三种写法都算条件展开：三元展开、`&&` 展开、`action={cond ? … : undefined}`。 */
@@ -109,6 +114,25 @@ const CONDITIONAL_SPREAD = [
   /\.\.\.\(\s*[^)]*&&[^)]*\{[^}]*action\s*:/,
   /action=\{\s*[^{}]*\?/
 ]
+
+/**
+ * 白名单违规的已知欠账（**只减不增**）。扫描器第一次能看见常量写法后暴露出的三处，
+ * 都在别的线上，都不由我改；修掉一处必须同笔删掉对应行。
+ *
+ * 与上面那份基线分开：那一份记「有没有动作」，这一份记「键对不对」。
+ */
+const KEY_BASELINE = new Map<string, number>([
+  // 情报线：`nothing-in-window` 的动作是「看全部」，站点给的是「打开设置」。
+  [
+    'products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEmptyMonthState.tsx|empty.nothing-in-window',
+    1
+  ],
+  // 情报线：`filtered-out` 的动作是「清除筛选」，站点给的是「看全部」。
+  [
+    'products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx|empty.filtered-out',
+    1
+  ]
+])
 
 function baselineKeyOf(site: CallSite): string {
   return `${site.file}|${site.state}.${site.reasonCode}`
@@ -152,8 +176,9 @@ describe('StateView call sites match the action rules', () => {
         .filter((key) => !allowed.includes(key))
         .map((key) => ({ file: site.file, line: site.line, code, key }))
     })
+    const unbaselined = offenders.filter((entry) => (KEY_BASELINE.get(`${entry.file}|${entry.code}`) ?? 0) === 0)
 
-    expect(offenders).toEqual([])
+    expect(unbaselined).toEqual([])
   })
 
   it('红夹具：`never-created` 配 `focus-form` 必须被报出（这次真出过的组合）', () => {
@@ -171,6 +196,22 @@ describe('StateView call sites match the action rules', () => {
     const offenders = fake.actionKeys.filter((key) => !allowed.includes(key))
 
     expect(offenders).toEqual(['ui.state.action.focus-form'])
+  })
+
+  it('keeps the key baseline shrinking too', () => {
+    const live = new Map<string, number>()
+    for (const site of sites) {
+      const code = `${site.state}.${site.reasonCode}`
+      const allowed = STATE_VIEW_ACTION_CHOICES[code]
+      if (allowed === undefined) continue
+      const broken = site.actionKeys.filter((key) => !allowed.includes(key)).length
+      if (broken === 0) continue
+      const key = `${site.file}|${code}`
+      live.set(key, (live.get(key) ?? 0) + broken)
+    }
+    const stale = [...KEY_BASELINE.keys()].filter((entry) => (live.get(entry) ?? 0) === 0)
+
+    expect(stale).toEqual([])
   })
 
   it('keeps the baseline shrinking: a fixed entry must be deleted, not left behind', () => {
