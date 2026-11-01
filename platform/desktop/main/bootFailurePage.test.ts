@@ -93,6 +93,19 @@ describe('boot failure page', () => {
     expect(style.match(/overflow-wrap:anywhere/gu)?.length).toBe(3)
   })
 
+  it('shrinks below 472px instead of clipping the actions', () => {
+    const html = renderBootFailurePage(failure, options)
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'))
+    const cardRule = style.slice(style.indexOf('.card {'), style.indexOf('}', style.indexOf('.card {')))
+
+    // 固定 472px 在窄窗里会把「退出应用」裁掉一半——而白屏时那正是用户最想按的键。
+    expect(cardRule).toContain('max-width:472px')
+    expect(cardRule).toContain('width:100%')
+    // flex 子项的 min-width:auto 会让卡片撑到内容最小宽度，`width:100%` 也压不住。
+    expect(cardRule).toContain('min-width:0')
+    expect(cardRule).not.toContain('width:472px')
+  })
+
   it('lets only this module turn failure text into markup', () => {
     // 脱敏发生在 failurePresentation，页面是它唯一的消费者。这条知识不能只存在人脑里：
     // 任何别的文件开始自己拼 HTML，就意味着它可能把 failure.reason（原文）直接插进去。

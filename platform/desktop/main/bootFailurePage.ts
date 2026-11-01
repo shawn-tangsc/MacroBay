@@ -79,7 +79,8 @@ export function renderBootFailurePage(failure: ScreenFailure, options: BootFailu
   * { box-sizing: border-box; }
   body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:var(--bg); color:var(--fg);
          font:13px/1.6 -apple-system, "Segoe UI", "Noto Sans SC", sans-serif; }
-  .card { width:472px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:24px; }
+  /* 这页挂在任意窗口上（函数签名就是 BrowserWindow），不是只在 960px 的主窗：窄窗要收缩，不能把按钮裁掉。 */
+  .card { width:100%; max-width:472px; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:24px; }
   h1 { margin:0 0 12px; font-size:16px; }
   .lead { color:var(--muted); margin:0 0 8px; }
   .reason { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:0 0 12px;
