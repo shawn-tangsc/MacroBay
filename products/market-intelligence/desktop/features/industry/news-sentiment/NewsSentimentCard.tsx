@@ -218,7 +218,7 @@ export function NewsSentimentCard(props: {
 /**
  * The five ways a window can have no rows, each rendered by the platform StateView.
  *
- * Why these five codes: a source that never ran is `not-yet` (its next step is to run it); all
+ * Why these five codes: a source that never ran is `never-ran` (its next step is to run it); all
  * sources switched off is `target-disabled` (the reader must re-enable them); a failing collection is
  * `error · unreadable` (retry reads again); only-out-of-window data is `older-than-window` (the
  * advertised action widens the window); a genuinely quiet period is `nothing-in-window`, which is a
