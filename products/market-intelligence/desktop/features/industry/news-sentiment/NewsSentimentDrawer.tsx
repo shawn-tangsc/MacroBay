@@ -315,6 +315,8 @@ export function NewsSentimentDrawer(props: {
                     size="md"
                     state="empty"
                   />
+                // 成因不可知（抽屉拿不到「从没跑过 / 采集失败」），故不断言窗口内确实为空：
+                // `not-yet` 不承担结论，`nothing-in-window` 会替这个窗口下「确实没有」的判断。
                 : <StateView reasonCode="not-yet" resolveText={props.resolveStateText} size="md" state="empty" />
             ) : null}
             {rows.map((row) => {
