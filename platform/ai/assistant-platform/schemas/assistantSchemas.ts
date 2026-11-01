@@ -40,6 +40,11 @@ export type AssistantEntity = {
   modelId: string | null
   modelName: string | null
   mcpServerIds: string[]
+  /**
+   * @deprecated 上下文来源注册表已删除（MI-11-R24）：没有任何运行时读取这个字段，
+   * 它只是历史模板带过来的持久化列。留着是为了避免为一个从没生效的能力做 schema 迁移；
+   * 真正的清理由迁移权威收敛那条（MI-11-R15b）一并处理。
+   */
   contextSourceIds: string[]
   tags: AssistantTag[]
   orderKey: string
