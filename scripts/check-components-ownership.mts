@@ -27,7 +27,7 @@ export const OWNER_VALUE = '前端组件'
  *
  * 为什么不用「只减不增」的历史基线：那张表要有人维护、会漂；**生效点是一个常量，漂不了**。
  */
-export const ALSO_RULE_SINCE = '385367c543c1b3ab578ea0d2e0e8856a28190e79'
+export const ALSO_RULE_SINCE = '60b84c149e6884e2892e965c7468f812d9041b37'
 
 /**
  * 组件自己的公开文档：`docs/development/<组件名>.md` 与 `.zh-CN.md`。
