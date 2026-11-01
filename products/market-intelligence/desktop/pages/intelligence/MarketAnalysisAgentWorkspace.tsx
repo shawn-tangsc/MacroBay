@@ -4,6 +4,7 @@ import { Button, Tooltip } from 'antd'
 import { Bot } from 'lucide-react'
 import { AgentChatSurface } from '@renderer/shell/agents/AgentChatSurface'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import type { productText } from '../../shared/i18n/productText'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
@@ -14,6 +15,7 @@ import { newsSentimentClient } from '../../shared/ipc/newsSentimentClient'
 import type { MarketAnalysisTimelineText } from './MarketAnalysisTimeline'
 import { analysisWorkspaceLayoutPolicy as layout } from './analysisWorkspaceLayoutPolicy'
 import { MarketAnalysisSessionMenu } from './MarketAnalysisSessionMenu'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { createMarketAnalysisContextRenderers } from './MarketAnalysisContextCard'
 import { useMarketAnalysisChat } from './useMarketAnalysisChat'
 import { AgentFloatingControl, type AgentFloatingControlText } from './AgentFloatingControl'
@@ -58,6 +60,7 @@ type Props = {
  */
 export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext, onOpenSources }: Props): React.ReactElement {
   const t = text.analysisWorkspace
+  const resolveProductText = useProductTextKey()
   const contextRenderers = useMemo(
     () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
     [t.contextAnalysis, t.selectedEvent]
@@ -173,7 +176,11 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
               composeText={chat.composeOutgoingText}
               contextRenderers={contextRenderers}
               disabled={selectionBlocked}
-              emptyState={<p className="mi-analysis-chat__empty">{t.empty}</p>}
+              emptyState={<StateView
+                state="empty"
+                reasonCode="not-yet"
+                productReason={{ key: 'pages.intelligence.portal.analysisWorkspace.empty', resolve: resolveProductText }}
+              />}
             />
           : chat.failed || selectionState === 'unavailable'
             ? <p className="mi-analysis-chat__pending" role="status">{chat.failed ? t.failed : text.analysisTimeline.unavailable}</p>

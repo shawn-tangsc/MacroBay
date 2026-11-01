@@ -86,7 +86,6 @@
 /* The shared conversation fills the panel; its composer stays on the panel's bottom edge. */
 .mi-analysis-chat > .agent-chat-surface { flex: 1 1 auto; min-height: 0; }
 /* An empty conversation keeps the product's own prompt instead of the agent page's hero. */
-.mi-analysis-chat__empty { flex: 1 1 auto; margin: 0; padding: 16px var(--mi-agent-gap); color: var(--muted); font-size: 12px; line-height: 1.6; }
 .mi-analysis-agent-workspace__divider { background: var(--border); cursor: row-resize; touch-action: none; }
 .mi-analysis-agent-workspace__divider:hover, .mi-analysis-agent-workspace__divider:focus-visible { background: var(--accent); outline: none; }
 .mi-analysis-agent-workspace .mi-analysis-timeline { padding: var(--mi-agent-gap); min-height: 0; overflow: auto; }
