@@ -31,6 +31,10 @@ asar: false
 extraResources:
   - from: resources/skills
     to: skills
+  # 产物溯源：写入提交哈希、tag、dirty、版本、构建时刻与平台架构（白名单见
+  # platform/desktop/packaging/buildInfo.ts）。build/ 由 `pnpm build:info` 在打包前生成。
+  - from: build/build-info.json
+    to: build-info.json
 
 # No native modules are rebuilt: the app uses Node built-ins only (node:sqlite).
 npmRebuild: false
