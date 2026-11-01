@@ -80,26 +80,34 @@ describe('window ipc surface', () => {
     expect(names.sort()).toEqual([...EXPECTED_CHANNELS].sort())
   })
 
-  it('keeps the five registered user-visible literals and adds no new one', async () => {
-    // 搬进来时带着 5 条界面可见字面量（两个对话框标题 + 三条英文错误）——那是存量，不是许可。
-    // 这条守卫的作用：**以后谁往这个文件里加一句用户看得见的话，会红**，而不是“文件已经在那儿了，加一句没人拦”。
+  it('keeps the visible literals a pinned list, on both the Chinese and English side', async () => {
+    // 搬进来时带着 5 条界面可见文案（两个对话框标题 + 三条英文错误）——那是存量，不是许可。
+    // 覆盖面按**出现位置**而不是按词：中文逐条计数（不去重），英文只认"可见位置的字符串"，
+    // 清单外冒出来的任何一句都红。先剥注释再扫，否则一句解释规则的注释会被当成违规。
     const { readFileSync } = await import('node:fs')
-    const source = readFileSync(new URL('./windowIpc.ts', import.meta.url), 'utf8')
+    const raw = readFileSync(new URL('./windowIpc.ts', import.meta.url), 'utf8')
+    const source = raw.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '')
 
-    // 只在**单行**里找字面量：`[^'"`\n]` 不能跨行，否则注释里的反引号会把整段代码吞进来。
-    const cjkLiterals = [...source.matchAll(/['"`]([^'"`\n]*[\u4e00-\u9fff][^'"`\n]*)['"`]/gu)].map(
-      (match) => match[1]
+    const cjk = [...source.matchAll(/['"`]([^'"`\n]*[\u4e00-\u9fff][^'"`\n]*)['"`]/gu)].map((m) => m[1])
+    // 不去重：重复写一句同样的中文也要红。
+    expect(cjk.filter((text) => text === '选择工作区')).toHaveLength(1)
+    expect(cjk.filter((text) => text === '选择附件')).toHaveLength(1)
+    expect(new Set(cjk)).toHaveProperty('size', 2)
+
+    // 英文侧：只看"会显示给用户的位置"——throw new Error(…) 与 title/label/message/placeholder/aria-*。
+    const visibleSlots = [
+      ...source.matchAll(/throw new Error\(\s*'([^']*)'/gu),
+      ...source.matchAll(/\b(?:title|label|message|placeholder|description|ariaLabel)\s*:\s*'([^']*)'/gu)
+    ].map((match) => match[1])
+    expect([...new Set(visibleSlots)].sort()).toEqual(
+      [
+        'Clipboard image is empty or too large.',
+        'Invalid clipboard image payload.',
+        'Only http(s) URLs can be opened externally.',
+        '选择工作区',
+        '选择附件'
+      ].sort()
     )
-    expect([...new Set(cjkLiterals)].sort()).toEqual(['选择工作区', '选择附件'])
-
-    const english = [
-      'Only http(s) URLs can be opened externally.',
-      'Invalid clipboard image payload.',
-      'Clipboard image is empty or too large.'
-    ]
-    for (const message of english) {
-      expect(source.split(message).length - 1).toBe(1)
-    }
   })
 
   it('takes run-time state only through its two ports', async () => {
