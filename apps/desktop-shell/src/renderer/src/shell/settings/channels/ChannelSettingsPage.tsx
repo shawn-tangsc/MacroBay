@@ -208,7 +208,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
                 state="empty"
                 reasonCode="never-created"
                 size="sm"
-                action={{ labelKey: STATE_VIEW_ACTION_KEYS.focus_form, onSelect: focusCreateForm }}
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: focusCreateForm }}
               />
             ) : null}
             {channels.map((channel) => (
