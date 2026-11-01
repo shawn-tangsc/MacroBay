@@ -205,11 +205,12 @@ function McpRow({
         }>
         {mcpStatusLabel(item.status, text)}
       </Tag>
-      {checked && item.status !== 'connected' && onUnbind ? (
+      {checked && UNBINDABLE_STATUSES.has(item.status) && onUnbind ? (
         <Button
           className="ant-secondary-button"
           size="small"
           aria-label={text.editor.tools.mcpUnbind}
+          autoInsertSpace={false}
           onClick={onUnbind}>
           {text.editor.tools.mcpUnbind}
         </Button>
@@ -306,6 +307,12 @@ async function runCredentialAction(
     onRestart?.()
   }
 }
+
+/**
+ * 哪些已绑定行给解绑出口：连不上、被停用、从没启动过。
+ * 「正在连接」是过渡态，不给出口——刚打开开关就闪出一个删除按钮，误点就删了刚建的绑定。
+ */
+const UNBINDABLE_STATUSES = new Set<AgentMcpCatalogItem['status']>(['error', 'disabled', 'idle'])
 
 /** 读屏名说的是「绑没绑」，把当前状态只作为不可用时的补充。 */
 function switchAccessibleName(item: AgentMcpCatalogItem, checked: boolean, text: AgentText): string {

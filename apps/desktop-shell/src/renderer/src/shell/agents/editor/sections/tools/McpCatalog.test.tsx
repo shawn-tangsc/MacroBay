@@ -93,6 +93,18 @@ describe('McpCatalog', () => {
     expect(healthy).not.toContain(`aria-label="${agentTextZh.editor.tools.mcpUnbind}"`)
   })
 
+  it('does not offer unbind while a server is still connecting', () => {
+    const markup = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'connecting' }] })
+
+    expect(markup).not.toContain(`aria-label="${agentTextZh.editor.tools.mcpUnbind}"`)
+  })
+
+  it('offers unbind for a bound server that was never started', () => {
+    const markup = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'idle' }] })
+
+    expect(markup).toContain(`aria-label="${agentTextZh.editor.tools.mcpUnbind}"`)
+  })
+
   it('does not explain an empty tool list on a server that is not bound yet', () => {
     const markup = renderCatalog({ addable: [{ ...baseItem, status: 'idle' }] })
 
