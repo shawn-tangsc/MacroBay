@@ -81,6 +81,8 @@ export type PlatformText = {
     windowHostUnavailableTitle: string
     windowHostUnavailableContext: string
     windowHostUnavailablePanel: string
+    /** 读失败（通道没通/响应不可读）：面板可能仍在，与「确实没有面板」是两条结论。 */
+    windowHostUnavailableUnreadable: string
     /** P1-06h（N2）：error-shell 的下一步提示（与标题/原因同样是成对 EN/ZH 键）。 */
     windowHostUnavailableHint: string
     /** P1-06h（N2）：独立窗准备期壳的专用正文（此前复用通用 loading，无法说明正在接管面板）。 */
@@ -1304,7 +1306,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       panelHandoffUnsaved: '面板还有未保存内容，已取消关闭', panelHandoffSensitive: '面板包含敏感草稿，已取消关闭',
       panelHandoffUnsupported: '当前版本不支持内容交接，已取消关闭',
       windowHostUnavailableTitle: '工作区窗口不可用', windowHostUnavailableContext: '未取得宿主上下文，已停止加载窗口内容',
-      windowHostUnavailablePanel: '当前窗口没有可承载的面板', windowHostUnavailableHint: '请回到主窗口重试，或重启应用',
+      windowHostUnavailablePanel: '当前窗口没有可承载的面板', windowHostUnavailableUnreadable: '读取本窗口的面板状态失败，面板可能仍在', windowHostUnavailableHint: '请回到主窗口重试，或重启应用',
       windowPreparingDetail: '正在把面板移入本窗口，请稍候', windowPanelPlaceholder: '此面板内容尚未接线',
       tabStrip: '工作区标签', tabClose: '关闭标签', tabOpenPage: '打开页面', tabActions: '标签操作', tabCloseOthers: '关闭其他标签',
       tabCloseRight: '关闭右侧标签', tabReopen: '重开最近关闭的标签', tabReopenUnavailable: '没有最近关闭的标签',
@@ -2364,7 +2366,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       panelHandoffUnsaved: 'The panel has unsaved content, so it was not closed', panelHandoffSensitive: 'The panel holds a sensitive draft, so it was not closed',
       panelHandoffUnsupported: 'Content handoff is not supported in this version, so the panel was not closed',
       windowHostUnavailableTitle: 'Workspace window unavailable', windowHostUnavailableContext: 'The host context could not be read, so window content was not loaded',
-      windowHostUnavailablePanel: 'This window has no panel to host', windowHostUnavailableHint: 'Return to the main window and try again, or restart the app',
+      windowHostUnavailablePanel: 'This window has no panel to host', windowHostUnavailableUnreadable: 'Could not read this window\'s panel state; the panel may still be there', windowHostUnavailableHint: 'Return to the main window and try again, or restart the app',
       windowPreparingDetail: 'Moving this panel into this window, please wait', windowPanelPlaceholder: 'Panel content is not wired up yet',
       tabStrip: 'Workspace tabs', tabClose: 'Close tab', tabOpenPage: 'Open page', tabActions: 'Tab actions', tabCloseOthers: 'Close other tabs',
       tabCloseRight: 'Close tabs to the right', tabReopen: 'Reopen last closed tab', tabReopenUnavailable: 'No recently closed tab',

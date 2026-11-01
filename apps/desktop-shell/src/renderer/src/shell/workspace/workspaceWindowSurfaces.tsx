@@ -187,17 +187,27 @@ export function buildPanelViews(input: {
  * 安全 error-shell（P1-06h / N2）：语言只取 AppShell 传来的**当前语言**兜底（白名单外一律回退 en-US），
  * 样式来自 `workspaceLayout.css` 的 `.workspace-window-error`（只用主题变量）。
  */
-export function WorkspaceErrorShell({ language, reason }: { language: AppLanguage; reason: 'context-unavailable' | 'panel-unmounted' }): React.ReactElement {
+export function WorkspaceErrorShell({ language, reason }: {
+  language: AppLanguage
+  /** `panel-unreadable` 是「拿不到」，其余是「确实没有」：结论不同，文案不能共用一个。 */
+  reason: 'context-unavailable' | 'panel-unmounted' | 'panel-unreadable'
+}): React.ReactElement {
   const labels = platformText[language].workspace
+  const detail = reason === 'panel-unreadable'
+    ? labels.windowHostUnavailableUnreadable
+    : reason === 'panel-unmounted'
+      ? labels.windowHostUnavailablePanel
+      : labels.windowHostUnavailableContext
   return (
     <section
       className="workspace-window-shell workspace-window-error"
       role="alert"
       aria-label={labels.windowHostUnavailableTitle}
       data-window-shell="error"
+      data-window-error-reason={reason}
     >
       <h1>{labels.windowHostUnavailableTitle}</h1>
-      <p>{reason === 'panel-unmounted' ? labels.windowHostUnavailablePanel : labels.windowHostUnavailableContext}</p>
+      <p>{detail}</p>
       <p className="workspace-window-shell-hint">{labels.windowHostUnavailableHint}</p>
     </section>
   )

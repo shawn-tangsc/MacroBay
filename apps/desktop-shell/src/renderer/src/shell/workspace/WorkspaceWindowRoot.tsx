@@ -185,17 +185,19 @@ export function WorkspaceWindowRoot(props: WorkspaceWindowRootProps): React.Reac
         setState({ status: 'error', reason: 'context-unavailable' })
         return
       }
-      const snapshot = await client.loadSnapshot()
+      const read = await client.loadSnapshot()
       if (cancelled) return
       if (outcome.context.role === 'main') {
         // 主窗仍渲染既有 shell，但保留权威快照与订阅：源侧 ACK 必须由主窗发出
-        setState({ status: 'main', context: outcome.context, snapshot, client })
+        setState({ status: 'main', context: outcome.context, snapshot: read.status === 'ok' ? read.snapshot : null, client })
         return
       }
-      if (snapshot === null) {
-        setState({ status: 'error', reason: 'panel-unmounted' })
+      if (read.status !== 'ok') {
+        // 「拿不到」与「确实没有」是两条结论：通道失败时面板可能仍在，不能报成「没有可承载的面板」。
+        setState({ status: 'error', reason: read.status === 'unavailable' ? 'panel-unreadable' : 'panel-unmounted' })
         return
       }
+      const snapshot = read.snapshot
       if (hostableMounts(outcome.context, snapshot).length > 0) {
         await applyBeforeFirstCommit(outcome.context.preferences.theme)
         if (cancelled) return
@@ -301,12 +303,14 @@ export function WorkspaceWindowRoot(props: WorkspaceWindowRootProps): React.Reac
         setState({ status: 'error', reason: 'context-unavailable' })
         return
       }
-      const snapshot = await client.loadSnapshot()
+      const read = await client.loadSnapshot()
       if (cancelled) return
-      if (snapshot === null) {
-        setState({ status: 'error', reason: 'panel-unmounted' })
+      if (read.status !== 'ok') {
+        // 同一条判据：宿主拒绝 ≠ 读不到。读不到时不能断定这个窗口没有面板。
+        setState({ status: 'error', reason: read.status === 'unavailable' ? 'panel-unreadable' : 'panel-unmounted' })
         return
       }
+      const snapshot = read.snapshot
       if (hostableMounts(outcome.context, snapshot).length > 0) {
         setState({ status: 'panel', context: outcome.context, snapshot, client })
         return

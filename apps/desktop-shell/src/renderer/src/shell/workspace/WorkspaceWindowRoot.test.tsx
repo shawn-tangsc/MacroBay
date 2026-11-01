@@ -121,6 +121,8 @@ function createFakeBridge(options: {
   contextOutcome: unknown
   snapshots?: WorkspaceSnapshot[]
   commandResult?: (request: Record<string, unknown>) => unknown
+  /** 覆盖快照读取的响应形状（抛错 / 拒绝 / 畸形），用来区分「拿不到」与「确实没有」。 */
+  snapshotReply?: () => unknown
 }): { bridge: WorkspaceBridge; state: FakeBridgeState; emit: (event: unknown) => void; pushSnapshot: (snapshot: WorkspaceSnapshot) => void } {
   const snapshots = options.snapshots ?? [snapshotWith(7)]
   const state: FakeBridgeState = {
@@ -137,6 +139,7 @@ function createFakeBridge(options: {
     },
     getSnapshot: async () => {
       state.snapshotCalls += 1
+      if (options.snapshotReply) return options.snapshotReply()
       return { status: 'ok', snapshot: snapshots[snapshots.length - 1] }
     },
     command: async (request: unknown) => {
@@ -347,6 +350,28 @@ describe('WorkspaceWindowRoot error-shell 与边界', () => {
     const host = await renderRoot(fake.bridge)
     expect(host.textContent).toContain(labels.windowHostUnavailablePanel)
     expect(host.querySelector('[data-panel-key]')).toBeNull()
+  })
+
+  it('读快照失败时说「拿不到」，不报成「没有可承载的面板」', async () => {
+    // 通道失败与「宿主明确没有面板」是两条结论：前者面板可能仍在，说成「没有」就是假结论。
+    const fake = createFakeBridge({
+      contextOutcome: hostContext('panel'),
+      snapshotReply: () => { throw new Error('ipc transport failed') }
+    })
+    const host = await renderRoot(fake.bridge)
+    expect(host.textContent).toContain(labels.windowHostUnavailableTitle)
+    expect(host.textContent).toContain(labels.windowHostUnavailableUnreadable)
+    expect(host.textContent).not.toContain(labels.windowHostUnavailablePanel)
+  })
+
+  it('宿主回话并拒绝读取时才报「没有可承载的面板」', async () => {
+    const fake = createFakeBridge({
+      contextOutcome: hostContext('panel'),
+      snapshotReply: () => ({ status: 'rejected', errorCode: 'panel-not-mounted' })
+    })
+    const host = await renderRoot(fake.bridge)
+    expect(host.textContent).toContain(labels.windowHostUnavailablePanel)
+    expect(host.textContent).not.toContain(labels.windowHostUnavailableUnreadable)
   })
 
   it('完全忽略 URL 参数：伪造 pageId/panelId 不改变任何渲染结果', async () => {
