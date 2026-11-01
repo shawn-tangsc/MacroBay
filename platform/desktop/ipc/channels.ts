@@ -58,6 +58,7 @@ export const IpcChannels = {
   modelProvidersTestConnection: 'platform:model-providers-test-connection',
   modelProvidersRunRuntimeChecks: 'platform:model-providers-run-runtime-checks',
   modelProvidersGetRuntimeCheckReport: 'platform:model-providers-get-runtime-check-report',
+  modelProvidersGetInUseRetired: 'platform:model-providers-get-in-use-retired',
   modelProvidersPreviewModelSync: 'platform:model-providers-preview-model-sync',
   modelProvidersApplyModelSync: 'platform:model-providers-apply-model-sync',
   /**

@@ -107,6 +107,7 @@ import { buildAgentSkillsRuntimeCatalog } from '../../ai/agent-platform/skills/s
 import { ToolRegistry } from '../../ai/agent-platform/tools'
 import type { ModelDefinition, ModelProviderInput, ProviderState, SafeModelProvider } from '../../ai/providers/modelProviderTypes'
 import { probeProviderProxyTarget, testModelProviderConnection } from '../../ai/providers/providerConnection'
+import { createInUseModelPatrolRuntime } from '../../ai/providers/inUseModelPatrolRuntime'
 import { isEndpointProbeKind, probeProviderEndpoint } from '../../ai/providers/providerEndpointProbe'
 import { generateProviderImages, validateImageGenerationInput } from '../../ai/providers/providerImageGeneration'
 import {
@@ -1714,6 +1715,28 @@ function registerIpcHandlers(
       return testModelProviderConnection(provider, { modelId: options?.modelId, fetch: getPlatformFetch() })
     }
   )
+  const inUseModelPatrol = createInUseModelPatrolRuntime({
+    listProviders: async () => (await providerStore.getState()).providers,
+    loadAgentModelIds: async () => {
+      const state = await agentStore.getState()
+      return state.agents.flatMap((agent) =>
+        [agent.model, agent.planModel, agent.smallModel].filter(
+          (id): id is string => typeof id === 'string' && id.length > 0
+        )
+      )
+    },
+    configuredDefaultModelIds: async () =>
+      Object.values((await settingsStore.get()).modelDefaults).filter(
+        (value) => typeof value === 'string' && value.trim().length > 0
+      ),
+    testConnection: async (providerId, modelId) => {
+      const provider = await providerStore.resolveRuntimeProvider(providerId)
+      if (!provider) return null
+      return testModelProviderConnection(provider, { modelId, fetch: getPlatformFetch() })
+    }
+  })
+  inUseModelPatrol.start()
+  ipcMain.handle(IpcChannels.modelProvidersGetInUseRetired, () => inUseModelPatrol.getRetired())
   /**
    * T1–T3：图像生成 / 图像编辑共用**同一条**通道（`operation: 'edit'` 是 additive 参数，不新增通道）。
    * 全部返回结构化 `{ok:...}`，不再抛裸 IPC 错误；顺序固定为

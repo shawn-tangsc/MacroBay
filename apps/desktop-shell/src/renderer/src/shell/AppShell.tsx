@@ -240,19 +240,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
   const [providers, setProviders] = useState<SafeModelProvider[]>([])
-  // PLAT-75：在用模型巡检（启动 + 每天一次；只探默认聊天模型与智能体绑定模型，最多 3 个）。
-  const inUseRetiredModels = useInUseModelPatrol({
-    providers,
-    configuredDefaultModelIds: Object.values(settings.modelDefaults).filter((value) => value.trim().length > 0),
-    loadAgentModelIds: async () => {
-      const state = await window.platform.agents.getState() as {
-        agents?: Array<{ model?: string; planModel?: string; smallModel?: string }>
-      }
-      return (state.agents ?? []).flatMap((agent) =>
-        [agent.model, agent.planModel, agent.smallModel].filter((id): id is string => typeof id === 'string' && id.length > 0)
-      )
-    }
-  })
+  // PLAT-75：巡检已挪到主进程调度；界面只读它的结论（窗口重新可见时同步一次）。
+  const inUseRetiredModels = useInUseModelPatrol()
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(createEmptyProviderDraft)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
