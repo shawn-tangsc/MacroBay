@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import { isCanonicalOpenInterestTime } from '../../../contracts/openInterestHistory'
 
@@ -51,8 +51,8 @@ export type PerpetualPositioningStore = ReturnType<typeof createPerpetualPositio
 
 export function createPerpetualPositioningSqliteStore(filePath: string) {
   mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
-  database.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const database = openSqliteDatabase(filePath)
+  database.exec('pragma synchronous = full;')
   database.exec(`create table if not exists perpetual_positioning_15m (
     asset text not null check (asset in ('btc','eth')),
     observed_ms integer not null,

@@ -1,14 +1,16 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 export type MacroCalendarSqlite = { readonly database: DatabaseSync; readonly filePath: string; close: () => void }
 
 export function createMacroCalendarSqlite(filePath: string): MacroCalendarSqlite {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
+  const database = openSqliteDatabase(filePath)
   try {
-    database.exec('pragma journal_mode = wal; pragma foreign_keys = on;')
+    database.exec('pragma foreign_keys = on;')
   } catch (error) {
     database.close()
     throw error

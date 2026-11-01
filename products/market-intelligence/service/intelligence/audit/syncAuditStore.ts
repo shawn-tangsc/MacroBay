@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import type { SyncAuditEntry } from '../../../contracts/syncRunRecords'
 
@@ -34,7 +34,7 @@ export function createSyncAuditStoreIfAvailable(filePath: string): SyncAuditStor
 }
 
 export function createSyncAuditStore(filePath: string): SyncAuditStore {
-  const database = new DatabaseSync(filePath)
+  const database = openSqliteDatabase(filePath)
   database.exec(`create table if not exists mi_sync_audit (
     id text primary key, at text not null, actor text not null, action text not null,
     target text not null, outcome text not null, failure_code text, duration_ms integer,

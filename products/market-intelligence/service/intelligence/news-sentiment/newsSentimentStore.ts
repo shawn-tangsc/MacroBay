@@ -1,6 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import type {
   NewsBodyTranslationRecord,
@@ -250,11 +252,11 @@ function deleteBefore(
 /** No migration path: a file that cannot be opened is discarded and rebuilt. */
 function openOrReset(filePath: string): DatabaseSync {
   try {
-    return new DatabaseSync(filePath)
+    return openSqliteDatabase(filePath)
   } catch (error) {
     if (filePath === ':memory:') throw error
     for (const suffix of ['', '-wal', '-shm']) rmSync(filePath + suffix, { force: true })
-    return new DatabaseSync(filePath)
+    return openSqliteDatabase(filePath)
   }
 }
 

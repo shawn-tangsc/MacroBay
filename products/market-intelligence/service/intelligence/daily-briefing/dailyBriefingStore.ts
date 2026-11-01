@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import type { DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
@@ -18,8 +18,8 @@ export const dailyBriefingStoragePolicy = Object.freeze({
  */
 export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingStore {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
-  const db = new DatabaseSync(filePath)
-  db.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const db = openSqliteDatabase(filePath)
+  db.exec('pragma synchronous = full;')
   const stored = Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
   if (stored !== dailyBriefingStoragePolicy.schemaVersion) {
     // The document is derived; when the schema changes, old editions are rebuilt on next open.

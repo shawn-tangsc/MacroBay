@@ -4,7 +4,10 @@ import { constants, createReadStream, createWriteStream, lstatSync, mkdirSync, o
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { pipeline } from 'node:stream/promises'
-import { backup, DatabaseSync } from 'node:sqlite'
+import { backup } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import type { MacroCalendarSqlite } from './macroCalendarSqlite'
 import { macroCalendarEvidenceArchivePolicy as limits, type MacroCalendarEvidenceArchive } from './macroCalendarEvidenceArchive'
 import { zeroXRouterCalendarStoragePolicy as market } from './0xrouter-calendar/marketCalendarStorageValidation'
@@ -105,7 +108,7 @@ export function createCalendarStorageSnapshotService(options: { readFreeBytes?: 
         capacity(input.parent, Math.max(physicalBytes, pageCount * pageSize) + limits.maximumArchiveBytes + limits.maximumMetadataBytes)
         const directory = exclusiveDirectory(input)
         await backup(input.source.database, join(directory, policy.databaseName), { rate: policy.backupPages })
-        const copied = new DatabaseSync(join(directory, policy.databaseName))
+        const copied = openSqliteDatabase(join(directory, policy.databaseName))
         try { copied.exec('pragma wal_checkpoint(truncate)') } finally { copied.close() }
         rmSync(`${join(directory, policy.databaseName)}-wal`, { force: true })
         rmSync(`${join(directory, policy.databaseName)}-shm`, { force: true })
@@ -208,7 +211,7 @@ function writeExclusive(path: string, body: string) {
 async function scan(directory: string, reader: EvidenceReader, consume: (record: RawIntelligenceRecord, body: string) => Promise<void>): Promise<SnapshotEvidence> {
   const path = join(directory, calendarBackupPolicy.databaseName)
   const fd = openRegular(path); closeSync(fd)
-  const database = new DatabaseSync(`${pathToFileURL(path).href}?immutable=1`, { readOnly: true })
+  const database = openSqliteDatabase(`${pathToFileURL(path).href}?immutable=1`, { readOnly: true })
   try { return await collectSnapshotEvidence(database, reader, consume) } finally { database.close() }
 }
 function exists(path: string): boolean {

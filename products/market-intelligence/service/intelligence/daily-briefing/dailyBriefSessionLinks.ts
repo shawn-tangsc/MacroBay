@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 export const dailyBriefSessionLinkStoragePolicy = Object.freeze({
   fileName: 'daily-brief-sessions.sqlite',
@@ -29,8 +29,8 @@ export type DailyBriefSessionLinkStore = Readonly<{
 
 export function createDailyBriefSessionLinkStore(filePath: string): DailyBriefSessionLinkStore {
   if (filePath !== ':memory:') mkdirSync(dirname(filePath), { recursive: true })
-  const db = new DatabaseSync(filePath)
-  db.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const db = openSqliteDatabase(filePath)
+  db.exec('pragma synchronous = full;')
   const version = Number((db.prepare('pragma user_version').get() as { user_version?: number }).user_version ?? 0)
   const hasOldTable = Boolean(db.prepare("select 1 from sqlite_master where type = 'table' and name = 'daily_brief_session_links'").get())
   if (version < 2 && hasOldTable) {

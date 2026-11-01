@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import { barRetentionPolicy, type BarRetentionCutoffs } from '../retention/barRetention'
 
@@ -21,7 +21,7 @@ const canonical = (value: number): string => {
 
 export function createMacroMarketStore(filePath: string) {
   mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
+  const database = openSqliteDatabase(filePath)
   database.exec(`create table if not exists macro_market_points (
     series text not null, at_ms integer not null, value text not null, observed_at_ms integer not null,
     primary key(series, at_ms))`)

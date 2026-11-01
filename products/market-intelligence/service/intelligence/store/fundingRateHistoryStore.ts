@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 export const fundingRateHistoryStoragePolicy = Object.freeze({
   fileName: 'funding-rate-history.sqlite',
@@ -24,8 +24,8 @@ export type FundingRateHistoryStore = ReturnType<typeof createFundingRateHistory
 
 export function createFundingRateHistorySqliteStore(filePath: string) {
   mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
-  database.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const database = openSqliteDatabase(filePath)
+  database.exec('pragma synchronous = full;')
   database.exec('create table if not exists funding_rate_history (asset text not null check (asset in (\'btc\', \'eth\')), funding_time_ms integer not null, rate_percent real not null, collected_at text not null, primary key (asset, funding_time_ms))')
 
   return {

@@ -1,6 +1,8 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import type { PersistedProviderState } from '../modelProviderTypes'
 import { ProviderPresetVersionMetaKey, type ProviderStorage } from '../providerStore'
@@ -46,9 +48,8 @@ export function createProviderSqliteStorage(options: CreateProviderSqliteStorage
   function ensureOpen(): DatabaseSync {
     if (connection) return connection
     if (options.path !== ':memory:') mkdirSync(dirname(options.path), { recursive: true })
-    const opened = new DatabaseSync(options.path)
+    const opened = openSqliteDatabase(options.path)
     opened.exec('pragma foreign_keys = on;')
-    opened.exec('pragma busy_timeout = 5000;')
     applyProviderSqliteMigrations(opened)
     seedPresetsOnce(opened, now().toISOString())
     connection = opened

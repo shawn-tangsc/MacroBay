@@ -1,4 +1,6 @@
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 type AssistantPlatformMigration = {
   id: string
@@ -152,7 +154,7 @@ export type AssistantPlatformDatabase = {
 }
 
 export function createAssistantPlatformDatabase(path: string): AssistantPlatformDatabase {
-  const connection = new DatabaseSync(path)
+  const connection = openSqliteDatabase(path)
   let transactionDepth = 0
   connection.exec('pragma foreign_keys = on;')
   applyMigrations(connection)

@@ -1,4 +1,6 @@
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 type AgentPlatformMigration = {
   id: string
@@ -1514,7 +1516,7 @@ export type AgentPlatformDatabase = {
 }
 
 export function createAgentPlatformDatabase(path: string): AgentPlatformDatabase {
-  const connection = new DatabaseSync(path)
+  const connection = openSqliteDatabase(path)
   let transactionDepth = 0
   connection.exec('pragma foreign_keys = on;')
   applyMigrations(connection)

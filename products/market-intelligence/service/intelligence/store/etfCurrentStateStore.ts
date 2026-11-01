@@ -1,5 +1,5 @@
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 import { mkdirSync } from 'node:fs'
 
 import { etfCurrentStateWindowPolicy, isValidEtfCurrentStateWindow, type EtfCurrentStateWindow, type EtfDailyFlow } from '../etf/etfCurrentStateWindow'
@@ -298,8 +298,8 @@ export function createInMemoryEtfCurrentStateStorage(initial?: EtfCurrentState):
 
 export function createEtfCurrentStateSqliteStorage(filePath: string): EtfCurrentStateStorage {
   mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
-  database.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const database = openSqliteDatabase(filePath)
+  database.exec('pragma synchronous = full;')
   database.exec('create table if not exists etf_current_state (id integer primary key check (id = 1), schema_version integer not null, window_json text, verified_at text, last_attempt_at text not null, last_success_at text, snapshot_replace_count integer not null, snapshot_no_write_count integer not null, rejection_count integer not null, history_json text)')
   // A state written before the archive existed has no history column. Adding it in place keeps the
   // stored snapshot readable as the old behaviour rather than discarding the file.

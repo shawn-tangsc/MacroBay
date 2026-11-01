@@ -1,4 +1,6 @@
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import type {
   JobLogEntry,
@@ -59,9 +61,8 @@ export type JobRunSqliteRepository = {
 }
 
 export function createJobRunSqliteRepository(path: string): JobRunSqliteRepository {
-  const db = new DatabaseSync(path)
+  const db = openSqliteDatabase(path)
   db.exec('pragma foreign_keys = on;')
-  db.exec('pragma journal_mode = wal;')
   db.exec('pragma synchronous = full;')
   applySchema(db)
 
