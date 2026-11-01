@@ -106,7 +106,7 @@ describe('crypto agent card entry flow', () => {
 
     expect(container.textContent).toContain(text.data.temporarilyUnavailable)
     expect(container.textContent).toContain(text.data.retry)
-    expect(container.textContent).not.toContain(text.data.sourceNotConfigured)
+    expect(container.textContent).not.toContain(text.data.sourcesNotConfigured)
     expect(container.querySelector('.mi-agent-card__progress')).toBeNull()
     expect(container.textContent).not.toMatch(/0\/0/)
   })

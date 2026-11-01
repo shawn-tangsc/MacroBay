@@ -66,8 +66,10 @@ export const productText = {
             temporarilyUnavailable: '暂时读不到',
             drawerUnavailable: '这项数据暂时读不到，不是你没有',
             retry: '再试一次',
-            sourceNotConfigured: '还没配置来源',
-            configureSources: '去设置配置'
+            sourcesNotConfigured: '还没配置来源',
+            sourcesNotEnabled: '来源都没启用',
+            configureSources: '去设置配置',
+            enableSources: '去启用'
           },
           agents: {
             crypto: { name: '数字货币市场解读员', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 个静态情报源' },
@@ -1859,8 +1861,10 @@ export const productText = {
             temporarilyUnavailable: 'Temporarily unavailable',
             drawerUnavailable: 'This data is temporarily unavailable — it is not missing from your setup',
             retry: 'Try again',
-            sourceNotConfigured: 'No source configured',
-            configureSources: 'Configure in settings'
+            sourcesNotConfigured: 'No source configured',
+            sourcesNotEnabled: 'No source enabled',
+            configureSources: 'Configure in settings',
+            enableSources: 'Enable in settings'
           },
           agents: {
             crypto: { name: 'Crypto Market Analyst', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 static intelligence sources' },

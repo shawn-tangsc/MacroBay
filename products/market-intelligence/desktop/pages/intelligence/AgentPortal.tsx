@@ -8,8 +8,18 @@ import futuresPortraitUrl from './assets/mi-futures-analyst.jpg'
 
 type AgentPortalText = {
   moduleLabel: string
-  /** 「暂时读不到」与「还没配置来源」的唯一用词；两种状态的动作也在这一块。 */
-  data: { temporarilyUnavailable: string; retry: string; sourceNotConfigured: string; configureSources: string }
+  /**
+   * 三种「没有可用读数」的唯一用词，各有自己的下一步：
+   * 没配置 → 去设置配置、都没启用 → 去启用、读不到 → 再试一次。三句不许互相借。
+   */
+  data: {
+    temporarilyUnavailable: string
+    retry: string
+    sourcesNotConfigured: string
+    sourcesNotEnabled: string
+    configureSources: string
+    enableSources: string
+  }
   agents: Record<MarketIntelligenceAgent['id'], { name: string; lens: string; sourceSummary: string }>
   states: { available: string; comingSoon: string }
   sourceSummary: { count: string; pending: string }
@@ -81,14 +91,26 @@ export function AgentPortal({
                 .replace('{enabled}', String(activation.enabledSourceCount))
                 .replace('{total}', String(activation.totalSourceCount))
               : ''
-            // The card's own three answers. A failed read must never borrow the not-configured
-            // sentence: one asks the reader to configure, the other asks them to wait and retry.
-            // "Configured" means at least one provider is enabled — a 0/12 read is still an
-            // unanswered setup, and printing it as a fraction reads like a working counter.
+            // Four answers, four different next steps. A failed read must never borrow a
+            // not-configured sentence, and "nothing configured" must not absorb "configured but
+            // all switched off" — the reader's next move differs in each case. A 0/12 read is
+            // still unanswered setup; printing it as a fraction reads like a working counter.
             const activationState = activation.status === 'loading' ? 'loading'
               : activation.status === 'unavailable' ? 'unavailable'
-                : activation.enabledSourceCount === 0 ? 'not-configured'
-                  : 'configured'
+                : activation.totalSourceCount === 0 ? 'not-configured'
+                  : activation.enabledSourceCount === 0 ? 'not-enabled'
+                    : 'configured'
+            const activationText = activationState === 'unavailable' ? text.data.temporarilyUnavailable
+              : activationState === 'not-configured' ? text.data.sourcesNotConfigured
+                : activationState === 'not-enabled' ? text.data.sourcesNotEnabled
+                  : '—'
+            const activationAction = activationState === 'unavailable'
+              ? { label: text.data.retry, run: onRetryActivation }
+              : activationState === 'not-configured'
+                ? { label: text.data.configureSources, run: onOpenSources }
+                : activationState === 'not-enabled'
+                  ? { label: text.data.enableSources, run: onOpenSources }
+                  : undefined
             const sampleSwitchDisabled = sample.busy || (!sample.available && !sample.active)
 
             return (
@@ -135,32 +157,17 @@ export function AgentPortal({
                         </button>
                       ) : (
                         <span className="mi-agent-card__activation" data-activation-state={activationState}>
-                          <span className="mi-agent-card__activation-state">
-                            {activationState === 'unavailable' ? text.data.temporarilyUnavailable
-                              : activationState === 'not-configured' ? text.data.sourceNotConfigured
-                                : '—'}
-                          </span>
-                          {activationState === 'unavailable' ? (
+                          <span className="mi-agent-card__activation-state">{activationText}</span>
+                          {activationAction ? (
                             <button
                               className="mi-agent-card__activation-action"
                               onClick={(event) => {
                                 event.stopPropagation()
-                                onRetryActivation()
+                                activationAction.run()
                               }}
                               type="button"
                             >
-                              {text.data.retry}
-                            </button>
-                          ) : activationState === 'not-configured' ? (
-                            <button
-                              className="mi-agent-card__activation-action"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                onOpenSources()
-                              }}
-                              type="button"
-                            >
-                              {text.data.configureSources}
+                              {activationAction.label}
                             </button>
                           ) : null}
                         </span>

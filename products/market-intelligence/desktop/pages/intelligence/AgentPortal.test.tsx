@@ -44,27 +44,34 @@ describe('AgentPortal activation read', () => {
     expect(markup).not.toContain('示例中')
   })
 
-  it('says the read failed instead of drawing an empty setup', () => {
+  it('says the read failed instead of drawing an empty or switched-off setup', () => {
     const markup = render({ status: 'unavailable' })
     expect(markup).toContain('暂时读不到')
     expect(markup).toContain('再试一次')
     expect(markup).not.toContain('还没配置来源')
+    expect(markup).not.toContain('来源都没启用')
     expect(markup).not.toContain('已启用')
     expect(markup).not.toMatch(/0\/0/)
   })
 
-  it('offers the reader’s own action when nothing is configured', () => {
+  it('says the sources are switched off when a configured setup has none enabled', () => {
+    // Twelve visible providers and none enabled is not "nothing configured": the reader did
+    // configure, and their next move is to switch one on, not to set the whole thing up.
     const markup = render({ status: 'ready', enabledSourceCount: 0, totalSourceCount: 12 })
-    expect(markup).toContain('还没配置来源')
-    expect(markup).toContain('去设置配置')
+    expect(markup).toContain('来源都没启用')
+    expect(markup).toContain('去启用')
+    expect(markup).not.toContain('还没配置来源')
     expect(markup).not.toContain('暂时读不到')
     expect(markup).not.toMatch(/0\/12/)
   })
 
-  it('still calls an answered empty view not-configured, not a failed read', () => {
+  it('offers the configuring action when nothing is configured at all', () => {
     const markup = render({ status: 'ready', enabledSourceCount: 0, totalSourceCount: 0 })
     expect(markup).toContain('还没配置来源')
+    expect(markup).toContain('去设置配置')
+    expect(markup).not.toContain('来源都没启用')
     expect(markup).not.toContain('暂时读不到')
+    expect(markup).not.toMatch(/0\/0/)
   })
 
   it('renders the retry control only for a failed read', () => {

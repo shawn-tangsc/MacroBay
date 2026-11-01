@@ -354,16 +354,23 @@ button.mi-agent-card__status:focus-visible {
 }
 
 /*
- * 「暂时读不到」/「还没配置来源」占住进度位：状态词与它的动作并排，尺寸沿用进度行的 9px，
- * 不加底色、不加边框，免得一个失败态看起来像一块新面板。
+ * 「暂时读不到」/「还没配置来源」/「来源都没启用」占住进度位：状态词与它的动作并排，
+ * 尺寸沿用进度行的 9px，不加底色、不加边框，免得一个失败态看起来像一块新面板。
+ *
+ * The English pair is the longest: "No source enabled · Enable in settings" is 7px wider than
+ * the copy column at 400px. It wraps onto a second line there instead of shrinking below 9px or
+ * running under the portrait — measured in the light-theme English fixture.
  */
 .mi-agent-card__activation {
   position: relative;
   z-index: 2;
   display: inline-flex;
-  flex: 0 0 auto;
-  gap: 6px;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 2px 6px;
   align-items: baseline;
+  justify-content: flex-end;
   color: var(--mi-terminal-muted);
   font-size: 9px;
 }
