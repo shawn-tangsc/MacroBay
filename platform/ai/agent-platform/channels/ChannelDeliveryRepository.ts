@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
-import type { ChannelDeliveryAttemptView, ChannelDeliverySource, ChannelDeliveryStatus, ChannelDeliveryAuditView } from './ChannelDeliveryContracts'
+import type { ChannelDeliveryAttemptView, ChannelDeliverySource, ChannelDeliverySkipReason, ChannelDeliveryStatus, ChannelDeliveryAuditView } from './ChannelDeliveryContracts'
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
 import { taskResultOutcomes, taskResultSourceId } from './taskResultSourceId'
 
@@ -198,7 +198,7 @@ export class ChannelDeliveryRepository {
       input.executionClaim?.workItemId ?? null, input.executionClaim?.workItemId ?? '', input.executionClaim?.receiptId ?? '', input.executionClaim?.dispatchId ?? '', input.executionClaim?.leaseToken ?? '', input.executionClaim?.leaseExpiresAt ?? '', input.now.toISOString(), input.executionClaim?.generation ?? -1)))
   }
 
-  finishSkipped(attempt: DeliveryAttempt, code: string, now: Date): boolean {
+  finishSkipped(attempt: DeliveryAttempt, code: ChannelDeliverySkipReason, now: Date): boolean {
     return this.database.transact(() => {
       const changed = this.database.connection.prepare(
         `update channel_delivery_attempts set status = 'skipped', stable_error_code = ?, updated_at = ?, completed_at = ?

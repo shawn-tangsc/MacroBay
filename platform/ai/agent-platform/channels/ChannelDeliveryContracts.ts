@@ -1,8 +1,25 @@
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
 
 export type ChannelDeliverySource = 'inbound-reply' | 'task-result' | 'agent-notify'
-// `sending` is an internal durable lease. Only its matching owner can record a result.
+/**
+ * Where one delivered message stands. NOT `TaskResultOutcome` (completed/failed/cancelled), which is
+ * what happened to the task run and goes into `source_id`. The two never convert into each other;
+ * they only meet as separate counts on the delivery-health panel.
+ *
+ * `sending` is an internal durable lease. Only its matching owner can record a result.
+ */
 export type ChannelDeliveryStatus = 'pending' | 'sending' | 'delivered' | 'failed' | 'unknown-after-send' | 'skipped'
+
+/**
+ * Why a delivery was skipped. A closed set on purpose: a skipped row without a reason tells the
+ * user "it was skipped, do not ask" — and each reason needs a different next action.
+ */
+export type ChannelDeliverySkipReason =
+  | 'delivery-no-enabled-target'
+  | 'delivery-empty-output'
+  | 'delivery-not-authorized'
+  | 'delivery-retry-not-permitted'
+  | 'delivery-owner-invalid'
 
 export type ChannelDeliveryTransportResult =
   | { kind: 'delivered' }

@@ -2,10 +2,13 @@
  * The `source_id` format for a task result is agreed in exactly one place. Producers and readers
  * both call these two functions, so a format change cannot leave one side parsing the old shape.
  *
- * The middle segment is the run outcome (not the delivery status), and `runLogId` may itself
- * contain colons: the outcome is the last segment, and only a known outcome counts.
+ * The LAST segment is the run outcome, and `runLogId` may itself contain colons. This is the run
+ * outcome, deliberately not the delivery status: `ChannelDeliveryStatus` lives on the delivery row,
+ * and swapping the two compiles and never throws — it only produces wrong counts.
  */
 export const taskResultOutcomes = ['completed', 'failed', 'cancelled'] as const
+
+/** What happened to the task run. NOT `ChannelDeliveryStatus`, which says where the message went. */
 export type TaskResultOutcome = (typeof taskResultOutcomes)[number]
 
 export function taskResultSourceId(runLogId: string, outcome: TaskResultOutcome): string {
