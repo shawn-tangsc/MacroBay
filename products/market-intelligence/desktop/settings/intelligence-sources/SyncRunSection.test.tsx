@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
+import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { SyncRunSection } from './SyncRunSection'
 
 const text = productText['zh-CN'].settings.intelligenceSources.syncRun
@@ -101,5 +102,20 @@ describe('sync run section', () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'unavailable', failureCode: 'runs-unavailable' })
     const dom = await render()
     expect(dom.textContent).toContain(text.unavailable)
+  })
+
+  it('renders each run in the display time zone, not the machine zone', async () => {
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () =>
+      root!.render(
+        createElement(ShellTimeZoneProvider, { timeZone: 'Asia/Shanghai' }, createElement(SyncRunSection, { text }))
+      )
+    )
+    await act(async () => { await Promise.resolve() })
+    // 08:27 UTC 显示成 16:27（GMT+8）；同一时刻在机器时区下会写成 08:27。
+    expect(host.textContent).toContain('16:27')
+    expect(host.textContent).not.toContain('08:27')
   })
 })

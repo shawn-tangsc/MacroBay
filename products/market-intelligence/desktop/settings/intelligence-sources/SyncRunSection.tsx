@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
 import type { SyncRunQuery, SyncRunRow, SyncRunWindow } from '../../../contracts/syncRunRecords'
 import { syncRunsCsv } from '../../../contracts/syncRunRecords'
@@ -48,6 +50,7 @@ const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
 const SYNC_RUN_PAGE_SIZE = 30
 
 export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React.ReactElement {
+  const timeZone = useShellTimeZone()
   const [window, setWindow] = useState<SyncRunWindow>('24h')
   const [outcome, setOutcome] = useState<SyncRunQuery['outcome']>()
   const [state, setState] = useState<'loading' | 'available' | 'unavailable'>('loading')
@@ -156,7 +159,7 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
         <span role="columnheader">{text.columns.detail}</span>
       </div>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
-        <span className="mi-sync-run__time" role="cell">{formatTime(row.at, window)}</span>
+        <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
         <span className="mi-sync-run__task" role="cell" title={taskLabelOf(row)}>{taskLabelOf(row)}</span>
         <span className="mi-sync-run__source" role="cell" title={row.sources.map(sourceLabelOf).join(text.joiner)}>
           {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
@@ -192,10 +195,8 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
 }
 
 /** A time alone is only unambiguous inside one day; wider windows carry the date. */
-function formatTime(at: string, window: SyncRunWindow): string {
-  const parsed = new Date(at)
-  if (Number.isNaN(parsed.getTime())) return at
-  const time = parsed.toLocaleTimeString(undefined, { hour12: false })
-  if (window === '24h') return time
-  return `${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')} ${time}`
+function formatTime(at: string, timeZone: string): string {
+  // 同一显示日只给时刻，跨日带日期；时区来自窗口级 provider，产品不再自己取本地时间。
+  // 失败时原样返回原始值，宁可显示未格式化的串，也不猜一个时刻。
+  return formatShellClock(at, { timeZone }) ?? at
 }
