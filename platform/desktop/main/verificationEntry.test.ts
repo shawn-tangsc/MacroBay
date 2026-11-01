@@ -61,6 +61,9 @@ describe('verification entry', () => {
   })
 
   it('keeps AGENTS.md step list equal to the verify chain, not just in name', () => {
+    // `AGENTS.md` 被 gitignore：`git archive` 出来的快照里没有它，本地才有。缺席时跳过，
+    // 否则这条守卫会让「按提交打快照签字」这件事失败在一个与仓库状态无关的原因上。
+    if (!existsSync(`${ROOT}AGENTS.md`)) return
     // 旧守卫只禁止「第二份带 `pnpm` 前缀的清单」：有人把清单改写成不带前缀的写法，它就一直绿着过期。
     // 它证明的从来是「没有第二份清单」，不是「这份清单是对的」——所以这里比步骤本身。
     const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
