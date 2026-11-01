@@ -100,7 +100,7 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<import('@platform/ai/agent-platform/schemas/agentSchemas').AgentEntity>
-  isWebSearchProviderReady?: () => Promise<boolean>
+  isWebSearchProviderReady?: () => Promise<boolean>; onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
@@ -163,10 +163,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
   // A product-owned job arms its own schedule from the switch; the module only forwards the event.
   const sourceEnableListeners = new Map<string, () => void>()
-  // The module can no longer fall back to the global fetch, so the composition root must hand the
-  // platform adapter over here rather than letting the module work without one.
-  if (!deps.platformFetch) throw new Error('market-intelligence-platform-fetch-required')
-  const platformFetch = deps.platformFetch
+  const platformFetch = deps.platformFetch ?? (() => { throw new Error('market-intelligence-platform-fetch-required') })
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
     getProviderState: deps.getProviderState,
     getAppLanguage: deps.getAppLanguage,
@@ -186,8 +183,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     ...(deps.getNetworkSettings
       ? { createPlatformWebSocket: () => createPlatformWebSocketFactory({ getNetworkSettings: deps.getNetworkSettings! }) }
       : {}),
-    onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.()
+    ...(deps.onSettingsCommitted ? { onSettingsCommitted: deps.onSettingsCommitted } : {}), onCalendarEnabledChanged: () => syncMarketCalendarSchedule?.()
   })
+  // A reader who changes their display zone means "08:05 is my 08:05 from now on", and they will not
+  // also open the briefing setting to press save. The platform tells us after the new zone is in
+  // effect, and the module moves its stored zone and re-registers the run.
   // 退出示例后按既有 profile 重新注册调度：与启动走同一条编排，不复制一份调度逻辑。
   resumeProductWork = async () => {
     await intelligenceModule.sourcesService.initializeRuntime()

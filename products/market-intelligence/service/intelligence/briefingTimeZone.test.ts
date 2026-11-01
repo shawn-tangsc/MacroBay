@@ -14,3 +14,4 @@ describe('resolveBriefingTimeZone', () => {
     expect(resolveBriefingTimeZone({ getTimeZone: () => 'America/New_York' })).toBe('America/New_York')
   })
 })
+

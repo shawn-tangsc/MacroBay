@@ -6,3 +6,4 @@
 export function resolveBriefingTimeZone(hooks: Readonly<{ getTimeZone?: () => string }> | undefined): string {
   return hooks?.getTimeZone?.() ?? 'UTC'
 }
+

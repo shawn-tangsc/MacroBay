@@ -194,6 +194,8 @@ export type IntelligenceModulePlatformHooks = {
   platformFetch: CapitalConditionsPlatformFetch
   /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. */
   getTimeZone?: () => string
+  /** The reader changed their display zone: the brief schedule follows it without a settings save. */
+  onSettingsCommitted?: (listener: (change: Readonly<{ changedKeys: readonly string[]; next: Readonly<{ timeZone: string }> }>) => void) => () => void
   /**
    * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
    * constructor because the desktop shell can only build it once network settings are readable —
@@ -973,6 +975,7 @@ export function getIntelligenceModule(
     const rescheduleBriefingForDisplayTimeZone = async (timeZone: string): Promise<void> => {
       scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(await dailyBriefingGenerationSettings.reanchor(timeZone), timeZone))
     }
+    modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
       rescheduleBriefingForDisplayTimeZone,
       pipeline,
