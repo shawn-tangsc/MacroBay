@@ -4,6 +4,10 @@
 
 This page describes how to produce a distributable desktop build from this checkout.
 
+It is the contributor-facing guide: the commands, what the package contains, and how to verify a build.
+The packaging contract itself, the installer failure modes and the release gates are maintainer material
+and live outside this repository's public docs, so nothing here restates them a second time.
+
 ## Current support
 
 - **macOS (arm64)**: `pnpm dist:mac` produces an unsigned `.dmg`. Verified from mount to a running
