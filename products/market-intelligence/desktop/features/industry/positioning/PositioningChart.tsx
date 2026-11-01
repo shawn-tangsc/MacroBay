@@ -9,6 +9,7 @@ import {
   type DashboardPositioningPoint,
   type DashboardPositioningViewState
 } from '../../../pages/intelligence/dashboardOpenInterestModel'
+import { axisTicks } from './positioningAxisTicks'
 
 import type { PositioningPanelText } from './positioningText'
 
@@ -228,17 +229,3 @@ function chipWidthFor(label: string): number {
   return Math.round(width + 12)
 }
 
-/**
- * Five evenly spaced instants across the window, snapped to the hour so the labels read as
- * round times. The card is full width now, and two labels at the ends left most of the axis
- * unreadable — a reader could not tell where in the week a dip happened.
- */
-function axisTicks(startMs: number, span: number, count: number): readonly Readonly<{ at: number; first: boolean; last: boolean }>[] {
-  if (count < 2 || span <= 0) return []
-  const steps = 4
-  return Array.from({ length: steps + 1 }, (_, index) => {
-    const raw = startMs + (span * index) / steps
-    const at = index === 0 ? startMs : index === steps ? startMs + span : Math.round(raw / 3_600_000) * 3_600_000
-    return { at, first: index === 0, last: index === steps }
-  })
-}
