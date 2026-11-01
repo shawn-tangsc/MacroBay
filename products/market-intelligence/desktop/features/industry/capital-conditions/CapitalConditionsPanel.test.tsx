@@ -295,11 +295,16 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
   })
 
-  it('keeps the unavailable state as a short safe state until the reason contract lands', () => {
+  it('tells a failed read apart from an empty one, through the platform error state', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' } }))
-    expect(markup).toContain(text.unavailable)
-    expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
+
+    // "Could not read" is an error, never an empty: a panel that says "nothing here" when the
+    // query failed tells the reader the opposite of what happened.
+    expect(markup).toContain('data-state="error"')
+    expect(markup).toContain('data-size="md"')
+    expect(markup).not.toContain('data-state="empty"')
+    expect(markup).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {

@@ -11,7 +11,6 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 type Text = {
   title: string
   loading: string
-  unavailable: string
   stablecoin: string
   asset: string
   totalSupply: string
@@ -55,7 +54,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         ? <LoadingState label={text.loading} minHeight={140} />
         : state.state === 'empty'
           ? <StateView state="empty" reasonCode="not-yet" />
-          : <p>{text.unavailable}</p>}
+          : <StateView state="error" reasonCode="unavailable" />}
       {/* The state above is what the last read returned. Re-reading it changes nothing, so the
           only useful action here is to ask the sources to be collected again. */}
       {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
