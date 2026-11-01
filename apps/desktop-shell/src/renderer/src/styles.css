@@ -9650,8 +9650,8 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 .chat-markdown-table th { background: color-mix(in srgb, var(--surface-raised, var(--surface)) 70%, transparent); color: var(--muted-strong); font-weight: 700; }
 .chat-markdown-table tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-raised, var(--surface)) 35%, transparent); }
 
-/* PLAT-64 — 整段结构化 JSON：代码块（等宽 + 圆角 + 横向滚动）或卡片（标题 + 正文）。
-   折叠条只在超过 20 行时出现；提示「已折叠 N 行」保证折叠不会看起来像内容被吞掉。 */
+/* PLAT-64 — 整段结构化 JSON：卡片摘要（标题 + 正文）加一段代码块。
+   JSON 一律一次显示完整：固定高度的可视区里左右上下滚动，不做折叠、不给「展开 / 查看原始」入口。 */
 .chat-markdown-json {
   /* 这个包裹层不是滚动容器，缺省 `min-width: auto` 会让整段 JSON 按最长一行撑开，
      把气泡和整个消息滚动区一起拉宽；横滚必须落在里面的 `pre` 上。 */
@@ -9659,23 +9659,11 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   max-width: 100%;
   margin: 6px 0;
 }
-.chat-markdown-json-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+.chat-markdown-json > pre {
+  /* 固定的可视高度：内容再长也不撑开消息，双向滚动保证每一行都还能看到。 */
+  max-height: 360px;
+  overflow: auto;
 }
-.chat-markdown-json-toggle {
-  padding: 1px 8px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted-strong);
-  font-size: 11.5px;
-  cursor: pointer;
-}
-.chat-markdown-json-toggle:hover { color: var(--text-strong); border-color: var(--muted-strong); }
-.chat-markdown-json-hint { color: var(--muted); font-size: 11.5px; }
 .chat-markdown-json-card {
   margin: 6px 0;
   padding: 8px 10px;

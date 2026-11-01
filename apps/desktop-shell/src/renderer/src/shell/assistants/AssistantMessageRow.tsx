@@ -204,7 +204,6 @@ export function AssistantMessageRow({
                           )
                     }
                     className="assistant-markdown"
-                    language={language}
                   />
                 </div>
               )
@@ -226,7 +225,6 @@ export function AssistantMessageRow({
               <ChatMarkdownText
                 text={messageBody}
                 className="assistant-markdown"
-                language={language}
               />
             ) : null}
           </>

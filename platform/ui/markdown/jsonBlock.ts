@@ -17,25 +17,19 @@ export type JsonBlock = {
   kind: JsonBlockKind
   /** 规范化后的 JSON 源码（2 空格缩进），代码块与卡片兜底都用它。 */
   source: string
-  /** 规范化后的行数，折叠阈值按它算（原始单行 JSON 展开后也可能超过阈值）。 */
-  lineCount: number
   value: unknown
 }
 
-/** 已知卡片形态：标题键 + 正文档。识别命中就出卡片，不命中就退回代码块。 */
+/** 已知卡片形态：标题键 + 正文档。识别命中就先出卡片摘要，原始 JSON 始终完整显示在它下方。 */
 export type JsonBlockCard = {
   title: string
   body: string
-  /** 卡片没展示的其余字段个数；>0 时界面必须提供「原始 JSON」入口，避免卡片吞掉内容。 */
-  extraFieldCount: number
 }
 
 export const JsonBlockShape = {
   /** 短于这个行数、且短于下面的字符数 ⇒ 不认为是结构化负载。 */
   minLines: 2,
   minCharacters: 40,
-  /** 超过这个行数默认折叠，并保留「已折叠 N 行」提示。 */
-  collapseAfterLines: 20
 } as const
 
 const CARD_TITLE_KEYS = ['title', 'name', 'label', 'heading'] as const
@@ -57,7 +51,7 @@ export function parseJsonBlock(text: string): JsonBlock | null {
   }
   if (!value || typeof value !== 'object') return null
   const source = JSON.stringify(value, null, 2)
-  return { kind, value, source, lineCount: source.split('\n').length }
+  return { kind, value, source }
 }
 
 export function readJsonBlockCard(block: JsonBlock): JsonBlockCard | null {
@@ -66,9 +60,7 @@ export function readJsonBlockCard(block: JsonBlock): JsonBlockCard | null {
   const titleEntry = firstEntry(record, CARD_TITLE_KEYS)
   const bodyEntry = firstEntry(record, CARD_BODY_KEYS)
   if (!titleEntry || !bodyEntry) return null
-  const shownKeys = new Set([titleEntry.key, bodyEntry.key])
-  const extraFieldCount = Object.keys(record).filter((key) => !shownKeys.has(key)).length
-  return { title: titleEntry.value, body: bodyEntry.value, extraFieldCount }
+  return { title: titleEntry.value, body: bodyEntry.value }
 }
 
 function readJsonBlockKind(trimmed: string): JsonBlockKind | null {

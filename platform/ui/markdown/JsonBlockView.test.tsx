@@ -24,14 +24,6 @@ function renderZh(text: string): string {
   )
 }
 
-function renderEn(text: string): string {
-  return renderToStaticMarkup(
-    <ShellLanguageProvider language="zh-CN">
-      <ChatMarkdownText text={text} language="en-US" />
-    </ShellLanguageProvider>
-  )
-}
-
 describe('structured JSON blocks in chat markdown (PLAT-64)', () => {
   it('recognises a whole-paragraph object or array, and leaves prose alone', () => {
     expect(parseJsonBlock(structuredPayload)).toMatchObject({ kind: 'object' })
@@ -58,15 +50,17 @@ describe('structured JSON blocks in chat markdown (PLAT-64)', () => {
     expect(html).not.toContain('"watchPoints"')
   })
 
-  it('renders a known card shape as a card, and keeps the unshown fields reachable', () => {
+  it('renders the whole JSON under a known card shape, with no way to hide it', () => {
     const html = renderZh(structuredPayload)
 
     expect(html).toContain('chat-markdown-json-card')
     expect(html).toContain('BTC 15m 复核')
     expect(html).toContain('结构仍偏多，但量能没有跟上。')
-    // 卡片隐藏了 tone/watchPoints/caveats ⇒ 必须给原始 JSON 入口，且默认不把 JSON 摊在正文里。
-    expect(html).toContain('查看原始 JSON')
-    expect(html).not.toContain('watchPoints')
+    // 卡片只是摘要：没被卡片展示的字段同样必须在代码块里一次看全，不给「展开 / 查看原始」入口。
+    expect(html).toContain('watchPoints')
+    expect(html).toContain('caveats')
+    expect(html).not.toContain('查看原始 JSON')
+    expect(html).not.toContain('展开')
   })
 
   it('falls back to the code block for a JSON shape it does not recognise', () => {
@@ -77,7 +71,7 @@ describe('structured JSON blocks in chat markdown (PLAT-64)', () => {
     expect(html).toContain('generatedAt')
   })
 
-  it('folds more than twenty lines with an explicit expand control and a folded-count hint', () => {
+  it('shows every line of a long JSON block, with no fold control and no folded-count hint', () => {
     const longJson = JSON.stringify(
       { generatedAt: '2026-10-14T06:00:00.000Z', rows: Array.from({ length: 30 }, (_, index) => ({ id: `row-${index}` })) },
       null,
@@ -85,20 +79,13 @@ describe('structured JSON blocks in chat markdown (PLAT-64)', () => {
     )
     const html = renderZh(longJson)
 
-    expect(html).toContain('展开')
-    expect(html).toMatch(/已折叠 \d+ 行/)
-    // 折叠只是收纳：前 20 行仍在代码块里，剩余行数与提示一致。
-    expect(html).toContain('&quot;generatedAt&quot;')
-    expect(html.split('\n').length).toBeLessThan(longJson.split('\n').length)
-  })
-
-  it('takes the fold labels from the explicit language prop (an English UI must not show Chinese)', () => {
-    const longJson = JSON.stringify({ rows: Array.from({ length: 30 }, (_, index) => ({ id: `row-${index}` })) }, null, 2)
-    const html = renderEn(longJson)
-
-    expect(html).toContain('Expand')
-    expect(html).toContain('lines folded')
+    // 折叠被去掉了：内容全在，用户靠可视区滚动看剩下的行。
     expect(html).not.toContain('展开')
+    expect(html).not.toContain('收起')
+    expect(html).not.toMatch(/已折叠 \d+ 行/)
+    expect(html).toContain('&quot;generatedAt&quot;')
+    expect(html).toContain('&quot;row-29&quot;')
+    expect(html.split('\n').length).toBeGreaterThanOrEqual(longJson.split('\n').length)
   })
 
   it('does not fold a short JSON block, and keeps it out of the prose paragraph', () => {

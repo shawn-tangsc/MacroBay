@@ -1724,7 +1724,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()}>
       {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
       <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
-      {/* PLAT-64：platform/ui 的 markdown 折叠/卡片文案走语言上下文（产品页/停靠面板由各自的外层提供）。 */}
+      {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
       <ShellLanguageProvider language={settings.language}>
       <div className="app-shell">
       <header className="topbar">
