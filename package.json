@@ -30,12 +30,13 @@
     "check:danger-color": "tsx scripts/check-danger-color.mts",
     "check:boot-page": "tsx scripts/boot-failure-layout.mts",
     "build:info": "tsx scripts/release/write-build-info.mts",
-    "verify": "pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm typecheck && pnpm test && pnpm build",
+    "verify": "pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm check:hex-color && pnpm typecheck && pnpm test && pnpm build",
     "demo:verify": "tsx scripts/demo/verify-sample.mts",
     "release:bump": "tsx scripts/release/bump-version.mts",
     "channel:acceptance": "tsx scripts/channel-acceptance.mts",
     "typecheck": "pnpm --filter @macrobay/desktop-shell typecheck",
-    "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts"
+    "generate:agent-capabilities": "tsx scripts/generate-agent-capability-reference.mts",
+    "check:hex-color": "tsx scripts/check-hex-color.mts"
   },
   "workspaces": [
     "apps/*",

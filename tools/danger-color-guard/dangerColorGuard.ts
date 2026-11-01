@@ -12,6 +12,8 @@ export type DangerColorUse = {
   file: string
   selector: string
   line: number
+  /** 字面量门禁用：这条声明的值（例如 `#dc2626`）。 */
+  value?: string
 }
 
 export type BaselineViolation =
@@ -59,6 +61,27 @@ export function scanDangerColor(css: string, file: string): DangerColorUse[] {
     const colorOffset = bodyOffset + declaration.index + declaration[0].search(/color:/i)
     const line = text.slice(0, colorOffset).split('\n').length
     uses.push({ file, selector, line })
+  }
+  return uses
+}
+
+/** 属性名必须正好是 `color`（不是 `border-color`），值是十六进制字面量。 */
+const HEX_COLOR_DECLARATION = /(?:^|;)\s*color:\s*(#[0-9a-fA-F]{3,8})\b/im
+
+export function scanHexColorLiteral(css: string, file: string): DangerColorUse[] {
+  const text = stripCssComments(css)
+  const uses: DangerColorUse[] = []
+  const rulePattern = /([^{}]+)\{([^{}]*)\}/g
+  let match: RegExpExecArray | null
+  while ((match = rulePattern.exec(text)) !== null) {
+    const selector = (match[1] ?? '').replace(/\s+/g, ' ').trim()
+    const body = match[2] ?? ''
+    const declaration = HEX_COLOR_DECLARATION.exec(body)
+    if (!declaration) continue
+    const bodyOffset = match.index + (match[1] ?? '').length + 1
+    const valueOffset = bodyOffset + declaration.index + declaration[0].search(/#/)
+    const line = text.slice(0, valueOffset).split('\n').length
+    uses.push({ file, selector, line, value: declaration[1] })
   }
   return uses
 }

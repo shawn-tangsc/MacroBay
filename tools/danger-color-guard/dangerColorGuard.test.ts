@@ -8,6 +8,7 @@ import {
   compareWithBaseline,
   formatViolations,
   scanDangerColor,
+  scanHexColorLiteral,
   stripCssComments,
   toBaseline
 } from './dangerColorGuard'
@@ -135,12 +136,18 @@ describe('the recorded baseline', () => {
   })
 })
 
-describe('baseline class names appear somewhere in source', () => {
+describe("baseline class references", () => {
   /**
-   * 名字只说它证明的事：它查的是**类名在源码里出现过**，不是「这条选择器会命中元素」。
-   * 类名还在、但被挪到别的元素上，它抓不到——那种只能靠界面验收。
+   * 名字只说它证明的事：它查的是**选择器里任意一个类名在源码里以整词出现过**，
+   * 不证明这条规则命中元素——类名还在、却挂到了别的元素上，它照样绿。
    *
-   * 允许名单故意留空：动态拼类名时人工核对后加，那一步正是我们要的人的动作。
+   * 名字里的 `at least one` 不是啰嗦：判据是「任意一个类名整词出现」，所以它证明的是
+   * 「这条选择器不像完全死掉」，**不是**「这条规则还活着」。`.a.b` 里 `.b` 死了、`.a` 还在用，
+   * 本断言照样绿——「部分类名已死、其余仍在」属于界面验收范围，机器查不了。
+   *
+   * 不取「主类名」：`.model-availability-icon.is-failed` 这类是模板拼的
+   * （`is-${state}`），字面串永远搜不到，取主类名会误报成死规则。
+   * 也不用 `includes`：那会把 `data-model-availability-icon` 当成类名命中。
    */
   const SOURCE_ROOTS = ['apps', 'platform', 'products']
   const SOURCE_EXTENSIONS = ['.ts', '.tsx']
@@ -167,13 +174,42 @@ describe('baseline class names appear somewhere in source', () => {
     return tokens
   }
 
-  it('finds no baseline entry whose class name exists nowhere in the source', () => {
+  it("keeps at least one class of every baseline selector referenced from source", () => {
     const tokens = collectSourceTokens()
-    const dead = Object.keys(baseline)
-      .map((key) => key.split(' :: ')[1] ?? '')
-      .map((selector) => ({ selector, className: /\.[A-Za-z0-9_-]+/.exec(selector)?.[0].slice(1) ?? '' }))
-      .filter((entry) => entry.className !== '' && !tokens.has(entry.className))
+    const dead = Object.keys(baseline).map((key) => {
+      const [file = key, selector = ''] = key.split(' :: ')
+      const classes = [...selector.matchAll(/\.([A-Za-z0-9_-]+)/g)].map((match) => match[1] ?? '')
+      return { file, selector, classes }
+    }).filter((entry) => entry.classes.length > 0 && !entry.classes.some((name) => tokens.has(name)))
 
-    expect(dead).toEqual([])
+    expect(
+      dead.map((entry) => `${entry.file} :: ${entry.selector}（类名 ${entry.classes.join(', ')}）`)
+    ).toEqual([])
   }, 60_000)
+})
+
+describe('scanHexColorLiteral', () => {
+  it('finds a literal foreground colour with its selector and line', () => {
+    const css = ['.a {', '  color: #dc2626;', '}', ''].join('\n')
+
+    expect(scanHexColorLiteral(css, 'x.css')).toEqual([
+      { file: 'x.css', selector: '.a', line: 2, value: '#dc2626' }
+    ])
+  })
+
+  it('ignores other colour properties, var() values and look-alike names', () => {
+    const css = [
+      '.b { border-color: #dc2626; }',
+      '.c { background-color: #dc2626; }',
+      '.d { color: var(--danger); }',
+      '/* color: #dc2626 在注释里不算 */',
+      '.g { color: var(--x, #dc2626); }'
+    ].join('\n')
+
+    expect(scanHexColorLiteral(css, 'x.css').map((use) => use.selector)).toEqual([])
+  })
+
+  it('treats an 8-digit literal as a literal', () => {
+    expect(scanHexColorLiteral('.f { COLOR: #11223344; }', 'x.css').map((use) => use.value)).toEqual(['#11223344'])
+  })
 })
