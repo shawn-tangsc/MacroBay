@@ -185,6 +185,33 @@ table, a pager or a whole page makes the data invisible, and **nobody reports th
 list simply looks finished. So the shape to write is `rows.length > 0 ? <content> : <StateView …>`,
 never `<StateView>` on one branch of a ternary whose other branch is the content.
 
+## A product reason sentence
+
+A product may replace **the reason sentence only** (§17) when its own copy carries a fact the
+platform cannot know — an as-of time, for instance:
+
+```tsx
+<StateView
+  state="empty"
+  reasonCode="older-than-window"
+  productReason={{
+    key: 'mi.newsSentiment.stale',
+    params: { time: formatTime(asOf, 'minute') },  // formatted by the platform first
+    resolve: (key, params) => text[key]?.(params) ?? ''
+  }}
+  resolveText={t}
+/>
+```
+
+- `key` must carry the product prefix (`mi.*`); the guard scans for it.
+- `params` only accepts strings: format the moment with the platform formatter first. Numbers are
+  rejected, so a raw timestamp cannot reach the sentence.
+- Missing key, empty string or a throw **falls back to the platform sentence**. The reason node
+  carries `data-reason-source="product" | "platform"`, so a call-site test can assert which path ran;
+  a silent fallback would hide the missing copy.
+- Titles, icons, announcements and actions stay the platform's. This is one slot, not a second copy
+  table.
+
 ## How to verify a page that uses it
 
 1. **Height**: in DevTools the `.state-view` element must report `min-height: 220px` for `lg` and

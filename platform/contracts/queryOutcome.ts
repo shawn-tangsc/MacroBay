@@ -42,3 +42,42 @@ export type QueryOutcome<T> =
 
 /** 从查询结果直接取状态词；`ok` 不产生状态视图。 */
 export type QueryOutcomeState = Exclude<QueryOutcome<unknown>['state'], 'ok'>
+
+/**
+ * 每个原因码要不要动作（契约 §16，2026-11-02）。
+ *
+ * 「有没有动作」是场景属性，类型不再替人判；于是这层保障从类型搬到这张表和两条扫描守卫：
+ * 文档动作列与本表逐条相等；调用点标 `required` 缺动作、标 `forbidden` 带动作都红。
+ *
+ * `none-installed` 的动作是**三选一**，不是一个固定键：三个站点各自是一种恢复方式。
+ */
+export type StateActionRule = 'required' | 'forbidden'
+
+export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
+  'empty.never-created': 'required',
+  'empty.filtered-out': 'required',
+  'empty.no-target-bound': 'required',
+  'empty.nothing-enabled': 'required',
+  'empty.none-installed': 'required',
+  'empty.no-target-selected': 'required',
+  'empty.not-yet': 'forbidden',
+  'empty.older-than-window': 'required',
+  'empty.nothing-in-window': 'required',
+  'error.unreadable': 'required',
+  'error.unavailable': 'required',
+  'error.operation-failed': 'required',
+  'error.needs-restart': 'required',
+  'disabled.capability-not-wired': 'forbidden',
+  'disabled.target-disabled': 'required',
+  'disabled.precondition-unsaved': 'required',
+  'permission.not-granted': 'required'
+}
+
+/** 允许出现在某个码上的动作键；没列出的码不限制（必填/禁止已由上一张表判）。 */
+export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
+  'empty.none-installed': [
+    'ui.state.action.install',
+    'ui.state.action.bind-target',
+    'ui.state.action.open-settings'
+  ]
+}

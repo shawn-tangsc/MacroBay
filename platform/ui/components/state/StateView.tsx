@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 
 import type { StateSize } from '../empty-state'
+import type { STATE_VIEW_ACTION_KEYS } from './stateViewText'
 import { LoadingState } from '../loading'
 
 import { useStateViewText } from './stateViewText'
@@ -78,24 +79,19 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.disabled.reason.target-disabled',
   'ui.state.disabled.reason.precondition-unsaved',
   'ui.state.permission',
-  'ui.state.permission.reason.not-granted',
-  'ui.state.action.create',
-  'ui.state.action.clear-filter',
-  'ui.state.action.bind-target',
-  'ui.state.action.enable',
-  'ui.state.action.retry',
-  'ui.state.action.check-source',
-  'ui.state.action.install',
-  'ui.state.action.save',
-  'ui.state.action.open-settings',
-  'ui.state.action.select-target',
-  'ui.state.action.restart-app',
-  'ui.state.action.open-system-settings',
-  'ui.state.action.refresh',
-  'ui.state.action.widen-time-window'
+  'ui.state.permission.reason.not-granted'
 ] as const
 
-export type StateViewTextKey = (typeof STATE_VIEW_TEXT_KEYS)[number]
+/**
+ * 键的类型 = 状态与原因键（本文件的位置清单）+ 动作键（`STATE_VIEW_ACTION_KEYS` 的值推导）。
+ *
+ * **不要再把动作键手写进上面那张清单**：那样同一个键集就有两份清单，靠人同步，
+ * 今晚已经掉队过两个（`focus-form`、`run-now`）。动作键的唯一来源是那个对象；
+ * 这里只做推导，于是「加一个键忘了写文案」会红在文案表上——红的位置就是错的位置。
+ */
+export type StateViewTextKey =
+  | (typeof STATE_VIEW_TEXT_KEYS)[number]
+  | (typeof STATE_VIEW_ACTION_KEYS)[keyof typeof STATE_VIEW_ACTION_KEYS]
 
 export type StateViewAction = {
   /** 动作文案的 i18n 键；不收字面量，且必须是本组件码表里的键。 */

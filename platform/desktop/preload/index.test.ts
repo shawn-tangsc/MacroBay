@@ -109,6 +109,31 @@ describe('desktop preload platform api', () => {
     expect(invoke).toHaveBeenCalledWith(IpcChannels.webSearchListProviders)
   })
 
+  it('exposes exactly the notification methods, including the one destructive call', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls[0]?.[1] as {
+      notifications: Record<string, unknown>
+    }
+
+    // 具名白名单：新增方法必须改这里，否则「渲染层能调什么」会悄悄变宽。
+    // `deleteRead` 是唯一破坏性入口，其余都是读、标读、收起、稍后这类状态迁移。
+    expect(Object.keys(api.notifications).sort()).toEqual([
+      'acknowledge',
+      'deleteRead',
+      'dismiss',
+      'getUnreadState',
+      'list',
+      'markAllRead',
+      'markRead',
+      'onChanged',
+      'requestDesktopPermission',
+      'sendTest',
+      'snooze'
+    ])
+    // 没有任意 channel 透传口：删除只能走这一条。
+    expect(api.notifications).not.toHaveProperty('invoke')
+  })
+
   it('exposes storage and cache methods through the preload bridge', async () => {
     invoke
       .mockResolvedValueOnce([{ cacheId: 'platform.agent-runtime-compatibility' }])

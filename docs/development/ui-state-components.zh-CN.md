@@ -165,6 +165,29 @@ import { StateView } from '@platform/ui/components/state'
 
 所以正确的写法是 `rows.length > 0 ? <内容> : <StateView …>`，**不是**把 `<StateView>` 放在三元的一个分支、另一个分支放内容。
 
+## 产品原因句
+
+产品自己的文案里有平台不知道的事实（例如「截至某时刻」）时，可以只替换**原因句这一格**（§17）：
+
+```tsx
+<StateView
+  state="empty"
+  reasonCode="older-than-window"
+  productReason={{
+    key: 'mi.newsSentiment.stale',
+    params: { time: formatTime(asOf, 'minute') },  // 先由平台格式化器算好
+    resolve: (key, params) => text[key]?.(params) ?? ''
+  }}
+  resolveText={t}
+/>
+```
+
+- `key` 必须带产品前缀（`mi.*`），守卫会扫；
+- `params` 只收字符串：时刻必须先用平台格式化器算好。数字进不来，原始时间戳到不了句子里；
+- 缺键、空串、抛错**一律回落平台句**；原因节点带 `data-reason-source="product" | "platform"`，
+  调用点测试能断言走的是哪一路——落回不许静默，否则缺文案永远没人发现；
+- 标题、图标、播报、动作仍归平台。这里只是一格，不是第二套文案表。
+
 ## 用了它之后怎么验
 
 1. **高度**：在 DevTools 里看 `.state-view` 的 `min-height`，`lg` 必须是 `220px`、`md` 必须是
