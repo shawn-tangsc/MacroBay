@@ -1,6 +1,6 @@
 import type { NetworkSettings } from '../settings/schema/appSettings'
 
-import { checkBypassRules, normalizeBypassRules } from './proxyBypass'
+import { checkBypassRules, normalizeBypassRules } from '../settings/schema/proxyBypassRules'
 
 export type SessionProxyConfig = {
   mode?: 'direct' | 'auto_detect' | 'pac_script' | 'fixed_servers' | 'system'
@@ -35,7 +35,7 @@ export type CustomProxyResolution =
 
 export type NetworkSettingsValidation =
   | { ok: true; interpretation: 'explicit' | 'socks5-implicit' }
-  | { ok: false; reason: ProxySettingsRejectionReason }
+  | { ok: false; reason: ProxySettingsRejectionReason; unsupported?: string[] }
 
 export function buildSessionProxyConfig(network: NetworkSettings): SessionProxyConfig {
   switch (network.proxyMode) {
@@ -102,7 +102,8 @@ export function validateNetworkSettings(network: NetworkSettings): NetworkSettin
   const resolution = resolveCustomProxyRules(network.proxyUrl)
   if (!resolution.ok) return { ok: false, reason: resolution.reason }
   // 绕过规则必须落在 Chromium 与 WebSocket 都能正确解释的语法内，否则保存即拒。
-  if (!checkBypassRules(network.proxyBypassRules).ok) return { ok: false, reason: 'bypass-rule-unsupported' }
+  const bypass = checkBypassRules(network.proxyBypassRules)
+  if (!bypass.ok) return { ok: false, reason: 'bypass-rule-unsupported', unsupported: bypass.unsupported }
   return { ok: true, interpretation: resolution.protocolWasImplicit ? 'socks5-implicit' : 'explicit' }
 }
 

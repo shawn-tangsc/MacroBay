@@ -1,4 +1,4 @@
-import { normalizeBypassRules } from '../../network/proxyBypass'
+import { normalizeBypassRules } from './proxyBypassRules'
 
 import {
   createDefaultNotificationRuntimeSettings,

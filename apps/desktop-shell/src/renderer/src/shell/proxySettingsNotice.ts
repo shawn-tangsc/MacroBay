@@ -10,7 +10,9 @@ export function proxyRejectionNotice(
   error: unknown,
   labels: PlatformText['preferences']
 ): string | null {
-  switch (readProxyRejectionReason(error)) {
+  const rejection = readProxyRejectionReason(error)
+  if (!rejection) return null
+  switch (rejection.reason) {
     case 'empty':
       return labels.proxyRejectedEmpty
     case 'unsupported-protocol':
@@ -18,7 +20,7 @@ export function proxyRejectionNotice(
     case 'unparsable':
       return labels.proxyRejectedUnparsable
     case 'bypass-rule-unsupported':
-      return labels.proxyRejectedBypassRule
+      return labels.proxyRejectedBypassRule(rejection.detail ?? '')
     default:
       return null
   }

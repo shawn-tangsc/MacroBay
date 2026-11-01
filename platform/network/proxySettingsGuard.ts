@@ -16,7 +16,9 @@ export function assertProxySettingsPatchAccepted(
   if (!hasNetworkField(patch)) return
   const validation = validateNetworkSettings(mergeNetworkSettingsPatch(patch, current))
   if (!validation.ok) {
-    throw new Error(`${PROXY_SETTINGS_REJECTED_PREFIX}:${validation.reason}`)
+    // 把不支持的那几条一起带出去，界面才能告诉他到底是哪几条。
+    const detail = validation.unsupported?.length ? `:${validation.unsupported.join(',')}` : ''
+    throw new Error(`${PROXY_SETTINGS_REJECTED_PREFIX}:${validation.reason}${detail}`)
   }
 }
 
@@ -43,9 +45,15 @@ export function mergeNetworkSettingsPatch(
   }
 }
 
-export function readProxyRejectionReason(error: unknown): ProxySettingsRejectionReason | null {
+export type ProxySettingsRejection = {
+  reason: ProxySettingsRejectionReason
+  /** 绕过规则被拒时，具体是哪几条。 */
+  detail: string | null
+}
+
+export function readProxyRejectionReason(error: unknown): ProxySettingsRejection | null {
   const message = error instanceof Error ? error.message : ''
-  const match = new RegExp(`${PROXY_SETTINGS_REJECTED_PREFIX}:([a-z-]+)`).exec(message)
+  const match = new RegExp(`${PROXY_SETTINGS_REJECTED_PREFIX}:([a-z-]+)(?::(.*))?`).exec(message)
   const reason = match?.[1]
   if (
     reason === 'empty' ||
@@ -53,7 +61,7 @@ export function readProxyRejectionReason(error: unknown): ProxySettingsRejection
     reason === 'unparsable' ||
     reason === 'bypass-rule-unsupported'
   ) {
-    return reason
+    return { reason, detail: match?.[2]?.trim() || null }
   }
   return null
 }
