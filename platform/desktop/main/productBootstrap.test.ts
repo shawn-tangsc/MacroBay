@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { runProductRegistration } from '../../product-registry/productRegistrationFailure'
 import {
   PRODUCT_BOOTSTRAP_FAILED_CODE,
   PRODUCT_BOOTSTRAP_FAILED_EVENT,
@@ -12,12 +13,18 @@ function createHarness() {
   return { log, markUnavailable, deps: { log: { log }, markUnavailable } }
 }
 
-/** 记一条「失败时必须有的东西」：事件名、稳定码、阶段、可读原因。 */
-function expectFailureLogged(log: ReturnType<typeof createHarness>['log'], stage: string, reason: string): void {
+/** 记一条「失败时必须有的东西」：事件名、稳定码、阶段、产品 id、可读原因。 */
+function expectFailureLogged(
+  log: ReturnType<typeof createHarness>['log'],
+  stage: string,
+  reason: string,
+  productId: string | null = null
+): void {
   expect(log).toHaveBeenCalledTimes(1)
   expect(log).toHaveBeenCalledWith('error', PRODUCT_BOOTSTRAP_FAILED_EVENT, {
     code: PRODUCT_BOOTSTRAP_FAILED_CODE,
     stage,
+    productId,
     reason
   })
 }
@@ -96,6 +103,31 @@ describe('product bootstrap failure logging', () => {
 
     expect(result).toBe('failed')
     expectFailureLogged(log, 'register-product-services', 'module not found')
+  })
+
+  it('names the product that failed when the registration carries the id', async () => {
+    const { log, deps } = createHarness()
+
+    const result = await runProductBootstrap(
+      {
+        registerProductServices: async () => {
+          // 生成文件里每个产品各包一层，抛出的错误自带 id。
+          await runProductRegistration('market-intelligence', () => {
+            throw new Error('route "mind.intel.dashboard" is not declared')
+          })
+        },
+        sealIpcSurface: () => undefined
+      },
+      deps
+    )
+
+    expect(result).toBe('failed')
+    expectFailureLogged(
+      log,
+      'register-product-services',
+      'product "market-intelligence" failed to register: route "mind.intel.dashboard" is not declared',
+      'market-intelligence'
+    )
   })
 
   it('stays silent and does not degrade when every step succeeds', async () => {

@@ -1,4 +1,5 @@
 import type { AppLog } from '../../observability/logging/appLog'
+import { productIdOf } from '../../product-registry/productRegistrationFailure'
 
 /**
  * 启动时产品注册这一段：注册服务 → 封口 IPC 面 → 可选的验收报告。
@@ -67,6 +68,9 @@ export async function runProductBootstrap<Sealed>(
     deps.log.log('error', PRODUCT_BOOTSTRAP_FAILED_EVENT, {
       code: PRODUCT_BOOTSTRAP_FAILED_CODE,
       stage,
+      // 产品 id 只在注册处知道（生成文件里每产品包一层），这里取用同一份错误，
+      // 不为日志另拼一条记录；取不到就是 null，不猜。
+      productId: productIdOf(error),
       reason: describeReason(error)
     })
     deps.markUnavailable()

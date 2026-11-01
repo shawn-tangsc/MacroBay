@@ -217,8 +217,13 @@ function renderProductServicesFile(products: readonly DiscoveredProduct[]): stri
     .map((entry) => `import { registerServices as register${toManifestExportName(entry.productId)}Services } from '${entry.importPath}'`)
     .join('\n')
 
+  // 每个产品单独包一层：注册失败时把产品 id 挂在错误上，启动失败日志与失败页共用这一条，
+  // 不做第二份记录（聚合调用本身看不出是谁失败了）。
   const registrations = bootstraps
-    .map((entry) => `  await register${toManifestExportName(entry.productId)}Services(deps)`)
+    .map(
+      (entry) =>
+        `  await runProductRegistration('${entry.productId}', () => register${toManifestExportName(entry.productId)}Services(deps))`
+    )
     .join('\n')
 
   return `/* eslint-disable */
@@ -238,6 +243,7 @@ import type {
 } from '@platform/ai/agent-platform/productTools/productAgentToolSchemas'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 import type { ProductCacheRegistrar } from '@platform/storage/cache-governance/productCacheRegistrar'
+import { runProductRegistration } from '@platform/product-registry/productRegistrationFailure'
 import type { ProductServiceDisposerRegistrar } from '@platform/product-registry/productServiceDisposerRegistry'
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
 import type { SecretVault } from '@platform/secrets/secretVaultTypes'
