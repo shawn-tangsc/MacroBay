@@ -668,36 +668,6 @@ describe('ChannelInboundService', () => {
     }
   }, 20_000)
 
-  it('uses bounded pagination for the fixed 100,000 receipt and 10,000 work-item budgets', () => {
-    const { database, repository } = createHarness()
-    database.connection.exec(`
-      with digits(d) as (values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)),
-      n(x) as (select a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 + f.d * 100000 + 1 from digits a cross join digits b cross join digits c cross join digits d cross join digits e cross join digits f)
-      insert into channel_receipts (id, channel_id, provider_event_key_ciphertext, provider_event_key_ref, provider_event_key_revision,
-        provider_event_key_hash, status, generation, created_at, updated_at)
-      select 'receipt-' || x, 'channel-a', x'01', 'payload-ref', 1, 'hash-' || x, 'ignored', 1, '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z' from n where x <= 100001;
-    `)
-    const memoryBefore = process.memoryUsage().heapUsed
-    const started = performance.now()
-    const result = repository.cleanupChannel('channel-a', new Date('2026-07-18T00:00:00.000Z'), 500)
-    expect(result.receipts).toBe(1)
-    expect(performance.now() - started).toBeLessThan(1_000)
-    expect(process.memoryUsage().heapUsed - memoryBefore).toBeLessThanOrEqual(64 * 1024 * 1024)
-    expect(database.connection.prepare('select count(*) as count from channel_receipts').get()).toEqual({ count: 100000 })
-
-    database.connection.exec(`
-      with digits(d) as (values (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)),
-      n(x) as (select a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 + 1 from digits a cross join digits b cross join digits c cross join digits d cross join digits e)
-      insert into channel_inbound_work_items (id, receipt_id, channel_id, conversation_id, dispatch_id, payload_ciphertext,
-        payload_key_ref, payload_key_revision, status, lease_expires_at, attempt_count, created_at, updated_at)
-      select 'work-' || x, 'work-receipt-' || x, 'channel-a', 'conversation-budget', 'dispatch-' || x, x'01',
-        'payload-ref', 1, 'completed', null, 1, '2026-07-18T00:00:00.000Z', '2026-07-18T00:00:00.000Z' from n where x <= 10001;
-    `)
-    const workCleanup = repository.cleanupChannel('channel-a', new Date('2026-07-18T00:00:00.000Z'), 500)
-    expect(workCleanup.workItems).toBe(1)
-    expect(database.connection.prepare('select count(*) as count from channel_inbound_work_items').get()).toEqual({ count: 10000 })
-  })
-
   it('cleans expired maintenance records in stable 500-row pages', () => {
     const { database, repository } = createHarness()
     database.connection.exec(`

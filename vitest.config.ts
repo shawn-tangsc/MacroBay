@@ -17,7 +17,13 @@ const MEASUREMENT_TESTS = [
   // 这条测的是「有界」本身：往 512 条的账本里灌 513 条、每条带 60 个事件键和一段超长摘要，
   // 量的就是上限处的裁剪代价，不是功能对错。单跑三次 4.92s / 7.05s（超时）/ 2.63s，
   // 2.6–7 秒的抖动随机器而定，5 秒默认值下必然偶发红。
-  'products/market-intelligence/service/intelligence/macro-calendar/macroCalendarProviderRuntime.test.ts'
+  'products/market-intelligence/service/intelligence/macro-calendar/macroCalendarProviderRuntime.test.ts',
+  // 通道的「有界清理代价」：同一提交在这台机器量到 780ms / 1107ms，代码路径没动，动的是负载。
+  // 断言保留绝对预算（1 秒），但改成同机连续三次取中位，并且串行跑。
+  'platform/ai/agent-platform/channels/ChannelInboundPaginationCost.test.ts',
+  // 这条扫全仓 import 图（读上千个文件），单跑 1.4 秒、并发时撞 5 秒默认预算：它量的是文件系统，
+  // 不是功能。两条都按同一口径进串行池，功能断言仍留在主 run。
+  'platform/ai/agent-platform/channels/channelTestSupportBoundary.test.ts'
 ]
 
 export default {
