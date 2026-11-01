@@ -24,6 +24,37 @@ import './stateView.css'
 
 export type StateViewState = 'normal' | 'loading' | 'empty' | 'error' | 'disabled' | 'permission'
 
+/**
+ * `ui.state.*` 的键是闭集：句子在全仓唯一一份文案表（`platformText.ts` 的 `uiState`），
+ * 组件与产品都不造句。新增一个键＝契约变更：先经架构师批准，再同笔补两语言。
+ */
+export type StateViewTextKey =
+  | 'ui.state.loading'
+  | 'ui.state.empty'
+  | 'ui.state.empty.reason.never-created'
+  | 'ui.state.empty.reason.filtered-out'
+  | 'ui.state.empty.reason.no-target-bound'
+  | 'ui.state.empty.reason.nothing-enabled'
+  | 'ui.state.empty.reason.not-yet'
+  | 'ui.state.error'
+  | 'ui.state.error.reason.unreadable'
+  | 'ui.state.error.reason.unavailable'
+  | 'ui.state.error.details'
+  | 'ui.state.disabled'
+  | 'ui.state.disabled.reason.capability-not-wired'
+  | 'ui.state.disabled.reason.target-disabled'
+  | 'ui.state.permission'
+  | 'ui.state.permission.reason.not-granted'
+  | 'ui.state.action.create'
+  | 'ui.state.action.clear-filter'
+  | 'ui.state.action.bind-target'
+  | 'ui.state.action.enable'
+  | 'ui.state.action.retry'
+  | 'ui.state.action.check-source'
+  | 'ui.state.action.grant'
+  | 'ui.state.action.open-settings'
+  | 'ui.state.action.contact-admin'
+
 export type StateViewAction = {
   /** 动作文案的 i18n 键；不收字面量。 */
   labelKey: string
