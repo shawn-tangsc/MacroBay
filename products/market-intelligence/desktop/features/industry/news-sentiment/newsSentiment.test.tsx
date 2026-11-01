@@ -250,12 +250,12 @@ describe('NewsSentimentFeature', () => {
     const query = vi.fn(async () => ({ ...VIEW, items: [...VIEW.items, neutral] }))
     const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(3)
-    const exclude = [...container.querySelectorAll<HTMLButtonElement>('.mi-news-sentiment__neutral-filter button')]
-      .find((button) => button.textContent?.includes(text.neutralFilter.exclude))
+    const exclude = [...container.querySelectorAll<HTMLElement>('.mi-news-sentiment__neutral-filter label')]
+      .find((label) => label.textContent?.includes(text.neutralFilter.exclude))
     await act(async () => { exclude?.click() })
     await act(async () => {})
     expect(container.querySelectorAll('.mi-news-sentiment__drivers button')).toHaveLength(2)
-    expect(exclude?.getAttribute('aria-pressed')).toBe('true')
+    expect(exclude?.querySelector('input')?.checked).toBe(true)
   })
 
   it('drops the card-wide engine badge and hides the empty footer', async () => {

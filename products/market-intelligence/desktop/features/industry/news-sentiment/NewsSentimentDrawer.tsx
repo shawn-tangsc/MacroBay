@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Drawer, Select } from 'antd'
+import { Button, Drawer, Segmented, Select } from 'antd'
 
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -335,10 +335,17 @@ export function NewsSentimentDrawer(props: {
                   </Button>
                 ) : null}
                 {translationEnabled && hasTranslatedBody && activeTranslationState !== 'translating' ? (
-                  <div className="mi-news-drawer__body-toggle" role="group">
-                    <button aria-pressed={bodyView === 'original'} onClick={() => setBodyView('original')} type="button">{text.drawer.detail.original}</button>
-                    <button aria-pressed={bodyView === 'translated'} onClick={() => setBodyView('translated')} type="button">{text.drawer.detail.translated}</button>
-                  </div>
+                  <Segmented
+                    aria-label={text.drawer.detail.body}
+                    className="mi-news-drawer__body-toggle"
+                    onChange={(value) => setBodyView(value as 'original' | 'translated')}
+                    options={[
+                      { label: text.drawer.detail.original, value: 'original' },
+                      { label: text.drawer.detail.translated, value: 'translated' }
+                    ]}
+                    size="small"
+                    value={bodyView}
+                  />
                 ) : null}
                 <p className="mi-news-drawer__bodytext">
                   {activeTranslationState === 'translating' || activeTranslationState === 'waiting' ? (

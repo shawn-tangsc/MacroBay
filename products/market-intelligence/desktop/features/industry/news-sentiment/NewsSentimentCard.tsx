@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button } from 'antd'
+import { Button, Segmented } from 'antd'
 import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -78,10 +78,17 @@ export function NewsSentimentCard(props: {
         <Newspaper aria-hidden="true" size={14} />
         <h2>{text.title}</h2>
         <div className="mi-news-sentiment__header-actions">
-          <span className="mi-news-sentiment__neutral-filter" role="group" aria-label={text.neutralFilter.label}>
-            <button aria-pressed={includeNeutral} className={includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(true)} type="button">{text.neutralFilter.all}</button>
-            <button aria-pressed={!includeNeutral} className={!includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(false)} type="button">{text.neutralFilter.exclude}</button>
-          </span>
+          <Segmented
+            aria-label={text.neutralFilter.label}
+            className="mi-news-sentiment__neutral-filter"
+            onChange={(value) => props.onIncludeNeutralChange?.(value === 'all')}
+            options={[
+              { label: text.neutralFilter.all, value: 'all' },
+              { label: text.neutralFilter.exclude, value: 'exclude' }
+            ]}
+            size="small"
+            value={includeNeutral ? 'all' : 'exclude'}
+          />
           <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
           <Button
             aria-label={text.settings}
