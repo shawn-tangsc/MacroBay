@@ -11,7 +11,7 @@ describe('daily briefing generation settings service', () => {
       storage: createInMemoryDailyBriefingGenerationSettingsStorage(),
       now: () => '2026-10-30T00:00:00.000Z'
     })
-    expect(await service.getView()).toEqual({ generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' })
+    expect(await service.getView()).toEqual({ generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' })
   })
 
   it('saves a valid change, persists it and notifies the scheduler', async () => {
@@ -27,7 +27,55 @@ describe('daily briefing generation settings service', () => {
       updatedAt: '2026-10-30T00:00:00.000Z'
     })
     expect(await storage.read()).toMatchObject({ generationTime: '07:30', windowHours: 48 })
-    expect(await service.getView()).toEqual({ generationTime: '07:30', windowHours: 48, cronExpression: '30 7 * * *' })
+    expect(await service.getView()).toEqual({ generationTime: '07:30', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 48, cronExpression: '30 7 * * *' })
+  })
+
+  it('fills a stored time with the display zone once, and never moves the moment', async () => {
+    // The bare 08:05 was always read as the reader's 08:05; the migration writes which zone that
+    // was, so the schedule stops following whatever the display zone happens to be.
+    const storage = createInMemoryDailyBriefingGenerationSettingsStorage({
+      generationTime: '08:30', windowHours: 24, updatedAt: '2026-10-30T00:00:00.000Z'
+    })
+    const write = vi.spyOn(storage, 'write')
+    const service = createDailyBriefingGenerationSettingsService({
+      storage, now: () => '2026-10-30T00:00:00.000Z', timeZone: () => 'Asia/Shanghai'
+    })
+
+    const first = await service.getView()
+    expect(first).toMatchObject({ generationTime: '08:30', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null })
+    expect(write).toHaveBeenCalledTimes(1)
+
+    // Idempotent: the second read sees the zone and writes nothing.
+    await service.getView()
+    await service.getSettings()
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(await storage.read()).toMatchObject({ generationTime: '08:30', generationTimeZone: 'Asia/Shanghai' })
+  })
+
+  it('reports a zone it cannot read instead of repairing it', async () => {
+    const storage = createInMemoryDailyBriefingGenerationSettingsStorage({
+      generationTime: '08:30', windowHours: 24, updatedAt: '2026-10-30T00:00:00.000Z',
+      generationTimeZone: 'Asia/Shangai' as never
+    })
+    const write = vi.spyOn(storage, 'write')
+    const service = createDailyBriefingGenerationSettingsService({ storage, timeZone: () => 'Asia/Shanghai' })
+
+    expect(await service.getView()).toMatchObject({
+      generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai'
+    })
+    // A typo must not be silently replaced by the display zone, and must not be rewritten either.
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('re-anchors the schedule to the display zone on a save', async () => {
+    const storage = createInMemoryDailyBriefingGenerationSettingsStorage({
+      generationTime: '08:30', windowHours: 24, generationTimeZone: 'America/New_York', updatedAt: '2026-10-30T00:00:00.000Z'
+    })
+    const service = createDailyBriefingGenerationSettingsService({ storage, timeZone: () => 'Asia/Shanghai' })
+
+    const saved = await service.save({ generationTime: '09:30' })
+    expect(saved).toMatchObject({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai' })
+    expect(await storage.read()).toMatchObject({ generationTimeZone: 'Asia/Shanghai' })
   })
 
   it('rejects an invalid value without writing or rescheduling', async () => {
@@ -49,6 +97,6 @@ describe('daily briefing generation settings service', () => {
       updatedAt: '2026-10-30T00:00:00.000Z'
     })
     const service = createDailyBriefingGenerationSettingsService({ storage })
-    expect(await service.getView()).toEqual({ generationTime: '09:00', windowHours: 24, cronExpression: '0 9 * * *' })
+    expect(await service.getView()).toEqual({ generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *' })
   })
 })

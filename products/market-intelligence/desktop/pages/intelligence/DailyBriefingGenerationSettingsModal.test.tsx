@@ -10,7 +10,7 @@ import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationS
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const view: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-  generation: { generationTime: '08:00', windowHours: 24, cronExpression: '0 8 * * *' },
+  generation: { generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' },
   resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
 }
 
@@ -52,6 +52,16 @@ describe('daily briefing generation settings modal', () => {
 
     expect(client.saveSettings).toHaveBeenCalledWith({ generation: { generationTime: '08:00', windowHours: 24 } })
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('says which zone the time belongs to, and which saved value is not a zone', async () => {
+    // The time alone is ambiguous: 08:00 means 08:00 in the zone beside it. When that zone cannot be
+    // read, the panel names it rather than letting the reader guess why nothing runs.
+    await render()
+    const capsule = document.body.querySelector('.mi-daily-briefing__settings-zone')
+    expect(capsule?.textContent).toBe('GMT+8')
+    expect(capsule?.getAttribute('data-time-zone')).toBe('Asia/Shanghai')
+    expect(document.body.querySelector('.mi-daily-briefing__settings-warning')).toBeNull()
   })
 
   it('keeps the dialog open and reports a failed save', async () => {

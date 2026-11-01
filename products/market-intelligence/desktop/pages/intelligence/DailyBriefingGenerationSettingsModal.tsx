@@ -6,6 +6,7 @@ import {
   dailyBriefingGenerationTimes
 } from '../../../contracts/dailyBriefing'
 import { LoadingState } from '@platform/ui/components/loading'
+import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import type { DailyBriefingText } from './dailyBriefingText'
@@ -25,6 +26,10 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
 }>): React.ReactElement {
   const [draft, setDraft] = useState<GenerationDraft | null>(null)
   const [saving, setSaving] = useState(false)
+  // The zone the stored time means, and the value that could not be read. Both come from the save
+  // that wrote them; the panel never guesses a zone of its own.
+  const [zone, setZone] = useState<string | null>(null)
+  const [invalidZone, setInvalidZone] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
 
@@ -40,6 +45,8 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
         setLoadFailed(true)
         return
       }
+      setZone(settings.view.generation.generationTimeZone ?? null)
+      setInvalidZone(settings.view.generation.generationTimeZoneInvalid ?? null)
       setDraft({
         generationTime: settings.view.generation.generationTime,
         windowHours: settings.view.generation.windowHours
@@ -79,14 +86,20 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
           <strong>{text.generationSettings.generationTime}</strong>
           <small>{text.generationSettings.generationTimeHint}</small>
         </div>
-        <Select
-          aria-label={text.generationSettings.generationTime}
-          value={draft.generationTime}
-          onChange={(generationTime: string) => setDraft((current) => current ? { ...current, generationTime } : current)}
-          options={dailyBriefingGenerationTimes.map((value) => ({ value, label: value }))}
-          style={{ width: 108 }}
-        />
+        <div className="mi-daily-briefing__settings-time">
+          <Select
+            aria-label={text.generationSettings.generationTime}
+            value={draft.generationTime}
+            onChange={(generationTime: string) => setDraft((current) => current ? { ...current, generationTime } : current)}
+            options={dailyBriefingGenerationTimes.map((value) => ({ value, label: value }))}
+            style={{ width: 108 }}
+          />
+          {/* The time is only half of the setting: 08:05 means 08:05 in this zone, and saying which
+              zone is what keeps one day from producing two editions. */}
+          {zone ? <span className="mi-daily-briefing__settings-zone" data-time-zone={zone}>{formatShellTimeZoneLabel(zone)}</span> : null}
+        </div>
       </div>
+      {invalidZone ? <p className="mi-daily-briefing__settings-warning" role="status">{text.generationSettings.invalidTimeZone.replace('{zone}', invalidZone)}</p> : null}
       <div className="mi-daily-briefing__settings-row">
         <div>
           <strong>{text.generationSettings.windowHours}</strong>

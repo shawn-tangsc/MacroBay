@@ -5,6 +5,7 @@ import type { DailyBriefingWindowHours } from '../../../contracts/dailyBriefing'
 import {
   applyDailyBriefingGenerationSettingsPatch,
   dailyBriefingGenerationCronExpression,
+  isDailyBriefingTimeZoneId,
   normalizeDailyBriefingGenerationSettings,
   type DailyBriefingGenerationSettings,
   type DailyBriefingGenerationSettingsPatch
@@ -13,6 +14,10 @@ import {
 /** The reader-facing shape. `cronExpression` is derived from the time, never stored. */
 export type DailyBriefingGenerationSettingsView = Readonly<{
   generationTime: string
+  /** The zone the time means, or null while it is unknown or unreadable. */
+  generationTimeZone: string | null
+  /** The value the reader saved when it was not a usable id; automatic generation is paused. */
+  generationTimeZoneInvalid: string | null
   windowHours: DailyBriefingWindowHours
   cronExpression: string
 }>
@@ -62,6 +67,11 @@ export function createDailyBriefingGenerationSettingsJsonStorage(filePath: strin
 export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
   storage: DailyBriefingGenerationSettingsStorage
   now?: () => string
+  /**
+   * The reader's display zone. It is only read while the stored setting has no zone of its own:
+   * a bare 08:05 was always meant as the reader's 08:05, so that is what it is migrated to.
+   */
+  timeZone?: () => string
   onSaved?: (settings: DailyBriefingGenerationSettings) => void
 }>): DailyBriefingGenerationSettingsService {
   const now = deps.now ?? (() => new Date().toISOString())
@@ -69,21 +79,44 @@ export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
   function view(settings: DailyBriefingGenerationSettings): DailyBriefingGenerationSettingsView {
     return Object.freeze({
       generationTime: settings.generationTime,
+      generationTimeZone: settings.generationTimeZone ?? null,
+      generationTimeZoneInvalid: settings.generationTimeZoneInvalid ?? null,
       windowHours: settings.windowHours,
       cronExpression: dailyBriefingGenerationCronExpression(settings)
     })
   }
 
+  /**
+   * Read the setting, filling in the missing zone exactly once.
+   *
+   * The write is idempotent by construction: it only happens while the stored file has no zone, and
+   * the next read sees the zone and writes nothing. The moment is never changed — the same 08:05
+   * that used to mean "whatever the display zone currently is" now says which zone that was.
+   */
+  async function load(): Promise<DailyBriefingGenerationSettings> {
+    const stored = await deps.storage.read().catch(() => undefined)
+    const normalized = normalizeDailyBriefingGenerationSettings(stored, now())
+    // A saved value that is not a usable id is reported, not repaired: repairing it would hide the
+    // typo and quietly move the schedule.
+    if (normalized.generationTimeZone || normalized.generationTimeZoneInvalid) return normalized
+    const zone = deps.timeZone?.()
+    if (!isDailyBriefingTimeZoneId(zone)) return normalized
+    const migrated = normalizeDailyBriefingGenerationSettings({ ...normalized, generationTimeZone: zone }, now())
+    // A failed write leaves the setting exactly as stored; the next read tries again.
+    await deps.storage.write(migrated).catch(() => undefined)
+    return migrated
+  }
+
   return {
     async getSettings() {
-      return normalizeDailyBriefingGenerationSettings(await deps.storage.read().catch(() => undefined), now())
+      return load()
     },
     async getView() {
-      return view(normalizeDailyBriefingGenerationSettings(await deps.storage.read().catch(() => undefined), now()))
+      return view(await load())
     },
     async save(patch) {
-      const current = normalizeDailyBriefingGenerationSettings(await deps.storage.read().catch(() => undefined), now())
-      const next = applyDailyBriefingGenerationSettingsPatch(current, patch, now())
+      const current = await load()
+      const next = applyDailyBriefingGenerationSettingsPatch(current, { generationTimeZone: deps.timeZone?.(), ...patch }, now())
       await deps.storage.write(next)
       deps.onSaved?.(next)
       return view(next)

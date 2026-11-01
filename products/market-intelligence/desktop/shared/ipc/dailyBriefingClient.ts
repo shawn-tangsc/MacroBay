@@ -39,6 +39,10 @@ export type DailyBriefingClientGetResult =
 
 export type DailyBriefingGenerationSettingsView = Readonly<{
   generationTime: string
+  /** The zone the time means; null while unknown or unreadable. */
+  generationTimeZone: string | null
+  /** The saved value that is not a usable zone; automatic generation is paused while it is set. */
+  generationTimeZoneInvalid: string | null
   windowHours: number
   cronExpression: string
 }>
@@ -176,9 +180,13 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
 }
 
 function isGenerationSettings(value: unknown): value is DailyBriefingGenerationSettingsView {
-  return isExact(value, ['generationTime', 'windowHours', 'cronExpression']) &&
+  // Both zone fields are nullable on purpose: an older main process answers without them, and that
+  // must read as "unknown", not as a failed settings read.
+  return isExact(value, ['generationTime', 'windowHours', 'cronExpression'], ['generationTimeZone', 'generationTimeZoneInvalid']) &&
     isText(value.generationTime) && typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
-    isText(value.cronExpression)
+    isText(value.cronExpression) &&
+    (value.generationTimeZone === undefined || value.generationTimeZone === null || isText(value.generationTimeZone)) &&
+    (value.generationTimeZoneInvalid === undefined || value.generationTimeZoneInvalid === null || isText(value.generationTimeZoneInvalid))
 }
 
 function isAiSettings(value: Record<string, unknown>): value is { editorialEnabled: boolean; providerId: string; modelId: string; webSearchEnabled: boolean; webSearchAuthorizedAt?: string } {

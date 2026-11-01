@@ -102,6 +102,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [generationSettingsOpen, setGenerationSettingsOpen] = useState(false)
   const [webSearchEnabled, setWebSearchEnabled] = useState<boolean | null>(null)
+  // Automatic generation is paused when the stored zone cannot be read; a manual run still works,
+  // but it then means the UTC clock, and the panel says so instead of letting the reader guess.
+  const [zoneInvalid, setZoneInvalid] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState(false)
   const [regenerateFailure, setRegenerateFailure] = useState<Readonly<{ code?: string; generationTrace?: GenerationTrace }> | null>(null)
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'done' | 'failed'>('idle')
@@ -163,7 +166,9 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   useEffect(() => {
     let active = true
     void client.getSettings?.().then((result) => {
-      if (active && result.state === 'available') setWebSearchEnabled(result.view.settings.webSearchEnabled)
+      if (!active || result.state !== 'available') return
+      setWebSearchEnabled(result.view.settings.webSearchEnabled)
+      setZoneInvalid(result.view.generation.generationTimeZoneInvalid ?? null)
     }).catch(() => undefined)
     return () => { active = false }
   }, [client])
@@ -194,7 +199,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     setRegenerating(true)
     setRegenerateFailure(null)
     try {
-      const result = await client.regenerate({ locale, timeZone })
+      const result = await client.regenerate({ locale, timeZone: zoneInvalid ? 'UTC' : timeZone })
       if (result.state === 'available') {
         setView({ status: 'ready', document: result.document, kind: 'today' })
         setRegenerateFailure(null)
@@ -305,9 +310,12 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}
       </button>
       <div className="mi-daily-briefing-page__actions">
-        {view.status === 'ready' && view.kind === 'today' ? <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
-          {regenerating ? text.regenerating : text.regenerate}
-        </button> : null}
+        {view.status === 'ready' && view.kind === 'today' ? <>
+          <button className="mi-daily-briefing__regenerate" type="button" disabled={regenerating} onClick={() => void regenerate()}>
+            {regenerating ? text.regenerating : text.regenerate}
+          </button>
+          {zoneInvalid ? <small className="mi-daily-briefing__manual-utc" role="status">{text.generationSettings.manualUtcNote}</small> : null}
+        </> : null}
         {view.status === 'ready' && !contentBlocked ? <button className="mi-daily-briefing__export" type="button" disabled={exportState === 'exporting'} onClick={() => void exportImage()} aria-live="polite">
           {exportState === 'exporting' ? text.exportingImage : exportState === 'done' ? text.exported : exportState === 'failed' ? text.exportFailed : text.exportImage}
         </button> : null}

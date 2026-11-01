@@ -66,7 +66,7 @@ import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsur
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
-import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { briefingScheduleFrom, briefingScheduleInput, registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
@@ -803,8 +803,8 @@ export function getIntelligenceModule(
     // the same job id so the next run uses the new time; the service reads the stored value at
     // generation time, so a change never rewrites an edition that already exists.
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
-      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')),
-      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, { timeZone: shellTimeZone(), generationTime: settings.generationTime })
+      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')), timeZone: shellTimeZone,
+      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(settings, shellTimeZone()))
     })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
@@ -952,7 +952,7 @@ export function getIntelligenceModule(
       service: dailyBriefingService,
       getLocale: getAppLanguage,
       timeZone: shellTimeZone,
-      getGenerationTime: async () => (await dailyBriefingGenerationSettings.getView()).generationTime
+      getSchedule: async () => briefingScheduleInput(await dailyBriefingGenerationSettings.getView())
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
     // source runtime is up: a fresh install would otherwise look as if every source were switched
