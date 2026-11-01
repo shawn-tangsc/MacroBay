@@ -11,7 +11,6 @@ import { useId, type ReactElement, type ReactNode } from 'react'
  * 一个组件同时背两种语义、靠布尔值让调用方猜，是这一轮要拆掉的病。
  */
 export type StateSize = 'sm' | 'md' | 'lg'
-export type StateLayout = 'block' | 'inline'
 
 export type EmptyStateAction = {
   label: string
@@ -33,7 +32,6 @@ export type EmptyStateProps = {
   /** 下一步。给不出动作就不传，改在 `reason` 里写「怎么才会出现」。 */
   action?: EmptyStateAction
   size?: StateSize
-  layout?: StateLayout
   /** 迁移期承载旧类名，保证存量样式继续生效。 */
   className?: string
 }
@@ -44,7 +42,6 @@ export function EmptyState({
   icon,
   action,
   size = 'md',
-  layout = 'block',
   className
 }: EmptyStateProps): ReactElement {
   const noteId = useId()
@@ -52,8 +49,7 @@ export function EmptyState({
   return (
     <div
       className={className ? `empty-state ${className}` : 'empty-state'}
-      data-size={size}
-      data-layout={layout}>
+      data-size={size}>
       {icon}
       <strong>{title}</strong>
       <span>{reason}</span>

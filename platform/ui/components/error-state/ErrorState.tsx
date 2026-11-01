@@ -1,7 +1,7 @@
 import { CircleHelp, TriangleAlert } from 'lucide-react'
 import type { ReactElement } from 'react'
 
-import type { StateLayout, StateSize } from '../empty-state'
+import type { StateSize } from '../empty-state'
 
 /**
  * 错态与「未知」的唯一组件（B0 契约：`ui-state-components-contract.md` §2、§5）。
@@ -25,7 +25,6 @@ type ErrorStateBaseProps = {
   /** 排障详情，默认折叠；展开后才看得到完整正文。 */
   details?: { summary: string; body: string }
   size?: StateSize
-  layout?: StateLayout
   className?: string
 }
 
@@ -41,14 +40,12 @@ export type ErrorStateProps =
 export function ErrorState(props: ErrorStateProps): ReactElement {
   const unknown = props.variant === 'unknown'
   const size = props.size ?? 'md'
-  const layout = props.layout ?? 'block'
   const className = props.className
 
   return (
     <section
       className={className ? `error-state ${className}` : 'error-state'}
       data-size={size}
-      data-layout={layout}
       data-variant={unknown ? 'unknown' : 'error'}
       role="alert">
       {unknown ? <CircleHelp size={17} aria-hidden="true" /> : <TriangleAlert size={17} aria-hidden="true" />}

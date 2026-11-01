@@ -17,7 +17,7 @@ describe('EmptyState', () => {
     )
 
     expect(markup).toBe(
-      '<div class="empty-state" data-size="md" data-layout="block"><svg data-icon="true"></svg>' +
+      '<div class="empty-state" data-size="md"><svg data-icon="true"></svg>' +
         '<strong>No tools</strong><span>Nothing is registered yet.</span></div>'
     )
   })
@@ -27,7 +27,7 @@ describe('EmptyState', () => {
 
     expect(markup).not.toContain('<button')
     expect(markup).toBe(
-      '<div class="empty-state" data-size="md" data-layout="block"><strong>Empty</strong><span>Nothing here.</span></div>'
+      '<div class="empty-state" data-size="md"><strong>Empty</strong><span>Nothing here.</span></div>'
     )
   })
 
