@@ -4,6 +4,81 @@ import { DEFAULT_RETRY_POLICY } from '../contracts/jobTypes'
 import { createJobRunSqliteStore } from './jobRunSqliteStore'
 import { createJobRuntime } from './jobRuntime'
 
+describe('jobRuntime terminal hook', () => {
+  it('reports a finished run once, with the cause the consumer needs', async () => {
+    const reported: Array<{ status: string; cause: string }> = []
+    const runtime = createJobRuntime({ onRunTerminal: ({ run, cause }) => reported.push({ status: run.status, cause }) })
+    runtime.registerHandler('ok', async () => {})
+    runtime.registerHandler('boom', async () => {
+      throw new Error('collector failed')
+    })
+    runtime.setSchedule({ id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+    runtime.setSchedule({ id: 'job-boom', owner: 'platform', handlerId: 'boom', title: 'Boom', trigger: { kind: 'manual' }, payload: {} })
+
+    await runtime.enqueueManual('job-ok')
+    await runtime.enqueueManual('job-boom')
+    await vi.waitFor(() => expect(reported).toHaveLength(2))
+
+    // A failed run is an `executed` outcome: that is what a "task failed" notification may report.
+    expect(reported).toEqual([{ status: 'completed', cause: 'executed' }, { status: 'failed', cause: 'executed' }])
+  })
+
+  it('marks a run that never started as rejected instead of executed', async () => {
+    const reported: Array<{ status: string; cause: string }> = []
+    const runtime = createJobRuntime({ onRunTerminal: ({ run, cause }) => reported.push({ status: run.status, cause }) })
+    const definition = {
+      id: 'job-queued', owner: 'platform' as const, handlerId: 'noop', title: 'Queued',
+      trigger: { kind: 'manual' as const }, payload: {}
+    }
+    runtime.registerHandler('noop', async () => {})
+    runtime.setSchedule(definition)
+
+    const run = runtime.createQueuedRun(definition)
+    runtime.cancel(run.id)
+    await vi.waitFor(() => expect(reported).toHaveLength(1))
+
+    // Cancelled before the handler ran: not a task failure, so the consumer can skip it.
+    expect(reported).toEqual([{ status: 'cancelled', cause: 'rejected' }])
+  })
+
+  it('reports a run settled by startup recovery as recovered, not as this process outcome', async () => {
+    const reported: Array<{ status: string; cause: string }> = []
+    const store = createJobRunSqliteStore(':memory:')
+    const runtime = createJobRuntime({ store, onRunTerminal: ({ run, cause }) => reported.push({ status: run.status, cause }) })
+    const definition = {
+      id: 'job-stale', owner: 'platform' as const, handlerId: 'noop', title: 'Stale',
+      trigger: { kind: 'manual' as const }, payload: {}
+    }
+    runtime.createQueuedRun(definition)
+    runtime.recover()
+
+    expect(reported).toEqual([{ status: 'cancelled', cause: 'recovered' }])
+    store.close()
+  })
+
+  it('keeps scheduling when a terminal listener throws', async () => {
+    const runtime = createJobRuntime({
+      onRunTerminal: () => {
+        throw new Error('listener exploded')
+      }
+    })
+    const calls: string[] = []
+    runtime.registerHandler('ok', async () => {
+      calls.push('ran')
+    })
+    runtime.setSchedule({ id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+
+    await runtime.enqueueManual('job-ok')
+    await vi.waitFor(() => expect(calls).toEqual(['ran']))
+    runtime.registerHandler('ok2', async () => {
+      calls.push('ran-again')
+    })
+    runtime.setSchedule({ id: 'job-ok-2', owner: 'platform', handlerId: 'ok2', title: 'Ok 2', trigger: { kind: 'manual' }, payload: {} })
+    await runtime.enqueueManual('job-ok-2')
+    await vi.waitFor(() => expect(calls).toEqual(['ran', 'ran-again']))
+  })
+})
+
 describe('jobRuntime', () => {
   it('registers handlers and enqueues manual jobs', async () => {
     const runtime = createJobRuntime()
