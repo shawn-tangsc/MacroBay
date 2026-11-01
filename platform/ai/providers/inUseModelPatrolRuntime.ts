@@ -29,22 +29,16 @@ export type InUseModelPatrolRuntimeDeps = {
     providerId: string,
     modelId: string
   ) => Promise<{ failureCode?: ProviderConnectionFailureCode | null } | null>
-  intervalMs?: number
   now?: () => Date
 }
 
-export const IN_USE_MODEL_PATROL_INTERVAL_MS = 24 * 60 * 60 * 1000
-
 export type InUseModelPatrolRuntime = {
-  start: () => void
-  stop: () => void
   runOnce: () => Promise<InUseModelRetiredItem[]>
   getRetired: () => readonly InUseModelRetiredItem[]
 }
 
 export function createInUseModelPatrolRuntime(deps: InUseModelPatrolRuntimeDeps): InUseModelPatrolRuntime {
   let retired: InUseModelRetiredItem[] = []
-  let timer: ReturnType<typeof setInterval> | null = null
   let running = false
 
   async function runOnce(): Promise<InUseModelRetiredItem[]> {
@@ -77,18 +71,6 @@ export function createInUseModelPatrolRuntime(deps: InUseModelPatrolRuntimeDeps)
   }
 
   return {
-    start() {
-      if (timer) return
-      void runOnce()
-      timer = setInterval(() => void runOnce(), deps.intervalMs ?? IN_USE_MODEL_PATROL_INTERVAL_MS)
-      // 巡检是背景工作：不让它把进程钉在事件循环上（测试与退出都受益）。
-      timer.unref?.()
-    },
-    stop() {
-      if (!timer) return
-      clearInterval(timer)
-      timer = null
-    },
     runOnce,
     getRetired: () => retired
   }

@@ -10,23 +10,25 @@ import type { InUseModelRetiredItem } from '@platform/ai/providers/inUseModelPat
  *
  * 这里只做一次读取，并在窗口重新可见时同步一次；没有 `setInterval`。
  */
-export function useInUseModelPatrol(input: { enabled?: boolean } = {}): InUseModelRetiredItem[] {
+export function useInUseModelPatrol(
+  input: { providerId?: string | null; modelId?: string | null; enabled?: boolean } = {}
+): InUseModelRetiredItem[] {
   const [retired, setRetired] = useState<InUseModelRetiredItem[]>([])
-  const enabled = input.enabled !== false
+  const enabled = input.enabled !== false && Boolean(input.providerId)
 
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
 
     const load = async (): Promise<void> => {
-      // 老版本 preload 或测试里的部分替身没有这个方法：没有结论时按「没有下线模型」处理，
-      // 但不要去猜一个结论出来。
+      // 读的是既有的「模型可用性检查报告」：巡检结论是它的一部分，不为它单开通道。
+      // 测试与旧 preload 可能没有这个方法：没有报告就没有结论，不猜一个出来。
       const api = window.platform.modelProviders as {
-        getInUseRetired?: () => Promise<InUseModelRetiredItem[]>
+        getRuntimeCheckReport?: (providerId: string, modelId: string) => Promise<unknown>
       }
-      const items = await (api.getInUseRetired?.() ?? Promise.resolve([])).catch(
-        () => [] as InUseModelRetiredItem[]
-      )
+      const report = await (api.getRuntimeCheckReport?.(input.providerId as string, input.modelId ?? '') ??
+        Promise.resolve(null)).catch(() => null)
+      const items = (report as { inUseRetired?: InUseModelRetiredItem[] } | null)?.inUseRetired ?? []
       if (!cancelled) setRetired(items)
     }
 
@@ -39,7 +41,7 @@ export function useInUseModelPatrol(input: { enabled?: boolean } = {}): InUseMod
       cancelled = true
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [enabled])
+  }, [enabled, input.providerId, input.modelId])
 
   return retired
 }

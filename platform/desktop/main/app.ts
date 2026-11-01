@@ -108,6 +108,7 @@ import { ToolRegistry } from '../../ai/agent-platform/tools'
 import type { ModelDefinition, ModelProviderInput, ProviderState, SafeModelProvider } from '../../ai/providers/modelProviderTypes'
 import { probeProviderProxyTarget, testModelProviderConnection } from '../../ai/providers/providerConnection'
 import { createInUseModelPatrolRuntime } from '../../ai/providers/inUseModelPatrolRuntime'
+import { registerInUseModelPatrolJob } from '../../ai/providers/registerInUseModelPatrolJob'
 import { isEndpointProbeKind, probeProviderEndpoint } from '../../ai/providers/providerEndpointProbe'
 import { generateProviderImages, validateImageGenerationInput } from '../../ai/providers/providerImageGeneration'
 import {
@@ -426,6 +427,27 @@ const agentStore = createAgentSqliteStoreWithOptions(
     legacyStateLoader: () => legacyAgentStorage.read()
   }
 )
+
+const inUseModelPatrol = createInUseModelPatrolRuntime({
+    listProviders: async () => (await providerStore.getState()).providers,
+    loadAgentModelIds: async () => {
+      const state = await agentStore.getState()
+      return state.agents.flatMap((agent) =>
+        [agent.model, agent.planModel, agent.smallModel].filter(
+          (id): id is string => typeof id === 'string' && id.length > 0
+        )
+      )
+    },
+    configuredDefaultModelIds: async () =>
+      Object.values((await settingsStore.get()).modelDefaults).filter(
+        (value) => typeof value === 'string' && value.trim().length > 0
+      ),
+    testConnection: async (providerId, modelId) => {
+      const provider = await providerStore.resolveRuntimeProvider(providerId)
+      if (!provider) return null
+      return testModelProviderConnection(provider, { modelId, fetch: getPlatformFetch() })
+    }
+})
 const agentServices = createAgentPlatformServices(agentStore, {
   taskAutomation: {
     getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset,
@@ -1715,28 +1737,6 @@ function registerIpcHandlers(
       return testModelProviderConnection(provider, { modelId: options?.modelId, fetch: getPlatformFetch() })
     }
   )
-  const inUseModelPatrol = createInUseModelPatrolRuntime({
-    listProviders: async () => (await providerStore.getState()).providers,
-    loadAgentModelIds: async () => {
-      const state = await agentStore.getState()
-      return state.agents.flatMap((agent) =>
-        [agent.model, agent.planModel, agent.smallModel].filter(
-          (id): id is string => typeof id === 'string' && id.length > 0
-        )
-      )
-    },
-    configuredDefaultModelIds: async () =>
-      Object.values((await settingsStore.get()).modelDefaults).filter(
-        (value) => typeof value === 'string' && value.trim().length > 0
-      ),
-    testConnection: async (providerId, modelId) => {
-      const provider = await providerStore.resolveRuntimeProvider(providerId)
-      if (!provider) return null
-      return testModelProviderConnection(provider, { modelId, fetch: getPlatformFetch() })
-    }
-  })
-  inUseModelPatrol.start()
-  ipcMain.handle(IpcChannels.modelProvidersGetInUseRetired, () => inUseModelPatrol.getRetired())
   /**
    * T1–T3：图像生成 / 图像编辑共用**同一条**通道（`operation: 'edit'` 是 additive 参数，不新增通道）。
    * 全部返回结构化 `{ok:...}`，不再抛裸 IPC 错误；顺序固定为
@@ -1867,7 +1867,11 @@ function registerIpcHandlers(
       providerId: string,
       modelId: string,
       runtimeId: 'claude-code' | 'openai-agents' = 'claude-code'
-    ) => providerRuntimeCheckService.getReport(providerId, modelId, runtimeId)
+    ) => ({
+      ...providerRuntimeCheckService.getReport(providerId, modelId, runtimeId),
+      /** 同一份「模型可用性检查报告」里的巡检结论（调度在主进程，界面只读）。 */
+      inUseRetired: inUseModelPatrol.getRetired()
+    })
   )
   /**
    * PLAT-61 诊断可用性：模型同步失败**不再 throw**（原始 IPC Error 会带着
@@ -2678,6 +2682,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   taskAutomationMaintenance.recoverAfterRestart()
   disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
   disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)
+  registerInUseModelPatrolJob(jobRuntime, {
+    patrol: inUseModelPatrol,
+    isReady: async () => {
+      const providers = (await providerStore.getState()).providers
+      return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
+    }
+  })
   disposeChannelDeliveryMaintenance = channelDeliveryMaintenance.start()
   disposeChannelInboundRecovery = channelInboundExecutionRunner.startRecovery()
   disposeTelegramRuntimeMaintenance = telegramRuntimeMaintenance.start()

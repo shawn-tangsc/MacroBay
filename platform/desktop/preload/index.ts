@@ -105,8 +105,6 @@ const api = {
     addOrUpdateModel: (providerId: string, model: unknown) => ipcRenderer.invoke(IpcChannels.modelProvidersAddOrUpdateModel, providerId, model),
     removeModel: (providerId: string, modelId: string) => ipcRenderer.invoke(IpcChannels.modelProvidersRemoveModel, providerId, modelId),
     setDefaultChatModel: (providerId: string, modelId: string) => ipcRenderer.invoke(IpcChannels.modelProvidersSetDefaultChatModel, providerId, modelId),
-    /** 主进程巡检的「在用模型已下线」结论（只读；调度在主进程，渲染层不再自己起定时器）。 */
-    getInUseRetired: () => ipcRenderer.invoke(IpcChannels.modelProvidersGetInUseRetired),
     testConnection: (
       providerId: string,
       options?: {

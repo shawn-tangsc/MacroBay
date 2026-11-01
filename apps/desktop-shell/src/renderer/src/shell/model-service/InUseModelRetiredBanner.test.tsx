@@ -29,15 +29,19 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
-function installPlatform(getInUseRetired: () => Promise<InUseModelRetiredItem[]>): void {
+function installPlatform(items: () => Promise<InUseModelRetiredItem[]>): void {
   Object.defineProperty(window, 'platform', {
     configurable: true,
-    value: { modelProviders: { getInUseRetired: vi.fn(getInUseRetired) } }
+    value: {
+      modelProviders: {
+        getRuntimeCheckReport: vi.fn(async () => ({ inUseRetired: await items() }))
+      }
+    }
   })
 }
 
 function Host({ onChangeModel }: { onChangeModel: () => void }): React.ReactElement {
-  const retired = useInUseModelPatrol()
+  const retired = useInUseModelPatrol({ providerId: 'silicon', modelId: 'chat-a' })
   return createElement(InUseModelRetiredBanner, { labels, items: retired, onChangeModel })
 }
 

@@ -240,8 +240,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
   const [providers, setProviders] = useState<SafeModelProvider[]>([])
-  // PLAT-75：巡检已挪到主进程调度；界面只读它的结论（窗口重新可见时同步一次）。
-  const inUseRetiredModels = useInUseModelPatrol()
+  // PLAT-75：巡检已挪到主进程的每日任务；界面只从「模型可用性检查报告」里读它的结论。
+  const patrolProvider = providers.find((provider) => provider.enabled && provider.hasApiKey) ?? providers[0]
+  const inUseRetiredModels = useInUseModelPatrol({
+    providerId: patrolProvider?.id ?? null,
+    modelId: patrolProvider?.defaultChatModelId ?? patrolProvider?.models[0]?.id ?? ''
+  })
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(createEmptyProviderDraft)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
