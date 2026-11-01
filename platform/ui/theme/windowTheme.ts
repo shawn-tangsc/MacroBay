@@ -48,6 +48,17 @@ export const WINDOW_ACCENT_COLOR: Readonly<Record<AccentColor, string>> = Object
   violet: '#b794ff'
 })
 
+/**
+ * 浅色主题的强调色：同一个色名的深一档版本。
+ * 浅色底上荧光色既当不了文字（白底 1.1–2.4:1），也放不住白字；浅色一律用深一档，
+ * 白字在其上 4.93 / 5.99 / 7.28:1，文字与底色互为 AA。
+ */
+export const WINDOW_ACCENT_COLOR_LIGHT: Readonly<Record<AccentColor, string>> = Object.freeze({
+  lime: '#2f7d6a',
+  cyan: '#1f6b86',
+  violet: '#5b46a8'
+})
+
 /** antd 具名颜色 token 的深/浅两态（PLAT-39 的 parity 值逐字保留 ⇒ 两窗颜色一致性不回退）。 */
 export const WINDOW_ANTD_COLOR_TOKENS: Readonly<Record<WindowThemeVariant, Readonly<{
   colorBgContainer: string
@@ -75,7 +86,8 @@ export const WINDOW_ANTD_COLOR_TOKENS: Readonly<Record<WindowThemeVariant, Reado
     colorBorder: '#dedfd8',
     colorText: '#20221f',
     colorTextSecondary: '#73766e',
-    colorTextLightSolid: '#11130f'
+    /* 浅色强调底是深绿，白字 4.93:1；近黑只有 3.79:1。与 styles.css 的 --accent-contrast 同值。 */
+    colorTextLightSolid: '#ffffff'
   })
 })
 
@@ -132,7 +144,7 @@ export function resolveWindowAntdTokenValues(
   variant: WindowThemeVariant,
   accentColor: AccentColor
 ): WindowAntdTokenValues {
-  const accent = WINDOW_ACCENT_COLOR[accentColor]
+  const accent = variant === 'dark' ? WINDOW_ACCENT_COLOR[accentColor] : WINDOW_ACCENT_COLOR_LIGHT[accentColor]
   const colors = WINDOW_ANTD_COLOR_TOKENS[variant]
   return Object.freeze({
     ...WINDOW_ANTD_SIZING,

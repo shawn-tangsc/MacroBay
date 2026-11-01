@@ -7,6 +7,7 @@ import {
   resolveWindowAntdTokenValues,
   resolveWindowBackgroundColor,
   WINDOW_ACCENT_COLOR,
+  WINDOW_ACCENT_COLOR_LIGHT,
   WINDOW_ANTD_COLOR_TOKENS,
   WINDOW_ANTD_SIZING,
   WINDOW_BACKGROUND_COLOR,
@@ -93,6 +94,7 @@ function singleSourceColors(): Set<string> {
     for (const value of Object.values(tokens.segmented)) colors.add(String(value).toLowerCase())
   }
   for (const value of Object.values(WINDOW_ACCENT_COLOR)) colors.add(String(value).toLowerCase())
+  for (const value of Object.values(WINDOW_ACCENT_COLOR_LIGHT)) colors.add(String(value).toLowerCase())
   return colors
 }
 
@@ -133,7 +135,7 @@ describe('PLAT-42 ②：antd token 由同一单源产出', () => {
       for (const accent of ['lime', 'cyan', 'violet'] as const) {
         const config = buildWindowAntdTheme(variant, accent)
         expect(config.algorithm).toBe(variant === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm)
-        expect(config.token?.colorPrimary).toBe(WINDOW_ACCENT_COLOR[accent])
+        expect(config.token?.colorPrimary).toBe((variant === 'dark' ? WINDOW_ACCENT_COLOR : WINDOW_ACCENT_COLOR_LIGHT)[accent])
         expect(config.token).toMatchObject(WINDOW_ANTD_COLOR_TOKENS[variant])
         expect(config.token).toMatchObject(WINDOW_ANTD_SIZING)
         // 单源判据：ThemeConfig 里出现的每个 hex 颜色都必须是单源里的值
@@ -144,7 +146,7 @@ describe('PLAT-42 ②：antd token 由同一单源产出', () => {
 
   it('accent 底上的文字色由单源给出，并与 styles.css --accent-contrast 逐字一致', () => {
     expect(WINDOW_ANTD_COLOR_TOKENS.dark.colorTextLightSolid).toBe('#141512')
-    expect(WINDOW_ANTD_COLOR_TOKENS.light.colorTextLightSolid).toBe('#11130f')
+    expect(WINDOW_ANTD_COLOR_TOKENS.light.colorTextLightSolid).toBe('#ffffff')
     expect(cssVariable(':root', '--accent-contrast')).toBe(WINDOW_ANTD_COLOR_TOKENS.dark.colorTextLightSolid)
     expect(cssVariable(':root[data-theme="light"]', '--accent-contrast')).toBe(
       WINDOW_ANTD_COLOR_TOKENS.light.colorTextLightSolid
