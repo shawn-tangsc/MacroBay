@@ -175,6 +175,9 @@ describe('Claude Code Agent SDK bridge', () => {
     // PostToolUse guards results from the user's own MCP servers only, and it is judged by
     // membership in that set — the mcp__ prefix also covers the platform's own servers.
     expect(queryRequest.options.hooks?.PostToolUse).toHaveLength(1)
+    // A failed tool call never reaches PostToolUse, so the failure path has its own registration.
+    expect(queryRequest.options.hooks?.PostToolUseFailure).toHaveLength(1)
+    expect(queryRequest.options.hooks?.PostToolUseFailure[0].matcher).toBe('*')
     expect(queryRequest.options.hooks?.PostToolUse[0].matcher).toBe('*')
     expect(queryRequest.options.hooks?.PostToolUse[0].hooks).toHaveLength(1)
 
