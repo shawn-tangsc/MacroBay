@@ -1137,6 +1137,79 @@ describe('createAssistantChatRuntimeService', () => {
     expect(fetch).not.toHaveBeenCalled()
     expect(repos.messages.listByTopic(topic.id)).toEqual([])
   })
+
+  it('sends a short conversation exactly as before the budget existed', async () => {
+    const db = createAssistantPlatformDatabase(':memory:')
+    const repos = createAssistantPlatformRepositories(db)
+    const assistant = repos.assistants.create({ ...createDefaultAssistantSeed(), modelId: 'openai:gpt-test' })
+    const topic = repos.topics.create({ assistantId: assistant.id, name: 'Short context' })
+    const fetch = vi.fn(async () =>
+      new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n', {
+        headers: { 'content-type': 'text/event-stream' }
+      })
+    )
+    const runtime = createAssistantChatRuntimeService({ repos, fetch, getProviderState: async () => providerState() })
+
+    for (let round = 1; round <= 2; round += 1) {
+      await runtime.open({
+        topicId: topic.id,
+        trigger: 'submit-message',
+        userMessageParts: [{ type: 'text', text: `question ${round}` }]
+      })
+      await vi.waitFor(() => {
+        const messages = repos.messages.listByTopic(topic.id).filter((item) => item.role === 'assistant')
+        expect(messages.at(-1)?.status).toBe('success')
+      })
+    }
+
+    const sentCall = fetch.mock.calls.at(-1) as unknown as [string, RequestInit] | undefined
+    const body = JSON.parse(String(sentCall?.[1]?.body))
+    expect(body.messages).toEqual([
+      { role: 'system', content: assistant.prompt },
+      { role: 'user', content: 'question 1' },
+      { role: 'assistant', content: 'ok' },
+      { role: 'user', content: 'question 2' }
+    ])
+  })
+
+  it('stops sending the whole conversation once it outgrows the context window', async () => {
+    const db = createAssistantPlatformDatabase(':memory:')
+    const repos = createAssistantPlatformRepositories(db)
+    const assistant = repos.assistants.create({ ...createDefaultAssistantSeed(), modelId: 'openai:gpt-test' })
+    const topic = repos.topics.create({ assistantId: assistant.id, name: 'Long context' })
+    const longAnswer = '答'.repeat(600)
+    const fetch = vi.fn(async () =>
+      new Response(`data: {"choices":[{"delta":{"content":"${longAnswer}"}}]}\n\ndata: [DONE]\n\n`, {
+        headers: { 'content-type': 'text/event-stream' }
+      })
+    )
+    const runtime = createAssistantChatRuntimeService({ repos, fetch, getProviderState: async () => providerState() })
+
+    for (let round = 1; round <= 20; round += 1) {
+      await runtime.open({
+        topicId: topic.id,
+        trigger: 'submit-message',
+        userMessageParts: [{ type: 'text', text: `第 ${round} 个问题：${'问'.repeat(300)}` }]
+      })
+      await vi.waitFor(() => {
+        const messages = repos.messages.listByTopic(topic.id).filter((item) => item.role === 'assistant')
+        expect(messages.at(-1)?.status).toBe('success')
+      })
+    }
+
+    const historyCount = repos.messages.listByTopic(topic.id).filter((item) => item.status === 'success').length
+    const sentCall = fetch.mock.calls.at(-1) as unknown as [string, RequestInit] | undefined
+    const body = JSON.parse(String(sentCall?.[1]?.body))
+    const sent = body.messages as Array<{ role: string; content: string }>
+
+    expect(historyCount).toBeGreaterThan(20)
+    expect(sent.length).toBeLessThan(historyCount)
+    expect(sent.at(-1)?.role).toBe('user')
+    expect(sent.at(-1)?.content).toContain('第 20 个问题')
+    expect(sent[0]?.role).toBe('system')
+    // 丢掉整轮：除 system 外，第一条必须是 user。
+    expect(sent[1]?.role).toBe('user')
+  })
 })
 
 function providerState() {

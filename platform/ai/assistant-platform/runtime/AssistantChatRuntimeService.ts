@@ -26,6 +26,7 @@ import {
   createAssistantWebSearchToolService
 } from '../../web-search/assistant/assistantWebSearchTools'
 import { createAssistantWebSearchMessagePart } from '../../web-search/assistant/assistantWebSearchMessageParts'
+import { planAssistantContext, toChatCompletionMessages } from './assistantContextPlan'
 import { guardWebSearchSourcesForModel } from '../../web-search/assistant/assistantWebSearchGuard'
 import type { AssistantEntity } from '../schemas/assistantSchemas'
 import type {
@@ -332,12 +333,19 @@ export function createAssistantChatRuntimeService(
         : flattenActiveBranch(deps.repos.messages.listByTopic(input.topicId), input.placeholder.id).filter(
             (message) => message.id !== input.placeholder.id && message.status === 'success'
           )
-      const promptMessages = buildRuntimeMessages(input.assistant, branch, messageDataToText(input.userMessage))
-
       // T4/T5：协议是模型自己的事实；缺对应端点时派发前即抛 configuration-required。
       const runtimeProviders = (await getRuntimeProviderState()).providers
       const runtimeProvider = runtimeProviders.find((entry) => entry.id === resolved.model.providerId)
       const runtimeModel = runtimeProvider?.models.find((entry) => entry.id === resolved.model.modelId)
+
+      // 上下文按 token 预算裁剪：模型窗口优先，缺失时由契约回落到保守值。
+      const contextPlan = planAssistantContext({
+        assistantPrompt: input.assistant.prompt,
+        branch,
+        latestUserText: messageDataToText(input.userMessage),
+        ...(runtimeModel?.contextLength ? { contextWindow: runtimeModel.contextLength } : {})
+      })
+      const promptMessages = toChatCompletionMessages(contextPlan)
       const result = await requestAssistantChatCompletion({
         // 运行时只读模型自己的协议（同步/新增时已把供应商默认快照进去）。
         protocol: normalizeModelChatProtocol(runtimeModel?.chatProtocol),
@@ -583,30 +591,6 @@ function createAssistantRuntimeMessageData(text: string, parts: AssistantMessage
   return {
     parts: [...parts, ...createAssistantTextData(text).parts]
   }
-}
-
-function buildRuntimeMessages(
-  assistant: AssistantEntity,
-  branch: readonly AssistantMessageEntity[],
-  latestUserText: string
-): ChatCompletionMessage[] {
-  const messages: ChatCompletionMessage[] = []
-  if (assistant.prompt.trim()) {
-    messages.push({ role: 'system', content: assistant.prompt.trim() })
-  }
-
-  for (const message of branch) {
-    const content = messageDataToText(message)
-    if (!content) continue
-    if (message.role === 'system') messages.push({ role: 'system', content })
-    if (message.role === 'user') messages.push({ role: 'user', content })
-    if (message.role === 'assistant') messages.push({ role: 'assistant', content })
-  }
-
-  if (messages[messages.length - 1]?.role !== 'user' || messages[messages.length - 1]?.content !== latestUserText) {
-    messages.push({ role: 'user', content: latestUserText })
-  }
-  return messages
 }
 
 function createWebSearchSnippet(content: string): string {
