@@ -1,7 +1,9 @@
 import { applyReservedFacts } from '../analysis/analysisImpactDisclosurePolicy'
+import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_CONTEXT_POLICY,
+  MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION,
+  MARKET_ANALYSIS_CONTRACT_POLICY,
   MARKET_ANALYSIS_POLICY_PATH_POLICY,
   MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
@@ -375,12 +377,12 @@ export async function buildMarketAnalysisContext(
   // Cap the macro share before the global budget, so one provider's routine rows can never
   // evict the other domains: the model needs capital, sentiment and funding to explain a move.
   // The cap protects the policy path's fixed share; a busy month must not drop the SEP or the vote.
-  const macroCapped = applyMacroFactCap(sortedFacts, MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts)
+  const macroCapped = applyMacroFactCap(sortedFacts, MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.maximumMacroFacts)
   if (macroCapped.truncated) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
   // The reserve reorders inside the budget so the facts explaining a triggered change survive
   // truncation; with no triggers this is exactly `macroCapped.facts.slice(0, maxFacts)`.
   const keptFacts = applyReservedFacts(macroCapped.facts, internal.triggeredEventKeys ?? new Set(), maxFacts,
-    undefined, MARKET_ANALYSIS_CONTEXT_POLICY.minimumFactsPerDomain)
+    undefined, MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.minimumFactsPerDomain)
   if (keptFacts.length < macroCapped.facts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
   // A caller may ask for fewer facts than the macro share; say the policy set was cut rather than
   // letting the generic truncation caveat hide which evidence went missing.
@@ -391,8 +393,8 @@ export async function buildMarketAnalysisContext(
 
   const output: MarketAnalysisContextAvailable = {
     state: 'available',
-    schemaVersion: MARKET_ANALYSIS_CONTEXT_POLICY.schemaVersion,
-    profileId: 'crypto-market-analysis-v1',
+    schemaVersion: MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION,
+    profileId: MARKET_ANALYSIS_CONTRACT_POLICY.dataAccessProfileId,
     eventGroupId: input.eventGroupId,
     asOf: input.asOf,
     dataCutoff: input.asOf,
@@ -405,7 +407,7 @@ export async function buildMarketAnalysisContext(
     sourceHealth: Object.freeze(sourceHealth?.data.sources.map(source => toSourceHealthFlag(source, input.asOf)) ?? []),
     domainAccess: matrix.domains
   }
-  if (utf8JsonBytes(output) > MARKET_ANALYSIS_CONTEXT_POLICY.maximumOutputBytes) {
+  if (utf8JsonBytes(output) > MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes) {
     return { state: 'unavailable', errorCode: MARKET_ANALYSIS_ERROR_CODES.contextTooLarge }
   }
   return output

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import type { AgentFact } from '../../../contracts/marketAnalysisContracts'
-import { MARKET_ANALYSIS_CONTEXT_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from './analysisContextPolicy'
 import { analysisImpactDisclosurePolicy, applyReservedFacts, isFactForTriggeredEvent } from './analysisImpactDisclosurePolicy'
 
 function factAt(index: number, eventKey: string | null, domain: AgentFact['domain'] = 'macro'): AgentFact {
@@ -82,7 +82,7 @@ it('keeps both halves of a domain whose floor is raised', () => {
   // Funding now carries the rate series and the open interest behind it. Under one shared floor
   // the newest series evicts the older one, so the domain floor is a map and funding asks for two
   // series' worth.
-  const floors = MARKET_ANALYSIS_CONTEXT_POLICY.minimumFactsPerDomain as Readonly<Record<string, number>>
+  const floors = MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.minimumFactsPerDomain as Readonly<Record<string, number>>
   expect(floors.default).toBe(6)
   expect(floors.funding).toBeGreaterThan(floors.default)
 

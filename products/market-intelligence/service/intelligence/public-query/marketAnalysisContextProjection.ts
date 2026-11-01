@@ -4,10 +4,10 @@ import type { OpenInterestHistoryResult } from '../../../contracts/openInterestH
 import { resolvePositioningState } from '../../../contracts/openInterestPositioning'
 
 import {
+  MARKET_ANALYSIS_CONTRACT_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENT,
   MARKET_ANALYSIS_CROSS_ASSET_REAL_INSTRUMENT,
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_CONTEXT_POLICY,
   MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
   isMarketAnalysisCanonicalUtc,
   type AgentFact,
@@ -73,8 +73,8 @@ export function isContextInput(value: unknown): value is MarketAnalysisContextIn
 }
 
 export function normalizeContextMaxFacts(value: number | undefined): number | undefined {
-  if (value === undefined) return MARKET_ANALYSIS_CONTEXT_POLICY.defaultMaxFacts
-  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, MARKET_ANALYSIS_CONTEXT_POLICY.defaultMaxFacts) : undefined
+  if (value === undefined) return MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems
+  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems) : undefined
 }
 
 /**

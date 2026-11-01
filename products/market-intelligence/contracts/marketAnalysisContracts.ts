@@ -12,36 +12,15 @@ export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 } as const)
 
-export const MARKET_ANALYSIS_CONTEXT_POLICY = Object.freeze({
-  defaultMaxFacts: MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems,
-  /**
-   * Share of the fact budget the macro domain may take. Providers kept filling the context with
-   * routine macro rows (112 of 161 facts at one point) and truncated capital, sentiment,
-   * funding and cross-asset away entirely, so conclusions said they lacked the numbers they
-   * needed to explain anything.
-   */
-  maximumMacroFacts: 90,
-  /**
-   * Floor under the macro ceiling: every domain keeps at least this many of its newest facts.
-   *
-   * The ceiling stopped one provider filling the context, but the budget is still global and the
-   * reading order puts funding and sentiment last, so adding a domain (cross-asset) removed theirs
-   * entirely: the 16:21 snapshot kept macro 91 / capital 60 / cross-asset 10 and **no funding and
-   * no sentiment facts at all**. Six covers the smallest domain's full series (funding holds five
-   * points) plus one, and costs nothing from the volume domains beyond the budget they already had.
-   */
-  minimumFactsPerDomain: Object.freeze({
-    /**
-     * Funding now carries two series (the rate and the open interest behind it). A single
-     * six-fact floor would let the newest of the two evict the other, and the pair is exactly
-     * what this domain exists to read together; twelve keeps both.
-     */
-    default: 6,
-    funding: 12
-  } as Readonly<Record<string, number>>),
-  maximumOutputBytes: MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes,
-  schemaVersion: 2
-} as const)
+/**
+ * The shape version of a stored analysis context result.
+ *
+ * It stays in the contract, unlike the fact budget it used to sit next to, because
+ * `MarketAnalysisContextAvailable` names it in its type: bumping it changes every reader's
+ * compile, which is exactly what a contract constant does. How many facts a context carries is a
+ * runtime budget and lives in `service/intelligence/analysis/analysisContextPolicy.ts`.
+ */
+export const MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION = 2
 
 export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
   maxItemsTruncated: 'max-items-truncated',
@@ -253,7 +232,7 @@ export type MarketAnalysisContextInput = Readonly<{
 
 export type MarketAnalysisContextAvailable = Readonly<{
   state: 'available'
-  schemaVersion: typeof MARKET_ANALYSIS_CONTEXT_POLICY.schemaVersion
+  schemaVersion: typeof MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION
   profileId: typeof MARKET_ANALYSIS_CONTRACT_POLICY.dataAccessProfileId
   eventGroupId: string
   asOf: string

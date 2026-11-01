@@ -5,11 +5,11 @@ import type { JobRuntime } from '@platform/jobs'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { intelligenceAgentCapabilities } from '../agent-capabilities/capabilityCatalog'
 import {
-  MARKET_ANALYSIS_CONTEXT_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
   formatMarketAnalysisDataAccessAcceptanceMarker
 } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_INTELLIGENCE_QUERY_CAVEATS } from '../../../contracts/intelligenceQueryContracts'
+import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshot } from '../../macro-market/macroMarketSnapshotQuery'
@@ -587,7 +587,7 @@ describe('market analysis data-access matrix', () => {
     expect(result.state).toBe('available')
     if (result.state !== 'available') return
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro')
-    expect(macroFacts.length).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts)
+    expect(macroFacts.length).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.maximumMacroFacts)
     // The macro-market and FRED facts are part of the same budget and survive beside the calendar's.
     expect(macroFacts.some(fact => fact.metric === 'dollar-index-level')).toBe(true)
     expect(macroFacts.some(fact => fact.metric === 'us-10y-yield')).toBe(true)
@@ -667,7 +667,7 @@ describe('market analysis data-access matrix', () => {
     // The macro share is capped so a provider cannot evict the other domains; only a slice of
     // the admitted observations' facts (7 metrics each) survives.
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro').length
-    expect(macroFacts).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts)
+    expect(macroFacts).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.maximumMacroFacts)
     expect(macroFacts).toBeGreaterThan(0)
     expect(new Set(result.facts.map(fact => fact.domain))).toEqual(new Set(['macro', 'capital', 'sentiment', 'funding']))
     expect(result.caveats).toContain('provider-observations-truncated')
