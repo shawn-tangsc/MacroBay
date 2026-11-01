@@ -5,7 +5,10 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { Drawer } from '@platform/ui/components/drawer'
 import { notificationCopy, type NotificationCopyLanguage, type NotificationCopyKey } from '@platform/i18n/notificationCopy'
-import type { SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
+import type {
+  NotificationDeeplink,
+  SafeNotificationRecord
+} from '@platform/notifications/contracts/notificationContracts'
 
 import type { PlatformText } from '../../i18n/platformText'
 
@@ -18,6 +21,8 @@ type NotificationCenterDrawerProps = {
   onClose: () => void
   labels: PlatformText['notifications']
   language: NotificationCopyLanguage
+  /** 通知自带的动作要真的做那件事：把 deeplink 交给外壳打开，而不是再标一次已读。 */
+  onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   source?: NotificationCenterSource
 }
 
@@ -55,6 +60,7 @@ export function NotificationCenterDrawer({
   onClose,
   labels,
   language,
+  onOpenDeeplink,
   source
 }: NotificationCenterDrawerProps): React.ReactElement {
   const [state, setState] = useState<LoadState>('loading')
@@ -161,13 +167,36 @@ export function NotificationCenterDrawer({
       ) : (
         <div className="notification-center-groups">
           {unreadItems.length === 0 ? null : (
-            <Group title={labels.centerUnreadGroup} items={unreadItems} language={language} labels={labels} onRead={markOneRead} actionable />
+            <Group
+              title={labels.centerUnreadGroup}
+              items={unreadItems}
+              language={language}
+              labels={labels}
+              onOpenDeeplink={onOpenDeeplink}
+              onRead={markOneRead}
+              actionable
+            />
           )}
           {readItems.length === 0 ? null : (
-            <Group title={labels.centerEarlierGroup} items={readItems} language={language} labels={labels} onRead={markOneRead} actionable />
+            <Group
+              title={labels.centerEarlierGroup}
+              items={readItems}
+              language={language}
+              labels={labels}
+              onOpenDeeplink={onOpenDeeplink}
+              onRead={markOneRead}
+              actionable
+            />
           )}
           {recorded.length === 0 ? null : (
-            <Group title={labels.centerRecordedGroup} items={recorded} language={language} labels={labels} onRead={markOneRead} />
+            <Group
+              title={labels.centerRecordedGroup}
+              items={recorded}
+              language={language}
+              labels={labels}
+              onOpenDeeplink={onOpenDeeplink}
+              onRead={markOneRead}
+            />
           )}
         </div>
       )}
@@ -181,6 +210,7 @@ function Group(props: {
   language: NotificationCopyLanguage
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
+  onOpenDeeplink: (deeplink: NotificationDeeplink) => void
   /** 主位才给动作；「仅记录」组没有动作目标，行上不出按钮（A2 只约束主位，A3 管这里）。 */
   actionable?: boolean
 }): React.ReactElement {
@@ -195,6 +225,7 @@ function Group(props: {
             key={item.id}
             labels={props.labels}
             language={props.language}
+            onOpenDeeplink={props.onOpenDeeplink}
             onRead={props.onRead}
           />
         ))}
@@ -222,6 +253,7 @@ function NotificationRow(props: {
   language: NotificationCopyLanguage
   labels: PlatformText['notifications']
   onRead: (id: string) => Promise<void>
+  onOpenDeeplink: (deeplink: NotificationDeeplink) => void
 }): React.ReactElement {
   const { item, labels, language } = props
   const [expanded, setExpanded] = useState(false)
@@ -254,15 +286,35 @@ function NotificationRow(props: {
           </button>
         ) : null}
       </div>
-      {props.actionable ? (
-        <Button
-          size="small"
-          disabled={!unread}
-          aria-label={labels.centerMarkRead}
-          onClick={() => void props.onRead(item.id)}>
-          {labels.centerMarkRead}
-        </Button>
-      ) : null}
+      {props.actionable ? <NotificationActionButton item={item} language={language} onOpenDeeplink={props.onOpenDeeplink} /> : null}
     </li>
+  )
+}
+
+/** 通知自带动作的文案解析：标签同样只存键，句子按当前语言取。 */
+function actionLabel(labelKey: string, language: NotificationCopyLanguage): string {
+  return notificationCopy[language][labelKey as NotificationCopyKey] ?? labelKey
+}
+
+/**
+ * 主位行上的动作 = **这条通知要你做的事**，不是列表管理。
+ *
+ * 之前这里放的是「标为已读」——那是「我看过了」，不是「任务失败了你去看一眼」。记录里本来就有
+ * `actions[0]`（如「打开任务」）与 `deeplink`，UI 不消费它，用户就只能点标记已读，事没做。
+ * 现在点击真的把 deeplink 交给外壳打开；没有动作的通知本来就不会进主位。
+ */
+function NotificationActionButton(props: {
+  item: SafeNotificationRecord
+  language: NotificationCopyLanguage
+  onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+}): React.ReactElement | null {
+  const action = props.item.actions[0]
+  const deeplink = action?.deeplink ?? props.item.deeplink
+  if (action === undefined || deeplink === undefined) return null
+  const label = actionLabel(action.labelKey, props.language)
+  return (
+    <Button size="small" onClick={() => props.onOpenDeeplink(deeplink)}>
+      {label}
+    </Button>
   )
 }

@@ -44,6 +44,8 @@ import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDe
 import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
+import { NotificationBell } from './notifications/NotificationBell'
+import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -209,6 +211,7 @@ export function AppShell(): React.ReactElement {
 function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => void } = {}): React.ReactElement {
   const [activeNavKey, setActiveNavKey] = useState('assistants')
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
   const [bootDataReady, setBootDataReady] = useState(false)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
@@ -1719,6 +1722,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {/* 拖动区：页面名不再重复显示（当前页由 Tab 条承载），这里是纯粹的窗口拖动留白 */}
         <div className="titlebar-drag" aria-hidden="true" />
         <div className="topbar-actions">
+          <NotificationBell labels={t.notifications} onOpen={() => setNotificationCenterOpen(true)} />
           <button type="button" aria-label="Search" title="Search">
             <Search size={15} />
           </button>
@@ -1729,6 +1733,34 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         {/* Windows：自绘标题栏的最小化/最大化/关闭（macOS 用系统红绿灯，这里不渲染） */}
         <WindowControls />
       </header>
+
+      <NotificationCenterDrawer
+        open={notificationCenterOpen}
+        onOpenDeeplink={(deeplink) => {
+          // 通知自带的动作要真的把人送到地方：设置分区 → 设置页对应面板；产品页 → 该产品一级菜单。
+          setNotificationCenterOpen(false)
+          if (deeplink.settingsSectionId !== undefined) {
+            setActiveNavKey('settings')
+            setSettingsPanelKey(deeplink.settingsSectionId)
+            return
+          }
+          if (deeplink.pageId !== undefined) {
+            setActiveNavKey(deeplink.pageId)
+            return
+          }
+          if (deeplink.productId !== undefined) {
+            const entry = productMenuEntries.find((item) => item.productId === deeplink.productId)
+            if (entry) setActiveNavKey(entry.routePath)
+          }
+        }}
+        onClose={() => {
+          setNotificationCenterOpen(false)
+          // 关闭后焦点回铃铛：键盘用户不该被扔回文档开头。
+          queueMicrotask(() => document.querySelector<HTMLElement>('[data-notification-bell] button')?.focus())
+        }}
+        labels={t.notifications}
+        language={settings.language}
+      />
 
       <InUseModelRetiredBanner
         labels={t.models}

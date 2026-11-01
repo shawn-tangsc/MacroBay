@@ -54,13 +54,20 @@ function fakeSource(overrides: Partial<NotificationCenterSource> = {}): Notifica
   }
 }
 
-async function mount(source: NotificationCenterSource): Promise<void> {
+async function mount(source: NotificationCenterSource, onOpenDeeplink: (d: unknown) => void = () => undefined): Promise<void> {
   const host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <NotificationCenterDrawer open onClose={() => undefined} labels={labels} language="zh-CN" source={source} />
+      <NotificationCenterDrawer
+        open
+        onClose={() => undefined}
+        labels={labels}
+        language="zh-CN"
+        onOpenDeeplink={onOpenDeeplink}
+        source={source}
+      />
     )
   })
   // 首帧是 loading，list 的兑现要再 flush 一次。
@@ -233,5 +240,48 @@ describe('记录里存的是键，句子在展示时解析', () => {
     expect(document.body.textContent).toContain('央行')
     // 缺参不许静默消失：`{taskName}` 留在句子里，看得见才会被修。
     expect(document.body.textContent).toContain('{taskName}')
+  })
+
+  it('主位行的动作是通知自己要做的事，点击真的把 deeplink 交出去', async () => {
+    const opened: unknown[] = []
+    const source = fakeSource({
+      list: async () => ({
+        items: [
+          record({
+            id: 't1',
+            deeplink,
+            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+          })
+        ]
+      })
+    })
+    await mount(source, (value) => opened.push(value))
+
+    const action = [...document.body.querySelectorAll<HTMLButtonElement>('.notification-center-row button')]
+      .find((button) => flat(button.textContent) === '打开任务')
+    expect(action).toBeTruthy()
+
+    await act(async () => {
+      action!.click()
+    })
+    // 断言 deeplink 被消费，而不是「按钮存在」：存在但点了没用的按钮正是这条要修的。
+    expect(opened).toEqual([deeplink])
+  })
+
+  it('行上不再拿「标为已读」冒充通知动作', async () => {
+    const source = fakeSource({
+      list: async () => ({
+        items: [
+          record({
+            id: 't2',
+            deeplink,
+            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+          })
+        ]
+      })
+    })
+    await mount(source)
+    const rowButtons = [...document.body.querySelectorAll<HTMLButtonElement>('.notification-center-row button')]
+    expect(rowButtons.some((button) => flat(button.textContent) === flat(labels.centerMarkRead))).toBe(false)
   })
 })
