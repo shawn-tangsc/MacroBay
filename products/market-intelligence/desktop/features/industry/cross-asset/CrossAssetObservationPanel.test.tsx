@@ -221,7 +221,10 @@ describe('cross-asset observation workspace', () => {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
       expect(host.querySelector('[data-cross-asset-workspace]')).not.toBeNull()
       expect(host.querySelector('section')?.getAttribute('aria-label')).toBe(text.title)
-      expect(host.textContent).toContain(text.unavailable)
+      // 拿不到行情是「读不到」，由统一状态面说那句话并给出重试，不再自己写一句文案。
+      const failure = host.querySelector<HTMLElement>('.state-view--error')
+      expect(failure, 'a failed query renders the shared state surface').not.toBeNull()
+      expect(failure?.querySelector('.state-view__action'), 'error always offers an action').not.toBeNull()
       expect(host.querySelector('[data-cross-asset-region="status"]')).not.toBeNull()
       // 跨市场观察 is temporarily unrendered (its data and i18n keys are untouched); this guard is
       // flipped back when the aside returns.

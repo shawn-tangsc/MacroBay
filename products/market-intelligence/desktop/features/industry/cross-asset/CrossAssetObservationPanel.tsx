@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Popover, Segmented, Tooltip } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import type { productText } from '../../../shared/i18n/productText'
 import type { createCrossAssetObservationClient } from '../../../shared/ipc/crossAssetObservationClient'
 import { crossAssetContractPolicy } from '../../../../contracts/crossAssetObservationContracts'
@@ -348,7 +349,10 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
             macroAssets: { dxy: text.assetLabels.dxy, gold: text.assetLabels.gold } }} />
           : view.state === 'loading'
             ? <LoadingState label={text.loading} fill />
-            : <p className="mi-cross-asset__empty">{text.unavailable}</p>}
+            // 查询失败是「读不到」，不是「没有」：走统一状态面，码用 unreadable（程序故障，可重试）。
+            // 「来源被关」那一支等设置深链入口落地后再拆成 disabled · target-disabled。
+            : <StateView state="error" reasonCode="unreadable" size="panel"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
       </div>
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
           It is the product's own statement about the chart, kept apart from the model's conclusion — a

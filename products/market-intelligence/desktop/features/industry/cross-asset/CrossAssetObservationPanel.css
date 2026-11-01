@@ -14,7 +14,6 @@
   --mi-cross-asset-chart-height: 100px;
   --mi-cross-asset-chart-height-wide: 116px;
   /* 空状态与图表共用同一高度，避免加载完成后整块跳动。 */
-  --mi-cross-asset-chart-empty-height: var(--mi-cross-asset-chart-height);
   --mi-cross-asset-axis-width: 62px;
   --mi-cross-asset-tooltip-width: 210px;
   --mi-cross-asset-tooltip-inset: 8px;
@@ -59,7 +58,6 @@
 .mi-cross-asset [data-direction="-1"] { color: var(--mi-dashboard-negative); }
 /* `.mi-cross-asset__observations` rules were removed with the aside itself; the correlations and
    relative returns still live in the snapshot, only their rendering is temporarily withdrawn. */
-.mi-cross-asset__empty { display: grid; align-content: center; min-height: var(--mi-cross-asset-chart-empty-height); color: var(--mi-cross-asset-muted); }
 .mi-cross-asset__legend { display: flex; gap: 12px; margin-block: 10px; }
 .mi-cross-asset__legend button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--mi-cross-asset-text); cursor: pointer; font: inherit; padding: 0; }
 .mi-cross-asset__legend button[aria-pressed="false"] { opacity: .4; }
