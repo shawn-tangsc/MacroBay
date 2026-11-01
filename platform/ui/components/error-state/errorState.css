@@ -8,6 +8,9 @@
 }
 
 .error-state[data-variant='error'] {
+  /* 只给图标（currentColor）。实测对比度（WCAG 计算值）：
+     深色 --danger 对 surface 3.94、对 surface-soft 3.25 —— 达图形 3:1，不达正文 4.5:1。
+     所以这一支的颜色**不许**用在正文上；正文一律走 --text-strong / --muted。 */
   color: var(--danger);
 }
 
