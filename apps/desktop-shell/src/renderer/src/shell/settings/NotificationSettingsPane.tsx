@@ -70,7 +70,8 @@ export function NotificationSettingsPane(props: {
         ))}
       </div>
 
-      <p className="notification-settings-footnote">{labels.scopeNote}</p>
+      {/* 控件不可操作时不给操作建议：开关全禁用着，还建议「至少保留一个渠道」等于建议一个没得选的选择。 */}
+      {available ? <p className="notification-settings-footnote">{labels.scopeNote}</p> : null}
     </section>
   )
 }
