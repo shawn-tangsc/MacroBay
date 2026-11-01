@@ -40,16 +40,24 @@ describe('ui.state 文案归平台一处拥有', () => {
     expect(resolveStateViewText('en-US', 'ui.state.empty.reason.nope' as StateViewTextKey)).toBe('')
   })
 
-  it('动作键常量表里的每个值都在闭集内，且都是 ui.state.action.*', () => {
+  it('动作键只有一个来源：常量表，且每个键两种语言都有句子', () => {
     const values = Object.values(STATE_VIEW_ACTION_KEYS)
     expect(values.length).toBeGreaterThan(0)
+
     for (const value of values) {
-      expect(STATE_VIEW_TEXT_KEYS).toContain(value)
+      // 动作键**不再手写进 `STATE_VIEW_TEXT_KEYS`**：那张清单只剩状态与原因键，
+      // 动作键由这个对象推导进类型。两份清单靠人同步，今晚已经掉队过两个。
+      expect(STATE_VIEW_TEXT_KEYS as readonly string[]).not.toContain(value)
       expect(value.startsWith('ui.state.action.')).toBe(true)
+      // 加键忘写文案 → 这里红，位置就是错过的地方。
+      expect(resolveStateViewText('zh-CN', value)).not.toBe('')
+      expect(resolveStateViewText('en-US', value)).not.toBe('')
     }
-    // 常量表不许漏键：闭集里每个动作键都要能从常量表取到，否则产品又要写回字面量。
-    const actionKeys = STATE_VIEW_TEXT_KEYS.filter((key) => key.startsWith('ui.state.action.'))
-    expect(new Set(values)).toEqual(new Set(actionKeys))
+  })
+
+  it('状态与原因键那张清单里，一个动作键都不许混进去', () => {
+    const strays = STATE_VIEW_TEXT_KEYS.filter((key) => key.startsWith('ui.state.action.'))
+    expect(strays).toEqual([])
   })
 
   it('hook 从上下文取语言，产品不传语言参数', () => {

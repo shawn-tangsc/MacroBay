@@ -66,6 +66,7 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.empty.reason.none-installed',
   'ui.state.empty.reason.no-target-selected',
   'ui.state.empty.reason.not-yet',
+  'ui.state.empty.reason.never-ran',
   'ui.state.empty.reason.older-than-window',
   'ui.state.empty.reason.nothing-in-window',
   'ui.state.error',
@@ -143,6 +144,7 @@ export type StateViewProps =
   | (StateViewBase & { state: 'empty'; reasonCode: 'none-installed'; action?: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-selected'; action?: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'not-yet'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'never-ran'; action?: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'older-than-window'; action?: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-in-window'; action?: StateViewAction })
   | (StateViewBase & { state: 'error'; reasonCode: 'unreadable'; action?: StateViewAction; details?: StateDetails })
