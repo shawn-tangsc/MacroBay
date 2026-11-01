@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import type { JobContext } from '@platform/jobs'
+
 import {
   channelAdapterMaintenanceTypes,
   channelMaintenanceJobDefinitions,
@@ -16,7 +18,7 @@ function dependencies(overrides: Partial<ChannelMaintenanceJobDependencies> = {}
     inboundRecovery: vi.fn(async () => {}),
     adapterMaintenance: Object.fromEntries(
       channelAdapterMaintenanceTypes.map((type) => [type, vi.fn()])
-    ) as unknown as ChannelMaintenanceJobDependencies['adapterMaintenance'],
+    ) as ChannelMaintenanceJobDependencies['adapterMaintenance'],
     ...overrides
   }
 }
@@ -40,8 +42,14 @@ describe('channel maintenance jobs', () => {
   it('registers one handler per definition and invokes the matching pass', async () => {
     const handlers = new Map<string, () => Promise<void>>()
     const deps = dependencies()
+    const context: JobContext = {
+      jobRunId: 'run-maintenance',
+      signal: new AbortController().signal,
+      log: async () => {},
+      progress: async () => {}
+    }
     registerChannelMaintenanceJobHandlers(
-      { registerHandler: (id, handler) => { handlers.set(id, async () => { await handler({}, { log: async () => {}, progress: async () => {} } as never) }) } },
+      { registerHandler: (id, handler) => { handlers.set(id, async () => { await handler({}, context) }) } },
       deps
     )
 
