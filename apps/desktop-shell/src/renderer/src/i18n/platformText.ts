@@ -933,7 +933,6 @@ export type PlatformText = {
   preferences: {
     language: string
     displayStyle: string
-    accentColor: string
     timeZone: string
     timeZoneFollowSystem: string
     timeZoneSearch: string
@@ -956,9 +955,6 @@ export type PlatformText = {
     system: string
     light: string
     dark: string
-    lime: string
-    cyan: string
-    violet: string
   }
   notifications: {
     channelsDescription: string
@@ -1961,7 +1957,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     preferences: {
       language: '语言',
       displayStyle: '显示风格',
-      accentColor: '强调色',
       timeZone: '时区',
       timeZoneFollowSystem: '跟随系统',
       timeZoneSearch: '搜索时区',
@@ -1983,10 +1978,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: '跟随系统',
       light: '浅色',
-      dark: '深色',
-      lime: '绿色',
-      cyan: '蓝色',
-      violet: '紫色'
+      dark: '深色'
     },
     notifications: {
       channelsHeading: '投递渠道',
@@ -2996,7 +2988,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     preferences: {
       language: 'Language',
       displayStyle: 'Display Style',
-      accentColor: 'Accent Color',
       timeZone: 'Time zone',
       timeZoneFollowSystem: 'Follow system',
       timeZoneSearch: 'Search time zones',
@@ -3018,10 +3009,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: 'System',
       light: 'Light',
-      dark: 'Dark',
-      lime: 'Lime',
-      cyan: 'Cyan',
-      violet: 'Violet'
+      dark: 'Dark'
     },
     notifications: {
       channelsHeading: 'Delivery Channels',
