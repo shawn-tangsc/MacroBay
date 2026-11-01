@@ -9269,6 +9269,13 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   line-height: 1.5;
 }
 
+.notification-settings-test {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .notification-settings-footnote {
   margin: 12px 0 0;
   max-width: 720px;

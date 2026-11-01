@@ -1,5 +1,5 @@
 import { Bell } from 'lucide-react'
-import { Switch, Tag } from 'antd'
+import { Button, Switch, Tag } from 'antd'
 
 import { notificationProducerWired } from '@platform/notifications/contracts/notificationContracts'
 import type { NotificationSettings } from '@platform/settings/schema/appSettings'
@@ -68,6 +68,14 @@ export function NotificationSettingsPane(props: {
             </span>
           </label>
         ))}
+      </div>
+
+      {/* 手动说明 + 唯一的动作：发送一条测试通知。权限状态不在这里画——系统答不了「授没授权」。 */}
+      <div className="notification-settings-test">
+        <Button size="small" onClick={() => void window.platform.notifications.sendTest()}>
+          {labels.sendTest}
+        </Button>
+        <p className="notification-settings-footnote">{labels.sendTestHint}</p>
       </div>
 
       {/* 控件不可操作时不给操作建议：开关全禁用着，还建议「至少保留一个渠道」等于建议一个没得选的选择。 */}

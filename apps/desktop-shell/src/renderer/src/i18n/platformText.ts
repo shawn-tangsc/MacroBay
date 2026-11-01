@@ -1016,6 +1016,8 @@ export type PlatformText = {
     centerDeleteReadDone: (count: string) => string
     centerDeleteReadEmpty: string
     centerCancel: string
+    sendTest: string
+    sendTestHint: string
     centerRecordedGroup: string
     centerExpand: string
     centerCollapse: string
@@ -2092,6 +2094,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerDeleteReadDone: (count) => `已删除 ${count} 条已读通知`,
       centerDeleteReadEmpty: '没有已读通知可删。',
       centerCancel: '取消',
+      sendTest: '发送测试通知',
+      sendTestHint: '这条只用来验证链路：它不代表任何业务事实。桌面横幅没弹出，多半是系统没放行，不是平台没发出去。',
       centerRecordedGroup: '仅记录',
       centerExpand: '展开',
       centerCollapse: '收起',
@@ -3186,6 +3190,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerDeleteReadDone: (count) => `Deleted ${count} read notifications`,
       centerDeleteReadEmpty: 'There are no read notifications to delete.',
       centerCancel: 'Cancel',
+      sendTest: 'Send a test notification',
+      sendTestHint: 'This only proves the pipeline works; it describes no real event. If no desktop banner appears, the system probably blocked it rather than the platform failing to send.',
       centerRecordedGroup: 'Recorded only',
       centerExpand: 'Show more',
       centerCollapse: 'Show less',
