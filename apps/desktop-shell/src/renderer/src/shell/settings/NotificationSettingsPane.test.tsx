@@ -39,21 +39,21 @@ async function mount(onChange = vi.fn()): Promise<HTMLElement> {
 }
 
 describe('notification settings availability', () => {
-  it('shows the unavailable state while no producer exists, and does not pretend the switches work', async () => {
-    // Pinned on purpose: flip the constant in the change that wires the first producer, and this
-    // test is what makes that flip a reviewed decision instead of a forgotten toggle.
-    expect(notificationProducerWired).toBe(false)
+  it('presents working switches and no explanation once the first producer is wired', async () => {
+    // Pinned on purpose: the first producer is wired (task failure), so the pane must present
+    // working switches instead of the "nothing produces notifications" notice.
+    expect(notificationProducerWired).toBe(true)
 
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
     const switches = [...container.querySelectorAll('.notification-channel-switch')]
 
-    expect(container.textContent).toContain(labels.unavailableNotice)
-    // 控件全禁用时不给操作建议：那句「建议至少保留一个渠道」此刻建议了一个没得选的选择。
-    expect(container.textContent).not.toContain(labels.scopeNote)
+    // 接通后：不再出现「为什么不能用」的解释（包括反过来的「现在可以了」），开关可用，建议行回来。
+    expect(container.textContent).not.toContain(labels.unavailableNotice)
     // 通知中心常开、已从设置页移除：只剩三个投递开关。
     expect(switches).toHaveLength(3)
-    expect(switches.every((control) => (control as HTMLButtonElement).disabled)).toBe(true)
+    expect(switches.every((control) => (control as HTMLButtonElement).disabled)).toBe(false)
+    expect(container.textContent).toContain(labels.scopeNote)
   })
 
   it('keeps the delivery switches enabled once a producer is wired', async () => {
@@ -65,7 +65,7 @@ describe('notification settings availability', () => {
     const badgeCount = [...container.querySelectorAll('.ant-tag')].filter(
       (tag) => tag.textContent === labels.unavailableBadge
     ).length
-    expect(badgeCount).toBe(notificationProducerWired ? 0 : 3)
+    expect(badgeCount).toBe(0)
   })
 })
 

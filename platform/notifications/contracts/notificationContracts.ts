@@ -149,7 +149,7 @@ export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeS
  * switches filter an empty stream, so the settings pane must present them as unavailable instead
  * of as working toggles. Flip this in the same change that wires the first producer.
  */
-export const notificationProducerWired = false
+export const notificationProducerWired: boolean = true
 
 export function toSafeNotificationRecord(record: NotificationRecord): SafeNotificationRecord {
   const metadata = record.safeMetadata ? sanitizeMetadata(record.safeMetadata) : undefined

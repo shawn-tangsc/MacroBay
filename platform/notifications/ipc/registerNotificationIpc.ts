@@ -12,7 +12,7 @@ import type { NotificationClock } from '../runtime/notificationRouting'
 let notificationRuntime: ReturnType<typeof createNotificationRuntime> | null = null
 let getNotificationSettings: (() => Promise<NotificationRuntimeSettings>) | null = null
 let notificationClock: NotificationClock | null = null
-let getLanguage: (() => NotificationCopyLanguage) | null = null
+let getLanguage: (() => Promise<NotificationCopyLanguage>) | null = null
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
@@ -23,7 +23,7 @@ export function configureNotificationRuntime(deps: {
    * 类型上可缺是为了装配顺序（先 configure 再取实例），但**缺了会在取实例时直接抛错**，
    * 不会悄悄按中文发出去——静默兜底会让英文用户收到中文桌面通知。
    */
-  getLanguage?: () => NotificationCopyLanguage
+  getLanguage?: () => Promise<NotificationCopyLanguage>
 }): void {
   getNotificationSettings = deps.getSettings
   notificationClock = deps.clock
@@ -62,8 +62,9 @@ export function getNotificationRuntime() {
       clock: notificationClock,
       deliveryHooks: {
         // 记录只存键与参数，句子在这里按**当前语言**解析：切语言后历史通知也跟着变。
-        desktop: (record) => {
-          const language = getLanguage?.() ?? 'zh-CN'
+        desktop: async (record) => {
+          // 每次读设置：切语言后**历史通知**也按新语言解析（记录里只有键）。
+          const language = (await getLanguage?.()) ?? 'zh-CN'
           const template = notificationCopyText(language, record.titleKey)
           const bodyTemplate = record.bodyKey === undefined
             ? undefined

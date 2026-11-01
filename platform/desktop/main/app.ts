@@ -171,6 +171,7 @@ import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
 import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
+import { wireTaskFailureNotifier } from '../../notifications/producers/wireTaskFailureNotifier'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
 import { buildAppMenu } from '../menu/appMenu'
@@ -2181,7 +2182,12 @@ function registerIpcHandlers(
   configureNotificationRuntime({
     getSettings: async () => (await settingsStore.get()).notifications,
     // 免打扰窗口按设置的读者时区判断，不按运行机器；同一提供者随设置保存刷新。
-    clock: { now: () => new Date(), timeZone: () => shellTimeZone.get() }
+    clock: { now: () => new Date(), timeZone: () => shellTimeZone.get() },
+    // 桌面通知在主进程发出：每次读设置拿当前语言，切语言后连历史通知也按新语言解析。
+    getLanguage: async () => {
+      const language = (await settingsStore.get()).language
+      return language === 'en-US' ? 'en-US' : 'zh-CN'
+    }
   })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
@@ -2285,7 +2291,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   })
   const productIpcRegistry = createProductIpcRegistry()
   productIpcRegistryForDisposal = productIpcRegistry
-  const jobRuntime = createJobRuntime({ store: jobRunStore })
+  // 第一个真实通知来源：任务最终失败。装配在这，通知语义不进平台。
+  const onRunTerminal = wireTaskFailureNotifier({
+    submit: (request) => getNotificationRuntime().submit(request),
+    listDefinitions: () => jobRuntime.listSchedules(),
+    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant))
+  })
+  const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
   jobRuntimeForDisposal = jobRuntime
   jobRuntime.recover()
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
