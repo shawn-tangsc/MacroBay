@@ -254,6 +254,28 @@ describe('AgentTaskDispatchService', () => {
     )
   })
 
+  it('renders the prompt time zone from the shell reader, following a change without a restart', async () => {
+    let zone = 'Asia/Tokyo'
+    const task = createTask({ prompt: 'Run at {time} ({timezone}).' })
+    const services = createAgentPlatformServices(
+      createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace], tasks: [task] }))
+    )
+    const prompts: string[] = []
+    const dispatcher = new AgentTaskDispatchService({
+      services,
+      runtime: { sendMessage: async (request) => { prompts.push(request.text); return createRuntimeResult(request.sessionId) } },
+      now: () => '2026-01-01T10:30:00.000Z',
+      timeZone: () => zone
+    })
+
+    await dispatcher.runTask(agent.id, task.id, task.revision ?? 1)
+    zone = 'America/New_York'
+    await dispatcher.runTask(agent.id, task.id, task.revision ?? 1)
+
+    expect(prompts[0]).toContain('Asia/Tokyo')
+    expect(prompts[1]).toContain('America/New_York')
+  })
+
   it('best-effort prewarms the fresh task session before sending the task prompt', async () => {
     const store = createMemoryStateStore(
       createAgentStoreState({

@@ -859,6 +859,7 @@ const taskAutomationMaintenance = createTaskAutomationMaintenance({
 const agentTaskDispatchService = new AgentTaskDispatchService({
   services: agentServices,
   runtime: agentRuntimeService,
+  timeZone: () => shellTimeZone.get(),
   getJobBridge: () => agentTaskJobBridge,
   readHeartbeat: readHeartbeatFileFromWorkspace,
   deliverTaskResult: deliverTaskResultToChannels.deliver,
