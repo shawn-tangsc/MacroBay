@@ -1172,7 +1172,7 @@ describe('macro economic calendar', () => {
     const empty = await renderCalendar({ queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
     await flush()
     // The shared state surface prints its own title; the product sentence rides the reason slot.
-    expect(empty.container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.emptyState.title)
+    expect(empty.container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
     expect(empty.container.querySelector('.mi-economic-calendar__empty-state')).not.toBeNull()
 
     expect(loading.container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()

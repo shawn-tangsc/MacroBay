@@ -23,6 +23,6 @@ export function CalendarEmptyMonthState({ text }: { text: EconomicCalendarText }
     reasonCode="nothing-in-window"
     size="lg"
     action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: openIntelligenceSourcesSettings }}
-    productReason={{ key: 'mi.calendar.empty-month', resolve: () => text.emptyState.title }}
+    productReason={{ key: 'mi.calendar.empty-month', resolve: () => text.status.empty }}
   />
 }
