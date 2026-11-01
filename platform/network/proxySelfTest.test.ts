@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:net'
 
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { isProxyEndpointReachable, parseResolvedProxy } from './proxySelfTest'
+import { isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy } from './proxySelfTest'
 
 describe('parseResolvedProxy', () => {
   it('reads the first hop of a chromium resolution', () => {
@@ -47,5 +47,16 @@ describe('isProxyEndpointReachable', () => {
 
     await expect(isProxyEndpointReachable({ host: '127.0.0.1', port: address.port }, 1000)).resolves.toBe(true)
     await expect(isProxyEndpointReachable({ host: '127.0.0.1', port: 1 }, 500)).resolves.toBe(false)
+  })
+})
+
+describe('isLoopbackProxyEndpoint', () => {
+  it('recognises only endpoints where a failed connection means the proxy itself', () => {
+    expect(isLoopbackProxyEndpoint('127.0.0.1:7890')).toBe(true)
+    expect(isLoopbackProxyEndpoint('127.1.2.3:1080')).toBe(true)
+    expect(isLoopbackProxyEndpoint('localhost:7890')).toBe(true)
+    expect(isLoopbackProxyEndpoint('[::1]:7890')).toBe(true)
+    expect(isLoopbackProxyEndpoint('192.168.1.10:7890')).toBe(false)
+    expect(isLoopbackProxyEndpoint('proxy.corp.test:7890')).toBe(false)
   })
 })

@@ -51,3 +51,18 @@ export function isProxyEndpointReachable(
     socket.once('error', () => finish(false))
   })
 }
+
+/**
+ * 代理端点是不是本机回环。回环上的连接不经过网络栈，连不上只能说明代理没起或端口错；
+ * 非回环连不上则分不清本机断网、VPN、主机不在、防火墙四件事，不许归到代理或目标站。
+ */
+export function isLoopbackProxyEndpoint(hostOrEndpoint: string): boolean {
+  const value = hostOrEndpoint.trim().toLowerCase()
+  if (!value) return false
+  const host = value.startsWith('[')
+    ? value.slice(1, value.indexOf(']'))
+    : value.slice(0, value.lastIndexOf(':') > 0 ? value.lastIndexOf(':') : value.length)
+  const normalized = host.replace(/^\[|\]$/g, '')
+  if (normalized === 'localhost' || normalized === '::1') return true
+  return /^127\./.test(normalized)
+}

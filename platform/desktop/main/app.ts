@@ -154,7 +154,7 @@ import { createDefaultAppSettings, supportedLanguages } from '../../settings/sch
 import { createSettingsStore } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
 import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
-import { isProxyEndpointReachable, parseResolvedProxy } from '../../network/proxySelfTest'
+import { isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy } from '../../network/proxySelfTest'
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
@@ -1688,7 +1688,8 @@ function registerIpcHandlers(
           resolvedProxy,
           proxied: !route.direct,
           endpointReachable,
-          proxyEndpoint: route.endpoint ? `${route.endpoint.host}:${route.endpoint.port}` : null
+          proxyEndpoint: route.endpoint ? `${route.endpoint.host}:${route.endpoint.port}` : null,
+          proxyEndpointLoopback: route.endpoint ? isLoopbackProxyEndpoint(`${route.endpoint.host}:${route.endpoint.port}`) : null
         }
       }
       // PLAT-63：端点测试只接受已知端点类型 + http(s) 地址；校验先于任何网络请求。

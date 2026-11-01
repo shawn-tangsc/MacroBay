@@ -879,7 +879,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           resolvedProxy: typeof result?.resolvedProxy === 'string' ? result.resolvedProxy : undefined,
           proxied: typeof result?.proxied === 'boolean' ? result.proxied : undefined,
           endpointReachable: typeof result?.endpointReachable === 'boolean' ? result.endpointReachable : null,
-          proxyEndpoint: typeof result?.proxyEndpoint === 'string' ? result.proxyEndpoint : null
+          proxyEndpoint: typeof result?.proxyEndpoint === 'string' ? result.proxyEndpoint : null,
+          proxyEndpointLoopback: typeof result?.proxyEndpointLoopback === 'boolean' ? result.proxyEndpointLoopback : null
         }
       })
     } catch {

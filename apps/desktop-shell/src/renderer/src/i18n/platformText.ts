@@ -945,9 +945,14 @@ export type PlatformText = {
     proxySelfTestPassedViaProxy: (status: number, seconds: string) => string
     proxySelfTestReachable: (status: number, seconds: string) => string
     proxySelfTestNotApplied: (resolvedProxy: string) => string
-    proxySelfTestProxyUnreachable: (endpoint: string) => string
+    proxySelfTestProxyNotRunning: (endpoint: string) => string
+    proxySelfTestProxyServerUnreachable: (endpoint: string) => string
+    proxySelfTestProxyAnsweredBadly: (sentence: string) => string
+    proxySelfTestUnattributable: (sentence: string) => string
     proxySelfTestTargetRejected: (status: number, host: string) => string
     proxySelfTestAuthenticationHint: string
+    proxySelfTestTargetDenied: (status: number, host: string) => string
+    proxySelfTestDeniedHint: string
     proxyRejectedEmpty: string
     proxyRejectedUnsupportedProtocol: string
     proxyRejectedUnparsable: string
@@ -1978,9 +1983,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestReachable: (status, seconds) => `能连到目标站点（HTTP ${status} · ${seconds}s）`,
       proxySelfTestNotApplied: (resolvedProxy) =>
         `代理自检：未生效（设置为代理，但网络栈解析为「${resolvedProxy}」，这次没有走代理）`,
-      proxySelfTestProxyUnreachable: (endpoint) => `代理自检：失败（代理端点 ${endpoint} 连不上，与目标站无关）`,
+      proxySelfTestProxyNotRunning: (endpoint) =>
+        `代理自检：失败（本机代理 ${endpoint} 没有响应：代理没启动，或端口不对）`,
+      proxySelfTestProxyServerUnreachable: (endpoint) =>
+        `连不上代理服务器本身（${endpoint}）；原因待查——先确认这台机器能上网，再确认地址和端口是否写对`,
+      proxySelfTestProxyAnsweredBadly: (sentence) => `经代理请求失败：代理端点连得上，但代理自身返回了错误（${sentence}）`,
+      proxySelfTestUnattributable: (sentence) =>
+        `经代理访问目标站失败（${sentence}）；代理端点连得上、请求已经发出去，但没拿到响应。无法判断问题出在代理出口还是目标站本身，先换一个目标站再试一次`,
       proxySelfTestTargetRejected: (status, host) => `已连到目标站点，站点要求鉴权（HTTP ${status}）· ${host}`,
       proxySelfTestAuthenticationHint: '这条自检不带 Key，401 属正常；与代理是否生效无关。',
+      proxySelfTestTargetDenied: (status, host) => `已连到目标站点，站点拒绝了请求（HTTP ${status}）· ${host}`,
+      proxySelfTestDeniedHint: '请求到达了站点、被站点挡下（可能不允许无凭据访问或触发了防护）；与代理是否生效无关。',
       proxyRejectedEmpty: '请先填写代理地址。',
       proxyRejectedUnsupportedProtocol: '代理地址只支持 http、https、socks5 三种协议，请写成 `http://主机:端口`。',
       proxyRejectedUnparsable: '代理地址格式不对，请写成 `http://主机:端口` 或 `socks5://主机:端口`。',
@@ -3018,12 +3031,21 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestReachable: (status, seconds) => `Reached the target site (HTTP ${status} · ${seconds}s)`,
       proxySelfTestNotApplied: (resolvedProxy) =>
         `Proxy check: not in effect (a proxy is configured, but the network stack resolved "${resolvedProxy}", so this request went direct)`,
-      proxySelfTestProxyUnreachable: (endpoint) =>
-        `Proxy check: failed (the proxy endpoint ${endpoint} is unreachable, which has nothing to do with the target site)`,
+      proxySelfTestProxyNotRunning: (endpoint) =>
+        `Proxy check: failed (the local proxy ${endpoint} did not answer: it is not running, or the port is wrong)`,
+      proxySelfTestProxyServerUnreachable: (endpoint) => `Cannot reach the proxy server itself (${endpoint}); cause unknown. First confirm this machine has internet, then check the address and port`,
+      proxySelfTestProxyAnsweredBadly: (sentence) =>
+        `The request through the proxy failed: the proxy endpoint answers, but the proxy itself returned an error (${sentence})`,
+      proxySelfTestUnattributable: (sentence) =>
+        `The request through the proxy could not complete (${sentence}); the proxy endpoint answers and the request went out, but no response came back. It cannot be told whether the proxy's egress or the target site is at fault — try another target site`,
       proxySelfTestTargetRejected: (status, host) =>
         `Reached the target site; it asks for authentication (HTTP ${status}) · ${host}`,
       proxySelfTestAuthenticationHint:
         'This check sends no key, so a 401 is expected; it says nothing about whether the proxy is in effect.',
+      proxySelfTestTargetDenied: (status, host) =>
+        `Reached the target site; the site refused the request (HTTP ${status}) · ${host}`,
+      proxySelfTestDeniedHint:
+        'The request reached the site and was turned away there (it may not allow unauthenticated access, or a guard stepped in); this says nothing about whether the proxy is in effect.',
       proxyRejectedEmpty: 'Enter a proxy address first.',
       proxyRejectedUnsupportedProtocol: 'Only http, https and socks5 addresses are supported; write it as `http://host:port`.',
       proxyRejectedUnparsable: 'That proxy address cannot be parsed; write it as `http://host:port` or `socks5://host:port`.',

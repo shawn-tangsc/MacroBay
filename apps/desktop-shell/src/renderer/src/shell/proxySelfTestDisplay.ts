@@ -16,6 +16,8 @@ export type ProxySelfTestResult = {
   proxied?: boolean
   endpointReachable?: boolean | null
   proxyEndpoint?: string | null
+  /** 代理端点是否在本机回环上；回环连不上只能说明代理没起或端口错。 */
+  proxyEndpointLoopback?: boolean | null
 }
 
 /**
@@ -56,22 +58,31 @@ export function describeProxySelfTest(
 ): ProxySelfTestView {
   const preferences = labels.preferences
 
-  // 代理端点连不上：代理坏了，与目标站无关。
+  // 代理端点连不上：只有回环上才能确定是代理没起或端口错；非回环分不清本机断网、
+  // VPN、主机不在、防火墙，只说「连不上代理服务器本身」并给两步自查，绝不归到目标站。
   if (result.endpointReachable === false) {
+    const endpoint = result.proxyEndpoint?.trim() || result.targetHost
     return {
-      line: preferences.proxySelfTestProxyUnreachable(result.proxyEndpoint?.trim() || result.targetHost),
+      line:
+        result.proxyEndpointLoopback === true
+          ? preferences.proxySelfTestProxyNotRunning(endpoint)
+          : preferences.proxySelfTestProxyServerUnreachable(endpoint),
       tone: 'fail',
       hint: null
     }
   }
 
-  // 目标站自己拒绝（401/403）：请求到了站，是「部分成功」，并给一行解释消解「代理坏了」的误判。
+  // 目标站拒绝（401/403）：请求到了站，是「部分成功」，并给一行解释消解「代理坏了」的误判。
+  // 两者不是一回事：401 是「站点要鉴权，这次没带 Key 所以正常」，403 是「站点把请求挡下来了」。
   const rejectedStatus = targetRejectedStatus(result)
   if (rejectedStatus !== null) {
+    const denied = rejectedStatus === 403
     return {
-      line: preferences.proxySelfTestTargetRejected(rejectedStatus, result.targetHost),
+      line: denied
+        ? preferences.proxySelfTestTargetDenied(rejectedStatus, result.targetHost)
+        : preferences.proxySelfTestTargetRejected(rejectedStatus, result.targetHost),
       tone: 'partial',
-      hint: preferences.proxySelfTestAuthenticationHint
+      hint: denied ? preferences.proxySelfTestDeniedHint : preferences.proxySelfTestAuthenticationHint
     }
   }
 
@@ -99,10 +110,26 @@ export function describeProxySelfTest(
     }
   }
 
-  // 没拿到 2xx：有 HTTP 状态码说明到了站（5xx/4xx 属「部分」），没有状态码说明没到站。
+  const sentence = proxyFailureSentence(result, labels)
+
+  // 代理端点活着却自己报错：这是代理自身的问题。
+  if (result.endpointReachable === true && (result.reasonCode === 'proxy_error' || result.reasonCode === 'invalid_response')) {
+    return {
+      line: preferences.proxySelfTestProxyAnsweredBadly(sentence),
+      tone: 'fail',
+      hint: null
+    }
+  }
+
+  // 有状态码说明请求到了站（4xx/5xx 属「部分」）；没有状态码就绝不许说目标站有问题。
+  if (result.status !== null) {
+    return { line: `${sentence} · ${result.targetHost}`, tone: 'partial', hint: null }
+  }
+
+  // 一次响应都没拿到：说不清是代理出口还是目标站，按「无法归因」的句式说清排除了什么。
   return {
-    line: `${proxyFailureSentence(result, labels)} · ${result.targetHost}`,
-    tone: result.status === null ? 'fail' : 'partial',
+    line: preferences.proxySelfTestUnattributable(sentence),
+    tone: 'fail',
     hint: null
   }
 }
