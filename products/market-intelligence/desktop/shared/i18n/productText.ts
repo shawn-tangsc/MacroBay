@@ -205,7 +205,6 @@ export const productText = {
             title: '重点舆情',
             all: '全部',
             loading: '正在读取舆情…',
-            empty: '暂无数据',
             unavailable: '舆情暂时不可用。',
             retry: '重试',
             refresh: '刷新',
@@ -216,6 +215,16 @@ export const productText = {
             bodyLimited: '部分条目仅依据标题', neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
             openAll: '查看全部舆情',
             settings: '舆情设置',
+            // 五种「没有条目」互不相同，且不靠颜色区分：四源没开 / 开了没跑 / 采集失败 / 数据过期 /
+            // 这段时间确实没有。除「确实没有」外都给出下一步（§9 的 filtered-empty 仍由抽屉负责）。
+            emptyStates: {
+              sourcesDisabled: '数据源未开启',
+              neverRan: '还没跑过',
+              quiet: '这段时间没有相关消息',
+              collectionFailed: '采集失败',
+              stale: '数据已过期 · 最后更新 {time}',
+              actions: { openSettings: '去设置开启', runNow: '现在跑一次', retry: '再试一次', refresh: '立即刷新' }
+            },
             drawer: {
               title: '舆情',
               filters: { direction: '方向', source: '来源', scope: '对象', all: '全部' },
@@ -1972,7 +1981,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             title: 'Key sentiment',
             all: 'All',
             loading: 'Loading news sentiment…',
-            empty: 'No data yet',
             unavailable: 'News sentiment is unavailable.',
             retry: 'Retry',
             refresh: 'Refresh',
@@ -1984,6 +1992,14 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             neutralFilter: { label: 'Neutral', all: 'With neutral', exclude: 'Without neutral' },
             openAll: 'Open all sentiment',
             settings: 'Sentiment settings',
+            emptyStates: {
+              sourcesDisabled: 'Data sources are off',
+              neverRan: "Hasn't run yet",
+              quiet: 'No related news in this period',
+              collectionFailed: 'Collection failed',
+              stale: 'Data is out of date · last updated {time}',
+              actions: { openSettings: 'Open settings', runNow: 'Run now', retry: 'Try again', refresh: 'Refresh now' }
+            },
             drawer: {
               title: 'News sentiment',
               filters: { direction: 'Direction', source: 'Source', scope: 'Scope', all: 'All' },

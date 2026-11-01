@@ -151,6 +151,9 @@ function IntelligencePageBody(): React.ReactElement {
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
+          // The news card's "sources are off" state opens the same drawer the header's
+          // configure button does — one settings surface, not a second one.
+          onOpenSources={() => setSourceDrawerOpen(true)}
           text={text}
           locale={language}
           // The one event-title list the product keeps, read here because the page entry owns the

@@ -6,8 +6,10 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { productText } from '../../../shared/i18n/productText'
 import type { NewsSentimentItemView, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
+import { NEWS_SENTIMENT_WINDOW_MS } from '../../../../service/intelligence/schema/newsSentiment'
 import { labelText } from './newsSentimentPresentation'
 import { passesNeutralFilter } from './newsSentimentFilters'
+import { resolveNewsSentimentEmptyState } from './newsSentimentEmptyState'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
@@ -21,6 +23,10 @@ export function NewsSentimentCard(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
+  /** Opens the product's source settings; the "sources are off" state has no other way forward. */
+  onOpenSources?: () => void
+  /** Collects the named sources now: "run once" after a first enable, "try again" after a failure. */
+  onRunSources?: (sourceIds: readonly string[]) => void
   includeNeutral?: boolean
   onIncludeNeutralChange?: (includeNeutral: boolean) => void
 }): React.ReactElement {
@@ -37,6 +43,22 @@ export function NewsSentimentCard(props: {
     : []
   useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
+  // A view that did not come from the query (a fixture, a partial DTO) must not throw here: without
+  // a usable instant there is no window edge, and the card then says only what it can support.
+  const windowStart = view?.asOf && NEWS_SENTIMENT_WINDOW_MS[view.window] !== undefined
+    ? new Date(Date.parse(view.asOf) - NEWS_SENTIMENT_WINDOW_MS[view.window]).toISOString()
+    : ''
+  const emptyState = view
+    ? resolveNewsSentimentEmptyState({
+        state: view.state,
+        itemCount: (view.items ?? []).length,
+        windowStart,
+        ...(view.readiness ? { readiness: view.readiness } : {}),
+        ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {})
+      })
+    : undefined
+  const emptyAction = emptyState ? emptyStateAction(emptyState.kind, props, text) : undefined
+  const emptySentence = emptyState ? emptyStateText(emptyState, text, formatTime) : undefined
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>
@@ -65,9 +87,16 @@ export function NewsSentimentCard(props: {
         </div>
       ) : loading && !view ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><LoadingState label={text.loading} minHeight={140} /></div>
+      ) : emptyState && emptySentence ? (
+        // Five different "no rows" situations, five different sentences, each carrying the next step
+        // except the one that is a fact rather than a fault. Nothing here relies on colour.
+        <div className="mi-news-sentiment__state" data-news-sentiment-state={emptyState.kind}>
+          <p>{emptySentence}</p>
+          {emptyAction ? <button onClick={emptyAction.run} type="button">{emptyAction.label}</button> : null}
+        </div>
       ) : !available ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
-          <p>{text.empty}</p>
+          <p>{text.drawer.emptyFiltered}</p>
         </div>
       ) : visibleDrivers.length === 0 ? (
         // A read that succeeded but whose rows were filtered out is not an empty window: say which
@@ -107,4 +136,46 @@ export function NewsSentimentCard(props: {
       )}
     </section>
   )
+}
+
+function emptyStateText(
+  state: import('./newsSentimentEmptyState').NewsSentimentEmptyState,
+  text: NewsSentimentText,
+  formatTime: (instant: string, precision?: 'minute') => string
+): string {
+  switch (state.kind) {
+    case 'sources-disabled': return text.emptyStates.sourcesDisabled
+    case 'collection-failed': return text.emptyStates.collectionFailed
+    case 'never-ran': return text.emptyStates.neverRan
+    case 'stale': return text.emptyStates.stale.replace('{time}', formatTime(state.lastKnownItemAt ?? '', 'minute'))
+    case 'quiet': return text.emptyStates.quiet
+  }
+}
+
+/**
+ * The next step, once per cause. The quiet case has none on purpose: a quiet period is the answer,
+ * not a fault to retry.
+ */
+function emptyStateAction(
+  kind: import('./newsSentimentEmptyState').NewsSentimentEmptyKind,
+  props: { onOpenSources?: () => void; onRunSources?: (sourceIds: readonly string[]) => void; onRefresh: () => void; view?: NewsSentimentView },
+  text: NewsSentimentText
+): Readonly<{ label: string; run: () => void }> | undefined {
+  const readiness = props.view?.readiness
+  switch (kind) {
+    case 'sources-disabled':
+      return props.onOpenSources ? { label: text.emptyStates.actions.openSettings, run: props.onOpenSources } : undefined
+    case 'collection-failed':
+      return props.onRunSources && readiness
+        ? { label: text.emptyStates.actions.retry, run: () => props.onRunSources?.(readiness.failedSourceIds) }
+        : undefined
+    case 'never-ran':
+      return props.onRunSources && readiness
+        ? { label: text.emptyStates.actions.runNow, run: () => props.onRunSources?.(readiness.neverRanSourceIds) }
+        : undefined
+    case 'stale':
+      return { label: text.emptyStates.actions.refresh, run: props.onRefresh }
+    case 'quiet':
+      return undefined
+  }
 }

@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { newsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
+import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { NewsSentimentDrawer } from './NewsSentimentDrawer'
@@ -19,12 +20,23 @@ export function NewsSentimentFeature(props: {
   text: NewsSentimentText
   client?: NewsSentimentClient
   now?: () => Date
+  /** Opens the product's source settings: the "sources are off" empty state has nowhere else to go. */
+  onOpenSources?: () => void
+  /** Injected in tests; production reads the product's own source client. */
+  sourcesClient?: { runNow: (sourceId: string) => Promise<unknown> }
   /** Publish the clicked item so the agent can start from that story. */
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
   const client = props.client ?? newsSentimentClient
+  const sourcesClient = props.sourcesClient ?? intelligenceSourcesClient
   const now = props.now ?? (() => new Date())
   const state = useNewsSentiment({ client, now })
+  const refresh = state.refresh
+  // One click collects the named sources and re-reads. A collection that fails on one source must
+  // not swallow the others, so the promises are settled independently.
+  const runSources = (sourceIds: readonly string[]): void => {
+    void Promise.allSettled(sourceIds.map((sourceId) => sourcesClient.runNow(sourceId))).then(() => refresh())
+  }
   // English is the source language for the feed, so the English UI has no translation surface.
   // Any future non-English UI language reuses the same controls and translates into that language.
   const translationEnabled = (props.language ?? 'zh-CN') !== 'en-US'
@@ -39,7 +51,9 @@ export function NewsSentimentFeature(props: {
         loading={state.loading}
         onOpenAll={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSources={props.onOpenSources}
         onRefresh={state.refresh}
+        onRunSources={runSources}
         includeNeutral={state.filters.includeNeutral}
         onIncludeNeutralChange={(includeNeutral) => state.setFilters({ includeNeutral })}
         onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true); props.onSelectContext?.(item) }}

@@ -76,6 +76,79 @@ async function mount(node: React.ReactElement): Promise<HTMLElement> {
   return container
 }
 
+describe('card empty states', () => {
+  const readiness = (overrides: Partial<NonNullable<NewsSentimentView['readiness']>> = {}) => ({
+    total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0,
+    failedSourceIds: [], neverRanSourceIds: [],
+    lastSuccessAt: '2026-10-24T12:00:00.000Z',
+    ...overrides
+  })
+  const emptyView = (overrides: Partial<NewsSentimentView> = {}): NewsSentimentView => ({
+    state: 'empty', asOf: '2026-10-24T13:00:00.000Z', generatedAt: '2026-10-24T13:00:00.000Z',
+    window: '1h', items: [], caveats: [], ...overrides
+  })
+  const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof NewsSentimentCard>[0]> = {}) =>
+    mount(
+      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
+    )
+
+  it('tells the five no-rows situations apart, each with its own next step', async () => {
+    const onOpenSources = vi.fn()
+    const onRunSources = vi.fn()
+    const onRefresh = vi.fn()
+
+    const disabled = await mountCard(emptyView({ readiness: readiness({ enabledCount: 0 }) }), { onOpenSources })
+    const failed = await mountCard(emptyView({ readiness: readiness({ failedCount: 4, failedSourceIds: ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] }) }), { onRunSources })
+    const neverRan = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4, neverRanSourceIds: ['sec-rss'] }) }), { onRunSources })
+    const stale = await mountCard(emptyView({ readiness: readiness(), latestKnownItemAt: '2026-10-24T09:00:00.000Z' }), { onRefresh })
+    const quiet = await mountCard(emptyView({ readiness: readiness() }))
+
+    const sentences = [
+      text.emptyStates.sourcesDisabled,
+      text.emptyStates.collectionFailed,
+      text.emptyStates.neverRan,
+      text.emptyStates.stale.replace('{time}', ''),
+      text.emptyStates.quiet
+    ]
+    expect(new Set(sentences).size).toBe(5)
+
+    expect(disabled.textContent).toContain(text.emptyStates.sourcesDisabled)
+    expect(failed.textContent).toContain(text.emptyStates.collectionFailed)
+    expect(neverRan.textContent).toContain(text.emptyStates.neverRan)
+    // The stale sentence carries the time of the newest judgment on record, not just the label.
+    expect(stale.textContent).toContain(text.emptyStates.stale.split('{time}')[0]!)
+    expect(stale.textContent).not.toContain(text.emptyStates.quiet)
+    expect(quiet.textContent).toContain(text.emptyStates.quiet)
+
+    // Every state shares one class and differs by text + data attribute: nothing here is colour-only.
+    for (const [container, kind] of [[disabled, 'sources-disabled'], [failed, 'collection-failed'], [neverRan, 'never-ran'], [stale, 'stale'], [quiet, 'quiet']] as const) {
+      expect(container.querySelector(`[data-news-sentiment-state="${kind}"]`)?.className).toBe('mi-news-sentiment__state')
+    }
+    // The one state that is a fact rather than a fault offers no action.
+    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] button')).toBeNull()
+
+    const click = async (container: HTMLElement) => {
+      const button = container.querySelector<HTMLButtonElement>('.mi-news-sentiment__state button')
+      await act(async () => { button?.click() })
+    }
+    await click(disabled)
+    await click(failed)
+    await click(neverRan)
+    await click(stale)
+    expect(onOpenSources).toHaveBeenCalledTimes(1)
+    expect(onRunSources).toHaveBeenNthCalledWith(1, ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'])
+    expect(onRunSources).toHaveBeenNthCalledWith(2, ['sec-rss'])
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call an empty read "quiet" when the sources never ran', async () => {
+    const container = await mountCard(emptyView({ readiness: readiness({ neverRanCount: 4 }) }))
+    expect(container.textContent).not.toContain(text.emptyStates.quiet)
+    expect(container.textContent).toContain(text.emptyStates.neverRan)
+  })
+})
+
 describe('NewsSentimentFeature', () => {
   it('shows the summary and the top drivers', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
@@ -224,7 +297,9 @@ describe('NewsSentimentFeature', () => {
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
         view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
     )
-    expect(container.textContent).toContain(text.empty)
+    // No readiness was read, so the card cannot name a cause: it says the window is quiet rather
+    // than inventing a broken source, and it never renders a zero score.
+    expect(container.textContent).toContain(text.emptyStates.quiet)
     expect(container.textContent).not.toContain('0.00')
   })
 })
