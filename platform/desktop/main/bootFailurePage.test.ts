@@ -83,14 +83,14 @@ describe('boot failure page', () => {
     expect(resolveBootFailureAction('https://example.com')).toBeNull()
   })
 
-  it('breaks the log path at spaces before splitting the file name', () => {
+  it('breaks long text at spaces before splitting a file name, everywhere it can wrap', () => {
     const html = renderBootFailurePage(failure, options)
     const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'))
-    const logRule = style.slice(style.indexOf('.log {'), style.indexOf('}', style.indexOf('.log {')))
 
-    // `break-all` 会在 `app.log` 中间断行，文件名被劈开；`anywhere` 优先在空格处断。
-    expect(logRule).toContain('overflow-wrap:anywhere')
-    expect(logRule).not.toContain('break-all')
+    // `break-all` 会在 `app.log` 中间断行，文件名被劈开。只改日志行没用：
+    // 正文原因行与 `pre` 里的长路径同样会被劈开，所以整页不许出现 `break-all`。
+    expect(style).not.toContain('break-all')
+    expect(style.match(/overflow-wrap:anywhere/gu)?.length).toBe(3)
   })
 
   it('lets only this module turn failure text into markup', () => {

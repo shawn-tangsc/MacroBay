@@ -83,13 +83,13 @@ export function renderBootFailurePage(failure: ScreenFailure, options: BootFailu
   h1 { margin:0 0 12px; font-size:16px; }
   .lead { color:var(--muted); margin:0 0 8px; }
   .reason { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; margin:0 0 12px;
-            font-family:ui-monospace, SFMono-Regular, Menlo, monospace; word-break:break-all; }
+            font-family:ui-monospace, SFMono-Regular, Menlo, monospace; word-break:normal; overflow-wrap:anywhere; }
   .code-row { display:flex; gap:8px; align-items:baseline; margin:0 0 16px; }
   .code-label { color:var(--muted); }
   .code { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   details { border-top:1px solid var(--line); padding-top:10px; }
   summary { cursor:pointer; color:var(--muted); display:flex; justify-content:space-between; gap:8px; }
-  pre { max-height:118px; overflow-y:auto; overflow-x:hidden; white-space:pre-wrap; word-break:break-all;
+  pre { max-height:118px; overflow-y:auto; overflow-x:hidden; white-space:pre-wrap; word-break:normal; overflow-wrap:anywhere;
         font-family:ui-monospace, SFMono-Regular, Menlo, monospace; margin:8px 0 0;
         /* 技术详情必须有自己的视觉边界：否则用户分不清哪段能复制、哪段是我们的说明。 */
         border:1px solid var(--line); background:var(--bg); border-radius:6px; padding:8px; }
