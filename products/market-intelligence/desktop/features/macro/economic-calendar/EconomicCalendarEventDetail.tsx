@@ -1,15 +1,17 @@
 import { useState, type ReactElement } from 'react'
 import { Button, DatePicker } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
-import { RefreshCw } from 'lucide-react'
+import { Pencil, RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { EconomicCalendarText } from './economicCalendarText'
 import type { EconomicCalendarEventView } from './economicCalendarModel'
 import { calendarDisplayDate } from './economicCalendarDayModel'
@@ -150,6 +152,7 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
    * A row that carries an actual value has already been released: the time it happened is history,
    * and letting the reader move it would be editing the past. Those rows show the time as plain text.
    */
+  const resolveKey = useProductTextKey()
   const canEdit = event.actual === undefined && event.lifecycleState === 'scheduled'
 
   const open = (): void => {
@@ -207,7 +210,16 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
             value={draft === null ? null : dayjs(draft)}
           />
         : canEdit
-          ? <button aria-label={text.details.time} className="mi-economic-calendar__release-time-value" onClick={open} type="button">{shown}</button>
+          ? <span className="mi-economic-calendar__release-time-value">
+              {shown}
+              <IconButton
+                ariaLabelKey="pages.intelligence.portal.calendar.details.editTime.label"
+                icon={Pencil}
+                onSelect={open}
+                resolveText={resolveKey}
+                size="sm"
+              />
+            </span>
           : <span className="mi-economic-calendar__release-time-value" data-release-time-fixed="true">{shown}</span>}
       {editing
         ? <span className="mi-economic-calendar__release-time-actions">
@@ -280,16 +292,19 @@ function confirmRefresh(message: string): boolean {
  * waits for a result that is never coming. A wait stays `LoadingState`; a failure is
  * `error · unreadable` with a retry that asks again.
  */
-export function EconomicCalendarEventDetailState({ state, text, onRetry }: {
-  state: 'loading' | 'error'
-  text: string
-  onRetry?: () => void
-}): ReactElement {
+export function EconomicCalendarEventDetailState(props: Readonly<{ text: string } & (
+  | { state: 'loading' }
+  | { state: 'error'; onRetry: () => void }
+)>): ReactElement {
+  // The retry is part of the error, not an option: `error · unreadable` promises the reader that
+  // asking again is the way out, and a state that offers it only when the caller happened to pass a
+  // callback renders the same state in two shapes. A caller with nothing to re-read has the wrong
+  // state, not a missing prop.
   return <aside className="mi-economic-calendar__inspector" aria-live="polite">
-    {state === 'loading'
-      ? <LoadingState label={text} minHeight={220} />
+    {props.state === 'loading'
+      ? <LoadingState label={props.text} minHeight={220} />
       : <StateView state="error" reasonCode="unreadable" size="md"
-          action={onRetry ? { labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry } : undefined} />}
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: props.onRetry }} />}
   </aside>
 }
 

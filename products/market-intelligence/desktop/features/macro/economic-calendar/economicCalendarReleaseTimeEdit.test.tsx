@@ -96,7 +96,7 @@ describe('the release time is edited where it is shown', () => {
     expect(row?.textContent).toContain('10-14 20:30')
     // The control is not the default state: nothing to fill in until the reader opens it.
     expect(host.querySelector('.mi-economic-calendar__release-time-picker')).toBeNull()
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     expect(host.querySelector('.mi-economic-calendar__release-time-picker')).not.toBeNull()
   })
 
@@ -118,7 +118,7 @@ describe('the release time is edited where it is shown', () => {
 
   it('re-reads the detail after a saved release time', async () => {
     const { host, input } = await renderInspector(event())
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     await click(host, text.details.editTime.save)
     await flush()
 
@@ -135,7 +135,7 @@ describe('the release time is edited where it is shown', () => {
     input.setReleaseTime = vi.fn(async () => ({ state: 'rejected' as const }))
     const readsBefore = input.getEventDetail.mock.calls.length
 
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     await click(host, text.details.editTime.save)
     await flush()
 
@@ -160,7 +160,7 @@ describe('the picker shows the wall clock of the display zone, and what was stor
     expect(row?.textContent).toContain('03-08 03:00')
     expect(row?.textContent).not.toContain('02:30')
 
-    await click(host, text.details.time)
+    await click(host, text.details.editTime.label)
     await flush()
     expect(host.querySelector<HTMLInputElement>('.mi-economic-calendar__release-time-picker')?.dataset.value)
       .toBe('2026-03-08 03:00')
@@ -179,14 +179,17 @@ describe('a release that has already happened cannot be moved', () => {
     expect(value?.getAttribute('data-release-time-fixed')).toBe('true')
     expect(value?.tagName).toBe('SPAN')
     expect(host.querySelector('button[aria-label="' + text.details.time + '"]')).toBeNull()
+    expect(host.querySelector('button[aria-label="' + text.details.editTime.label + '"]')).toBeNull()
     expect(host.textContent).not.toContain(text.details.editTime.restore)
   })
 
   it('still lets a scheduled row without an actual value be edited', async () => {
     const { host } = await renderInspector(event())
     const value = host.querySelector<HTMLElement>('.mi-economic-calendar__release-time-value')
-    expect(value?.tagName).toBe('BUTTON')
+    // The time stays visible; the edit trigger is its own icon button beside it.
+    expect(value?.tagName).toBe('SPAN')
     expect(value?.getAttribute('data-release-time-fixed')).toBeNull()
+    expect(host.querySelector(`button[aria-label="${text.details.editTime.label}"]`)).not.toBeNull()
   })
 })
 
