@@ -13,8 +13,14 @@ const ROOT = resolve(__dirname, '../../../..')
 const SCANNED_ROOTS = ['apps', 'platform', 'products']
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
 
-/** 单元测试里用 `ui.test.*` 这类假键，形状与真键一致，不需要例外。 */
-const KEY_SHAPE = /^[a-z][a-z0-9]*(\.[a-z0-9]+(-[a-z0-9]+)*)+$/
+/**
+ * 键的形状：点分，**允许驼峰**（产品文案键就是 `portal.calendarCard.openCalendar` 这种），
+ * 但不许空白、不许中文——那才是「一句话被当成键」的样子。
+ *
+ * 这里只判「像不像键」，不判「键在不在表里」：产品自有 i18n 表是合法来源，键在不在那张表里
+ * 由各产品自己的用例保证，组件侧无法枚举。
+ */
+const KEY_SHAPE = /^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+(-[A-Za-z0-9]+)*)+$/
 
 type Offender = { file: string; line: number; prop: string; value: string }
 
@@ -63,4 +69,13 @@ describe('IconButton key guard', () => {
 
     expect(bad).toHaveLength(3)
   })
+  it('尺度收紧的方向：句子和带空白的值仍然被拒', () => {
+    // 放开驼峰不能顺手把「一句话」也放进来——这才是这条守卫存在的理由。
+    expect(KEY_SHAPE.test('portal.calendarCard.openCalendar')).toBe(true)
+    expect(KEY_SHAPE.test('ui.state.action.focus-form')).toBe(true)
+    expect(KEY_SHAPE.test('打开日历')).toBe(false)
+    expect(KEY_SHAPE.test('Open the calendar')).toBe(false)
+    expect(KEY_SHAPE.test('nokeydothere')).toBe(false)
+  })
+
 })
