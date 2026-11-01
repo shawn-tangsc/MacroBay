@@ -15,7 +15,7 @@ supported yet.
   reachable from the product.
 - The daily briefing reads the collected evidence and can be generated from the briefing page.
 - Structured agent questions and tool approvals are rendered in the conversation.
-- The repository passes `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+- The repository passes `pnpm verify`.
 
 ## Not usable in this release
 
