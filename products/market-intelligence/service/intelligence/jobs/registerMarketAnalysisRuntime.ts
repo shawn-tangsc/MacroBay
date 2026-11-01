@@ -63,15 +63,21 @@ const MARKET_ANALYSIS_CONSUMER_ID = 'market-intelligence.market-analysis-trigger
 /**
  * 订阅话题与处理函数名都从 manifest 读（`MI-11-R22` A1）：手写第二份数组就是漂移的源头，
  * 之前 manifest 写着 `eventConsumers: []` 而这里实注册 3 个 topic，就是这么来的。
+ *
+ * 声明缺失时**返回 null 并报一条具名诊断，不抛**：这段跑在 `registerProductServices` 里，
+ * 而外层的 `catch { markUnavailable(); return }`（`app.ts:2630`）会在主窗渲染（`:2723`）之前
+ * 直接返回——抛出去就是「白窗 + 用户看不到任何报错」，等于拿整个应用陪一条声明。
+ * 缺声明由用例钉住（`product.manifest.test.ts`），运行期由这条日志留痕。
  */
-function marketAnalysisConsumerRegistration(): { topics: readonly string[]; handlerId: string } {
-  const registration = marketIntelligenceProductManifest.eventConsumers?.find(
-    (consumer) => consumer.id === MARKET_ANALYSIS_CONSUMER_ID
-  )
+export function resolveMarketAnalysisConsumerRegistration(
+  manifest: { eventConsumers?: readonly { id: string; topics: readonly string[]; handlerId: string }[] } = marketIntelligenceProductManifest
+): { topics: readonly string[]; handlerId: string } | null {
+  const registration = manifest.eventConsumers?.find((consumer) => consumer.id === MARKET_ANALYSIS_CONSUMER_ID)
   if (!registration) {
-    throw new Error(
-      `market-intelligence manifest does not declare the "${MARKET_ANALYSIS_CONSUMER_ID}" event consumer.`
+    console.error(
+      `market-intelligence.event-consumer-undeclared: the manifest does not declare "${MARKET_ANALYSIS_CONSUMER_ID}", so the market analysis trigger stays off.`
     )
+    return null
   }
   return registration
 }
@@ -397,8 +403,8 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // specific missed open instead of producing an unattributed refresh.
   }
 
-  if (input.eventBusRuntime) {
-    const consumerRegistration = marketAnalysisConsumerRegistration()
+  const consumerRegistration = resolveMarketAnalysisConsumerRegistration()
+  if (input.eventBusRuntime && consumerRegistration) {
     input.eventBusRuntime.registerConsumer(
       {
         consumerId: MARKET_ANALYSIS_CONSUMER_ID,
