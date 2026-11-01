@@ -8,9 +8,6 @@ import { classifyBypassRule, splitBypassRules } from '../settings/schema/proxyBy
  * WebSocket 侧必须读同一套语义，否则同一个设置会有两条出网路径各自解释。
  */
 
-export type { BypassRulesCheck } from '../settings/schema/proxyBypassRules'
-export { checkBypassRules, normalizeBypassRules } from '../settings/schema/proxyBypassRules'
-
 /** 与 Chromium 同一份规则的判定：`host` 可以是主机名或 IP 字面量。 */
 export function shouldBypass(host: string, bypassRules: string): boolean {
   const normalizedHost = host.trim().toLowerCase()
