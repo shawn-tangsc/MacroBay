@@ -47,7 +47,7 @@ export function McpCatalog({
   onRefresh
 }: McpCatalogProps): React.ReactElement {
   const manualInputRef = useRef<InputRef | null>(null)
-  // 「去添加」是真的能做的一步：把光标送到同一面板里的手动添加框，而不是指去一个不存在的设置页。
+  // 「去绑定」是真的能做的一步：把光标送到同一面板里的手动添加框，而不是指去一个不存在的设置页。
   const focusManualInput = (): void => manualInputRef.current?.focus()
 
   return (
@@ -56,9 +56,9 @@ export function McpCatalog({
       {catalog.bound.length === 0 && manualMcps.length === 0 ? (
         <StateView
           state="empty"
-          reasonCode="never-created"
+          reasonCode="none-installed"
           size="md"
-          action={{ labelKey: STATE_VIEW_ACTION_KEYS.focus_form, onSelect: focusManualInput }}
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.bind_target, onSelect: focusManualInput }}
         />
       ) : (
         <div className="agent-tool-catalog compact">
