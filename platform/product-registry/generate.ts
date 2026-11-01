@@ -237,7 +237,6 @@ import type {
   ProductAgentToolInvokeResult
 } from '@platform/ai/agent-platform/productTools/productAgentToolSchemas'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
-import type { AssistantProgrammaticInvocationClient } from '@platform/ai/assistant-platform/invocation/AssistantProgrammaticInvocationService'
 import type { ProductCacheRegistrar } from '@platform/storage/cache-governance/productCacheRegistrar'
 import type { ProductServiceDisposerRegistrar } from '@platform/product-registry/productServiceDisposerRegistry'
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
@@ -271,7 +270,6 @@ export type ProductServiceDependencies = {
     input: ProductAgentToolInvokeInput
   ) => Promise<ProductAgentToolInvokeResult>
   invokeProductIpc?: (productId: string, method: string, payload?: unknown) => Promise<unknown>
-  assistantInvocation?: AssistantProgrammaticInvocationClient
 }
 
 export async function registerProductServices(deps: ProductServiceDependencies): Promise<void> {

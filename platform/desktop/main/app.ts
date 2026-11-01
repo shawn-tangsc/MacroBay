@@ -79,7 +79,6 @@ import { createWebSearchCredentialStore } from '../../ai/web-search/runtime/WebS
 import { createWebSearchService } from '../../ai/web-search/runtime/WebSearchService'
 import { AssistantTemplateRegistry } from '../../ai/assistant-platform/library/AssistantTemplateRegistry'
 import { AssistantLibraryService } from '../../ai/assistant-platform/library/AssistantLibraryService'
-import { AssistantProgrammaticInvocationService } from '../../ai/assistant-platform/invocation/AssistantProgrammaticInvocationService'
 import { platformAssistantTemplates } from '../../ai/assistant-platform/library/platformAssistantTemplates'
 import { createAssistantTemplateRegistrationsFromManifests } from '../../ai/assistant-platform/library/assistantTemplateManifestAdapter'
 import { AssistantTopicNamingService } from '../../ai/assistant-platform/naming/AssistantTopicNamingService'
@@ -1176,13 +1175,6 @@ const assistantLibraryService = new AssistantLibraryService({
   registry: assistantTemplateRegistry,
   repos: assistantRepositories
 })
-const assistantInvocationService = new AssistantProgrammaticInvocationService({
-  library: assistantLibraryService,
-  repos: assistantRepositories,
-  runtime: assistantChatRuntime,
-  getProviderState: providerStore.getState,
-  getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId
-})
 const assistantIpcHandlers = createAssistantIpcHandlers(
   assistantRepositories,
   assistantChatRuntime,
@@ -1312,7 +1304,6 @@ export type DesktopAppBootstrapOptions = {
       input: ProductAgentToolInvokeInput
     ) => Promise<ProductAgentToolInvokeResult>
     invokeProductIpc?: (productId: string, method: string, payload?: unknown) => Promise<unknown>
-    assistantInvocation?: AssistantProgrammaticInvocationService
   }) => void | Promise<void>
 }
 
@@ -2544,7 +2535,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       isWebSearchProviderReady: isAgentWebSearchProviderReady,
       invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
       invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
-      assistantInvocation: assistantInvocationService
     })
     const productIpcMethods = productIpcRegistry.seal(expectedProductIpcMethods(productManifests))
     if (productAcceptanceProfile.enabled) {
