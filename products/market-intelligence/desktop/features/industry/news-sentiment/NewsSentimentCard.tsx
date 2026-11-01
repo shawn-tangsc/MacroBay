@@ -57,8 +57,11 @@ export function NewsSentimentCard(props: {
         ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {})
       })
     : undefined
-  const emptyAction = emptyState ? emptyStateAction(emptyState.kind, props, text) : undefined
-  const emptySentence = emptyState ? emptyStateText(emptyState, text, formatTime) : undefined
+  // Without a source status an empty window has no known cause. Saying "no related news" there would
+  // turn "I cannot tell" into a reading, which is the one thing this card must not do.
+  const causeUnknown = view?.state === 'empty' && !view.readiness
+  const emptyAction = emptyState && !causeUnknown ? emptyStateAction(emptyState.kind, props, text) : undefined
+  const emptySentence = emptyState && !causeUnknown ? emptyStateText(emptyState, text, formatTime) : undefined
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>
@@ -80,7 +83,7 @@ export function NewsSentimentCard(props: {
         </div>
       </header>
 
-      {failed ? (
+      {failed || causeUnknown ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="unavailable">
           <p>{text.unavailable}</p>
           <button onClick={props.onRefresh} type="button">{text.retry}</button>

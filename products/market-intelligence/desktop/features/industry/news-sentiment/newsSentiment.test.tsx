@@ -295,11 +295,25 @@ describe('NewsSentimentFeature', () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
         onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
-        view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
+        view={{
+          ...VIEW, state: 'empty', summary: undefined, items: [],
+          readiness: { total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [], lastSuccessAt: '2026-10-24T12:00:00.000Z' }
+        }} />
     )
-    // No readiness was read, so the card cannot name a cause: it says the window is quiet rather
-    // than inventing a broken source, and it never renders a zero score.
     expect(container.textContent).toContain(text.emptyStates.quiet)
     expect(container.textContent).not.toContain('0.00')
+  })
+
+  it('does not turn an unreadable source status into "no related news"', async () => {
+    // No readiness means the cause is unknown. Saying the period was quiet would publish a reading
+    // the card cannot support — the same mistake as writing 0% for an empty denominator.
+    const container = await mount(
+      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+        onRefresh={() => undefined} onSelectItem={() => undefined} text={text}
+        view={{ ...VIEW, state: 'empty', summary: undefined, items: [] }} />
+    )
+    expect(container.textContent).toContain(text.unavailable)
+    expect(container.textContent).not.toContain(text.emptyStates.quiet)
+    expect(container.querySelector('[data-news-sentiment-state="unavailable"]')).toBeTruthy()
   })
 })
