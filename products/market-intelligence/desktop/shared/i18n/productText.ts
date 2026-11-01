@@ -186,6 +186,7 @@ export const productText = {
           calendarCard: {
             title: '接下来要看的', todaySection: '最近已公布（有变化）', upcomingSection: '待发布',
             empty: '未来 7 天无高重要性事件', unavailable: '日历数据暂不可用', refresh: '刷新',
+            releasedEmpty: '最近 {days} 天内没有已公布的事件',
             awaitingData: '已到发布时刻，等待实际值',
             // 「±30 分」反应那一行的标签（原型 ④）。三条线的名字用跨资产那份词表。
             reactionHint: '这次发布前后各 30 分钟的相对变化（不是因果判断）',
@@ -2028,6 +2029,7 @@ export const productText = {
           calendarCard: {
             title: 'What to watch', todaySection: 'Recently released, value moved', upcomingSection: 'Upcoming',
             empty: 'No high-importance events in the next 7 days', unavailable: 'Calendar data is unavailable', refresh: 'Refresh',
+            releasedEmpty: 'No released events in the last {days} days.',
             awaitingData: 'Scheduled time has passed; waiting for the value',
             reactionHint: 'Relative change in the 30 minutes around the release (not a causal claim)',
             dxy: 'DXY',

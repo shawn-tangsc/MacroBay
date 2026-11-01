@@ -363,3 +363,20 @@ it('keeps the category tag inside the 84px rail instead of letting the card clip
   expect(rule).toContain('text-align: right')
   expect(rule).not.toContain('white-space: nowrap')
 })
+
+// An empty released section must say which window it is empty for. Blank space reads as "the
+// feature is broken"; «no released events in the last 3 days» is a fact the reader can act on.
+it('says its own window when nothing was released, instead of leaving the section blank', async () => {
+  const projection = { today: [], upcoming: [row()], state: 'available' as const }
+  const zh = await render(<MarketCalendarCard projection={projection} text={text} />)
+  expect(zh.textContent).toContain('最近 3 天内没有已公布的事件')
+  await act(async () => {})
+  const en = await render(<MarketCalendarCard projection={projection} text={calendarText('en-US')} />, 'en-US')
+  expect(en.textContent).toContain('No released events in the last 3 days.')
+})
+
+it('drops that line as soon as one release is listed', async () => {
+  const released = row({ eventKey: 'released', kind: 'released' as const, actual: { displayValue: '1.2%' }, previous: { displayValue: '1.0%' } })
+  const host = await render(<MarketCalendarCard projection={{ today: [released], upcoming: [], state: 'available' }} text={text} />)
+  expect(host.textContent).not.toContain('没有已公布的事件')
+})

@@ -1,5 +1,6 @@
 import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
 import { Button, Tooltip } from 'antd'
+import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
 import type { CrossAssetId } from '../../../contracts/crossAssetObservationContracts'
 import { formatReadableAnalysisValue, readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
 import { crossAssetSignedValue } from '../../features/industry/cross-asset/crossAssetFormat'
@@ -20,6 +21,8 @@ import type { CalendarCardProjection, CalendarCardRow } from './projectUpcomingC
 
 export type MarketCalendarCardText = Readonly<{
   title: string; todaySection: string; upcomingSection: string; empty: string; unavailable: string; refresh: string
+  /** Says its own window: an empty section must read as «nothing was released in N days», never as «no data». */
+  releasedEmpty: string
   awaitingData: string
   /** 反应行的悬停说明；窗口长度不再作为一个可见标签占位。 */
   reactionHint: string
@@ -214,6 +217,9 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
         {onRefresh ? <Button icon={<RefreshCw aria-hidden="true" size={13} />} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
       </p> : null}
       {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+      {projection.state === 'available' && projection.today.length === 0
+        ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
+        : null}
       {projection.today.length > 0 ? <>
         <p className="mi-calendar-card__section">{text.todaySection}</p>
         <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
