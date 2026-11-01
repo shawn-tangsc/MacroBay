@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Button, Popover, Tooltip } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
@@ -83,6 +84,9 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
   const [page, setPage] = useState(0)
   const [notice, setNotice] = useState<string>()
   const [aggregates, setAggregates] = useState<SyncRunAggregateResult>()
+  /** Bumped by every retry so both reads re-run without duplicating their effects. */
+  const [reloadToken, setReloadToken] = useState(0)
+  const retry = (): void => setReloadToken((current) => current + 1)
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
   const query: SyncRunQuery = { window, limit: 500 }
@@ -92,7 +96,7 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
     let cancelled = false
     void syncRunClient.aggregates().then((result) => { if (!cancelled) setAggregates(result) })
     return () => { cancelled = true }
-  }, [window])
+  }, [window, reloadToken])
 
   useEffect(() => {
     let cancelled = false
@@ -102,7 +106,7 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       if (result.state === 'available') { setRows(result.rows); setState('available') } else setState('unavailable')
     })
     return () => { cancelled = true }
-  }, [window, outcome])
+  }, [window, outcome, reloadToken])
 
   // A run's task and source arrive as data. Product-side rows use their action as the handler id,
   // so the audit actions are the fallback before the raw label — otherwise an English reader gets
@@ -177,9 +181,35 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       </div>
     </header>
     {state === 'loading' ? <LoadingState label={text.loading} minHeight={160} /> : null}
-    {state === 'unavailable' ? <p className="mi-sync-run__empty">{text.unavailable}</p> : null}
-    {state === 'available' && rows.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
-    {state === 'available' && rows.length > 0 && visible.length === 0 ? <p className="mi-sync-run__empty">{text.empty}</p> : null}
+    {state === 'unavailable'
+      ? <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
+        reasonCode="unreadable"
+        size="md"
+        state="error"
+      />
+      : null}
+    {/* Nothing ran in this window: the reader can widen it, so this is not "not yet". */}
+    {state === 'available' && rows.length === 0
+      ? <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.widen_time_window, onSelect: () => { setWindow('all'); setPage(0) } }}
+        reasonCode="filtered-out"
+        size="md"
+        state="empty"
+      />
+      : null}
+    {/* Records exist but the filters hide them: clearing the filters is the way out. */}
+    {state === 'available' && rows.length > 0 && visible.length === 0
+      ? <StateView
+        action={{
+          labelKey: STATE_VIEW_ACTION_KEYS.clear_filter,
+          onSelect: () => { setTaskFilter(''); setSourceFilter(''); setOutcome(undefined); setPage(0) }
+        }}
+        reasonCode="filtered-out"
+        size="md"
+        state="empty"
+      />
+      : null}
     {state === 'available' && visible.length > 0 ? <div className="mi-sync-run__scroll" role="table" aria-label={text.title}>
       {/* A grid, not a table: the header and every row share one column template, so a sticky header
           cannot lay itself out on a different grid from the body. */}
@@ -234,10 +264,19 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       <p className="mi-sync-run__aggregate-note">{text.aggregates.note}</p>
       {!aggregates ? <LoadingState label={text.loading} minHeight={80} /> : null}
       {aggregates?.state === 'unavailable'
-        ? <p className="mi-sync-run__empty">{text.aggregates.unavailable[aggregates.reason]}</p>
+        ? (aggregates.reason === 'memory-store-has-no-aggregates'
+          ? <StateView reasonCode="capability-not-wired" size="md" state="disabled" />
+          : <StateView
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: retry }}
+            reasonCode="unreadable"
+            size="md"
+            state="error"
+          />)
         : null}
+      {/* Detail is kept 30 days; a younger install has nothing folded yet, and there is nothing to
+          do about that, so no action. */}
       {aggregates?.state === 'available' && aggregates.rows.length === 0
-        ? <p className="mi-sync-run__empty">{text.aggregates.empty}</p>
+        ? <StateView reasonCode="not-yet" size="md" state="empty" />
         : null}
       {aggregates?.state === 'available' && aggregates.rows.length > 0
         ? <div className="mi-sync-run__aggregate-table" role="table" aria-label={text.aggregates.title}>

@@ -6,7 +6,6 @@
 .mi-sync-run__filters select { background: var(--surface-2, #14171e); color: inherit; border: 1px solid var(--border, #22252d); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
 .mi-sync-run__filters button { border: 1px solid var(--border, #22252d); background: none; color: inherit; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
 .mi-sync-run__notice { color: var(--accent, #b7cf52); }
-.mi-sync-run__empty { color: var(--text-secondary); font-size: 12px; margin: 12px 0; }
 .mi-sync-run__time, .mi-sync-run__duration { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
 /* A handler id is one long token; without a clamp it widens the fixed column and pushes the whole
    table sideways, which reads as a second kind of misalignment. */

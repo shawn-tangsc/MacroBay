@@ -106,8 +106,10 @@ describe('sync run section', () => {
     const dom = await render()
     await selectAllWindow(dom)
 
-    expect(dom.textContent).toContain(text.aggregates.unavailable['memory-store-has-no-aggregates'])
-    expect(dom.textContent).not.toContain(text.aggregates.empty)
+    // A store that keeps no summary is a capability gap, not a failed read: `disabled`, no action.
+    expect(dom.querySelector('[data-state="disabled"]')).not.toBeNull()
+    expect(dom.querySelector('[data-state="empty"]')).toBeNull()
+    expect(dom.querySelector('.state-view__action')).toBeNull()
   })
 
   it('offers every registered source in the filter, including one that has not run lately', async () => {
@@ -141,13 +143,16 @@ describe('sync run section', () => {
   it('shows the empty sentence when the window has no runs', async () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'available', rows: [] })
     const dom = await render()
-    expect(dom.textContent).toContain(text.empty)
+    expect(dom.querySelector('[data-state="empty"]')).not.toBeNull()
+    // The window is what hid the records, so the way out is widening it.
+    expect(dom.querySelector('.state-view__action')).not.toBeNull()
   })
 
   it('names the failure instead of pretending to load forever', async () => {
     vi.spyOn(syncRunClient, 'list').mockResolvedValue({ state: 'unavailable', failureCode: 'runs-unavailable' })
     const dom = await render()
-    expect(dom.textContent).toContain(text.unavailable)
+    expect(dom.querySelector('[data-state="error"]')).not.toBeNull()
+    expect(dom.querySelector('.state-view__action')).not.toBeNull()
   })
 
   it('renders each run in the display time zone, not the machine zone', async () => {
