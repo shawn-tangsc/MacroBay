@@ -234,6 +234,20 @@ export class ChannelDeliveryRepository {
     return this.listEnabledTargets(channelId, agentId).length > 0
   }
 
+  /**
+   * Whether any delivery target exists for this channel, enabled or not. Without this, "never
+   * bound" and "bound but disabled" collapse into one skip reason and one of the two users is
+   * told to do the wrong thing.
+   */
+  hasAnyTarget(channelId: string, agentId: string): boolean {
+    const row = this.database.connection.prepare(
+      `select 1 as present from channel_delivery_targets t
+       join agent_channels c on c.id = t.channel_id
+       where t.channel_id = ? and c.agent_id = ? limit 1`
+    ).get(channelId, agentId) as { present?: number } | undefined
+    return row?.present === 1
+  }
+
   listAttempts(input: { channelId: string; agentId: string; limit?: number; offset?: number }): { attempts: ChannelDeliveryAttemptView[]; total: number } {
     const limit = Math.max(1, Math.min(input.limit ?? 50, 100)); const offset = Math.max(0, input.offset ?? 0)
     const rows = this.database.connection.prepare(

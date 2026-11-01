@@ -88,7 +88,15 @@ export class ChannelDeliveryService {
 
   async deliverToEnabledTargets(input: Omit<ChannelDeliveryRequest, 'conversationId'>): Promise<ChannelDeliveryResult[]> {
     const targets = this.deps.repository.listEnabledTargets(input.channelId, input.agentId)
-    if (targets.length === 0) return [{ status: 'skipped', attemptId: null, errorCode: 'delivery-no-enabled-target' }]
+    if (targets.length === 0) {
+      return [{
+        status: 'skipped',
+        attemptId: null,
+        errorCode: this.deps.repository.hasAnyTarget(input.channelId, input.agentId)
+          ? 'delivery-target-disabled'
+          : 'delivery-no-target-bound'
+      }]
+    }
     return Promise.all(targets.map((target) => this.deliver({ ...input, conversationId: target.conversationId })))
   }
 

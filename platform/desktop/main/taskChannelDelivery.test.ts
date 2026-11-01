@@ -6,7 +6,7 @@ describe('task channel delivery', () => {
   it('delegates task results to the unified delivery kernel without legacy active chats', async () => {
     const deliverToEnabledTargets = vi.fn(async () => [
       { status: 'delivered' as const, attemptId: 'attempt-1', errorCode: null },
-      { status: 'skipped' as const, attemptId: null, errorCode: 'delivery-no-enabled-target' }
+      { status: 'skipped' as const, attemptId: null, errorCode: 'delivery-no-target-bound' }
     ])
     const patchDeliverySummary = vi.fn(async () => {})
     const delivery = createTaskChannelDelivery({

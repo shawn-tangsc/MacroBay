@@ -15,7 +15,9 @@ export type ChannelDeliveryStatus = 'pending' | 'sending' | 'delivered' | 'faile
  * user "it was skipped, do not ask" — and each reason needs a different next action.
  */
 export type ChannelDeliverySkipReason =
-  | 'delivery-no-enabled-target'
+  // Two different user actions: bind a channel, or enable the bound one.
+  | 'delivery-no-target-bound'
+  | 'delivery-target-disabled'
   | 'delivery-empty-output'
   | 'delivery-not-authorized'
   | 'delivery-retry-not-permitted'

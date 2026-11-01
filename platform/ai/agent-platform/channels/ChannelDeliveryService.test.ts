@@ -26,7 +26,8 @@ describe('ChannelDeliveryService', () => {
     const result = await service.deliverToEnabledTargets({
       channelId: 'channel-a', agentId: 'agent-a', source: 'agent-notify', sourceId: 'notify-1', text: 'notice'
     })
-    expect(result).toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-no-enabled-target' }])
+    // No target row at all is "bind a channel", not "enable the bound one".
+    expect(result).toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-no-target-bound' }])
     expect(transport.send).not.toHaveBeenCalled()
     expect(database.connection.prepare('select count(*) as count from channel_delivery_attempts').get()).toEqual({ count: 0 })
   })
@@ -237,3 +238,19 @@ function harness(enabled = true, beforeSendOwnership?: () => void) {
 
 function cipherForTests() { return { encrypt: async () => ({ ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 }), decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext, keyedHash: async () => 'hash', rotate: async () => ({ keyRef: 'ref', keyRevision: 1 }), revoke: async () => {} } }
 function hashForTests(value: string): string { return createHash('sha256').update(value).digest('base64url') }
+
+describe('skip reasons name the action the user has to take', () => {
+  it('distinguishes a bound but disabled target from no target at all', async () => {
+    const { service, database } = harness()
+    database.connection.exec(`
+      update channel_delivery_targets set enabled = 0
+      where channel_id = 'channel-a'
+    `)
+
+    const result = await service.deliverToEnabledTargets({
+      channelId: 'channel-a', agentId: 'agent-a', source: 'agent-notify', sourceId: 'notify-disabled', text: 'notice'
+    })
+
+    expect(result).toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-target-disabled' }])
+  })
+})
