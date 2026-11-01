@@ -37,6 +37,8 @@ boundary it used.
 
 - **Read the market picture** — a dashboard with macro context, cross-asset observations, capital
   conditions, and the latest published analysis.
+- **Read the day in one page** — the daily briefing collects the same evidence into a single edition:
+  what is being priced, what changed, and what to watch.
 - **Ask why** — the analyst agent reads the same evidence and explains what changed, instead of
   producing an untraceable summary.
 - **Check the number** — open the evidence behind a reading and see its source and observation

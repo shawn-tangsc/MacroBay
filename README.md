@@ -41,6 +41,10 @@ what changed, with the source and the cutoff time attached to every number.
 A claim that cannot be traced to a source record and a timestamp is supposed to be reported as a gap.
 That is the whole product: **not a paragraph you have to take on faith.**
 
+A daily briefing collects the same evidence into one page: what the market is pricing, what changed
+overnight, and what to watch today. It can be generated on a schedule or on demand, and every item
+keeps its source and its cutoff time.
+
 <p align="center">
   <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: crypto market checklist, market status, cross-asset returns, capital conditions, sentiment, funding and the watchlist" width="100%">
 </p>

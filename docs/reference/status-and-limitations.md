@@ -13,6 +13,7 @@ supported yet.
 - Agent sessions can run with the bundled `market-intelligence` product.
 - The intelligence portal, dashboard, macro calendar, source configuration, and analyst agent are
   reachable from the product.
+- The daily briefing reads the collected evidence and can be generated from the briefing page.
 - Structured agent questions and tool approvals are rendered in the conversation.
 - The repository passes `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 
