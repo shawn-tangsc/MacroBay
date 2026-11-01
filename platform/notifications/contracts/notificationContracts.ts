@@ -37,6 +37,8 @@ export type NotificationRecord = {
   correlationId?: string
   safeMetadata?: Record<string, unknown>
   occurrenceCount: number
+  /** 熔断折叠掉的原文条数；只有聚合记录有。原文不落库，但这个事实必须留下。 */
+  collapsedCount?: number
   createdAt: string
   updatedAt: string
   readAt?: string

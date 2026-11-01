@@ -1,4 +1,3 @@
-import type { NotificationState } from '../contracts/notificationContracts'
 import type { NotificationDailyCounters } from '../store/notificationStore'
 
 /**
@@ -70,11 +69,6 @@ export function pruneNotificationDailyCounters(
     kept[key] = value
   }
   return kept
-}
-
-/** 聚合记录把「被折掉了多少条」记在这里；正文不落库，但事实要留下。 */
-export function foldIntoCancelledCount(record: { collapsedCount?: number; state?: NotificationState }): number {
-  return (record.collapsedCount ?? 0) + 1
 }
 
 function normalizeLimit(value: number | undefined): number {

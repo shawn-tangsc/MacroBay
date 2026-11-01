@@ -6,6 +6,7 @@ import {
   acknowledgeNotification,
   createDefaultNotificationStoreState,
   createNotificationFromRequest,
+  createNotificationId,
   dismissNotification,
   expireDueNotifications,
   isActiveNotification,
@@ -28,6 +29,12 @@ import type {
   SafeNotificationRecord
 } from '../contracts/notificationContracts'
 import { toSafeNotificationRecord } from '../contracts/notificationContracts'
+import {
+  decideNotificationBreaker,
+  pruneNotificationDailyCounters,
+  utcDayOf
+} from './notificationBreaker'
+import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { normalizeRequestedChannels, routeTransientDelivery, type DeliveryHooks, type NotificationClock } from '../runtime/notificationRouting'
 
@@ -73,7 +80,9 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     const now = new Date().toISOString()
     const normalized = {
       ...state,
-      records: expireDueNotifications(reactivateSnoozedNotifications(state.records, now), now)
+      records: expireDueNotifications(reactivateSnoozedNotifications(state.records, now), now),
+      // 计数桶的回收只由清理任务与下一次写入负责；读取时静默丢弃会让「清理释放了几条」永远报 0。
+      dailyCounters: state.dailyCounters ?? {}
     }
     cache = normalized
     return normalized
@@ -94,28 +103,63 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       const settings = await deps.getSettings()
       const now = new Date().toISOString()
       const duplicate = findActiveDuplicate(state.records, request, now)
-      let record = duplicate
-        ? mergeDuplicateNotification(duplicate, request, now)
-        : createNotificationFromRequest(
-            {
-              ...request,
-              requestedChannels: withCenterForDisruptiveChannels(request, normalizeRequestedChannels(request, settings, deps.clock))
-            },
-            now
-          )
 
-      const nextRecords = duplicate
-        ? state.records.map((item: NotificationRecord) => (item.id === record.id ? record : item))
-        : [record, ...state.records]
-
-      await persist({ ...state, records: nextRecords })
-      notifyChanged()
-
-      if (!duplicate) {
-        await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock)
+      // 折叠第一层：同 dedupeKey 且仍活跃 → 只累加次数，不新增记录，也不消耗熔断额度。
+      if (duplicate) {
+        const merged = mergeDuplicateNotification(duplicate, request, now)
+        const mergedRecords = state.records.map((item: NotificationRecord) => (item.id === merged.id ? merged : item))
+        await persist({ ...state, records: mergedRecords })
+        notifyChanged()
+        return toSafeNotificationRecord(merged)
       }
 
+      const ownerId = request.productId ?? 'platform'
+      const breaker = decideNotificationBreaker({
+        counters: state.dailyCounters ?? {},
+        ownerId,
+        now
+      })
+      const dailyCounters = pruneNotificationDailyCounters(breaker.counters, now)
+
+      // 折叠第二层：超过当日上限后原文不落库，只把「今天还出过几条」留在聚合记录上。
+      if (breaker.action === 'fold') {
+        const folded = foldIntoAggregate(state.records, request, ownerId, now)
+        await persist({ ...state, records: folded.records, dailyCounters })
+        notifyChanged()
+        return toSafeNotificationRecord(folded.aggregate)
+      }
+
+      const record = createNotificationFromRequest(
+        {
+          ...request,
+          requestedChannels: withCenterForDisruptiveChannels(request, normalizeRequestedChannels(request, settings, deps.clock))
+        },
+        now
+      )
+
+      await persist({ ...state, records: [record, ...state.records], dailyCounters })
+      notifyChanged()
+      await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock)
+
       return toSafeNotificationRecord(record)
+    },
+
+    /**
+     * 保留期清理：按天数 + 条数剪记录，同时丢掉窗口外的计数桶。
+     * 清理任务（`@platform/jobs`）与启动恢复都只调这一处，避免两条清理路径各剪一半。
+     */
+    async prune(): Promise<{ removedRecords: number; removedCounters: number }> {
+      const state = await load()
+      const settings = await deps.getSettings()
+      const now = new Date().toISOString()
+      const pruned = pruneNotificationRecords(state.records, { retentionDays: settings.retentionDays, now })
+      const counters = pruneNotificationDailyCounters(state.dailyCounters ?? {}, now)
+      const removedCounters = Object.keys(state.dailyCounters ?? {}).length - Object.keys(counters).length
+      const removedRecords = state.records.length - pruned.records.length
+      if (removedRecords === 0 && removedCounters === 0) return { removedRecords: 0, removedCounters: 0 }
+      await persist({ records: pruned.records, dailyCounters: counters })
+      notifyChanged()
+      return { removedRecords, removedCounters }
     },
 
     /**
@@ -229,6 +273,61 @@ function withCenterForDisruptiveChannels(
   const disruptive = channels.some((channel) => channel === 'desktop' || channel === 'toast' || channel === 'popup')
   if (!disruptive || channels.includes('center')) return [...channels]
   return ['center', ...channels]
+}
+
+
+/**
+ * 熔断的聚合记录：**同一 owner 同一天只有一条**。
+ *
+ * 折叠掉的是原文，不是事实——正文不落库，但「今天还出过几条、属于哪个 owner」必须留下。
+ * 标题只是一个稳定标识，界面从 `collapsedCount` 出文案，**不要直接显示这个字符串**。
+ */
+const NOTIFICATION_AGGREGATE_TITLE = 'notification-aggregate'
+
+function aggregateDedupeKey(ownerId: string, now: string): string {
+  return `${NOTIFICATION_AGGREGATE_TITLE}|${ownerId}|${utcDayOf(now)}`
+}
+
+function foldIntoAggregate(
+  records: readonly NotificationRecord[],
+  request: NotificationRequest,
+  ownerId: string,
+  now: string
+): { records: NotificationRecord[]; aggregate: NotificationRecord } {
+  const dedupeKey = aggregateDedupeKey(ownerId, now)
+  const existing = records.find((record) => record.dedupeKey === dedupeKey)
+  if (existing) {
+    const aggregate: NotificationRecord = {
+      ...existing,
+      collapsedCount: (existing.collapsedCount ?? 0) + 1,
+      occurrenceCount: existing.occurrenceCount + 1,
+      updatedAt: now
+    }
+    return {
+      records: records.map((record) => (record.id === aggregate.id ? aggregate : record)),
+      aggregate
+    }
+  }
+
+  const aggregate: NotificationRecord = {
+    id: createNotificationId(),
+    owner: request.owner,
+    productId: request.productId,
+    sourceId: NOTIFICATION_AGGREGATE_TITLE,
+    title: NOTIFICATION_AGGREGATE_TITLE,
+    severity: 'warning',
+    priority: 'low',
+    channels: ['center'],
+    state: 'unread',
+    actions: [],
+    dedupeKey,
+    safeMetadata: { aggregate: true },
+    occurrenceCount: 1,
+    collapsedCount: 1,
+    createdAt: now,
+    updatedAt: now
+  }
+  return { records: [aggregate, ...records], aggregate }
 }
 
 function isMissingFileError(error: unknown): boolean {

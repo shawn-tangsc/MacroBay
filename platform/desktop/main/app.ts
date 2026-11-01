@@ -172,7 +172,8 @@ import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
-import { configureNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
+import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
+import { registerNotificationRetentionJob } from '../../notifications/jobs/notificationRetentionJob'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
 import { buildAppMenu } from '../menu/appMenu'
@@ -2447,6 +2448,11 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   jobRuntimeForDisposal = jobRuntime
   jobRuntime.recover()
   registerAssistantSessionRetentionJob(jobRuntime, { repo: createRetentionRepository(assistantDatabase) })
+  // 保留期清理挂在同一个任务运行时上；owner 是 platform，用户在任务表里能认出它是平台项。
+  registerNotificationRetentionJob(jobRuntime, {
+    runtime: () => getNotificationRuntime(),
+    timeZone: () => shellTimeZone.get()
+  })
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
   const jobScheduleQueryService = createJobScheduleQueryService({ runtime: jobRuntime })
   agentTaskJobBridge = createAgentTaskJobBridge({ jobRuntime })

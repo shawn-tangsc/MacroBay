@@ -67,6 +67,10 @@ export function normalizeNotificationRecord(value: unknown): NotificationRecord 
         ? (candidate.safeMetadata as Record<string, unknown>)
         : undefined,
     occurrenceCount: typeof candidate.occurrenceCount === 'number' ? Math.max(1, candidate.occurrenceCount) : 1,
+    collapsedCount:
+      typeof candidate.collapsedCount === 'number' && candidate.collapsedCount > 0
+        ? Math.floor(candidate.collapsedCount)
+        : undefined,
     createdAt: String(candidate.createdAt ?? new Date().toISOString()),
     updatedAt: String(candidate.updatedAt ?? candidate.createdAt ?? new Date().toISOString()),
     readAt: candidate.readAt ? String(candidate.readAt) : undefined,
