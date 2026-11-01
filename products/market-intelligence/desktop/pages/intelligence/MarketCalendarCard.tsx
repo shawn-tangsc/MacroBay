@@ -1,6 +1,8 @@
 import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
 import { Button, Tooltip } from 'antd'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
 import type { CrossAssetId } from '../../../contracts/crossAssetObservationContracts'
 import { formatReadableAnalysisValue, readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
@@ -59,6 +61,7 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
   onOpenEventInCalendar?: (eventKey: string, month: string) => void
   selectedEventKey?: string
 }>): React.ReactElement {
+  const resolveKey = useProductTextKey()
   const formatTime = useShellTimeFormat()
   // 示例模式下月份兜底走场景时钟，否则卡片会去查一个没有示例数据的月份。
   const sampleNow = useSampleNow()
@@ -208,7 +211,8 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
   return <section className="mi-calendar-card" aria-label={text.title}>
     <header>
       <h2>{text.title}</h2>
-      <button aria-label={text.openCalendar} className="mi-calendar-card__open" onClick={() => onOpenCalendar(month)} type="button"><CalendarDays aria-hidden="true" size={15} /></button>
+      <IconButton icon={CalendarDays} size="md" variant="plain" resolveText={resolveKey}
+        ariaLabelKey="pages.intelligence.portal.calendarCard.openCalendar" onSelect={() => onOpenCalendar(month)} />
     </header>
     {/* Only the list scrolls. The header is the card's identity — the reader keeps seeing what
         they are looking at while scanning further down the schedule — so it stays outside the

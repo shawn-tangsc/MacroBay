@@ -7,6 +7,7 @@ import { expect, it, vi } from 'vitest'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { productText } from '../../shared/i18n/productText'
+import { resolveProductTextKey } from '../../shared/i18n/productTextKey'
 import { MarketCalendarCard } from './MarketCalendarCard'
 
 const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
@@ -135,7 +136,9 @@ it('copies a row instead of navigating, and keeps the calendar action for the mo
   await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__copy')!.click())
   expect(written).toEqual(['10-13 12:30 经济指标 消费者物价指数（CPI）'])
   expect(onOpenCalendar).not.toHaveBeenCalled()
-  await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__open')!.click())
+  // The header action is the shared icon button now; its accessible name is the product key's sentence.
+  const openLabel = resolveProductTextKey('zh-CN', 'pages.intelligence.portal.calendarCard.openCalendar')
+  await act(async () => host.querySelector<HTMLButtonElement>(`button[aria-label="${openLabel}"]`)!.click())
   expect(onOpenCalendar).toHaveBeenCalledWith('2026-10')
 })
 
