@@ -5,14 +5,19 @@ import { app } from 'electron'
 import { createDesktopNotificationAdapter } from '../desktop/desktopNotificationAdapter'
 import { createNotificationJsonStorage, createNotificationRuntime } from '../runtime/notificationRuntime'
 import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
+import type { NotificationClock } from '../runtime/notificationRouting'
 
 let notificationRuntime: ReturnType<typeof createNotificationRuntime> | null = null
 let getNotificationSettings: (() => Promise<NotificationRuntimeSettings>) | null = null
+let notificationClock: NotificationClock | undefined
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
+  /** 读者时区与当前时刻；免打扰窗口按它判断，缺省 UTC。 */
+  clock?: NotificationClock
 }): void {
   getNotificationSettings = deps.getSettings
+  notificationClock = deps.clock
 }
 
 export function getNotificationRuntime() {
@@ -30,6 +35,7 @@ export function getNotificationRuntime() {
           retentionDays: 30,
           defaultSnoozeMinutes: 60
         }),
+      clock: notificationClock,
       deliveryHooks: {
         desktop: (record) => desktopAdapter.show(record)
       },

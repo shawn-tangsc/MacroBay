@@ -2285,7 +2285,9 @@ function registerIpcHandlers(
   )
 
   configureNotificationRuntime({
-    getSettings: async () => (await settingsStore.get()).notifications
+    getSettings: async () => (await settingsStore.get()).notifications,
+    // 免打扰窗口按设置的读者时区判断，不按运行机器；同一提供者随设置保存刷新。
+    clock: { now: () => new Date(), timeZone: () => shellTimeZone.get() }
   })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()

@@ -26,7 +26,7 @@ import type {
 } from '../contracts/notificationContracts'
 import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
-import { normalizeRequestedChannels, routeTransientDelivery, type DeliveryHooks } from '../runtime/notificationRouting'
+import { normalizeRequestedChannels, routeTransientDelivery, type DeliveryHooks, type NotificationClock } from '../runtime/notificationRouting'
 
 export type NotificationStorage = JsonFileStorage<NotificationStoreState>
 
@@ -50,6 +50,8 @@ export function createNotificationJsonStorage(filePath: string): NotificationSto
 export type NotificationRuntimeDependencies = {
   storage: NotificationStorage
   getSettings: () => Promise<NotificationRuntimeSettings>
+  /** 读者时区与当前时刻；免打扰窗口按它判断，缺省 UTC。 */
+  clock?: NotificationClock
   deliveryHooks?: DeliveryHooks
   requestDesktopPermission?: () => Promise<{ granted: boolean; supported: boolean }>
 }
@@ -89,7 +91,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
         : createNotificationFromRequest(
             {
               ...request,
-              requestedChannels: normalizeRequestedChannels(request, settings)
+              requestedChannels: normalizeRequestedChannels(request, settings, deps.clock)
             },
             now
           )
@@ -101,7 +103,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       await persist({ ...state, records: nextRecords })
 
       if (!duplicate) {
-        await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {})
+        await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock)
       }
 
       return toSafeNotificationRecord(record)
