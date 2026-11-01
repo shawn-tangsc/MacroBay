@@ -351,7 +351,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
             ? <LoadingState label={text.loading} fill />
             // 查询失败是「读不到」，不是「没有」：走统一状态面，码用 unreadable（程序故障，可重试）。
             // 「来源被关」那一支等设置深链入口落地后再拆成 disabled · target-disabled。
-            : <StateView state="error" reasonCode="unreadable" size="panel"
+            : <StateView state="error" reasonCode="unreadable" size="md"
                 action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
       </div>
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
