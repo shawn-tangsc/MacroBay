@@ -1472,7 +1472,7 @@ export const productText = {
         viewRuns: '运行记录',
         syncRun: {
           title: '运行记录',
-          window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部' },
+          window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部（含每日汇总）' },
           outcome: { any: '全部结果', succeeded: '成功', failed: '失败', running: '进行中' },
           columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', duration: '耗时', detail: '说明' },
           actions: { collect: '定时采集', refresh: '手动运行', analysis: '分析', configure: '配置变更', test: '测试连接', import: '导入文件', other: '其他' },
@@ -1554,12 +1554,12 @@ export const productText = {
           csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明'],
           aggregates: {
             title: '每日汇总',
-            note: '明细只留 30 天；更早的日子只剩当天的次数与失败数（日期按 UTC 日界）。',
+            note: '明细只留 30 天，更早的日子只剩当天的次数与失败数（日期按 UTC 日界）。最多显示最近 60 条「日 × 任务」记录，任务多时能翻到的天数会更短。',
             columns: { day: '日期（UTC）', task: '任务', runs: '次数', failures: '失败' },
             empty: '这一年里还没有汇总数据。',
             unavailable: {
-              'memory-store-has-no-aggregates': '当前存储模式不保留每日汇总，换成本地数据库后才有历史。',
-              'aggregates-unavailable': '每日汇总暂时读不到。'
+              'memory-store-has-no-aggregates': '这台机器现在不保存每日汇总，所以更早的日子看不到。',
+              'aggregates-unavailable': '每日汇总暂时读不到，稍后再看。'
             }
           }
         },
@@ -3284,7 +3284,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
         viewRuns: 'Run record',
         syncRun: {
           title: 'Run record',
-          window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All' },
+          window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All (with daily totals)' },
           outcome: { any: 'Any outcome', succeeded: 'Succeeded', failed: 'Failed', running: 'Running' },
           columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', duration: 'Duration', detail: 'Detail' },
           actions: { collect: 'Scheduled run', refresh: 'Manual run', analysis: 'Analysis', configure: 'Configuration', test: 'Connection test', import: 'File import', other: 'Other' },
@@ -3363,12 +3363,12 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail'],
           aggregates: {
             title: 'Daily totals',
-            note: 'Detail is kept for 30 days; older days keep only their run and failure counts (UTC day boundaries).',
+            note: 'Detail is kept for 30 days; older days keep only their run and failure counts (UTC day boundaries). At most the newest 60 day-and-task rows are shown, so a busy day makes the reach shorter.',
             columns: { day: 'Day (UTC)', task: 'Task', runs: 'Runs', failures: 'Failures' },
             empty: 'No daily totals in the past year.',
             unavailable: {
-              'memory-store-has-no-aggregates': 'This storage mode keeps no daily totals; history appears once the local database is in use.',
-              'aggregates-unavailable': 'The daily totals cannot be read right now.'
+              'memory-store-has-no-aggregates': 'This machine does not save daily totals, so older days cannot be shown.',
+              'aggregates-unavailable': 'The daily totals cannot be read right now; try again later.'
             }
           }
         },
