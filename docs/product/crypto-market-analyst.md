@@ -55,7 +55,7 @@ individual feeds: each preset bundles the sources that serve one part of the pic
 | Fear & Greed | Required | A public market-sentiment index | The market-sentiment gauge |
 | Spot and momentum | Required | Exchange quotes, market pricing, the dollar index | Market status, cross-asset comparison |
 | Funding rate | Required | Exchange perpetual funding and positioning | Perpetual funding and positioning |
-| Macro calendar | Recommended | Federal Reserve, BEA and BLS official schedules, plus a market calendar | Macro release dynamics, economic calendar |
+| Macro calendar | Recommended | Federal Reserve, BEA and BLS official schedules, plus a market calendar | The economic-calendar panel and the schedule-status row on the dashboard |
 | Stablecoins and DeFi | Recommended | Stablecoin supply and DeFi TVL data | Capital conditions |
 | Regulation and venues | Recommended | SEC and CFTC announcements, exchange notices and status pages | Timeline and evidence for the analyst |
 | Industry news | Optional | Industry media, project blogs, repository releases | Background context |
@@ -205,7 +205,7 @@ each panel to the provider that feeds it.
 | Capital conditions | Stablecoin supply, 7-day net change, latest BTC/ETH ETF readings, market flows | Stablecoin data, ETF flow data |
 | Market sentiment | Fear & Greed gauge with buckets and observation time | Sentiment index |
 | Perpetual funding rate | BTC and ETH funding, who pays whom, and history | Exchange perpetual data |
-| Macro release dynamics | Upcoming and released events grouped by official date, with prior and actual values | BLS, BEA, Federal Reserve, market calendar |
+| Economic calendar | Upcoming and released events grouped by official date, with prior and actual values | BLS, BEA, Federal Reserve, market calendar |
 | Latest AI conclusion | Direction per horizon, confidence, and conclusion blocks | The analyst agent |
 | Watchlist and timeline | Recently released and upcoming events, published analyses, and their status | Calendar, analysis runs |
 
