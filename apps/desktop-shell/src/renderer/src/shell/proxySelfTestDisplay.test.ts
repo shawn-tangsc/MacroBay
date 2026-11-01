@@ -62,6 +62,18 @@ describe('formatProxySelfTestLine', () => {
     expect(line).toBe(labels.proxySelfTestPassed(200, '0.1', 'DIRECT'))
   })
 
+  it('blames the target site on 401 without the word proxy and without the raw code', () => {
+    const line = formatProxySelfTestLine(
+      result({ ok: false, status: 401, reasonCode: 'http_401', durationMs: 80 }),
+      labels,
+      customContext
+    )
+
+    expect(line).toBe(labels.proxySelfTestTargetRejected(401, 'aihubmix.com'))
+    expect(line).not.toContain('代理')
+    expect(line).not.toContain('http_401')
+  })
+
   it('falls back to the mode label when the main process reported no resolution', () => {
     const line = formatProxySelfTestLine(
       result({ resolvedProxy: undefined, proxied: undefined }),

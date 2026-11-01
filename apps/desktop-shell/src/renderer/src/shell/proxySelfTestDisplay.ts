@@ -51,6 +51,11 @@ export function formatProxySelfTestLine(
   if (result.endpointReachable === false) {
     return labels.proxySelfTestProxyUnreachable(result.proxyEndpoint?.trim() || result.targetHost)
   }
+  // 目标站点自己拒绝（401/403）：先说人话，别让用户以为代理坏了，也别把内部码当句子。
+  const rejectedStatus = targetRejectedStatus(result)
+  if (rejectedStatus !== null) {
+    return labels.proxySelfTestTargetRejected(rejectedStatus, result.targetHost)
+  }
   if (result.ok) {
     return labels.proxySelfTestPassed(
       result.status ?? 0,
@@ -59,4 +64,10 @@ export function formatProxySelfTestLine(
     )
   }
   return labels.proxySelfTestFailed(result.reasonCode ?? 'unknown', result.targetHost)
+}
+
+function targetRejectedStatus(result: ProxySelfTestResult): number | null {
+  if (result.reasonCode === 'http_401' || result.status === 401) return result.status ?? 401
+  if (result.reasonCode === 'http_403' || result.status === 403) return result.status ?? 403
+  return null
 }
