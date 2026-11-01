@@ -1,5 +1,6 @@
 import type { AppLog } from '../../observability/logging/appLog'
 import { productIdOf } from '../../product-registry/productRegistrationFailure'
+import type { BootFailureDetail } from './failurePresentation'
 
 /**
  * 启动时产品注册这一段：注册服务 → 封口 IPC 面 → 可选的验收报告。
@@ -35,7 +36,9 @@ export interface ProductBootstrapDeps {
   markUnavailable: () => void
 }
 
-export type ProductBootstrapResult = 'ready' | 'failed'
+export type ProductBootstrapResult =
+  | { ok: true }
+  | { ok: false; failure: BootFailureDetail }
 
 /** 抛出来的东西不一定是 Error（字符串、对象都见过），但日志里必须有一句人能读的原因。 */
 function describeReason(error: unknown): string {
@@ -63,7 +66,7 @@ export async function runProductBootstrap<Sealed>(
     const sealed = steps.sealIpcSurface()
     stage = 'report-acceptance'
     steps.reportAcceptance?.(sealed)
-    return 'ready'
+    return { ok: true }
   } catch (error) {
     deps.log.log('error', PRODUCT_BOOTSTRAP_FAILED_EVENT, {
       code: PRODUCT_BOOTSTRAP_FAILED_CODE,
@@ -74,6 +77,14 @@ export async function runProductBootstrap<Sealed>(
       reason: describeReason(error)
     })
     deps.markUnavailable()
-    return 'failed'
+    return {
+      ok: false,
+      failure: {
+        code: PRODUCT_BOOTSTRAP_FAILED_CODE,
+        stage,
+        productId: productIdOf(error),
+        reason: describeReason(error)
+      }
+    }
   }
 }

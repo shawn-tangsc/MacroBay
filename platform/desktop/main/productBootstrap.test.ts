@@ -44,7 +44,7 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result).toBe('failed')
+    expect(result.ok).toBe(false)
     expectFailureLogged(log, 'register-product-services', 'product route "mind.intel.dashboard" is not declared')
     expect(markUnavailable).toHaveBeenCalledTimes(1)
     // 注册失败就不该继续封口：封一个空面会让后续步骤以为启动成功。
@@ -64,7 +64,7 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result).toBe('failed')
+    expect(result.ok).toBe(false)
     expectFailureLogged(log, 'seal-ipc-surface', 'duplicate ipc method')
     expect(markUnavailable).toHaveBeenCalledTimes(1)
   })
@@ -83,7 +83,7 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result).toBe('failed')
+    expect(result.ok).toBe(false)
     expectFailureLogged(log, 'report-acceptance', 'acceptance sink closed')
     expect(markUnavailable).toHaveBeenCalledTimes(1)
   })
@@ -101,7 +101,7 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result).toBe('failed')
+    expect(result.ok).toBe(false)
     expectFailureLogged(log, 'register-product-services', 'module not found')
   })
 
@@ -121,7 +121,7 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result).toBe('failed')
+    expect(result.ok).toBe(false)
     expectFailureLogged(
       log,
       'register-product-services',
@@ -143,7 +143,7 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result).toBe('ready')
+    expect(result.ok).toBe(true)
     expect(log).not.toHaveBeenCalled()
     expect(markUnavailable).not.toHaveBeenCalled()
     // 封口结果是交给验收报告的，不是给某个模块自己再算一遍。

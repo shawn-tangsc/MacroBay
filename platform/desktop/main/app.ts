@@ -168,6 +168,7 @@ import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagemen
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
 import { runProductBootstrap } from './productBootstrap'
+import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
@@ -2588,7 +2589,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
 
-  // 产品注册 → 封口 → 验收；失败路径的具名日志在 runProductBootstrap 里，这里只负责停止启动。
   const productBootstrap = await runProductBootstrap({
       registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({
               register: productIpcRegistry.register,
@@ -2630,7 +2630,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
         : undefined
     },
     { log: appLog, markUnavailable: () => productIpcRegistry.markUnavailable() })
-  if (productBootstrap === 'failed') return
+  if (productBootstrap.ok === false) return showBootFailurePage(mainWindow, productBootstrap.failure)
 
   reportPanelWorkspaceStart({ report: await panelWorkspace.start() }) // P1-06h N4：恢复/降级原因必须运行期可观测，启动顺序与 fail-closed 语义不变
   panelWorkspaceForDisposal = panelWorkspace
