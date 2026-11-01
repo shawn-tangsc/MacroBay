@@ -1,3 +1,9 @@
+/**
+ * 通道链路有两个测试根，只跑一个会「看起来全绿却漏掉消费者」：
+ *   platform/ai/agent-platform/channels/   与   platform/desktop/main/taskChannelDelivery.test.ts
+ * 本文件是 sourceId 格式与跳过码的消费方，不在 channels 目录内。改这条链路时两个必须一起跑：
+ *   pnpm exec vitest run platform/ai/agent-platform/channels platform/desktop/main/taskChannelDelivery.test.ts
+ */
 import { describe, expect, it, vi } from 'vitest'
 
 import { createTaskChannelDelivery } from './taskChannelDelivery'

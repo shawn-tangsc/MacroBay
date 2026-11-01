@@ -646,6 +646,9 @@ describe('ChannelInboundService', () => {
     expect(repository.cleanupChannel('channel-a')).toEqual({ receipts: 0, workItems: 0 })
   })
 
+  // The wait here is the database's own busy_timeout (5s), so the default 5s test budget can never
+  // hold: the measured value is 5.2s on an idle machine. Give it room instead of letting the suite
+  // fail on timing noise that says nothing about the lock behaviour under test.
   it('observes a real SQLite busy lock without acknowledgement', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'channel-inbound-busy-'))
     directories.push(directory)
@@ -663,7 +666,7 @@ describe('ChannelInboundService', () => {
       lock.close()
       harness.database.connection.close()
     }
-  })
+  }, 20_000)
 
   it('uses bounded pagination for the fixed 100,000 receipt and 10,000 work-item budgets', () => {
     const { database, repository } = createHarness()
