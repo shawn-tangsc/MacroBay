@@ -67,6 +67,22 @@ export function formatShellInstant(
 }
 
 /**
+ * 把某个瞬时按显示时区写成 `YYYY-MM`（日历刷新这类按月取数的入口用）。
+ * 不能用 `toISOString().slice(0,7)`：那是 UTC 的月份，月末差一天会取到错误的月。
+ */
+export function formatShellYearMonth(at: Date, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit' }).formatToParts(at)
+    const year = parts.find((part) => part.type === 'year')?.value ?? ''
+    const month = parts.find((part) => part.type === 'month')?.value ?? ''
+    if (!year || !month) return at.toISOString().slice(0, 7)
+    return `${year}-${month}`
+  } catch {
+    return at.toISOString().slice(0, 7)
+  }
+}
+
+/**
  * 同一个显示口径下的**紧凑时刻**，用于消息行这类空间紧张的位置：
  * 同一显示日 → `HH:mm`；跨日 → `MM-DD HH:mm`。
  *

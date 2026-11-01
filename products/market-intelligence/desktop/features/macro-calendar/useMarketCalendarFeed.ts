@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 
+import { formatShellYearMonth, resolveShellTimeZone } from '@platform/ui/time/shellTimeFormat'
+
 import { marketCalendarClient } from '../../shared/ipc/marketCalendarClient'
 
 export type MarketCalendarFeedState = {
@@ -18,7 +20,8 @@ export type MarketCalendarRefreshClient = {
  */
 export function useMarketCalendarFeed(
   client: MarketCalendarRefreshClient = marketCalendarClient,
-  locale: 'zh' | 'en' = 'zh'
+  locale: 'zh' | 'en' = 'zh',
+  options: Readonly<{ timeZone?: string; now?: () => Date }> = {}
 ): MarketCalendarFeedState {
   const [refreshing, setRefreshing] = useState(false)
   const [feedback, setFeedback] = useState<'succeeded' | 'failed' | undefined>()
@@ -30,8 +33,10 @@ export function useMarketCalendarFeed(
     setRefreshing(true)
     setFeedback(undefined)
     try {
+      // 月份按读者时区取：月底差一天用 UTC 会刷错月。
+      const at = (options.now ?? (() => new Date()))()
       const result = await client.refresh({
-        month: new Date().toISOString().slice(0, 7),
+        month: formatShellYearMonth(at, options.timeZone ?? resolveShellTimeZone(undefined)),
         locale
       })
       const state = result && typeof result === 'object' && 'state' in result
@@ -44,7 +49,7 @@ export function useMarketCalendarFeed(
       inFlight.current = false
       setRefreshing(false)
     }
-  }, [client, locale])
+  }, [client, locale, options.now, options.timeZone])
 
   return { refreshing, feedback, refresh }
 }
