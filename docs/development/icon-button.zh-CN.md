@@ -34,6 +34,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
 | `ariaLabelKey` | `string` | 是 | 读屏名，**收键不收句子**。传一句话就绕过了 i18n。 |
+| `ariaLabelParams` | `Record<string, string>` | 否 | 读屏名模板里的实体名（事件、来源、模型）。句子骨架在文案表里，如「在日历中打开「{name}」」；缺少的参数**原样留下 `{name}`**，不静默删掉半句。 |
 | `icon` | `LucideIcon` | 是 | lucide 图标组件。组件负责给它 `aria-hidden`；不许传 `<img>` 或文字当图标。 |
 | `size` | `'sm' \| 'md'` | 是 | `sm` 行内 22、`md` 卡片头与工具栏 24。 |
 | `onSelect` | `() => void` | 是 | 点击回调。 |

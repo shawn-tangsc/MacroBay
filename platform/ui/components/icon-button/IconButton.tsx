@@ -34,6 +34,14 @@ const SIZE_PX: Record<IconButtonSize, number> = { sm: 22, md: 24 }
 /** 图形按档位缩放：行内档 14、工具栏档 16。 */
 const GLYPH_PX: Record<IconButtonSize, number> = { sm: 14, md: 16 }
 
+/** 填模板里的 `{name}`；**找不到的参数原样保留**，让缺参在界面上看得见。 */
+function fillPlaceholders(template: string, params?: Readonly<Record<string, string>>): string {
+  if (params === undefined) return template
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
+    Object.prototype.hasOwnProperty.call(params, name) ? params[name] : whole
+  )
+}
+
 /** 工具栏那一排需要一点底色才不被当成正文，规格里叫 `solid`。 */
 export type IconButtonVariant = 'plain' | 'solid'
 
@@ -45,6 +53,14 @@ type IconButtonCommon = {
    * 代价是「必填的键」只能在守卫侧保证——`iconButtonKeyGuard.test.ts` 扫源码，含空白或中文即红。
    */
   ariaLabelKey: string
+  /**
+   * 读屏名里的实体名（事件名、来源名、模型名）。**句子的骨架在文案表里，这里只放会变的那几个字。**
+   *
+   * 不收整句：`{ name: '在日历中打开 CPI' }` 等于把读屏名重新变成七八种说法，
+   * 而那正是收键要防的。模板里缺哪个参数就**原样留下 `{name}`**——看得见才会被修，
+   * 静默删掉整段会得到一句读得通、但指错对象的话。
+   */
+  ariaLabelParams?: Readonly<Record<string, string>>
   /** 图标组件（lucide）。装饰图形，本组件负责 `aria-hidden`。 */
   icon: LucideIcon
   /** `sm` = 行内（22），`md` = 卡片头与工具栏（24）。 */
@@ -76,6 +92,7 @@ export type IconButtonProps = IconButtonCommon &
 
 export function IconButton({
   ariaLabelKey,
+  ariaLabelParams,
   icon: Glyph,
   size,
   onSelect,
@@ -84,7 +101,7 @@ export function IconButton({
   variant = 'plain',
   resolveText
 }: IconButtonProps): ReactElement {
-  const ariaLabel = resolveText(ariaLabelKey)
+  const ariaLabel = fillPlaceholders(resolveText(ariaLabelKey), ariaLabelParams)
   const pixels = SIZE_PX[size]
   const tooltipText = tooltipKey === undefined ? undefined : resolveText(tooltipKey)
 

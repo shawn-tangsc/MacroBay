@@ -36,6 +36,7 @@ window) — never per button.
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `ariaLabelKey` | `string` | yes | The screen-reader name, **as a key**. A literal sentence does not compile in review and defeats i18n. |
+| `ariaLabelParams` | `Record<string, string>` | no | The entity names that go into the label — an event, a source, a model. The sentence itself lives in the text table as a template, e.g. `Open {name} in the calendar`; a parameter that is missing stays visible as `{name}` rather than disappearing. |
 | `icon` | `LucideIcon` | yes | A lucide component. The component marks it `aria-hidden`; do not pass an `<img>` or a text glyph. |
 | `size` | `'sm' \| 'md'` | yes | `sm` = 22 px inline, `md` = 24 px card header and toolbar. |
 | `onSelect` | `() => void` | yes | Click handler. |

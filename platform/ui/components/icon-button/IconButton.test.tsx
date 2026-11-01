@@ -74,6 +74,34 @@ describe('IconButton', () => {
     expect(seen).toEqual(['ui.test.more-actions'])
   })
 
+  it('fills the entity name into the label template instead of taking a whole sentence', () => {
+    const html = markup({
+      ariaLabelKey: 'macro.icon.open-in-calendar',
+      ariaLabelParams: { name: 'CPI' },
+      resolveText: (value) => (value === 'macro.icon.open-in-calendar' ? 'Open {name} in the calendar' : value)
+    })
+
+    expect(html).toContain('aria-label="Open CPI in the calendar"')
+    expect(html).not.toContain('{name}')
+  })
+
+  it('leaves a missing parameter visible instead of dropping the phrase', () => {
+    // 静默删掉整段会得到「Open in the calendar」——读得通，但指错了对象。
+    const html = markup({
+      ariaLabelKey: 'macro.icon.open-in-calendar',
+      ariaLabelParams: { other: 'CPI' },
+      resolveText: (value) => (value === 'macro.icon.open-in-calendar' ? 'Open {name} in the calendar' : value)
+    })
+
+    expect(html).toContain('aria-label="Open {name} in the calendar"')
+  })
+
+  it('leaves a template without placeholders untouched when no parameters are passed', () => {
+    const html = markup({ resolveText: (value) => (value === 'ui.test.more-actions' ? 'More actions' : value) })
+
+    expect(html).toContain('aria-label="More actions"')
+  })
+
   it('is a plain button, so it can never submit a surrounding form', () => {
     expect(markup()).toContain('type="button"')
   })
