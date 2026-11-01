@@ -1,8 +1,5 @@
-declare module '@anthropic-ai/claude-agent-sdk' {
-  export function query(input: unknown): AsyncIterable<unknown>
-  const mod: { query?: typeof query }
-  export default mod
-}
+// `@anthropic-ai/claude-agent-sdk` is a regular dependency and ships its own types: declaring the
+// module here would shadow them, so a rename such as `updatedToolOutput` could never fail a build.
 
 declare module '@anthropic-ai/claude-code' {
   export function query(input: unknown): AsyncIterable<unknown>

@@ -1,4 +1,5 @@
 import type { ClaudeCodeExecutorDescriptor } from './ClaudeCodeExecutorDescriptor'
+import { createExternalMcpPostToolUseGuard } from './ClaudeCodeMcpToolOutcomeGuard'
 import type { ClaudeCodeMcpServerConfig } from './ClaudeCodeMcpServerConfig'
 
 export type ClaudeCodeAgentSdkMcpServer =
@@ -63,6 +64,14 @@ export type ClaudeCodeAgentSdkHookResult =
       }
     }
 
+export type ClaudeCodeAgentSdkPostToolUseHookHandler = (event: {
+  hook_event_name: 'PostToolUse'
+  tool_name: string
+  tool_input?: unknown
+  tool_response?: unknown
+  tool_use_id: string
+}) => Promise<Record<string, unknown>>
+
 export type ClaudeCodeAgentSdkHookHandler = (
   event: ClaudeCodeAgentSdkHookEvent,
   toolUseId: string,
@@ -94,6 +103,10 @@ export type ClaudeCodeAgentSdkOptions = {
     PreToolUse: Array<{
       matcher: '*'
       hooks: ClaudeCodeAgentSdkHookHandler[]
+    }>
+    PostToolUse: Array<{
+      matcher: '*'
+      hooks: ClaudeCodeAgentSdkPostToolUseHookHandler[]
     }>
   }
 }
@@ -175,6 +188,17 @@ export function createClaudeCodeAgentSdkOptions(
       }
     },
     hooks: {
+      // Which servers are external is decided here, by the composition root: the SDK registers the
+      // user's own servers under their display names, while the platform's own servers arrive
+      // through `additionalMcpServers`. The guard therefore judges membership, never the mcp__
+      // prefix — that prefix also covers macrobay_web, agent-skills, agent-task-management and the
+      // product tools, whose output must reach the model unchanged.
+      PostToolUse: [
+        {
+          matcher: '*',
+          hooks: [createExternalMcpPostToolUseGuard({ externalServerNames: Object.keys(externalMcpServers) })]
+        }
+      ],
       PreToolUse: [
         {
           matcher: '*',
