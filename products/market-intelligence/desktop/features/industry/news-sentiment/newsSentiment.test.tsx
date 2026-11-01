@@ -352,6 +352,32 @@ describe('NewsSentimentFeature', () => {
     expect(body).toContain(text.unavailable)
   })
 
+  it('keeps the neutral filter on the shared radio base, not a pressed-button pair', async () => {
+    // 1a acceptance for the segmented class: role=radiogroup, native radios (one Tab stop per group,
+    // arrow keys move within it), and no hand-written aria-pressed group anywhere on the card.
+    const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const group = container.querySelector('[role="radiogroup"]')
+    expect(group).toBeTruthy()
+    expect(group?.querySelectorAll('input[type="radio"]')).toHaveLength(2)
+    expect(group?.querySelectorAll('input[type="radio"]:checked')).toHaveLength(1)
+    expect(container.querySelectorAll('[aria-pressed]')).toHaveLength(0)
+  })
+
+  it('keeps the original/translated toggle on the shared radio base', async () => {
+    const getItem = vi.fn(async (input: { itemId: string }) => {
+      const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
+      return { ...item, bodyExcerpt: `body:${item.itemId}`, translatedBodyExcerpt: '译文正文' }
+    })
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const toggle = document.body.querySelector('.mi-news-drawer__body-toggle')
+    expect(toggle?.getAttribute('role')).toBe('radiogroup')
+    expect(toggle?.querySelectorAll('input[type="radio"]')).toHaveLength(2)
+    expect(toggle?.querySelectorAll('input[type="radio"]:checked')).toHaveLength(1)
+  })
+
   it('changes the window from the drawer controls', async () => {
     const query = vi.fn(async () => VIEW)
     const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
