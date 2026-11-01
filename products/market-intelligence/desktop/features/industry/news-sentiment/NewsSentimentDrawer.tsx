@@ -134,7 +134,9 @@ export function NewsSentimentDrawer(props: {
             onChange={(value: NewsSentimentWindow) => props.onWindowChange(value)}
             options={[
               ...NEWS_SENTIMENT_WINDOWS.map((window) => ({ value: window, label: window })),
-              { value: 'all', label: text.drawer.filters.all }
+              // The widest window is not "all history": the query returns at most 100 rows, and the
+              // label has to say so or the reader believes the list is complete.
+              { value: 'all', label: text.windowAll }
             ]}
             popupMatchSelectWidth={false}
             size="small"

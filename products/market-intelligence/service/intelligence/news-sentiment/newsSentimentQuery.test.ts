@@ -107,6 +107,31 @@ describe('newsSentimentQuery', () => {
   })
 })
 
+describe('the widest window is capped at 100 rows', () => {
+  // The UI no longer calls this window "all": it returns at most 100 rows, and the label says so.
+  // This is the other half of that promise — 120 stored judgments really do come back as 100.
+  it('returns the newest 100 of 120 rows', async () => {
+    const store = createNewsSentimentSqliteStore(':memory:')
+    const items = []
+    for (let index = 0; index < 120; index += 1) {
+      const at = new Date(Date.UTC(2026, 9, 24, 0, index, 0)).toISOString()
+      items.push({ itemId: `item-${index}`, sourceId: 'coindesk-rss', title: `News ${index}`, publishedAt: at })
+      store.upsertSentiment({
+        itemId: `item-${index}`, sourceId: 'coindesk-rss', publishedAt: at, scoredAt: at,
+        polarity: 'neutral', strength: 1, confidence: 50, symbols: [], reasonCode: 'news.no-rule.v1',
+        engine: 'rules', ruleId: 'news.no-rule.v1', caveats: []
+      })
+    }
+    const view = await createNewsSentimentQuery({
+      store,
+      pipeline: { listItems: () => items as never },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: 'all', limit: 500 })
+    expect(view.items).toHaveLength(100)
+    expect(view.items[0]?.itemId).toBe('item-119')
+  })
+})
+
 describe('empty windows carry their cause', () => {
   const readiness = {
     total: 4, enabledCount: 4, failedCount: 1, neverRanCount: 0,

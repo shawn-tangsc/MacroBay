@@ -57,6 +57,18 @@ export const productText = {
             dismiss: '知道了'
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
+          /**
+           * 「拿不到」与「确实没有」是两件事，两种界面的共同用词只有这一组。
+           * 没有配置是读者要做的事（去设置配置），读不到是系统这边的事（再试一次）；
+           * 共用一句，读者就分不清该动手还是该等。
+           */
+          data: {
+            temporarilyUnavailable: '暂时读不到',
+            drawerUnavailable: '这项数据暂时读不到，不是你没有',
+            retry: '再试一次',
+            sourceNotConfigured: '还没配置来源',
+            configureSources: '去设置配置'
+          },
           agents: {
             crypto: { name: '数字货币市场解读员', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 个静态情报源' },
             stocks: { name: '股票市场解读员', lens: 'EQUITIES MARKET LENS', sourceSummary: '数据源待接入' },
@@ -203,7 +215,9 @@ export const productText = {
           },
           newsSentiment: {
             title: '重点舆情',
-            all: '全部',
+            // 原来这里叫「全部」，但查询一次最多返回 100 条：窗口名必须说出上限，否则读者以为
+            // 看到的是全部历史。`MI-5-D6`。
+            windowAll: '最近 100 条',
             loading: '正在读取舆情…',
             unavailable: '舆情暂时不可用。',
             retry: '重试',
@@ -213,7 +227,7 @@ export const productText = {
             breakdown: '多 {bull} · 空 {bear} · 中性 {flat}',
             engine: { model: '模型', rules: '规则' },
             bodyLimited: '部分条目仅依据标题', neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
-            openAll: '查看全部舆情',
+            openAll: '查看舆情列表',
             settings: '舆情设置',
             // 五种「没有条目」互不相同，且不靠颜色区分：四源没开 / 开了没跑 / 采集失败 / 数据过期 /
             // 这段时间确实没有。除「确实没有」外都给出下一步（§9 的 filtered-empty 仍由抽屉负责）。
@@ -227,7 +241,7 @@ export const productText = {
             },
             drawer: {
               title: '舆情',
-              filters: { direction: '方向', source: '来源', scope: '对象', all: '全部' },
+              filters: { direction: '方向', source: '来源', scope: '对象', all: '不限' },
               scope: { market: '全市场', BTC: 'BTC', ETH: 'ETH' },
               columns: { time: '时间', title: '标题', polarity: '方向', source: '来源', symbols: '标的' },
               detail: { evidence: '证据引文', translated: '译文', strength: '强度', confidence: '置信', strengthLevels: { weak: '弱', medium: '中', strong: '强' }, body: '正文摘录', noBody: '仅依据标题与摘要判断', translatingBody: '正在翻译正文…', translationFailed: '正文翻译失败，先显示原文。', translateBody: '翻译正文', engine: '引擎', prompt: '提示词', original: '原文', openOriginal: '原文链接' },
@@ -247,8 +261,8 @@ export const productText = {
               judgeHint: '“跟随”跟随的是快速模型，与翻译模型是两套独立设置。',
               translation: { label: '翻译', on: '自动翻译已开启', off: '自动翻译已关闭', open: '打开翻译偏好', modelLabel: '翻译模型', followDefault: '跟随模型服务默认' },
               rescore: '重新评分已有条目', rescoring: '正在加入队列…', rescored: '已加入队列，完成后刷新查看。', rescoreFailed: '重新评分失败，请重试。',
-              rebuild: '重新抓取全部正文', rebuilding: '正在清空并重建…', rebuilt: '已清空正文与判断并重新抓取，稍后刷新。', rebuildFailed: '重建失败，请重试。',
-              retryTranslation: '翻译全部缺失', translateAll: '全部翻译', cancelTranslate: '取消翻译', translating: '正在翻译…', translationQueued: '已提交翻译重试，完成后刷新查看。', translationRetryFailed: '翻译重试提交失败。',
+              rebuild: '重新抓取所有正文', rebuilding: '正在清空并重建…', rebuilt: '已清空正文与判断并重新抓取，稍后刷新。', rebuildFailed: '重建失败，请重试。',
+              retryTranslation: '翻译缺失项', translateAll: '批量翻译正文', cancelTranslate: '取消翻译', translating: '正在翻译…', translationQueued: '已提交翻译重试，完成后刷新查看。', translationRetryFailed: '翻译重试提交失败。',
               save: '保存',
               cancel: '取消',
               saved: '已保存',
@@ -1833,6 +1847,18 @@ export const productText = {
             dismiss: 'Got it'
           },
           moduleLabel: 'MARKET INTELLIGENCE / AGENTS',
+          /**
+           * "Could not read it" and "there is nothing configured" are two different facts.
+           * No source configured is the reader's job (configure in settings); a failed read is
+           * ours (try again). One shared sentence would leave the reader guessing which to do.
+           */
+          data: {
+            temporarilyUnavailable: 'Temporarily unavailable',
+            drawerUnavailable: 'This data is temporarily unavailable — it is not missing from your setup',
+            retry: 'Try again',
+            sourceNotConfigured: 'No source configured',
+            configureSources: 'Configure in settings'
+          },
           agents: {
             crypto: { name: 'Crypto Market Analyst', lens: 'CRYPTO MARKET LENS', sourceSummary: '7 static intelligence sources' },
             stocks: { name: 'Equities Market Analyst', lens: 'EQUITIES MARKET LENS', sourceSummary: 'Sources pending' },
@@ -1979,7 +2005,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           },
           newsSentiment: {
             title: 'Key sentiment',
-            all: 'All',
+            // The query returns at most 100 rows, so the window names its cap instead of saying "All".
+            windowAll: 'Latest 100',
             loading: 'Loading news sentiment…',
             unavailable: 'News sentiment is unavailable.',
             retry: 'Retry',
@@ -1990,7 +2017,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             engine: { model: 'Model', rules: 'Rules' },
             bodyLimited: 'Some items are headline-only',
             neutralFilter: { label: 'Neutral', all: 'With neutral', exclude: 'Without neutral' },
-            openAll: 'Open all sentiment',
+            openAll: 'Open sentiment list',
             settings: 'Sentiment settings',
             emptyStates: {
               sourcesDisabled: 'Data sources are off',
@@ -2002,7 +2029,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             },
             drawer: {
               title: 'News sentiment',
-              filters: { direction: 'Direction', source: 'Source', scope: 'Scope', all: 'All' },
+              filters: { direction: 'Direction', source: 'Source', scope: 'Scope', all: 'Any' },
               scope: { market: 'Market', BTC: 'BTC', ETH: 'ETH' },
               columns: { time: 'Time', title: 'Title', polarity: 'Direction', source: 'Source', symbols: 'Symbols' },
               detail: { evidence: 'Evidence quote', translated: 'Translation', strength: 'Strength', confidence: 'Confidence', strengthLevels: { weak: 'weak', medium: 'medium', strong: 'strong' }, body: 'Body excerpt', noBody: 'Judged from the headline and summary only', translatingBody: 'Translating body…', translationFailed: 'Body translation failed; showing the original.', translateBody: 'Translate body', engine: 'Engine', prompt: 'Prompt', original: 'Original', openOriginal: 'Open original' },

@@ -291,6 +291,21 @@ describe('NewsSentimentFeature', () => {
       .toContain(text.drawer.emptyFiltered)
   })
 
+  it('names the widest window by its real cap and never says "all"', async () => {
+    const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const selector = document.body.querySelector<HTMLElement>('.mi-news-drawer__time .ant-select-selector')
+    await act(async () => { selector?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })) })
+    await act(async () => {})
+    const optionLabels = [...document.body.querySelectorAll<HTMLElement>('.ant-select-item-option')].map((entry) => entry.textContent?.trim())
+    expect(optionLabels).toContain(text.windowAll)
+    expect(text.windowAll).toBe('最近 100 条')
+    // The whole sentiment surface (card + drawer + the open dropdown) must not promise "全部".
+    expect(document.body.textContent).not.toContain('全部')
+  })
+
   it('shows the empty state without pretending neutral zero', async () => {
     const container = await mount(
       <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
