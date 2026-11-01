@@ -107,12 +107,15 @@ describe('CapitalConditionsPanel', () => {
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
     const body = etfTableBody(markup)
 
+    // Both halves answer through the platform error state: a part of the panel that could not be
+    // read is still "could not read", and neither half may fall back to a sentence of its own.
+    expect(body).toContain('data-state="error"')
     const bodyText = body.replace(/<[^>]*>/g, '')
-    expect(bodyText).toContain(text.etfTableUnavailable)
     expect(bodyText).not.toMatch(/\d/)
-    expect(markup).toContain(text.etfUnavailable)
     expect(markup).toContain('$1B')
     expect(markup).toContain('data-etf-flow="unavailable"')
+    const flow = /data-etf-flow="unavailable"([\s\S]*?)<\/section>/.exec(markup)![1]!
+    expect(flow).toContain('data-state="error"')
   })
 
   it('renders one shared zero-axis chart with exactly three series per day', () => {

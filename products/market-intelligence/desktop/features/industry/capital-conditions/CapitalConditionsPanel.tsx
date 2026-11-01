@@ -23,11 +23,9 @@ type Text = {
   streakColumn: string
   streak: string
   streakSingle: string
-  etfTableUnavailable: string
   observedAt: string
   etfFlow: string
   recent7TradingDays: string
-  etfUnavailable: string
   funds: string
   btc: string
   eth: string
@@ -129,7 +127,7 @@ function EtfTable({ etf, text }: { etf: AvailableState['etf']; text: Text }): Re
     </tr></thead>
     <tbody>
       {etf === 'unavailable'
-        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={5}>{text.etfTableUnavailable}</td></tr>
+        ? <tr><td className="mi-capital-conditions__etf-unavailable" colSpan={5}><StateView state="error" reasonCode="unavailable" /></td></tr>
         : <><EtfRow asset={etf.btc} label={text.btc} text={text} /><EtfRow asset={etf.eth} label={text.eth} text={text} /></>}
     </tbody>
   </table>
@@ -158,7 +156,7 @@ function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflo
 function EtfFlow({ state, flowHistory, text }: { state: Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf']; flowHistory?: Extract<DashboardCapitalConditionsState, { state: 'available' }>['flowHistory']; text: Text }): React.ReactElement {
   const chartRef = useRef<HTMLDivElement>(null)
   const [hoveredFlow, setHoveredFlow] = useState<HoveredFlow | null>(null)
-  if (state === 'unavailable' || !flowHistory) return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3><p>{text.etfUnavailable}</p></section>
+  if (state === 'unavailable' || !flowHistory) return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3><StateView state="error" reasonCode="unavailable" /></section>
   const visibleRows = flowHistory.rows.slice(-dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows)
   const maximumMagnitude = Math.max(...visibleRows.flatMap((row) => [Math.abs(row.funds), Math.abs(row.btc), Math.abs(row.eth)]))
   const axisMagnitude = maximumMagnitude === 0 ? undefined : formatFlowValue(maximumMagnitude)
