@@ -96,12 +96,12 @@ export interface ScreenFailure {
   reason: string
   /** 已脱敏、已锚定、未裁断：屏幕上「技术详情」里的完整版。 */
   reasonFull: string
-  /** 原文：**只给日志文件**，屏幕上任何位置都不许渲染它。 */
-  reasonForLog: string
 }
 
 /**
- * 一份结构、两个视图。`reasonForLog` 是原文（日志一个字不改），`reason` 是屏幕版。
+ * 一份结构、两个视图：日志侧写 `detail.reason` 原文（一个字不改），屏幕侧用这里返回的
+ * `reason`（裁断）与 `reasonFull`（技术详情）。屏幕侧的字段不承载原文——多存一份没人读的原文，
+ * 就是这个仓库重复清除过的「预留字段」。
  */
 export function presentBootFailure(detail: BootFailureDetail): ScreenFailure {
   // 顺序即泄漏防线的顺序：先凭据（redactText，平台唯一模式表），再路径（anchorPaths），最后裁断。
@@ -112,7 +112,6 @@ export function presentBootFailure(detail: BootFailureDetail): ScreenFailure {
     stage: detail.stage,
     productId: detail.productId,
     reason: truncateForScreen(anchored),
-    reasonFull: anchored,
-    reasonForLog: detail.reason
+    reasonFull: anchored
   }
 }

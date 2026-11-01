@@ -39,8 +39,9 @@ describe('failure presentation', () => {
     expect(screen.reason).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz0123456789')
     expect(screen.reason).not.toContain('/Users/alice')
     expect(screen.reason).toContain('products/x.ts')
-    // 日志视图保留原文，一个字不改：屏幕给方向，日志给证据。
-    expect(screen.reasonForLog).toContain('/Users/alice')
+    // 日志侧由 productBootstrap 写 `detail.reason` 原文（那条由它自己的用例守着）；
+    // 屏幕侧不承载原文，避免同一事实两份记录。
+    expect(screen.reasonFull).not.toContain('/Users/alice')
   })
 
   it('truncates the screen reason with a real ellipsis and leaves the log reason whole', () => {
@@ -54,7 +55,7 @@ describe('failure presentation', () => {
 
     expect(screen.reason.endsWith(FAILURE_ELLIPSIS)).toBe(true)
     expect(screen.reason).not.toContain('...')
-    expect(screen.reasonForLog).toBe(long)
+    expect(screen.reason.length).toBeLessThan(long.length)
   })
 
   it('keeps a short reason untouched and folds whitespace', () => {

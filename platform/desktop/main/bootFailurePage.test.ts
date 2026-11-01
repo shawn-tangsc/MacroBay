@@ -8,8 +8,7 @@ const failure: ScreenFailure = {
   stage: 'register-product-services',
   productId: 'market-intelligence',
   reason: `Cannot find module '…/products/market-intelligence/product.manifest.ts'`,
-  reasonFull: `Cannot find module '…/products/market-intelligence/product.manifest.ts'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1141:15)`,
-  reasonForLog: `Cannot find module '/Users/alice/project/AI/MacroBay/products/market-intelligence/product.manifest.ts'`
+  reasonFull: `Cannot find module '…/products/market-intelligence/product.manifest.ts'\n    at Module._resolveFilename (node:internal/modules/cjs/loader:1141:15)`
 }
 
 const options = { locale: 'zh-CN', logPath: '~/Library/Application Support/MacroBay/logs/app.log' }
