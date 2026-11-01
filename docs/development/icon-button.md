@@ -25,6 +25,12 @@ import { IconButton } from '@platform/ui/components/icon-button'
 Source: `platform/ui/components/icon-button/`. Visual spec:
 `docs-private/05-desktop/ui-audit/prototypes/2026-11-01-1b-stateview-iconbutton-statuspill.html` §②.
 
+**Basis: antd `Button`.** The component wraps it rather than hand-writing a `<button>`, so keyboard,
+disabled and `type="button"` behaviour come from the library; the look is still ours (padding 0,
+radius 5, transparent background, and our own hover/active). Its click wave is decorative motion and
+is turned off once in `platform/ui/theme`, read by both `ConfigProvider`s (main window and detached
+window) — never per button.
+
 ### Props
 
 | Prop | Type | Required | Meaning |

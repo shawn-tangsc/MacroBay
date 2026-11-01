@@ -25,6 +25,10 @@ import { IconButton } from '@platform/ui/components/icon-button'
 源码：`platform/ui/components/icon-button/`。外观规格：
 `docs-private/05-desktop/ui-audit/prototypes/2026-11-01-1b-stateview-iconbutton-statuspill.html` ②。
 
+**基础：antd `Button`。** 组件是封装层，不是手写 `<button>`：键盘、禁用、`type="button"` 由库提供，
+外观仍是我们的规格（内边距 0、圆角 5、透明底，hover/active 也归我们）。它的点击波纹属装饰性动效，
+在 `platform/ui/theme` 一处关掉，主窗与分离窗两个 `ConfigProvider` 都读那一份——不许逐按钮关。
+
 ### props
 
 | 字段 | 类型 | 必填 | 含义 |
