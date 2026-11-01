@@ -1,0 +1,53 @@
+import { connect } from 'node:net'
+
+export type ResolvedProxyEndpoint = { host: string; port: number }
+
+export type ResolvedProxyRoute = {
+  /** `session.resolveProxy` 的原始返回；展示给用户的就是它，不是输入框里的字符串。 */
+  raw: string
+  /** 第一跳是不是 DIRECT。是的话，「经代理」这句话就不成立。 */
+  direct: boolean
+  endpoint: ResolvedProxyEndpoint | null
+}
+
+/**
+ * 解析 Chromium `session.resolveProxy` 的返回：`DIRECT`、`PROXY host:port`、
+ * `SOCKS5 host:port`，多跳时以 `;` 分隔、第一跳为准。
+ */
+export function parseResolvedProxy(raw: string): ResolvedProxyRoute {
+  const entries = raw
+    .split(';')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  const first = entries[0]
+  if (!first || first.toUpperCase() === 'DIRECT') return { raw, direct: true, endpoint: null }
+
+  const match = /^[A-Z0-9]+\s+(.+):(\d+)$/i.exec(first)
+  if (!match) return { raw, direct: false, endpoint: null }
+  const port = Number(match[2])
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) return { raw, direct: false, endpoint: null }
+  return { raw, direct: false, endpoint: { host: match[1], port } }
+}
+
+/**
+ * 代理端点本身通不通：连不上是「代理坏了」，与目标站无关。
+ * 只做一次 TCP 连接，不做任何应用层握手。
+ */
+export function isProxyEndpointReachable(
+  endpoint: ResolvedProxyEndpoint,
+  timeoutMs = 1500
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (reachable: boolean): void => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolve(reachable)
+    }
+    const socket = connect({ host: endpoint.host, port: endpoint.port })
+    socket.setTimeout(timeoutMs, () => finish(false))
+    socket.once('connect', () => finish(true))
+    socket.once('error', () => finish(false))
+  })
+}

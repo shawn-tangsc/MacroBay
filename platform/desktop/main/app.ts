@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, session, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import { release } from 'node:os'
@@ -154,6 +154,7 @@ import { createDefaultAppSettings, supportedLanguages } from '../../settings/sch
 import { createSettingsStore } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
 import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
+import { isProxyEndpointReachable, parseResolvedProxy } from '../../network/proxySelfTest'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
@@ -1672,7 +1673,20 @@ function registerIpcHandlers(
     ) => {
       // PLAT-61 代理自检（同一通道、additive 参数）：无鉴权 GET，用 Electron net.fetch 走当前 session 代理。
       if (typeof options?.proxyProbeUrl === 'string' && options.proxyProbeUrl.trim()) {
-        return probeProviderProxyTarget(options.proxyProbeUrl.trim(), getPlatformFetch())
+        const targetUrl = options.proxyProbeUrl.trim()
+        // 证据链三项：网络栈的真实解析结果、代理端点可达性、经代理请求的状态码与耗时。
+        // 不看用户输入：用户填了代理不代表这次真的走了代理。
+        const resolvedProxy = await session.defaultSession.resolveProxy(targetUrl)
+        const route = parseResolvedProxy(resolvedProxy)
+        const endpointReachable = route.endpoint ? await isProxyEndpointReachable(route.endpoint) : null
+        const probe = await probeProviderProxyTarget(targetUrl, getPlatformFetch())
+        return {
+          ...probe,
+          resolvedProxy,
+          proxied: !route.direct,
+          endpointReachable,
+          proxyEndpoint: route.endpoint ? `${route.endpoint.host}:${route.endpoint.port}` : null
+        }
       }
       // PLAT-63：端点测试只接受已知端点类型 + http(s) 地址；校验先于任何网络请求。
       if (options?.endpointTest !== undefined) {

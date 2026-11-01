@@ -867,7 +867,11 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           status: typeof result?.status === 'number' ? result.status : null,
           durationMs: typeof result?.durationMs === 'number' ? result.durationMs : 0,
           reasonCode: typeof result?.reasonCode === 'string' ? result.reasonCode : null,
-          targetHost: typeof result?.targetHost === 'string' ? result.targetHost : resolveProviderHost(target)
+          targetHost: typeof result?.targetHost === 'string' ? result.targetHost : resolveProviderHost(target),
+          resolvedProxy: typeof result?.resolvedProxy === 'string' ? result.resolvedProxy : undefined,
+          proxied: typeof result?.proxied === 'boolean' ? result.proxied : undefined,
+          endpointReachable: typeof result?.endpointReachable === 'boolean' ? result.endpointReachable : null,
+          proxyEndpoint: typeof result?.proxyEndpoint === 'string' ? result.proxyEndpoint : null
         }
       })
     } catch {
@@ -1416,7 +1420,10 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
               <p
                 className={proxySelfTest.result.ok ? 'preference-proxy-probe-result ok' : 'preference-proxy-probe-result failed'}
                 data-proxy-self-test-result>
-                {formatProxySelfTestLine(proxySelfTest.result, resolveProxyDisplayLabel(), t.preferences)}
+                {formatProxySelfTestLine(proxySelfTest.result, t.preferences, {
+                  expectsProxy: settings.network.proxyMode === 'custom',
+                  fallbackProxyLabel: resolveProxyDisplayLabel()
+                })}
               </p>
             ) : null}
           </div>

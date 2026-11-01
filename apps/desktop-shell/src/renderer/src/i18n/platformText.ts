@@ -944,6 +944,8 @@ export type PlatformText = {
     proxySelfTestRunning: string
     proxySelfTestPassed: (status: number, seconds: string, proxy: string) => string
     proxySelfTestFailed: (code: string, host: string) => string
+    proxySelfTestNotApplied: (resolvedProxy: string) => string
+    proxySelfTestProxyUnreachable: (endpoint: string) => string
     proxyRejectedEmpty: string
     proxyRejectedUnsupportedProtocol: string
     proxyRejectedUnparsable: string
@@ -1971,6 +1973,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestRunning: '测试中…',
       proxySelfTestPassed: (status, seconds, proxy) => `代理自检：通过（HTTP ${status}，${seconds}s，经 ${proxy}）`,
       proxySelfTestFailed: (code, host) => `代理自检：失败（${code}）· 目标 ${host}`,
+      proxySelfTestNotApplied: (resolvedProxy) =>
+        `代理自检：未生效（设置为代理，但网络栈解析为「${resolvedProxy}」，这次没有走代理）`,
+      proxySelfTestProxyUnreachable: (endpoint) => `代理自检：失败（代理端点 ${endpoint} 连不上，与目标站无关）`,
       proxyRejectedEmpty: '请先填写代理地址。',
       proxyRejectedUnsupportedProtocol: '代理地址只支持 http、https、socks5 三种协议，请写成 `http://主机:端口`。',
       proxyRejectedUnparsable: '代理地址格式不对，请写成 `http://主机:端口` 或 `socks5://主机:端口`。',
@@ -3005,6 +3010,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestRunning: 'Testing…',
       proxySelfTestPassed: (status, seconds, proxy) => `Proxy check: passed (HTTP ${status}, ${seconds}s, via ${proxy})`,
       proxySelfTestFailed: (code, host) => `Proxy check: failed (${code}) · target ${host}`,
+      proxySelfTestNotApplied: (resolvedProxy) =>
+        `Proxy check: not in effect (a proxy is configured, but the network stack resolved "${resolvedProxy}", so this request went direct)`,
+      proxySelfTestProxyUnreachable: (endpoint) =>
+        `Proxy check: failed (the proxy endpoint ${endpoint} is unreachable, which has nothing to do with the target site)`,
       proxyRejectedEmpty: 'Enter a proxy address first.',
       proxyRejectedUnsupportedProtocol: 'Only http, https and socks5 addresses are supported; write it as `http://host:port`.',
       proxyRejectedUnparsable: 'That proxy address cannot be parsed; write it as `http://host:port` or `socks5://host:port`.',
