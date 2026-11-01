@@ -1,0 +1,45 @@
+/*
+ * 错态基座。颜色只承担「区分」，语义靠图标与文字：
+ * 错用 --danger，未知用 --muted-strong + 问号图标，灰度下仍可分辨（B0 契约 §4）。
+ */
+.error-state {
+  display: block;
+  color: var(--text);
+}
+
+.error-state[data-variant='error'] {
+  color: var(--danger);
+}
+
+.error-state[data-variant='unknown'] {
+  color: var(--muted-strong);
+}
+
+.error-state strong {
+  display: block;
+  color: var(--text-strong);
+}
+
+.error-state span {
+  display: block;
+  color: var(--muted);
+}
+
+.error-state details {
+  margin: 0;
+}
+
+.error-state summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.error-state-action {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}

@@ -40,7 +40,11 @@ describe('EmptyState', () => {
       />
     )
 
-    expect(markup).toContain('<button type="button" class="empty-state-action" disabled="" title="Pick an agent first.">Add one</button>')
+    // 禁用原因必须读屏可达：挂在 aria-describedby 指向的 note 上，不用 title（读屏不念、触屏不出现）。
+    expect(markup).toContain('aria-describedby="')
+    expect(markup).toContain('role="note"')
+    expect(markup).toContain('Pick an agent first.')
+    expect(markup).not.toContain('title="Pick an agent first."')
   })
 
   it('keeps the legacy class for migrated sites without adding layout rules', () => {

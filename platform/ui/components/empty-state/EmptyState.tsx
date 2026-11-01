@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react'
+import { useId, type ReactElement, type ReactNode } from 'react'
 
 /**
  * 空态的唯一组件（B0 契约：`docs-private/05-desktop/ui-state-components-contract.md`）。
@@ -16,7 +16,10 @@ export type StateLayout = 'block' | 'inline'
 export type EmptyStateAction = {
   label: string
   onPress: () => void
-  /** 有值即禁用，并把理由挂在 `title` 上；不要用一个禁用按钮当装饰。 */
+  /**
+   * 有值即禁用，并把理由挂到 `aria-describedby` 指向的 `role="note"` 节点上。
+   * 不用 `title`：读屏不念、触屏不出现——禁用原因必须两种入口都够得着。
+   */
   disabledReason?: string
 }
 
@@ -44,6 +47,8 @@ export function EmptyState({
   layout = 'block',
   className
 }: EmptyStateProps): ReactElement {
+  const noteId = useId()
+
   return (
     <div
       className={className ? `empty-state ${className}` : 'empty-state'}
@@ -57,10 +62,15 @@ export function EmptyState({
           type="button"
           className="empty-state-action"
           disabled={Boolean(action.disabledReason)}
-          title={action.disabledReason}
+          {...(action.disabledReason ? { 'aria-describedby': noteId } : {})}
           onClick={action.onPress}>
           {action.label}
         </button>
+      ) : null}
+      {action?.disabledReason ? (
+        <span id={noteId} role="note">
+          {action.disabledReason}
+        </span>
       ) : null}
     </div>
   )
