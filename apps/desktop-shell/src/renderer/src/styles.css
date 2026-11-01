@@ -3560,8 +3560,7 @@ h1 {
 .agent-tool-copy strong,
 .agent-config-section-button strong,
 .agent-empty-screen strong,
-.agent-message-empty strong,
-.agent-empty-catalog strong {
+.agent-message-empty strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text-strong);
@@ -3580,7 +3579,6 @@ h1 {
 .agent-config-section-button small,
 .agent-empty-screen span,
 .agent-message-empty span,
-.agent-empty-catalog span,
 .agent-empty-copy {
   color: var(--muted);
 }
@@ -6880,8 +6878,7 @@ h1 {
 }
 
 .agent-empty-screen,
-.agent-message-empty,
-.agent-empty-catalog {
+.agent-message-empty {
   display: grid;
   place-items: center;
   align-content: center;
@@ -7698,16 +7695,6 @@ h1 {
 .agent-tool-approval.danger.ant-tag {
   background: color-mix(in srgb, var(--danger) 10%, transparent);
   color: var(--danger);
-}
-
-.agent-empty-catalog {
-  min-height: 220px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 7px;
-}
-
-.agent-empty-catalog.compact {
-  min-height: 260px;
 }
 
 .agent-skill-marketplace-modal .ant-modal-content {
