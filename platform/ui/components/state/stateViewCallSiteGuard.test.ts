@@ -70,7 +70,7 @@ function callSitesIn(file: string): CallSite[] {
     const literalKeys = [...window.matchAll(/labelKey=\{?['"]([^'"]+)['"]\}?/g)].map((m) => m[1] ?? '')
     const constantKeys = [...window.matchAll(/STATE_VIEW_ACTION_KEYS\.(\w+)/g)]
       .map((m) => STATE_VIEW_ACTION_KEYS[m[1] as keyof typeof STATE_VIEW_ACTION_KEYS])
-      .filter((key): key is string => typeof key === 'string')
+      .filter((key) => typeof key === 'string')
     const actionKeys = [...literalKeys, ...constantKeys]
     sites.push({
       file: relative(ROOT, file),
