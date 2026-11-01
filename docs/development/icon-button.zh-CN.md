@@ -34,8 +34,8 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `size` | `'sm' \| 'md'` | 是 | `sm` 行内 22、`md` 卡片头与工具栏 24。 |
 | `onSelect` | `() => void` | 是 | 点击回调。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析入口；组件内零文案、不 import i18n。 |
-| `disabled` | `boolean` | 否 | 原生 `disabled`：不进 Tab 序列、点了不触发。 |
-| `tooltipKey` | `string` | 否 | 悬停**和聚焦**都出现的解释，同样只收键。不用原生 `title`。 |
+| `disabled` | `boolean` | 否 | 原生 `disabled`：不进 Tab 序列、点了不触发。与 `tooltipKey` 不能并存，一起传编译不过。 |
+| `tooltipKey` | `string` | 否 | 悬停**和聚焦**都出现的解释，同样只收键。不用原生 `title`；禁用时不许传。 |
 | `variant` | `'plain' \| 'solid'` | 否，默认 `plain` | `solid` 给工具栏一排加边框与底色。 |
 
 ### 尺寸
@@ -51,6 +51,12 @@ import { IconButton } from '@platform/ui/components/icon-button'
 ## 组件自己保证的几条
 
 - **`aria-label` 必填且来自键**：图标是装饰性的、带 `aria-hidden`，所以名字只念一遍。
+  `ariaLabelKey` / `tooltipKey` 保持开区间（每个站点读屏名都不同，平台枚举不出来），
+  代价由守卫补上：`iconButtonKeyGuard.test.ts` 扫源码，写成一句话、中文、或带空白的键即红。
+- **提示是可访问描述，不是装饰**：`Tooltip` 用 `aria-describedby` 把解析后的句子挂到触发元素上，
+  键盘 Tab 进来也读得到；原生 `title` 不存在。
+- **`disabled` 与 `tooltipKey` 不并存**：禁用的按钮不进 Tab、也接不到 focus，它的提示只有鼠标够得着。
+  原因重要就写成可见说明——这个组合在类型上就被拒掉。
 - **焦点环只有一处**：`:focus-visible` 2px accent 描边、offset 2；样式表里没有任何 `outline: none`。
 - **`type="button"`**：放在表单里不会顺手提交。
 - **不承载语义色**：图标按钮一律中性色。危险动作是带文字的按钮，不是红色图标。
@@ -77,4 +83,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 1. **尺寸**：DevTools 里按钮的 `width` / `height` 是 22 或 24。别的值说明这一处绕过了组件。
 2. **名字**：开着读屏聚焦按钮，念出来的是解析后的句子，不是键、也不是图标。
 3. **焦点**：Tab 能到、环看得见；禁用状态被 Tab 跳过。
-4. **提示**：聚焦就会出现解释；出现原生 `title` 小黄条说明走错了路。
+4. **提示**：聚焦就会出现解释，且触发元素的 `aria-describedby` 解析到那句解释；出现原生 `title`
+   小黄条说明走错了路。
+5. **不许禁用配 tooltip**：一个灰按钮、解释只在悬停时出现，键盘用户就是死路——它不该编译过，
+   也不许用外层包裹绕过去。

@@ -145,6 +145,47 @@ describe('IconButton', () => {
     expect(html).not.toMatch(/<button[^>]*\stitle=/)
   })
 
+  it('ties the described text to the trigger once the button takes focus', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<IconButton {...props({ tooltipKey: 'ui.test.hint' })} />)
+    })
+
+    const button = host.querySelector('button')!
+    await act(async () => {
+      button.focus()
+    })
+
+    // antd 把弹层挂在传送门里，一帧后才进 DOM；这里轮询而不是靠固定 sleep。
+    let described: string | null = null
+    for (let attempt = 0; attempt < 40 && described === null; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+      const id = button.getAttribute('aria-describedby')
+      if (id === null) continue
+      const target = document.getElementById(id)
+      if (target === null) continue
+      if (target.textContent === 'ui.test.hint') described = target.textContent
+    }
+
+    // 键盘用户 Tab 到它时，提示文字必须已经挂在可访问描述上；这是「禁用 + Tooltip」被禁掉的前提。
+    expect(described).toBe('ui.test.hint')
+  })
+
+  it('rejects "disabled with a tooltip" at compile time — keyboard users never reach it', () => {
+    const blocked: IconButtonProps = {
+      ...props(),
+      disabled: true,
+      // @ts-expect-error 禁用的按钮接不到 focus，Tooltip 只对鼠标生效；原因要写成可见说明。
+      tooltipKey: 'ui.test.hint'
+    }
+
+    expect(blocked).toBeDefined()
+  })
+
   it('carries no copy of its own: no literal Chinese outside comments, no spinner, no motion', () => {
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 

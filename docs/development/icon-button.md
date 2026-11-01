@@ -34,8 +34,8 @@ Source: `platform/ui/components/icon-button/`. Visual spec:
 | `size` | `'sm' \| 'md'` | yes | `sm` = 22 px inline, `md` = 24 px card header and toolbar. |
 | `onSelect` | `() => void` | yes | Click handler. |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver; the component holds no copy and imports no i18n. |
-| `disabled` | `boolean` | no | Native `disabled`: it leaves the tab order and stops firing. |
-| `tooltipKey` | `string` | no | Explanation on hover **and focus**, key only. There is no native `title`. |
+| `disabled` | `boolean` | no | Native `disabled`: it leaves the tab order and stops firing. Cannot be combined with `tooltipKey` — that combination does not compile. |
+| `tooltipKey` | `string` | no | Explanation on hover **and focus**, key only. There is no native `title`. Never together with `disabled`. |
 | `variant` | `'plain' \| 'solid'` | no, default `plain` | `solid` adds a border and a surface tint for toolbar rows. |
 
 ### Sizes
@@ -52,7 +52,15 @@ The pixel values live in one table in the component and are written to the eleme
 ## Rules the component enforces
 
 - **`aria-label` is mandatory and comes from a key.** The icon is decorative and `aria-hidden`, so
-  the name is spoken once, not twice.
+  the name is spoken once, not twice. `ariaLabelKey` and `tooltipKey` stay open strings because every
+  call site names its own trigger; `iconButtonKeyGuard.test.ts` keeps them key-shaped — a literal
+  sentence, a CJK label or an unresolved key turns that guard red.
+- **A tooltip is a description, not decoration.** `Tooltip` ties the resolved hint to the trigger
+  with `aria-describedby`; a keyboard user who tabs in gets the sentence, and there is no native
+  `title`.
+- **`disabled` and `tooltipKey` never coexist.** A disabled button leaves the tab order and cannot
+  take focus, so its tooltip would only ever be reachable with a mouse. When the reason matters,
+  write it as visible text; the type rejects the combination.
 - **One focus ring:** `:focus-visible` gets a 2 px accent outline with a 2 px offset. There is no
   `outline: none` anywhere in the stylesheet.
 - **`type="button"`:** an icon button inside a form never submits it.
@@ -83,4 +91,7 @@ The pixel values live in one table in the component and are written to the eleme
 2. **Name**: with the screen reader on, focusing the button announces the resolved sentence, not a
    key and not the icon.
 3. **Focus**: Tab reaches it, and the ring is visible. Disabled buttons are skipped by Tab.
-4. **Tooltip**: focusing the button shows the hint; a native `title` tooltip means the wrong path.
+4. **Tooltip**: focusing the button shows the hint, and the trigger's `aria-describedby` resolves to
+   that sentence. A native `title` tooltip means the wrong path.
+5. **No disabled tooltip**: a gray icon button whose explanation only appears on hover is a
+   keyboard dead end — it must not compile, and it must not be worked around with a wrapper.
