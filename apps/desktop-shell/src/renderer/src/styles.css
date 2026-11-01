@@ -372,6 +372,106 @@ button {
   outline-offset: -2px;
 }
 
+.notification-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 未读用强调色，不用红色：红在这套界面里代表「出错」，未读不是错误。 */
+.notification-bell-badge {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.notification-center-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notification-center-group-title {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notification-center-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notification-center-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.notification-center-row[data-state="unread"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.notification-center-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notification-center-copy strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.notification-center-copy span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.notification-center-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notification-center-confirm {
+  font-size: 11.5px;
+  color: var(--muted);
+  flex: 1 1 100%;
+}
+
+.notification-center-notice {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
 .topbar-actions {
   display: flex;
   height: 100%;

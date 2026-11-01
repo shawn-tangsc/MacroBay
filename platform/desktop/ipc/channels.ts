@@ -206,6 +206,8 @@ export const IpcChannels = {
   /** 发送一条测试通知：走真实 submit()，用来验证「链路通不通、系统放没放行」。 */
   notificationsSendTest: 'platform:notifications-send-test',
   notificationsAcknowledge: 'platform:notifications-acknowledge',
+  /** 真删除：只删已读记录（清空是标已读、单条收起是状态迁移，都不走这里）。 */
+  notificationsDeleteRead: 'platform:notifications-delete-read',
   notificationsDismiss: 'platform:notifications-dismiss',
   notificationsSnooze: 'platform:notifications-snooze',
   notificationsRequestDesktopPermission: 'platform:notifications-request-desktop-permission',

@@ -414,6 +414,8 @@ const api = {
     /** 清空 = 全部未读标为已读；返回 `{ unread, version }`，角标不必再查一次。 */
     markAllRead: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input),
     acknowledge: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }),
+    /** 真删除已读记录；返回实际删掉的条数。**未读不受影响**，与 `markAllRead` 不是一回事。 */
+    deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead),
     dismiss: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }),
     snooze: (id: string, until: string) => ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }),
     /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */

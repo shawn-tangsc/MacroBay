@@ -1016,6 +1016,10 @@ export type PlatformText = {
     centerDeleteReadDone: (count: string) => string
     centerDeleteReadEmpty: string
     centerCancel: string
+    centerRecordedGroup: string
+    centerExpand: string
+    centerCollapse: string
+    centerMergedCount: (count: string) => string
     channelsHeading: string
   }
   webSearch: {
@@ -2076,7 +2080,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       popupEnabled: '高优先级弹窗',
       popupDescription: '为高优先级事件提供更明显的应用内弹窗提示。',
       bell: '通知',
-      bellUnread: (count) => `通知，${count} 条未读`,
+      bellUnread: (count) => `${count} 条未读通知，打开通知中心`,
       centerTitle: '通知',
       centerUnreadGroup: '未读',
       centerEarlierGroup: '已读',
@@ -2087,7 +2091,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerDeleteReadConfirm: '删除所有已读通知？此操作不可撤销；未读通知不会被删除。',
       centerDeleteReadDone: (count) => `已删除 ${count} 条已读通知`,
       centerDeleteReadEmpty: '没有已读通知可删。',
-      centerCancel: '取消'
+      centerCancel: '取消',
+      centerRecordedGroup: '仅记录',
+      centerExpand: '展开',
+      centerCollapse: '收起',
+      centerMergedCount: (count) => `×${count}`
     },
     webSearch: {
       title: '网页搜索',
@@ -3166,7 +3174,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       popupEnabled: 'High-priority popups',
       popupDescription: 'Show stronger in-app popups for events that need immediate attention.',
       bell: 'Notifications',
-      bellUnread: (count) => `Notifications, ${count} unread`,
+      bellUnread: (count) => `${count} unread notifications, open the notification center`,
       centerTitle: 'Notifications',
       centerUnreadGroup: 'Unread',
       centerEarlierGroup: 'Earlier',
@@ -3177,7 +3185,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       centerDeleteReadConfirm: 'Delete every read notification? This cannot be undone; unread notifications are not deleted.',
       centerDeleteReadDone: (count) => `Deleted ${count} read notifications`,
       centerDeleteReadEmpty: 'There are no read notifications to delete.',
-      centerCancel: 'Cancel'
+      centerCancel: 'Cancel',
+      centerRecordedGroup: 'Recorded only',
+      centerExpand: 'Show more',
+      centerCollapse: 'Show less',
+      centerMergedCount: (count) => `×${count}`
     },
     webSearch: {
       title: 'Web Search',

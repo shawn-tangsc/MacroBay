@@ -28,6 +28,11 @@ const collapseWhitespace = (text: string): string => text.replace(/\s+/gu, ' ')
 const looseIndexOf = (source: string, needle: string): number =>
   collapseWhitespace(source).indexOf(collapseWhitespace(needle))
 const preloadSource = readSource('../preload/index.ts')
+/**
+ * 删除已读是**破坏性**通道，必须能一眼看出它落在哪一层：
+ * 渲染层只经 preload → 主进程 handler → 运行时，不许绕过去直接写文件。
+ */
+const notificationIpcSource = readSource('../../notifications/ipc/notificationIpcHandlers.ts')
 const taskIpcHelperSource = readSource('registerAgentTaskIpcHandlers.ts')
 const generatedProductManifestsSource = readSource('../../../products/generated/productManifests.ts')
 const generatedProductServicesSource = readSource('../../../products/generated/productServices.ts')
@@ -701,3 +706,15 @@ function preloadMethodBlock(source: string, method: string): string {
   const next = rest.search(/\n    [a-zA-Z]\w+: /)
   return source.slice(start, next < 0 ? undefined : start + method.length + 1 + next)
 }
+
+describe('notification delete-read surface', () => {
+  it('reaches the renderer only through the runtime, on its own channel', () => {
+    // 通道名独立，不与「清空 = 标已读」或「单条收起」复用。
+    expect(IpcChannels.notificationsDeleteRead).toBe('platform:notifications-delete-read')
+    // 主进程 handler 走运行时方法，不自己摸存储。
+    expect(notificationIpcSource).toContain('IpcChannels.notificationsDeleteRead')
+    expect(notificationIpcSource).toContain('getNotificationRuntime().deleteRead()')
+    // 渲染层入口：preload 暴露方法，但命名空间里只有这一个删除方法。
+    expect(preloadSource).toContain('deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead)')
+  })
+})
