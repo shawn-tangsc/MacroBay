@@ -81,3 +81,23 @@ describe('retention repository', () => {
     expect(repo.listCandidates().find((row) => row.topicId === 'huge')?.messageCount).toBe(10_000)
   })
 })
+
+describe('retention audit trail', () => {
+  it('drops records past the age cutoff and beyond the newest N', () => {
+    const db = createAssistantPlatformDatabase(':memory:')
+    const repo = createRetentionRepository(db)
+    const insert = db.connection.prepare(
+      `insert into assistant_retention_audits (id, ran_at, cutoff_at, reason, limit_value, deleted_topics, deleted_messages)
+       values (?, ?, ?, 'age', 365, 1, 1)`
+    )
+    insert.run('ancient', '2020-01-01T00:00:00.000Z', '2019-01-01T00:00:00.000Z')
+    for (let index = 0; index < 5; index += 1) {
+      insert.run(`recent-${index}`, `2026-10-0${index + 1}T00:00:00.000Z`, '2025-10-01T00:00:00.000Z')
+    }
+
+    const pruned = repo.pruneAudits('2025-01-01T00:00:00.000Z', 3)
+
+    expect(pruned).toBe(3)
+    expect(repo.listAudits().map((row) => row.id)).toEqual(['recent-4', 'recent-3', 'recent-2'])
+  })
+})

@@ -23,6 +23,8 @@ export type RetentionRepository = {
   /** 从最旧的开始删掉 `dropCount` 条消息。 */
   trimMessages: (topicId: string, dropCount: number) => number
   appendAudit: (entry: RetentionAuditEntry) => void
+  /** 裁掉早于 `cutoffIso` 或超出最近 `maxEntries` 条的记录，返回删掉多少条。 */
+  pruneAudits: (cutoffIso: string, maxEntries: number) => number
   listAudits: (limit?: number) => RetentionAuditEntry[]
 }
 
@@ -95,6 +97,21 @@ export function createRetentionRepository(db: AssistantPlatformDatabase): Retent
           entry.deletedTopics,
           entry.deletedMessages
         )
+    },
+
+    pruneAudits(cutoffIso, maxEntries) {
+      const byAge = db.connection
+        .prepare('delete from assistant_retention_audits where ran_at < ?')
+        .run(cutoffIso)
+      const byCount = db.connection
+        .prepare(
+          `delete from assistant_retention_audits
+            where id not in (
+              select id from assistant_retention_audits order by ran_at desc, id desc limit ?
+            )`
+        )
+        .run(Math.max(0, maxEntries))
+      return Number(byAge.changes ?? 0) + Number(byCount.changes ?? 0)
     },
 
     listAudits(limit = 50) {

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
+import type { RetentionAuditEntry, RetentionRepository } from '../repositories/retentionRepository'
+
 import {
+  applySessionRetention,
+  AUDIT_MAX_ENTRIES,
+  AUDIT_RETENTION_DAYS,
   DEFAULT_ASSISTANT_SESSION_RETENTION,
+  MAX_SESSIONS_PER_RUN,
   planSessionRetention,
   type SessionRetentionCandidate
 } from './assistantSessionRetention'
@@ -78,5 +84,49 @@ describe('assistant session retention', () => {
     )
 
     expect(decisions.map((decision) => decision.reason)).toEqual(['age'])
+  })
+})
+
+function stubRepo(candidates: SessionRetentionCandidate[]) {
+  const calls = {
+    deleted: [] as string[],
+    trimmed: [] as Array<[string, number]>,
+    audits: [] as RetentionAuditEntry[],
+    pruned: [] as Array<[string, number]>
+  }
+  const repo: RetentionRepository = {
+    listCandidates: () => candidates,
+    deleteTopic: (topicId: string) => { calls.deleted.push(topicId) },
+    trimMessages: (topicId: string, dropCount: number) => { calls.trimmed.push([topicId, dropCount]); return dropCount },
+    appendAudit: (entry: RetentionAuditEntry) => { calls.audits.push(entry) },
+    pruneAudits: (cutoffIso: string, maxEntries: number) => { calls.pruned.push([cutoffIso, maxEntries]); return 0 },
+    listAudits: () => calls.audits
+  }
+  return { calls, repo }
+}
+
+describe('assistant session retention run', () => {
+  it('handles at most the per-run cap and leaves the rest for tomorrow', () => {
+    const many = Array.from({ length: 600 }, (_, index) =>
+      candidate({ topicId: `topic-${index}`, updatedAt: '2020-01-01T00:00:00.000Z' })
+    )
+    const { calls, repo } = stubRepo(many)
+
+    const outcome = applySessionRetention(repo, DEFAULT_ASSISTANT_SESSION_RETENTION, NOW)
+
+    expect(calls.deleted).toHaveLength(MAX_SESSIONS_PER_RUN)
+    expect(outcome.deletedTopics).toBe(MAX_SESSIONS_PER_RUN)
+  })
+
+  it('prunes its own audit trail in the same run instead of letting it grow', () => {
+    const { calls, repo } = stubRepo([candidate({ updatedAt: '2020-01-01T00:00:00.000Z' })])
+
+    applySessionRetention(repo, DEFAULT_ASSISTANT_SESSION_RETENTION, NOW)
+
+    expect(calls.pruned).toHaveLength(1)
+    const [cutoff, maxEntries] = calls.pruned[0]!
+    expect(maxEntries).toBe(AUDIT_MAX_ENTRIES)
+    const expectedCutoff = new Date(NOW.getTime() - AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    expect(cutoff).toBe(expectedCutoff)
   })
 })

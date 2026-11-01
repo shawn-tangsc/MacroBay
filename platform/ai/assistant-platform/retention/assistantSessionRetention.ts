@@ -4,6 +4,13 @@ import type { RetentionAuditEntry, RetentionRepository } from '../repositories/r
 
 export type SessionRetentionReason = 'age' | 'message-count'
 
+/** 单次扫描最多处理多少个会话；超出的留到次日。这是上限，不是目标。 */
+export const MAX_SESSIONS_PER_RUN = 500
+
+/** 裁剪记录自身的保留期：180 天或最近 500 条，先到为准。 */
+export const AUDIT_RETENTION_DAYS = 180
+export const AUDIT_MAX_ENTRIES = 500
+
 export type AssistantSessionRetentionPolicy = {
   /** 会话最后更新时间早于这么多天即淘汰。 */
   maxAgeDays: number
@@ -82,6 +89,7 @@ export type SessionRetentionOutcome = {
   deletedTopics: number
   deletedMessages: number
   audits: RetentionAuditEntry[]
+  prunedAudits: number
 }
 
 /**
@@ -94,7 +102,9 @@ export function applySessionRetention(
   policy: AssistantSessionRetentionPolicy = DEFAULT_ASSISTANT_SESSION_RETENTION,
   now: Date = new Date()
 ): SessionRetentionOutcome {
-  const decisions = planSessionRetention(repo.listCandidates(), policy, now)
+  // 一次只处理上限以内的会话：删除是逐条语句，几万条会让写锁反复争用，用户体感是
+  // 「那天早上应用卡」。剩下的次日再来，宁可慢一天，也不要卡一次。
+  const decisions = planSessionRetention(repo.listCandidates(), policy, now).slice(0, MAX_SESSIONS_PER_RUN)
   const ranAt = now.toISOString()
   const cutoffAt = new Date(now.getTime() - policy.maxAgeDays * 24 * 60 * 60 * 1000).toISOString()
 
@@ -130,9 +140,16 @@ export function applySessionRetention(
     audits.push(entry)
   }
 
+  // 记录表自己也要有人管：只增不减正是我们在清的那种病。清理在同一个任务里做，不另开 job。
+  const prunedAudits = repo.pruneAudits(
+    new Date(now.getTime() - AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+    AUDIT_MAX_ENTRIES
+  )
+
   return {
     deletedTopics: decisions.filter((decision) => decision.action === 'delete-topic').length,
     deletedMessages: audits.reduce((sum, audit) => sum + audit.deletedMessages, 0),
-    audits
+    audits,
+    prunedAudits
   }
 }
