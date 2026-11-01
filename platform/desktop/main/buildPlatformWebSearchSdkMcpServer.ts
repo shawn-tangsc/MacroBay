@@ -1,5 +1,6 @@
 import type { WebSearchResponse } from '../../ai/web-search/contracts/webSearchContracts'
 import {
+  guardPlatformWebSearchResults,
   platformWebSearchServerKey,
   platformWebSearchSessionToolName
 } from '../../ai/agent-platform/tools/platformWebTools'
@@ -102,7 +103,11 @@ export async function buildPlatformWebSearchSdkMcpServer(input: {
           query,
           ...(asOf ? { asOf } : {}),
           providerId: response.providerId,
-          results: filterResultsAfterCutoff(response.results, asOf)
+          // Guarded field by field so the result stays one parseable JSON object.
+          results: guardPlatformWebSearchResults(
+            filterResultsAfterCutoff(response.results, asOf),
+            response.providerId
+          )
         })
       } catch {
         return textResult({ state: 'unavailable', reason: 'search-failed' })
