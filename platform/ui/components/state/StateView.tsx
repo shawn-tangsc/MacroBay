@@ -32,9 +32,11 @@ export type {
  * `state` 是判别联合不是平铺对象，`reasonCode` 是按状态分家的闭集：`<StateView state="empty" />`
  * 与「empty 配 error 的码」都编译不过，否则就会落回一句兜底文案——而那正是「暂无数据」的撒谎方式。
  *
- * 动作位是**场景属性**，不是 `state × reason` 的必然属性，所以 `action` 一律可选：
+ * 动作位是**场景属性**，不是 `state × reason` 的必然属性，所以 `action` 一律可选（契约 §16）：
  * - 「还没跑过」的正解是「现在跑一次」，但「这段时间确实没有消息」是事实、没有可做的事；
- * - 有没有动作由调用方按场景判，类型不替人判（§13 2026-11-02 裁定）。
+ * - 有没有动作由调用方按场景判，类型不替人判（契约 §16）。替代保障是 `queryOutcome.ts` 的
+ *   `STATE_VIEW_ACTION_RULES` 表 + 两条扫描守卫：文档动作列与表逐条相等；调用点标 `required`
+ *   缺动作、标 `forbidden` 带动作都红。
  *
  * 文档判据（验收用，不是类型）：`error` 与可恢复的 `empty` 必须给动作；`empty · not-yet`、
  * `disabled · capability-not-wired` 可以没有；`permission · not-granted` 给的是「去系统设置」，
@@ -89,11 +91,8 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.select-target',
   'ui.state.action.restart-app',
   'ui.state.action.open-system-settings',
-  'ui.state.action.run-now',
   'ui.state.action.refresh',
-  'ui.state.action.widen-time-window',
-  'ui.state.action.focus-form',
-  'ui.state.action.open-assistant'
+  'ui.state.action.widen-time-window'
 ] as const
 
 export type StateViewTextKey = (typeof STATE_VIEW_TEXT_KEYS)[number]
@@ -113,17 +112,34 @@ type StateViewBase = {
   /** 尺寸词只有一个来源（§3）：`lg` 整页 220、`md` 卡内 80、`sm` 本批不开放。 */
   size?: StateSize
   className?: string
+  /** 产品原因句入口（§17）；只覆盖原因句这一格，`normal` / `loading` 传了编译不过。 */
+  productReason?: ProductReason
 }
 
 type StateDetails = { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
+
+/**
+ * 产品原因句入口（契约 §17）。**只覆盖原因句这一格**：标题/状态词、图标、播报、动作仍归平台。
+ *
+ * - `key` 必须带产品前缀（`mi.newsSentiment.*`），由守卫扫；
+ * - `params` 只收**已经展示好**的字符串——时刻必须先经平台时间格式化器算好再传，
+ *   所以这里不收 `number`，数字进不来；
+ * - 缺键、空串、抛错**一律回落平台句**：原因句是这一格唯一的解释，空串等于「没有理由」；
+ * - 节点带 `data-reason-source`，回落不许静默，调用点测试能断言走的是哪一路。
+ */
+export type ProductReason = {
+  key: string
+  params?: Record<string, string>
+  resolve: (key: string, params?: Record<string, string>) => string
+}
 
 /**
  * 每个 `reasonCode` 单独一分支（§13）：它们不只是「哪些值合法」，还决定 `action` 与 `details`
  * 的归属。写成 `state + Exclude<code>` 的联合会把「这个码能不能带动作」这一层丢掉。
  */
 export type StateViewProps =
-  | (StateViewBase & { state: 'normal'; children: ReactNode })
-  | (StateViewBase & { state: 'loading' })
+  | (StateViewBase & { state: 'normal'; children: ReactNode; productReason?: never })
+  | (StateViewBase & { state: 'loading'; productReason?: never })
   | (StateViewBase & { state: 'empty'; reasonCode: 'never-created'; action?: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'filtered-out'; action?: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-bound'; action?: StateViewAction })
@@ -235,6 +251,22 @@ export function StateView(props: StateViewProps): ReactElement {
 
   const { state, reasonCode } = props
   const keys = stateViewTextKeys(state, reasonCode)
+  const platformReason = resolveText(keys.reason)
+  // 产品句只在 productReason 存在时生效，且必须问得出一句非空的话；否则回落平台句。
+  const productReason = 'productReason' in props ? props.productReason : undefined
+  let reasonText = platformReason
+  let reasonSource = 'platform'
+  if (productReason !== undefined) {
+    try {
+      const candidate = productReason.resolve(productReason.key, productReason.params)
+      if (typeof candidate === 'string' && candidate.trim() !== '') {
+        reasonText = candidate
+        reasonSource = 'product'
+      }
+    } catch {
+      // 产品解析器抛错不该把整屏打成白屏：回落平台句，并让 data-reason-source 说出这件事。
+    }
+  }
   // `details` 只挂在 error 上（判别联合已挡住别的态传它），收成局部量给 JSX 收窄。
   const details = state === 'error' ? props.details : undefined
 
@@ -250,7 +282,9 @@ export function StateView(props: StateViewProps): ReactElement {
         className="state-view__live"
         {...(state === 'error' ? { role: 'status', 'aria-live': 'polite' } : {})}>
         <strong className="state-view__title">{resolveText(keys.title)}</strong>
-        <span className="state-view__reason">{resolveText(keys.reason)}</span>
+        <span className="state-view__reason" data-reason-source={reasonSource}>
+          {reasonText}
+        </span>
       </span>
       {details === undefined ? null : (
         <details className="state-view__details">

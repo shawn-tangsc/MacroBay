@@ -51,3 +51,58 @@ describe('解析器不许吃掉键', () => {
     expect(offenders).toEqual([])
   })
 })
+
+/**
+ * §17 的同一类病：产品原因句改成「键 + 参数」之后，`resolve: (key) => t(key)` 会编译通过、
+ * 键形状也对，但它把 `params` 吃掉了——界面上直接露出 `{moment}`。守卫只管能机械判的那半边：
+ * 键必须带产品前缀、传了 `params` 就必须让 `resolve` 有第二个参数。
+ */
+const PRODUCT_REASON_BLOCK = /productReason=\{\{([\s\S]*?)\}\}/g
+const PRODUCT_PREFIX = /^[a-z][a-z0-9]*\./
+const TWO_PARAM_ARROW = /resolve:\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)/
+
+export function productReasonOffenders(file: string, text: string): string[] {
+  const offenders: string[] = []
+  for (const match of codeOnly(text).matchAll(PRODUCT_REASON_BLOCK)) {
+    const block = match[1] ?? ''
+    const keyMatch = block.match(/\bkey:\s*'([^']+)'/)
+    if (!keyMatch) {
+      offenders.push(`${file}: productReason 没有字面键，判断不了前缀`)
+      continue
+    }
+    const dictKey = keyMatch[1] ?? ''
+    if (dictKey.startsWith('ui.')) {
+      offenders.push(`${file}: 产品原因句不能借用平台前缀（${dictKey}）`)
+    } else if (!PRODUCT_PREFIX.test(dictKey)) {
+      offenders.push(`${file}: 产品原因句的键没有产品前缀（${dictKey}）`)
+    }
+    const passesParams = /\bparams:/.test(block)
+    // 传了参数却给一个单参箭头：参数在解析器里被吃掉，界面上会露出 {占位}。
+    if (passesParams && /resolve:\s*\(/.test(block) && !TWO_PARAM_ARROW.test(block)) {
+      offenders.push(`${file}: 传了 params，但 resolve 只有一个参数，参数会被吃掉`)
+    }
+  }
+  return offenders
+}
+
+describe('产品原因句：键带前缀、参数不被吃掉（§17）', () => {
+  it('产品与外壳源码里的 productReason 都守规矩', () => {
+    const offenders = SOURCE_ROOTS
+      .flatMap((root) => collectSourceFiles(resolve(ROOT, root)))
+      .flatMap((file) => productReasonOffenders(file, readFileSync(resolve(ROOT, file), 'utf8')))
+
+    expect(offenders).toEqual([])
+  })
+
+  it('catches each shape it claims to catch', () => {
+    const good = `productReason={{ key: 'mi.newsSentiment.staleSince', params: { moment: momentText }, resolve: (k, p) => t(k, p) }}`
+    const platformPrefix = `productReason={{ key: 'ui.state.empty', resolve: (k, p) => t(k, p) }}`
+    const noPrefix = `productReason={{ key: 'staleSince', resolve: (k, p) => t(k, p) }}`
+    const eatsParams = `productReason={{ key: 'mi.newsSentiment.staleSince', params: { moment: momentText }, resolve: (k) => t(k) }}`
+
+    expect(productReasonOffenders('good.tsx', good)).toEqual([])
+    expect(productReasonOffenders('prefix.tsx', platformPrefix).length).toBe(1)
+    expect(productReasonOffenders('plain.tsx', noPrefix).length).toBe(1)
+    expect(productReasonOffenders('eats.tsx', eatsParams).length).toBe(1)
+  })
+})

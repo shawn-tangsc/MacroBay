@@ -352,3 +352,94 @@ describe('窗口三种「没有」互不顶替（§3：查过没有 ≠ 还没�
     expect(new Set(reasons).size).toBe(3)
   })
 })
+
+describe('产品原因句入口（§17：只覆盖原因句，参数必须走到）', () => {
+  /** 产品文案表的替身：与产品一样，句子里带 `{参数名}` 占位。 */
+  const TEMPLATES: Record<string, string> = {
+    'mi.newsSentiment.staleSince': '数据已过期 · 最后更新 {moment}'
+  }
+  const productResolve = (dictKey: string, params?: Record<string, string>): string =>
+    (TEMPLATES[dictKey] ?? '').replace(/\{(\w+)\}/g, (_whole, name: string) => params?.[name] ?? `{${name}}`)
+
+  const stale: StateViewProps = {
+    state: 'disabled',
+    reasonCode: 'target-disabled',
+    resolveText: key,
+    productReason: {
+      key: 'mi.newsSentiment.staleSince',
+      params: { moment: '2026-11-02 01:20 (UTC+08:00)' },
+      resolve: productResolve
+    }
+  }
+
+  it('renders the product sentence with its parameter filled in, never the raw placeholder', () => {
+    const html = markup(stale)
+
+    expect(html).toContain('数据已过期 · 最后更新 2026-11-02 01:20 (UTC+08:00)')
+    // 「参数有路可走」的判据就在这里：占位符不许原样出现在结果里。
+    expect(html).not.toContain('{moment}')
+    expect(html).toContain('data-reason-source="product"')
+  })
+
+  it('keeps the title on the platform even when the reason is the product sentence', () => {
+    const html = markup(stale)
+
+    expect(html).toContain('data-reason-source="product"')
+    // 标题仍是 `ui.state.<state>` 键解析出来的，产品改不到。
+    expect(html).toContain('ui.state.disabled')
+  })
+
+  it('falls back to the platform sentence when the product asks for a missing key', () => {
+    const html = markup({
+      state: 'empty',
+      reasonCode: 'not-yet',
+      resolveText: key,
+      productReason: { key: 'mi.newsSentiment.notInTheTable', resolve: productResolve }
+    })
+
+    expect(html).toContain('data-reason-source="platform"')
+    expect(html).toContain('ui.state.empty.reason.not-yet')
+  })
+
+  it('falls back instead of leaving the reason blank when the product returns nothing', () => {
+    for (const resolve of [() => '', () => '   ']) {
+      const html = markup({
+        state: 'empty',
+        reasonCode: 'not-yet',
+        resolveText: key,
+        productReason: { key: 'mi.newsSentiment.emptyText', resolve }
+      })
+
+      expect(html).toContain('data-reason-source="platform"')
+      expect(html).toContain('ui.state.empty.reason.not-yet')
+      expect(html).not.toContain('data-reason-source="product"')
+    }
+  })
+
+  it('does not take the screen down when a product resolver throws', () => {
+    const html = markup({
+      state: 'error',
+      reasonCode: 'unreadable',
+      resolveText: key,
+      productReason: {
+        key: 'mi.newsSentiment.boom',
+        resolve: () => {
+          throw new Error('product table exploded')
+        }
+      }
+    })
+
+    expect(html).toContain('data-reason-source="platform"')
+    expect(html).toContain('ui.state.error.reason.unreadable')
+  })
+
+  it('only offers the entry on the four states that have a reason sentence', () => {
+    // @ts-expect-error `normal` 没有原因句，传 `productReason` 不成立。
+    const onNormal: StateViewProps = { state: 'normal', resolveText: key, productReason: { key: 'mi.a', resolve: productResolve } }
+    // @ts-expect-error `loading` 的句子归 LoadingState，同样没有这一格。
+    const onLoading: StateViewProps = { state: 'loading', resolveText: key, productReason: { key: 'mi.a', resolve: productResolve } }
+
+    expect(onNormal).toBeDefined()
+    expect(onLoading).toBeDefined()
+  })
+})

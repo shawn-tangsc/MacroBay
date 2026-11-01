@@ -65,29 +65,29 @@ separate them by colour.
 The reason codes are a closed set. The action column is **a review criterion, not a type rule**
 (2026-11-02): whether a state has an action depends on the situation, not on `state × reason`.
 `error` and a recoverable `empty` must carry one; `empty · not-yet` and
-`disabled · capability-not-wired` may carry none. Use `run-now` for "run it once now", `refresh`
-for "get a newer copy", `retry` only when the previous attempt failed — using `retry` for a refresh
-tells the reader a stale value failed.
+`disabled · capability-not-wired` may carry none. `refresh` means "get a newer copy"; `retry` only when the previous attempt failed — using `retry`
+for a refresh tells the reader a stale value failed. There is no "run it once now" key: a code that
+needs one gets the code and the key in the same change, never the key on its own.
 
 | `state` | `reasonCode` | Action | Meaning |
 | --- | --- | --- | --- |
-| `empty` | `never-created` | expected: create | Nothing has ever been created. |
-| `empty` | `filtered-out` | expected: clear the filter | There is data; the filter hides it. |
-| `empty` | `no-target-bound` | expected: bind a target | No target is bound yet. |
-| `empty` | `nothing-enabled` | expected: enable | Nothing is enabled. |
-| `empty` | `none-installed` | expected: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
-| `empty` | `no-target-selected` | expected: focus the selector | A target exists to pick, but none is selected yet. |
-| `empty` | `not-yet` | never | It only appears once something has happened. |
-| `empty` | `older-than-window` | expected: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
-| `empty` | `nothing-in-window` | expected: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
-| `error` | `unreadable` | expected: retry | The data could not be read — this is not "there is none". |
-| `error` | `unavailable` | expected: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
-| `error` | `operation-failed` | expected: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
-| `error` | `needs-restart` | expected: restart the app | A local interface is missing; only a restart loads it. |
-| `disabled` | `capability-not-wired` | never | The platform side is not connected; nothing is wrong on the reader's side. |
-| `disabled` | `target-disabled` | expected: enable | The target was switched off. |
-| `disabled` | `precondition-unsaved` | expected: save | The form has unsaved changes; saving unlocks it. |
-| `permission` | `not-granted` | expected: open system settings | Only for capabilities where the system can answer whether permission was granted. |
+| `empty` | `never-created` | required: create | Nothing has ever been created. |
+| `empty` | `filtered-out` | required: clear the filter | There is data; the filter hides it. |
+| `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
+| `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
+| `empty` | `none-installed` | required: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
+| `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
+| `empty` | `not-yet` | forbidden | It only appears once something has happened; a button here would be a fake action. |
+| `empty` | `older-than-window` | required: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
+| `empty` | `nothing-in-window` | required: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
+| `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
+| `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
+| `error` | `operation-failed` | required: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
+| `error` | `needs-restart` | required: restart the app | A local interface is missing; only a restart loads it. |
+| `disabled` | `capability-not-wired` | forbidden | The platform side is not connected; nothing is wrong on the reader's side. |
+| `disabled` | `target-disabled` | required: enable | The target was switched off. |
+| `disabled` | `precondition-unsaved` | required: save | The form has unsaved changes; saving unlocks it. |
+| `permission` | `not-granted` | required: open system settings | Only for capabilities where the system can answer whether permission was granted. |
 
 ### Sizes
 
@@ -138,6 +138,36 @@ a pixel value from a call site, and do not write a second `min-height` in page C
 // Wrong: hand-written copy, a boolean switch, a pixel size, an icon prop.
 <StateView state="empty" title="No data" spinner size={120} icon={<Empty />} />
 ```
+
+### A product sentence, with its parameters
+
+The platform code set does not grow product codes. When a product really needs its own wording for
+one situation, it overrides **the reason slot only** — the title, icon, live region and action stay
+platform-owned:
+
+```tsx
+<StateView
+  state="disabled"
+  reasonCode="target-disabled"
+  productReason={{
+    key: 'mi.newsSentiment.staleSince',             // product prefix; never ui.*
+    params: { moment: formatInstant(updatedAt) },   // already formatted; strings only
+    resolve: (key, params) => productT(key, params) // the second argument must be taken
+  }}
+  action={{ labelKey: 'ui.state.action.refresh', onSelect: refresh }}
+/>
+```
+
+- `params` carries **already formatted** display values: a time is formatted by the platform's time
+  formatter before it is passed, so a product cannot sneak a `number` or a `Date` in, and cannot
+  call `toLocaleString()` itself.
+- A missing key, an empty string or a thrown error **falls back to the platform sentence**. The
+  reason node carries `data-reason-source="product" | "platform"`, so a call-site test can assert
+  which path rendered.
+- `resolve` must take both arguments: `(key) => …` eats the parameters and leaks `{moment}` into the
+  UI — `textResolverGuard` turns red on it.
+- It exists only on the four states that have a reason sentence (`empty` / `error` / `disabled` /
+  `permission`); passing it on `normal` / `loading` does not compile.
 
 ## What a state decision may decide
 

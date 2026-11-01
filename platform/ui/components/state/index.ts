@@ -5,6 +5,7 @@ export type {
   EmptyReasonCode,
   ErrorReasonCode,
   PermissionReasonCode,
+  ProductReason,
   StateViewAction,
   StateViewProps,
   StateViewState,

@@ -129,6 +129,28 @@ import { StateView } from '@platform/ui/components/state'
 <StateView state="empty" title="暂无数据" spinner size={120} icon={<Empty />} />
 ```
 
+### 产品自己的原因句（带参数）
+
+平台码表不扩产品码。产品确实需要自己那句话时，只覆盖**原因句这一格**——标题、图标、播报、动作仍归平台：
+
+```tsx
+<StateView
+  state="disabled"
+  reasonCode="target-disabled"
+  productReason={{
+    key: 'mi.newsSentiment.staleSince',            // 必须带产品前缀，不许用 ui.*
+    params: { moment: formatInstant(updatedAt) },  // 已经格式化好的展示值，只收字符串
+    resolve: (key, params) => productT(key, params) // 第二个参数必须接住
+  }}
+  action={{ labelKey: 'ui.state.action.refresh', onSelect: refresh }}
+/>
+```
+
+- `params` 只收**已经格式化好**的字符串：时刻先经平台时间格式化器算好再传，所以产品没法从这里塞数字或 `Date`，也没法自己 `toLocaleString()`；
+- 缺键、空串、抛错**一律回落平台句**，原因格带 `data-reason-source="product" | "platform"`，调用点测试据此断言走的是哪一路；
+- `resolve` 必须收两个参数：写成 `(key) => …` 会把参数吃掉，界面上直接露出 `{时刻}`——守卫 `textResolverGuard` 当场红；
+- 只存在于四种有原因句的态（`empty` / `error` / `disabled` / `permission`）；`normal` / `loading` 传了编译不过。
+
 ## 状态判定可以决定什么
 
 一次状态判定只产出一个 `(state, reasonCode)` 元组，别的都不产。下面三件事由数据决定，不由状态决定：
