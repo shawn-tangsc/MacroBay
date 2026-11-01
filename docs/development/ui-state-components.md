@@ -37,7 +37,7 @@ instead of falling back to a generic sentence.
 | `state` | `StateViewState` | always | Which of the six states this region is in. |
 | `resolveText` | `(key: string) => string` | always | The caller's text resolver. The component holds no copy and imports no i18n. |
 | `reasonCode` | a closed set, one per state | `empty` / `error` / `disabled` / `permission` | A **code**, never a sentence. The key is `ui.state.<state>.reason.<code>`. A code that belongs to another state does not compile. |
-| `action` | `{ labelKey, onSelect }` | `empty` except `not-yet`; `disabled` / `target-disabled`; optional for `error`; never for `not-yet`, `capability-not-wired`, `permission` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
+| `action` | `{ labelKey, onSelect }` | `empty` except `not-yet`; `error`; `disabled` / `target-disabled`; `permission`; never for `not-yet`, `capability-not-wired` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
 | `details` | `{ summaryKey, bodyKey }` | `error` only | Troubleshooting detail, folded by default. |
 | `size` | `'sm' \| 'md' \| 'lg'` | optional, default `md` | `lg` = full page (220), `md` = inside a card (80). `sm` is reserved and must not be used yet. |
 | `children` | `ReactNode` | `normal` only | The region's own content. |
@@ -55,7 +55,7 @@ Icons come from one table inside the component and are chosen by `state` alone.
 | `empty` | circle | no | Why there is nothing (not configured / filtered out / not collected yet). |
 | `error` | `!` | `role="status"` + `aria-live="polite"` | What failed and what the reader can do. |
 | `disabled` | circle-slash | no | Why it cannot be used, and one action that unlocks it — or none when the platform side is not wired. |
-| `permission` | lock | no | What is missing and who grants it. No action in this batch: the local single-user build has no administrator to ask. |
+| `permission` | lock | no | What is missing and who grants it, plus one action that opens system settings. Only for capabilities the system can answer for. |
 
 `disabled` and `permission` share the same neutral colour on purpose. They stay distinguishable in
 grayscale because the outline differs (circle-slash vs lock) and the action slot differs. Do not
@@ -70,11 +70,11 @@ The reason codes are a closed set. The action column is enforced by the type, no
 | `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
 | `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
 | `empty` | `not-yet` | never | It only appears once something has happened. |
-| `error` | `unreadable` | retry, when the reader can | The data could not be read — this is not "there is none". |
-| `error` | `unavailable` | check the source, when the reader can | The source itself is unavailable; retrying blindly achieves nothing. |
+| `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
+| `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
 | `disabled` | `capability-not-wired` | never | The platform side is not connected; nothing is wrong on the reader's side. |
 | `disabled` | `target-disabled` | required: enable | The target was switched off. |
-| `permission` | `not-granted` | never in this batch | Only for capabilities where the system can answer whether permission was granted. |
+| `permission` | `not-granted` | required: open system settings | Only for capabilities where the system can answer whether permission was granted. |
 
 ### Sizes
 
@@ -126,6 +126,6 @@ a pixel value from a call site, and do not write a second `min-height` in page C
    `80px` for `md`. Read the computed value, do not eyeball the screenshot.
 2. **Live regions**: only `error` may carry `aria-live`, and it must also be the only live region on
    screen. `loading` already has one, inside `LoadingState` — the page must not add a second.
-3. **No action placeholder**: `permission` without `action` renders no button and no empty row.
+3. **No action placeholder**: `capability-not-wired` without `action` renders no button and no empty row; `permission` always carries one "open system settings", and that handler must really open the system settings — a required action with an empty handler is a dead button moved, not fixed.
 4. **Grayscale**: a filtered screenshot of `disabled` and `permission` must still tell them apart.
 5. **No copy in the component**: grep the component for sentences; it must contain none.

@@ -17,9 +17,9 @@ import './stateView.css'
  *
  * 动作位按「读者能不能自己解决」定，不是按状态定：
  * - `empty · not-yet`、`disabled · capability-not-wired`：读者没有可做的动作，**不许传入动作**；
- * - `empty` 其余码、`disabled · target-disabled`：必须给一个点了就能解决的动作；
- * - `permission`：本批一律不给动作——本地单用户版没有「管理员」这个人，点了就是死路；
- * - `error`：动作可选（能重试就给，不能就别给假按钮）。
+ * - `empty` 其余码、`disabled · target-disabled`、`error`：必须给一个点了就能解决的动作；
+ * - `permission · not-granted`：必须给「去系统设置」——码表把它限死在系统能回答授没授权的
+ *   能力上，能开启它的是系统设置，按钮真能把人送过去。`contact-admin` 那类假动作仍然禁止。
  *
  * 播报：**只有 `error` 进 live region**，且只包标题与原因。`role="alert"` 是 assertive，会打断
  * 正在朗读的内容并把按钮一起念出来，所以用 `status` + `polite`。`empty` / `disabled` /
@@ -57,19 +57,14 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.enable',
   'ui.state.action.retry',
   'ui.state.action.check-source',
-  'ui.state.action.grant',
-  'ui.state.action.open-settings',
-  'ui.state.action.contact-admin'
+  'ui.state.action.open-system-settings'
 ] as const
 
 export type StateViewTextKey = (typeof STATE_VIEW_TEXT_KEYS)[number]
 
-/** 尺寸词只有一个来源：`StateSize`（§3）。这里只给并行的旧名字一个落点，语义不变。 */
-export type StateViewSize = StateSize
-
 export type StateViewAction = {
-  /** 动作文案的 i18n 键；不收字面量。 */
-  labelKey: string
+  /** 动作文案的 i18n 键；不收字面量，且必须是本组件码表里的键。 */
+  labelKey: StateViewTextKey
   onSelect: () => void
 }
 
@@ -104,13 +99,13 @@ export type StateViewProps =
   | (StateViewBase & {
       state: 'error'
       reasonCode: ErrorReasonCode
-      action?: StateViewAction
+      action: StateViewAction
       /** 排障详情，默认折叠，不进 live region。 */
-      details?: { summaryKey: string; bodyKey: string }
+      details?: { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
     })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: never })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action: StateViewAction })
-  | (StateViewBase & { state: 'permission'; reasonCode: PermissionReasonCode; action?: never })
+  | (StateViewBase & { state: 'permission'; reasonCode: PermissionReasonCode; action: StateViewAction })
 
 /** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，本批不给固定高度。 */
 const MIN_HEIGHT: Record<StateSize, number | undefined> = { sm: undefined, md: 80, lg: 220 }

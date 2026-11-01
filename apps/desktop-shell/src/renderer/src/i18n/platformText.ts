@@ -1291,10 +1291,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.error.reason.unreadable': '数据没有读出来，可以重试',
       'ui.state.error.reason.unavailable': '数据源本身不可用，先检查来源设置',
       'ui.state.disabled': '这个功能当前不可用',
-      'ui.state.disabled.reason.capability-not-wired': '平台侧还没有接通，用户没有做错，也没有可做的操作',
+      'ui.state.disabled.reason.capability-not-wired': '这项能力平台侧还没接通，不是你的问题；现在没有可做的操作',
       'ui.state.disabled.reason.target-disabled': '目标已经被停用，先重新启用',
       'ui.state.permission': '没有查看权限',
-      'ui.state.permission.reason.not-granted': '缺少这项权限，需要先开启',
+      'ui.state.permission.reason.not-granted': '这项由系统设置控制，要在系统设置里开启',
       'ui.state.error.details': '技术详情',
       'ui.state.action.create': '创建',
       'ui.state.action.clear-filter': '清除筛选',
@@ -1302,9 +1302,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.enable': '去启用',
       'ui.state.action.retry': '重试',
       'ui.state.action.check-source': '检查来源',
-      'ui.state.action.grant': '去开启',
-      'ui.state.action.open-settings': '打开设置',
-      'ui.state.action.contact-admin': '联系管理员'
+      'ui.state.action.open-system-settings': '去系统设置'
     },
     windowChrome: {
       controls: '窗口控制',
@@ -2378,10 +2376,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.error.reason.unreadable': 'The data could not be read — you can retry',
       'ui.state.error.reason.unavailable': 'The data source itself is unavailable — check the source settings',
       'ui.state.disabled': 'This is not available right now',
-      'ui.state.disabled.reason.capability-not-wired': 'The platform side is not connected; nothing is wrong on your side, and there is nothing to do here',
+      'ui.state.disabled.reason.capability-not-wired': 'This capability is not wired up on the platform side yet; nothing is wrong on your side, and there is nothing to do here',
       'ui.state.disabled.reason.target-disabled': 'The target is turned off — turn it back on',
       'ui.state.permission': 'No permission to view',
-      'ui.state.permission.reason.not-granted': 'This permission is not granted yet — grant it first',
+      'ui.state.permission.reason.not-granted': 'This is controlled by system settings; turn it on there',
       'ui.state.error.details': 'Details',
       'ui.state.action.create': 'Create',
       'ui.state.action.clear-filter': 'Clear filter',
@@ -2389,9 +2387,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.enable': 'Enable',
       'ui.state.action.retry': 'Retry',
       'ui.state.action.check-source': 'Check source',
-      'ui.state.action.grant': 'Grant',
-      'ui.state.action.open-settings': 'Open settings',
-      'ui.state.action.contact-admin': 'Contact an administrator'
+      'ui.state.action.open-system-settings': 'Open system settings'
     },
     windowChrome: {
       controls: 'Window controls',

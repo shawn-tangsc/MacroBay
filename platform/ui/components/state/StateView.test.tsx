@@ -157,7 +157,8 @@ describe('StateView', () => {
       markup({
         state: 'permission',
         reasonCode: 'not-granted',
-        resolveText: key
+        resolveText: key,
+        action: { labelKey: 'ui.state.action.open-system-settings', onSelect: () => undefined }
       })
     )
 
@@ -166,9 +167,9 @@ describe('StateView', () => {
     expect(permission.querySelector('[data-state-icon="permission"]')).not.toBeNull()
     expect(disabled.innerHTML).toContain('M5.6 5.6l12.8 12.8')
     expect(permission.innerHTML).toContain('<rect x="4" y="11"')
-    // ② 动作位不同：平台没接通时给不出动作；缺权限时本批也不给动作（没有「管理员」这个人）。
+    // ② 动作位不同：平台没接通给不出动作；缺权限必须给「去系统设置」，且按钮真能把人送过去。
     expect(disabled.querySelector('button')).toBeNull()
-    expect(permission.querySelector('button')).toBeNull()
+    expect(permission.querySelector('button')?.textContent).toBe('ui.state.action.open-system-settings')
     // ③ 两态都不用危险色。
     expect(css).not.toMatch(/\.state-view--(disabled|permission)[^{]*\{[^}]*--danger/)
   })
@@ -235,6 +236,31 @@ describe('StateView', () => {
     expect(onSelect).toHaveBeenCalledTimes(1)
   })
 
+  it('gives permission a working "open system settings" button, not a dead one', async () => {
+    const openSystemSettings = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <StateView
+          state="permission"
+          reasonCode="not-granted"
+          resolveText={key}
+          action={{ labelKey: 'ui.state.action.open-system-settings', onSelect: openSystemSettings }}
+        />
+      )
+    })
+
+    // 必填动作配空实现就是死按钮换了个位置：按下去必须真的调到调用方送进来的入口。
+    const button = host.querySelector('button')!
+    expect(button.textContent).toBe('ui.state.action.open-system-settings')
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(openSystemSettings).toHaveBeenCalledTimes(1)
+  })
+
   it('builds the documented key names in one place, and lists every key it can ask for', () => {
     expect(stateViewTextKeys('empty', 'never-created')).toEqual({
       title: 'ui.state.empty',
@@ -290,12 +316,18 @@ describe('StateView', () => {
       action: { labelKey: 'ui.state.action.create', onSelect: () => undefined },
       details: { summaryKey: 'a', bodyKey: 'b' }
     }
+    // @ts-expect-error 动作文案是码表里的键，自由字符串编译不过。
+    const freeLabel: StateViewProps = { state: 'permission', reasonCode: 'not-granted', resolveText: key, action: { labelKey: 'ui.state.action.whatever', onSelect: () => undefined } }
+    // @ts-expect-error 缺权限必须带「去系统设置」，不许留成没人填的空动作位。
+    const missingGrant: StateViewProps = { state: 'permission', reasonCode: 'not-granted', resolveText: key }
+    // @ts-expect-error 出错态也必须带恢复动作，不许指着调用方自己想起来补。
+    const missingRetry: StateViewProps = { state: 'error', reasonCode: 'unreadable', resolveText: key }
     // @ts-expect-error 不收 spinner 这类语义开关。
     const spinner: StateViewProps = { state: 'loading', resolveText: key, spinner: true }
     // @ts-expect-error size 是位置词，不收数字。
     const numericSize: StateViewProps = { state: 'loading', resolveText: key, size: 220 }
 
-    for (const value of [freeText, wrongPair, missingAction, actionOnNotYet, actionOnWired, detailsOnEmpty, spinner, numericSize]) {
+    for (const value of [freeText, wrongPair, missingAction, actionOnNotYet, actionOnWired, detailsOnEmpty, freeLabel, missingGrant, missingRetry, spinner, numericSize]) {
       expect(value).toBeDefined()
     }
   })

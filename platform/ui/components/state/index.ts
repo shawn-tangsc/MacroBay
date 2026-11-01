@@ -6,7 +6,6 @@ export type {
   PermissionReasonCode,
   StateViewAction,
   StateViewProps,
-  StateViewSize,
   StateViewState,
   StateViewTextKey
 } from './StateView'
