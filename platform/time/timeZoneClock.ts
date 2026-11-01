@@ -75,7 +75,11 @@ export function instantForWallClock(input: WallClockComponents): Date | null {
   }
 }
 
-type WallClockAt = { year: number; month: number; day: number; hour: number; minute: number }
+/**
+ * A wall clock as it reads in one zone. Exported with {@link wallClockAt} because a caller that is
+ * handed only the instant cannot name the shape it gets back.
+ */
+export type WallClockAt = { year: number; month: number; day: number; hour: number; minute: number }
 
 function offsetMinutesAt(instantMs: number, timeZone: string): number | null {
   try {
@@ -100,7 +104,13 @@ function offsetMinutesAt(instantMs: number, timeZone: string): number | null {
   }
 }
 
-function wallClockAt(instantMs: number, timeZone: string): WallClockAt | null {
+/**
+ * The wall clock one instant reads as in `timeZone` — the reverse of {@link instantForWallClock}.
+ *
+ * Pairs with it so a picker can be filled from an instant and read back through the same conversion;
+ * a reader that formats the instant on its own machine is the second source of truth this avoids.
+ */
+export function wallClockAt(instantMs: number, timeZone: string): WallClockAt | null {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone,
