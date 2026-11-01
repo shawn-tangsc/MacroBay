@@ -16,9 +16,11 @@ function dependencies(overrides: Partial<ChannelMaintenanceJobDependencies> = {}
     deliveryCleanup: vi.fn(),
     deliveryRetry: vi.fn(async () => {}),
     inboundRecovery: vi.fn(async () => {}),
+    // Object.fromEntries widens the per-key mock to `Mock<Procedure>`; the cast goes through
+    // unknown because the keyed record and a plain mock map do not overlap structurally.
     adapterMaintenance: Object.fromEntries(
       channelAdapterMaintenanceTypes.map((type) => [type, vi.fn()])
-    ) as ChannelMaintenanceJobDependencies['adapterMaintenance'],
+    ) as unknown as ChannelMaintenanceJobDependencies['adapterMaintenance'],
     ...overrides
   }
 }
