@@ -60,6 +60,23 @@ describe('verification entry', () => {
     }
   })
 
+  it('keeps AGENTS.md step list equal to the verify chain, not just in name', () => {
+    // 旧守卫只禁止「第二份带 `pnpm` 前缀的清单」：有人把清单改写成不带前缀的写法，它就一直绿着过期。
+    // 它证明的从来是「没有第二份清单」，不是「这份清单是对的」——所以这里比步骤本身。
+    const pkg = JSON.parse(read('package.json')) as { scripts?: Record<string, string> }
+    const chain = (pkg.scripts?.verify ?? '')
+      .split('&&')
+      .map((step) => step.trim().replace(/^pnpm /u, ''))
+    const section = markdownSection(read('AGENTS.md'), '## Verification')
+    const listedLine = section.split('\n').find((line) => line.includes(' → ') && line.includes('`'))
+    expect(listedLine, 'AGENTS.md no longer lists the steps').toBeTruthy()
+    // 只取 `checks:` 之后那一串：同一行前面还有反引号包着的 `verify`，它不属于步骤列表。
+    const chainText = (listedLine as string).slice((listedLine as string).indexOf('checks:'))
+    const listed = [...chainText.matchAll(/`([^`]+)`/gu)].map((match) => match[1])
+
+    expect(listed).toEqual(chain)
+  })
+
   it('keeps the private release gates on the same command', () => {
     const releaseProcess = `${ROOT}docs-private/10-development/release-process.md`
     // `docs-private` 被 gitignore，CI 里没有这些文件；本地才有，所以缺席时只验有它的情况。
