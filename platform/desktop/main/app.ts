@@ -450,7 +450,9 @@ const agentServices = createAgentPlatformServices(agentStore, {
       findByPath: agentRepositories.workspaces.findByPath
     },
     sessions: agentRepositories.sessions,
-    messages: agentRepositories.messages,
+    messages: {
+      listByCursor: agentRepositories.messages.listByCursor
+    },
     tasks: {
       get: agentRepositories.tasks.get,
       list: agentRepositories.tasks.list,

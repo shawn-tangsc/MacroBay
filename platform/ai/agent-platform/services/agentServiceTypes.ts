@@ -94,22 +94,6 @@ export type AgentPlatformQueryAdapters = {
       sessionId: string,
       query?: AgentSessionMessagesListQuery
     ) => CursorPaginationResponse<Pick<AgentSessionMessageEntity, 'id'>>
-    search: (query: {
-      q: string
-      cursor?: string
-      limit?: number
-      createdAtFrom?: string
-      sessionId?: string
-    }) => {
-      items: Array<{
-        messageId: string
-        sessionId: string
-        role: AgentSessionMessageEntity['role']
-        snippet: string
-        createdAt: string
-      }>
-      nextCursor?: string
-    }
   }
   tasks?: {
     list: (
@@ -201,13 +185,3 @@ export type SessionEntitySearchItem = {
   target: { sessionId: string; agentId: string | null }
 }
 
-export type SessionMessageContentSearchItem = {
-  messageId: string
-  sessionId: string
-  sessionName: string
-  agentId?: string
-  agentName?: string
-  role: string
-  snippet: string
-  createdAt: string
-}

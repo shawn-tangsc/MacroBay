@@ -24,13 +24,6 @@ import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 import type { CursorPaginationResponse } from '../store/agentStore'
 import type { TaskMutationAuditEntity } from '../runtime/tasks/taskAutomationContracts'
 
-type MessageSearchResult = {
-  messageId: string
-  sessionId: string
-  role: AgentSessionMessageEntity['role']
-  snippet: string
-  createdAt: string
-}
 
 type PlatformStateCollectionsSnapshot = {
   mcpServers: McpServerEntity[]
@@ -604,7 +597,6 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
   const messages = {
     replaceAll(entities: readonly AgentSessionMessageEntity[]): void {
       database.transact(() => {
-        db.prepare('delete from agent_session_messages_fts').run()
         db.prepare('delete from agent_session_messages').run()
         for (const entity of entities) {
           messages.upsert(entity)
@@ -644,12 +636,6 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         entity.updatedAt
       )
 
-      db.prepare('delete from agent_session_messages_fts where message_id = ?').run(entity.id)
-      db.prepare('insert into agent_session_messages_fts (message_id, session_id, searchable_text) values (?, ?, ?)').run(
-        entity.id,
-        entity.sessionId,
-        entity.searchableText
-      )
     },
     listAll(): AgentSessionMessageEntity[] {
       return db
@@ -690,60 +676,7 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
         nextCursor: rows.length > limit && tail ? encodeMessageCursor(tail.created_at, tail.id) : undefined
       }
     },
-    search(query: {
-      q: string
-      limit?: number
-      sessionId?: string
-      cursor?: string
-      createdAtFrom?: string
-    }): { items: MessageSearchResult[]; nextCursor?: string } {
-      const limit = Math.max(1, Math.min(query.limit ?? 50, 200))
-      const cursor = decodeMessageCursor(query.cursor)
-      const params: Array<string | number> = [query.q]
-      const where = ['f.searchable_text match ?']
-      if (query.sessionId) {
-        where.push('m.session_id = ?')
-        params.push(query.sessionId)
-      }
-      if (query.createdAtFrom) {
-        where.push('m.created_at >= ?')
-        params.push(query.createdAtFrom)
-      }
-      if (cursor) {
-        where.push('(m.created_at < ? or (m.created_at = ? and m.id < ?))')
-        params.push(cursor.createdAt, cursor.createdAt, cursor.id)
-      }
 
-      const rows = db
-        .prepare(
-          `select m.id as message_id, m.session_id, m.role, m.searchable_text, m.created_at
-           from agent_session_messages_fts f
-           join agent_session_messages m on m.id = f.message_id
-           where ${where.join(' and ')}
-           order by m.created_at desc, m.id desc
-           limit ?`
-        )
-        .all(...params, limit + 1) as Array<{
-          message_id: string
-          session_id: string
-          role: AgentSessionMessageEntity['role']
-          searchable_text: string
-          created_at: string
-        }>
-
-      const items = rows.slice(0, limit)
-      const tail = items[limit - 1]
-      return {
-        items: items.map((row) => ({
-          messageId: row.message_id,
-          sessionId: row.session_id,
-          role: row.role,
-          snippet: row.searchable_text,
-          createdAt: row.created_at
-        })),
-        nextCursor: rows.length > limit && tail ? encodeMessageCursor(tail.created_at, tail.message_id) : undefined
-      }
-    }
   }
 
   const mcpServers = {
@@ -1997,7 +1930,6 @@ export function createAgentPlatformRepositories(database: AgentPlatformDatabase)
       if (options.writeChannels) throw new Error('channel-legacy-write-rejected')
       database.transact(() => {
         db.prepare('delete from agent_session_pins').run()
-        db.prepare('delete from agent_session_messages_fts').run()
         db.prepare('delete from agent_session_messages').run()
         db.prepare('delete from agent_sessions').run()
         db.prepare('delete from agent_workspaces').run()

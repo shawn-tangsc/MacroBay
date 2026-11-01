@@ -89,8 +89,6 @@ const migrations: AgentPlatformMigration[] = [
       create index if not exists idx_agent_session_messages_session_created
         on agent_session_messages(session_id, created_at desc, id desc);
 
-      create virtual table if not exists agent_session_messages_fts
-        using fts5(message_id UNINDEXED, session_id UNINDEXED, searchable_text);
     `
   },
   {
@@ -1498,6 +1496,14 @@ const migrations: AgentPlatformMigration[] = [
           updated_at = '2026-10-31T00:00:00.000Z'
       where id = 'daily-brief-editor'
         and json_type(coalesce(configuration_json, '{}'), '$.effort') is null;
+    `
+  },
+  {
+    id: '0046_drop_agent_session_messages_fts',
+    up: `
+      -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
+      -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
+      drop table if exists agent_session_messages_fts;
     `
   }
 ]
