@@ -57,10 +57,23 @@ describe('compareWithBaseline', () => {
     expect(compareWithBaseline([use], toBaseline([use]))).toEqual([])
   })
 
-  it('reports an added use outside the baseline', () => {
+  it('reports a key over quota with the count and every line of that key', () => {
     const violations = compareWithBaseline([use], {})
 
-    expect(violations).toEqual([{ kind: 'added', file: 'x.css', selector: '.a', line: 1 }])
+    // 比较按计数做：不知道该键里哪一行是新的，就不假装知道。
+    expect(violations).toEqual([
+      { kind: 'over-quota', file: 'x.css', selector: '.a', extra: 1, lines: [1] }
+    ])
+  })
+
+  it('lists both lines when a key gains a second use', () => {
+    const violations = compareWithBaseline(
+      [{ file: 'x.css', selector: '.y', line: 3 }, { file: 'x.css', selector: '.y', line: 1 }],
+      toBaseline([{ file: 'x.css', selector: '.y', line: 1 }])
+    )
+
+    expect(violations).toHaveLength(1)
+    expect(violations[0]).toMatchObject({ kind: 'over-quota', extra: 1, lines: [1, 3] })
   })
 
   it('reports a stale baseline entry so the list cannot drift from the code', () => {
@@ -77,11 +90,36 @@ describe('compareWithBaseline', () => {
     expect(formatViolations(violations)).toContain('基线缺选择器')
   })
 
-  it('names the file, selector and line in the failure output', () => {
-    const message = formatViolations([{ kind: 'added', file: 'x.css', selector: '.a', line: 7 }])
+  it('names the file, selector and every line in the failure output', () => {
+    const message = formatViolations([
+      { kind: 'over-quota', file: 'x.css', selector: '.a', extra: 1, lines: [3, 7] }
+    ])
 
-    expect(message).toContain('x.css:7')
+    expect(message).toContain('x.css')
     expect(message).toContain('.a')
+    expect(message).toContain('比基线多 1 处')
+    expect(message).toContain('3, 7')
+  })
+
+  it('matches a fallback value, inner spaces and an upper-case property', () => {
+    const css = [
+      '.f { color: var(--danger, #c00); }',
+      '.g { color: var(--danger, var(--text-strong)); }',
+      '.h { color: var( --danger ); }',
+      '.i { COLOR: var(--danger); }'
+    ].join('\n')
+
+    expect(scanDangerColor(css, 'x.css').map((use) => use.selector)).toEqual(['.f', '.g', '.h', '.i'])
+  })
+
+  it('still rejects look-alike token names and other colour properties', () => {
+    const css = [
+      '.a { color: var(--dangerous); }',
+      '.b { color: var(--danger-soft); }',
+      '.c { border-left-color: var(--danger); }'
+    ].join('\n')
+
+    expect(scanDangerColor(css, 'x.css')).toEqual([])
   })
 })
 

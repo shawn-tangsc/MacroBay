@@ -15,12 +15,24 @@ export type DangerColorUse = {
 }
 
 export type BaselineViolation =
-  | { kind: 'added'; file: string; selector: string; line: number }
+  /** 该键超出基线：不知道该键里哪一行是新的，所以只报数量与该键全部行号。 */
+  | { kind: 'over-quota'; file: string; selector: string; extra: number; lines: readonly number[] }
   | { kind: 'stale'; file: string; selector: string }
   /** 基线里有一条没有选择器：不能跳过，跳过就等于留一个永久盲区。 */
   | { kind: 'malformed'; file: string; selector: string }
 
 const COMMENT_PATTERN = /\/\*[\s\S]*?\*\//g
+
+/**
+ * 认「前景色 --danger」的声明，含三种容易漏的写法：
+ * - 带兜底值：`var(--danger, #c00)`、`var(--danger, var(--text-strong))`；
+ * - 括号内有空格：`var( --danger )`；
+ * - 属性名大写：`COLOR:`（CSS 大小写不敏感）。
+ *
+ * 必须**不**命中：`--dangerous`、`--danger-soft`、`border-left-color`——子串匹配的老坑，
+ * 反方向同样要防，所以 `--danger` 后面必须紧跟空格、逗号或右括号。
+ */
+const DANGER_COLOR_DECLARATION = /(?:^|;)\s*color:\s*var\(\s*--danger\s*(?:,(?:[^()]|\([^()]*\))*)?\)/im
 
 export function stripCssComments(css: string): string {
   // 保留换行，行号才不会漂。
@@ -40,11 +52,11 @@ export function scanDangerColor(css: string, file: string): DangerColorUse[] {
   while ((match = rulePattern.exec(text)) !== null) {
     const selector = (match[1] ?? '').replace(/\s+/g, ' ').trim()
     const body = match[2] ?? ''
-    const declaration = /(?:^|;)\s*color:\s*var\(--danger\)/m.exec(body)
+    const declaration = DANGER_COLOR_DECLARATION.exec(body)
     if (!declaration) continue
     const bodyOffset = match.index + (match[1] ?? '').length + 1
     // 报的是 `color` 这个词的位置，不是匹配串起点——否则行号会落在上一条声明上。
-    const colorOffset = bodyOffset + declaration.index + declaration[0].indexOf('color')
+    const colorOffset = bodyOffset + declaration.index + declaration[0].search(/color:/i)
     const line = text.slice(0, colorOffset).split('\n').length
     uses.push({ file, selector, line })
   }
@@ -77,9 +89,15 @@ export function compareWithBaseline(
 
   for (const [key, uses] of Object.entries(seen)) {
     const allowed = baseline[key] ?? 0
-    for (const use of uses.slice(allowed)) {
-      violations.push({ kind: 'added', file: use.file, selector: use.selector, line: use.line })
-    }
+    if (uses.length <= allowed) continue
+    const first = uses[0]
+    violations.push({
+      kind: 'over-quota',
+      file: first?.file ?? key.split(' :: ')[0] ?? key,
+      selector: first?.selector ?? '',
+      extra: uses.length - allowed,
+      lines: uses.map((use) => use.line).sort((left, right) => left - right)
+    })
   }
 
   for (const [key, count] of Object.entries(baseline)) {
@@ -102,8 +120,9 @@ export function compareWithBaseline(
 export function formatViolations(violations: readonly BaselineViolation[]): string {
   return violations
     .map((violation) => {
-      if (violation.kind === 'added') {
-        return `  新增：${violation.file}:${violation.line}  选择器 \`${violation.selector}\``
+      if (violation.kind === 'over-quota') {
+        // 比较是按计数做的：不知道该键里哪一行是新的，就别假装知道。
+        return `  超配额：${violation.file}  选择器 \`${violation.selector}\` 比基线多 ${violation.extra} 处（该键全部行：${violation.lines.join(', ')}）`
       }
       if (violation.kind === 'malformed') {
         return `  基线缺选择器：${violation.file}（不能跳过——跳过会留下永久盲区）`
