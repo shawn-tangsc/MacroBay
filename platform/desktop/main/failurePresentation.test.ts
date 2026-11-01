@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -7,6 +10,41 @@ import {
   presentBootFailure,
   truncateForScreen
 } from './failurePresentation'
+
+/** 失败页在「别的都挂了」时才出现，它的依赖面就是它的生存条件。 */
+const FAILURE_PAGE_FILES = ['failurePresentation.ts', 'bootFailurePage.ts', 'bootFailureWindow.ts']
+
+function importedModules(relativePath: string): string[] {
+  const source = readFileSync(resolve(__dirname, relativePath), 'utf8')
+  return [...source.matchAll(/^import\s[^'"]*['"]([^'"]+)['"]/gmu)].map((match) => match[1])
+}
+
+describe('failure page dependency surface', () => {
+  it('imports nothing that could be the thing that broke', () => {
+    for (const file of FAILURE_PAGE_FILES) {
+      for (const module of importedModules(file)) {
+        const allowed =
+          // 平台唯一的凭据模式表：纯函数，失败页要用它把 token 从错误消息里拿掉。
+          module.endsWith('secrets/redaction/redactText') ||
+          // 同目录的失败页模块。
+          module.startsWith('./') ||
+          // 主进程框架本身：页面要在 Electron 里活着，这是它的宿主不是依赖。
+          module === 'electron' ||
+          // 纯工具。
+          module === 'node:path' ||
+          module === 'node:fs'
+        expect({ file, module, allowed }).toEqual({ file, module, allowed: true })
+      }
+    }
+  })
+
+  it('keeps the three files free of settings, i18n, theme and product imports', () => {
+    for (const file of FAILURE_PAGE_FILES) {
+      const modules = importedModules(file).join('\n')
+      expect(modules).not.toMatch(/settings|i18n|platformText|theme|@products|products\//u)
+    }
+  })
+})
 
 describe('failure presentation', () => {
   it('anchors every POSIX and Windows home path form the acceptance list names', () => {
