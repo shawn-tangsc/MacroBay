@@ -23,6 +23,11 @@ export default {
     // except the list".
     testTimeout: 15_000,
     hookTimeout: 15_000,
+    // 1269 files on one laptop: running them all at once starves the CPU, and the red set rotates —
+    // 15 failures, then 4, then 1, different files each time, every one of them green when run
+    // alone. Half the pool is both stable and faster (full suite: 166s green vs 288s with
+    // failures), because the suite spends more time thrashing than working above that.
+    maxWorkers: '50%',
     exclude: [...configDefaults.exclude]
   }
 }
