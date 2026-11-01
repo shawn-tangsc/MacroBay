@@ -73,6 +73,8 @@ import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
+import { registerAssistantSessionRetentionJob } from '../../ai/assistant-platform/retention/registerAssistantSessionRetentionJob'
+import { createRetentionRepository } from '../../ai/assistant-platform/repositories/retentionRepository'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createAssistantChatRuntimeService } from '../../ai/assistant-platform/runtime/AssistantChatRuntimeService'
 import { createWebSearchCredentialStore } from '../../ai/web-search/runtime/WebSearchCredentialStore'
@@ -2368,6 +2370,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   const jobRuntime = createJobRuntime({ store: jobRunStore })
   jobRuntimeForDisposal = jobRuntime
   jobRuntime.recover()
+  registerAssistantSessionRetentionJob(jobRuntime, { repo: createRetentionRepository(assistantDatabase) })
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
   const jobScheduleQueryService = createJobScheduleQueryService({ runtime: jobRuntime })
   agentTaskJobBridge = createAgentTaskJobBridge({ jobRuntime })
