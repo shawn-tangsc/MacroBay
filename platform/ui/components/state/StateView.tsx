@@ -44,10 +44,16 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.empty.reason.no-target-bound',
   'ui.state.empty.reason.nothing-enabled',
   'ui.state.empty.reason.none-installed',
+  'ui.state.empty.reason.no-target-selected',
   'ui.state.empty.reason.not-yet',
+  'ui.state.empty.reason.no-target-selected',
   'ui.state.error',
   'ui.state.error.reason.unreadable',
   'ui.state.error.reason.unavailable',
+  'ui.state.error.reason.operation-failed',
+  'ui.state.error.reason.needs-restart',
+  'ui.state.error.reason.operation-failed',
+  'ui.state.error.reason.needs-restart',
   'ui.state.error.details',
   'ui.state.disabled',
   'ui.state.disabled.reason.capability-not-wired',
@@ -64,6 +70,8 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.install',
   'ui.state.action.save',
   'ui.state.action.open-settings',
+  'ui.state.action.select-target',
+  'ui.state.action.restart',
   'ui.state.action.open-system-settings'
 ] as const
 
@@ -89,35 +97,42 @@ export type EmptyReasonCode =
   | 'no-target-bound'
   | 'nothing-enabled'
   | 'none-installed'
+  | 'no-target-selected'
   | 'not-yet'
 
-export type ErrorReasonCode = 'unreadable' | 'unavailable'
+export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart' | 'operation-failed' | 'needs-restart'
 export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
 export type PermissionReasonCode = 'not-granted'
 
+type StateDetails = { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
+
+/**
+ * 每个 `reasonCode` 单独一分支（§13）：它们不只是「哪些值合法」，还决定 `action` 与 `details`
+ * 的归属。写成 `state + Exclude<code>` 的联合会把「这个码能不能带动作」这一层丢掉。
+ */
 export type StateViewProps =
   | (StateViewBase & { state: 'normal'; children: ReactNode })
   | (StateViewBase & { state: 'loading' })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'never-created'; action: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'filtered-out'; action: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-bound'; action: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-enabled'; action: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'none-installed'; action: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-selected'; action: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'not-yet'; action?: never })
-  | (StateViewBase & {
-      state: 'empty'
-      reasonCode: Exclude<EmptyReasonCode, 'not-yet'>
-      action: StateViewAction
-    })
+  | (StateViewBase & { state: 'error'; reasonCode: 'unreadable'; action: StateViewAction; details?: StateDetails })
+  | (StateViewBase & { state: 'error'; reasonCode: 'unavailable'; action: StateViewAction; details?: StateDetails })
   | (StateViewBase & {
       state: 'error'
-      reasonCode: ErrorReasonCode
+      reasonCode: 'operation-failed'
       action: StateViewAction
-      /** 排障详情，默认折叠，不进 live region。 */
-      details?: { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
+      details?: StateDetails
     })
+  | (StateViewBase & { state: 'error'; reasonCode: 'needs-restart'; action: StateViewAction; details?: StateDetails })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: never })
-  | (StateViewBase & {
-      state: 'disabled'
-      reasonCode: Exclude<DisabledReasonCode, 'capability-not-wired'>
-      action: StateViewAction
-    })
-  | (StateViewBase & { state: 'permission'; reasonCode: PermissionReasonCode; action: StateViewAction })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action: StateViewAction })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'precondition-unsaved'; action: StateViewAction })
+  | (StateViewBase & { state: 'permission'; reasonCode: 'not-granted'; action: StateViewAction })
 
 /** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，本批不给固定高度。 */
 const MIN_HEIGHT: Record<StateSize, number | undefined> = { sm: undefined, md: 80, lg: 220 }

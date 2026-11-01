@@ -70,8 +70,11 @@ The reason codes are a closed set. The action column is enforced by the type, no
 | `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
 | `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
 | `empty` | `none-installed` | required: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
+| `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | never | It only appears once something has happened. |
 | `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
+| `error` | `operation-failed` | required: retry | The write failed; nothing was saved. |
+| `error` | `needs-restart` | required: restart the app | The running app cannot pick this up; a restart is the fix. |
 | `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
 | `disabled` | `capability-not-wired` | never | The platform side is not connected; nothing is wrong on the reader's side. |
 | `disabled` | `target-disabled` | required: enable | The target was switched off. |
