@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fromWallClock, toWallClock, wallClockIsAmbiguous } from './economicCalendarModel'
+import { fromWallClock, resolveReleaseTimeWrite, toWallClock, wallClockIsAmbiguous } from './economicCalendarModel'
 
 describe('wall clock text in a zone and the instant it names', () => {
   it('formats an instant the way an input needs it, per zone', () => {
@@ -68,5 +68,36 @@ describe('wall clock text in a zone and the instant it names', () => {
     expect(fromWallClock('2026-11-01T00:05', 'UTC')).toBe('2026-11-01T00:05:00.000Z')
     expect(toWallClock('2026-11-01T00:05:00.000Z', 'Asia/Shanghai')).toBe('2026-11-01T08:05')
     expect(fromWallClock('2026-11-01T08:05', 'Asia/Shanghai')).toBe('2026-11-01T00:05:00.000Z')
+  })
+})
+
+describe('what a save writes, and what the picker must show after it', () => {
+  it('writes the corrected instant and hands back the corrected text for a spring gap', () => {
+    // 02:30 does not exist in New York that day; the store takes 03:00 EDT and the picker has to
+    // show 03:00 afterwards, which is the correction this returns.
+    expect(resolveReleaseTimeWrite('2026-03-08T02:30', 'America/New_York')).toEqual({
+      kind: 'write',
+      instant: '2026-03-08T07:00:00.000Z',
+      scheduledDate: '2026-03-08',
+      correctedWallClock: '2026-03-08T03:00'
+    })
+  })
+
+  it('writes an ordinary time without asking the picker to change', () => {
+    expect(resolveReleaseTimeWrite('2026-10-14T08:30', 'America/New_York')).toEqual({
+      kind: 'write',
+      instant: '2026-10-14T12:30:00.000Z',
+      scheduledDate: '2026-10-14'
+    })
+  })
+
+  it('refuses a repeated autumn hour instead of silently choosing one', () => {
+    // 01:30 on 2026-11-01 exists twice in New York.
+    expect(resolveReleaseTimeWrite('2026-11-01T01:30', 'America/New_York')).toEqual({ kind: 'ambiguous' })
+  })
+
+  it('refuses text that names no moment and a zone the runtime does not know', () => {
+    expect(resolveReleaseTimeWrite('2026-10-14', 'America/New_York')).toEqual({ kind: 'invalid' })
+    expect(resolveReleaseTimeWrite('2026-10-14T08:30', 'Mars/Olympus_Mons')).toEqual({ kind: 'invalid' })
   })
 })

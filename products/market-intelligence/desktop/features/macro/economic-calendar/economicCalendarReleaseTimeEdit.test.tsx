@@ -148,8 +148,9 @@ describe('the release time is edited where it is shown', () => {
 describe('the picker shows the wall clock of the display zone, and what was stored', () => {
   it('shows 03:00 for a spring gap the store resolved forward, never the 02:30 that does not exist', async () => {
     // The store holds the corrected instant (03:00 EDT = 07:00Z) for a reader who picked 02:30 on the
-    // spring-forward day. Both the row and the picker must read back through the display zone, so
-    // neither can show a time that was not stored.
+    // spring-forward day. The row and the picker both read it back through the display zone, so
+    // neither can show a time that was never stored. The decision itself is covered by
+    // `resolveReleaseTimeWrite` in the wall-clock model test.
     const { host } = await renderInspector(event({
       // The inspector opens on the event's own month; the stored instant is the corrected gap time.
       scheduledAt: '2026-03-08T07:00:00.000Z',
@@ -161,7 +162,6 @@ describe('the picker shows the wall clock of the display zone, and what was stor
 
     await click(host, text.details.time)
     await flush()
-    // 07:00Z reads as 03:00 in New York; a machine-zone formatting would have said something else.
     expect(host.querySelector<HTMLInputElement>('.mi-economic-calendar__release-time-picker')?.dataset.value)
       .toBe('2026-03-08 03:00')
   })

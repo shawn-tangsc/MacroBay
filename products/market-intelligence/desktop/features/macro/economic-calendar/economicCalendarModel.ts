@@ -312,6 +312,32 @@ export function wallClockIsAmbiguous(text: string, timeZone: string): boolean {
   return matches.size > 1
 }
 
+/**
+ * What a save should write, and what the picker must show afterwards.
+ *
+ * The component used to decide this inline, which left the correction untested: a spring gap is
+ * written forward, and `correctedWallClock` is the text the picker has to show instead of what the
+ * reader typed. Returning it here is what makes "the screen never shows a time that was not stored"
+ * checkable without driving a picker.
+ */
+export type ReleaseTimeWrite =
+  | Readonly<{ kind: 'ambiguous' }>
+  | Readonly<{ kind: 'invalid' }>
+  | Readonly<{ kind: 'write'; instant: string; scheduledDate: string; correctedWallClock?: string }>
+
+export function resolveReleaseTimeWrite(wallClock: string, timeZone: string): ReleaseTimeWrite {
+  if (wallClockIsAmbiguous(wallClock, timeZone)) return { kind: 'ambiguous' }
+  const instant = fromWallClock(wallClock, timeZone)
+  if (instant === undefined) return { kind: 'invalid' }
+  const stored = toWallClock(instant, timeZone)
+  return {
+    kind: 'write',
+    instant,
+    scheduledDate: wallClock.slice(0, 10),
+    ...(stored !== undefined && stored !== wallClock ? { correctedWallClock: stored } : {})
+  }
+}
+
 function parseWallClock(text: string): { year: number; month: number; day: number; hour: number; minute: number } | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(text)
   if (!match) return undefined

@@ -16,6 +16,7 @@ import {
   economicCalendarCaveats,
   formatEconomicCalendarTime,
   fromWallClock,
+  resolveReleaseTimeWrite,
   toWallClock,
   wallClockIsAmbiguous
 } from './economicCalendarModel'
@@ -161,20 +162,24 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
 
   async function save(): Promise<void> {
     if (draft === null) return
-    const wallClock = draft
-    if (wallClockIsAmbiguous(wallClock, timeZone)) { setState('ambiguous'); return }
-    const instant = fromWallClock(wallClock, timeZone)
-    if (instant === undefined) { setState('rejected'); return }
+    const decision = resolveReleaseTimeWrite(draft, timeZone)
+    if (decision.kind === 'ambiguous') { setState('ambiguous'); return }
+    if (decision.kind === 'invalid') { setState('rejected'); return }
     setState('saving')
-    const result = await client.setReleaseTime({ eventKey: event.eventKey, scheduledAt: instant, scheduledDate: wallClock.slice(0, 10) })
+    const result = await client.setReleaseTime({
+      eventKey: event.eventKey, scheduledAt: decision.instant, scheduledDate: decision.scheduledDate
+    })
     if (result.state !== 'saved') { setState('rejected'); return }
-    // A spring gap resolves forward: the stored instant is not the text the reader typed, so the
-    // picker has to show what was stored instead of leaving them looking at a time that never was.
-    const stored = toWallClock(instant, timeZone)
-    if (stored !== undefined && stored !== wallClock) setDraft(stored)
     setState('saved')
-    setEditing(false)
     await onChanged()
+    // A spring gap resolves forward, so the stored instant can differ from the text the reader
+    // picked. Writing the correction back into the picker and leaving the row open is the only way
+    // the reader sees what was stored: closing straight away would hide a value that changed.
+    if (decision.correctedWallClock !== undefined) {
+      setDraft(decision.correctedWallClock)
+      return
+    }
+    setEditing(false)
   }
 
   async function restore(): Promise<void> {
