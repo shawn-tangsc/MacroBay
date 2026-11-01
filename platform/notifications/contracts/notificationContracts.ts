@@ -79,6 +79,13 @@ export type NotificationListPage = {
   nextCursor?: string
 }
 
+/**
+ * 桌面通知的授权状态。**`unknown` 是常态，不是异常**：Electron 41 没有 `getNotificationSettings`，
+ * 而 `Notification.isSupported()` 回答的是「这个平台支不支持通知」，不是「用户授没授权」。
+ * 拿它冒充 `granted` 会让排查全部指向「发送失败」，把一个查不到的结论说成已知事实。
+ */
+export type DesktopNotificationPermission = 'granted' | 'denied' | 'unknown'
+
 export type NotificationRuntimeSettings = {
   centerEnabled: boolean
   desktopEnabled: boolean

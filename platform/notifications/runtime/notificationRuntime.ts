@@ -17,6 +17,7 @@ import {
   type NotificationStoreState
 } from '../store/notificationStore'
 import type {
+  DesktopNotificationPermission,
   NotificationListPage,
   NotificationListQuery,
   NotificationRecord,
@@ -53,7 +54,8 @@ export type NotificationRuntimeDependencies = {
   /** 读者时区与当前时刻；免打扰窗口按它判断。**必传**：缺省成 UTC 会把「不知道」当成「用户在格林尼治」。 */
   clock: NotificationClock
   deliveryHooks?: DeliveryHooks
-  requestDesktopPermission?: () => Promise<{ granted: boolean; supported: boolean }>
+  /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
+  readDesktopPermission?: () => Promise<DesktopNotificationPermission>
 }
 
 export function createNotificationRuntime(deps: NotificationRuntimeDependencies) {
@@ -160,11 +162,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       return transition(id, (record) => snoozeNotification(record, until))
     },
 
-    async requestDesktopPermission(): Promise<{ granted: boolean; supported: boolean }> {
-      if (deps.requestDesktopPermission) {
-        return deps.requestDesktopPermission()
+    async readDesktopPermission(): Promise<DesktopNotificationPermission> {
+      if (deps.readDesktopPermission) {
+        return deps.readDesktopPermission()
       }
-      return { granted: false, supported: false }
+      // 没有读法就是「不知道」，不是「被拒绝」，也不是「已授权」。
+      return 'unknown'
     }
   }
 

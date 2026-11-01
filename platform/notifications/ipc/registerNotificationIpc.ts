@@ -43,7 +43,7 @@ export function getNotificationRuntime() {
       deliveryHooks: {
         desktop: (record) => desktopAdapter.show(record)
       },
-      requestDesktopPermission: () => desktopAdapter.requestPermission()
+      readDesktopPermission: () => desktopAdapter.readPermission()
     })
     void notificationRuntime.initialize()
   }

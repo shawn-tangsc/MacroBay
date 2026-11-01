@@ -411,6 +411,7 @@ const api = {
     acknowledge: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }),
     dismiss: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsDismiss, { id }),
     snooze: (id: string, until: string) => ipcRenderer.invoke(IpcChannels.notificationsSnooze, { id, until }),
+    /** 返回 `granted | denied | unknown`；**`unknown` 是常态**，UI 不许把 unknown 显示成「已授权」。 */
     requestDesktopPermission: () => ipcRenderer.invoke(IpcChannels.notificationsRequestDesktopPermission)
   },
   jobs: {

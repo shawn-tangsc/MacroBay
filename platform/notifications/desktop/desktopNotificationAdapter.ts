@@ -1,16 +1,20 @@
 import { Notification } from 'electron'
 
-import type { NotificationRecord } from '../contracts/notificationContracts'
+import type { DesktopNotificationPermission, NotificationRecord } from '../contracts/notificationContracts'
 
 export type DesktopNotificationAdapter = {
-  requestPermission: () => Promise<{ granted: boolean; supported: boolean }>
+  /** 只有「系统能回答授没授权」时才返回 granted/denied；查不到一律 unknown，不许拿支持性冒充授权。 */
+  readPermission: () => Promise<DesktopNotificationPermission>
   show: (record: NotificationRecord) => Promise<{ ok: boolean; reason?: string }>
 }
 
 export function createDesktopNotificationAdapter(): DesktopNotificationAdapter {
   return {
-    async requestPermission() {
-      return { supported: true, granted: Notification.isSupported() }
+    async readPermission() {
+      // Electron 41.9.2：`getMediaAccessStatus` 只认 microphone/camera/screen，没有通知；`Notification`
+      // 的 `failed` 事件仅 win32。所以这里**没有**可靠的授权读法——「查不到」就说查不到。
+      // `Notification.isSupported()` 只说明这个平台支持通知，推不出用户已授权。
+      return 'unknown'
     },
     async show(record) {
       if (!Notification.isSupported()) {
