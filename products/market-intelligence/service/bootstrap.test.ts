@@ -16,7 +16,7 @@ import { createEventBusRuntime } from '@platform/message-bus'
 import { createProductIpcRegistry } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { getBlsApiCompatibilityProbe, registerServices } from './bootstrap'
-import { resetIntelligenceModuleForTests } from './intelligence/intelligenceModule'
+import { getIntelligenceModule, resetIntelligenceModuleForTests } from './intelligence/intelligenceModule'
 import { marketIntelligenceProductManifest } from '../product.manifest'
 import { MACRO_ECONOMIC_CALENDAR_IPC_METHODS } from '../contracts/macro/economicCalendarQueryContracts'
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../contracts/intelligencePublicQueryMethods'
@@ -139,6 +139,73 @@ describe('market-intelligence product bootstrap', () => {
         compactable: true
       })
     )
+  })
+
+  it('reports a compaction as the bytes it freed, not the size of the whole cache', async () => {
+    const registrations: Array<{
+      cacheId: string
+      provider: { compact: (input: { dryRun?: boolean }) => Promise<Record<string, unknown>> }
+    }> = []
+    registerServices({
+      platformFetch: vi.fn(),
+      register: vi.fn(),
+      jobRuntime: createJobRuntime(),
+      eventBusRuntime: createEventBusRuntime(),
+      registerProductAgentToolHandler: vi.fn(),
+      registerProductCache: (_productId, registration) => registrations.push(registration as never),
+      secretVault: vault()
+    })
+    const provider = registrations.find(({ cacheId }) => cacheId === 'market-intelligence.translation-records')?.provider
+    expect(provider).toBeDefined()
+
+    const module = getIntelligenceModule(createJobRuntime())
+    const twoMonthsAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    const seeded = [
+      {
+        translationId: 'tr-expired',
+        sourceType: 'item' as const,
+        sourceId: 'item-expired',
+        sourceHash: 'hash-expired',
+        targetLocale: 'zh-CN' as const,
+        status: 'translated' as const,
+        promptVersion: 'v1',
+        translatedAt: twoMonthsAgo,
+        titleTranslated: 'x'.repeat(600)
+      },
+      {
+        translationId: 'tr-not-required',
+        sourceType: 'item' as const,
+        sourceId: 'item-not-required',
+        sourceHash: 'hash-not-required',
+        targetLocale: 'zh-CN' as const,
+        status: 'not-required' as const,
+        promptVersion: 'v1'
+      }
+    ]
+    await module.translationService.replaceRecords([])
+    await module.translationService.replaceRecords(seeded)
+    try {
+      const before = await module.translationService.listRecords()
+      const bytesBefore = Buffer.byteLength(JSON.stringify(before), 'utf8')
+
+      const preview = await provider!.compact({ dryRun: true })
+      expect(preview).toMatchObject({ dryRun: true, status: 'skipped', removedRecords: 2 })
+      expect(await module.translationService.listRecords()).toEqual(before)
+
+      const result = await provider!.compact({ dryRun: false })
+      const after = await module.translationService.listRecords()
+      const bytesAfter = Buffer.byteLength(JSON.stringify(after), 'utf8')
+
+      expect(after).toEqual([])
+      expect(result).toMatchObject({ operation: 'compact', dryRun: false, removedRecords: 2 })
+      // The point of the assertion: the number is the measured difference, and it is strictly
+      // smaller than the cache, which the old implementation reported wholesale.
+      expect(result.removedBytes).toBe(bytesBefore - bytesAfter)
+      expect(result.removedBytes).toBeLessThan(bytesBefore)
+      expect(preview.removedBytes).toBe(result.removedBytes)
+    } finally {
+      await module.translationService.replaceRecords([])
+    }
   })
 
   it('registers the static product IPC baseline before the registry becomes active', () => {

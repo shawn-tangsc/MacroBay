@@ -133,6 +133,14 @@ function sampleModeRecorderDirectory(): string | undefined {
   return join(app.getAppPath(), 'products/market-intelligence/demo/raw')
 }
 
+/**
+ * The cached volume as the cache page measures it: the JSON payload the store writes on disk.
+ * One implementation, so inspect, clear and compact cannot disagree about what a byte is.
+ */
+function translationRecordsBytes(records: readonly unknown[]): number {
+  return Buffer.byteLength(JSON.stringify(records), 'utf8')
+}
+
 export function registerServices(deps: ProductBootstrapDependencies): void {
   blsApiCompatibilityHost.initialize(Object.freeze({ platformFetch: deps.platformFetch }))
   /**
@@ -464,7 +472,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
           cacheId: 'market-intelligence.translation-records',
           status: records.length > 0 ? 'ready' : 'empty',
           recordCount: records.length,
-          sizeBytes: Buffer.byteLength(JSON.stringify(records), 'utf8'),
+          sizeBytes: translationRecordsBytes(records),
           lastUpdatedAt: Number.isFinite(latestTranslatedAt) ? new Date(latestTranslatedAt).toISOString() : undefined,
           rebuildable: true,
           message: 'Translation display records can be regenerated from product-owned source items.'
@@ -472,7 +480,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       },
       clear: async ({ dryRun }) => {
         const records = await intelligenceModule.translationService.listRecords()
-        const removedBytes = Buffer.byteLength(JSON.stringify(records), 'utf8')
+        // A clear removes every record, so the volume before the call is exactly what it removed.
+        const removedBytes = translationRecordsBytes(records)
         if (dryRun === true) {
           return {
             cacheId: 'market-intelligence.translation-records',
@@ -496,30 +505,38 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         }
       },
       compact: async ({ dryRun }) => {
+        // A compaction keeps most of the file, so its `removedBytes` is the difference between the
+        // measurements, not the size of the whole record set. The old code reported the latter: it
+        // said 131 KB for a run that dropped 20 records out of hundreds.
         const records = await intelligenceModule.translationService.listRecords()
+        const bytesBefore = translationRecordsBytes(records)
         if (dryRun === true) {
-          const result = await intelligenceModule.translationService.previewCompaction({ retentionMode: 'balanced' })
+          const plan = await intelligenceModule.translationService.previewCompaction({ retentionMode: 'balanced' })
+          // A dry run changes nothing; it reports what the same compaction would free, and the audit
+          // record carries `dryRun`, so a preview is never counted as a removal that happened.
+          const removableBytes = Math.max(0, bytesBefore - translationRecordsBytes(plan.next))
           return {
             cacheId: 'market-intelligence.translation-records',
             operation: 'compact',
             dryRun: true,
-            status: result.removedCount > 0 ? 'skipped' : 'succeeded',
-            removedRecords: result.removedCount,
-            removedBytes: Buffer.byteLength(JSON.stringify(records), 'utf8'),
+            status: plan.removedCount > 0 ? 'skipped' : 'succeeded',
+            removedRecords: plan.removedCount,
+            removedBytes: removableBytes,
             message:
-              result.removedCount > 0
+              plan.removedCount > 0
                 ? 'Dry run only. Translation records would be compacted.'
                 : 'No stale translation records need compaction.'
           }
         }
         const result = await intelligenceModule.translationService.compactDerivedRecords({ retentionMode: 'balanced' })
+        const bytesAfter = translationRecordsBytes(await intelligenceModule.translationService.listRecords())
         return {
           cacheId: 'market-intelligence.translation-records',
           operation: 'compact',
           dryRun: false,
           status: 'succeeded',
           removedRecords: result.removedCount,
-          removedBytes: Buffer.byteLength(JSON.stringify(records), 'utf8'),
+          removedBytes: Math.max(0, bytesBefore - bytesAfter),
           message:
             result.removedCount > 0 ? 'Translation records compaction finished.' : 'No stale translation records needed compaction.'
         }
