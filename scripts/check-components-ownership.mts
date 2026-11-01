@@ -33,10 +33,28 @@ export function declaresComponentOwner(message: string): boolean {
   return false
 }
 
+/**
+ * 组件提交里附带改了别的线的东西时，必须逐条说明。
+ *
+ * 这不是白名单——白名单会逼出「为了合规而拆得别扭」的提交。要求只有一条：**每个附带文件
+ * 都要在提交信息里有一行 `Also: <路径> — <为什么必须同一笔>`**。写得出一句诚实的话就放行；
+ * 写不出的（比如 220 行业务迁移搭组件提交的车）会红。
+ */
+export function unexplainedFiles(files: readonly string[], message: string): string[] {
+  const declared = new Set<string>()
+  for (const line of message.split('\n')) {
+    const match = /^Also:\s*(\S+)/u.exec(line.trim())
+    if (match) declared.add(match[1])
+  }
+  return files.filter((file) => !touchesComponents([file]) && !declared.has(file))
+}
+
 export type ComponentOwnershipViolation = {
   hash: string
   subject: string
   files: readonly string[]
+  /** 组件目录以外、提交信息里又没有 `Also:` 说明的文件。 */
+  unexplained: readonly string[]
 }
 
 export type InspectedCommit = {
@@ -47,13 +65,19 @@ export type InspectedCommit = {
 }
 
 export function findViolations(commits: readonly InspectedCommit[]): ComponentOwnershipViolation[] {
-  return commits
-    .filter((commit) => touchesComponents(commit.files) && !declaresComponentOwner(commit.message))
-    .map((commit) => ({
+  const violations: ComponentOwnershipViolation[] = []
+  for (const commit of commits) {
+    if (!touchesComponents(commit.files)) continue
+    const unexplained = unexplainedFiles(commit.files, commit.message)
+    if (declaresComponentOwner(commit.message) && unexplained.length === 0) continue
+    violations.push({
       hash: commit.hash,
       subject: commit.subject,
-      files: commit.files.filter((file) => touchesComponents([file]))
-    }))
+      files: commit.files.filter((file) => touchesComponents([file])),
+      unexplained
+    })
+  }
+  return violations
 }
 
 function git(args: readonly string[]): string {
@@ -103,10 +127,11 @@ function main(): void {
     return
   }
 
-  console.error(`components-ownership: ${violations.length} commit(s) touched ${COMPONENTS_DIR} without "${OWNER_TRAILER}: ${OWNER_VALUE}".`)
+  console.error(`components-ownership: ${violations.length} commit(s) touched ${COMPONENTS_DIR} without a proper owner declaration.`)
   for (const violation of violations) {
     console.error(`  ${violation.hash.slice(0, 8)} ${violation.subject}`)
     for (const file of violation.files) console.error(`      ${file}`)
+    for (const file of violation.unexplained) console.error(`      ${file}  ← 组件目录以外，缺一行 \`Also: ${file} — <为什么必须同一笔>\``)
   }
   console.error('')
   console.error('这个目录只允许前端组件线改。如果你不是那条线：撤回这处改动，交给他们做。')
