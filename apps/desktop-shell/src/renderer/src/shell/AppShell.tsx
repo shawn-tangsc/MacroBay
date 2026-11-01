@@ -46,6 +46,7 @@ import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
 import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
+import { resolveNotificationNavigation } from './notifications/notificationDeeplink'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -1737,21 +1738,11 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       <NotificationCenterDrawer
         open={notificationCenterOpen}
         onOpenDeeplink={(deeplink) => {
-          // 通知自带的动作要真的把人送到地方：设置分区 → 设置页对应面板；产品页 → 该产品一级菜单。
           setNotificationCenterOpen(false)
-          if (deeplink.settingsSectionId !== undefined) {
-            setActiveNavKey('settings')
-            setSettingsPanelKey(deeplink.settingsSectionId)
-            return
-          }
-          if (deeplink.pageId !== undefined) {
-            setActiveNavKey(deeplink.pageId)
-            return
-          }
-          if (deeplink.productId !== undefined) {
-            const entry = productMenuEntries.find((item) => item.productId === deeplink.productId)
-            if (entry) setActiveNavKey(entry.routePath)
-          }
+          const target = resolveNotificationNavigation(deeplink, productMenuEntries)
+          if (!target) return
+          if (target.settingsPanelKey !== undefined) setSettingsPanelKey(target.settingsPanelKey)
+          if (target.navKey !== undefined) setActiveNavKey(target.navKey)
         }}
         onClose={() => {
           setNotificationCenterOpen(false)
