@@ -187,6 +187,10 @@ export const NEWS_SENTIMENT_CAVEATS = Object.freeze({
   bodyLimited: 'news-body-limited',
   modelUnavailable: 'news-model-unavailable',
   modelInvalidOutput: 'news-model-invalid-output',
+  /** 本轮模型调用额度用完：其余条目按规则判断，下一次运行会再试。 */
+  modelBudgetExhausted: 'news-model-budget-exhausted',
+  /** 连续三条没有拿到模型判断后，本轮余下条目不再调用模型（154 §7.1 的熔断）。 */
+  modelDegraded: 'news-model-degraded',
   emptyWindow: 'news-empty-window',
   queryFailed: 'news-query-failed'
 })

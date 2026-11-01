@@ -154,3 +154,81 @@ describe('newsSentimentScoringService', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('newsSentimentScoringService budget, retry and fallback', () => {
+  const ids = ['a', 'b', 'c', 'd', 'e', 'f']
+
+  function makeService(invoke: NewsSentimentInvoke, count: number) {
+    const store = createNewsSentimentSqliteStore(':memory:')
+    const { state, providerId, modelId } = readyProviders()
+    const items = ids.slice(0, count).map((id, index) => item({ itemId: `item-${id}`, title: `News ${id}`, publishedAt: `2026-10-24T12:${String(index).padStart(2, '0')}:00.000Z` }))
+    const service = createNewsSentimentScoringService({
+      pipeline: { listItems: () => items },
+      store,
+      settingsStore: createNewsSentimentSettingsStore(createInMemoryNewsSentimentSettingsStorage()),
+      getProviderState: async () => state,
+      getModelDefaults: async () => ({ fastModelId: `${providerId}:${modelId}` }),
+      invoke,
+      now: () => '2026-10-24T13:00:00.000Z'
+    })
+    return { store, service }
+  }
+
+  const failing = () => vi.fn(async () => { throw new Error('provider down') }) as unknown as NewsSentimentInvoke
+
+  it('retries a failed call once, so one hiccup does not become a rule judgment', async () => {
+    const { providerId, modelId } = readyProviders()
+    let calls = 0
+    const invoke = vi.fn(async () => {
+      calls += 1
+      if (calls === 1) throw new Error('provider down')
+      return { ok: true as const, output: modelOutput(), providerId, modelId, trace: { taskId: 't', durationMs: 1 } }
+    }) as unknown as NewsSentimentInvoke
+    const { service, store } = makeService(invoke, 1)
+
+    const result = await service.scoreItems({ itemIds: ['item-a'] })
+    expect(result).toMatchObject({ model: 1, rules: 0, modelCalls: 2 })
+    expect(invoke).toHaveBeenCalledTimes(2)
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')?.engine).toBe('model')
+  })
+
+  it('does not retry an invalid output: the model already answered', async () => {
+    const invoke = vi.fn(async (request: { parse: (value: unknown) => unknown }) => ({
+      ok: true as const,
+      output: request.parse({ polarity: 'sideways' }),
+      providerId: 'p', modelId: 'm', trace: { taskId: 't', durationMs: 1 }
+    })) as unknown as NewsSentimentInvoke
+    const { service, store } = makeService(invoke, 1)
+
+    const result = await service.scoreItems({ itemIds: ['item-a'] })
+    expect(result).toMatchObject({ model: 0, rules: 1, modelCalls: 1 })
+    expect(invoke).toHaveBeenCalledTimes(1)
+    expect(store.getLatestSentiment('item-a', '2026-10-24T13:00:00.000Z')?.caveats).toContain('news-model-invalid-output')
+  })
+
+  it('stops calling the model after three consecutive failures', async () => {
+    const invoke = failing()
+    const { service, store } = makeService(invoke, 6)
+
+    const result = await service.scoreItems({ limit: 10 })
+    // Three items x (call + retry), then the rest go straight to rules.
+    expect(invoke).toHaveBeenCalledTimes(6)
+    expect(result).toMatchObject({ model: 0, rules: 6, modelCalls: 6 })
+    // The pass is ordered newest-first, so the last three items are the degraded ones, whichever
+    // ids they happen to be.
+    const degraded = ids.filter((id) => store.getLatestSentiment(`item-${id}`, '2026-10-24T13:00:00.000Z')?.caveats.includes('news-model-degraded'))
+    expect(degraded).toHaveLength(3)
+  })
+
+  it('spends retries from the same pass allowance instead of a second counter', async () => {
+    const invoke = failing()
+    const { service, store } = makeService(invoke, 3)
+
+    const result = await service.scoreItems({ limit: 3 })
+    expect(result).toMatchObject({ model: 0, rules: 3, modelCalls: 3 })
+    expect(invoke).toHaveBeenCalledTimes(3)
+    // The pass ran out mid-item; the remaining judgments say why they have no model answer.
+    const exhausted = ids.filter((id) => store.getLatestSentiment(`item-${id}`, '2026-10-24T13:00:00.000Z')?.caveats.includes('news-model-budget-exhausted'))
+    expect(exhausted.length).toBeGreaterThan(0)
+  })
+})

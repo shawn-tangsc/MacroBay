@@ -25,7 +25,14 @@ export type NewsSentimentScoringResult = Readonly<{
   rules: number
   skipped: number
   failed: number
+  /** Model calls spent by this run, retries included — the same allowance the pass is capped by. */
+  modelCalls: number
 }>
+
+/** 154 §7.1：单条失败重试 1 次（一次调用 + 一次重试）。 */
+const MAX_ATTEMPTS_PER_ITEM = 2
+/** 154 §7.1：连续 3 条没拿到模型判断，本轮余下条目不再调用模型。 */
+const CONSECUTIVE_FAILURES_BEFORE_FALLBACK = 3
 
 const SOURCES = new Set<string>(NEWS_SENTIMENT_SOURCE_IDS)
 const OKX_TYPES = new Set<string>(OKX_SENTIMENT_ANN_TYPES)
@@ -62,18 +69,59 @@ export function createNewsSentimentScoringService(deps: {
 
       const admitted = deps.pipeline.listItems().filter(isAdmittedItem)
       const requestedIds = input.itemIds?.length ? new Set(input.itemIds) : undefined
+      // One number for the whole pass: how many items it may judge is also how many model calls it
+      // may spend, and a retry is spent from the same allowance. A second counter would drift from
+      // this one the day either changes (the lesson of the analysis budget).
+      const runBudget = Math.max(1, input.limit ?? deps.maxPerRun ?? 20)
       const candidates = admitted
         .filter((item) => !requestedIds || requestedIds.has(item.itemId))
         .filter((item) => !isCurrent(deps.store.getLatestSentiment(item.itemId, deps.now()), useModel, modelRef))
         // The pass is capped; newest first so the visible window fills before older backlog.
         .sort((left, right) => (right.publishedAt ?? '').localeCompare(left.publishedAt ?? ''))
-        .slice(0, input.limit ?? deps.maxPerRun ?? 20)
+        .slice(0, runBudget)
 
       let processed = 0
       let modelCount = 0
       let rulesCount = 0
       let skipped = 0
       let failed = 0
+      let modelCalls = 0
+      // 154 §7.1: three judgments in a row without a model answer means this run stops paying for one.
+      let consecutiveModelFailures = 0
+
+      /**
+       * One model attempt. `'invalid'` means the model answered but broke the contract; `'failed'`
+       * is the transient kind the caller is allowed to retry once.
+       */
+      const invokeOnce = async (
+        target: { itemId: string; sourceId: string; publishedAt: string; title: string },
+        body: string,
+        providerId: string,
+        modelId: string
+      ): Promise<NewsSentimentJudgment | 'invalid' | 'failed'> => {
+        try {
+          const result = await deps.invoke<NewsSentimentJudgment | null>({
+            taskId: `market-intelligence.news-sentiment:${target.itemId}`,
+            providerId,
+            modelId,
+            messages: buildNewsSentimentMessages({
+              sourceName: target.sourceId,
+              publishedAt: target.publishedAt,
+              title: target.title,
+              body
+            }),
+            parse: (raw) => {
+              const parsed = parseNewsPolarityModelOutput(raw, body)
+              return parsed.ok ? parsed.value : null
+            },
+            timeoutMs: 30_000
+          })
+          if (!result.ok) return 'failed'
+          return result.output ?? 'invalid'
+        } catch {
+          return 'failed'
+        }
+      }
 
       for (const item of candidates) {
         if (!item.publishedAt) {
@@ -93,46 +141,61 @@ export function createNewsSentimentScoringService(deps: {
         const caveats: string[] = []
 
         if (useModel && model.providerId && model.modelId) {
+          const providerId = model.providerId
+          const modelId = model.modelId
           let modelJudgment: NewsSentimentJudgment | null = null
-          let modelError: 'invalid' | 'failed' = 'failed'
-          try {
-            const result = await deps.invoke<NewsSentimentJudgment | null>({
-              taskId: `market-intelligence.news-sentiment:${item.itemId}`,
-              providerId: model.providerId,
-              modelId: model.modelId,
-              messages: buildNewsSentimentMessages({
-                sourceName: item.sourceId,
-                publishedAt: item.publishedAt,
-                title: item.title,
-                body
-              }),
-              parse: (raw) => {
-                const parsed = parseNewsPolarityModelOutput(raw, body)
-                if (parsed.ok) return parsed.value
-                modelError = 'invalid'
-                return null
-              },
-              timeoutMs: 30_000
-            })
-            if (result.ok && result.output) modelJudgment = result.output
-            else if (result.ok) modelError = 'invalid'
-          } catch {
-            modelError = 'failed'
+          let modelError: 'invalid' | 'failed' | 'budget' | 'degraded' = 'failed'
+
+          if (modelCalls >= runBudget) {
+            modelError = 'budget'
+          } else if (consecutiveModelFailures >= CONSECUTIVE_FAILURES_BEFORE_FALLBACK) {
+            modelError = 'degraded'
+          } else {
+            for (
+              let attempt = 0;
+              attempt < MAX_ATTEMPTS_PER_ITEM && modelCalls < runBudget;
+              attempt += 1
+            ) {
+              modelCalls += 1
+              const outcome = await invokeOnce(
+                { itemId: item.itemId, sourceId: item.sourceId, publishedAt: item.publishedAt, title: item.title },
+                body,
+                providerId,
+                modelId
+              )
+              if (typeof outcome === 'object') {
+                modelJudgment = outcome
+                break
+              }
+              modelError = outcome
+              // 154 §7.1 retries a failed call once. An invalid output is an answer, not a transient
+              // fault — it keeps its own caveat instead of buying a second identical prompt.
+              if (outcome === 'invalid') break
+            }
+            // Running out of the pass's allowance is the reason this item got no model answer, even
+            // though the last attempt that fit also failed.
+            if (!modelJudgment && modelCalls >= runBudget) modelError = 'budget'
           }
 
           if (modelJudgment) {
+            consecutiveModelFailures = 0
             judgment = modelJudgment
             engine = 'model'
             modelRefUsed = modelRef
             promptVersion = NEWS_SENTIMENT_PROMPT_VERSION
           } else {
+            consecutiveModelFailures += 1
             judgment = scoreNewsWithRules({ title: item.title, summary: item.summary })
             engine = 'rules'
             ruleId = judgment.reasonCode
             caveats.push(
               modelError === 'invalid'
                 ? NEWS_SENTIMENT_CAVEATS.modelInvalidOutput
-                : NEWS_SENTIMENT_CAVEATS.modelUnavailable
+                : modelError === 'budget'
+                  ? NEWS_SENTIMENT_CAVEATS.modelBudgetExhausted
+                  : modelError === 'degraded'
+                    ? NEWS_SENTIMENT_CAVEATS.modelDegraded
+                    : NEWS_SENTIMENT_CAVEATS.modelUnavailable
             )
           }
         } else {
@@ -166,7 +229,7 @@ export function createNewsSentimentScoringService(deps: {
 
       const requestedCount = requestedIds ? requestedIds.size : admitted.length
       skipped = Math.max(0, requestedCount - candidates.length)
-      return { processed, model: modelCount, rules: rulesCount, skipped, failed }
+      return { processed, model: modelCount, rules: rulesCount, skipped, failed, modelCalls }
     }
   }
 }
