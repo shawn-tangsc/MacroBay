@@ -9,7 +9,7 @@ import type { AgentText } from '../../../agentText'
 import SkillDetailModal from '../../SkillDetailModal'
 import SkillMarketplaceModal from '../../SkillMarketplaceModal'
 import { buildAgentSkillRuntimeViewModel } from '../../agentSkillRuntimeViewModel'
-import { EmptyCatalog } from './EmptyCatalog'
+import { EmptyState } from '@platform/ui/components/empty-state'
 
 type SkillCatalogProps = {
   text: AgentText
@@ -78,10 +78,11 @@ export function SkillCatalog({
         onClose={() => setDetailSkillId(null)}
       />
       {skills.length === 0 ? (
-        <EmptyCatalog
+        <EmptyState
+          className="agent-empty-catalog"
           icon={<Sparkles size={17} />}
           title={text.editor.tools.noSkillTitle}
-          description={text.editor.tools.noSkillDescription}
+          reason={text.editor.tools.noSkillDescription}
         />
       ) : (
         skills.map((skill) => (

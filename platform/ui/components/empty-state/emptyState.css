@@ -1,0 +1,31 @@
+/*
+ * 空态基座。迁移期与旧类名共存：旧页面的 `.agent-empty-catalog strong/span` 仍然生效，
+ * 这里只补颜色与动作按钮，**不加任何布局规则**——加了就会在迁移当天改变间距，
+ * 「零外观变化」当场作废。布局由所在容器决定。
+ */
+.empty-state {
+  display: block;
+}
+
+.empty-state strong {
+  color: var(--text-strong);
+}
+
+.empty-state span {
+  color: var(--muted);
+}
+
+.empty-state-action {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.empty-state-action:disabled {
+  cursor: default;
+  color: var(--muted);
+}

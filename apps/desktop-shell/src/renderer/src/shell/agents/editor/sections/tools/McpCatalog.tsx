@@ -7,7 +7,7 @@ import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
-import { EmptyCatalog } from './EmptyCatalog'
+import { EmptyState } from '@platform/ui/components/empty-state'
 import {
   emptyToolsHint,
   McpStatusTag,
@@ -47,10 +47,11 @@ export function McpCatalog({
     <div className="agent-tool-catalog">
       <div className="agent-tool-list-heading">{text.editor.tools.boundHeading}</div>
       {catalog.bound.length === 0 && manualMcps.length === 0 ? (
-        <EmptyCatalog
+        <EmptyState
+          className="agent-empty-catalog"
           icon={<Network size={17} />}
           title={text.editor.tools.noMcpTitle}
-          description={text.editor.tools.noMcpDescription}
+          reason={text.editor.tools.noMcpDescription}
         />
       ) : (
         <div className="agent-tool-catalog compact">
@@ -83,10 +84,11 @@ export function McpCatalog({
 
       <div className="agent-tool-list-heading">{text.editor.tools.mcpRegistryHeading}</div>
       {catalog.addable.length === 0 ? (
-        <EmptyCatalog
+        <EmptyState
+          className="agent-empty-catalog"
           icon={<Network size={17} />}
           title={text.editor.tools.noMcpRegistryTitle}
-          description={text.editor.tools.noMcpRegistryDescription}
+          reason={text.editor.tools.noMcpRegistryDescription}
         />
       ) : (
         <div className="agent-tool-catalog compact">

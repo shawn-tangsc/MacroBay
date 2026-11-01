@@ -14,7 +14,7 @@ import type { AgentSkillBinding, AgentStoreState } from '@platform/ai/agent-plat
 
 import { useAgentText } from '../../agentTextProvider'
 import { BuiltinToolCatalog } from './tools/BuiltinToolCatalog'
-import { EmptyCatalog } from './tools/EmptyCatalog'
+import { EmptyState } from '@platform/ui/components/empty-state'
 import { McpCatalog } from './tools/McpCatalog'
 import { SkillCatalog } from './tools/SkillCatalog'
 import { ProductToolPackagesCatalog } from './tools/ProductToolPackagesCatalog'
@@ -177,10 +177,11 @@ export default function ToolsSection({
             children: agentId ? (
               <ProductToolPackagesCatalog text={t} agentId={agentId} search={search} />
             ) : (
-              <EmptyCatalog
+              <EmptyState
+                className="agent-empty-catalog"
                 icon={<Package size={17} />}
                 title={t.editor.tools.saveAgentBeforeProductToolsTitle}
-                description={t.editor.tools.saveAgentBeforeProductToolsDescription}
+                reason={t.editor.tools.saveAgentBeforeProductToolsDescription}
               />
             )
           },
@@ -199,10 +200,11 @@ export default function ToolsSection({
                 onUninstall={(skillId) => void window.platform.agents.skills.uninstall(skillId)}
               />
             ) : (
-              <EmptyCatalog
+              <EmptyState
+                className="agent-empty-catalog"
                 icon={<Sparkles size={17} />}
                 title={t.editor.tools.saveAgentBeforeSkillTitle}
-                description={t.editor.tools.saveAgentBeforeSkillDescription}
+                reason={t.editor.tools.saveAgentBeforeSkillDescription}
               />
             )
           }

@@ -6,7 +6,7 @@ import type { LocalizedText } from '@platform/product-manifest'
 
 import type { AgentText } from '../../../agentText'
 import { useAgentLanguage } from '../../../agentTextProvider'
-import { EmptyCatalog } from './EmptyCatalog'
+import { EmptyState } from '@platform/ui/components/empty-state'
 import { ProductToolPackageCard } from './ProductToolPackageCard'
 import { filterProductToolPackages } from './productToolPackageFilter'
 
@@ -90,10 +90,11 @@ export function ProductToolPackagesCatalog({
 
   if (visiblePackages.length === 0) {
     return (
-      <EmptyCatalog
+      <EmptyState
+        className="agent-empty-catalog"
         icon={<Package size={17} />}
         title={text.editor.tools.noProductToolPackagesTitle}
-        description={text.editor.tools.noProductToolPackagesDescription}
+        reason={text.editor.tools.noProductToolPackagesDescription}
       />
     )
   }
