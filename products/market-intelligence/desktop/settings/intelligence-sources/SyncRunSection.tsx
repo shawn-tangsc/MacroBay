@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 
+import { Button } from 'antd'
+
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
@@ -170,7 +172,7 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
             {(['succeeded', 'failed', 'running'] as const).map((value) => <option key={value} value={value}>{text.outcome[value]}</option>)}
           </select>
         </label>
-        <button onClick={() => void exportCsv()} type="button">{text.exportCsv}</button>
+        <Button onClick={() => void exportCsv()} size="small">{text.exportCsv}</Button>
         {notice ? <span className="mi-sync-run__notice" role="status">{notice}</span> : null}
       </div>
     </header>
@@ -217,9 +219,9 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       ? <footer className="mi-sync-run__foot">
         <span>{text.showing.replace('{shown}', String(visible.length)).replace('{total}', String(filtered.length))}{text.joiner}{text.retention}</span>
         {pageCount > 1 ? <span className="mi-sync-run__pager">
-          <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} type="button">{text.previous}</button>
+          <Button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} size="small">{text.previous}</Button>
           <span>{text.page.replace('{page}', String(currentPage + 1)).replace('{pages}', String(pageCount))}</span>
-          <button disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)} type="button">{text.next}</button>
+          <Button disabled={currentPage >= pageCount - 1} onClick={() => setPage(currentPage + 1)} size="small">{text.next}</Button>
         </span> : null}
       </footer>
       : null}

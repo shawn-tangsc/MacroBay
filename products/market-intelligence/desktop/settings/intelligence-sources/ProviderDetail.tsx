@@ -211,12 +211,14 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
               placeholder={labels.apiKey.emptyHint}
               type={revealed || credentialPristine ? 'text' : 'password'}
               value={revealed ? rawKey ?? '' : credentialDraft}
-              suffix={<button
+              suffix={<Button
                 aria-label={labels.apiKey.label}
                 className="source-provider-detail__reveal"
-                type="button"
+                icon={revealed ? <EyeOff size={13} /> : <Eye size={13} />}
                 onClick={() => void toggleReveal()}
-              >{revealed ? <EyeOff size={13} /> : <Eye size={13} />}</button>}
+                size="small"
+                type="text"
+              />}
               onChange={(event) => { setCredentialPristine(false); setRevealed(false); setRevealFailed(false); setCredentialDraft(event.target.value) }}
             />
             <Button disabled={credentialPristine || !credentialDraft.trim() || savingCredential} loading={savingCredential} onClick={() => void saveCredential()}>{labels.apiKey.save}</Button>
