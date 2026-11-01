@@ -57,9 +57,7 @@ export type MarketAnalysisDashboardInjection = Readonly<{
  * define keys such as `empty`, `loading` and `title`, and merging them would let
  * one surface silently display the other surface's text.
  */
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, onOpenSources, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
-  /** Opens the product's source settings from the rail's news card; the page entry owns that drawer. */
-  onOpenSources?: () => void
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
   /**
    * The calendar's own title vocabulary, read from the product registry by the page entry.
    *
@@ -254,7 +252,6 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         }}
         openEntry={openEntry}
         onOpenChange={setOpenEntry}
-        onOpenSources={onOpenSources}
         timelineText={timelineText}
       />
     </div>

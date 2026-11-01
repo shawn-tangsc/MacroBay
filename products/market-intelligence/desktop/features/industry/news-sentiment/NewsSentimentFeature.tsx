@@ -11,7 +11,6 @@ import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { NewsSentimentDrawer } from './NewsSentimentDrawer'
 import { NewsSentimentSettingsModal } from './NewsSentimentSettingsModal'
-import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import { useNewsSentiment } from './useNewsSentiment'
 
 import './newsSentiment.css'
@@ -25,8 +24,6 @@ export function NewsSentimentFeature(props: {
   text: NewsSentimentText
   client?: NewsSentimentClient
   now?: () => Date
-  /** Opens the product's source settings: the "sources are off" empty state has nowhere else to go. */
-  onOpenSources?: () => void
   /** Injected in tests; production reads the product's own source client. */
   sourcesClient?: {
     runNow: (sourceId: string) => Promise<unknown>
