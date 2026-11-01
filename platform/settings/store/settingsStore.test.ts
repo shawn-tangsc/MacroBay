@@ -90,7 +90,8 @@ describe('app settings', () => {
     ).toEqual({
       proxyMode: 'custom',
       proxyUrl: 'http://127.0.0.1:7888',
-      proxyBypassRules: 'localhost 127.0.0.1'
+      // 读取时归一化成 Chromium 语法（逗号分隔）：空白/分号都是历史写法。
+      proxyBypassRules: 'localhost,127.0.0.1'
     })
   })
 

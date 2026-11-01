@@ -1,3 +1,5 @@
+import { normalizeBypassRules } from '../../network/proxyBypass'
+
 import {
   createDefaultNotificationRuntimeSettings,
   type NotificationRuntimeSettings
@@ -234,8 +236,11 @@ export function normalizeNetworkSettings(
   const normalized = {
     proxyMode: isProxyMode(candidate.proxyMode) ? candidate.proxyMode : defaults.proxyMode,
     proxyUrl: typeof candidate.proxyUrl === 'string' ? candidate.proxyUrl.trim() : defaults.proxyUrl,
-    proxyBypassRules:
-      typeof candidate.proxyBypassRules === 'string' ? candidate.proxyBypassRules.trim() : defaults.proxyBypassRules
+    // 历史数据可能用分号分隔、夹着 `:1` 这类残留：读取时就归一化成 Chromium 语法，
+    // 否则一次无关保存也会被旧规则挡住。
+    proxyBypassRules: normalizeBypassRules(
+      typeof candidate.proxyBypassRules === 'string' ? candidate.proxyBypassRules : defaults.proxyBypassRules
+    )
   }
 
   if (isLegacyImplicitProxyDefault(normalized)) {

@@ -12,6 +12,8 @@ export function assertProxySettingsPatchAccepted(
   patch: AppSettingsPatch,
   current: NetworkSettings
 ): void {
+  // 只有 patch 真的带了 network 才校验：改语言/主题不能被一条历史网络数据挡住。
+  if (!hasNetworkField(patch)) return
   const validation = validateNetworkSettings(mergeNetworkSettingsPatch(patch, current))
   if (!validation.ok) {
     throw new Error(`${PROXY_SETTINGS_REJECTED_PREFIX}:${validation.reason}`)
@@ -19,6 +21,10 @@ export function assertProxySettingsPatchAccepted(
 }
 
 /** 补丁里只有已知形状的字段才参与校验，其余保持当前值。 */
+function hasNetworkField(patch: AppSettingsPatch): boolean {
+  return Object.prototype.hasOwnProperty.call(patch, 'network') && patch.network !== undefined
+}
+
 export function mergeNetworkSettingsPatch(
   patch: AppSettingsPatch,
   current: NetworkSettings

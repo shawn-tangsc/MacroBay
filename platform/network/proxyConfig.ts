@@ -1,6 +1,6 @@
 import type { NetworkSettings } from '../settings/schema/appSettings'
 
-import { checkBypassRules } from './proxyBypass'
+import { checkBypassRules, normalizeBypassRules } from './proxyBypass'
 
 export type SessionProxyConfig = {
   mode?: 'direct' | 'auto_detect' | 'pac_script' | 'fixed_servers' | 'system'
@@ -106,12 +106,9 @@ export function validateNetworkSettings(network: NetworkSettings): NetworkSettin
   return { ok: true, interpretation: resolution.protocolWasImplicit ? 'socks5-implicit' : 'explicit' }
 }
 
+/** Chromium 的绕过规则列表；归一化逻辑只有 `proxyBypass` 一份。 */
 export function normalizeProxyBypassRules(value: string): string {
-  return value
-    .split(/[,\s]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .join(',')
+  return normalizeBypassRules(value)
 }
 
 function defaultPortForProtocol(protocol: string): string {

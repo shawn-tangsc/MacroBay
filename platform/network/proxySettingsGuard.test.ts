@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createDefaultAppSettings } from '../settings/schema/appSettings'
+import { createDefaultAppSettings, normalizeNetworkSettings } from '../settings/schema/appSettings'
 
 import {
   assertProxySettingsPatchAccepted,
@@ -28,6 +28,31 @@ describe('proxySettingsGuard', () => {
     expect(readProxyRejectionReason(rejectionOf('myproxy'))).toBe('unparsable')
     expect(readProxyRejectionReason(rejectionOf('ftp://1.2.3.4:1'))).toBe('unsupported-protocol')
     expect(readProxyRejectionReason(rejectionOf(''))).toBe('empty')
+  })
+
+  it('does not let a stored proxy problem block an unrelated save', () => {
+    // 现象：语言存不下来。根因是校验每次保存都跑，并沿用库里的旧网络数据。
+    const staleNetwork = { proxyMode: 'custom' as const, proxyUrl: 'myproxy', proxyBypassRules: 'localhost' }
+    expect(() => assertProxySettingsPatchAccepted({ language: 'en-US' }, staleNetwork)).not.toThrow()
+    expect(() => assertProxySettingsPatchAccepted({ themeMode: 'dark' }, staleNetwork)).not.toThrow()
+    // 真改网络时才校验，并给得出原因。
+    expect(() => assertProxySettingsPatchAccepted({ network: staleNetwork }, staleNetwork)).toThrow()
+  })
+
+  it('migrates semicolon-separated legacy rules instead of trapping the user', () => {
+    const normalized = normalizeNetworkSettings({
+      proxyMode: 'custom',
+      proxyUrl: 'socks5://127.0.0.1:1080',
+      proxyBypassRules: 'localhost;127.0.0.1;:1;api.bls.gov;www.bls.gov'
+    })
+
+    expect(normalized.proxyBypassRules).toBe('localhost,127.0.0.1,api.bls.gov,www.bls.gov')
+    expect(() =>
+      assertProxySettingsPatchAccepted(
+        { network: { proxyMode: 'custom', proxyUrl: 'http://127.0.0.1:7890', proxyBypassRules: normalized.proxyBypassRules } },
+        currentNetwork()
+      )
+    ).not.toThrow()
   })
 
   it('lets a bare host:port through, because it is a supported shorthand', () => {
