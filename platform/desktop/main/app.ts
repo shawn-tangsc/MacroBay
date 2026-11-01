@@ -156,7 +156,7 @@ import type {
 import { createSqliteProductAgentToolTraceRepository } from '../../ai/agent-platform/productTools/createSqliteProductAgentToolTraceRepository'
 import type { AppLanguage, AppSettingsPatch, ModelDefaultsSettings, NetworkSettings } from '../../settings/schema/appSettings'
 import { createDefaultAppSettings, supportedLanguages } from '../../settings/schema/appSettings'
-import { createSettingsStore } from '../../settings/store/settingsStore'
+import { createSettingsStore, type SettingsCommittedListener } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
 import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
 import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy, probeDirectEgress } from '../../network/proxySelfTest'
@@ -1333,6 +1333,7 @@ export type DesktopAppBootstrapOptions = {
     getNetworkSettings: () => Promise<NetworkSettings>
     /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
     getTimeZone?: () => string
+    onSettingsCommitted?: (listener: SettingsCommittedListener) => () => void
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
@@ -1558,9 +1559,7 @@ function registerIpcHandlers(
     await writeFile(filePath, bytes)
     return filePath
   })
-  // PLAT-27：`platform:external-apps-*` 此前只有声明、没有 handler（死通道 ⇒ Agent 聊天栏「外部应用」列表
-  // 永不出现）。主进程侧本就存在可平凡接线的枚举实现（`ExternalAppsService`）⇒ 注册 handler（情形 ①），
-  // 不新增通道、不改按钮的 fail-closed 行为；枚举来源是 OS 的协议处理器查询，路径入参经既有 allow-list 校验。
+  // PLAT-27：`platform:external-apps-*` 只补上 handler（此前是死通道）；不新增通道、不改 fail-closed。
   ipcMain.handle(IpcChannels.externalAppsListInstalled, () => externalAppsService.listInstalledAppViews())
   ipcMain.handle(IpcChannels.externalAppsLaunchWorkspace, (_event: IpcMainInvokeEvent, input: unknown) =>
     externalAppsService.launchWorkspace(validateLaunchExternalAppRequest(input)))
@@ -1575,11 +1574,11 @@ function registerIpcHandlers(
       // 内置 Agent/会话文案按 id 重新解析到新语言；用户改过的字段不动，也不写任何迁移标记。
       await refreshBuiltinSeedCopy(next.language)
     }
-    // 时区改动必须立刻影响后续排期/日界，不必等重启。
     await shellTimeZone.refresh()
     await applySessionProxySettings(next.network)
     // PLAT-32/S1：偏好的**唯一对账点** = 这条显式通知（受控读取不再带副作用；通知自身绝不 reject）
     void panelWorkspaceForDisposal?.notifyPreferencesChanged()
+    settingsStore.notifyCommitted()
     return next
   })
   ipcMain.handle(IpcChannels.channelsCatalog, () => channelManagementService.catalog())
@@ -2589,7 +2588,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
 
-  // 产品注册 → 封口 → 验收：失败先写具名日志再降级（这条路径原本什么都不记，白窗口时日志里一行都没有）。
+  // 产品注册 → 封口 → 验收；失败路径的具名日志在 runProductBootstrap 里，这里只负责停止启动。
   const productBootstrap = await runProductBootstrap({
       registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({
               register: productIpcRegistry.register,
@@ -2607,6 +2606,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
               },
               // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
               getTimeZone: () => shellTimeZone.get(),
+              onSettingsCommitted: settingsStore.onCommitted,
               platformFetch: getPlatformFetch(),
               secretVault: providerSecretVault,
               registerProductAgentToolHandler,

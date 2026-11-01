@@ -398,3 +398,73 @@ describe('app settings', () => {
     ).toEqual({ policyPreset: 'balanced' })
   })
 })
+
+describe('settings committed registration', () => {
+  it('names what actually changed, and only notifies once the commit is complete', async () => {
+    const store = createSettingsStore()
+    const calls: unknown[] = []
+    store.onCommitted((change) => calls.push(change))
+
+    await store.update({ timeZone: 'Asia/Tokyo' })
+    // 提交了但副作用还没跑完：此时通知订阅方，它读到的是半路状态。
+    expect(calls).toHaveLength(0)
+
+    store.notifyCommitted()
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      changedKeys: ['timeZone'],
+      previous: { timeZone: 'system' },
+      next: { timeZone: 'Asia/Tokyo' }
+    })
+  })
+
+  it('stays silent for a save that changes nothing, so a no-op save never reschedules a task', async () => {
+    const store = createSettingsStore()
+    const calls: unknown[] = []
+    store.onCommitted((change) => calls.push(change))
+
+    await store.update({ timeZone: 'Asia/Tokyo' })
+    store.notifyCommitted()
+    await store.update({ timeZone: 'Asia/Tokyo' })
+    store.notifyCommitted()
+
+    expect(calls).toHaveLength(1)
+  })
+
+  it('notifies each commit once and never repeats the previous one', async () => {
+    const store = createSettingsStore()
+    const calls: unknown[] = []
+    store.onCommitted((change) => calls.push(change))
+
+    await store.update({ timeZone: 'Asia/Tokyo' })
+    store.notifyCommitted()
+    store.notifyCommitted()
+    await store.update({ timeZone: 'UTC' })
+    store.notifyCommitted()
+
+    expect(calls).toHaveLength(2)
+  })
+
+  it('does not turn a subscriber failure into a failed save', async () => {
+    const store = createSettingsStore()
+    store.onCommitted(() => {
+      throw new Error('subscriber bug')
+    })
+
+    await expect(store.update({ timeZone: 'UTC' })).resolves.toMatchObject({ timeZone: 'UTC' })
+    expect(() => store.notifyCommitted()).not.toThrow()
+  })
+
+  it('stops notifying after unsubscribe, and notifying before any commit is a no-op', async () => {
+    const store = createSettingsStore()
+    const calls: unknown[] = []
+    const unsubscribe = store.onCommitted((change) => calls.push(change))
+
+    expect(() => store.notifyCommitted()).not.toThrow()
+    unsubscribe()
+    await store.update({ timeZone: 'UTC' })
+    store.notifyCommitted()
+
+    expect(calls).toEqual([])
+  })
+})
