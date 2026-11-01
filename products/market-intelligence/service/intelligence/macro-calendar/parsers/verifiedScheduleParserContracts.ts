@@ -11,6 +11,14 @@ export type MacroCalendarScheduleDraft = {
   revisionKind: MacroCalendarRevisionKind
   scheduledDate: string
   scheduledAt?: string
+  /**
+   * Whether this meeting publishes projection materials (the SEP / dot plot).
+   *
+   * The official calendar marks those meetings with a trailing asterisk on the date block, which
+   * is the only machine-readable signal on the page; without it a reader cannot tell an ordinary
+   * meeting from one that will also move the median path.
+   */
+  hasProjectionMaterials?: boolean
   providerId: MacroCalendarOfficialSourceDescriptor['providerId']
   descriptorId: MacroCalendarOfficialSourceDescriptor['descriptorId']
   sourceUrl: string

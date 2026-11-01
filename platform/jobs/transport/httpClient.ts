@@ -33,7 +33,8 @@ export type HttpClientLogEntry = {
 }
 
 export type HttpClientOptions = {
-  fetchImpl?: typeof fetch
+  /** 出网通道，必传：缺席就退回全局 fetch 等于留一个静默绕过口。 */
+  fetchImpl: typeof fetch
   retryPolicy?: HttpClientRetryPolicy
   redactHeaders?: string[]
   onLog?: (entry: HttpClientLogEntry) => void
@@ -50,9 +51,9 @@ const DEFAULT_RETRYABLE_STATUSES = [408, 429, 500, 502, 503, 504]
 
 export async function httpRequest(
   request: HttpClientRequest,
-  options: HttpClientOptions = {}
+  options: HttpClientOptions
 ): Promise<HttpClientResponse> {
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl
   const retryPolicy = options.retryPolicy ?? { maxAttempts: 1 }
   const redactHeaders = normalizeHeaderNames(options.redactHeaders ?? ['authorization', 'x-api-key'])
   const maxAttempts = Math.max(1, retryPolicy.maxAttempts)

@@ -1,4 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import type { CapabilityDomain } from './capabilityTypes'
@@ -6,9 +8,13 @@ import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
 
 export type ReadHandlerDeps = {
   jobRuntime: JobRuntime
+  /** Built once by the composition root; handlers never reach for the singleton themselves. */
+  intelligenceModule: IntelligenceModule
   getAppLanguage: () => Promise<AppLanguage>
   macroCalendarOps: MacroCalendarOps
   crossAssetOps: CrossAssetOps
+  /** The panel's own read, so a tool answer and the card can never disagree. */
+  policyPath?: { read: (input: { asOf: string }) => unknown | undefined }
 }
 
 export const DOMAIN_ORDER: readonly CapabilityDomain[] = [

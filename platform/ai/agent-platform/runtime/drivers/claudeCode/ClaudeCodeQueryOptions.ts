@@ -5,6 +5,11 @@ import type { ClaudeCodeMcpServerConfig } from './ClaudeCodeMcpServerConfig'
 import type { ClaudeCodeCompositionSettings } from './ClaudeCodeSettingsBuilder'
 import { buildClaudeCodeSkillContext } from './ClaudeCodeSkillContext'
 import { buildClaudeCodeToolPolicyFromSettings, type ClaudeCodeToolPolicy } from './ClaudeCodeToolPolicy'
+import {
+  applyClaudeCodeOutputLimitEnv,
+  resolveClaudeCodeOutputLimit,
+  type ClaudeCodeOutputLimit
+} from './ClaudeCodeOutputLimit'
 
 /** Provider environments push third-party relays to `max`; an explicit agent choice must win. */
 const EFFORT_ENV_KEY = 'CLAUDE_CODE_EFFORT_LEVEL'
@@ -41,6 +46,8 @@ export type ClaudeCodeRuntimeMetadata = {
   skillToolIds: string[]
   runtimeMcpToolNames?: string[]
   skillContext?: string | null
+  /** 本回合的单轮输出上限及其来源；`undefined` = 调用方构造的旧元数据。 */
+  outputLimit?: ClaudeCodeOutputLimit
   toolPolicy: ClaudeCodeToolPolicy
 }
 
@@ -56,6 +63,8 @@ export type ClaudeCodeQueryOptionsInput = {
   effectiveResume?: string
   /** 模型能力声明为不支持推理时强制关闭思考；`undefined` = 未声明，保持原行为。 */
   modelSupportsReasoning?: boolean
+  /** 模型声明的 `maxCompletionTokens`；缺省 = 没有能力值，用安全默认。 */
+  modelMaxOutputTokens?: number | null
 }
 
 export type ClaudeCodeQueryOptions = {
@@ -74,12 +83,16 @@ export function createClaudeCodeQueryOptionsFromSettings(input: ClaudeCodeQueryO
   const reasoningDisabled = requestedEffort === 'off' || input.modelSupportsReasoning === false
   const configuredEffort: Exclude<AgentEffort, 'off'> | null =
     requestedEffort && requestedEffort !== 'off' ? requestedEffort : null
+  const outputLimit = applyClaudeCodeOutputLimitEnv(
+    resolveSdkEnvironment(input.settings, input.providerEnv, reasoningDisabled),
+    resolveClaudeCodeOutputLimit(input.modelMaxOutputTokens)
+  )
 
   return {
     sdkOptions: {
       model: input.modelId,
       cwd: input.settings.cwd,
-      env: resolveSdkEnvironment(input.settings, input.providerEnv, reasoningDisabled),
+      env: outputLimit.env,
       permissionMode: input.settings.permissionMode,
       ...(reasoningDisabled
         ? { thinking: { type: 'disabled' as const } }
@@ -100,6 +113,7 @@ export function createClaudeCodeQueryOptionsFromSettings(input: ClaudeCodeQueryO
       skillToolIds: [...input.settings.skillToolIds],
       runtimeMcpToolNames: [...(input.settings.runtimeMcpToolNames ?? [])],
       ...(skillContext !== undefined ? { skillContext } : {}),
+      outputLimit: { ...outputLimit.outputLimit },
       toolPolicy: buildClaudeCodeToolPolicyFromSettings(input.settings)
     }
   }

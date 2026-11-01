@@ -823,6 +823,58 @@ describe('analysis request refusals', () => {
   })
 })
 
+describe('market analysis timeline event captions', () => {
+  const entry = (id: string, eventGroupId: string, occurredAt: string, groupType: string | null, groupSubject: string | null) => ({
+    id, eventGroupId, analysisRunId: null, kind: 'analysis', status: 'published', occurredAt,
+    summaryRef: null, safeTitle: '市场分析已生成', safeExcerpt: '偏空。', version: 1, triggerStatus: null, groupType, groupSubject
+  })
+
+  async function renderEntries(entries: unknown[]): Promise<HTMLElement> {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: entries, nextCursor: null }
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    return container
+  }
+
+  it('names the event on every row when the list mixes events', async () => {
+    // The reported defect: two rows twenty seconds apart were two different events (a news item
+    // and a macro series), which read as one conclusion posted twice.
+    const container = await renderEntries([
+      entry('mi-tl-2', 'mi-eg-news', '2026-10-31T13:36:23.000Z', 'sentiment', 'A Nasdaq-listed company may sell $450 million bitcoin'),
+      entry('mi-tl-1', 'mi-eg-macro', '2026-10-31T13:36:04.000Z', 'macro', 'Fed Funds Target Range Upper')
+    ])
+
+    const captions = Array.from(container.querySelectorAll('.mi-analysis-timeline__group')).map(node => node.textContent)
+    expect(captions).toEqual([
+      '消息面 · A Nasdaq-listed company may sell $450 million bitcoin',
+      '宏观 · Fed Funds Target Range Upper'
+    ])
+  })
+
+  it('says nothing about the event on a list scoped to one event, or on a row whose event has no name', async () => {
+    const scoped = await renderEntries([
+      entry('mi-tl-2', 'mi-eg-1', '2026-10-31T13:36:23.000Z', 'sentiment', '某条消息'),
+      entry('mi-tl-1', 'mi-eg-1', '2026-10-31T13:00:00.000Z', 'sentiment', '某条消息')
+    ])
+    expect(scoped.querySelector('.mi-analysis-timeline__group')).toBeNull()
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    const unnamed = await renderEntries([
+      entry('mi-tl-2', 'mi-eg-1', '2026-10-31T13:36:23.000Z', 'funding', null),
+      entry('mi-tl-1', 'mi-eg-2', '2026-10-31T13:00:00.000Z', 'macro', null)
+    ])
+    expect(unnamed.querySelector('.mi-analysis-timeline__group')).toBeNull()
+  })
+})
+
 describe('market analysis timeline client refusals', () => {
   it('normalizes the already-available refusal instead of reporting a failed publish', async () => {
     // The client is where the refusal used to be collapsed into 'failed'; the hook never saw the

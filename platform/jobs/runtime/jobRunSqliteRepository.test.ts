@@ -258,3 +258,29 @@ function runFixture(input: Partial<JobRunRecord> & { id: string }): JobRunRecord
     logs: input.logs ?? []
   }
 }
+
+describe('job run ordering beyond the sequence width', () => {
+  afterEach(() => {
+    for (const repository of repositories.splice(0)) repository.close()
+  })
+
+  it('orders by time once the run sequence passes 9999', () => {
+    const repository = createRepository()
+    // String order puts `…-9999` above `…-10000`, so an id-ordered "latest" page returns the older row.
+    repository.upsertRun(runFixture({ id: 'run-sqlite-9999', createdAt: '2026-10-01T00:00:00.000Z' }))
+    repository.upsertRun(runFixture({ id: 'run-sqlite-10000', createdAt: '2026-10-30T00:00:00.000Z' }))
+    expect(repository.listRunPage({ limit: 1 }).runs[0]?.id).toBe('run-sqlite-9999')
+    expect(repository.listRunPage({ limit: 1, newestFirst: true }).runs[0]?.id).toBe('run-sqlite-10000')
+  })
+
+  it('pages newest-first without repeating a row', () => {
+    const repository = createRepository()
+    for (let index = 0; index < 5; index += 1) {
+      repository.upsertRun(runFixture({ id: `run-sqlite-${10000 + index}`, createdAt: `2026-10-3${index}T00:00:00.000Z` }))
+    }
+    const first = repository.listRunPage({ limit: 2, newestFirst: true })
+    expect(first.runs.map((run) => run.id)).toEqual(['run-sqlite-10004', 'run-sqlite-10003'])
+    const second = repository.listRunPage({ limit: 2, newestFirst: true, cursor: first.nextCursor })
+    expect(second.runs.map((run) => run.id)).toEqual(['run-sqlite-10002', 'run-sqlite-10001'])
+  })
+})

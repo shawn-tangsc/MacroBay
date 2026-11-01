@@ -97,7 +97,7 @@ function createFixture(state: AgentStoreState) {
   const commands = new TaskAutomationCommandService({
     store,
     now: () => new Date('2026-01-02T00:00:00.000Z'),
-    defaultTimezone: 'UTC',
+    timeZone: () => 'UTC',
     getPolicyPreset: async () => 'balanced'
   })
   const runtime = new TaskManagementToolRuntimeService({ store, commands })
@@ -192,7 +192,7 @@ describe('buildTaskManagementSdkMcpServer', () => {
     const commands = new TaskAutomationCommandService({
       store,
       now: () => new Date('2026-01-02T00:00:00.000Z'),
-      defaultTimezone: 'UTC',
+      timeZone: () => 'UTC',
       getPolicyPreset: async () => 'balanced'
     })
     const enqueueRun = vi.fn(async () => ({ taskId: 'task-1', runLogId: 'queued-run-1' }))

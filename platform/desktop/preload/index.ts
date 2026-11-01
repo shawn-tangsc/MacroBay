@@ -105,6 +105,8 @@ const api = {
     addOrUpdateModel: (providerId: string, model: unknown) => ipcRenderer.invoke(IpcChannels.modelProvidersAddOrUpdateModel, providerId, model),
     removeModel: (providerId: string, modelId: string) => ipcRenderer.invoke(IpcChannels.modelProvidersRemoveModel, providerId, modelId),
     setDefaultChatModel: (providerId: string, modelId: string) => ipcRenderer.invoke(IpcChannels.modelProvidersSetDefaultChatModel, providerId, modelId),
+    /** 全局巡检结论（调度在主进程的每日任务，界面只读）。 */
+    getInUseRetired: () => ipcRenderer.invoke(IpcChannels.modelProvidersGetInUseRetired),
     testConnection: (
       providerId: string,
       options?: {

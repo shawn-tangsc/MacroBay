@@ -87,7 +87,6 @@ function sourceDefinition(overrides: Partial<IntelligenceSourceDefinition> = {})
     defaultRetentionMode: 'balanced',
     defaultScopePolicy: 'watchlist-priority',
     supportsSentiment: true,
-    supportsCredentialTest: false,
     supportsRunNow: true,
     supportsReplay: true,
     sourceSpecificFields: [],
@@ -208,6 +207,27 @@ describe('publicQueryService hindsight regressions', () => {
 
     service.setCrossAssetQuery(undefined)
     expect(await service.queryCrossAssetSnapshot({ range: '1h', asOf: AS_OF })).toBeUndefined()
+  })
+
+  it('reads the macro history through one late-bound reader, and fails closed when it is unwired', () => {
+    const service = createMarketIntelligencePublicQueryService({
+      pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }), listSourceDefinitions: () => []
+    })
+
+    // Unwired is "no historical answer exists in this build", not an empty store.
+    expect(service.queryMacroHistoryAsOf({ series: 'dxy', asOf: AS_OF })).toBeUndefined()
+
+    const read = vi.fn(() => ({
+      state: 'unavailable' as const, series: 'dxy', asOf: AS_OF,
+      gapCode: 'historical-as-of-unavailable' as const, detail: 'the store holds no point at or before this instant.'
+    }))
+    service.setMacroHistoryAsOfQuery({ read })
+    expect(service.queryMacroHistoryAsOf({ series: 'dxy', asOf: AS_OF }))
+      .toMatchObject({ state: 'unavailable', gapCode: 'historical-as-of-unavailable' })
+    expect(read).toHaveBeenCalledWith({ series: 'dxy', asOf: AS_OF })
+
+    service.setMacroHistoryAsOfQuery({ read: () => { throw new Error('store down') } })
+    expect(service.queryMacroHistoryAsOf({ series: 'gold', asOf: AS_OF })).toBeUndefined()
   })
 
   it('does not return events whose detectedAt is after asOf even when publishedAt is earlier', async () => {
@@ -620,3 +640,65 @@ function crossAssetSnapshot() {
     observationKey: { indexBtc: 'unavailable' as const, ethBtc: 'unavailable' as const },
     indexSource: 'unavailable' as const }
 }
+
+describe('module signals', () => {
+  const bucketMs = 15 * 60_000
+  // The marked bucket has to be closed by the instant asked for, or the query never looks at it.
+  const lastBucket = Date.parse('2026-07-08T10:15:00.000Z')
+  /** Flat buckets, then one that looks like a liquidation, so the mark has something to mark. */
+  const positioningBars = (count: number) => Array.from({ length: count }, (_, index) => ({
+    observedAt: new Date(lastBucket - (count - 1 - index) * bucketMs).toISOString(),
+    notionalUsd: index === count - 1 ? 970_000_000 : 1_000_000_000,
+    volumeBase: index === count - 1 ? 2_500 : 1_000,
+    closePrice: index === count - 1 ? 69_000 : 70_000
+  }))
+
+  it('answers from the same open-interest read the panel makes, once', async () => {
+    const read = vi.fn(async () => ({ state: 'available' as const, btc: positioningBars(120), eth: positioningBars(120) }))
+    const service = createMarketIntelligencePublicQueryService({
+      pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }),
+      listSourceDefinitions: () => [],
+      perpetualPositioningStore: { read } as never
+    })
+
+    const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
+    // One read for the query, and the signals come out of its hints rather than a second pass.
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(signals.length).toBeGreaterThan(0)
+    expect(signals.every(signal => signal.ruleId === 'oi-liquidation-proxy')).toBe(true)
+    expect(new Set(signals.map(signal => signal.asset))).toEqual(new Set(['btc', 'eth']))
+  })
+
+  it('lets another leg join the list without changing the shape the page reads', async () => {
+    const service = createMarketIntelligencePublicQueryService({
+      pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }),
+      listSourceDefinitions: () => [],
+      perpetualPositioningStore: { read: async () => ({ state: 'unavailable' as const }) } as never
+    })
+    const later = {
+      version: '1', moduleId: 'etf-flows' as const, ruleId: 'etf-outflow-3d', asset: 'btc' as const,
+      severity: 'high' as const, observedAt: '2026-07-08T10:00:00.000Z',
+      cadence: { kind: 'trading-day' as const },
+      values: { netFlowUsd: -4.8e8, coveredDays: 3, requiredDays: 3 },
+      dedupeKey: 'etf-flows:etf-outflow-3d:btc:2026-07-08',
+      readiness: 'available' as const, triggerOwner: 'module-signal'
+    }
+    service.addModuleSignalProducer({ query: async () => [later] })
+
+    const signals = await service.queryModuleSignals({ asOf: '2026-07-08T10:30:00.000Z' })
+    expect(signals).toContainEqual(later)
+    // The open-interest leg could not read, and it says so rather than vanishing.
+    expect(signals.filter(signal => signal.moduleId === 'open-interest').every(signal => signal.readiness === 'unavailable')).toBe(true)
+  })
+
+  it('asks nothing for an instant it cannot read', async () => {
+    const read = vi.fn(async () => ({ state: 'available' as const, btc: [], eth: [] }))
+    const service = createMarketIntelligencePublicQueryService({
+      pipeline: createIntelligencePipeline({ rawRecordStore: createRawRecordStore() }),
+      listSourceDefinitions: () => [],
+      perpetualPositioningStore: { read } as never
+    })
+    expect(await service.queryModuleSignals({ asOf: '2026-07-08 10:30' })).toEqual([])
+    expect(read).not.toHaveBeenCalled()
+  })
+})

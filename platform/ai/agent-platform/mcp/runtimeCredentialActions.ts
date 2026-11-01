@@ -1,3 +1,5 @@
+import type { McpRuntimeState } from '../schemas/mcpServerSchemas'
+
 export const runtimeCredentialActionIds = [
   'open-url',
   'restart',
@@ -16,7 +18,8 @@ export type RuntimeCredentialAction = {
 }
 
 export type BuildRuntimeCredentialActionsInput = {
-  status: 'connected' | 'connecting' | 'error' | 'disabled'
+  /** 直接取运行时状态闭集，避免这里再抄一份词表——抄一份就多一处忘记同步的地方。 */
+  status: McpRuntimeState
   errorKind?: 'abort' | 'config' | 'dependency' | 'auth' | 'transient'
   message?: string
   retryable?: boolean

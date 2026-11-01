@@ -128,8 +128,8 @@ Release from `main` with an annotated tag:
 ```bash
 git switch main
 git pull --ff-only
-git tag -a v0.2.2 -m "MacroBay 0.2.2 (alpha)"
-git push origin v0.2.2
+git tag -a vX.Y.Z -m "MacroBay X.Y.Z (alpha)"
+git push origin vX.Y.Z
 ```
 
 Pushing the tag runs `.github/workflows/release.yml`, which builds the macOS dmg and the Windows

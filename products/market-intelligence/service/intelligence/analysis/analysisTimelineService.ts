@@ -9,7 +9,11 @@ type ComparableSnapshot = Pick<EvidenceSnapshot, 'id' | 'eventGroupId' | 'create
 type Repository = Readonly<{
   listTimeline: (input: { eventGroupId?: string; cursor?: string | null; limit?: number }) => { items: readonly TimelineEntry[]; nextCursor: string | null }
   getTimelineEntry?: (id: string) => TimelineEntry | undefined
-  getEventGroup: (id: string) => { id: string; currentSummaryId: string | null } | undefined
+  /**
+   * The group's own identity. Both extra fields are optional: the group row may be an older shape,
+   * and a test double that only knows the summary pointer must keep working.
+   */
+  getEventGroup: (id: string) => { id: string; currentSummaryId: string | null; groupType?: string; mergeKey?: string } | undefined
   getSnapshot?: (id: string) => (ComparableSnapshot & { asOf: string; dataCutoff: string }) | undefined
   listSnapshots?: (eventGroupId: string) => readonly ComparableSnapshot[]
   getRun: (id: string) => AnalysisRun | undefined
@@ -52,11 +56,22 @@ export type RendererChangeView = Readonly<{
 export type RendererTimelineEntry = Readonly<Pick<TimelineEntry, 'id' | 'eventGroupId' | 'analysisRunId' | 'kind' | 'status' | 'occurredAt' | 'summaryRef' | 'safeTitle' | 'safeExcerpt' | 'direction' | 'version'> & {
   /** Why the newest automatic decision for this group happened, or why it did not. */
   triggerStatus: TriggerStatus | null
+  /**
+   * Which kind of event this row belongs to (`macro`, `sentiment`, `funding`, ...).
+   *
+   * A page spans several event groups, and two rows published seconds apart are two different
+   * events, not a duplicate: without this the list reads as the same conclusion posted twice.
+   */
+  groupType: string | null
+  /** The group's own subject (a news headline, a series name) — what the conclusion is about. */
+  groupSubject: string | null
 }>
 export type RendererTimelinePage = Readonly<{ schemaVersion: 1; items: readonly RendererTimelineEntry[]; nextCursor: string | null }>
 
 export function createAnalysisTimelineService(deps: Readonly<{
   repository: Repository
+  /** 读者时区：时间线的「哪个开盘」按它换算。 */
+  timeZone: () => string
   createFollowUpSession?: (input: AnalysisFollowUpInput) => Promise<string>
 }>): Readonly<{
   listTimeline: (input: { eventGroupId?: string; cursor?: string | null; limit?: number }) => RendererTimelinePage
@@ -68,13 +83,23 @@ export function createAnalysisTimelineService(deps: Readonly<{
 }> {
   function listTimeline(input: { eventGroupId?: string; cursor?: string | null; limit?: number }): RendererTimelinePage {
     const page = deps.repository.listTimeline(input)
-    return { schemaVersion: 1, items: page.items.map(entry => toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry))), nextCursor: page.nextCursor }
+    // One group can own several rows on a page (an analysis and its review, an event and its
+    // update), and the name is read per row: without this the same group row was read once per row.
+    const groups = new Map<string, { groupType: string | null; groupSubject: string | null }>()
+    const groupFor = (eventGroupId: string) => {
+      const cached = groups.get(eventGroupId)
+      if (cached) return cached
+      const resolved = readGroup(deps, eventGroupId)
+      groups.set(eventGroupId, resolved)
+      return resolved
+    }
+    return { schemaVersion: 1, items: page.items.map(entry => toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry), groupFor(entry.eventGroupId))), nextCursor: page.nextCursor }
   }
 
   function getTimelineEntry(id: string): RendererTimelineEntry {
     const entry = deps.repository.getTimelineEntry?.(id)
     if (!entry) throw new Error('analysis-timeline-entry-not-found')
-    return toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry))
+    return toTimelineEntry(entry, readSummary(deps, entry), readTriggerStatus(deps, entry), readGroup(deps, entry.eventGroupId))
   }
 
   function getAnalysisRun(id: string) {
@@ -130,16 +155,50 @@ function readSummary(deps: { repository: Repository }, entry: TimelineEntry): { 
  * "nothing to say". Attributing the group's newest decision to every row is what made a reader's
  * 重新分析 row carry the staleness floor's wording.
  */
-function readTriggerStatus(deps: { repository: Repository }, entry: TimelineEntry): TriggerStatus | null {
+function readTriggerStatus(deps: { repository: Repository; timeZone: () => string }, entry: TimelineEntry): TriggerStatus | null {
   try {
     const run = entry.analysisRunId ? deps.repository.getRun(entry.analysisRunId) : undefined
-    return projectTriggerStatus(deps.repository.listTriggerLedger?.(entry.eventGroupId), run)
+    return projectTriggerStatus(deps.repository.listTriggerLedger?.(entry.eventGroupId), run, deps.timeZone())
   } catch {
     return null
   }
 }
 
-function toTimelineEntry(entry: TimelineEntry, summary?: { eventAssessment?: string; conclusion?: { summary: string; direction: string } }, triggerStatus: TriggerStatus | null = null): RendererTimelineEntry {
+/**
+ * The group a row belongs to; an unreadable group is "unknown", never an exception.
+ *
+ * The timeline is a read of published rows. A group that cannot be read (retention, a
+ * half-migrated store) must not turn the whole list into a failure, so the two labels simply
+ * go missing.
+ */
+function readGroup(deps: { repository: Repository }, eventGroupId: string): { groupType: string | null; groupSubject: string | null } {
+  try {
+    const group = deps.repository.getEventGroup(eventGroupId)
+    return { groupType: group?.groupType ?? null, groupSubject: subjectFromMergeKey(group?.mergeKey) }
+  } catch {
+    return { groupType: null, groupSubject: null }
+  }
+}
+
+/**
+ * What a group is about, read from its merge key.
+ *
+ * `eventGroupMergeKey` joins the group type, the source kind, the domain, the subject and the
+ * release bucket, and the bucket is always the last segment — so the subject is the one before it:
+ * a news headline for a sentiment group, the series name for a macro one. A key of an older or
+ * unknown shape yields null rather than a wrong subject; a caption naming the wrong event is worse
+ * than no caption. A subject still saying `unknown` is a placeholder, not a name.
+ */
+export function subjectFromMergeKey(mergeKey: string | null | undefined): string | null {
+  if (!mergeKey) return null
+  const segments = mergeKey.split('|')
+  if (segments.length < 5) return null
+  const subject = segments[segments.length - 2]?.trim()
+  if (!subject || subject.toLowerCase() === 'unknown') return null
+  return subject.length > 80 ? `${subject.slice(0, 79)}…` : subject
+}
+
+function toTimelineEntry(entry: TimelineEntry, summary?: { eventAssessment?: string; conclusion?: { summary: string; direction: string } }, triggerStatus: TriggerStatus | null = null, group: { groupType: string | null; groupSubject: string | null } = { groupType: null, groupSubject: null }): RendererTimelineEntry {
   const { schemaVersion: _schemaVersion, ...safe } = entry
   // Structured summaries publish their verdict as `summary`; legacy rows keep the stored excerpt.
   // Entry-level rather than page-level: `listTimeline` may span several event groups.
@@ -147,7 +206,9 @@ function toTimelineEntry(entry: TimelineEntry, summary?: { eventAssessment?: str
     ...safe,
     safeExcerpt: summary?.conclusion?.summary ?? summary?.eventAssessment ?? safe.safeExcerpt,
     direction: (summary?.conclusion?.direction as TimelineEntry['direction']) ?? safe.direction ?? null,
-    triggerStatus
+    triggerStatus,
+    groupType: group.groupType,
+    groupSubject: group.groupSubject
   }
 }
 

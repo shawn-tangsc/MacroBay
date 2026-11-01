@@ -1,5 +1,9 @@
 export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
-  schemaVersion: 1,
+  /**
+   * Bumped from 1 when the policy-path facts started carrying `sourceUrl`: new snapshots are
+   * written as 2, while a stored 1 is still a valid snapshot (the field is optional).
+   */
+  schemaVersion: 2,
   dataAccessProfileId: 'crypto-market-analysis-v1',
   outputSchemaVersion: 2,
   maximumModelFieldCharacters: 2_000,
@@ -8,28 +12,15 @@ export const MARKET_ANALYSIS_CONTRACT_POLICY = Object.freeze({
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 } as const)
 
-export const MARKET_ANALYSIS_CONTEXT_POLICY = Object.freeze({
-  defaultMaxFacts: MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems,
-  /**
-   * Share of the fact budget the macro domain may take. Providers kept filling the context with
-   * routine macro rows (112 of 161 facts at one point) and truncated capital, sentiment,
-   * funding and cross-asset away entirely, so conclusions said they lacked the numbers they
-   * needed to explain anything.
-   */
-  maximumMacroFacts: 90,
-  /**
-   * Floor under the macro ceiling: every domain keeps at least this many of its newest facts.
-   *
-   * The ceiling stopped one provider filling the context, but the budget is still global and the
-   * reading order puts funding and sentiment last, so adding a domain (cross-asset) removed theirs
-   * entirely: the 16:21 snapshot kept macro 91 / capital 60 / cross-asset 10 and **no funding and
-   * no sentiment facts at all**. Six covers the smallest domain's full series (funding holds five
-   * points) plus one, and costs nothing from the volume domains beyond the budget they already had.
-   */
-  minimumFactsPerDomain: 6,
-  maximumOutputBytes: MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes,
-  schemaVersion: 1
-} as const)
+/**
+ * The shape version of a stored analysis context result.
+ *
+ * It stays in the contract, unlike the fact budget it used to sit next to, because
+ * `MarketAnalysisContextAvailable` names it in its type: bumping it changes every reader's
+ * compile, which is exactly what a contract constant does. How many facts a context carries is a
+ * runtime budget and lives in `service/intelligence/analysis/analysisContextPolicy.ts`.
+ */
+export const MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION = 2
 
 export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
   maxItemsTruncated: 'max-items-truncated',
@@ -65,22 +56,59 @@ export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
    * Two daily series disagreed about which trading day they describe, so the difference between them
    * describes no single day. The legs are still facts; their spread is not stated.
    */
-  macroRatesMixedPeriods: 'macro-rates-mixed-observation-dates'
+  macroRatesMixedPeriods: 'macro-rates-mixed-observation-dates',
+  /** The policy-path source is enabled but the read has no meeting or no usable odds. */
+  policyPathUnavailable: 'policy-path-unavailable',
+  /** The policy-path fact set hit its own fixed budget. */
+  policyPathTruncated: 'policy-path-facts-truncated',
+  /** The odds exist but the series does not reach back 24 hours yet, so no change is stated. */
+  policyPathChange24hUnavailable: 'policy-path-24h-change-unavailable',
+  /** No SEP is stored for a meeting at or before the analysis boundary. */
+  policyPathSepUnavailable: 'policy-path-sep-unavailable',
+  /** Neither a parsed statement nor FRED published a target range. */
+  policyPathRangeUnavailable: 'policy-path-target-range-unavailable',
+  /** A computed source URL was not https on an admitted host, so it was dropped. */
+  policyPathSourceUrlInvalid: 'policy-path-source-url-invalid'
 } as const)
 
-export const MARKET_ANALYSIS_MACRO_CALENDAR_POLICY = Object.freeze({
-  maxEvents: 200,
-  factMetrics: Object.freeze({
-    eventName: 'event-name', lifecycleState: 'lifecycle-state', scheduledDate: 'scheduled-date',
-    scheduledAt: 'scheduled-at', officialReleaseDate: 'official-release-date', actual: 'actual', previous: 'previous',
-    // Market expectation. The official route has no consensus source; the 0xRouter route does,
-    // and a change in expectation moves a conclusion without any released value changing.
-    consensus: 'consensus',
-    // Derived: actual − market expectation. The unit of this fact is the presentation unit
-    // (`pp` or `relative-percent`), so a conclusion can cite the surprise instead of subtracting
-    // two display strings it cannot compare.
-    surprise: 'surprise'
-  })
+/** The source whose facts the analysis reads as a *fixed share* of the context, not an open feed. */
+export const MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID = 'policy-path-market'
+
+/**
+ * The metric names one policy-path fact may carry: the closed set the projection writes and the
+ * model vocabulary, validator and prompt read. How many of them a run may take, and how many prompt
+ * characters they may cost, are budgets and live in `analysis/analysisRunPolicy.ts`.
+ */
+export const MARKET_ANALYSIS_POLICY_PATH_METRICS = Object.freeze({
+  nextMeetingDate: 'policy-next-meeting-date',
+  impliedProbability: 'policy-implied-probability',
+  probabilityChange24h: 'policy-implied-probability-change-24h',
+  targetRange: 'policy-target-range',
+  sepMedianCurrentYear: 'policy-sep-median-current-year',
+  sepMedianPath: 'policy-sep-median-path',
+  lastDecisionVote: 'policy-last-decision-vote'
+} as const)
+
+export const MARKET_ANALYSIS_POLICY_PATH_CAVEATS = Object.freeze({
+  oddsAreMarketPricing: 'odds-are-market-pricing',
+  projectionsFromLatestSepMeeting: 'projections-from-latest-sep-meeting'
+} as const)
+
+/**
+ * The metric names one macro-calendar fact may carry. This is the identity set a stored fact and its
+ * reader must agree on, so it stays in the contract; how many calendar events a read may page
+ * through is a budget and lives in `analysis/analysisRunPolicy.ts`.
+ */
+export const MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS = Object.freeze({
+  eventName: 'event-name', lifecycleState: 'lifecycle-state', scheduledDate: 'scheduled-date',
+  scheduledAt: 'scheduled-at', officialReleaseDate: 'official-release-date', actual: 'actual', previous: 'previous',
+  // Market expectation. The official route has no consensus source; the 0xRouter route does,
+  // and a change in expectation moves a conclusion without any released value changing.
+  consensus: 'consensus',
+  // Derived: actual − market expectation. The unit of this fact is the presentation unit
+  // (`pp` or `relative-percent`), so a conclusion can cite the surprise instead of subtracting
+  // two display strings it cannot compare.
+  surprise: 'surprise'
 } as const)
 
 export const MARKET_ANALYSIS_ID_PREFIXES = Object.freeze({
@@ -202,7 +230,7 @@ export type MarketAnalysisContextInput = Readonly<{
 
 export type MarketAnalysisContextAvailable = Readonly<{
   state: 'available'
-  schemaVersion: typeof MARKET_ANALYSIS_CONTEXT_POLICY.schemaVersion
+  schemaVersion: typeof MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION
   profileId: typeof MARKET_ANALYSIS_CONTRACT_POLICY.dataAccessProfileId
   eventGroupId: string
   asOf: string
@@ -299,6 +327,11 @@ export type AgentFact = Readonly<{
   confidence: number
   comparability: AnalysisComparability
   evidenceRefId: string | null
+  /**
+   * The public page a reader can open to check this value. Optional because facts written before
+   * the policy path carried one stay valid; it never reaches the model prompt.
+   */
+  sourceUrl?: string
 }>
 
 export type AgentEvidenceRef = Readonly<{
@@ -312,6 +345,8 @@ export type AgentEvidenceRef = Readonly<{
   computedAt: string | null
   visibleAt: string
   excerptHash: string
+  /** The public page behind this evidence, when the projection knows one. */
+  sourceUrl?: string
 }>
 
 export type SourceHealthFlag = Readonly<{
@@ -370,7 +405,8 @@ export type SnapshotChange = Readonly<{
 
 export type EvidenceSnapshot = Readonly<{
   id: string
-  schemaVersion: 1
+  /** 1 is a snapshot written before facts carried `sourceUrl`; new snapshots are written as 2. */
+  schemaVersion: 1 | 2
   eventGroupId: string
   asOf: string
   dataCutoff: string
@@ -513,6 +549,57 @@ export type PredictionVerification = Readonly<{
   reasonCode: string
   reason: string
 }>
+
+/**
+ * The fixed shape of a verdict ledger row.
+ *
+ * A conclusion is deleted after fourteen days; the verdict it produced outlives it so a calibration
+ * view has something to count. That longer life must not become unbounded growth, so the two fields
+ * that come from model output are capped here: a prediction carrying more conditions than
+ * `maximumStoredConditions`, or a verdict citing more evidence than `maximumStoredEvidenceRefs`, keeps
+ * the first ones and its row records the full counts — a truncated claim that says how much it left out.
+ * The evidence a verdict was decided on is still complete for fourteen days in
+ * `mi_analysis_prediction_verifications`; the ledger is the long-lived aggregate, not the audit trail.
+ */
+export const PREDICTION_LEDGER_SHAPE_POLICY = Object.freeze({
+  maximumStoredConditions: 8,
+  maximumStoredEvidenceRefs: 8
+} as const)
+
+/**
+ * One judged prediction, kept longer than the conclusion it came from.
+ *
+ * No prose: a predicate that can be re-evaluated, the verdict it earned, the rule that produced it, the
+ * evidence it cited, and the two instants that bound it. `conditionCount` and `evidenceRefCount` are the
+ * full counts, so a reader can tell a complete row from a capped one without a flag.
+ */
+export type PredictionLedgerEntry = Readonly<{
+  /** The same id as the prediction it judges; the ledger row outlives that prediction row. */
+  predictionId: string
+  schemaVersion: 1
+  asset: 'BTC' | 'ETH'
+  horizonStart: string
+  horizonEnd: string
+  /** Canonical conditions the verdict was decided on, joined by ` && `; null when none parsed. */
+  predicate: string | null
+  /** Conditions the prediction carried; larger than the stored predicate when the ledger capped it. */
+  conditionCount: number
+  status: AnalysisPredictionStatus
+  reasonCode: string
+  ruleVersion: PredictionVerification['ruleVersion']
+  evidenceRefs: readonly string[]
+  /** Evidence refs the verdict cited; larger than `evidenceRefs.length` when the ledger capped them. */
+  evidenceRefCount: number
+  predictionCreatedAt: string
+  evaluatedAt: string
+}>
+
+/**
+ * What the verifier knows and the store cannot derive from the prediction row: the condition the verdict
+ * was decided on, and how many conditions it carried. The rest of the ledger row is read off that row
+ * when the verdict is written, so the two can never disagree about what was judged.
+ */
+export type PredictionLedgerCondition = Readonly<{ predicate: string | null; conditionCount: number }>
 
 export type TimelineEntry = Readonly<{
   id: string

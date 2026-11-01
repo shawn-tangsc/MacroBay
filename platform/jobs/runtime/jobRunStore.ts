@@ -2,6 +2,8 @@ import type {
   JobCancelReason,
   JobLogEntry,
   JobProgress,
+  JobRunAggregateQuery,
+  JobRunAggregateResult,
   JobRunPage,
   JobRunQuery,
   JobRunRecord,
@@ -42,6 +44,13 @@ export type JobRunStore = {
    * ever start them. They used to stay `queued` in the store forever.
    */
   recoverStaleQueuedRuns: () => JobRunRecord[]
+  /**
+   * Daily counters that outlive the run details they were folded from.
+   *
+   * A store that keeps no history answers `unavailable` with a reason code; it must never answer
+   * an empty list, which is indistinguishable from "nothing ran".
+   */
+  listRunAggregates: (query?: JobRunAggregateQuery) => JobRunAggregateResult
 }
 
 export function createJobRunStore(): JobRunStore {
@@ -175,6 +184,13 @@ export function createJobRunStore(): JobRunStore {
         if (cancelled) recovered.push(cancelled)
       }
       return recovered
+    },
+    /**
+     * This store keeps details only: nothing is ever folded into daily history, so the honest
+     * answer is "cannot answer", not an empty list that a caller would render as "nothing ran".
+     */
+    listRunAggregates(_query?: JobRunAggregateQuery): JobRunAggregateResult {
+      return { state: 'unavailable', reason: 'memory-store-has-no-aggregates', rows: [] }
     }
   }
 }

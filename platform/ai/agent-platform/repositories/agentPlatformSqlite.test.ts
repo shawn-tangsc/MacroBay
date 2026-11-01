@@ -113,6 +113,120 @@ describe('agent platform sqlite repositories', () => {
     expect(secondPage.items.map((item: { id: string }) => item.id)).toEqual(['session-3'])
   })
 
+  it('persists the session-scoped tool allowlist across a reopen', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'agent-session-tools-'))
+    try {
+      const path = join(dir, 'agent.sqlite')
+      const db = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(db)
+      repos.agents.upsert({ ...agent, configuration: { requireSessionToolAllowlist: true } })
+      repos.workspaces.upsert(workspace)
+      repos.sessions.upsert({
+        ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Brief' }),
+        allowedTools: ['WebSearch', 'WebFetch']
+      })
+      db.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const repositories = createAgentPlatformRepositories(reopened)
+      const rows = repositories.sessions.listAll(new Map([[workspace.id, workspace]]))
+      expect(rows[0]?.allowedTools).toEqual(['WebSearch', 'WebFetch'])
+      expect(repositories.agents.listAll()[0]?.configuration?.requireSessionToolAllowlist).toBe(true)
+      reopened.connection.close()
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads rows written before the allowlist column as an empty allowlist', () => {
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    db.connection
+      .prepare(
+        `insert into agent_sessions (id, agent_id, name, description, workspace_id, trace_id, order_key, created_at, updated_at)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run('legacy-session', agent.id, 'Legacy', null, workspace.id, null, '0009', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')
+
+    const rows = repos.sessions.listAll(new Map([[workspace.id, workspace]]))
+
+    expect(rows[0]?.allowedTools).toEqual([])
+  })
+
+  it('keeps a daily brief editor effort that was explicitly chosen before the default-effort migration', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-daily-brief-effort-'))
+    try {
+      const path = join(directory, 'agent.sqlite')
+      const database = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(database)
+      repos.agents.upsert({
+        ...agent,
+        id: 'daily-brief-editor',
+        name: 'Daily Brief Editor',
+        configuration: { permission_mode: 'plan', max_turns: 8, effort: 'max' }
+      })
+      database.connection
+        .prepare('delete from agent_platform_migrations where id = ?')
+        .run('0045_daily_brief_editor_effort_low')
+      database.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const repositories = createAgentPlatformRepositories(reopened)
+      expect(repositories.agents.get('daily-brief-editor')?.configuration?.effort).toBe('max')
+      reopened.connection.close()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('fills the low effort default for a daily brief editor that never set an effort', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-daily-brief-effort-'))
+    try {
+      const path = join(directory, 'agent.sqlite')
+      const database = createAgentPlatformDatabase(path)
+      const repos = createAgentPlatformRepositories(database)
+      repos.agents.upsert({
+        ...agent,
+        id: 'daily-brief-editor',
+        name: 'Daily Brief Editor',
+        configuration: { permission_mode: 'plan', max_turns: 8, effort: 'max' }
+      })
+      database.connection
+        .prepare(`update agent_entities set configuration_json = json_remove(configuration_json, '$.effort') where id = ?`)
+        .run('daily-brief-editor')
+      database.connection
+        .prepare('delete from agent_platform_migrations where id = ?')
+        .run('0045_daily_brief_editor_effort_low')
+      database.connection.close()
+
+      const reopened = createAgentPlatformDatabase(path)
+      const repositories = createAgentPlatformRepositories(reopened)
+      expect(repositories.agents.get('daily-brief-editor')?.configuration).toMatchObject({
+        effort: 'low',
+        permission_mode: 'plan',
+        max_turns: 8
+      })
+      reopened.connection.close()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('stores only built-in tool names from the session allowlist', () => {
+    const db = createAgentPlatformDatabase(':memory:')
+    const repos = createAgentPlatformRepositories(db)
+    repos.workspaces.upsert(workspace)
+    repos.sessions.upsert({
+      ...sessionFixture({ id: 'session-1', orderKey: '0001', updatedAt: '2026-01-01T00:00:00.000Z', name: 'Brief' }),
+      allowedTools: ['WebSearch', 'NotATool', 'WebSearch']
+    })
+
+    const rows = repos.sessions.listAll(new Map([[workspace.id, workspace]]))
+
+    expect(rows[0]?.allowedTools).toEqual(['WebSearch'])
+  })
+
   it('queries agents with search, stable sorting, and offset pagination at the repository layer', () => {
     const db = createAgentPlatformDatabase(':memory:')
     const repos = createAgentPlatformRepositories(db)
@@ -241,88 +355,7 @@ describe('agent platform sqlite repositories', () => {
     expect(secondPage.items.map((item: { id: string }) => item.id)).toEqual(['message-1'])
   })
 
-  it('searches message content through sqlite FTS instead of full in-memory scans', () => {
-    const db = createAgentPlatformDatabase(':memory:')
-    const repos = createAgentPlatformRepositories(db)
-    seedSessionGraph(repos, { sessionId: 'session-1' })
-    seedSessionGraph(repos, { sessionId: 'session-2' })
 
-    repos.messages.upsert(
-      messageFixture({
-        id: 'message-1',
-        sessionId: 'session-1',
-        createdAt: '2026-01-01T00:00:01.000Z',
-        text: 'Review the breakout invalidation'
-      })
-    )
-    repos.messages.upsert(
-      messageFixture({
-        id: 'message-2',
-        sessionId: 'session-2',
-        createdAt: '2026-01-01T00:00:02.000Z',
-        text: 'Summarize execution risk'
-      })
-    )
-
-    const results = repos.messages.search({ q: 'breakout', limit: 10 })
-
-    expect(results.items.map((item) => item.messageId)).toEqual(['message-1'])
-    expect(results.items[0]).toMatchObject({
-      sessionId: 'session-1',
-      role: 'assistant'
-    })
-  })
-
-  it('supports message search pagination and time/session filters at the repository layer', () => {
-    const db = createAgentPlatformDatabase(':memory:')
-    const repos = createAgentPlatformRepositories(db)
-    seedSessionGraph(repos, { sessionId: 'session-1' })
-    seedSessionGraph(repos, { sessionId: 'session-2' })
-
-    repos.messages.upsert(
-      messageFixture({
-        id: 'message-1',
-        sessionId: 'session-1',
-        createdAt: '2026-01-01T00:00:01.000Z',
-        text: 'breakout base case'
-      })
-    )
-    repos.messages.upsert(
-      messageFixture({
-        id: 'message-2',
-        sessionId: 'session-1',
-        createdAt: '2026-01-01T00:00:02.000Z',
-        text: 'breakout follow up'
-      })
-    )
-    repos.messages.upsert(
-      messageFixture({
-        id: 'message-3',
-        sessionId: 'session-2',
-        createdAt: '2026-01-01T00:00:03.000Z',
-        text: 'breakout other session'
-      })
-    )
-
-    const firstPage = repos.messages.search({ q: 'breakout', sessionId: 'session-1', limit: 1 })
-    const secondPage = repos.messages.search({
-      q: 'breakout',
-      sessionId: 'session-1',
-      limit: 1,
-      cursor: firstPage.nextCursor
-    })
-    const filtered = repos.messages.search({
-      q: 'breakout',
-      sessionId: 'session-1',
-      createdAtFrom: '2026-01-01T00:00:01.500Z',
-      limit: 10
-    })
-
-    expect(firstPage.items.map((item) => item.messageId)).toEqual(['message-2'])
-    expect(firstPage.nextCursor).toBeDefined()
-    expect(secondPage.items.map((item) => item.messageId)).toEqual(['message-1'])
-    expect(filtered.items.map((item) => item.messageId)).toEqual(['message-2'])
-  })
 
   it('keeps session cursors decodable when order keys include timestamp separators', () => {
     const db = createAgentPlatformDatabase(':memory:')

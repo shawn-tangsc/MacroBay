@@ -34,6 +34,32 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).not.toContain('没有匹配的任务。')
   })
 
+  it('explains why a delivery was skipped instead of leaving only the tag', () => {
+    const task = { id: 'task-1', name: '每日行情总结', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
+    hooks.settings.mockReturnValue(settings({
+      tasks: [task],
+      taskRuns: {
+        'task-1': {
+          status: 'skipped',
+          at: '2026-07-17T08:00:00.000Z',
+          health: { delivered: 0, failed: 0, pending: 0, skipped: 3, unknown: 0 },
+          skipReasons: ['delivery-no-target-bound', 'delivery-target-disabled'],
+          unexplainedSkips: 1
+        }
+      }
+    }))
+    hooks.schedules.mockReturnValue(schedules({ items: [] }))
+
+    const markup = renderPage()
+
+    // Each reason leads to a different action, so the page must name them, not echo a code.
+    expect(markup).toContain('这条任务还没绑定通道')
+    expect(markup).toContain('绑定的通道已停用')
+    expect(markup).not.toContain('delivery-no-target-bound')
+    // A skipped row with no recorded reason is a defect and must be visible as one.
+    expect(markup).toContain('没有记录原因')
+  })
+
   it('keeps the delivery health block visible with zeros instead of collapsing it when there is no task', () => {
     hooks.settings.mockReturnValue(settings({ tasks: [], emptyState: 'never-created' }))
     hooks.schedules.mockReturnValue(schedules({ items: [] }))
@@ -314,7 +340,10 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
       : overrides.policy,
     state: {
       filteredTasks: overrides.emptyState === 'never-created' ? [] : tasks,
-      rows: (overrides.emptyState === 'never-created' ? [] : tasks).map((item) => ({ task: item, lastRun: null })),
+      rows: (overrides.emptyState === 'never-created' ? [] : tasks).map((item) => ({
+        task: item,
+        lastRun: (overrides.taskRuns as Record<string, unknown> | undefined)?.[String(item.id)] ?? null
+      })),
       selectedTask: null,
       expandedTaskId: overrides.expandedTaskId ?? null,
       auditCount: (overrides.audits as unknown[] | undefined)?.length ?? 0,

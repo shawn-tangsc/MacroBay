@@ -72,9 +72,8 @@ const fixtures = vi.hoisted(() => {
   }
 })
 
-vi.mock('../intelligenceModule', () => ({
-  getIntelligenceModule: () => ({ sourcesService: fixtures.sourcesService })
-}))
+/** The composition root builds the module once; the handler reads the instance from its deps. */
+const injectedModule = { sourcesService: fixtures.sourcesService } as never
 vi.mock('../ipc/registerIntelligenceIpc', () => ({
   getIntelligenceService: () => ({})
 }))
@@ -98,7 +97,7 @@ function registrations(): Map<string, ProductAgentToolHandlerRegistration> {
   const collected = new Map<string, ProductAgentToolHandlerRegistration>()
   registerIntelligenceAgentToolHandlers(
     (registration) => collected.set(registration.handlerId, registration),
-    { jobRuntime, getAppLanguage: async () => 'zh-CN', macroCalendarOps: {} as never, crossAssetOps: {} as never }
+    { jobRuntime, intelligenceModule: injectedModule, getAppLanguage: async () => 'zh-CN', macroCalendarOps: {} as never, crossAssetOps: {} as never }
   )
   return collected
 }

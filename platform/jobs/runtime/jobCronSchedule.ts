@@ -40,14 +40,42 @@ export function computeNextCronRunAt(
     cursor.setUTCSeconds(0, 0)
   }
 
-  for (let attempt = 0; attempt < maxCronSearchAttempts; attempt += 1) {
-    if (matchesCronExpression(parsed, cursor, timezone)) {
-      return cursor.getTime()
+  // Walk candidates coarsest field first, and jump to the next hour whenever one of the calendar or
+  // hour fields cannot match. That is exact — every minute of an hour shares those fields — and it
+  // keeps a dead expression within the same 365-day window at ~8.7k timezone lookups instead of
+  // 525,600. The minute-by-minute version spent ~21 s of main-process time on `0 0 29 2 *`, and the
+  // settings projection calls this for every registered definition, synchronously, on every refresh.
+  let remainingMinutes = maxCronSearchAttempts
+  while (remainingMinutes > 0) {
+    const parts = getCronDateParts(cursor, timezone)
+    if (!parts) return null
+
+    if (
+      !matchesCronField(parsed.month, parts.month) ||
+      !matchesCronField(parsed.dayOfMonth, parts.dayOfMonth) ||
+      !matchesCronField(parsed.dayOfWeek, parts.dayOfWeek) ||
+      !matchesCronField(parsed.hour, parts.hour)
+    ) {
+      remainingMinutes -= advanceToNextHour(cursor)
+      continue
     }
-    cursor.setUTCMinutes(cursor.getUTCMinutes() + 1, 0, 0)
+    if (!matchesCronField(parsed.minute, parts.minute)) {
+      cursor.setUTCMinutes(cursor.getUTCMinutes() + 1, 0, 0)
+      remainingMinutes -= 1
+      continue
+    }
+
+    return cursor.getTime()
   }
 
   return null
+}
+
+/** Advances the cursor to the next hour boundary and returns how many minutes that consumed. */
+function advanceToNextHour(cursor: Date): number {
+  const minutesToNextHour = 60 - cursor.getUTCMinutes()
+  cursor.setUTCMinutes(cursor.getUTCMinutes() + minutesToNextHour, 0, 0)
+  return minutesToNextHour
 }
 
 function parseCronExpression(expr: string): ParsedCronExpression | null {
@@ -120,19 +148,6 @@ function parseCronRange(input: string, min: number, max: number): { start: numbe
   const value = Number(input)
   if (!Number.isInteger(value) || value < min || value > max) return null
   return { start: value, end: value }
-}
-
-function matchesCronExpression(expr: ParsedCronExpression, date: Date, timezone: string | undefined): boolean {
-  const dateParts = getCronDateParts(date, timezone)
-  if (!dateParts) return false
-
-  return (
-    matchesCronField(expr.minute, dateParts.minute) &&
-    matchesCronField(expr.hour, dateParts.hour) &&
-    matchesCronField(expr.dayOfMonth, dateParts.dayOfMonth) &&
-    matchesCronField(expr.month, dateParts.month) &&
-    matchesCronField(expr.dayOfWeek, dateParts.dayOfWeek)
-  )
 }
 
 function matchesCronField(field: ParsedCronField, value: number): boolean {

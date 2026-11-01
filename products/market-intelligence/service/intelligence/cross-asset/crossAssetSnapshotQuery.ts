@@ -51,8 +51,8 @@ const iso = (value: number) => new Date(value).toISOString()
  */
 /**
  * How much history a read asks for: the longer of the longest printed window (the table's 7d column) and
- * this range's own window. A thirty-day curve needs thirty days of closes, and the short ranges still need
- * seven days so the 7d column beside them stays answerable from one analysis.
+ * this range's own window. The short ranges still need seven days so the 7d column beside them stays
+ * answerable from one analysis.
  */
 const historyIngestMs = (range: CrossAssetRange): number =>
   // 每个准入窗口都在热层内、都取精确同一时刻，所以不需要"锚点回看量"那一段（那是跨冷层窗口才要的，
@@ -87,7 +87,7 @@ export function createCrossAssetSnapshotQuery(deps: {
    * not degrade — the store throws and the whole snapshot turns unavailable — so the split is derived
    * from the cap rather than assumed to fit.
    */
-  const readHistory = (fromMs: number, toMs: number, asOfMs: number): Record<string, ClosePoint[]> => {
+  const readHistory = (fromMs: number, toMs: number, knowledgeMs: number): Record<string, ClosePoint[]> => {
     const span = toMs - fromMs
     // The cap is a **count** of bars, so it converts to milliseconds before it can bound a span.
     const capMs = crossAssetPolicy.historyMaxPoints * crossAssetPolicy.intervalMs
@@ -100,7 +100,7 @@ export function createCrossAssetSnapshotQuery(deps: {
     }
     return Object.fromEntries(crossAssetPolicy.storedSymbols.map(symbol => [symbol,
       bounds.slice(0, -1).flatMap((start, index) => deps.store.queryAt({
-        symbol: symbol as StoredSymbol, fromMs: start, toMs: bounds[index + 1] as number, asOfMs
+        symbol: symbol as StoredSymbol, fromMs: start, toMs: bounds[index + 1] as number, asOfMs: knowledgeMs
       }) as readonly ClosedBar[]).map(bar => ({ atMs: bar.barEndMs, close: bar.close }))])) as Record<string, ClosePoint[]>
   }
   return {
@@ -111,6 +111,15 @@ export function createCrossAssetSnapshotQuery(deps: {
       const input = parsed as CrossAssetQueryInput
       const mode = input.asOf ? 'historical' : 'current'
       const asOfMs = input.asOf ? Date.parse(input.asOf) : now
+      /**
+       * Which version of each bar the read admits: what was known at `asOf`, or the newest version.
+       *
+       * The window end stays `asOf` either way. `latest` only changes the version cutoff, and it exists
+       * for readings of a past window (the calendar card's ±30 minutes): the bar that closes at +30 is
+       * ingested by the next poll, so asking "what was known at +35" routinely loses the right end, and
+       * a window backfilled after downtime is invisible in its entirety.
+       */
+      const knowledgeMs = input.knowledge === 'latest' ? now : asOfMs
       const end = Math.floor(asOfMs / crossAssetPolicy.intervalMs) * crossAssetPolicy.intervalMs
       const feedState: CrossAssetIndexFeedState = deps.indexFeed?.().state ?? 'pending'
       // The live runtime state is read once, and only for a current snapshot: a historical observation
@@ -131,7 +140,7 @@ export function createCrossAssetSnapshotQuery(deps: {
         // admitted close (`end - interval`) instead of including it.
         const fromMs = end - historyIngestMs(input.range)
         const toMs = end + crossAssetPolicy.intervalMs
-        const histories = readHistory(fromMs, toMs, asOfMs)
+        const histories = readHistory(fromMs, toMs, knowledgeMs)
         presence = {
           real: (histories[crossAssetPolicy.index.symbol] ?? []).length > 0,
           proxy: (histories[crossAssetPolicy.index.proxySymbol] ?? []).length > 0

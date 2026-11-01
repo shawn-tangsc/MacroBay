@@ -22,6 +22,7 @@ export function toManifestRegistrations(
       outputSchema: capability.outputSchema,
       schemaVersion: 1,
       description: capability.description,
+      title: capability.title,
       readOnly: !write,
       requiresTemporalBoundary: declaresTemporalBoundary(capability.inputSchema),
       requiresApproval: write ? 'always' : 'never',

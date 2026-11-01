@@ -61,6 +61,21 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 看板、资金费率、稳定币、ETF 流向、两个月的日历和三条已发布分析——界面上标注「示例数据」，并且不会写入
 你的数据库。实时面板仍然需要你自己的模型供应商和数据源凭据。
 
+<div align="center">
+
+### ⭐ 如果它对你有用，一个 star 能让它继续做下去
+
+<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
+  <img alt="给 MacroBay 点 star" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
+</a>
+
+</div>
+
+> 观潮是我一个人在做，全部开源。
+> Star 是我唯一能看到的「真的有人在用」的信号，也决定了下一个需要它的人能不能搜到。
+>
+> **[→ 给项目点个 star](https://github.com/shawn-tangsc/MacroBay/stargazers)** · 两秒钟的事。
+
 给那些"说完一句话还得接得住追问"的人——不管这是你的第一轮周期，还是第四轮。
 
 ## 这套东西适合谁
@@ -135,11 +150,11 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 
 ## 数据来源
 
-30 多个经过筛选的来源，选它们的理由很简单：加密恰好是免费和低成本数据足够好的领域。交易所
-公告与 API 变更（Binance、OKX）、交易所与链的状态和发布（Coinbase、Kraken、Solana、GitHub
-Releases）、市场数据（Binance 现货与合约、CoinGecko、DeFiLlama 稳定币与 TVL、ETF 流向、
-恐惧贪婪指数）、新闻与日历（CoinDesk、CryptoPanic、CoinMarketCal、Ethereum Foundation），
-以及决定大类资产环境的宏观层（FRED、BLS、BEA、Treasury、SEC、CFTC、美联储）。
+经过筛选的来源，覆盖加密原生、市场数据、新闻与宏观层，选它们的理由很简单：加密恰好是免费和低成本
+数据足够好的领域。交易所公告与 API 变更（Binance、OKX）、交易所与链的状态和发布（Coinbase、Kraken、
+Solana、GitHub Releases）、市场数据（Binance 现货与合约、CoinGecko、DeFiLlama 稳定币与 TVL、
+ETF 流向、恐惧贪婪指数）、新闻（主流行业媒体与项目官方博客，具体来源在设置里按需开启），以及决定大类资产环境的宏观层
+（FRED、SEC、CFTC、美联储，日历背后是 BLS、BEA 与美联储的官方发布日程）。
 
 部分来源需要你自己的账号、Key 或网络访问，覆盖范围也因来源而异。没有启用的来源会以明确的缺口
 呈现，绝不会被填成一个中性的占位值。
@@ -166,7 +181,7 @@ pnpm dev
 
 ## 状态
 
-MacroBay 目前是 **alpha**（`0.2.2`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
+MacroBay 目前是 **alpha**（`0.3.0`）。macOS 是已验证平台。应用内置**示例模式**：无 Key、断网也能
 打开完整看板并读到三条已发布结论，数据来自真实录制的一周。实时面板仍需你自己的供应商凭据。
 macOS 安装包可从源码构建但未签名，Windows 安装器能在 CI 和 Windows 11 x64 真机上构建，但安装后的
 运行态尚未验证，Linux 尚未配置打包。详见

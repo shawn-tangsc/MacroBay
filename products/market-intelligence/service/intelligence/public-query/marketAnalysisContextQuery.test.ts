@@ -5,11 +5,11 @@ import type { JobRuntime } from '@platform/jobs'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { intelligenceAgentCapabilities } from '../agent-capabilities/capabilityCatalog'
 import {
-  MARKET_ANALYSIS_CONTEXT_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
   formatMarketAnalysisDataAccessAcceptanceMarker
 } from '../../../contracts/marketAnalysisContracts'
 import { MARKET_INTELLIGENCE_QUERY_CAVEATS } from '../../../contracts/intelligenceQueryContracts'
+import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
 import { macroRatesSnapshotPublicPolicy } from '../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroMarketSnapshotPublicPolicy } from '../../../contracts/macro/macroMarketSnapshotContracts'
 import type { MacroMarketSnapshot } from '../../macro-market/macroMarketSnapshotQuery'
@@ -166,18 +166,20 @@ describe('market analysis data-access matrix', () => {
         // The macro domain now carries two read-only agent tools (the dollar/gold snapshot and the
         // FRED daily block), so its tool flag is derived from the source registry rather than false.
         agentToolAvailable: true,
-        sourceIds: expect.arrayContaining(['fred-rates-liquidity', 'twelve-data-market']),
+        sourceIds: expect.arrayContaining(['fred-rates-liquidity', 'twelve-data-market', 'policy-path-market']),
         publicQueryMethods: [
           'macroEconomicCalendarQueryService.queryMonth',
           'marketCalendarPublicQueryService.queryMonth',
           'publicQueryService.queryMacroMarketSnapshot',
-          'publicQueryService.queryMacroRatesSnapshot'
+          'publicQueryService.queryMacroRatesSnapshot',
+          'publicQueryService.queryPolicyPath'
         ],
         ipcMethods: [
           'intelligence.macro.economicCalendar.queryMonth',
           'intelligence.macro.marketCalendar.queryMonth',
           'intelligence.macro.marketSnapshot.query',
-          'intelligence.macro.ratesSnapshot.query'
+          'intelligence.macro.ratesSnapshot.query',
+          'intelligence.macro.policyPath.read'
         ]
       })
     ]))
@@ -223,6 +225,13 @@ describe('market analysis data-access matrix', () => {
         sourceId: 'twelve-data-market', admission: 'production-ready', autoTriggerAllowed: false,
         caveats: expect.arrayContaining(['synthetic-dollar-index', 'provider-time-series']),
         agentToolAvailable: true
+      }),
+      // The policy path is one service feeding the panel card and the analysis context. It may
+      // answer an agent tool, but the odds are not permission to start an analysis from a price.
+      expect.objectContaining({
+        sourceId: 'policy-path-market', admission: 'connected-but-not-agent-tool', autoTriggerAllowed: false,
+        publicQueryMethods: ['publicQueryService.queryPolicyPath'], ipcMethods: ['intelligence.macro.policyPath.read'],
+        caveats: ['odds-are-market-pricing', 'projections-from-latest-sep-meeting'], agentToolAvailable: true
       })
     ]))
     expect(access.some(item => item.admission === 'temporarily-paused')).toBe(false)
@@ -280,19 +289,29 @@ describe('market analysis data-access matrix', () => {
 
     expect(manifestToolNames).toEqual(intelligenceAgentCapabilities.map(capability => capability.id))
     expect(manifestToolNames).toContain('get_market_analysis_context')
-    expect(manifestToolNames).toEqual(expect.arrayContaining(['get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure']))
+    expect(manifestToolNames).toEqual(expect.arrayContaining(['get_macro_market_snapshot', 'get_macro_rates_snapshot', 'get_policy_path', 'explain_figure']))
     expect(marketIntelligenceProductManifest.tools.map(tool => tool.id)).toEqual([
-      'get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'
+      'get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'get_policy_path', 'explain_figure'
     ])
     expect(marketIntelligenceProductManifest.skills.map(skill => skill.id)).toEqual([
-      'market-analysis-skill-v1', 'intelligence-ops-skill-v1'
+      'market-analysis-skill-v1', 'daily-brief-editor-skill-v1', 'intelligence-ops-skill-v1'
     ])
-    expect(marketIntelligenceProductManifest.agents).toEqual([expect.objectContaining({
-      id: 'crypto-market-analyst',
-      toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
-      skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
-      workflowIds: ['market-analysis-auto-run-v1']
-    })])
+    // Two seeded agents: the analyst that answers questions, and the brief editor that only curates
+    // a draft. The editor intentionally has no tools or workflows of its own.
+    expect(marketIntelligenceProductManifest.agents).toEqual([
+      expect.objectContaining({
+        id: 'crypto-market-analyst',
+        toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'get_policy_path', 'explain_figure'],
+        skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
+        workflowIds: ['market-analysis-auto-run-v1']
+      }),
+      expect.objectContaining({
+        id: 'daily-brief-editor',
+        toolIds: [],
+        skillIds: ['daily-brief-editor-skill-v1'],
+        workflowIds: []
+      })
+    ])
     expect(marketIntelligenceProductManifest.workflows.map(workflow => workflow.id)).toEqual(['market-analysis-auto-run-v1'])
     expect(compareMarketAnalysisAgentToolRegistration(manifestToolNames, handlerIds)).toEqual({
       registeredToolCount: intelligenceAgentCapabilities.length,
@@ -568,7 +587,7 @@ describe('market analysis data-access matrix', () => {
     expect(result.state).toBe('available')
     if (result.state !== 'available') return
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro')
-    expect(macroFacts.length).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts)
+    expect(macroFacts.length).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.maximumMacroFacts)
     // The macro-market and FRED facts are part of the same budget and survive beside the calendar's.
     expect(macroFacts.some(fact => fact.metric === 'dollar-index-level')).toBe(true)
     expect(macroFacts.some(fact => fact.metric === 'us-10y-yield')).toBe(true)
@@ -648,7 +667,7 @@ describe('market analysis data-access matrix', () => {
     // The macro share is capped so a provider cannot evict the other domains; only a slice of
     // the admitted observations' facts (7 metrics each) survives.
     const macroFacts = result.facts.filter(fact => fact.domain === 'macro').length
-    expect(macroFacts).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts)
+    expect(macroFacts).toBeLessThanOrEqual(MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.maximumMacroFacts)
     expect(macroFacts).toBeGreaterThan(0)
     expect(new Set(result.facts.map(fact => fact.domain))).toEqual(new Set(['macro', 'capital', 'sentiment', 'funding']))
     expect(result.caveats).toContain('provider-observations-truncated')
@@ -713,6 +732,36 @@ describe('market analysis data-access matrix', () => {
     expect(result.domainAccess.find((domain) => domain.domain === 'capital')).toMatchObject({ factCount: 6, evidenceCount: 6 })
     expect(result.domainAccess.find((domain) => domain.domain === 'capital')?.caveats).not.toContain('evidence-unavailable')
     expect(result.facts.filter((fact) => fact.metric === 'etf-net-flow-usd')).toHaveLength(2)
+  })
+
+  it('keeps the stablecoin readings when another domain overflows the budget', async () => {
+    const days = Array.from({ length: 10 }, (_, index) => ({
+      tradingDate: `2026-09-${String(index + 10).padStart(2, '0')}`, netFlowUsd: (index + 1) * 10, observedAt: AS_OF
+    }))
+    const points = Array.from({ length: 180 }, (_, index) => ({ observedAt: AS_OF, ratePercent: index / 100 }))
+    const result = await buildMarketAnalysisContext({ eventGroupId: 'mi-eg-test', asOf: AS_OF, maxFacts: 160 }, contextQueryService({
+      queryFundingRateHistory: async () => ({ state: 'available', asOf: AS_OF, btc: points, eth: points }),
+      queryCapitalConditionsSnapshot: async () => ({
+        state: 'available', asOf: AS_OF,
+        etf: {
+          state: 'available', schemaVersion: 1, sourceId: '0xrouter', windowEnd: '2026-09-19', verifiedAt: AS_OF,
+          btc: { asset: 'BTC', rows: days },
+          eth: { asset: 'ETH', rows: days }
+        },
+        coreStablecoins: { observedAt: AS_OF, verifiedAt: AS_OF, currentUsd: 100, change1dUsd: 1, change1dPercent: 1, change7dUsd: 2, change7dPercent: 2, change30dUsd: 3, change30dPercent: 3 },
+        conclusion: 'partial'
+      })
+    }))
+
+    expect(result.state).toBe('available')
+    if (result.state !== 'available') return
+    expect(result.caveats).toContain('max-items-truncated')
+    // Capping the ETF window is what keeps capital out of the budget fight: the overflow is
+    // funding's own volume, and the four stablecoin readings — the first thing the page reads —
+    // must still be in the snapshot the model is handed.
+    expect(result.facts.filter((fact) => fact.subject === 'stablecoins').map((fact) => fact.metric).sort())
+      .toEqual(['change-1d-usd', 'change-30d-usd', 'change-7d-usd', 'current-usd'])
+    expect(result.facts.filter((fact) => fact.metric === 'etf-net-flow-usd')).toHaveLength(10)
   })
 
   it('caps facts at 160 and records the truncation caveat', async () => {

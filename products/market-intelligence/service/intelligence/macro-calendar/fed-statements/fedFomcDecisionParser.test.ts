@@ -47,6 +47,27 @@ describe('parseFedFomcDecision', () => {
     })
   })
 
+  it('reads the vote tally and the dissent direction from the approval and voting sentences', () => {
+    const withVote = body.toString('utf8')
+      .replace('approved the following statement for release:', 'approved the following statement for release by a 10 – 2 vote:')
+      .replace(
+        'The Committee is continuing its policy of reducing its holdings of Treasury securities and agency debt.',
+        'Voting against the monetary policy action were Lisa D. Cook and Beth M. Hammack, who preferred to raise the target range for the federal funds rate by 1/4 percentage point at this meeting.'
+      )
+    const document = parseFedFomcDecisionDocument({ body: Buffer.from(withVote), officialStatementUrl: input.officialStatementUrl })
+    expect(document?.vote).toEqual({ for: 10, against: 2 })
+    expect(document?.dissents).toEqual([
+      { name: 'Lisa D. Cook', preferred: 'raise' },
+      { name: 'Beth M. Hammack', preferred: 'raise' }
+    ])
+  })
+
+  it('omits the vote and dissents when the statement does not state them', () => {
+    const document = parseFedFomcDecisionDocument({ body, officialStatementUrl: input.officialStatementUrl })
+    expect(document?.vote).toBeUndefined()
+    expect(document?.dissents).toBeUndefined()
+  })
+
   it('joins the real date-only 2026-07-29 FOMC schedule without inventing a schedule time', () => {
     const schedule = parseFedFomcSchedule({ body: scheduleBody, descriptor: getMacroCalendarOfficialSourceDescriptor('macro-calendar-fed-schedule')! })
       .find((event) => event.eventKey === input.schedule.eventKey)

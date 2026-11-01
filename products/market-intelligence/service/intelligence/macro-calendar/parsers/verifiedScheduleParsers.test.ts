@@ -24,6 +24,9 @@ describe('verified official schedule parsers', () => {
       'US.FOMC.2026-01-28', 'US.FOMC.2026-03-18', 'US.FOMC.2026-12-09'
     ]))
     expect(drafts.every((draft) => draft.scheduledAt === undefined && draft.caveats.includes('official-time-not-published'))).toBe(true)
+    // The asterisk on the date block is the only signal that a meeting also publishes projections.
+    expect(drafts.find((draft) => draft.eventKey === 'US.FOMC.2026-03-18')?.hasProjectionMaterials).toBe(true)
+    expect(drafts.find((draft) => draft.eventKey === 'US.FOMC.2026-12-09')?.hasProjectionMaterials).toBe(false)
     expect(JSON.stringify(drafts)).not.toContain('href')
   })
 

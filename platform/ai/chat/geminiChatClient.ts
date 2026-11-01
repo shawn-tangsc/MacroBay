@@ -33,7 +33,7 @@ type GeminiPayload = {
 type GeminiContent = { role: 'user' | 'model'; parts: Array<{ text: string }> }
 
 export async function requestGeminiChatCompletion(input: GeminiChatRequest): Promise<ChatProtocolResult> {
-  const response = await (input.fetch ?? fetch)(buildGeminiGenerateUrl(input.baseUrl, input.modelId), {
+  const response = await input.fetch(buildGeminiGenerateUrl(input.baseUrl, input.modelId), {
     method: 'POST',
     headers: {
       'x-goog-api-key': input.apiKey,

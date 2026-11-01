@@ -9,6 +9,9 @@ import type {
 } from '../../../service/intelligence/schema/intelligenceTranslation'
 import { intelligenceTranslationClient } from '../../shared/ipc/intelligenceTranslationClient'
 
+/** One click may not queue the whole history: the cap is the cost limit, not a time window. */
+const TRANSLATION_QUEUE_LIMIT = 50
+
 export function useIntelligenceTranslationSettings(labels: {
   saveFailed: string
   queueFailed: string
@@ -20,7 +23,8 @@ export function useIntelligenceTranslationSettings(labels: {
   const [saving, setSaving] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const [errorCode, setErrorCode] = useState<string | null>(null)
+  // A sentence from the product text, never a code: the card renders it as-is.
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [nextSettings, nextStatus, providers] = await Promise.all([
@@ -34,19 +38,19 @@ export function useIntelligenceTranslationSettings(labels: {
   }, [])
 
   useEffect(() => {
-    void load().catch(() => setErrorCode(labels.saveFailed))
+    void load().catch(() => setErrorMessage(labels.saveFailed))
   }, [labels.saveFailed, load])
 
   const updateSettings = useCallback(
     async (patch: Partial<IntelligenceTranslationSettings>) => {
       setSaving(true)
-      setErrorCode(null)
+      setErrorMessage(null)
       try {
         const next = await intelligenceTranslationClient.saveSettings(patch)
         setSettings(next)
         setModuleStatus(await intelligenceTranslationClient.getModuleStatus())
       } catch {
-        setErrorCode(labels.saveFailed)
+        setErrorMessage(labels.saveFailed)
       } finally {
         setSaving(false)
       }
@@ -54,19 +58,29 @@ export function useIntelligenceTranslationSettings(labels: {
     [labels.saveFailed]
   )
 
-  const queueMissing = useCallback(async () => {
+  /**
+   * Queues whatever is still untranslated for the sources the card sits under.
+   *
+   * The limit stays: it caps what one click can cost. The time window does not — the page shows no
+   * time filter, so a fixed 7-day window would silently drop older pending items and still call
+   * itself "the current selection".
+   */
+  const queueMissing = useCallback(async (sourceIds?: readonly string[]) => {
     setQueuing(true)
     setNotice(null)
-    setErrorCode(null)
+    setErrorMessage(null)
     try {
       await intelligenceTranslationClient.queueMissing({
         reason: 'manual-selection',
-        filters: { timeRange: '7d', limit: 50 }
+        filters: {
+          ...(sourceIds && sourceIds.length > 0 ? { sourceIds: [...sourceIds] } : {}),
+          limit: TRANSLATION_QUEUE_LIMIT
+        }
       })
       setNotice(labels.queueQueued)
       setModuleStatus(await intelligenceTranslationClient.getModuleStatus())
     } catch {
-      setErrorCode(labels.queueFailed)
+      setErrorMessage(labels.queueFailed)
     } finally {
       setQueuing(false)
     }
@@ -79,7 +93,7 @@ export function useIntelligenceTranslationSettings(labels: {
     saving,
     queuing,
     notice,
-    errorCode,
+    errorMessage,
     updateSettings,
     queueMissing
   }

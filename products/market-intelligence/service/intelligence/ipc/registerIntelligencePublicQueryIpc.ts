@@ -1,4 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
@@ -27,7 +29,16 @@ import {
   isWithinCapitalConditionsSnapshotDtoBudget,
   toEtfPublicSnapshot
 } from '../../../contracts/intelligenceQueryContracts'
-import { getIntelligenceModule } from '../intelligenceModule'
+import { divergenceUnavailable, isCanonicalDivergenceTime, isMarketDivergenceResult } from '../../../contracts/marketDivergence'
+import { isCanonicalSignalTime, isModuleSignal } from '../../../contracts/moduleSignal'
+import {
+  isCanonicalOpenInterestTime,
+  isOpenInterestHistoryResult,
+  isOpenInterestWindow,
+  openInterestHistoryPolicy,
+  type OpenInterestHistoryResult,
+  type OpenInterestWindow
+} from '../../../contracts/openInterestHistory'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -52,9 +63,10 @@ function asEvidenceInput(input: unknown): EvidenceExcerptQueryInput {
 
 export function registerIntelligencePublicQueryIpc(
   register: ProductIpcRegistrar,
-  jobRuntime: JobRuntime
+  jobRuntime: JobRuntime,
+  intelligenceModule: IntelligenceModule
 ): void {
-  const publicQueryService = () => getIntelligenceModule(jobRuntime).publicQueryService
+  const publicQueryService = () => intelligenceModule.publicQueryService
 
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.querySentimentSnapshot, async (payload) =>
     publicQueryService().querySentimentSnapshot(asTimeBoundInput(payload))
@@ -98,6 +110,35 @@ export function registerIntelligencePublicQueryIpc(
     } catch { return fundingRateHistoryUnavailable() }
   })
 
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryOpenInterestHistory, async (payload) => {
+    try {
+      const input = asOpenInterestHistoryInput(payload)
+      if (!input) return openInterestUnavailable()
+      const value = await publicQueryService().queryOpenInterestHistory(input)
+      return isOpenInterestHistoryResult(value, input.asOf, input.window) ? value : openInterestUnavailable()
+    } catch { return openInterestUnavailable() }
+  })
+
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryMarketDivergence, async (payload) => {
+    try {
+      const input = asMarketDivergenceInput(payload)
+      // The three faults are kept apart so a reader (and a developer) can tell which layer refused.
+      if (!input) return divergenceUnavailable('bad-payload')
+      const value = await publicQueryService().queryMarketDivergence(input)
+      return isMarketDivergenceResult(value, input.asOf) ? value : divergenceUnavailable('bad-answer')
+    } catch { return divergenceUnavailable('query-failed') }
+  })
+
+  register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryModuleSignals, async (payload) => {
+    try {
+      // The page reads signals, so the payload is one instant and nothing else.
+      if (!isExactDataRecord(payload, ['asOf']) || !isCanonicalSignalTime(payload.asOf)) return []
+      const signals = await publicQueryService().queryModuleSignals({ asOf: payload.asOf })
+      // A malformed signal is dropped here rather than handed to a chip that would render half of it.
+      return signals.filter(signal => isModuleSignal(signal))
+    } catch { return [] }
+  })
+
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, async (payload) => {
     try {
       const input = asCapitalConditionsSnapshotInput(payload)
@@ -123,6 +164,17 @@ function snapshotResult(value: unknown, input: FearGreedSnapshotQueryInput): Fea
   if (isExactDataRecord(value, ['state', 'asOf']) && value.state === 'empty' && value.asOf === input.asOf) return { state: 'empty', asOf: value.asOf }
   if (isExactDataRecord(value, ['state', 'failureCode']) && value.state === 'unavailable' && value.failureCode === snapshotPolicy.unavailableFailureCode) return snapshotUnavailable()
   return snapshotUnavailable()
+}
+
+/** Exported for its guard test: the payload shape is what broke the two-pass read once. */
+export function asMarketDivergenceInput(value: unknown): { asOf: string } | undefined {
+  if (!isExactDataRecord(value, ['asOf'])) return undefined
+  return isCanonicalDivergenceTime(value.asOf) ? { asOf: value.asOf } : undefined
+}
+
+function asOpenInterestHistoryInput(value: unknown): { asOf: string; window: OpenInterestWindow } | undefined {
+  if (!isExactDataRecord(value, ['asOf', 'window'])) return undefined
+  return isCanonicalOpenInterestTime(value.asOf) && isOpenInterestWindow(value.window) ? { asOf: value.asOf, window: value.window } : undefined
 }
 
 function asFundingRateHistoryInput(value: unknown): FundingRateHistoryQueryInput | undefined {
@@ -167,8 +219,7 @@ function capitalConditionsResult(value: unknown, input: CapitalConditionsSnapsho
         change7dPercent: value.coreStablecoins.change7dPercent as number, change30dUsd: value.coreStablecoins.change30dUsd as number,
         change30dPercent: value.coreStablecoins.change30dPercent as number,
         ...(value.coreStablecoins.dailyFlows ? { dailyFlows: value.coreStablecoins.dailyFlows as readonly { tradingDate: string; netFlowUsd: number }[] } : {})
-      }, ...(typeof value.usdStablecoinSupplyUsd === 'number' && Number.isFinite(value.usdStablecoinSupplyUsd) && !Object.is(value.usdStablecoinSupplyUsd, -0)
-        ? { usdStablecoinSupplyUsd: value.usdStablecoinSupplyUsd } : {}), conclusion: 'partial'
+      }, conclusion: 'partial'
     }
     return isWithinCapitalConditionsSnapshotDtoBudget(result) ? result : capitalConditionsUnavailable()
   }
@@ -179,9 +230,8 @@ function isCapitalAvailableRecord(value: unknown): value is Record<string, unkno
   if (!value || typeof value !== 'object') return false
   const fields = Object.getOwnPropertyNames(value)
   const expected = ['state', 'asOf', 'etf', 'coreStablecoins', 'conclusion']
-  return fields.length === expected.length || fields.length === expected.length + 1
-    ? isExactDataRecord(value, fields) && expected.every((field) => fields.includes(field)) && fields.every((field) => expected.includes(field) || field === 'usdStablecoinSupplyUsd')
-    : false
+  return fields.length === expected.length &&
+    isExactDataRecord(value, fields) && expected.every((field) => fields.includes(field))
 }
 
 function isCapitalNumberSet(value: Record<string, unknown>): boolean {
@@ -214,6 +264,10 @@ function isExactDataRecord(value: unknown, fields: readonly string[]): value is 
 
 function snapshotUnavailable(): Extract<FearGreedSnapshotResult, { state: 'unavailable' }> {
   return { state: 'unavailable', failureCode: snapshotPolicy.unavailableFailureCode }
+}
+
+function openInterestUnavailable(): Extract<OpenInterestHistoryResult, { state: 'unavailable' }> {
+  return { state: 'unavailable', failureCode: openInterestHistoryPolicy.unavailableFailureCode }
 }
 
 function fundingRateHistoryUnavailable(): Extract<FundingRateHistoryResult, { state: 'unavailable' }> {

@@ -17,11 +17,8 @@ const mockPublicQueryService = {
   getEvidenceExcerpt: vi.fn(async () => ({ queryType: MARKET_INTELLIGENCE_QUERY_TYPES.evidenceExcerpt }))
 }
 
-vi.mock('../intelligenceModule', () => ({
-  getIntelligenceModule: () => ({
-    publicQueryService: mockPublicQueryService
-  })
-}))
+/** The composition root builds the module once; the registrar receives that instance. */
+const moduleUnderTest = { publicQueryService: mockPublicQueryService } as never
 
 describe('registerIntelligenceProductTools', () => {
   it('delegates each handler to the public query service', async () => {
@@ -30,7 +27,8 @@ describe('registerIntelligenceProductTools', () => {
       (registration) => {
         handlers.set(registration.handlerId, registration.handle)
       },
-      {} as JobRuntime
+      {} as JobRuntime,
+      moduleUnderTest
     )
 
     await handlers.get('market-intelligence.query-sentiment-snapshot')?.({ asOf: '2026-07-08T10:00:00.000Z' })

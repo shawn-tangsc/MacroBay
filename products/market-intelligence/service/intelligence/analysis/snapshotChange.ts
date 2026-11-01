@@ -51,13 +51,17 @@ export function computeSnapshotChange(input: Readonly<{
     if (!currentFacts.has(factId)) factChanges.push(changedFact('removed', fact, fact.value))
   }
   factChanges.sort((left, right) => left.factId.localeCompare(right.factId))
-  const newsEvidence = new Set(
+  // Two kinds of evidence rotate without describing a new market change: the news window replaces
+  // its items wholesale, and a policy observation gets a new evidence ref every time the odds move
+  // (its fact id stays put). Their facts still appear above; counting the refs as added/removed
+  // would make every refresh look like new evidence.
+  const rotatingEvidence = new Set(
     [...input.current.facts, ...input.previous.facts]
-      .filter(fact => fact.metric === 'news-sentiment' && fact.evidenceRefId)
+      .filter(fact => (fact.metric === 'news-sentiment' || fact.sourceId === 'policy-path-market') && fact.evidenceRefId)
       .map(fact => fact.evidenceRefId as string)
   )
-  const previousEvidence = new Set(input.previous.evidenceRefs.map(ref => ref.evidenceRefId).filter(id => !newsEvidence.has(id)))
-  const currentEvidence = new Set(input.current.evidenceRefs.map(ref => ref.evidenceRefId).filter(id => !newsEvidence.has(id)))
+  const previousEvidence = new Set(input.previous.evidenceRefs.map(ref => ref.evidenceRefId).filter(id => !rotatingEvidence.has(id)))
+  const currentEvidence = new Set(input.current.evidenceRefs.map(ref => ref.evidenceRefId).filter(id => !rotatingEvidence.has(id)))
   const missingDomains = diffSets(input.current.missingDomains, input.previous.missingDomains)
   const caveats = diffSets(input.current.caveats, input.previous.caveats)
   return {

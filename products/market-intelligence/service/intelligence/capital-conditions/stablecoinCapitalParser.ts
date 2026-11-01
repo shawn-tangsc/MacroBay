@@ -29,7 +29,6 @@ export type StablecoinCapitalSnapshot = Readonly<{
   change7dPercent: number
   change30dUsd: number
   change30dPercent: number
-  usdStablecoinSupplyUsd?: number
   dailyFlows?: readonly StablecoinDailyFlow[]
 }>
 
@@ -65,7 +64,6 @@ export function parseStablecoinCapitalSnapshot(payload: unknown): StablecoinCapi
     const change30dPercent = change30dUsd / coreMonthUsd * 100
     if (![change1dUsd, change1dPercent, change7dUsd, change30dUsd, change7dPercent, change30dPercent].every(Number.isFinite)) return unavailable()
 
-    const usdStablecoinSupplyUsd = sumUsdBackground(assets)
     return Object.freeze({
       state: 'available' as const,
       snapshot: Object.freeze({
@@ -75,8 +73,7 @@ export function parseStablecoinCapitalSnapshot(payload: unknown): StablecoinCapi
         change7dUsd,
         change7dPercent,
         change30dUsd,
-        change30dPercent,
-        ...(usdStablecoinSupplyUsd === undefined ? {} : { usdStablecoinSupplyUsd })
+        change30dPercent
       })
     })
   } catch {
@@ -162,18 +159,6 @@ function readPeggedUsd(asset: Record<string, unknown>, field: string): number | 
   const values = safeRecord(readValue(asset, field))
   const value = values && readValue(values, coreStablecoinWindowPolicy.usdField)
   return isValidUsd(value) ? value : undefined
-}
-
-function sumUsdBackground(assets: readonly Record<string, unknown>[]): number | undefined {
-  let total = 0
-  for (const asset of assets) {
-    if (readValue(asset, 'pegType') !== coreStablecoinIdentityPolicy.usdPegType) continue
-    const current = readPeggedUsd(asset, coreStablecoinWindowPolicy.currentField)
-    if (current === undefined) continue
-    total += current
-    if (!isValidUsd(total)) return undefined
-  }
-  return total
 }
 
 function isValidUsd(value: unknown): value is number {

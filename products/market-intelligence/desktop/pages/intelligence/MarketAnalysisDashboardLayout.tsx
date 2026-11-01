@@ -28,6 +28,11 @@ import './marketAnalysisWorkspace.css'
  */
 export type MarketAnalysisDashboardInjection = Readonly<{
   conclusionSlot?: (node: HTMLDivElement | null) => void
+  /**
+   * The rail slot the page portals its policy card into: the card reads the page's state but lives
+   * at the top of the rail, next to the calendar the same numbers are about.
+   */
+  policySlot?: HTMLDivElement | null
   /** The calendar's event-title vocabulary, read once by the page entry and rendered by the panel. */
   calendarEventTitles?: Record<string, string>
   /** The 0xRouter month's events, read once here because the page owns the locale and the client. */
@@ -52,7 +57,9 @@ export type MarketAnalysisDashboardInjection = Readonly<{
  * define keys such as `empty`, `loading` and `title`, and merging them would let
  * one surface silently display the other surface's text.
  */
-export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
+export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCalendar = () => undefined, onOpenSources, calendarEventTitles, readMarketEvents, renderEventDetailDrawer, readCalendarReaction }: { children: ReactNode; text: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']; locale?: MarketAnalysisReadableLocale; onOpenCalendar?: (month: string, eventKey?: string) => void
+  /** Opens the product's source settings from the rail's news card; the page entry owns that drawer. */
+  onOpenSources?: () => void
   /**
    * The calendar's own title vocabulary, read from the product registry by the page entry.
    *
@@ -87,6 +94,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   const [timelineOpen, setTimelineOpen] = useState(false)
   const [analysisSettingsOpen, setAnalysisSettingsOpen] = useState(false)
   const [conclusionHost, setConclusionHost] = useState<HTMLDivElement | null>(null)
+  const [policyHost, setPolicyHost] = useState<HTMLDivElement | null>(null)
   // Frozen at mount: a new instant per render would re-query the calendar on every render.
   // One selection at a time, shared by the timeline entries and the calendar card, so the floating
   // agent is never apart from what the reader is looking at.
@@ -120,6 +128,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
   // macro release strip; the card is portalled into it so the dashboard stays
   // free of timeline state while the card reads as part of the dashboard.
   const conclusionSlot = useCallback((node: HTMLDivElement | null) => setConclusionHost(node), [])
+  const policySlot = useCallback((node: HTMLDivElement | null) => setPolicyHost(node), [])
   /**
    * A chart line the reader picked.
    *
@@ -160,6 +169,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
             list once, the panel renders it and hands the picked line back up. */}
         {cloneElement(children as React.ReactElement<MarketAnalysisDashboardInjection>, {
           conclusionSlot,
+          policySlot: policyHost,
           onSelectChartEvent: selectChartEvent,
           ...(calendarEventTitles ? { calendarEventTitles } : {}),
           ...(readMarketEvents ? { readMarketEvents } : {})
@@ -193,6 +203,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
 <MarketAnalysisAgentWorkspace
         language={locale ?? 'zh-CN'}
         floatingText={{ open: text.calendarCard.expandAgent, close: text.calendarCard.closeAgent, title: text.calendarCard.agentTitle, clear: text.calendarCard.clearConversation }}
+        railHeader={<div ref={policySlot} data-dashboard-policy-slot />}
         card={<MarketCalendarCard
           projection={cardData.projection}
           text={{
@@ -243,6 +254,7 @@ export function MarketAnalysisDashboardLayout({ children, text, locale, onOpenCa
         }}
         openEntry={openEntry}
         onOpenChange={setOpenEntry}
+        onOpenSources={onOpenSources}
         timelineText={timelineText}
       />
     </div>

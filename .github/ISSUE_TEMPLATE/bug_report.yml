@@ -13,7 +13,7 @@ body:
     attributes:
       label: Version
       description: The release tag you installed, or the commit if you run from source.
-      placeholder: "0.2.2"
+      placeholder: "0.3.0"
     validations:
       required: true
 

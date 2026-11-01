@@ -1,11 +1,14 @@
+/** The product has one settings home: calendar feeds, providers and collection policy all live in
+ *  Intelligence Sources, so a calendar request and a sources request are the same destination. */
 export const MARKET_INTELLIGENCE_SETTINGS_PANELS = {
-  intelligenceSources: 'market-intelligence.intelligence-sources',
-  macroCalendar: 'market-intelligence.intelligence-sources'
+  intelligenceSources: 'market-intelligence.intelligence-sources'
 } as const
 
 /** Built-in shell settings sections this product navigates to; the proxy section lives in `preferences`. */
 export const PLATFORM_SETTINGS_PANELS = {
-  preferences: 'preferences'
+  preferences: 'preferences',
+  models: 'models',
+  webSearch: 'web-search'
 } as const
 
 export type AppShellNavigateDetail = {
@@ -24,11 +27,13 @@ export function openIntelligenceSourcesSettings(): void {
   })
 }
 
-export function openMacroCalendarSettings(): void {
-  navigateAppShell({
-    navKey: 'settings',
-    settingsPanelKey: MARKET_INTELLIGENCE_SETTINGS_PANELS.macroCalendar
-  })
+/** Opens the built-in model service page (providers and default models). */
+export function openWebSearchSettings(): void {
+  navigateAppShell({ navKey: 'settings', settingsPanelKey: PLATFORM_SETTINGS_PANELS.webSearch })
+}
+
+export function openModelSettings(): void {
+  navigateAppShell({ navKey: 'settings', settingsPanelKey: PLATFORM_SETTINGS_PANELS.models })
 }
 
 /** Opens the built-in Basic Settings page that owns proxy mode, proxy address and proxy self-test. */

@@ -45,6 +45,7 @@ export const webSearchProviderPresets: WebSearchProviderPreset[] = [
     name: 'Fetch',
     type: 'api',
     phase: 0,
+    enabledByDefault: true,
     capabilities: [{ feature: 'fetchUrls' }]
   },
   {

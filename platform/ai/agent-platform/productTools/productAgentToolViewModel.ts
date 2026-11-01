@@ -2,6 +2,7 @@ import type { ProductAgentToolApprovalMode } from '../../../product-manifest'
 import type { ToolApproval } from '../schemas/toolSchemas'
 import type {
   AgentProductToolPackageBinding,
+  ProductAgentToolDescriptor,
   ProductAgentToolPackageDescriptor,
   ProductAgentToolPackagePermissionMode
 } from './productAgentToolSchemas'
@@ -14,6 +15,8 @@ export type ProductAgentToolPackageEditorView = {
   diagnostics: string[]
   tools: Array<{
     toolName: string
+    /** 本地化短名；缺省时界面回退到 `toolName`。 */
+    title?: ProductAgentToolDescriptor['title']
     description: string
     readOnly: boolean
     requiresTemporalBoundary: boolean
@@ -77,6 +80,7 @@ export function buildProductAgentToolPackageEditorView(input: {
       : [...input.package.diagnostics],
     tools: input.package.tools.map((tool) => ({
       toolName: tool.toolName,
+      title: tool.title,
       description: tool.description,
       readOnly: tool.readOnly,
       requiresTemporalBoundary: tool.requiresTemporalBoundary,

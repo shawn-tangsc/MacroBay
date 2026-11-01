@@ -8,6 +8,12 @@ import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
 import { EmptyCatalog } from './EmptyCatalog'
+import {
+  emptyToolsHint,
+  McpStatusTag,
+  switchAccessibleName,
+  UNBINDABLE_STATUSES
+} from './mcpRowStatus'
 
 type McpCatalogProps = {
   text: AgentText
@@ -59,6 +65,7 @@ export function McpCatalog({
                 if (!checked) onRemove(mcp.id)
               }}
               onRefresh={() => onRefresh(mcp.id)}
+              onUnbind={() => onRemove(mcp.id)}
             />
           ))}
           {manualMcps.map((mcpId) => (
@@ -150,7 +157,8 @@ function McpRow({
   text,
   checked,
   onToggle,
-  onRefresh
+  onRefresh,
+  onUnbind
 }: {
   item: AgentMcpCatalogItem
   tools: readonly McpTool[]
@@ -158,6 +166,7 @@ function McpRow({
   checked: boolean
   onToggle: (checked: boolean) => void
   onRefresh?: () => void
+  onUnbind?: () => void
 }): React.ReactElement {
   return (
     <div className="agent-tool-row agent-mcp-row">
@@ -176,6 +185,8 @@ function McpRow({
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
+        ) : checked ? (
+          <small className="agent-mcp-empty-hint">{emptyToolsHint(item.status, text)}</small>
         ) : null}
         {item.actions.length > 0 ? (
           <span className="agent-mcp-credential-actions">
@@ -190,16 +201,17 @@ function McpRow({
           </span>
         ) : null}
       </span>
-      <Tag
-        className={
-          item.status === 'connected'
-            ? 'agent-tool-approval auto'
-            : item.status === 'error'
-              ? 'agent-tool-approval danger'
-              : 'agent-tool-approval'
-        }>
-        {mcpStatusLabel(item.status, text)}
-      </Tag>
+      <McpStatusTag item={item} text={text} />
+      {checked && UNBINDABLE_STATUSES.has(item.status) && onUnbind ? (
+        <Button
+          className="ant-secondary-button"
+          size="small"
+          aria-label={text.editor.tools.mcpUnbind}
+          autoInsertSpace={false}
+          onClick={onUnbind}>
+          {text.editor.tools.mcpUnbind}
+        </Button>
+      ) : null}
       {checked && onRefresh ? (
         <Button
           className="ant-icon-button"
@@ -213,8 +225,8 @@ function McpRow({
       <Switch
         size="small"
         checked={checked}
-        disabled={!checked && !item.pickable}
-        aria-label={checked ? text.common.enabled : text.common.available}
+        // 读屏名说清楚「绑没绑」，而不是把状态词当开关名念出来（那会读成「不可用，开关」）。
+        aria-label={switchAccessibleName(item, checked, text)}
         onChange={onToggle}
       />
     </div>
@@ -291,11 +303,4 @@ async function runCredentialAction(
   if (action.id === 'restart' || action.id === 'retry') {
     onRestart?.()
   }
-}
-
-function mcpStatusLabel(status: AgentMcpCatalogItem['status'], text: AgentText): string {
-  if (status === 'connected') return text.editor.tools.mcpConnected
-  if (status === 'connecting') return text.editor.tools.mcpConnecting
-  if (status === 'error') return text.editor.tools.mcpError
-  return text.editor.tools.mcpDisabled
 }

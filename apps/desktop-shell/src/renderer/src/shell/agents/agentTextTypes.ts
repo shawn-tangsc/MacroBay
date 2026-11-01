@@ -213,6 +213,7 @@ export type AgentText = {
     modelRetired: string
     modelNotActivated: string
     modelNotFound: string
+    stillWaiting: string
   }
   runtimeActivity: {
     title: string

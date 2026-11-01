@@ -1,0 +1,248 @@
+import { ExternalLink } from 'lucide-react'
+
+import { MiSideDrawer } from './MiSideDrawer'
+
+import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES, namedOutcomes } from '../../../contracts/policyPath'
+import type { PolicyPathReading } from '../../../service/intelligence/policy-path/policyPathQueryService'
+import { conclusionView, percentOf } from './policyPathSettlementText'
+import './policyPathDrawer.css'
+
+/**
+ * The policy reading's detail: the projection path, the vote behind the last decision, and the basis
+ * of the odds. Every number here can be opened at its source, which is the point of the drawer.
+ *
+ * It opens on the left because the card that opens it lives in the right rail: the rail stays
+ * visible, and the reader keeps the calendar in sight while reading the same meeting's projections.
+ */
+export type PolicyPathDrawerText = Readonly<{
+  title: string; sepPath: string; decision: string; basis: string; close: string; openSource: string
+  median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
+  odds: string; change24h: string; range30d: string; quote: string
+  sepMissing: string; decisionMissing: string
+  meeting: string; daysAway: string; projection: string; unchanged: string; range: string
+  /** Same split as the card: the month and the bucket stay separate so English can order them. */
+  outcomeLead: string
+  /** The SEP table's open-ended column, which is a phrase rather than a year. */
+  longerRun: string
+  /** The two FRED series behind the range, labelled so the series ids do not have to be memorised. */
+  rangeLower: string; rangeUpper: string
+  preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
+  /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
+  change24hPending: string
+  /** Short enough to sit beside the dash, so the reader is not left guessing. */
+  change24hPendingShort: string
+  /** "The median is one 25bp step above the range midpoint" - the design's core question. */
+  sepSteps: string; sepStepsLevel: string
+  outcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
+  /** The settlement section: the realised band against the price one hour before it. */
+  settlementTitle: string; settlementPricingBefore: string; settlementOther: string
+  settlementPricedDetail: string; settlementStatementLink: string
+  settlementConclusionLabel: string; voteTally: string
+  /** The row label above the realised band; the date sits in the value. */
+  settlementActualLabel: string
+  /** The fallback baseline, labelled with the hours since the decision. */
+  settlementPricingAfter: string
+  settlementActual: string
+  settlementPricedConclusion: string; settlementHawkish: string; settlementDovish: string
+  settlementConclusionMissing: string
+  /** Every bucket at one instant, not just the one the card leads with. */
+  distributionTitle: string
+  shortOutcomes: Readonly<Record<'no-change' | 'hike-25' | 'hike-50-plus' | 'cut-25' | 'cut-50-plus', string>>
+  /** The comparison columns: today, a day ago, a week ago. */
+  compareNow: string; compareDay: string; compareWeek: string
+  /** Says what a dash in the comparison columns means. */
+  compareHint: string
+}>
+
+/**
+ * The projection columns come from the stored table, not from a fixed list: next year's SEP covers a
+ * different four-year window, and a hardcoded 2026–2029 would print four dashes for it.
+ */
+function projectionColumns(medianPath: Readonly<Record<string, number>> | undefined, text: PolicyPathDrawerText) {
+  const keys = Object.keys(medianPath ?? {}).filter((key) => key === 'longerRun' || /^y\d{4}$/.test(key))
+  return keys.sort((left, right) => (left === 'longerRun' ? 1 : right === 'longerRun' ? -1 : left.localeCompare(right)))
+    .map((key) => ({ key, label: key === 'longerRun' ? text.longerRun : key.slice(1) }))
+}
+
+export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
+  reading: PolicyPathReading
+  text: PolicyPathDrawerText
+  onClose: () => void
+}>): React.ReactElement {
+  const probability = reading.probability
+  const vote = reading.lastDecision?.vote
+  // On the decision day the next meeting is the one after the realised one; the calendar still
+  // returns today's meeting until the date passes, so the strip's own next meeting wins.
+  const nextMeeting = reading.settlement?.nextMeeting
+  const meetingDate = nextMeeting?.meetingDate ?? reading.meetingDate
+  const daysAway = nextMeeting?.daysUntil ?? reading.daysUntilMeeting
+  return <MiSideDrawer title={text.title} closeLabel={text.close} onClose={onClose}
+    meta={<>
+      <span>{text.meeting} {meetingDate.slice(5)} · {text.daysAway.replace('{days}', String(daysAway))}</span>
+      {reading.hasProjectionMaterials ? <em className="mi-policy-drawer__chip">{text.projection}</em> : null}
+    </>}>
+
+    {/* While the strip is up the odds below belong to a meeting that already decided; showing them
+        would put a pre-decision price under a post-decision result. */}
+    {reading.phase.kind === 'settlement' ? null : <div className="mi-policy-drawer__hero">
+      <span className="mi-policy-drawer__value">{probability ? percentOf(probability.value) : '—'}</span>
+      <span className="mi-policy-drawer__hero-label">{probability
+        ? text.outcomeLead
+          .replace('{month}', String(Number(reading.meetingDate.slice(5, 7))))
+          .replace('{outcome}', text.outcomes[probability.outcome])
+        : ''}</span>
+      {probability?.changeInPp24h === undefined ? null : <span className="mi-policy-drawer__delta" data-direction={probability.changeInPp24h > 0 ? 'up' : probability.changeInPp24h < 0 ? 'down' : 'flat'}>
+        {probability.changeInPp24h > 0 ? '+' : ''}{probability.changeInPp24h.toFixed(1)}pp · {text.change24h}
+      </span>}
+    </div>}
+
+    {reading.settlement ? <SettlementSection reading={reading} text={text} /> : null}
+
+    {/* The card names one bucket; the reader still needs to see what the other four are priced at,
+        or 30% looks like it does not exist. */}
+    {reading.phase.kind !== 'settlement' && probability?.distribution ? <section className="mi-policy-drawer__section">
+      <h3>{text.distributionTitle}</h3>
+      {/* One row per bucket, one column per time point: the shape is the bar in the first cell,
+          and the two right-hand columns say whether today's number is news or a week-old level. */}
+      <table className="mi-policy-drawer__distribution">
+        <thead><tr>
+          <th scope="col">{''}</th><th scope="col">{text.compareNow}</th>
+          <th scope="col">{text.compareDay}</th><th scope="col">{text.compareWeek}</th>
+        </tr></thead>
+        <tbody>{(() => {
+          const named = new Set(namedOutcomes(probability.distribution!))
+          return POLICY_PATH_OUTCOME_ORDER.map((outcome) => {
+          const share = probability.distribution?.[outcome] ?? 0
+          return <tr key={outcome} data-outcome={outcome} data-named={named.has(outcome) ? 'true' : 'false'}
+            data-leading={outcome === probability.outcome ? 'true' : undefined}>
+            <th scope="row">
+              <span className="mi-policy-drawer__distribution-bar" aria-hidden="true"><i style={{ width: `${Math.max(share * 100, share > 0 ? 2 : 0)}%` }} /></span>
+              {text.shortOutcomes[outcome]}
+            </th>
+            <td>{percentOf(share)}</td>
+            <td>{probability.comparison?.day ? percentOf(probability.comparison.day[outcome]) : '—'}</td>
+            <td>{probability.comparison?.week ? percentOf(probability.comparison.week[outcome]) : '—'}</td>
+          </tr>
+          })
+        })()}</tbody>
+      </table>
+      <p className="mi-policy-drawer__note">{text.compareHint}</p>
+    </section> : null}
+
+    <section className="mi-policy-drawer__section">
+      <h3>{text.sepPath}
+        {reading.sep ? <a href={reading.sep.sourceUrl} rel="noreferrer" target="_blank">{text.openSource}<ExternalLink aria-hidden="true" size={11} /></a> : null}
+      </h3>
+      {reading.sep ? <>
+        <div className="mi-policy-drawer__path">
+          {projectionColumns(reading.sep.medianPath, text).map(({ key, label }) => <div key={key} data-empty={reading.sep?.medianPath?.[key] === undefined ? 'true' : undefined}>
+            <b>{reading.sep?.medianPath?.[key]?.toFixed(1) ?? '—'}</b><span>{label}</span>
+          </div>)}
+        </div>
+        <p className="mi-policy-drawer__note">
+          {text.asOf} {reading.sep.asOf}
+          {reading.sep.rangeCurrentYear ? ` · ${text.sepRange} ${reading.sep.rangeCurrentYear.low}–${reading.sep.rangeCurrentYear.high}%` : ''}
+          {reading.sep.previousMedian === undefined ? '' : ` · ${text.previous} ${reading.sep.previousMedian}%`}
+        </p>
+        {reading.sep.stepsFromCurrent === undefined ? null : <p className="mi-policy-drawer__note">
+          {reading.sep.stepsFromCurrent === 0
+            ? text.sepStepsLevel
+            : text.sepSteps.replace('{steps}', String(Math.abs(reading.sep.stepsFromCurrent)))
+              .replace('{direction}', reading.sep.stepsFromCurrent > 0 ? '↑' : '↓')}
+        </p>}
+      </> : <p className="mi-policy-drawer__empty">{text.sepMissing}</p>}
+    </section>
+
+    <section className="mi-policy-drawer__section">
+      <h3>{text.decision}
+        {reading.lastDecision?.statementUrl ? <a href={reading.lastDecision.statementUrl} rel="noreferrer" target="_blank">{text.openSource}<ExternalLink aria-hidden="true" size={11} /></a> : null}
+      </h3>
+      {vote ? <>
+        <div className="mi-policy-drawer__vote">
+          <b>{vote.for}–{vote.against}</b><span>{text.unchanged}</span>
+        </div>
+        <p className="mi-policy-drawer__note">{text.dissents} {(reading.lastDecision?.dissents ?? [])
+          .map((row) => `${row.name}（${text.preferred[row.preferred]}）`).join('、') || '—'}</p>
+      </> : <p className="mi-policy-drawer__empty">{text.decisionMissing}</p>}
+    </section>
+
+    <section className="mi-policy-drawer__section">
+      <h3>{text.basis}
+        {/* Both bounds, each to its own series: the row shows 3.75–4.00, and a reader should be
+            able to check either half instead of trusting the pair. */}
+        <span className="mi-policy-drawer__source-links">FRED ·
+          <a href="https://fred.stlouisfed.org/series/DFEDTARL" rel="noreferrer" target="_blank">{text.rangeLower} DFEDTARL<ExternalLink aria-hidden="true" size={11} /></a>
+          <a href="https://fred.stlouisfed.org/series/DFEDTARU" rel="noreferrer" target="_blank">{text.rangeUpper} DFEDTARU<ExternalLink aria-hidden="true" size={11} /></a>
+        </span>
+      </h3>
+      <dl className="mi-policy-drawer__kv">
+        {probability ? <>
+          <div><dt>{text.change24h}</dt><dd title={probability.changeInPp24h === undefined ? text.change24hPending : undefined}>
+            {probability.changeInPp24h === undefined
+              ? <><span className="mi-policy-drawer__muted">—</span><span className="mi-policy-drawer__muted">（{text.change24hPendingShort}）</span></>
+              : `${probability.changeInPp24h > 0 ? '+' : ''}${probability.changeInPp24h.toFixed(1)}pp`}
+          </dd></div>
+          <div><dt>{text.range30d}</dt><dd>{probability.range30d ? `${percentOf(probability.range30d.min)}–${percentOf(probability.range30d.max)}` : '—'}</dd></div>
+          <div><dt>{text.quote}</dt><dd>{probability.quote ? `${(probability.quote.bid * 100).toFixed(0)} / ${(probability.quote.ask * 100).toFixed(0)}` : '—'}</dd></div>
+        </> : null}
+        <div><dt>{text.venue}</dt><dd>{probability?.marketUrl
+          ? <a href={probability.marketUrl} rel="noreferrer" target="_blank">{probability.venue}<ExternalLink aria-hidden="true" size={11} /></a>
+          : probability?.venue ?? '—'}</dd></div>
+        <div><dt>{text.range}</dt><dd>{reading.targetRange ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%` : '—'}</dd></div>
+        {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{probability.asOf.replace('T', ' ').slice(0, 19)}</dd></div> : null}
+      </dl>
+    </section>
+  </MiSideDrawer>
+}
+
+/**
+ * The settlement section: what the meeting did, what the market had priced an hour before it, and
+ * the gap between the two. It repeats the card's arithmetic from the same reading, so the two
+ * surfaces cannot describe the same decision differently.
+ *
+ * The pricing line names the leading band, the realised band and everything else as one number: the
+ * three remaining buckets are noise at this width, and the point is what was priced, not a ladder.
+ */
+function SettlementSection({ reading, text }: Readonly<{ reading: PolicyPathReading; text: PolicyPathDrawerText }>): React.ReactElement | null {
+  const settlement = reading.settlement
+  if (!settlement) return null
+  const conclusion = conclusionView(settlement, text)
+  const vote = reading.lastDecision?.vote
+  const distribution = settlement.pricedDistribution
+  const leading = settlement.pricedOutcome
+  const otherShare = distribution && leading
+    ? POLICY_PATH_OUTCOMES
+      .filter((outcome) => outcome !== leading && outcome !== settlement.actualOutcome)
+      .reduce((sum, outcome) => sum + distribution[outcome], 0)
+    : undefined
+  const statementUrl = reading.lastDecision?.statementUrl
+  return <section className="mi-policy-drawer__section" data-settlement>
+    <h3>{text.settlementTitle}
+      {statementUrl ? <a href={statementUrl} rel="noreferrer" target="_blank">{text.settlementStatementLink}<ExternalLink aria-hidden="true" size={11} /></a> : null}
+    </h3>
+    <dl className="mi-policy-drawer__kv">
+      <div>
+        <dt>{text.settlementActualLabel}</dt>
+        <dd>{settlement.decidedMeetingDate.slice(5)} · <b>{text.outcomes[settlement.actualOutcome]}</b></dd>
+      </div>
+      {vote ? <div><dt>{text.voteTally}</dt><dd>{vote.for}–{vote.against}</dd></div> : null}
+      {distribution && leading && otherShare !== undefined ? <div>
+        <dt>{settlement.pricingBasis === 'post-decision'
+          ? text.settlementPricingAfter.replace('{hours}', String(settlement.pricedHoursAfter ?? 0))
+          : text.settlementPricingBefore}</dt>
+        <dd>{text.outcomes[leading]} {percentOf(distribution[leading])} · {text.outcomes[settlement.actualOutcome]} {percentOf(distribution[settlement.actualOutcome])} · {text.settlementOther} {percentOf(otherShare)}</dd>
+      </div> : null}
+      <div>
+        <dt>{text.settlementConclusionLabel}</dt>
+        <dd>{conclusion
+          ? <em className="mi-policy-drawer__conclusion" data-direction={conclusion.direction}>{conclusion.label}</em>
+          : <span className="mi-policy-drawer__muted">{text.settlementConclusionMissing}</span>}</dd>
+      </div>
+    </dl>
+    {/* One note, not three: the reason is already inside the conclusion cell, and repeating it under
+        the table is what made this block read as a wall of text. */}
+    {settlement.conclusion.kind === 'relative' && settlement.priced !== undefined
+      ? <p className="mi-policy-drawer__note">{text.settlementPricedDetail.replace('{value}', percentOf(settlement.priced))}</p>
+      : null}
+  </section>
+}

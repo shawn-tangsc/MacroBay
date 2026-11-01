@@ -1,7 +1,7 @@
 /**
  * 一处改版本号：`pnpm release:bump 0.2.1`。
  *
- * 版本号散落在六处，手改必漏（漏了 `check-release-version` 会在打标签后才红）。
+ * 版本号散落在七处，手改必漏（漏了 `check-release-version` 会在打标签后才红）。
  * 这个脚本按固定清单改写，改完打印命中数量；任何一处没命中就失败，而不是静默跳过。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -18,7 +18,10 @@ const targets: readonly Target[] = [
   { path: 'docs/reference/status-and-limitations.md', pattern: /(MacroBay is at `)(\d+\.\d+\.\d+)(`)/u, replace: (_m, next) => `MacroBay is at \`${next}\`` },
   { path: 'docs/reference/status-and-limitations.md', pattern: /(The `)(\d+\.\d+\.\d+)(` release)/u, replace: (_m, next) => `The \`${next}\` release` },
   { path: 'docs/reference/status-and-limitations.zh-CN.md', pattern: /(MacroBay 当前版本是 `)(\d+\.\d+\.\d+)(`)/u, replace: (_m, next) => `MacroBay 当前版本是 \`${next}\`` },
-  { path: 'docs/reference/status-and-limitations.zh-CN.md', pattern: /(`)(\d+\.\d+\.\d+)(` 不承诺内部 API)/u, replace: (_m, next) => `\`${next}\` 不承诺内部 API` }
+  { path: 'docs/reference/status-and-limitations.zh-CN.md', pattern: /(`)(\d+\.\d+\.\d+)(` 不承诺内部 API)/u, replace: (_m, next) => `\`${next}\` 不承诺内部 API` },
+  // The bug report form asks which release a reader installed. A stale hint sends them to the wrong
+  // tag, and it is the last place that still names one concrete version.
+  { path: '.github/ISSUE_TEMPLATE/bug_report.yml', pattern: /(placeholder: ")(\d+\.\d+\.\d+)(")/u, replace: (_m, next) => `placeholder: "${next}"` }
 ]
 
 const requested = process.argv[2]

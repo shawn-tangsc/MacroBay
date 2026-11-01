@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 
 import type { AgentFact, MarketAnalysisDomainObservation } from '../../../contracts/marketAnalysisContracts'
-import { MARKET_ANALYSIS_CONTEXT_CAVEATS, MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_CONTEXT_CAVEATS, MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
 import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEconomicCalendarQueryService'
 import { projectMacroCalendar } from './marketAnalysisContextProjection'
 
@@ -39,7 +39,7 @@ function project(events: readonly Record<string, unknown>[]): Readonly<{
   return { facts, caveats, evidenceRefs }
 }
 
-const surpriseFacts = (facts: readonly AgentFact[]) => facts.filter(fact => fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.surprise)
+const surpriseFacts = (facts: readonly AgentFact[]) => facts.filter(fact => fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.surprise)
 
 it('emits one percentage-point surprise fact that inherits the event evidence reference', () => {
   const { facts } = project([observation()])

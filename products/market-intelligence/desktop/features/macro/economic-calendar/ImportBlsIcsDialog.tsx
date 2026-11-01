@@ -2,7 +2,7 @@ import { Button, Modal } from 'antd'
 import { Check, X } from 'lucide-react'
 import type { ReactElement } from 'react'
 
-import type { EconomicCalendarText } from './EconomicCalendar'
+import type { EconomicCalendarText } from './economicCalendarText'
 import type { BlsIcsImportDialogState } from './useBlsIcsImport'
 
 export const importBlsIcsDialogPolicy = {

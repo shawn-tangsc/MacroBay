@@ -1,3 +1,4 @@
+import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
@@ -178,6 +179,8 @@ export type PlatformText = {
     channelRuntimeMissing: string
     channelOperationFailed: string
     channelCatalogStatus: Record<'planned' | 'blocked' | 'supported', string>
+    /** What each adapter is missing, so a blocked row says why instead of only saying blocked. */
+    channelCatalogReason: Record<'supported' | 'planned' | 'blockedImplemented' | 'blockedUnimplemented', string>
     channelConversationKind: Record<'direct' | 'group' | 'channel', string>
     channelState: Record<'credential-missing' | 'configuration-ready' | 'disabled' | 'deleting' | 'runtime-ready', string>
   }
@@ -227,6 +230,9 @@ export type PlatformText = {
     pending: string
     skipped: string
     unknown: string
+    /** 跳过原因必须解释成人话：每个码对应一个不同的用户动作。 */
+    deliverySkipReason: Record<ChannelDeliverySkipReason, string>
+    deliverySkipReasonUnrecorded: (count: number) => string
     auditAccepted: string
     auditRejected: string
     auditAction: Record<'create' | 'update' | 'pause' | 'resume' | 'delete' | 'run-now' | 'cancel-run' | 'runtime-transition' | 'channel-delete-cleanup', string>
@@ -359,9 +365,10 @@ export type PlatformText = {
     mcpDisabled: string
     mcpAuto: string
     mcpManual: string
+    /** 助手侧 MCP 执行未接入：此设置暂不生效，只保留已存的值。 */
+    mcpModeUnavailableHint: string
     enableWebSearch: string
     webSearchHint: string
-    contextSourcesPlaceholder: string
     comingSoon: string
     mentionedModels: string
     webSearchCardTitle: string
@@ -623,6 +630,8 @@ export type PlatformText = {
     /** 默认模型条：第二行（绘画模型）默认收起，用「更多默认模型设置」展开。 */
     defaultModelsShowMore: string
     defaultModelsCollapse: string
+    /** 默认模型条底部：说清哪些默认值由平台入口直接用、哪些只供产品功能读取。 */
+    defaultModelsConsumerHint: string
     copyModelId: string
     copied: string
     nonChatModelHint: string
@@ -927,19 +936,37 @@ export type PlatformText = {
   preferences: {
     language: string
     displayStyle: string
-    accentColor: string
     timeZone: string
     timeZoneFollowSystem: string
     timeZoneSearch: string
     timeZoneUnavailable: string
+    timeZoneOpenTimesHint: string
     proxyMode: string
     proxyAddress: string
     proxyBypassRules: string
     proxyRequestHint: string
     proxySelfTest: string
     proxySelfTestRunning: string
-    proxySelfTestPassed: (status: number, seconds: string, proxy: string) => string
-    proxySelfTestFailed: (code: string, host: string) => string
+    proxySelfTestPassedViaProxy: (status: number, seconds: string) => string
+    proxySelfTestReachable: (status: number, seconds: string) => string
+    proxySelfTestNotApplied: (resolvedProxy: string) => string
+    proxySelfTestProxyNotRunning: (endpoint: string) => string
+    proxySelfTestLocalNetwork: string
+    proxySelfTestLocalNetworkHint: string
+    proxySelfTestProxyAfterProbe: (endpoint: string) => string
+    proxySelfTestProxyAfterProbeHint: string
+    proxySelfTestCauseUnknownHint: string
+    proxySelfTestProxyAnsweredBadly: (sentence: string) => string
+    proxySelfTestUnattributable: (endpoint: string) => string
+    proxySelfTestTargetRejected: (status: number, host: string) => string
+    proxySelfTestAuthenticationHint: string
+    proxySelfTestTargetDenied: (status: number, host: string) => string
+    proxySelfTestDeniedHint: string
+    proxyRejectedEmpty: string
+    proxyRejectedUnsupportedProtocol: string
+    proxyRejectedUnparsable: string
+    proxyRejectedBypassRule: (rules: string) => string
+    proxySocks5Implicit: string
     proxyAddressPlaceholder: string
     proxyBypassPlaceholder: string
     proxySystem: string
@@ -950,13 +977,12 @@ export type PlatformText = {
     system: string
     light: string
     dark: string
-    lime: string
-    cyan: string
-    violet: string
   }
   notifications: {
     channelsDescription: string
     scopeNote: string
+    unavailableNotice: string
+    unavailableBadge: string
     centerEnabled: string
     centerDescription: string
     desktopEnabled: string
@@ -1083,6 +1109,8 @@ export type PlatformText = {
     clickToReplace: string
     revealApiKeyFailed: string
     revealApiKeyUnavailable: string
+    copyApiKey: string
+    apiKeyCopied: string
     revealApiKeyBridgeFailed: string
     revealApiKeyMissing: string
     retry: string
@@ -1293,7 +1321,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: '存储与缓存',
       taskAutomation: '任务自动化',
       basicSettings: '基础设置',
-      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
+      notifications: '通知', channels: '通道', channelCreate: '创建通道', channelRefresh: '刷新', channelPlanned: '等待适配器发布', channelRunning: '运行中', channelDisable: '停用', channelRestart: '重启', channelCredentialConfigured: '凭据已配置', channelCredentialMissing: '凭据缺失', channelCredentialUnavailable: '凭据不可用', channelSaveCredential: '保存凭据', channelNoInstances: '尚无通道实例', channelName: '名称', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: '飞书 App ID', channelLarkAppSecret: '飞书 App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: '微信二维码授权（等待协议冻结）', channelDelete: '删除', channelPolicy: '访问策略', channelPolicyCreate: '添加策略', channelPolicySubject: { user: '用户', conversation: '会话' }, channelTarget: '投递目标', channelUpdate: '保存更改', channelEnable: '请求启用', channelEnableBlocked: '等待适配器支持证据', channelAdapterUnavailable: '适配器尚未实现，暂不接收凭据', channelCandidates: '待授权会话', channelCandidatesEmpty: '当未授权的用户/群发消息时会出现在这里', channelCandidateUnknown: '未知用户', channelCandidateAllow: '允许', channelCandidateIgnore: '忽略', channelCandidateAlsoTarget: '同时开启推送', channelDeleteConfirm: '删除通道会断开连接并清理本地密钥引用，确认继续？', channelCancel: '取消', channelRuntimeGeneration: '运行代际', channelRuntimeLifecycle: '运行状态', channelRuntimeMissing: '未运行', channelOperationFailed: '操作失败，请重试', channelCatalogStatus: { planned: '计划中', blocked: '已阻止', supported: '证据完备' }, channelCatalogReason: { supported: '证据完备，可启用', planned: '等待真机验收证据', blockedImplemented: '缺验收证据：可存凭据，暂不能启用', blockedUnimplemented: '适配器尚未实现：缺协议实现与验收证据' }, channelConversationKind: { direct: '私聊', group: '群组', channel: '频道' }, channelState: { 'credential-missing': '凭据缺失', 'configuration-ready': '配置就绪', disabled: '已停用', deleting: '正在删除', 'runtime-ready': '运行就绪' }
     },
     taskAutomation: {
       title: '任务自动化', subtitle: '平台任务、投递健康与变更审计。', refresh: '刷新', retry: '重试', emptyValue: '—',
@@ -1313,6 +1341,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       outcome: { success: '成功', failed: '失败', skipped: '已跳过', never: '从未运行' },
       details: '详情', collapse: '收起', taskDeliveryHealth: '本任务投递健康', recentChanges: '最近变更', noChanges: '暂无变更记录。',
       delivered: '已投递', failed: '失败', pending: '待投递', skipped: '已跳过', unknown: '未知',
+      deliverySkipReason: {
+        'delivery-no-target-bound': '这条任务还没绑定通道，去「通道」里绑定一个就会开始投递',
+        'delivery-target-disabled': '绑定的通道已停用，重新启用后才会投递',
+        'delivery-empty-output': '这次运行没有可投递的内容',
+        'delivery-not-authorized': '投递身份校验未通过，已按安全策略跳过',
+        'delivery-retry-not-permitted': '这次投递不满足重试条件，不再重试',
+        'delivery-owner-invalid': '投递由另一次运行持有，本次跳过'
+      },
+      deliverySkipReasonUnrecorded: (count) => `${count} 次跳过没有记录原因（属于缺陷，已按异常记录）`,
       auditAccepted: '已接受', auditRejected: '已拒绝',
       auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
@@ -1423,9 +1460,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpDisabled: '禁用',
       mcpAuto: '自动',
       mcpManual: '手动',
+      mcpModeUnavailableHint: '助手的 MCP 执行尚未接入，此处设置暂不生效；需要 MCP 请使用智能体。',
       enableWebSearch: '启用网页搜索',
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
-      contextSourcesPlaceholder: '知识库与上下文源将在后续平台能力中接入。',
       comingSoon: '即将推出',
       mentionedModels: '提及模型',
       webSearchCardTitle: '网页搜索',
@@ -1675,13 +1712,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelAgent: '默认智能体模型',
       defaultModelAgentHint: '新建智能体时使用',
       defaultModelFast: '快速模型',
-      defaultModelFastHint: '轻量任务使用',
+      defaultModelFastHint: '供产品功能读取（轻量任务），平台自身不调用',
       defaultModelTranslation: '翻译模型',
-      defaultModelTranslationHint: '翻译任务使用',
+      defaultModelTranslationHint: '供产品功能读取（翻译任务），平台自身不调用',
       defaultModelImage: '绘画模型',
       defaultModelImageHint: '图片生成使用',
       defaultModelsShowMore: '更多默认模型设置',
       defaultModelsCollapse: '收起',
+      defaultModelsConsumerHint:
+        '助手、智能体、绘画由对应入口直接使用；快速与翻译模型只作为共用默认值被产品功能读取。没有产品用到时，选了也不会有可见效果。',
       copyModelId: '复制',
       copied: '已复制',
       nonChatModelHint: '非聊天模型不会出现在对话模型选择中',
@@ -1950,19 +1989,40 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     preferences: {
       language: '语言',
       displayStyle: '显示风格',
-      accentColor: '强调色',
       timeZone: '时区',
       timeZoneFollowSystem: '跟随系统',
       timeZoneSearch: '搜索时区',
       timeZoneUnavailable: '无法读取系统时区，暂时按 UTC 显示。',
+      timeZoneOpenTimesHint: '开盘时刻按这里选择的时区计算',
       proxyMode: '代理模式',
       proxyAddress: '代理地址',
       proxyBypassRules: '代理绕过规则',
       proxyRequestHint: '应用请求走这里的代理设置；浏览器能打开不代表应用能连。',
       proxySelfTest: '测试代理',
       proxySelfTestRunning: '测试中…',
-      proxySelfTestPassed: (status, seconds, proxy) => `代理自检：通过（HTTP ${status}，${seconds}s，经 ${proxy}）`,
-      proxySelfTestFailed: (code, host) => `代理自检：失败（${code}）· 目标 ${host}`,
+      proxySelfTestPassedViaProxy: (status, seconds) => `已通过代理到达目标站点（HTTP ${status} · ${seconds}s）`,
+      proxySelfTestReachable: (status, seconds) => `能连到目标站点（HTTP ${status} · ${seconds}s）`,
+      proxySelfTestNotApplied: (resolvedProxy) =>
+        `代理自检：未生效（设置为代理，但网络栈解析为「${resolvedProxy}」，这次没有走代理）`,
+      proxySelfTestProxyNotRunning: (endpoint) =>
+        `代理自检：失败（本机代理 ${endpoint} 没有响应：代理没启动，或端口不对）`,
+      proxySelfTestLocalNetwork: '本机网络不通：不经代理的对照探针也失败了',
+      proxySelfTestLocalNetworkHint: '先确认这台机器能上网（Wi-Fi / 网线 / VPN）；代理地址与端口等网络恢复后再核。',
+      proxySelfTestProxyAfterProbe: (endpoint) => `本机网络是通的，但连不上代理服务器本身（${endpoint}）`,
+      proxySelfTestProxyAfterProbeHint: '对照探针已确认这台机器能上网：请核对代理地址与端口。',
+      proxySelfTestCauseUnknownHint: '这次没拿到对照结果，暂时判断不了原因；可以重试一次。',
+      proxySelfTestProxyAnsweredBadly: (sentence) => `经代理请求失败：代理端点连得上，但代理自身返回了错误（${sentence}）`,
+      proxySelfTestUnattributable: (endpoint) => `连不上代理服务器本身（${endpoint}）；原因待查`,
+      proxySelfTestTargetRejected: (status, host) => `已连到目标站点，站点要求鉴权（HTTP ${status}）· ${host}`,
+      proxySelfTestAuthenticationHint: '这条自检不带 Key，401 属正常；与代理是否生效无关。',
+      proxySelfTestTargetDenied: (status, host) => `已连到目标站点，站点拒绝了请求（HTTP ${status}）· ${host}`,
+      proxySelfTestDeniedHint: '请求到达了站点、被站点挡下（可能不允许无凭据访问或触发了防护）；与代理是否生效无关。',
+      proxyRejectedEmpty: '请先填写代理地址。',
+      proxyRejectedUnsupportedProtocol: '代理地址只支持 http、https、socks5 三种协议，请写成 `http://主机:端口`。',
+      proxyRejectedUnparsable: '代理地址格式不对，请写成 `http://主机:端口` 或 `socks5://主机:端口`。',
+      proxyRejectedBypassRule: (rules) =>
+        `这几条绕过规则写法不受支持：${rules}。只支持主机名、\`*.域名\`、\`<local>\` 和 \`*\`，不支持端口与 CIDR。`,
+      proxySocks5Implicit: '未写协议，按 socks5 解释；若你的代理是 HTTP，请写成 `http://主机:端口`。',
       proxyAddressPlaceholder: '例如 socks5://127.0.0.1:6153',
       proxyBypassPlaceholder: 'localhost,127.0.0.1,::1',
       proxySystem: '系统代理',
@@ -1972,15 +2032,14 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: '跟随系统',
       light: '浅色',
-      dark: '深色',
-      lime: '绿色',
-      cyan: '蓝色',
-      violet: '紫色'
+      dark: '深色'
     },
     notifications: {
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
+      unavailableNotice: '通知暂未启用：平台目前还没有产生通知的来源，这些开关不会有任何效果。接到第一个真实来源后重新启用。',
+      unavailableBadge: '未启用',
       centerEnabled: '通知中心',
       centerDescription: '保留所有通知记录，便于回看系统消息与任务结果。',
       desktopEnabled: '桌面通知',
@@ -2106,6 +2165,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clickToReplace: '点击可替换 Key',
       revealApiKeyFailed: '读取已保存 Key 失败，已保持掩码。',
       revealApiKeyUnavailable: '应用进程缺少该接口，请重启应用后重试。',
+      copyApiKey: '复制密钥',
+      apiKeyCopied: '已复制',
       revealApiKeyBridgeFailed: '与主进程通信失败，请重启应用后重试。',
       revealApiKeyMissing: '没有找到已保存的 Key（可能已被移除）。',
       retry: '重试',
@@ -2315,7 +2376,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       storageAndCache: 'Storage and Cache',
       taskAutomation: 'Task Automation',
       basicSettings: 'Basic Settings',
-      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
+      notifications: 'Notifications', channels: 'Channels', channelCreate: 'Create channel', channelRefresh: 'Refresh', channelPlanned: 'Waiting for adapter release', channelRunning: 'Running', channelDisable: 'Disable', channelRestart: 'Restart', channelCredentialConfigured: 'Credential configured', channelCredentialMissing: 'Credential missing', channelCredentialUnavailable: 'Credential unavailable', channelSaveCredential: 'Save credential', channelNoInstances: 'No channel instances', channelName: 'Name', channelAgentId: 'Agent ID', channelCredential: 'Bot Token', channelAppCredential: 'App Token', channelLarkAppId: 'Lark App ID', channelLarkAppSecret: 'Lark App Secret', channelQqAppId: 'QQ App ID', channelQqClientSecret: 'QQ Client Secret', channelDiscordBotToken: 'Discord Bot Token', channelWechatEnrollment: 'WeChat QR enrollment (protocol pending)', channelDelete: 'Delete', channelPolicy: 'Access policy', channelPolicyCreate: 'Add policy', channelPolicySubject: { user: 'User', conversation: 'Conversation' }, channelTarget: 'Delivery target', channelUpdate: 'Save changes', channelEnable: 'Request enable', channelEnableBlocked: 'Adapter support evidence is pending', channelAdapterUnavailable: 'Adapter is not implemented yet; credentials are disabled', channelCandidates: 'Pending conversations', channelCandidatesEmpty: 'Unknown users or groups appear here after they message the bot', channelCandidateUnknown: 'Unknown user', channelCandidateAllow: 'Allow', channelCandidateIgnore: 'Ignore', channelCandidateAlsoTarget: 'Also enable delivery', channelDeleteConfirm: 'Deleting the channel disconnects it and clears local credential references. Continue?', channelCancel: 'Cancel', channelRuntimeGeneration: 'Generation', channelRuntimeLifecycle: 'Runtime', channelRuntimeMissing: 'not running', channelOperationFailed: 'The operation failed. Please retry.', channelCatalogStatus: { planned: 'Planned', blocked: 'Blocked', supported: 'Evidence complete' }, channelCatalogReason: { supported: 'Evidence complete, can be enabled', planned: 'Waiting for real-device acceptance evidence', blockedImplemented: 'Acceptance evidence missing: credentials can be stored, cannot be enabled yet', blockedUnimplemented: 'Adapter not implemented: protocol and acceptance evidence are missing' }, channelConversationKind: { direct: 'Direct', group: 'Group', channel: 'Channel' }, channelState: { 'credential-missing': 'Credential missing', 'configuration-ready': 'Configuration ready', disabled: 'Disabled', deleting: 'Deleting', 'runtime-ready': 'Runtime ready' }
     },
     taskAutomation: {
       title: 'Task Automation', subtitle: 'Platform jobs, delivery health, and mutation audits.', refresh: 'Refresh', retry: 'Retry', emptyValue: '—',
@@ -2335,6 +2396,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       outcome: { success: 'Succeeded', failed: 'Failed', skipped: 'Skipped', never: 'Never' },
       details: 'Details', collapse: 'Collapse', taskDeliveryHealth: 'Delivery health for this task', recentChanges: 'Recent changes', noChanges: 'No changes yet.',
       delivered: 'Delivered', failed: 'Failed', pending: 'Pending', skipped: 'Skipped', unknown: 'Unknown',
+      deliverySkipReason: {
+        'delivery-no-target-bound': 'This task has no channel bound yet — bind one under Channels to start delivering',
+        'delivery-target-disabled': 'The bound channel is disabled — re-enable it to deliver again',
+        'delivery-empty-output': 'This run produced nothing to deliver',
+        'delivery-not-authorized': 'The delivery identity check failed, so it was skipped as a safety measure',
+        'delivery-retry-not-permitted': 'This delivery is not eligible for a retry',
+        'delivery-owner-invalid': 'Another run owns this delivery, so it was skipped'
+      },
+      deliverySkipReasonUnrecorded: (count) => `${count} skipped ${count === 1 ? 'delivery has' : 'deliveries have'} no recorded reason (a defect, logged as an anomaly)`,
       auditAccepted: 'Accepted', auditRejected: 'Rejected',
       auditAction: { create: 'Created', update: 'Updated', pause: 'Paused', resume: 'Resumed', delete: 'Deleted', 'run-now': 'Run now', 'cancel-run': 'Cancelled run', 'runtime-transition': 'Runtime transition', 'channel-delete-cleanup': 'Channel cleanup' },
       resourceJobs: 'Platform & product jobs', resourceLoading: 'Loading platform jobs…', resourceLoadFailed: 'Failed to load platform jobs.',
@@ -2445,9 +2515,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpDisabled: 'Disabled',
       mcpAuto: 'Auto',
       mcpManual: 'Manual',
+      mcpModeUnavailableHint:
+        'Assistant-side MCP execution is not connected yet, so this setting has no effect. Use an agent when you need MCP.',
       enableWebSearch: 'Enable web search',
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
-      contextSourcesPlaceholder: 'Knowledge and context sources will connect through later platform capabilities.',
       comingSoon: 'Coming soon',
       mentionedModels: 'Mentioned models',
       webSearchCardTitle: 'Web Search',
@@ -2699,13 +2770,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       defaultModelAgent: 'Default agent model',
       defaultModelAgentHint: 'Used for new agents',
       defaultModelFast: 'Fast model',
-      defaultModelFastHint: 'Used for lightweight tasks',
+      defaultModelFastHint: 'Read by product features (lightweight tasks); the platform itself does not call it',
       defaultModelTranslation: 'Translation model',
-      defaultModelTranslationHint: 'Used for translations',
+      defaultModelTranslationHint: 'Read by product features (translation); the platform itself does not call it',
       defaultModelImage: 'Image model',
       defaultModelImageHint: 'Used for image generation',
       defaultModelsShowMore: 'More default model settings',
       defaultModelsCollapse: 'Collapse',
+      defaultModelsConsumerHint:
+        'Assistant, agent, and image defaults are used directly by their own entry points. The fast and translation defaults are shared values read by product features only, so they have no visible effect until a product uses them.',
       copyModelId: 'Copy',
       copied: 'Copied',
       nonChatModelHint: 'Non-chat models do not appear in chat model selection.',
@@ -2979,19 +3052,48 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     preferences: {
       language: 'Language',
       displayStyle: 'Display Style',
-      accentColor: 'Accent Color',
       timeZone: 'Time zone',
       timeZoneFollowSystem: 'Follow system',
       timeZoneSearch: 'Search time zones',
       timeZoneUnavailable: 'The system time zone is unavailable; times are shown in UTC.',
+      timeZoneOpenTimesHint: 'Open times are calculated in the time zone selected here.',
       proxyMode: 'Proxy Mode',
       proxyAddress: 'Proxy Address',
       proxyBypassRules: 'Proxy Bypass Rules',
       proxyRequestHint: 'App requests use the proxy settings here; the browser reaching a site does not mean the app can.',
       proxySelfTest: 'Test proxy',
       proxySelfTestRunning: 'Testing…',
-      proxySelfTestPassed: (status, seconds, proxy) => `Proxy check: passed (HTTP ${status}, ${seconds}s, via ${proxy})`,
-      proxySelfTestFailed: (code, host) => `Proxy check: failed (${code}) · target ${host}`,
+      proxySelfTestPassedViaProxy: (status, seconds) => `Reached the target site through the proxy (HTTP ${status} · ${seconds}s)`,
+      proxySelfTestReachable: (status, seconds) => `Reached the target site (HTTP ${status} · ${seconds}s)`,
+      proxySelfTestNotApplied: (resolvedProxy) =>
+        `Proxy check: not in effect (a proxy is configured, but the network stack resolved "${resolvedProxy}", so this request went direct)`,
+      proxySelfTestProxyNotRunning: (endpoint) =>
+        `Proxy check: failed (the local proxy ${endpoint} did not answer: it is not running, or the port is wrong)`,
+      proxySelfTestLocalNetwork: 'This machine has no working network: the probe that bypasses the proxy failed too',
+      proxySelfTestLocalNetworkHint:
+        'First confirm this machine can reach the internet (Wi-Fi / cable / VPN); recheck the proxy address and port once the network is back.',
+      proxySelfTestProxyAfterProbe: (endpoint) =>
+        `This machine's network works, but the proxy server itself cannot be reached (${endpoint})`,
+      proxySelfTestProxyAfterProbeHint:
+        'The comparison probe confirmed this machine can reach the internet: check the proxy address and port.',
+      proxySelfTestCauseUnknownHint: 'No comparison result was obtained this time, so the cause cannot be told yet; try again.',
+      proxySelfTestProxyAnsweredBadly: (sentence) =>
+        `The request through the proxy failed: the proxy endpoint answers, but the proxy itself returned an error (${sentence})`,
+      proxySelfTestUnattributable: (endpoint) => `Cannot reach the proxy server itself (${endpoint}); cause unknown`,
+      proxySelfTestTargetRejected: (status, host) =>
+        `Reached the target site; it asks for authentication (HTTP ${status}) · ${host}`,
+      proxySelfTestAuthenticationHint:
+        'This check sends no key, so a 401 is expected; it says nothing about whether the proxy is in effect.',
+      proxySelfTestTargetDenied: (status, host) =>
+        `Reached the target site; the site refused the request (HTTP ${status}) · ${host}`,
+      proxySelfTestDeniedHint:
+        'The request reached the site and was turned away there (it may not allow unauthenticated access, or a guard stepped in); this says nothing about whether the proxy is in effect.',
+      proxyRejectedEmpty: 'Enter a proxy address first.',
+      proxyRejectedUnsupportedProtocol: 'Only http, https and socks5 addresses are supported; write it as `http://host:port`.',
+      proxyRejectedUnparsable: 'That proxy address cannot be parsed; write it as `http://host:port` or `socks5://host:port`.',
+      proxyRejectedBypassRule: (rules) =>
+        `These bypass rules cannot be honoured: ${rules}. Only host names, \`*.domain\`, \`<local>\` and \`*\` are supported — not ports or CIDR ranges.`,
+      proxySocks5Implicit: 'No protocol given, so this is read as socks5; if your proxy speaks HTTP, write `http://host:port`.',
       proxyAddressPlaceholder: 'e.g. socks5://127.0.0.1:6153',
       proxyBypassPlaceholder: 'localhost,127.0.0.1,::1',
       proxySystem: 'System Proxy',
@@ -3001,10 +3103,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: 'System',
       light: 'Light',
-      dark: 'Dark',
-      lime: 'Lime',
-      cyan: 'Cyan',
-      violet: 'Violet'
+      dark: 'Dark'
     },
     notifications: {
       channelsHeading: 'Delivery Channels',
@@ -3012,6 +3111,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
       scopeNote:
         'Keep at least one lightweight channel enabled. Desktop delivery is useful away from the app, while popups are better for events that need immediate attention.',
+      unavailableNotice:
+        'Notifications are not available yet: nothing in the platform produces one right now, so these switches have no effect. They turn on with the first real source.',
+      unavailableBadge: 'Not available',
       centerEnabled: 'Notification center',
       centerDescription: 'Keep an in-app record of notifications so results and system messages can be reviewed later.',
       desktopEnabled: 'Desktop notifications',
@@ -3137,6 +3239,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clickToReplace: 'Click to replace the key',
       revealApiKeyFailed: 'Could not read the saved key; keeping the mask.',
       revealApiKeyUnavailable: 'The app process is missing this interface; restart the app and retry.',
+      copyApiKey: 'Copy key',
+      apiKeyCopied: 'Copied',
       revealApiKeyBridgeFailed: 'Failed to reach the main process; restart the app and retry.',
       revealApiKeyMissing: 'No saved key was found (it may have been removed).',
       retry: 'Retry',

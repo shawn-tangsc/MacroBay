@@ -5,6 +5,8 @@ import type { AgentComposedMessage } from '@renderer/shell/agents/agentMessageSe
 import { analysisWorkspacePolicy, type AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import type { AgentSessionRuntimeSnapshot } from '@platform/ai/agent-platform/runtime/runtimeTypes'
 import { navigateAppShell } from '../../shared/navigation/productShellNavigation'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
+import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
 const pendingDraftKey = 'market-analysis-pending'
 
@@ -25,6 +27,7 @@ export function useMarketAnalysisChat(
   /** Human title of the selected analysis node; the card falls back to a generic label. */
   analysisContextTitle?: string
 ) {
+  const timeZone = useShellTimeZone()
   const [state, setState] = useState<AgentStoreState>()
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [sending, setSending] = useState(false)
@@ -180,13 +183,15 @@ export function useMarketAnalysisChat(
       }
     }
     if (selected) {
+      // 时刻按窗口级显示时区写；同一个瞬时在别的时区下会显示成别的日期，不能自己拼。
+      const contextDetail = formatShellClock(selected.asOf, { timeZone })
       return {
         text: `${text}\n\n[eventGroupId=${selected.eventGroupId}; analysisRunId=${selected.analysisRunId}; summaryId=${selected.summaryId}; asOf=${selected.asOf}]`,
         displayText: text,
         context: {
           kind: 'market-analysis-node',
           label: analysisContextTitle?.trim() || 'Context',
-          ...(formatContextTime(selected.asOf) ? { detail: formatContextTime(selected.asOf) } : {}),
+          ...(contextDetail ? { detail: contextDetail } : {}),
           payload: {
             eventGroupId: selected.eventGroupId,
             analysisRunId: selected.analysisRunId,
@@ -197,7 +202,7 @@ export function useMarketAnalysisChat(
       }
     }
     return text
-  }, [analysisContextTitle, selectedEventContext])
+  }, [analysisContextTitle, selectedEventContext, timeZone])
 
   async function send() {
     const submittedDraft = draft
@@ -256,9 +261,4 @@ export function useMarketAnalysisChat(
   }
 }
 
-function formatContextTime(asOf: string): string | undefined {
-  const date = new Date(asOf)
-  if (Number.isNaN(date.getTime())) return undefined
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
+

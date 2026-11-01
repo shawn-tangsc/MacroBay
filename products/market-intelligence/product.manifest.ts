@@ -1,5 +1,7 @@
 import type { ProductManifest } from '../../platform/product-manifest'
 import { MARKET_ANALYSIS_IPC_METHODS } from './contracts/marketAnalysisIpcContracts'
+import { INTELLIGENCE_EVENT_TOPICS } from './contracts/intelligenceEvents'
+import { GROUP_MARKET_ANALYSIS_CHANGE_JOB } from './service/intelligence/jobs/marketAnalysisJobIds'
 
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
@@ -7,7 +9,7 @@ import { toManifestRegistrations } from './service/intelligence/agent-capabiliti
 export const marketIntelligenceProductManifest = {
   id: 'market-intelligence',
   name: { 'zh-CN': '情报模块', 'en-US': 'Market Intelligence' },
-  version: '0.2.2',
+  version: '0.3.0',
   description: 'Market intelligence collection, assessment, and workspace.',
   shellContributions: {
     menuPages: [
@@ -76,6 +78,9 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.macro.economicCalendar.importManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.previewManualBlsIcs' },
     { method: 'intelligence.macro.economicCalendar.queryMonth' },
+    { method: 'intelligence.macro.policyPath.read' },
+    { method: 'intelligence.syncRuns.list' },
+    { method: 'intelligence.syncRuns.aggregates' },
     // The reader's own release time: every registered product method must be in this sealed
     // baseline, in the order main registers it.
     { method: 'intelligence.macro.economicCalendar.setReleaseTime' },
@@ -89,8 +94,17 @@ export const marketIntelligenceProductManifest = {
     { method: 'intelligence.dashboardSourceConnection.test' },
     { method: 'intelligence.queryImpactTimeline' },
     { method: 'intelligence.queryFundingRateHistory' },
+    { method: 'intelligence.queryOpenInterestHistory' },
+    { method: 'intelligence.queryMarketDivergence' },
+    { method: 'intelligence.queryModuleSignals' },
     { method: 'intelligence.queryCapitalConditionsSnapshot' },
     { method: 'intelligence.queryFearGreedSnapshot' },
+    { method: 'intelligence.dailyBriefing.getToday' },
+    { method: 'intelligence.dailyBriefing.list' },
+    { method: 'intelligence.dailyBriefing.get' },
+    { method: 'intelligence.dailyBriefing.regenerate' },
+    { method: 'intelligence.dailyBriefing.getSettings' },
+    { method: 'intelligence.dailyBriefing.saveSettings' },
     { method: 'intelligence.queryRelatedEvents' },
     { method: 'intelligence.querySentimentSeries' },
     { method: 'intelligence.querySentimentSnapshot' },
@@ -123,10 +137,17 @@ export const marketIntelligenceProductManifest = {
     { id: 'get_market_analysis_context', title: '市场分析上下文', description: '读取带时间边界的市场分析事实。', module: './tools/market-analysis-context' },
     { id: 'get_macro_market_snapshot', title: '美元与黄金快照', description: '读取美元指数与黄金的最新水平及窗口变化。', module: './tools/macro-market-snapshot' },
     { id: 'get_macro_rates_snapshot', title: '美债日频利率', description: '读取 FRED 的 10Y/实际利率/2Y/盈亏平衡通胀日频读数。', module: './tools/macro-rates-snapshot' },
+    { id: 'get_policy_path', title: 'Fed 利率路径', description: '读取下次 FOMC 会议的区间、市场定价、SEP 中位路径与上次票型。', module: './tools/policy-path' },
     { id: 'explain_figure', title: '数字来源与算式', description: '读取某个数的来源、观测时刻与算式（不带参数则列出可查的族）。', module: './tools/provenance-explain' }
   ],
   skills: [
     { id: 'market-analysis-skill-v1', title: '市场影响分析', description: '使用可追溯证据生成条件式市场分析。', module: './agents/skills/market-analysis' },
+    {
+      id: 'daily-brief-editor-skill-v1',
+      title: '每日简报 AI 编辑',
+      description: '以交易分析师视角决定日报候选的展示与 why，缺失结论可带来源补查。',
+      module: './agents/skills/daily-brief-editor'
+    },
     {
       id: 'intelligence-ops-skill-v1',
       title: '情报运维',
@@ -142,8 +163,18 @@ export const marketIntelligenceProductManifest = {
       seedModule: './agents/agents/cryptoMarketAnalyst',
       seedOnStartup: true,
       skillIds: ['market-analysis-skill-v1', 'intelligence-ops-skill-v1'],
-      toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'explain_figure'],
+      toolIds: ['get_market_analysis_context', 'get_macro_market_snapshot', 'get_macro_rates_snapshot', 'get_policy_path', 'explain_figure'],
       workflowIds: ['market-analysis-auto-run-v1']
+    },
+    {
+      id: 'daily-brief-editor',
+      title: '每日简报编辑',
+      description: '以交易分析师视角决定日报候选可见性并生成编辑层。',
+      seedModule: './agents/agents/dailyBriefEditor',
+      seedOnStartup: true,
+      skillIds: ['daily-brief-editor-skill-v1'],
+      toolIds: [],
+      workflowIds: []
     }
   ],
   workflows: [
@@ -173,9 +204,35 @@ export const marketIntelligenceProductManifest = {
     { id: 'market-intelligence.replayWindow' },
     { id: 'market-intelligence.reindex' },
     { id: 'market-intelligence.refreshMacroCalendar' },
-    { id: 'market-intelligence.refreshBeaOfficialReleases' }
+    { id: 'market-intelligence.refreshBeaOfficialReleases' },
+    { id: 'market-intelligence.dailyBriefing' }
   ],
-  eventConsumers: [],
+  /**
+   * 本产品**发布**的话题（`MI-11-R22` A1）：定时任务从这里选订阅目标。
+   * 五个 topic 都有真实生产者（`intelligenceEventPublisher`），与 `INTELLIGENCE_EVENT_TOPICS` 同源。
+   */
+  eventTopics: [
+    'market-intelligence.item.created',
+    'market-intelligence.cluster.updated',
+    'market-intelligence.impact.created',
+    'market-intelligence.sentiment.updated',
+    'market-intelligence.source.health.changed'
+  ],
+  /**
+   * 本产品**消费**的话题（`MI-11-R22` A1）。运行时从这里读，不再手写第二份数组——
+   * 声明与实现因此不可能漂移。话题本身必须出现在本 manifest 的 `eventTopics` 里（生成期守卫）。
+   */
+  eventConsumers: [
+    {
+      id: 'market-intelligence.market-analysis-trigger',
+      topics: [
+        INTELLIGENCE_EVENT_TOPICS.itemCreated,
+        INTELLIGENCE_EVENT_TOPICS.impactCreated,
+        INTELLIGENCE_EVENT_TOPICS.sentimentUpdated
+      ],
+      handlerId: GROUP_MARKET_ANALYSIS_CHANGE_JOB
+    }
+  ],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest

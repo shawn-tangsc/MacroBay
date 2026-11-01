@@ -46,15 +46,23 @@ export function TranslationPreferencesSection(props: {
     failedCount: string
     translatedCount: string
     lastJobAt: string
+    /** Punctuation comes from the text layer: a fullwidth bracket on an English screen is a typo. */
+    joiner: string
+    labelSep: string
+    parenOpen: string
+    parenClose: string
+    modelPathSep: string
     followModelServiceDefault: string
     defaultModelNotConfigured: string
     defaultModelUnavailable: string
     targetLocales: Record<string, string>
   }
   notice?: string | null
-  errorCode?: string | null
+  /** Already a sentence from the product text; the card never renders a raw code. */
+  errorMessage?: string | null
   onChange: (patch: Partial<SafeIntelligenceTranslationSettings>) => void
-  onQueueMissing: () => void
+  /** Queues the untranslated items of `sourceIds`; the card passes its own scope. */
+  onQueueMissing: (sourceIds?: readonly string[]) => void
 }): React.ReactElement {
   const settings = props.settings
   const scopedCounts = useMemo(() => {
@@ -94,12 +102,12 @@ export function TranslationPreferencesSection(props: {
   )
   const followDefaultLabel =
     !settings?.defaultModelId.trim()
-      ? `${props.labels.followModelServiceDefault}（${props.labels.defaultModelNotConfigured}）`
+      ? `${props.labels.followModelServiceDefault}${props.labels.parenOpen}${props.labels.defaultModelNotConfigured}${props.labels.parenClose}`
       : props.modelProviders.length === 0
         ? props.labels.followModelServiceDefault
         : defaultModel.ok
-          ? `${props.labels.followModelServiceDefault} · ${defaultModel.providerName} / ${defaultModel.modelName}`
-          : `${props.labels.followModelServiceDefault}（${props.labels.defaultModelUnavailable}）`
+          ? `${props.labels.followModelServiceDefault}${props.labels.joiner}${defaultModel.providerName}${props.labels.modelPathSep}${defaultModel.modelName}`
+          : `${props.labels.followModelServiceDefault}${props.labels.parenOpen}${props.labels.defaultModelUnavailable}${props.labels.parenClose}`
   const pickerValue =
     settings?.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : null
 
@@ -182,14 +190,20 @@ export function TranslationPreferencesSection(props: {
               <StatusPill label={props.labels.translatedCount} value={String(counts.translatedCount)} />
               <StatusPill
                 label={props.labels.lastJobAt}
-                value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : props.labels.saved}
+                // No job has run yet is not "saved": the pill used to claim a job that never happened.
+                value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : '—'}
                 wide
               />
             </>
           ) : null}
         </div>
         <div className="intelligence-section-actions intelligence-translation-actions">
-          <Button className="ant-secondary-button" size="small" loading={props.queuing} onClick={props.onQueueMissing}>
+          <Button
+            className="ant-secondary-button"
+            size="small"
+            loading={props.queuing}
+            onClick={() => props.onQueueMissing(props.sourceIds)}
+          >
             {props.labels.queueMissing}
           </Button>
         </div>
@@ -197,14 +211,14 @@ export function TranslationPreferencesSection(props: {
       <div className="intelligence-translation-meta">
         {props.moduleStatus ? (
           <small>
-            {props.labels.moduleStatus}: {props.labels.pendingCount} {counts.pendingCount} ·{' '}
+            {props.labels.moduleStatus}{props.labels.labelSep}{props.labels.pendingCount} {counts.pendingCount}{props.labels.joiner}
             {props.labels.failedCount} {counts.failedCount}
           </small>
         ) : null}
-        {props.errorCode ? <small data-tone="error">{props.errorCode}</small> : null}
-        {!props.errorCode && props.saving ? <small>{props.labels.saving}</small> : null}
-        {!props.errorCode && !props.saving && props.notice ? <small>{props.notice}</small> : null}
-        {!props.errorCode && !props.saving && !props.notice && settings ? <small>{props.labels.saved}</small> : null}
+        {props.errorMessage ? <small data-tone="error">{props.errorMessage}</small> : null}
+        {!props.errorMessage && props.saving ? <small>{props.labels.saving}</small> : null}
+        {!props.errorMessage && !props.saving && props.notice ? <small>{props.notice}</small> : null}
+        {!props.errorMessage && !props.saving && !props.notice && settings ? <small>{props.labels.saved}</small> : null}
       </div>
     </section>
   )

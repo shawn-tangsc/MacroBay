@@ -35,12 +35,16 @@ type Props = {
   language?: 'zh-CN' | 'en-US'
   /** The calendar card that takes the conversation's place in the column. */
   card?: ReactNode
+  /** Rendered above the card: the dashboard's policy reading, portalled in by the page. */
+  railHeader?: ReactNode
   /** The calendar event the reader selected, as the line the card itself rendered. */
   selectedContextLabel?: string
   /** Its key and month, needed to read the facts the system holds for it. */
   selectedEventKey?: string
   selectedEventMonth?: string
   onClearSelectedContext?: () => void
+  /** Opens the product's source settings from the news card's empty state. */
+  onOpenSources?: () => void
   floatingText: AgentFloatingControlText
 }
 
@@ -52,7 +56,7 @@ type Props = {
  * When no timeline result is injected the column owns one itself, which keeps
  * the embedded workspace usable on its own.
  */
-export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext }: Props): React.ReactElement {
+export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timeline: injectedTimeline, selectionState: injectedState, binding: injectedBinding, onBindingChange, card, railHeader, floatingText, selectedContextLabel, selectedEventKey, selectedEventMonth, onClearSelectedContext, onOpenSources }: Props): React.ReactElement {
   const t = text.analysisWorkspace
   const contextRenderers = useMemo(
     () => createMarketAnalysisContextRenderers({ analysis: t.contextAnalysis, event: t.selectedEvent }),
@@ -75,6 +79,7 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
   const selectionBlocked = selectionState === 'loading' || selectionState === 'unavailable'
   const [chatPercent, setChatPercent] = useState<number>(layout.initialChatPercent)
   const container = useRef<HTMLElement>(null)
+  const panes = useRef<HTMLDivElement>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [selectedNews, setSelectedNews] = useState<{ itemId: string; title: string }>()
 
@@ -177,19 +182,27 @@ export function MarketAnalysisAgentWorkspace({ text, language = 'zh-CN', timelin
       </section>
 
   return <aside ref={container} className="mi-analysis-agent-workspace" aria-label={t.title} style={{ '--mi-chat-percent': `${chatPercent}%` } as CSSProperties}>
-    {card}
+    {/* The policy card keeps its own row; the calendar and the news share what is left in half. */}
+    {railHeader}
+
+    <div className="mi-analysis-agent-workspace__panes" ref={panes}>
+    <div className="mi-analysis-agent-workspace__card">
+      {card}
+    </div>
 
     <div className="mi-analysis-agent-workspace__divider" role="separator" tabIndex={0} aria-label={t.resize} aria-orientation="horizontal" aria-valuemin={layout.minChatPercent} aria-valuemax={layout.maxChatPercent} aria-valuenow={chatPercent}
       onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); resize(chatPercent + (event.key === 'ArrowDown' ? layout.keyboardStepPercent : -layout.keyboardStepPercent)) } }}
       onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId) }}
-      onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = container.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
+      onPointerMove={event => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; const rect = panes.current?.getBoundingClientRect(); if (rect?.height) resize((event.clientY - rect.top) / rect.height * layout.percentScale) }}
       onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }}
     />
     <NewsSentimentFeature
       language={language}
       text={text.newsSentiment}
+      onOpenSources={onOpenSources}
       onSelectContext={(item) => { onClearSelectedContext?.(); setSelectedNews({ itemId: item.itemId, title: item.displayTitle ?? item.title }) }}
     />
+    </div>
     <AgentFloatingControl onOpenChange={setChatOpen} text={floatingText}>{chatPanel}</AgentFloatingControl>
   </aside>
 }

@@ -37,6 +37,8 @@ export type SlotTickResult = Readonly<{
 
 export type SlotTickDependencies = Readonly<{
   now: () => string
+  /** 读者时区（主进程唯一提供者）；开盘的墙上小时按它换算。 */
+  timeZone: () => string
   /** Whether the open already has a delivery: a run that succeeded inside its coverage window. */
   isDelivered: (instant: SessionSlotInstant) => boolean
   /** Whether the open tried inside its window, failed, and ran out of window: it is not retried. */
@@ -51,7 +53,12 @@ export function createAnalysisSlotTick(dependencies: SlotTickDependencies) {
   return {
     async run(): Promise<SlotTickResult> {
       const now = dependencies.now()
-      const due = dueSessionSlots({ now, isDelivered: dependencies.isDelivered, isAbandoned: dependencies.isAbandoned })
+      const due = dueSessionSlots({
+        now,
+        timeZone: dependencies.timeZone(),
+        isDelivered: dependencies.isDelivered,
+        isAbandoned: dependencies.isAbandoned
+      })
       if (due.length === 0) return { outcome: 'not-due', requested: [], deferred: [] }
       if (!dependencies.hasEligibleAnchor()) {
         await dependencies.log('Market analysis session slot skipped: no eligible intelligence anchor.', { now, due: due.map(instant => instant.slot) })

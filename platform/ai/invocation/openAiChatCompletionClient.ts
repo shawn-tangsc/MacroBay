@@ -8,7 +8,8 @@ export type ChatCompletionRequest = {
   messages: StructuredModelMessage[]
   temperature?: number
   jsonMode?: boolean
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入 `platformFetch`。 */
+  fetch: typeof fetch
   abortSignal?: AbortSignal
 }
 
@@ -20,7 +21,7 @@ export async function requestOpenAiCompatibleChatCompletion(
   input: ChatCompletionRequest
 ): Promise<ChatCompletionResult> {
   try {
-    const response = await (input.fetch ?? fetch)(buildChatCompletionsUrl(input.baseUrl), {
+    const response = await input.fetch(buildChatCompletionsUrl(input.baseUrl), {
       method: 'POST',
       headers: {
         authorization: `Bearer ${input.apiKey}`,

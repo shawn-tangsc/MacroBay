@@ -22,6 +22,11 @@ describe('jobRunSqliteStore', () => {
     }
   })
 
+  // 2105 creates plus 2050 completions, each its own transaction under `synchronous = full`, cost
+  // one fsync per row: measured 4-5 s on macOS/APFS alone, and past the 5 s default once the rest of
+  // the file runs beside it. The volume is the point of this case (history deeper than one page,
+  // still untouched by reopen), so it gets more time rather than fewer rows. Treat 30 s as a
+  // local headroom measurement, not a budget: a slower disk wants a larger timeout, not fewer rows.
   it('starts without decoding history and recovers every running page without decoding terminal JSON', async () => {
     const path = await createTempDatabasePath()
     const first = createStore(path)
@@ -43,7 +48,7 @@ describe('jobRunSqliteStore', () => {
     expect(reopened.recoverStaleRunningRuns()).toEqual([])
     expect(reopened.getRun('run-sqlite-1')?.status).toBe('completed')
     expect(reopened.createRun(baseInput('new')).id).toBe('run-sqlite-2106')
-  })
+  }, 30_000)
 
   it('uses a separate SQLite sequence so legacy run IDs remain untouched and new IDs stay unique', async () => {
     const path = await createTempDatabasePath()

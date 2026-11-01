@@ -64,6 +64,22 @@ recorded real week — dashboard, funding, stablecoins, ETF flows, two calendar 
 published analyses — labelled *Sample data*, and writes nothing into your database. Live panels still
 need your own model provider and data-source credentials.
 
+<div align="center">
+
+### ⭐ If this is useful to you, a star keeps it going
+
+<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
+  <img alt="Star MacroBay" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
+</a>
+
+</div>
+
+> One person builds MacroBay, in the open.
+> A star is the only signal I can see that someone is actually using it — and it decides whether the
+> next person who needs this ever finds it.
+>
+> **[→ Star the repo](https://github.com/shawn-tangsc/MacroBay/stargazers)** · it takes two seconds.
+
 Built for people whose read has to survive a follow-up question — whether that is your first cycle or your fourth.
 
 ## Who it is for
@@ -148,12 +164,13 @@ it at 21:00 should produce two different, defensible answers — not one answer 
 
 ## Data sources
 
-30+ curated sources, chosen because crypto is where free and low-cost data is actually good enough:
-exchange announcements and API changes (Binance, OKX), venue, chain status and release feeds
-(Coinbase, Kraken, Solana, GitHub releases), market data (Binance spot and futures, CoinGecko,
-DeFiLlama stablecoins and TVL, ETF flows, Fear & Greed), news and calendars (CoinDesk, CryptoPanic,
-CoinMarketCal, Ethereum Foundation), and the macro layer that sets the regime (FRED, BLS, BEA,
-Treasury, SEC, CFTC, Federal Reserve).
+Curated sources across crypto-native, market data, news and the macro layer, chosen because crypto is
+where free and low-cost data is actually good enough: exchange announcements and API changes (Binance,
+OKX), venue, chain status and release feeds (Coinbase, Kraken, Solana, GitHub releases), market data
+(Binance spot and futures, CoinGecko, DeFiLlama stablecoins and TVL, ETF flows, Fear & Greed), news
+(mainstream industry media and project official blogs, each enabled in settings as needed), and the
+macro layer that sets the regime (FRED, SEC, CFTC, Federal
+Reserve, plus the official BLS, BEA and Fed release schedules behind the calendar).
 
 Some sources need your own account, key, or network access, and coverage varies by source. Anything
 you have not enabled appears as an explicit gap — never as a neutral placeholder value.
@@ -183,7 +200,7 @@ boundary it used.
 
 ## Status
 
-MacroBay is **alpha** (`0.2.2`). macOS is the verified platform. A **sample mode** ships with the app:
+MacroBay is **alpha** (`0.3.0`). macOS is the verified platform. A **sample mode** ships with the app:
 with no key and no network you can open the full dashboard and one published analysis, replayed from a
 real recorded week. Live panels still need your own provider credentials. The macOS `.dmg` is unsigned;
 Windows installers build in CI and on Windows 11 x64 hardware, but the installed app is not verified

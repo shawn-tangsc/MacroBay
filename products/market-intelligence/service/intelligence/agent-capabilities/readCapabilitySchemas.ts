@@ -538,3 +538,107 @@ export const newsSentimentItemOutputSchema = {
     item: { type: 'object' }
   }
 } as const
+
+export const dailyPulseInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['asOf'],
+  properties: {
+    asOf: { type: 'string', format: 'date-time' }
+  }
+} as const
+
+const dailyPulseReadingSchema = {
+  type: 'object',
+  required: ['id', 'group', 'state', 'window'],
+  properties: {
+    id: { type: 'string', enum: ['fear-greed', 'funding-btc', 'funding-eth', 'stablecoin', 'etf-btc', 'etf-eth'] },
+    group: { type: 'string', enum: ['funds', 'sentiment'] },
+    labelKey: { type: 'string' },
+    state: { type: 'string', enum: ['available', 'stale', 'unavailable', 'source-disabled'] },
+    value: { type: ['object', 'null'] },
+    change: { type: ['object', 'null'] },
+    changeReason: { type: 'string' },
+    window: { type: 'string' },
+    observedAt: { type: ['string', 'null'] },
+    reason: { type: 'string' }
+  }
+} as const
+
+export const dailyPulseOutputSchema = {
+  type: 'object',
+  required: ['state', 'asOf', 'readings', 'news', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'partial', 'unavailable'] },
+    asOf: { type: 'string', format: 'date-time' },
+    readings: { type: 'array', items: dailyPulseReadingSchema },
+    news: {
+      type: 'object',
+      required: ['state'],
+      properties: {
+        state: { type: 'string', enum: ['available', 'empty', 'unavailable', 'source-disabled'] },
+        counts: { type: 'object' },
+        itemCount: { type: 'integer', minimum: 0 }
+      }
+    },
+    caveats: { type: 'array', items: { type: 'string' } }
+  }
+} as const
+
+export const latestConclusionInputSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['asOf'],
+  properties: {
+    asOf: { type: 'string', format: 'date-time' }
+  }
+} as const
+
+export const latestConclusionOutputSchema = {
+  type: 'object',
+  required: ['state', 'asOf', 'caveats'],
+  properties: {
+    state: { type: 'string', enum: ['available', 'empty'] },
+    asOf: { type: 'string', format: 'date-time' },
+    summaryId: { type: 'string' },
+    publishedAt: { type: 'string', format: 'date-time' },
+    direction: { type: 'string', enum: ['bullish', 'bearish', 'range', 'undecided', 'mixed'] },
+    summary: { type: 'string' },
+    change: { type: 'string' },
+    conditions: { type: 'array', items: { type: 'string' } },
+    invalidations: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['asset', 'horizonEnd', 'text'],
+        properties: {
+          asset: { type: 'string', enum: ['BTC', 'ETH'] },
+          horizonEnd: { type: 'string', format: 'date-time' },
+          text: { type: 'string' }
+        }
+      }
+    },
+    counterEvidence: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['statement', 'evidenceRefId'],
+        properties: { statement: { type: 'string' }, evidenceRefId: { type: 'string' } }
+      }
+    },
+    directions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['horizon', 'direction', 'confidence'],
+        properties: {
+          horizon: { type: 'string', enum: ['short', 'medium', 'long'] },
+          direction: { type: 'string' },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+          rationale: { type: 'string' }
+        }
+      }
+    },
+    caveats: { type: 'array', items: { type: 'string' } }
+  }
+} as const

@@ -2,11 +2,20 @@ import { createHash } from 'node:crypto'
 
 import { fedFomcDecisionFixtureProvenance } from './fedFomcDecisionProvenance'
 
+export type FedFomcVote = { for: number; against: number }
+
+/** How a dissenting participant would have moved the range at this meeting. */
+export type FedFomcDissent = { name: string; preferred: 'raise' | 'lower' | 'maintain' }
+
 export type FedFomcDecisionEvidence = {
   eventKey: string
   decisionDate: string
   releasedAt: string
   targetRange: { lowerPercent: number; upperPercent: number; displayValue: string }
+  /** Absent when the statement does not state a vote tally; never invented. */
+  vote?: FedFomcVote
+  /** Absent when nobody dissented, or when the sentence is not in the body. */
+  dissents?: FedFomcDissent[]
 }
 
 export type FedFomcDecisionDocument = Omit<FedFomcDecisionEvidence, 'eventKey'>
@@ -53,7 +62,11 @@ export function parseFedFomcDecisionDocument(input: unknown): FedFomcDecisionDoc
     if (!decisionDate || decisionDate.replaceAll('-', '') !== sourceDate) return undefined
     const releasedAt = decisionDate ? parseReleaseInstant(html, decisionDate) : undefined
     const targetRange = parseTargetRange(html)
-    return decisionDate && releasedAt && targetRange ? { decisionDate, releasedAt, targetRange } : undefined
+    if (!decisionDate || !releasedAt || !targetRange) return undefined
+    const bodyText = decisionBody(html)
+    const vote = parseVote(bodyText)
+    const dissents = parseDissents(bodyText)
+    return { decisionDate, releasedAt, targetRange, ...(vote ? { vote } : {}), ...(dissents ? { dissents } : {}) }
   } catch {
     return undefined
   }
@@ -114,6 +127,26 @@ function parseReleaseInstant(html: string, decisionDate: string): string | undef
   const localHour = hour % 12 + (meridiem === 'p.m.' ? 12 : 0)
   const timestamp = Date.parse(`${decisionDate}T00:00:00.000Z`) - offset * 60_000 + (localHour * 60 + minute) * 60_000
   return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined
+}
+
+/**
+ * The statement's approval sentence carries the vote tally. The separator is an en dash in the
+ * published page and occasionally a hyphen in derived captures, so both are accepted.
+ */
+function parseVote(bodyText: string): FedFomcVote | undefined {
+  const match = /approved the following statement for release by a (\d+)\s*[–—-]\s*(\d+) vote/.exec(bodyText)
+  if (!match) return undefined
+  const vote = { for: Number(match[1]), against: Number(match[2]) }
+  return Number.isSafeInteger(vote.for) && Number.isSafeInteger(vote.against) && vote.for + vote.against > 0 ? vote : undefined
+}
+
+/** A dissent names the participants and the direction they preferred; both halves are required. */
+function parseDissents(bodyText: string): FedFomcDissent[] | undefined {
+  const match = /Voting against the monetary policy action were (.+?), who preferred to (raise|lower|maintain)\b/.exec(bodyText)
+  if (!match) return undefined
+  const preferred = match[2] as FedFomcDissent['preferred']
+  const names = match[1]!.split(/,| and /).map((name) => name.trim()).filter(Boolean)
+  return names.length ? names.map((name) => ({ name, preferred })) : undefined
 }
 
 function parseTargetRange(html: string): FedFomcDecisionEvidence['targetRange'] | undefined {

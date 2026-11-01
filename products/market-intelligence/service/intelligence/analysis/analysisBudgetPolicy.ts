@@ -1,26 +1,36 @@
 import { isMarketAnalysisCanonicalUtc } from '../../../contracts/marketAnalysisContracts'
 import { isScheduledSlotTriggerKey } from './analysisSchedulePolicy'
-import { isGateExempt } from './analysisTriggerSourcePolicy'
+import { analysisRunLineOf, isGateExempt } from './analysisTriggerSourcePolicy'
 
 /**
  * The analysis budget: how often automatic analysis may spend a model call.
  *
- * One owner for every time and quota number, because the previous arrangement declared
- * `maximumHourlyTriggers: 12` / `maximumDailyTriggers: 48` in `analysisTriggerPolicy` while
- * its only caller passed `hourTriggerCount: 0` / `dayTriggerCount: 0` — a budget that could
- * never fire. `analysisTriggerPolicy` now references these values instead of owning copies.
+ * One owner for every quota number, and now one quota per line. Until this version the calendar
+ * line's nine calls were counted against the same bucket the item line spent, so a busy event day
+ * quietly ate the calendar's whole allowance; measured over seven days the calendar line was
+ * refused 56 times for a total it never got to use. Each line now reads its own counts
+ * (`analysisRunCounter` produces them from one line classifier), and the global daily number is
+ * only a backstop.
  *
- * The counts are inputs (produced by `analysisRunCounter`, which owns the window); this
- * policy only decides. `reasonCode` is non-null exactly when the decision is `skipped`, so a
- * caller cannot accidentally record a limit as the reason a run was allowed.
+ * The counts are inputs; this policy only decides. `reasonCode` is non-null exactly when the
+ * decision is `skipped`, so a caller cannot accidentally record a limit as the reason a run was
+ * allowed.
  */
 
 export const analysisBudgetPolicy = Object.freeze({
-  version: 'marketAnalysisBudgetPolicy.v2',
-  /** Coalescing window for data-driven triggers; also the item path's per-phase cooldown. */
+  version: 'marketAnalysisBudgetPolicy.v3',
+  /**
+   * Coalescing window. Declared per line in `lineQuotas`: the calendar line obeys it, the item line
+   * does not — the item path already carries its own 30-minute phase cooldown in
+   * `analysisTriggerPolicy`, and stacking a second window on top would refuse attempts the old
+   * arrangement allowed.
+   */
   minimumIntervalMs: 30 * 60 * 1_000,
-  maximumHourlyRuns: 3,
-  maximumDailyRuns: 12,
+  /**
+   * Backstop for the whole data-driven day: the sum of the two lines' daily quotas (48 + 9). It is
+   * deliberately not smaller than any line, or a busy line would be charged the other's spend.
+   */
+  maximumDailyRuns: 57,
   /**
    * Reserved for the three session slots — one per open. The other lines may not touch it.
    *
@@ -29,12 +39,15 @@ export const analysisBudgetPolicy = Object.freeze({
    * unsatisfiable by construction.
    */
   reservedScheduledRunsPerDay: 3,
-  /**
-   * The event line's own allowance: the daily total minus the slots' reserve, because the reserve
-   * belongs to the opens. Three slots a day is one more than the floor reserved, so the data-driven
-   * line gives up one of its ten — the same total, spent the way the reader asked for it.
-   */
-  eventRunsPerDayAllowance: 9,
+  lineQuotas: Object.freeze({
+    /**
+     * The item line keeps the quotas `analysisTriggerPolicy` actually enforced (12 an hour, 48 a
+     * day) so removing that gate is an equivalent migration, not a tightening.
+     */
+    event: Object.freeze({ daily: 48, hourly: 12, coalesce: false }),
+    /** The calendar line's own nine a day, plus the three an hour it was previously denied. */
+    calendar: Object.freeze({ daily: 9, hourly: 3, coalesce: true })
+  }),
   dayWindow: 'utc-calendar-day' as const,
   reasonCodes: Object.freeze({
     invalidInput: 'invalid-budget-input',
@@ -54,6 +67,9 @@ export type AnalysisBudgetInput = Readonly<{
   hourRuns: number
   dayRuns: number
   eventRunsToday: number
+  eventRunsThisHour: number
+  calendarRunsToday: number
+  calendarRunsThisHour: number
   /** Deliveries inside the reserved session-slot line (`schedule.*`). */
   scheduledRunsToday: number
 }>
@@ -61,7 +77,10 @@ export type AnalysisBudgetInput = Readonly<{
 export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   const skip = (reasonCode: string): BudgetDecision => ({ decision: 'skipped', reasonCode })
   const queued: BudgetDecision = { decision: 'queued', reasonCode: null }
-  const counts = [input.hourRuns, input.dayRuns, input.eventRunsToday, input.scheduledRunsToday]
+  const counts = [
+    input.hourRuns, input.dayRuns, input.eventRunsToday, input.eventRunsThisHour,
+    input.calendarRunsToday, input.calendarRunsThisHour, input.scheduledRunsToday
+  ]
   const validInstant = (value: string | null) => value === null || (isMarketAnalysisCanonicalUtc(value) && Number.isFinite(Date.parse(value)))
   // Fail closed: a caller that cannot state its counts gets no permission to spend.
   if (!isMarketAnalysisCanonicalUtc(input.now) || !Number.isFinite(Date.parse(input.now)) ||
@@ -70,21 +89,29 @@ export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   }
   // A human asked for this run: no significance, interval or budget limit applies.
   if (isGateExempt(input.triggerKey)) return queued
-  // Session slots are decided *before* the daily total, unlike every other automatic line. That
-  // total is spent by data-driven runs, and a busy day would otherwise spend the three calls the
-  // slots exist to reserve — the same eviction that emptied funding and sentiment from the fact
-  // budget once a new domain's facts were added. Their own reserve is the only limit they obey.
+  // Session slots are decided *before* every other line. That total is spent by data-driven runs,
+  // and a busy day would otherwise spend the three calls the slots exist to reserve. Their own
+  // reserve is the only limit they obey.
   if (isScheduledSlotTriggerKey(input.triggerKey)) {
     return input.scheduledRunsToday >= analysisBudgetPolicy.reservedScheduledRunsPerDay
       ? skip(analysisBudgetPolicy.reasonCodes.scheduleReserve)
       : queued
   }
-  // The daily total applies to every other automatic source, before any per-line allowance.
-  if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.daily)
-  if (input.eventRunsToday >= analysisBudgetPolicy.eventRunsPerDayAllowance) return skip(analysisBudgetPolicy.reasonCodes.daily)
-  if (input.hourRuns >= analysisBudgetPolicy.maximumHourlyRuns) return skip(analysisBudgetPolicy.reasonCodes.hourly)
-  if (input.lastAutoRunAt !== null && Date.parse(input.now) - Date.parse(input.lastAutoRunAt) < analysisBudgetPolicy.minimumIntervalMs) {
+  // Each data-driven line reads its own day and hour. A new key is the calendar line until it is
+  // registered as an event: the default is the strict line, never the generous one.
+  const line = analysisRunLineOf(input.triggerKey)
+  const quota = line === 'event' ? analysisBudgetPolicy.lineQuotas.event : analysisBudgetPolicy.lineQuotas.calendar
+  const runsToday = line === 'event' ? input.eventRunsToday : input.calendarRunsToday
+  const runsThisHour = line === 'event' ? input.eventRunsThisHour : input.calendarRunsThisHour
+  if (runsToday >= quota.daily) return skip(analysisBudgetPolicy.reasonCodes.daily)
+  if (runsThisHour >= quota.hourly) return skip(analysisBudgetPolicy.reasonCodes.hourly)
+  if (quota.coalesce && input.lastAutoRunAt !== null && Date.parse(input.now) - Date.parse(input.lastAutoRunAt) < analysisBudgetPolicy.minimumIntervalMs) {
     return skip(analysisBudgetPolicy.reasonCodes.interval)
+  }
+  // Backstop only: with both lines inside their own quotas this can only fire if a future line is
+  // given a larger allowance without raising the total.
+  if (input.eventRunsToday + input.calendarRunsToday >= analysisBudgetPolicy.maximumDailyRuns) {
+    return skip(analysisBudgetPolicy.reasonCodes.daily)
   }
   return queued
 }

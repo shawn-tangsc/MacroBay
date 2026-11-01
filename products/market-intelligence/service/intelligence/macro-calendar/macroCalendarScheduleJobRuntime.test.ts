@@ -14,6 +14,25 @@ describe('macroCalendarScheduleJobRuntime', () => {
     )
   })
 
+  it('ignores enabled providers it does not own instead of dropping the whole schedule', async () => {
+    const jobRuntime = createJobRuntime()
+    const collectAndUpdateHealth = vi.fn(async () => ({ state: 'updated' as const }))
+    const service = createMacroCalendarScheduleJobRuntime({
+      jobRuntime,
+      // The market calendar's providers sit in the same profile list; one unknown id used to make
+      // the Fed/BEA descriptors resolve to `undefined`, so nothing was ever scheduled.
+      profiles: { list: vi.fn(async () => [
+        { providerId: 'macro-calendar-0xrouter-economic-data', enabled: true },
+        { providerId: 'macro-calendar-fed', enabled: true }
+      ]) },
+      health: { collectAndUpdateHealth }
+    })
+    await service.initialize()
+    await vi.waitFor(() => expect(collectAndUpdateHealth).toHaveBeenCalledTimes(1))
+    expect(collectAndUpdateHealth).toHaveBeenCalledWith(expect.objectContaining({ descriptorId: 'macro-calendar-fed-schedule' }))
+    service.dispose()
+  })
+
   it('arms the first last-complete interval after the startup execution with the real job runtime', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-04T00:00:00.000Z'))

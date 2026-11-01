@@ -1,4 +1,8 @@
 import type { ClaudeCodeExecutorDescriptor } from './ClaudeCodeExecutorDescriptor'
+import {
+  createExternalMcpPostToolUseFailureGuard,
+  createExternalMcpPostToolUseGuard
+} from './ClaudeCodeMcpToolOutcomeGuard'
 import type { ClaudeCodeMcpServerConfig } from './ClaudeCodeMcpServerConfig'
 
 export type ClaudeCodeAgentSdkMcpServer =
@@ -63,6 +67,22 @@ export type ClaudeCodeAgentSdkHookResult =
       }
     }
 
+export type ClaudeCodeAgentSdkPostToolUseFailureHookHandler = (event: {
+  hook_event_name: 'PostToolUseFailure'
+  tool_name: string
+  tool_input?: unknown
+  tool_use_id: string
+  error?: string
+}) => Promise<Record<string, unknown>>
+
+export type ClaudeCodeAgentSdkPostToolUseHookHandler = (event: {
+  hook_event_name: 'PostToolUse'
+  tool_name: string
+  tool_input?: unknown
+  tool_response?: unknown
+  tool_use_id: string
+}) => Promise<Record<string, unknown>>
+
 export type ClaudeCodeAgentSdkHookHandler = (
   event: ClaudeCodeAgentSdkHookEvent,
   toolUseId: string,
@@ -94,6 +114,14 @@ export type ClaudeCodeAgentSdkOptions = {
     PreToolUse: Array<{
       matcher: '*'
       hooks: ClaudeCodeAgentSdkHookHandler[]
+    }>
+    PostToolUse: Array<{
+      matcher: '*'
+      hooks: ClaudeCodeAgentSdkPostToolUseHookHandler[]
+    }>
+    PostToolUseFailure: Array<{
+      matcher: '*'
+      hooks: ClaudeCodeAgentSdkPostToolUseFailureHookHandler[]
     }>
   }
 }
@@ -175,6 +203,33 @@ export function createClaudeCodeAgentSdkOptions(
       }
     },
     hooks: {
+      // The guard defaults to guarding every mcp__ result and excludes only the servers this
+      // platform builds itself (`additionalMcpServers`: macrobay_web, agent-skills,
+      // agent-task-management, product tools). Judging by the user's display names cannot work:
+      // the SDK rewrites a display name into the wire name (non-alphanumerics become `_`), and a
+      // mismatch would silently pass external content through.
+      PostToolUse: [
+        {
+          matcher: '*',
+          hooks: [
+            createExternalMcpPostToolUseGuard({
+              platformServerNames: Object.keys(options.additionalMcpServers ?? {})
+            })
+          ]
+        }
+      ],
+      // A failed tool call never reaches PostToolUse, and the SDK cannot rewrite its output; the
+      // failure hook can only attach context, so it states plainly where that error text came from.
+      PostToolUseFailure: [
+        {
+          matcher: '*',
+          hooks: [
+            createExternalMcpPostToolUseFailureGuard({
+              platformServerNames: Object.keys(options.additionalMcpServers ?? {})
+            })
+          ]
+        }
+      ],
       PreToolUse: [
         {
           matcher: '*',

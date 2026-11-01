@@ -16,8 +16,20 @@ describe('web search settings', () => {
         cutoffLimit: 2000,
         cutoffUnit: 'token'
       },
-      providerOverrides: {}
+      providerOverrides: { fetch: { enabled: true } }
     })
+  })
+
+  it('enables the credential-free fetch provider by default and keeps an explicit opt-out', () => {
+    expect(createDefaultWebSearchSettings().providerOverrides.fetch).toEqual({ enabled: true })
+
+    expect(
+      normalizeWebSearchSettings({ providerOverrides: { fetch: { enabled: false } } }).providerOverrides.fetch
+    ).toEqual({ enabled: false })
+
+    // Existing settings saved before fetch defaulted to enabled have no fetch entry; they get it
+    // on the next normalization instead of staying stuck at "disabled".
+    expect(normalizeWebSearchSettings({ providerOverrides: {} }).providerOverrides.fetch).toEqual({ enabled: true })
   })
 
   it('normalizes result limits and unknown provider defaults', () => {
@@ -86,6 +98,7 @@ describe('web search settings', () => {
         }
       }).providerOverrides
     ).toEqual({
+      fetch: { enabled: true },
       tavily: {
         enabled: true,
         capabilities: {

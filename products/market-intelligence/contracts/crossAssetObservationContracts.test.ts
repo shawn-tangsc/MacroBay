@@ -164,6 +164,11 @@ describe('cross-asset IPC input boundary', () => {
     expect(parseCrossAssetInput(crossAssetMethods.query, { range: '24h' }, now)).toEqual({ range: '24h' })
     expect(parseCrossAssetInput(crossAssetMethods.query, { range: '7d', asOf: '2026-09-14T11:00:00.000Z' }, now))
       .toEqual({ range: '7d', asOf: '2026-09-14T11:00:00.000Z' })
+    // A past window can also be answered by the newest known version of each bar — the calendar card's
+    // ±30 minutes needs it, because the bar closing at +30 is ingested after the instant it asks from.
+    expect(parseCrossAssetInput(crossAssetMethods.query,
+      { range: '24h', asOf: '2026-09-14T11:00:00.000Z', knowledge: 'latest' }, now))
+      .toEqual({ range: '24h', asOf: '2026-09-14T11:00:00.000Z', knowledge: 'latest' })
   })
 
   it.each([
@@ -172,6 +177,9 @@ describe('cross-asset IPC input boundary', () => {
     ['query', { range: '1h', asOf: '2026-09-14T12:00:00.001Z' }],
     ['query', { range: '1h', asOf: '2026-02-30T12:00:00.000Z' }],
     ['query', { range: '1h', asOf: '2026-09-14T12:00:00+00:00' }],
+    // A version rule without a window end says nothing: a current query already reads the newest.
+    ['query', { range: '1h', knowledge: 'latest' }],
+    ['query', { range: '1h', asOf: '2026-09-14T11:00:00.000Z', knowledge: 'as-known-then' }],
     ['acquire', { header: {} }], ['renew', { leaseId: 'x'.repeat(129) }],
     ['refresh', { leaseId: '' }], ['release', { leaseId: 12 }], ['setEnabled', { enabled: 1 }]
   ])('rejects invalid %s input', (method, value) => {

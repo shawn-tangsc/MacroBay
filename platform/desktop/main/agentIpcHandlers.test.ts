@@ -314,13 +314,16 @@ describe('agent ipc handlers', () => {
     const created = await handlers.createSession({
       agentId: 'agent-1',
       name: 'Created',
-      workspace: { type: 'system' }
+      workspace: { type: 'system' },
+      allowedTools: ['WebSearch']
     })
     const updated = await handlers.updateSession(created.id, { name: 'Renamed' })
     const selectedState = await handlers.selectSession(created.id)
     const deletedIds = await handlers.deleteSessions([created.id])
 
+    expect(created.allowedTools).toEqual(['WebSearch'])
     expect(updated.name).toBe('Renamed')
+    expect(updated.allowedTools).toEqual(['WebSearch'])
     expect(selectedState.activeSessionId).toBe(created.id)
     expect(selectedState.activeAgentId).toBe('agent-1')
     expect(deletedIds.deletedIds).toEqual([created.id])
@@ -505,7 +508,7 @@ describe('agent ipc handlers', () => {
           setPolicyPreset: async (next) => {
             policyPreset = next
           },
-          defaultTimezone: 'Asia/Shanghai',
+          timeZone: () => 'Asia/Shanghai',
           now: () => new Date('2026-07-16T00:00:00.000Z')
         }
       }

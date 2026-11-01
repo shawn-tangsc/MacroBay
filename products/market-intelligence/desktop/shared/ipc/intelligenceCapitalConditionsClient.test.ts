@@ -30,12 +30,12 @@ describe('intelligenceCapitalConditionsClient', () => {
     expect(invoke).toHaveBeenCalledWith('market-intelligence', INTELLIGENCE_PUBLIC_QUERY_METHODS.queryCapitalConditionsSnapshot, { asOf })
   })
 
-  it('retains the optional finite USD stablecoin background without accepting extensions', async () => {
+  it('refuses a payload still carrying the removed background-supply key', async () => {
     const invoke = vi.fn(async () => ({ ...result, usdStablecoinSupplyUsd: 315 }))
     vi.stubGlobal('window', { platform: { products: { invoke } } })
 
     await expect(intelligenceCapitalConditionsClient.querySnapshot({ asOf })).resolves.toEqual({
-      ...result, usdStablecoinSupplyUsd: 315
+      state: 'unavailable', failureCode: 'capital-conditions-query-unavailable'
     })
   })
 

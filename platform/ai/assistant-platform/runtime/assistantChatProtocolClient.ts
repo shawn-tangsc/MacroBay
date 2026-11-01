@@ -37,7 +37,7 @@ export type AssistantChatProtocolRequest = {
   messages: ChatCompletionMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   tools?: ChatCompletionTool[]
   executeTool?: (call: AssistantToolCall) => Promise<AssistantToolExecutionResult>
@@ -66,7 +66,7 @@ export async function requestAssistantChatCompletion(
         messages: input.messages,
         ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
         ...(input.signal ? { signal: input.signal } : {}),
-        ...(input.fetch ? { fetch: input.fetch } : {}),
+        fetch: input.fetch,
         ...(input.onDelta ? { onDelta: input.onDelta } : {}),
         ...(input.tools?.length ? { tools: toChatProtocolTools(input.tools) } : {}),
         ...(input.executeTool ? { executeTool: toChatProtocolToolExecutor(input.executeTool) } : {}),
@@ -92,7 +92,7 @@ export async function requestAssistantChatCompletion(
     messages: input.messages,
     ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
     ...(input.signal ? { signal: input.signal } : {}),
-    ...(input.fetch ? { fetch: input.fetch } : {}),
+    fetch: input.fetch,
     ...(input.onDelta ? { onDelta: input.onDelta } : {}),
     ...(input.tools ? { tools: input.tools } : {}),
     ...(input.executeTool ? { executeTool: input.executeTool } : {}),

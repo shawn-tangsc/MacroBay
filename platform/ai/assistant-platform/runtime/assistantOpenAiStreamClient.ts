@@ -1,7 +1,12 @@
+import { extractSseEvents, tryParseJsonChunk } from '../../chat/sseStreamParser'
 import { buildChatCompletionsUrl } from '../../providers/providerEndpoints'
 import type { AssistantMessageStats } from '../schemas/messageSchemas'
 import type { AssistantMessagePart } from '../schemas/messageSchemas'
 import { AssistantInvocationFailureError } from './assistantInvocationFailureEvidence'
+
+function parseChunk(raw: string): ChatCompletionStreamChunk | null {
+  return tryParseJsonChunk(raw) as ChatCompletionStreamChunk | null
+}
 
 export type ChatCompletionMessage = {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -70,7 +75,8 @@ export async function streamOpenAiCompatibleChatCompletion(input: {
   messages: ChatCompletionMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入 `platformFetch`。 */
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   tools?: ChatCompletionTool[]
   executeTool?: (call: AssistantToolCall) => Promise<AssistantToolExecutionResult>
@@ -131,11 +137,12 @@ async function requestChatCompletion(input: {
   messages: ChatCompletionMessage[]
   temperature?: number
   signal?: AbortSignal
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入 `platformFetch`。 */
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
   tools?: ChatCompletionTool[]
 }): Promise<AssistantStreamResult & { toolCalls: AssistantToolCall[] }> {
-  const response = await (input.fetch ?? fetch)(buildChatCompletionsUrl(input.baseUrl), {
+  const response = await input.fetch(buildChatCompletionsUrl(input.baseUrl), {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.apiKey}`,
@@ -196,7 +203,7 @@ async function readStreamingChatCompletion(
     buffer = events.remainder
     for (const event of events.items) {
       if (event === '[DONE]') continue
-      const chunk = parseStreamChunk(event)
+      const chunk = parseChunk(event)
       if (!chunk) continue
       if (chunk.usage) usage = chunk.usage
       const delta = extractDeltaText(chunk)
@@ -261,29 +268,7 @@ function extractDeltaText(payload: ChatCompletionStreamChunk): string {
   return ''
 }
 
-function parseStreamChunk(raw: string): ChatCompletionStreamChunk | null {
-  try {
-    return JSON.parse(raw) as ChatCompletionStreamChunk
-  } catch {
-    return null
-  }
-}
 
-function extractSseEvents(buffer: string): { items: string[]; remainder: string } {
-  const normalized = buffer.replace(/\r\n/g, '\n')
-  const parts = normalized.split('\n\n')
-  const remainder = parts.pop() ?? ''
-  const items = parts
-    .map((block) =>
-      block
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice('data:'.length).trim())
-        .join('\n')
-    )
-    .filter(Boolean)
-  return { items, remainder }
-}
 
 function normalizeUsage(usage?: ChatCompletionUsage): AssistantMessageStats | null {
   if (!usage) return null

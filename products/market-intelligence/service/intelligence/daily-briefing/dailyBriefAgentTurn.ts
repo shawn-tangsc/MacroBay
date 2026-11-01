@@ -1,0 +1,524 @@
+import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
+import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
+import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
+import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
+import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
+import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
+import { compareBriefingNextRelevance, selectBriefingMacroItems, selectMacroFloorItem } from './dailyBriefingDocument'
+import { briefingDataFactIds, briefingDataVisibilityAudit, selectBriefingDataFacts } from './dailyBriefingDataSelection'
+import {
+  dailyBriefBackfillPolicy,
+  isCanonicalDailyBriefBackfillTime,
+  isDailyBriefBackfillMetric,
+  isDailyBriefBackfillResult,
+  type DailyBriefBackfillRequest,
+  type DailyBriefBackfillResult
+} from '../public-query/dailyBriefBackfill'
+
+export type DailyBriefAgentTurnResult =
+  | Readonly<{ state: 'accepted'; document: DailyBriefingDocument; sessionId: string; toolInvocations: readonly import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] }>
+  | Readonly<{ state: 'failed'; failureCode: string; failureDetail?: string; sessionId: string; toolInvocations: readonly import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] }>
+
+/**
+ * One gap the frozen edition can state but could not fill: a row that is missing, stale or disabled.
+ *
+ * The list is derived from the document itself, so the ids the editor may ask about are exactly the
+ * ids the reader sees, and a source the reader turned off is listed but never requested.
+ */
+export type DailyBriefDataGap = Readonly<{
+  id: string
+  source: string
+  metric: string
+  asOf: string
+  state: DailyBriefingReadingState
+  reason: string
+  requestable: boolean
+}>
+
+/** The product's historical backfill tool, already bound to the edition cutoff. */
+export type DailyBriefBackfillExecutor = (request: DailyBriefBackfillRequest) => Promise<DailyBriefBackfillResult>
+
+export type DailyBriefTurnStage = 'selection' | 'field-backfill' | 'writing' | 'validation' | 'repair-1' | 'repair-2'
+
+export type DailyBriefTurnStageEvent = Readonly<{
+  stage: DailyBriefTurnStage
+  state: 'begin' | 'success' | 'failed' | 'skipped'
+  failureCode?: string
+  failureDetail?: string
+}>
+
+export type DailyBriefAgentTurnInput = Readonly<{
+  runner: DailyBriefAgentRunner
+  document: DailyBriefingDocument
+  locale: DailyBriefingLocale
+  /**
+   * The window's earlier AI conclusions, oldest first. The editor synthesizes them into a new
+   * conclusion instead of copying the analysis page's verdict.
+   */
+  priorConclusions?: readonly BriefingPriorConclusion[]
+  allowedTools?: readonly string[]
+  /**
+   * Optional so the turn keeps working when no historian is wired: a requested backfill then answers
+   * `backfill-unwired`, which is a gap, not a fabricated value or a failed edition.
+   */
+  backfill?: DailyBriefBackfillExecutor
+  /**
+   * The generation deadline. Once it aborts, no further agent round is opened: a timed-out edition
+   * must stop costing tokens instead of finishing in the background.
+   */
+  signal?: AbortSignal
+  /** Reports the session as soon as it exists, before the first round resolves. */
+  onSession?: (sessionId: string) => void
+  /**
+   * Reports the stage transitions the turn itself owns. The service composes them with the stages
+   * it owns (source, candidates, field backfill, store), so the reader can see where a failed
+   * attempt stopped instead of only its final code.
+   */
+  onStage?: (event: DailyBriefTurnStageEvent) => void
+}>
+
+/** The generation deadline fired, so the turn refuses to open another agent round. */
+export class DailyBriefTurnAbortedError extends Error {
+  constructor() {
+    super('daily-brief-turn-aborted')
+    this.name = 'DailyBriefTurnAbortedError'
+  }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DailyBriefTurnAbortedError()
+}
+
+function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly BackfillOutcome[]): DailyBriefingDocument {
+  const metrics: Record<string, { id: string; format: BriefingValueFormat; group: 'market' | 'funds' }> = {
+    'core-stablecoin-supply-usd': { id: 'stablecoin', format: 'usd', group: 'funds' },
+    'etf-net-flow-btc': { id: 'etf-btc', format: 'usd', group: 'funds' },
+    'etf-net-flow-eth': { id: 'etf-eth', format: 'usd', group: 'funds' },
+    'funding-rate-percent-btc': { id: 'funding-btc', format: 'percent', group: 'funds' },
+    'funding-rate-percent-eth': { id: 'funding-eth', format: 'percent', group: 'funds' },
+    'dxy-level': { id: 'dxy', format: 'level', group: 'market' },
+    'gold-level-usd': { id: 'gold', format: 'level', group: 'market' },
+    'us10y-yield-percent': { id: 'us10y', format: 'percent', group: 'market' },
+    'us10y-real-yield-percent': { id: 'us10y-real', format: 'percent', group: 'market' }
+  }
+  const byId = new Map(outcomes.flatMap((outcome) => outcome.result?.state === 'available' && metrics[outcome.result.metric] ? [[metrics[outcome.result.metric]!.id, outcome.result] as const] : []))
+  if (byId.size === 0) return document
+  const patch = <T extends BriefingMarketRow | BriefingPulseRow>(row: T): T => {
+    const fact = byId.get(row.id)
+    if (!fact) return row
+    return Object.freeze({ ...row, state: 'available' as const, value: Object.freeze({ number: fact.value, format: metrics[fact.metric]!.format }), observedAt: fact.observedAt, change: null }) as T
+  }
+  return Object.freeze({
+    ...document,
+    data: Object.freeze({ ...document.data, market: Object.freeze(document.data.market.map(patch)), funds: Object.freeze(document.data.funds.map(patch)) })
+  })
+}
+
+export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
+  let document = input.document
+  const priorConclusions = input.priorConclusions ?? []
+  const editionKey = dailyBriefEditionKey(document.edition.date, input.locale)
+  const copy = dailyBriefSessionCopy(input.locale)
+  const summary = factSummary(document, input.locale)
+  const gaps = collectDataGaps(document)
+  const protocol = backfillProtocol(gaps, document)
+  const stage = (event: DailyBriefTurnStageEvent): void => input.onStage?.(event)
+  const selectionPrompt = [
+    buildDailyBriefingSelectionPrompt({ document: document, locale: input.locale })
+      .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n'),
+    ...(protocol ? [protocol] : [])
+  ].join('\n\n')
+  throwIfAborted(input.signal)
+  stage({ stage: 'selection', state: 'begin' })
+  const started = await input.runner.start({ editionKey, date: document.edition.date, locale: input.locale, prompt: selectionPrompt, displayText: `${summary.detail}\n\n${copy.firstTask}`, context: summary, ...(input.allowedTools ? { allowedTools: input.allowedTools } : {}), ...(input.signal ? { signal: input.signal } : {}), ...(input.onSession ? { onSession: input.onSession } : {}) })
+  let selection: unknown
+  try { selection = JSON.parse(started.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
+  const toolInvocations: import('@platform/ai/agent-platform/runtime/runtimeTypes').AgentRuntimeToolInvocation[] = [...started.toolInvocations]
+  let response: string
+  if (!selection || typeof selection !== 'object' || (selection as { stage?: unknown }).stage !== 'select') {
+    throwIfAborted(input.signal)
+    const corrected = await input.runner.continue(started.sessionId, 'Your selection JSON was invalid. Return {"stage":"select",...} and nothing else.', undefined, input.signal)
+    try { selection = JSON.parse(corrected.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { selection = undefined }
+    toolInvocations.push(...corrected.toolInvocations)
+  }
+  if (!selection || typeof selection !== 'object' || (selection as { stage?: unknown }).stage !== 'select') {
+    stage({ stage: 'selection', state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection' })
+    await input.runner.finish(started.sessionId, 'failed')
+    return { state: 'failed', failureCode: 'invalid-shape', failureDetail: 'selection', sessionId: started.sessionId, toolInvocations }
+  }
+  const unknown = unknownSelection(selection, document)
+  if (unknown) {
+    stage({ stage: 'selection', state: 'failed', failureCode: 'invalid-shape', failureDetail: `selection-unknown:${unknown}` })
+    await input.runner.finish(started.sessionId, 'failed')
+    return { state: 'failed', failureCode: 'invalid-shape', failureDetail: `selection-unknown:${unknown}`, sessionId: started.sessionId, toolInvocations }
+  }
+  stage({ stage: 'selection', state: 'success' })
+  const requests = (selection as { requests?: unknown }).requests
+  stage({ stage: 'field-backfill', state: 'begin' })
+  const backfill = await runBackfillRound(selection, input, gaps)
+  if (backfill) document = applyBackfillFacts(document, backfill)
+  stage({ stage: 'field-backfill', state: (Array.isArray(requests) && requests.length > 0) || backfill ? 'success' : 'skipped' })
+  if ((Array.isArray(requests) && requests.length > 0) || backfill) {
+    const sections: string[] = []
+    if (Array.isArray(requests) && requests.length > 0) sections.push(`FIELD RESPONSE:\n${fieldResponse(document, requests, input.locale)}`)
+    if (backfill) sections.push(backfillMessage(backfill, document.edition.windowEnd))
+    throwIfAborted(input.signal)
+    const answer = await input.runner.continue(started.sessionId, `${sections.join('\n\n')}\nDo not return another selection. The next message is the writing task.`, undefined, input.signal)
+    toolInvocations.push(...answer.toolInvocations)
+    try {
+      const adjusted = JSON.parse(answer.assistantText.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, ''))
+      if (adjusted && typeof adjusted === 'object' && (adjusted as { stage?: unknown }).stage === 'select') selection = adjusted
+    } catch { /* keep the prior selection when the model just acknowledges */ }
+  }
+  const selectedDocument = selectDocument(document, selection)
+  const prompt = buildDailyBriefingPrompt({ document: selectedDocument, locale: input.locale, selection, priorConclusions })
+    .map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join('\n\n')
+  throwIfAborted(input.signal)
+  stage({ stage: 'writing', state: 'begin' })
+  const written = await input.runner.continue(started.sessionId, prompt, `任务 2/2 · 写作\n\n${prompt}`, input.signal)
+  response = written.assistantText
+  toolInvocations.push(...written.toolInvocations)
+  stage({ stage: 'writing', state: 'success' })
+  stage({ stage: 'validation', state: 'begin' })
+  let failureCode = 'invalid-json'
+  let failureDetail: string | undefined
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let parsed: unknown
+    try { parsed = JSON.parse(response.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')) } catch { parsed = undefined }
+    if (parsed) {
+      const validation = validateDailyBriefingEditorial(parsed, selectedDocument, input.locale, toolInvocations, priorConclusions)
+      if (validation.ok) {
+        stage({ stage: 'validation', state: 'success' })
+        const document = applyDailyBriefingEditorial(selectedDocument, validation.value, { promptVersion: 'daily-briefing.agent.v2', model: 'agent-session', source: 'default' }, priorConclusions)
+        await input.runner.finish(started.sessionId, 'accepted')
+        return { state: 'accepted', document, sessionId: started.sessionId, toolInvocations }
+      }
+      failureCode = validation.failureCode
+      failureDetail = validation.detail
+    }
+    if (attempt < 2) {
+      throwIfAborted(input.signal)
+      const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
+      stage({ stage: repairStage, state: 'begin' })
+      const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`, undefined, input.signal)
+      response = repair.assistantText
+      toolInvocations.push(...repair.toolInvocations)
+      stage({ stage: repairStage, state: 'success' })
+    }
+  }
+  stage({ stage: 'validation', state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}) })
+  await input.runner.finish(started.sessionId, 'failed')
+  return { state: 'failed', failureCode, ...(failureDetail ? { failureDetail } : {}), sessionId: started.sessionId, toolInvocations }
+}
+
+const MARKET_GAP_METRICS: Readonly<Record<string, readonly [string, string]>> = Object.freeze({
+  dxy: Object.freeze(['dxy', 'dxy-level'] as const),
+  gold: Object.freeze(['gold', 'gold-level-usd'] as const),
+  us10y: Object.freeze(['treasury', 'us10y-yield-percent'] as const),
+  'us10y-real': Object.freeze(['treasury', 'us10y-real-yield-percent'] as const)
+})
+
+const FUNDS_GAP_METRICS: Readonly<Record<string, readonly [string, string]>> = Object.freeze({
+  stablecoin: Object.freeze(['stablecoin', 'core-stablecoin-supply-usd'] as const),
+  'etf-btc': Object.freeze(['etf', 'etf-net-flow-btc'] as const),
+  'etf-eth': Object.freeze(['etf', 'etf-net-flow-eth'] as const),
+  'funding-btc': Object.freeze(['funding', 'funding-rate-percent-btc'] as const),
+  'funding-eth': Object.freeze(['funding', 'funding-rate-percent-eth'] as const)
+})
+
+export function collectDataGaps(document: DailyBriefingDocument): readonly DailyBriefDataGap[] {
+  const asOf = document.edition.windowEnd
+  const gaps = new Map<string, DailyBriefDataGap>()
+  const add = (source: string, metric: string, state: DailyBriefingReadingState, reason: string): void => {
+    if (!isDailyBriefBackfillMetric(source, metric)) return
+    const id = `${source}:${metric}`
+    if (gaps.has(id)) return
+    gaps.set(id, Object.freeze({ id, source, metric, asOf, state, reason, requestable: state !== 'source-disabled' }))
+  }
+  for (const row of document.data.market) {
+    if (row.state === 'available') continue
+    const pair = MARKET_GAP_METRICS[row.id]
+    if (pair) add(pair[0], pair[1], row.state, row.reason ?? row.state)
+  }
+  for (const row of document.data.funds) {
+    if (row.state === 'available') continue
+    const pair = FUNDS_GAP_METRICS[row.id]
+    if (pair) add(pair[0], pair[1], row.state, row.reason ?? row.state)
+  }
+  const leverage = document.data.leverage
+  if (!leverage || leverage.state !== 'available') {
+    const state: DailyBriefingReadingState = leverage?.state ?? 'unavailable'
+    add('open-interest', 'open-interest-usd-btc', state, 'open-interest row missing')
+    add('open-interest', 'open-interest-usd-eth', state, 'open-interest row missing')
+  }
+  return Object.freeze([...gaps.values()])
+}
+
+function backfillProtocol(gaps: readonly DailyBriefDataGap[], document: DailyBriefingDocument): string {
+  if (gaps.length === 0) return ''
+  return [
+    `DATA GAPS (frozen at ${document.edition.windowEnd}):`,
+    ...gaps.map((gap) => `- ${gap.id} asOf=${gap.asOf} state=${gap.state} reason=${gap.reason} ${gap.requestable ? 'requestable' : 'not-requestable'}`),
+    `BACKFILL: you may ask the product to re-read a requestable gap at its as-of instant. Add a "backfill" array to the same select JSON: {"source":"<source>","metric":"<metric>","asOf":"<the gap asOf or earlier>"}. At most ${dailyBriefBackfillPolicy.maximumRequestsPerRound}, one round per edition.`,
+    'The tool answers with a value plus observedAt/sourceUrl/method, or a named GAP. Never estimate a GAP, never change an official actual, and only ask about ids listed above.'
+  ].join('\n')
+}
+
+type BackfillOutcome = Readonly<{
+  source: string
+  metric: string
+  asOf: string
+  result?: DailyBriefBackfillResult
+  gapCode?: string
+  detail?: string
+}>
+
+async function runBackfillRound(
+  selection: unknown,
+  input: DailyBriefAgentTurnInput,
+  gaps: readonly DailyBriefDataGap[]
+): Promise<readonly BackfillOutcome[] | undefined> {
+  const raw = (selection as { backfill?: unknown }).backfill
+  if (!Array.isArray(raw) || raw.length === 0) return undefined
+  const byId = new Map(gaps.map((gap) => [gap.id, gap]))
+  const cutoff = input.document.edition.windowEnd
+  const outcomes: BackfillOutcome[] = []
+  const seen = new Set<string>()
+  let executed = 0
+  for (const entry of raw) {
+    const request = readBackfillRequest(entry)
+    if (!request) {
+      outcomes.push({ source: '', metric: '', asOf: '', gapCode: 'invalid-request', detail: 'a backfill entry must carry source, metric and asOf strings.' })
+      continue
+    }
+    const id = `${request.source}:${request.metric}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    const gap = byId.get(id)
+    if (!gap) {
+      outcomes.push({ ...request, gapCode: 'not-a-gap', detail: 'that fact is not one of this edition\'s gaps.' })
+      continue
+    }
+    if (!gap.requestable) {
+      outcomes.push({ ...request, gapCode: 'source-disabled', detail: 'the reader turned this source off; the brief must not read around it.' })
+      continue
+    }
+    if (!isCanonicalDailyBriefBackfillTime(request.asOf)) {
+      outcomes.push({ ...request, gapCode: 'invalid-as-of', detail: 'asOf must be a canonical UTC instant.' })
+      continue
+    }
+    if (request.asOf > cutoff) {
+      outcomes.push({ ...request, gapCode: 'future-as-of', detail: `asOf is after the frozen cutoff ${cutoff}.` })
+      continue
+    }
+    if (executed >= dailyBriefBackfillPolicy.maximumRequestsPerRound) {
+      outcomes.push({ ...request, gapCode: 'round-limit', detail: `at most ${dailyBriefBackfillPolicy.maximumRequestsPerRound} requests per round.` })
+      continue
+    }
+    if (!input.backfill) {
+      outcomes.push({ ...request, gapCode: 'backfill-unwired', detail: 'no historical reader is attached to this build; the gap stays.' })
+      continue
+    }
+    executed += 1
+    let result: unknown
+    try {
+      result = await input.backfill(request)
+    } catch {
+      outcomes.push({ ...request, gapCode: 'query-unavailable', detail: 'the historical reader failed.' })
+      continue
+    }
+    outcomes.push(acceptBackfill(result, request))
+  }
+  return Object.freeze(outcomes)
+}
+
+function readBackfillRequest(value: unknown): DailyBriefBackfillRequest | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const record = value as { source?: unknown; metric?: unknown; asOf?: unknown }
+  if (typeof record.source !== 'string' || typeof record.metric !== 'string' || typeof record.asOf !== 'string') return undefined
+  return { source: record.source, metric: record.metric, asOf: record.asOf }
+}
+
+function acceptBackfill(value: unknown, request: DailyBriefBackfillRequest): BackfillOutcome {
+  if (!isDailyBriefBackfillResult(value)) {
+    return { ...request, gapCode: 'query-unavailable', detail: 'the reader returned an unrecognised answer.' }
+  }
+  if (value.source !== request.source || value.metric !== request.metric || value.asOf !== request.asOf) {
+    return { ...request, gapCode: 'query-unavailable', detail: 'the reader answered a different request.' }
+  }
+  if (value.state === 'available' && value.observedAt > request.asOf) {
+    return { ...request, gapCode: 'not-visible-as-of', detail: 'the answer was observed after the requested instant.' }
+  }
+  return { ...request, result: value }
+}
+
+function backfillMessage(outcomes: readonly BackfillOutcome[], cutoff: string): string {
+  const lines = outcomes.map((outcome) => {
+    const id = outcome.source && outcome.metric ? `${outcome.source}:${outcome.metric}` : 'invalid-request'
+    if (outcome.result?.state === 'available') {
+      return `- ${id} asOf=${outcome.result.asOf} -> value=${outcome.result.value} unit=${outcome.result.unit} observedAt=${outcome.result.observedAt} sourceUrl=${outcome.result.sourceUrl} method=${outcome.result.method}`
+    }
+    if (outcome.result?.state === 'unavailable') {
+      return `- ${id} asOf=${outcome.result.asOf} -> GAP ${outcome.result.gapCode}: ${outcome.result.detail}`
+    }
+    return `- ${id}${outcome.asOf ? ` asOf=${outcome.asOf}` : ''} -> GAP ${outcome.gapCode ?? 'query-unavailable'}: ${outcome.detail ?? 'no answer'}`
+  })
+  return [
+    `BACKFILL RESPONSE (frozen cutoff ${cutoff}; one round per edition):`,
+    ...lines,
+    'Backfilled values are context for ranking only: they are not in the frozen DOCUMENT, so do not cite them in prose and do not copy them into facts. A GAP means no value exists at that instant; never estimate one. Return the adjusted selection JSON now, without another backfill round.'
+  ].join('\n')
+}
+
+function factSummary(document: DailyBriefingDocument, locale: DailyBriefingLocale): Readonly<{ kind: string; label: string; detail: string }> {
+  const copy = dailyBriefSessionCopy(locale)
+  const fill = dailyBriefSessionCopyText
+  const short = (title: string) => title.length > 54 ? `${title.slice(0, 54)}…` : title
+  const macro = (document.news.macroCandidates ?? document.news.macro).slice(0, 8).map((item) => short(item.title))
+  const news = document.news.items.slice(0, 8).map((item) => short(item.translatedTitle ?? item.title))
+  const next = (document.next.candidates ?? [document.next.focus, ...document.next.items]).filter((item): item is NonNullable<typeof item> => Boolean(item)).slice(0, 6).map((item) => short(item.title))
+  const details = [
+    fill(copy.window, { start: document.edition.windowStart, end: document.edition.windowEnd }),
+    fill(copy.macroCandidates, { count: String(macro.length), items: macro.join(copy.listSeparator) || copy.empty }),
+    fill(copy.newsCandidates, { count: String(news.length), items: news.join(copy.listSeparator) || copy.empty }),
+    fill(copy.next, { items: next.join(copy.listSeparator) || copy.empty })
+  ].join('\n')
+  return Object.freeze({ kind: 'daily-briefing-facts', label: copy.factsLabel, detail: details.slice(0, 700) })
+}
+
+function fieldResponse(document: DailyBriefingDocument, requests: readonly unknown[], locale: DailyBriefingLocale): string {
+  const copy = dailyBriefSessionCopy(locale)
+  const lines: string[] = []
+  for (const raw of requests) {
+    if (!raw || typeof raw !== 'object') continue
+    const request = raw as { factId?: unknown; fields?: unknown }
+    if (typeof request.factId !== 'string' || !Array.isArray(request.fields)) continue
+    const fields = request.fields.filter((field): field is string => typeof field === 'string')
+    const [kind, id] = request.factId.split(':')
+    const item = kind === 'macro'
+      ? document.news.macro.find((candidate) => candidate.eventKey === id)
+      : kind === 'news'
+        ? document.news.items.find((candidate) => candidate.itemId === id)
+        : undefined
+    const record = item as Record<string, unknown> | undefined
+    lines.push(`${request.factId}: ${fields.map((field) => `${field}=${record && field in record ? String(record[field]) : copy.missing}`).join(copy.fieldSeparator)}`)
+  }
+  return lines.length > 0 ? lines.join('\n') : copy.unknownRequest
+}
+
+function selectDocument(document: DailyBriefingDocument, selection: unknown): DailyBriefingDocument {
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; focus?: unknown; focusWhy?: unknown; data?: unknown; hiddenData?: unknown }
+  const newsIds = Array.isArray(value.news) ? new Set(value.news.filter((item): item is string => typeof item === 'string')) : undefined
+  const macroIds = Array.isArray(value.macro) ? new Set(value.macro.filter((item): item is string => typeof item === 'string')) : undefined
+  const macroCandidates = document.news.macroCandidates ?? document.news.macro
+  const nextCandidates = document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))
+  const nextKeys = Array.isArray(value.next) ? new Set(value.next.filter((item): item is string => typeof item === 'string')) : undefined
+  // The editor may move the focus off the default relevance leader, but only by naming a BTC/ETH
+  // transmission. A missing key, an unknown key, or a why with no channel falls back to relevance.
+  const selectedFocus = selectedNextFocus(value, nextCandidates)
+  const relevanceOrder = [...nextCandidates].sort(compareBriefingNextRelevance)
+  const focus = selectedFocus ?? relevanceOrder[0] ?? document.next.focus
+  const selectedNext = nextKeys
+    ? nextCandidates.filter((item) => nextKeys.has(item.eventKey) && item.eventKey !== focus?.eventKey)
+    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey)
+  const orderedNext = [...selectedNext].sort(compareBriefingNextRelevance)
+  // Deterministic floor: when the editor hid every other event, the next most relevant one stays
+  // visible. `maximumNextItems` excludes the focus, so the rendered list is focus + 3 = 4.
+  const nextItems = (orderedNext.length > 0
+    ? orderedNext
+    : relevanceOrder.filter((item) => item.eventKey !== focus?.eventKey).slice(0, 1))
+    .slice(0, dailyBriefingPolicy.maximumNextItems)
+  const selectedNews = newsIds ? document.news.items.filter((item) => newsIds.has(`news:${item.itemId}`)) : document.news.items
+  const selectedMacro = macroIds ? macroCandidates.filter((item) => macroIds.has(`macro:${item.eventKey}`)) : macroCandidates
+  // Selection decides visibility. The system never unions a release the editor did not select: a
+  // missing consensus only removes "no consensus" as a hiding reason, it does not make the event
+  // shown. The cap keeps the section at four candidates; when a selection is missing altogether the
+  // single most surprising release is the deterministic floor instead of every high-impact print.
+  const macro = selectBriefingMacroItems(selectedMacro, macroIds ? undefined : selectMacroFloorItem(selectedMacro))
+  const macroCapOmitted = new Set(selectedMacro
+    .filter((item) => !macro.some((chosen) => chosen.eventKey === item.eventKey))
+    .map((item) => `macro:${item.eventKey}`))
+  const shown = [...new Set([
+    ...selectedNews.map((item) => `news:${item.itemId}`),
+    ...macro.map((item) => `macro:${item.eventKey}`),
+    ...(focus ? [focus.eventKey] : []),
+    ...nextItems.map((item) => item.eventKey)
+  ])]
+  const hiddenEntries = Array.isArray((value as { hidden?: unknown }).hidden) ? (value as { hidden: unknown[] }).hidden : []
+  const hiddenReason = new Map(hiddenEntries.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const factId = (entry as { factId?: unknown }).factId
+    const reason = (entry as { reason?: unknown }).reason
+    return typeof factId === 'string' && typeof reason === 'string' && reason.trim().length > 0 ? [[factId, reason] as const] : []
+  }))
+  const allCandidates = [
+    ...document.news.items.map((item) => `news:${item.itemId}`),
+    ...macroCandidates.map((item) => `macro:${item.eventKey}`),
+    ...nextCandidates.map((item) => item.eventKey)
+  ]
+  const shownIds = new Set(shown)
+  const dataInclude = Array.isArray(value.data) ? value.data.filter((item): item is string => typeof item === 'string') : []
+  const dataHidden = Array.isArray(value.hiddenData) ? value.hiddenData.filter((entry): entry is { factId: string; reason: string } =>
+    Boolean(entry) && typeof entry === 'object' &&
+    typeof (entry as { factId?: unknown }).factId === 'string' &&
+    typeof (entry as { reason?: unknown }).reason === 'string').map((entry) => ({ factId: entry.factId, reason: entry.reason })) : []
+  // The selection round carries the editor's data choice too, so the writer starts from the rows the
+  // editor already judged instead of re-deriving them from an undifferentiated table.
+  const selectedDocument = selectBriefingDataFacts({
+    ...document,
+    news: Object.freeze({ ...document.news, items: Object.freeze(selectedNews), macro: Object.freeze(macro) }),
+    next: Object.freeze({ ...document.next, ...(focus ? { focus } : {}), items: Object.freeze(nextItems) })
+  }, { include: dataInclude, hidden: dataHidden })
+  const dataAudit = briefingDataVisibilityAudit(selectedDocument)
+  const newsMacroNextAudit = {
+    shown: Object.freeze([...shown, ...dataAudit.shown]),
+    hidden: Object.freeze([
+      ...allCandidates.filter((factId) => !shownIds.has(factId)).map((factId) => Object.freeze({
+        factId,
+        reason: hiddenReason.get(factId) ?? (macroCapOmitted.has(factId) ? 'macro display cap reached (at most 4)' : 'not selected')
+      })),
+      ...dataAudit.hidden
+    ])
+  }
+  return Object.freeze({
+    ...selectedDocument,
+    provenance: Object.freeze({ ...selectedDocument.provenance, selectionAudit: Object.freeze(newsMacroNextAudit) })
+  })
+}
+
+function selectedNextFocus(
+  value: Readonly<{ focus?: unknown; focusWhy?: unknown }>,
+  candidates: readonly BriefingNextItem[]
+): BriefingNextItem | undefined {
+  const eventKey = typeof value.focus === 'string' ? value.focus : undefined
+  const why = typeof value.focusWhy === 'string' ? value.focusWhy.trim() : ''
+  if (!eventKey || !why || why.length > 200 || !hasBriefingNextTransmission(why)) return undefined
+  const candidate = candidates.find((item) => item.eventKey === eventKey)
+  return candidate ? Object.freeze({ ...candidate, why }) : undefined
+}
+
+function unknownSelection(selection: unknown, document: DailyBriefingDocument): string | undefined {
+  const value = selection as { news?: unknown; macro?: unknown; next?: unknown; data?: unknown; hiddenData?: unknown }
+  const nextKeys = new Set((document.next.candidates ?? [document.next.focus, ...document.next.items].filter((item): item is NonNullable<typeof item> => Boolean(item))).map((item) => item.eventKey))
+  const newsIds = new Set(document.news.items.map((item) => `news:${item.itemId}`))
+  const macroIds = new Set((document.news.macroCandidates ?? document.news.macro).map((item) => `macro:${item.eventKey}`))
+  const dataIds = new Set(briefingDataFactIds(document))
+  for (const key of ['news', 'macro', 'next', 'data'] as const) {
+    const list = value[key]
+    if (!Array.isArray(list)) continue
+    for (const id of list) {
+      if (typeof id !== 'string') return String(id)
+      if (key === 'news' && !newsIds.has(id)) return id
+      if (key === 'macro' && !macroIds.has(id)) return id
+      if (key === 'next' && !nextKeys.has(id)) return id
+      if (key === 'data' && !dataIds.has(id)) return id
+    }
+  }
+  if (Array.isArray(value.hiddenData)) {
+    for (const entry of value.hiddenData) {
+      const factId = entry && typeof entry === 'object' ? (entry as { factId?: unknown }).factId : undefined
+      if (typeof factId !== 'string' || !dataIds.has(factId)) return String(factId)
+    }
+  }
+  return undefined
+}

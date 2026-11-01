@@ -8,6 +8,8 @@ import {
   marketIntelligenceEvidenceInputSchema,
   marketIntelligenceQueryOutputSchema,
   marketIntelligenceTimeBoundInputSchema,
+  policyPathInputSchema,
+  policyPathOutputSchema,
   provenanceExplainInputSchema,
   provenanceExplainOutputSchema
 } from './capabilitySchemas'
@@ -18,6 +20,10 @@ import {
   crossAssetSnapshotOutputSchema,
   dashboardFeedStatusInputSchema,
   dashboardFeedStatusOutputSchema,
+  dailyPulseInputSchema,
+  dailyPulseOutputSchema,
+  latestConclusionInputSchema,
+  latestConclusionOutputSchema,
   describeCapabilitiesInputSchema,
   describeCapabilitiesOutputSchema,
   listSourcesInputSchema,
@@ -99,6 +105,19 @@ export const intelligenceAgentCapabilities = [
     inputSchema: macroSnapshotEmptyInputSchema,
     outputSchema: macroRatesSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-macro-rates-snapshot',
+    timeoutMs: 5_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_policy_path',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': 'Fed 利率路径', 'en-US': 'Fed policy path' },
+    description:
+      '读取下一次 FOMC 会议的政策读数：目标区间、会议日期与剩余天数、预测市场对「最可能那一档」的定价（当前值、24h 变化、近 30 日区间、买卖价）、最新一份 SEP 的中位数路径与本年区间，以及上次决议的票型与反对票。限制：概率是预测市场的**成交价格**，不是模型预测，也不代表结果；24h 变化需要至少一天的观测，序列不足时该字段缺席而不是 0；SEP 属于**最近一次发布预测的会议**（可能早于下一次会议数月），必须带 asOf 引用；目标区间在声明尚未解析时回落 FRED 已发布的 DFEDTARU/L；staleness 为 live/delayed/stale/unavailable，表示报价新鲜度而非数据完整性。只读，不触发分析。',
+    inputSchema: policyPathInputSchema,
+    outputSchema: policyPathOutputSchema,
+    handlerId: 'market-intelligence.get-policy-path',
     timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
@@ -321,6 +340,32 @@ export const intelligenceAgentCapabilities = [
     outputSchema: crossAssetSnapshotOutputSchema,
     handlerId: 'market-intelligence.get-cross-asset-snapshot',
     timeoutMs: 10_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_latest_conclusion',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': '最新已发布结论', 'en-US': 'Latest published conclusion' },
+    description:
+      '读取 asOf 时刻之前最新一条已发布分析或复盘的结论：方向、摘要、成立条件、推翻条件、反证与多周期方向。只读已发布的摘要与预测，不触发分析、不生成日报、不写库；asOf 之后发布的结论不会提前出现，没有已发布结论时返回 empty 和 no-published-conclusion，不用模板补写。',
+    inputSchema: latestConclusionInputSchema,
+    outputSchema: latestConclusionOutputSchema,
+    handlerId: 'market-intelligence.get-latest-conclusion',
+    timeoutMs: 5_000,
+    maxOutputBytes: READ_OUTPUT_BYTES
+  },
+  {
+    id: 'get_daily_pulse',
+    domain: 'query',
+    kind: 'read',
+    title: { 'zh-CN': '每日脉搏', 'en-US': 'Daily pulse' },
+    description:
+      '读取每日简报的六行读数：恐惧贪婪、BTC/ETH 资金费率、稳定币、BTC/ETH ETF 净流，以及过去 24 小时舆情摘要。每行带 available/stale/unavailable/source-disabled 状态、窗口与观测时间；缺失或未启用是明确状态，不用 0 或上一值补齐。只读取 asOf 时刻已有的数据，不生成日报、不写库、不触发采集。',
+    inputSchema: dailyPulseInputSchema,
+    outputSchema: dailyPulseOutputSchema,
+    handlerId: 'market-intelligence.get-daily-pulse',
+    timeoutMs: 5_000,
     maxOutputBytes: READ_OUTPUT_BYTES
   },
   {

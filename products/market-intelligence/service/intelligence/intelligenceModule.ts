@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises'
 import type { JobRuntime, ManagedWorkerRuntime } from '@platform/jobs'
 import { createManagedWorkerRuntime } from '@platform/jobs'
 import type { EventBusRuntime } from '@platform/message-bus'
+import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '@platform/ai/agent-platform/runtime/agentChatRuntime'
+import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import type { PlatformWebSocketConstructor } from '@platform/network/platformWebSocket'
 import type { ProviderState } from '@platform/ai/providers/modelProviderTypes'
 import { createStructuredModelInvocationService } from '@platform/ai/invocation/structuredModelInvocation'
@@ -55,9 +57,41 @@ import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './ne
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
+import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentReadiness'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
+import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
+import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
+import { createDailyBriefingService, localDate, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
+import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
+import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
+import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
+import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
+import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
+import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
+import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
+import { createDailyBriefAgentRunner } from './daily-briefing/dailyBriefAgentRunner'
+import { resolveDailyBriefAgentAllowedTools } from './daily-briefing/dailyBriefAgentAllowedTools'
+import { createDailyBriefBackfillExecutor } from './public-query/dailyBriefBackfill'
+import { createEtfHistoryAsOf } from './public-query/etfHistoryAsOf'
+import { createStablecoinHistoryAsOf } from './public-query/stablecoinHistoryAsOf'
+import type { PolicyPathQueryService } from './policy-path/policyPathQueryService'
+import { createDailyBriefingAiSettingsStore, createDailyBriefingAiSettingsJsonStorage } from './daily-briefing/dailyBriefingAiSettingsStore'
+import { createDailyBriefingAiSettingsService } from './daily-briefing/dailyBriefingAiSettingsService'
+import {
+  createDailyBriefingGenerationSettingsJsonStorage,
+  createDailyBriefingGenerationSettingsService
+} from './daily-briefing/dailyBriefingGenerationSettingsService'
+import {
+  createDailyBriefingSettingsService,
+  type DailyBriefingSettingsService
+} from './daily-briefing/dailyBriefingSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
+import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
+import { resolveRuntimeConfig } from './application/sourceRuntimeConfig'
+import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
+import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
 import {
@@ -73,7 +107,6 @@ import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipel
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { statSync } from 'node:fs'
-import { getPlatformFetch } from '@platform/network/platformFetch'
 import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createMacroCalendarEvidenceStore } from './macro-calendar/macroCalendarEvidenceStore'
@@ -88,6 +121,9 @@ import { createEtfCurrentStateRefreshService } from './etf/etfCurrentStateRefres
 import { createZeroXRouterEtfFlowHistoryClient } from './application/zeroXRouterEtfFlowHistoryClient'
 import { zeroXRouterSourcePolicy } from './application/zeroXRouterSourcePolicy'
 import { createFundingRateHistorySqliteStore } from './store/fundingRateHistoryStore'
+import { createPerpetualPositioningSqliteStore } from './store/perpetualPositioningStore'
+import { createBinanceOpenInterestClient } from './open-interest/binanceOpenInterestClient'
+import { createOpenInterestRefreshService } from './open-interest/openInterestRefreshService'
 import { createFundingRateHistoryRefreshService } from './funding-rate/fundingRateHistoryRefreshService'
 import { createBinanceFundingRateHistoryClient } from './funding-rate/binanceFundingRateHistoryClient'
 import { createZeroXRouterCalendarEvidenceAdmissionService } from './macro-calendar/0xrouter-calendar/zeroXRouterCalendarEvidenceAdmissionService'
@@ -153,18 +189,33 @@ export type IntelligenceModulePlatformHooks = {
   /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
   eventBusRuntime?: EventBusRuntime
-  platformFetch?: CapitalConditionsPlatformFetch
+  /** Required: the first call must inject it, and every consumer reads this one. */
+  platformFetch: CapitalConditionsPlatformFetch
+  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. */
+  getTimeZone?: () => string
   /**
    * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
    * constructor because the desktop shell can only build it once network settings are readable —
    * binding it eagerly would hand the product a constructor that fails on its first connect.
    */
   createPlatformWebSocket?: () => PlatformWebSocketConstructor
+  /** Any source switch, so a product-owned job can arm or drop its own schedule. */
+  onSourceEnabledChanged?: (sourceId: string) => void | Promise<void>
   /** Reconcile the automatic calendar job registry after a feed switch. */
   onCalendarEnabledChanged?: () => void | Promise<void>
+  createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
+  sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
+  cancelAgentSession?: (sessionId: string) => Promise<void> | void
+  appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
+  updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
+  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<unknown>
+  isWebSearchProviderReady?: () => Promise<boolean>
 }
 
-type IntelligenceModule = {
+let briefingPolicyPathQuery: PolicyPathQueryService | undefined
+
+export type IntelligenceModule = {
   pipeline: ReturnType<typeof createIntelligencePipeline>
   sourcesService: ReturnType<typeof createIntelligenceSourcesService>
   translationService: ReturnType<typeof createIntelligenceTranslationService>
@@ -184,6 +235,14 @@ type IntelligenceModule = {
   replayService: ReturnType<typeof createIntelligenceReplayService>
   archiveService: ReturnType<typeof createIntelligenceArchiveService>
   publicQueryService: ReturnType<typeof createMarketIntelligencePublicQueryService>
+  dailyBriefingService: DailyBriefingService
+  /** The deterministic core-fact pass, exposed for logs and focused verification. */
+  dailyBriefFactEnsure: ReturnType<typeof createDailyBriefFactEnsure>
+  /**
+   * The daily-brief settings seam. The name predates the generation setting; the value is the
+   * composed settings service, and `dailyBriefingAiSettings` inside the module is the AI-only part.
+   */
+  dailyBriefingAiSettings: DailyBriefingSettingsService
   rawRecordStore: ReturnType<typeof createRawRecordStore>
   macroCalendarEvidenceArchive: ReturnType<typeof createMacroCalendarEvidenceArchive>
   macroCalendarEvidenceReady: boolean
@@ -214,12 +273,33 @@ type IntelligenceModule = {
    * cross-asset rows actually read. Read-only, and the credential leaves as a boolean.
    */
   dashboardFeedStatus: Pick<DashboardFeedStatusQuery, 'status'>
+  setPolicyPathQuery: (query: PolicyPathQueryService) => void
   /** The gold price stream. Reads only: it never appends to the macro-market series store. */
   macroMarketLive: GoldLiveRuntime
 }
 
 let intelligenceModule: IntelligenceModule | null = null
 let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
+
+/**
+ * The reader time zone the brief schedule, its cutoff and the "today" it reads all use.
+ * Comes from the platform hook (the shell's single time zone reader); fixed UTC when a host
+ * has not injected one, never the machine's zone.
+ */
+export function resolveBriefingTimeZone(
+  hooks: Pick<IntelligenceModulePlatformHooks, 'getTimeZone'> | undefined
+): string {
+  return hooks?.getTimeZone?.() ?? 'UTC'
+}
+
+function shellTimeZone(): string {
+  return resolveBriefingTimeZone(modulePlatformHooks)
+}
+
+/** 供产品内其它装配点读取「读者时区」（同一提供者，不另起来源）。 */
+export function currentReaderTimeZone(): string {
+  return shellTimeZone()
+}
 
 function getProductDataDir(): string {
   return join(app.getPath('userData'), 'products', PRODUCT_ID)
@@ -267,11 +347,21 @@ export function getIntelligenceModule(
   jobRuntime: JobRuntime,
   platformHooks?: IntelligenceModulePlatformHooks
 ): IntelligenceModule {
-  if (platformHooks) {
-    modulePlatformHooks = platformHooks
+  // The module is a singleton and captures its dependencies when it is built. A second set of hooks
+  // therefore has no effect on what was already wired — for months that looked like a
+  // reconfiguration and silently did nothing. Repeat calls may omit hooks or repeat the same
+  // platform fetch; anything else is a wiring bug and fails here instead of turning into an
+  // occasional crash at startup.
+  if (intelligenceModule) {
+    if (platformHooks && platformHooks.platformFetch !== modulePlatformHooks?.platformFetch) {
+      throw new Error('intelligence-module-hooks-already-bound')
+    }
+    return intelligenceModule
   }
+  if (!platformHooks) throw new Error('intelligence-module-hooks-required')
+  modulePlatformHooks = platformHooks
 
-  if (!intelligenceModule) {
+  {
     const hooks = modulePlatformHooks
     const dataDir = getProductDataDir()
     const getAppLanguage = hooks?.getAppLanguage ?? (async () => 'zh-CN' as const)
@@ -337,11 +427,21 @@ export function getIntelligenceModule(
     })
     const requestGovernanceQueue = createSourceRequestGovernanceQueue({ now: () => Date.now() })
     const fundingRateHistoryStore = createFundingRateHistorySqliteStore(join(dataDir, 'funding-rate-history.sqlite'))
-    const fundingRateHistoryClient = createBinanceFundingRateHistoryClient({ platformFetch: (hooks?.platformFetch ?? getPlatformFetch()) as typeof fetch })
+    const fundingRateHistoryClient = createBinanceFundingRateHistoryClient({ platformFetch: hooks.platformFetch as typeof fetch })
     const fundingRateHistoryRefresh = createFundingRateHistoryRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
       requestHistory: fundingRateHistoryClient.requestHistory,
       store: fundingRateHistoryStore,
+      now: () => new Date().toISOString()
+    })
+    // The positioning series is the second half of the same source: a funding rate without the
+    // open interest behind it cannot tell deleveraging from crowding.
+    const perpetualPositioningStore = createPerpetualPositioningSqliteStore(join(dataDir, 'perpetual-positioning.sqlite'))
+    const openInterestClient = createBinanceOpenInterestClient({ platformFetch: hooks.platformFetch as typeof fetch })
+    const openInterestRefresh = createOpenInterestRefreshService({
+      isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
+      client: openInterestClient,
+      store: perpetualPositioningStore,
       now: () => new Date().toISOString()
     })
     const etfFlowHistoryClient = createZeroXRouterEtfFlowHistoryClient({ requestGovernanceQueue })
@@ -363,7 +463,7 @@ export function getIntelligenceModule(
         resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
         getCredential: credentialRef => credentialStore.getByRef(credentialRef as never)
       },
-      ...(hooks?.createPlatformWebSocket ? { createWebSocket: hooks.createPlatformWebSocket } : {}),
+      ...(hooks.createPlatformWebSocket ? { createWebSocket: hooks.createPlatformWebSocket } : {}),
       onError: error => { console.log(JSON.stringify({ marker: 'MI_MACRO_MARKET_LIVE_ERROR', sourceId: macroMarketPolicy.sourceId, message: String(error).slice(0, 200) })) }
     })
     const zeroXRouterCredential = async () => {
@@ -396,9 +496,15 @@ export function getIntelligenceModule(
     })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
-      http: createCapitalConditionsHttpClient({ platformFetch: hooks?.platformFetch }),
+      http: createCapitalConditionsHttpClient({ platformFetch: hooks.platformFetch }),
       store: capitalConditionsStore,
       now: () => new Date().toISOString()
+    })
+    // The historical reader shares the platform fetch and the source switch with the live refresh,
+    // but reads each core asset's own endpoint; the aggregate `stablecoincharts/all` series is never
+    // used to answer the core metric. The client streams and caps each per-asset response (~22-24 MB).
+    const capitalConditionsAssetHistoryHttp = createCapitalConditionsHttpClient({
+      platformFetch: hooks.platformFetch
     })
     const capitalConditions = createCapitalConditionsSourceIntegration({
       refreshService: capitalConditionsRefresh,
@@ -423,7 +529,7 @@ export function getIntelligenceModule(
         (async () => {
           throw new Error('Model service is unavailable.')
         }),
-      fetch: getPlatformFetch()
+      fetch: hooks.platformFetch as unknown as typeof fetch
     })
     let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
     const translationService = createIntelligenceTranslationService({
@@ -499,6 +605,35 @@ export function getIntelligenceModule(
           translation: translationService,
           getDisplayLocale: getAppLanguage,
           ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
+          // The four sources' readiness, read from the one projection that already answers "what is
+          // this source doing": the card needs it to name the cause of an empty window.
+          readSourceReadiness: async (asOf) => {
+            const profiles = await profileStore.listProfiles()
+            const enabledSourceIds = new Set(profiles.filter((profile) => profile.enabled).map((profile) => profile.sourceId))
+            const profileBySource = new Map(profiles.map((profile) => [profile.sourceId, profile]))
+            const definitions = listIntelligenceSourceDefinitions().filter((definition) =>
+              (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(definition.sourceId)
+            )
+            const coverage = buildSourceCoverageAsOf({
+              definitions,
+              runtimeStates: pipeline.listRuntimeStatesAsOf(asOf),
+              items: pipeline.listItems(),
+              asOf,
+              enabledSourceIds
+            })
+            return summarizeNewsSentimentReadiness(coverage.map((row) => {
+              // The cycle comes from the resolver the scheduler itself uses, so the card's idea of
+              // "old" cannot drift away from how often this source is really collected.
+              const definition = definitions.find((entry) => entry.sourceId === row.sourceId)
+              const pollingIntervalSec = definition
+                ? resolveRuntimeConfig({ definition, profile: profileBySource.get(row.sourceId) }).pollingIntervalSec
+                : undefined
+              return {
+                ...row,
+                ...(pollingIntervalSec ? { collectionIntervalMs: pollingIntervalSec * 1_000 } : {})
+              }
+            }))
+          },
           now: () => new Date().toISOString()
         })
       : undefined
@@ -566,6 +701,7 @@ export function getIntelligenceModule(
       capitalConditions,
       etfFlowHistory: etfCurrentStateRefresh,
       fundingRateHistory: fundingRateHistoryRefresh,
+      openInterest: openInterestRefresh,
       ...(newsSentimentEnrichment && newsSentimentScoring
         ? { newsSentiment: { enrichItems: newsSentimentEnrichment.enrichItems, scoreItems: newsSentimentScoring.scoreItems } }
         : {})
@@ -581,7 +717,11 @@ export function getIntelligenceModule(
         { limit: 500 }
       ).catch(() => undefined)
     }
-    const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore })
+    const publicQueryService = createMarketIntelligencePublicQueryService({ pipeline, capitalConditionsQuery, fundingRateHistoryStore, perpetualPositioningStore })
+    // The divergence card asks whether the day's news was priced; that needs the same scored
+    // headlines the news page and the analysis read, not the sentiment aggregate (which only
+    // exists for market-wide scopes).
+    publicQueryService.setNewsSentimentQuery(newsSentimentQuery ? { query: input => newsSentimentQuery.query(input) } : undefined)
     // The analysis switches own the model as well as the on/off state: a background job may only
     // spend a request on a model the reader enabled it with.
     const marketAnalysisSettingsService = createMarketAnalysisSettingsService({
@@ -594,6 +734,8 @@ export function getIntelligenceModule(
     })
     const marketAnalysisRuntime = registerMarketAnalysisRuntime({
       jobRuntime,
+      // 开盘时刻按设置的读者时区换算（唯一提供者）。
+      timeZone: shellTimeZone,
       eventBusRuntime: hooks?.eventBusRuntime,
       pipeline,
       publicQueryService,
@@ -614,6 +756,7 @@ export function getIntelligenceModule(
       capitalConditions,
       credentialStore,
       onCalendarEnabledChanged: hooks?.onCalendarEnabledChanged,
+      onSourceEnabledChanged: hooks?.onSourceEnabledChanged,
       requestGovernanceQueue,
       ...(hooks?.platformFetch ? { platformFetch: hooks.platformFetch as typeof fetch } : {})
     })
@@ -621,10 +764,12 @@ export function getIntelligenceModule(
     // that need no credential; a fresh install should not require toggling them on before the cards
     // can do anything. An existing profile wins, so a reader's "off" is never overridden.
     const ensureDefaultSources = seedDefaultEnabledSources(profileStore).catch(() => undefined)
-    void ensureDefaultSources
+    const startupReady = ensureDefaultSources
       .then(() => intelligenceRawRecordStartupRecoveryPolicy.completeBeforeSourceRuntime(jobRuntime))
       .finally(() => sourcesService.initializeRuntime().catch(() => undefined))
       .finally(() => marketAnalysisRuntime.startRecovery().catch(() => undefined))
+      .then(() => undefined, () => undefined)
+    void startupReady
     // Best-effort seed: `readSettings` already falls back to defaults when the file is absent, so
     // a failed write during shutdown must not surface as an unhandled rejection.
     void (async () => {
@@ -635,6 +780,204 @@ export function getIntelligenceModule(
         await translationStorage.writeSettings(createDefaultTranslationSettings(await getAppLanguage()))
       }
     })().catch(() => undefined)
+    // The daily brief settings own the editor agent's model: saving and a generation-time
+    // re-resolution both write the same choice through this one update.
+    const applyDailyBriefAgentModel = async (model: string): Promise<void> => {
+      await hooks?.updateAgent?.('daily-brief-editor', { model })
+    }
+    const dailyBriefingAiSettings = createDailyBriefingAiSettingsService({
+      store: createDailyBriefingAiSettingsStore(
+        createDailyBriefingAiSettingsJsonStorage(join(dataDir, 'daily-briefing-settings.json')),
+        () => new Date().toISOString()
+      ),
+      ...(hooks?.getModelDefaults ? { getModelDefaults: hooks.getModelDefaults } : {}),
+      ...(hooks?.getProviderState ? { getProviderState: hooks.getProviderState } : {}),
+      onModelSaved: async (settings) => {
+        if (!hooks?.updateAgent) return
+        const model = settings.providerId && settings.modelId ? `${settings.providerId}:${settings.modelId}` : 'unconfigured:default-chat-model'
+        await applyDailyBriefAgentModel(model)
+      },
+      applyAgentModel: applyDailyBriefAgentModel
+    })
+    // The generation setting owns when the edition runs and what it covers. Saving it re-registers
+    // the same job id so the next run uses the new time; the service reads the stored value at
+    // generation time, so a change never rewrites an edition that already exists.
+    const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
+      storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')),
+      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, { timeZone: shellTimeZone(), generationTime: settings.generationTime })
+    })
+    const dailyBriefingSettings = createDailyBriefingSettingsService({
+      ai: dailyBriefingAiSettings,
+      generation: dailyBriefingGenerationSettings
+    })
+    const dailyBriefSessionLinks = createDailyBriefSessionLinkStore(join(dataDir, 'daily-brief-sessions.sqlite'))
+    const dailyBriefSessionPort = hooks?.createAgentSession && hooks.sendAgentMessage && hooks.appendAgentSessionMessages && hooks.updateAgentSession && hooks.deleteAgentSessions
+      ? createDailyBriefEditorSessionPort({
+        links: dailyBriefSessionLinks,
+        createSession: hooks.createAgentSession,
+        send: hooks.sendAgentMessage,
+        cancelAgentSession: hooks.cancelAgentSession,
+      })
+      : undefined
+    const dailyBriefAgentRunner = dailyBriefSessionPort ? createDailyBriefAgentRunner({ port: dailyBriefSessionPort, agentId: 'daily-brief-editor' }) : undefined
+    const dailyBriefingStore = createDailyBriefingSqliteStore(join(dataDir, 'daily-briefings.sqlite'))
+    const isSourceEnabled = async (sourceId: string): Promise<boolean | undefined> => {
+      try {
+        return (await profileStore.resolveProfile(sourceId)).enabled
+      } catch {
+        return undefined
+      }
+    }
+    // The ETF and core-stablecoin readers are memoised per cutoff, not per process: the same cutoff
+    // owns one downloaded series (startup ensure, generation ensure and the Agent backfill share
+    // it), while a new cutoff must read again because a daily source's newest row is not final
+    // until its day ends. The persistent ensure cache still prevents a later launch from asking for
+    // the same editionDate|metric|asOf at all.
+    const backfillReaders = new Map<string, Readonly<{
+      etfHistory: ReturnType<typeof createEtfHistoryAsOf>
+      stablecoinHistory: ReturnType<typeof createStablecoinHistoryAsOf>
+    }>>()
+    const backfillReadersFor = (cutoff: string) => {
+      const existing = backfillReaders.get(cutoff)
+      if (existing) return existing
+      const created = Object.freeze({
+        etfHistory: createEtfHistoryAsOf({
+          requestWindow: async () => {
+            // The same two gates the refresh applies: a switched-off source is not read around, and
+            // a missing key is a missing interface rather than a failed request.
+            const profile = await profileStore.resolveProfile(zeroXRouterSourcePolicy.sourceId)
+            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
+            const credential = await zeroXRouterCredential()
+            if (!credential?.apiKey) return Object.freeze({ state: 'not-configured' as const })
+            return etfFlowHistoryClient.requestWindow(credential.apiKey)
+          }
+        }),
+        stablecoinHistory: createStablecoinHistoryAsOf({
+          requestAssetHistory: async (assetId) => {
+            // A switched-off stablecoin source is a missing interface, not a reason to bypass it.
+            const profile = await profileStore.resolveProfile(DAILY_BRIEFING_SOURCE_IDS.stablecoin)
+            if (!profile.enabled) return Object.freeze({ state: 'not-configured' as const })
+            return capitalConditionsAssetHistoryHttp.requestStablecoinAssetHistoryPayload(assetId)
+          }
+        })
+      })
+      if (backfillReaders.size >= 2) {
+        const oldest = backfillReaders.keys().next().value
+        if (oldest) backfillReaders.delete(oldest)
+      }
+      backfillReaders.set(cutoff, created)
+      return created
+    }
+    const backfillFactory = (cutoff: string) => {
+      const readers = backfillReadersFor(cutoff)
+      return createDailyBriefBackfillExecutor({
+        cutoff,
+        publicQuery: publicQueryService,
+        // The outer gate is what keeps a cached series from outliving a reader's "off": the reader
+        // cache answers by asset, so a switch flipped after a successful read would otherwise still
+        // be bypassed.
+        etfHistory: async (request) => (await isSourceEnabled(zeroXRouterSourcePolicy.sourceId)) === true
+          ? readers.etfHistory.read(request)
+          : Object.freeze({
+            state: 'unavailable' as const,
+            asset: request.asset,
+            asOf: request.asOf,
+            gapCode: 'historical-api-unavailable' as const,
+            detail: 'the ETF source is switched off; the gap stays.'
+          }),
+        stablecoinHistory: async (request) => (await isSourceEnabled(DAILY_BRIEFING_SOURCE_IDS.stablecoin)) === true
+          ? readers.stablecoinHistory.read(request)
+          : Object.freeze({
+            state: 'unavailable' as const,
+            asOf: request.asOf,
+            gapCode: 'historical-api-unavailable' as const,
+            detail: 'the stablecoin source is switched off; the gap stays.'
+          }),
+        now: () => new Date().toISOString()
+      })
+    }
+    const dailyBriefFactEnsure = createDailyBriefFactEnsure({
+      backfillFor: backfillFactory,
+      cache: createDailyBriefFactEnsureJsonCache(join(dataDir, 'daily-brief-fact-ensure.json')),
+      isSourceEnabled,
+      now: () => new Date().toISOString(),
+      onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
+    })
+    const dailyBriefingService = createDailyBriefingService({
+      source: createDailyBriefingSource({
+        repository: marketAnalysisRuntime.repository,
+        publicQuery: publicQueryService,
+        policyPathQuery: { read: (input) => briefingPolicyPathQuery?.read(input) },
+        // Read-only history: the morning brief synthesizes the window's earlier brief conclusions
+        // together with the analysis conclusions instead of copying one of them.
+        briefEditions: dailyBriefingStore,
+        news: newsSentimentQuery
+          ? { query: (input) => newsSentimentQuery.query(input) }
+          : {
+            async query(input) {
+              return {
+                state: 'unavailable' as const,
+                asOf: input.asOf,
+                generatedAt: input.asOf,
+                window: input.window,
+                items: [],
+                caveats: []
+              }
+            }
+          },
+        profiles: profileStore
+      }),
+      store: dailyBriefingStore,
+      ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
+      agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
+      editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
+      generationSettings: () => dailyBriefingGenerationSettings.getView(),
+      backfillFactory,
+      coreFactEnsure: async ({ document, cutoff }) =>
+        (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,
+      agentAllowedTools: async () => {
+        const view = await dailyBriefingAiSettings.getView()
+        const providerReady = hooks?.isWebSearchProviderReady
+          ? await hooks.isWebSearchProviderReady()
+          : true
+        return resolveDailyBriefAgentAllowedTools({
+          webSearchEnabled: view.settings.webSearchEnabled,
+          authorized: Boolean(view.settings.webSearchAuthorizedAt),
+          providerReady,
+          serverWebSearchSupported: view.webSearchSupported
+        })
+      }
+    })
+    registerDailyBriefingJob(jobRuntime, {
+      service: dailyBriefingService,
+      getLocale: getAppLanguage,
+      timeZone: shellTimeZone,
+      getGenerationTime: async () => (await dailyBriefingGenerationSettings.getView()).generationTime
+    })
+    // The deterministic pass runs once per module start, after the default sources exist and the
+    // source runtime is up: a fresh install would otherwise look as if every source were switched
+    // off. It is fire-and-forget so the renderer is never held; the latest stored edition is the
+    // only document it may amend.
+    void startupReady
+      .then(() => ensureDailyBriefFactsAtStartup({
+        store: dailyBriefingStore,
+        ensure: dailyBriefFactEnsure.ensure,
+        locale: getAppLanguage,
+        now: () => new Date().toISOString(),
+        onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
+      }))
+      .catch(() => undefined)
+    if (hooks?.deleteAgentSessions) {
+      registerDailyBriefSessionRetentionJob(jobRuntime, {
+        links: dailyBriefSessionLinks,
+        deleteSessions: (ids) => hooks.deleteAgentSessions!(ids),
+        today: () => {
+          const zone = shellTimeZone()
+          return localDate(new Date().toISOString(), zone) ?? new Date().toISOString().slice(0, 10)
+        },
+        timeZone: shellTimeZone
+      })
+    }
     intelligenceModule = {
       pipeline,
       workerRuntime,
@@ -652,6 +995,9 @@ export function getIntelligenceModule(
       },
       sourcesService,
       publicQueryService,
+      dailyBriefingService,
+      dailyBriefFactEnsure,
+      dailyBriefingAiSettings: dailyBriefingSettings,
       rawRecordStore,
       macroCalendarEvidenceArchive,
       macroCalendarEvidenceReady: macroCalendarEvidenceMigration.state !== 'unavailable',
@@ -677,7 +1023,26 @@ export function getIntelligenceModule(
         return { enabled: profile.enabled === true, hasCredential: Boolean(credential?.apiKey) }
       },
       macroMarketLive,
-      dashboardFeedStatus
+      dashboardFeedStatus,
+      setPolicyPathQuery: (query: PolicyPathQueryService) => {
+        briefingPolicyPathQuery = query
+        // The analysis reads through the public query service, not the briefing's direct handle.
+        // The wrapper owns the one thing the direct handle cannot know: whether the reader has the
+        // source switched on. A disabled source answers `disabled`, so the analysis neither leaks
+        // stale odds nor reports a gap the reader chose to hide.
+        publicQueryService.setPolicyPathQuery({
+          read: async ({ asOf }) => {
+            try {
+              const profile = await profileStore.resolveProfile('policy-path-market')
+              if (!profile.enabled) return { state: 'disabled' as const }
+              const reading = query.read({ asOf })
+              return reading ? { state: 'available' as const, reading } : { state: 'unavailable' as const }
+            } catch {
+              return { state: 'unavailable' as const }
+            }
+          }
+        })
+      }
     }
   }
   return intelligenceModule

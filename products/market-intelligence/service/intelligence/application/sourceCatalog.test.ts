@@ -29,7 +29,6 @@ describe('sourceCatalog metadata', () => {
     expect(bls?.readiness).toBe('fixture-ready')
     expect(bls?.supportsRunNow).toBe(false)
     expect(bls?.authMode).toBe('optional-api-key')
-    expect(bls?.supportsCredentialTest).toBe(true)
     expect(bls?.adapterConfig.requestMode).toBe('bls-series')
     expect(bls?.adapterConfig.freshnessWindowMs).toBeGreaterThan(0)
     expect(Array.isArray(bls?.adapterConfig.series)).toBe(true)
@@ -41,7 +40,6 @@ describe('sourceCatalog metadata', () => {
     // Configurable: the reader enables it and pastes a key; the credential is what admits the job.
     expect(fred?.readiness).toBe('live')
     expect(fred?.authMode).toBe('api-key')
-    expect(fred?.supportsCredentialTest).toBe(true)
     expect(fred?.adapterConfig.requestMode).toBe('fred-series')
     expect((fred?.adapterConfig.series as Array<{ key: string }>)?.map((row) => row.key)).toContain('US_2Y_YIELD')
     expect((fred?.adapterConfig.series as Array<{ key: string }>)?.map((row) => row.key)).toContain('US_10Y_BREAKEVEN_INFLATION')
@@ -51,7 +49,6 @@ describe('sourceCatalog metadata', () => {
     const legacy = getIntelligenceSourceDefinition('fred')
     expect(legacy?.visibility).toBe('hidden')
     expect(legacy?.supportsRunNow).toBe(false)
-    expect(legacy?.supportsCredentialTest).toBe(false)
   })
 
   it('lists planned macro sources without hiding them', () => {
@@ -65,7 +62,7 @@ describe('sourceCatalog metadata', () => {
     const source = getIntelligenceSourceDefinition('0xrouter-aggregate-provider')
     expect(source).toMatchObject({
       sourceId: '0xrouter-aggregate-provider', sourceGroup: 'aggregate-data-provider', authMode: 'api-key',
-      supportsCredentialTest: true, supportsRunNow: false, readiness: 'live', defaultCollectionPreset: 'balanced',
+      supportsRunNow: false, readiness: 'live', defaultCollectionPreset: 'balanced',
       adapterConfig: { probeContract: 'account-balance-json-object' },
       requestGovernance: {
         providerId: '0xrouter', quotaScope: 'api-key',
@@ -90,7 +87,6 @@ describe('sourceCatalog metadata', () => {
       sourceGroup: 'macro-regulation',
       adapterType: 'rest-api-poller',
       authMode: 'api-key',
-      supportsCredentialTest: true,
       // The generic runtime must never collect it: the product's own five-minute job owns the cadence
       // and the monthly budget, exactly as it does for the basket that remains the fallback.
       supportsRunNow: false,

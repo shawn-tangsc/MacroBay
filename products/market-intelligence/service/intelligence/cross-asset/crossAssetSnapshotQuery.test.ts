@@ -73,6 +73,32 @@ describe('cross-asset bounded snapshot query', () => {
     expect(read).toHaveBeenCalledTimes(12)
   })
 
+  it('answers a past window with the newest known version when the caller asks for latest knowledge', () => {
+    /**
+     * The store is bitemporal: by default a read answers with the version observed at or before the
+     * requested instant. Here the last hour was backfilled after the instant being asked about (a poll
+     * that missed the window, or a restart), so an `as-of` read loses the window's right end while
+     * `latest` keeps it. Same window, same anchor — only the version cutoff differs.
+     */
+    const bars = (symbol: string) => Array.from({ length: 313 }, (_, index) => ({
+      symbol, barOpenMs: now - (313 - index) * 300_000, barEndMs: now - (312 - index) * 300_000,
+      open: '100', high: '110', low: '90', close: String(100 + index / 100), volume: '1'
+    }))
+    const read = vi.fn((input: { symbol: string; asOfMs: number }) =>
+      input.symbol === 'USTEC' ? []
+        : bars(input.symbol).filter(bar => input.asOfMs >= now || bar.barEndMs <= now - 4_200_000))
+    const query = createCrossAssetSnapshotQuery({ now: () => now, store: { revision: 1, queryAt: read },
+      live: () => ({ state: 'live', quotes: { index: { state: 'missing' }, btc: { state: 'missing' }, eth: { state: 'missing' } } }) })
+    const asOf = new Date(now - 3_600_000).toISOString()
+    const known = query.query({ range: '24h', asOf })
+    expect(query.query({ range: '24h', asOf, knowledge: 'as-of' })).toEqual(known)
+    const latest = query.query({ range: '24h', asOf, knowledge: 'latest' })
+    expect(latest.analysisEnd).toEqual(known.analysisEnd)
+    expect(known.curves.btc.at(-1)?.returnPercent).toBeNull()
+    expect(latest.curves.btc.at(-1)?.returnPercent).toBeTypeOf('number')
+    expect(read).toHaveBeenCalledWith(expect.objectContaining({ asOfMs: now }))
+  })
+
   it('does not accept dependency quote payloads with nonfinite values or private fields', () => {
     const { query, live } = setup()
     live.mockReturnValue({ state: 'live', quotes: { index: { state: 'live', price: 'Infinity', tradedAtMs: now, receivedAtMs: now },

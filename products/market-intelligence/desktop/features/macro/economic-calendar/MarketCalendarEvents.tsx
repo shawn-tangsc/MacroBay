@@ -9,7 +9,7 @@ import {
   type MarketCalendarSurpriseAssessment
 } from '../../../../contracts/macro/marketCalendarSurprise'
 import { formatReadableAnalysisValue } from '../../../../contracts/marketAnalysisReadableText'
-import type { EconomicCalendarText } from './EconomicCalendar'
+import type { EconomicCalendarText } from './economicCalendarText'
 import { calendarDisplayDate, calendarDisplayTime } from './economicCalendarDayModel'
 import { MarketCalendarSourceStatus } from './MarketCalendarSourceStatus'
 

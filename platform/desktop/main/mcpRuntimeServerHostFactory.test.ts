@@ -107,17 +107,21 @@ describe('mcp runtime server host factory', () => {
         inputSchema: undefined
       }
     ])
-    await expect(
-      host.invokeTool({
-        toolName: 'read_file',
-        input: { path: '/tmp/demo.txt' },
-        sessionContext: 'mcp-session-1'
-      })
-    ).resolves.toEqual({
-      output: 'ok',
-      content: [{ type: 'text', text: 'ok' }],
-      isError: false
+    const invoked = await host.invokeTool({
+      toolName: 'read_file',
+      input: { path: '/tmp/demo.txt' },
+      sessionContext: 'mcp-session-1'
     })
+    // The return value reaches the model as fact, so it is guarded at this seam: the server and tool
+    // are named, the boundary makes the untrusted region explicit, and the payload survives intact.
+    expect(invoked.isError).toBe(false)
+    expect(String(invoked.output)).toContain('external tool server "Filesystem" (tool "read_file")')
+    expect(String(invoked.output)).toContain('<<<EXTERNAL_UNTRUSTED_CONTENT boundary=')
+    expect(String(invoked.output)).toContain('\nok\n')
+    const content = invoked.content as Array<{ type: string; text: string }>
+    expect(content[0]?.type).toBe('text')
+    expect(content[0]?.text).toContain('external tool server "Filesystem" (tool "read_file")')
+    expect(content[0]?.text).toContain('\nok\n')
 
     expect(createStdioTransport).toHaveBeenCalledWith({
       command: 'npx',
@@ -179,22 +183,24 @@ describe('mcp runtime server host factory', () => {
 
     const host = await createHost(stdioServer)
 
-    await expect(
-      host.invokeTool({
-        toolName: 'read_file',
-        input: { path: '/tmp/missing.txt' },
-        signal: abortController.signal
-      })
-    ).resolves.toEqual({
+    const richResult = await host.invokeTool({
+      toolName: 'read_file',
+      input: { path: '/tmp/missing.txt' },
+      signal: abortController.signal
+    })
+    // Structured values stay machine-readable: only the prose the model reads is guarded, and a
+    // wrapped error code would corrupt every caller that branches on it.
+    const textItem = (Array.isArray(richResult.content) ? richResult.content[0] : undefined) as
+      | { text?: string }
+      | undefined
+    expect(textItem?.text).toContain('external tool server "Filesystem" (tool "read_file")')
+    expect(textItem?.text).toContain('\nFile not found.\n')
+    expect({ ...richResult, content: undefined }).toEqual({
       output: {
         code: 'ENOENT',
         path: '/tmp/missing.txt'
       },
-      content: [
-        { type: 'text', text: 'File not found.' },
-        { type: 'image', data: 'base64-image', mimeType: 'image/png' },
-        { type: 'resource', resource: { uri: 'file:///tmp/missing.txt', text: 'missing' } }
-      ],
+      content: undefined,
       structuredContent: {
         code: 'ENOENT',
         path: '/tmp/missing.txt'

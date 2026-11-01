@@ -44,6 +44,12 @@ export async function probeIntelligenceSourceConnection(
     // OKX's help-centre page is a client-rendered shell, so a 200 on `pageUrl` would prove nothing
     // about whether collection works. The probe reads the same announcements endpoint the collector
     // reads and requires it to yield at least one row.
+    // The odds tool reads the venue's search endpoint, so the probe asks the same question: can we
+    // reach it and does it still answer with events? Probing the API root would only prove a 301.
+    if (config.sourceId === 'policy-path-market') {
+      return await probePolicyPathConnection(testedAt)
+    }
+
     if (isOkxAnnouncementsSource(config.sourceId)) {
       return await probeOkxAnnouncementsConnection(config, testedAt)
     }
@@ -174,6 +180,30 @@ async function probeBinanceConnection(
   }
 }
 
+async function probePolicyPathConnection(testedAt: string): Promise<SourceConnectionTestResult> {
+  const url = 'https://gamma-api.polymarket.com/public-search?q=fed%20decision&limit_per_type=1'
+  let response
+  try {
+    response = await intelligenceHttpRequest({ url, method: 'GET', headers: { Accept: 'application/json' }, timeoutMs: 20_000 }, { retryPolicy: { maxAttempts: 1 } })
+  } catch {
+    return { ok: false, message: 'Polymarket is unreachable.', testedAt }
+  }
+  if (response.status >= 400) {
+    return { ok: false, message: `Polymarket search rejected the request (HTTP ${response.status}).`, testedAt }
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(response.bodyText)
+  } catch {
+    return { ok: false, message: 'Polymarket returned a body that is not JSON.', testedAt }
+  }
+  const events = (parsed as { events?: unknown })?.events
+  const count = Array.isArray(events) ? events.length : 0
+  return count > 0
+    ? { ok: true, message: `Polymarket search reachable (${count} Fed events).`, testedAt }
+    : { ok: false, message: 'Polymarket search returned no Fed events.', testedAt }
+}
+
 async function probeOkxAnnouncementsConnection(
   config: IntelligenceSourceConfig,
   testedAt: string
@@ -234,6 +264,15 @@ async function probeUrlConnection(
     return {
       ok: false,
       message: `${label} unreachable (HTTP ${response.status}).`,
+      testedAt
+    }
+  }
+  // A 3xx means the host answered but the configured path is not the endpoint the collector uses.
+  // Saying "empty body" here would send the reader looking for the wrong fault.
+  if (response.status >= 300) {
+    return {
+      ok: false,
+      message: `${label} redirected (HTTP ${response.status}); probe the collector's own path instead.`,
       testedAt
     }
   }

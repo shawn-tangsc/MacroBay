@@ -522,6 +522,8 @@ describe('desktop preload platform api', () => {
       'cancelModelDetection',
       'detectModels',
       'generateImage',
+      // 全局只读快照：巡检结论是全局的，渲染层不能自己探（界面层不承担外部请求与调度）。
+      'getInUseRetired',
       'getRuntimeCheckReport',
       'list',
       'onModelDetectionDone',

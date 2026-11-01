@@ -73,6 +73,8 @@ type AgentTaskDispatchServiceDependencies = {
   jobBridge?: AgentTaskRunJobBridge
   getJobBridge?: () => AgentTaskRunJobBridge | null | undefined
   now?: () => string
+  /** 主进程唯一的读者时区来源；任务提示里的日期/时区按它渲染。 */
+  timeZone?: () => string
   onStateChanged?: () => Promise<void> | void
   deliverTaskResult?: (input: {
     taskId: string
@@ -224,7 +226,7 @@ export class AgentTaskDispatchService {
     const startedAt = this.timestamp()
     const renderedPrompt = renderTaskPromptTemplate(task.prompt, {
       now: startedAt,
-      timezone: resolveTaskTimezone(task),
+      timezone: resolveTaskTimezone(task, this.deps.timeZone?.() ?? 'UTC'),
       taskName: task.name
     })
     const runningLogId = options.existingRunningLogId ?? (await this.createRunningLog(task, startedAt)).id
@@ -536,11 +538,9 @@ function cloneWorkspaceSource(workspace: AgentSessionWorkspaceSource): AgentSess
   return { ...workspace }
 }
 
-function resolveTaskTimezone(task: AgentTaskSchedulerRuntimeTask): string {
+function resolveTaskTimezone(task: AgentTaskSchedulerRuntimeTask, fallbackTimeZone: string): string {
   const timezone = task.trigger.kind === 'cron' ? task.trigger.timezone : undefined
-  if (timezone) return timezone
-  const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-  return systemTimezone || 'UTC'
+  return timezone || fallbackTimeZone
 }
 
 function readAbortReason(signal: AbortSignal | null | undefined): JobCancelReason | null {

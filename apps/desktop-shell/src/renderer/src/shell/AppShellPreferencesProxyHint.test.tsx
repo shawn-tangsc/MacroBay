@@ -14,6 +14,7 @@ import { installPlatform } from './model-service/modelServicePageHarness'
  * PLAT-61：基础设置 → 代理段的一句灰字说明（应用请求走这里的代理；浏览器能打开≠应用能连）。
  */
 const labels = platformText['en-US'].preferences
+const sentences = platformText['en-US'].models
 
 let root: Root | undefined
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -70,13 +71,16 @@ describe('PLAT-61 基础设置代理说明', () => {
     await vi.waitFor(() => expect(container.querySelector('[data-proxy-self-test-result]')).not.toBeNull())
     const result = container.querySelector('[data-proxy-self-test-result]')
     expect(result?.textContent).toContain('HTTP 200')
-    expect(result?.textContent).toContain('http://127.0.0.1:7888')
+    // 绿档不再印地址；没确认经过代理时只说「能连到」。
+    expect(result?.textContent).toContain(labels.proxySelfTestReachable(200, '1.2'))
+    // 自定义模式下拿不到「经代理」的证据：琥珀 partial，不是绿色 pass。
+    expect(result?.getAttribute('data-tone')).toBe('partial')
     // 账号密码绝不出现。
     expect(result?.textContent).not.toContain('super-secret')
     expect(result?.textContent).not.toContain('user:')
   })
 
-  it('reports proxy self-test failures with the classified code and target host', async () => {
+  it('reports proxy self-test failures in human words without the internal code', async () => {
     const container = await renderBasicSettings({
       testConnection: async () => ({
         ok: false,
@@ -94,9 +98,11 @@ describe('PLAT-61 基础设置代理说明', () => {
     })
 
     await vi.waitFor(() => expect(container.querySelector('[data-proxy-self-test-result]')).not.toBeNull())
+    // 码不进句子；没拿到对照结果时走「连不上代理服务器本身、原因待查」，并给重试一行。
     expect(container.querySelector('[data-proxy-self-test-result]')?.textContent).toBe(
-      labels.proxySelfTestFailed('network_timeout', 'aihubmix.com')
+      `${labels.proxySelfTestUnattributable('aihubmix.com')}${labels.proxySelfTestCauseUnknownHint}`
     )
+    expect(container.querySelector('[data-proxy-self-test-result]')?.textContent).not.toContain('network_timeout')
   })
 
   it('shows the proxy request hint in basic settings', async () => {

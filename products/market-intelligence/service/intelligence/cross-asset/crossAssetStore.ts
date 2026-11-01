@@ -1,6 +1,8 @@
 import { mkdirSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import type { ClosedBar, StoredSymbol } from './binanceCrossAssetClient'
 import { crossAssetPolicy } from './crossAssetPolicy'
@@ -87,14 +89,16 @@ function validBar(bar: ClosedBar, at: number): boolean {
 export function createCrossAssetStore(filePath: string) {
   const startedAt = performance.now()
   mkdirSync(dirname(filePath), { recursive: true })
-  const db = new DatabaseSync(filePath)
+  // 先确认文件归属再切 WAL：不是本产品写的文件一个字节都不改，所以这里以 preserve 打开，
+  // 检查通过后才在下面自己切 WAL。
+  const db = openSqliteDatabase(filePath, { journalMode: 'preserve', pageSizeBytes: policy.pageSize })
   try {
     const version = Number(db.prepare('PRAGMA user_version').get()?.user_version)
     const existing = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()
     const fresh = version === 0 && existing.length === 0
     // A file this product did not write is never touched; a file it did write is migrated.
     if (!fresh && version !== policy.schemaVersion && version !== 1) throw new Error('storage-schema-unavailable')
-    db.exec(`PRAGMA page_size=${policy.pageSize}; PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+    db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
       PRAGMA wal_autocheckpoint=${policy.checkpointPages};`)
     const pageSize = Number(db.prepare('PRAGMA page_size').get()?.page_size)
     const maxPages = Math.floor(policy.maxDatabaseBytes / pageSize)

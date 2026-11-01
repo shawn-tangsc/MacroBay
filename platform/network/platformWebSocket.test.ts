@@ -21,6 +21,17 @@ describe('platformWebSocket', () => {
     await expect(resolveWebSocketProxyUrl('ws://127.0.0.1:5173/ws', customSocksNetwork)).resolves.toBeNull()
   })
 
+  it('explains bypass rules with the shared implementation, not a private parser', async () => {
+    // `<local>` 与 `.suffix` 都由 platform/network/proxyBypass 解释，与 Chromium 的那份设置同一套语义。
+    const network: NetworkSettings = { ...customSocksNetwork, proxyBypassRules: '<local>,.corp.test' }
+
+    await expect(resolveWebSocketProxyUrl('ws://intranet/ws', network)).resolves.toBeNull()
+    await expect(resolveWebSocketProxyUrl('wss://stream.corp.test/ws', network)).resolves.toBeNull()
+    await expect(resolveWebSocketProxyUrl('wss://stream.example.test/ws', network)).resolves.toBe(
+      'socks5://127.0.0.1:6153'
+    )
+  })
+
   it('uses Electron system proxy resolution when proxy mode is system', async () => {
     const resolveSystemProxy = vi.fn(async () => 'PROXY 127.0.0.1:7890; DIRECT')
 

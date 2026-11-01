@@ -1,6 +1,7 @@
 import {
   createMcpRuntimeConfigError,
   createMcpRuntimeDependencyError,
+  guardMcpToolInvokeResult,
   normalizeMcpRuntimeToolInvokeResult,
   type McpRuntimeServerHostFactory,
   type McpRuntimeToolInvokeResult
@@ -129,7 +130,12 @@ export function createMcpRuntimeServerHostFactory(
           undefined,
           signal ? { signal } : undefined
         )
-        return normalizeMcpRuntimeToolInvokeResult(result)
+        // The model reads this return value as fact: guard it at the seam we own. Results the SDK
+        // fetches over its own MCP connection never reach here (known gap, see the R28 row).
+        return guardMcpToolInvokeResult(normalizeMcpRuntimeToolInvokeResult(result), {
+          serverKey: server.name || server.id,
+          toolName
+        })
       },
       subscribeToToolChanges: (listener) => {
         toolChangeListeners.add(listener)

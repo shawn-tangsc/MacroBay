@@ -7,12 +7,7 @@ import type {
 } from '../schemas/sessionSchemas'
 import { getAgentMessagePromptText } from '../schemas/messageDataHelpers'
 import { clearAgentSessionMessages, deleteAgentSessionMessage, listAgentSessionMessages } from '../store/agentStore'
-import type {
-  AgentPlatformQueryAdapters,
-  AgentPlatformStateStore,
-  SessionMessageContentSearchItem
-} from './agentServiceTypes'
-import { buildSnippet, includesSearchText, normalizeSearch } from './agentSearch'
+import type { AgentPlatformQueryAdapters, AgentPlatformStateStore } from './agentServiceTypes'
 
 export class AgentSessionMessageService {
   constructor(
@@ -114,74 +109,6 @@ export class AgentSessionMessageService {
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
       .find((message) => message.runtimeResumeToken)?.runtimeResumeToken ?? null
   }
-
-  async search(query: {
-    q: string
-    cursor?: string
-    limit?: number
-    createdAtFrom?: string
-    sessionId?: string
-  }): Promise<{ items: SessionMessageContentSearchItem[]; nextCursor?: string }> {
-    const search = normalizeSearch(query.q)
-    if (!search) return { items: [] }
-    const repoSearch = this.queries.messages?.search(query)
-    if (repoSearch) {
-      const state = await this.store.getState()
-      return {
-        items: repoSearch.items.map((item) => {
-          const session = state.sessions.find((entry) => entry.id === item.sessionId)
-          const agent = state.agents.find((entry) => entry.id === session?.agentId)
-          return {
-            messageId: item.messageId,
-            sessionId: item.sessionId,
-            sessionName: session?.name ?? '',
-            agentId: agent?.id,
-            agentName: agent?.name,
-            role: item.role,
-            snippet: item.snippet,
-            createdAt: item.createdAt
-          }
-        }),
-        nextCursor: repoSearch.nextCursor
-      }
-    }
-
-    const limit = Math.max(1, Math.min(query.limit ?? 50, 200))
-    const createdAtFromMs = query.createdAtFrom ? Date.parse(query.createdAtFrom) : undefined
-    const cursor = decodeSearchCursor(query.cursor)
-    const state = await this.store.getState()
-
-    const sorted = Object.values(state.messagesBySessionId)
-      .flat()
-      .filter((message) => {
-        if (query.sessionId && message.sessionId !== query.sessionId) return false
-        if (createdAtFromMs !== undefined && Date.parse(message.createdAt) < createdAtFromMs) return false
-        if (cursor && !isOlderThanSearchCursor(message, cursor)) return false
-        return includesSearchText(message.searchableText, search)
-      })
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt) || b.id.localeCompare(a.id))
-
-    const items = sorted.slice(0, limit)
-    const hasNext = sorted.length > limit
-    const tail = items.at(-1)
-    return {
-      items: items.map((message) => {
-        const session = state.sessions.find((item) => item.id === message.sessionId)
-        const agent = state.agents.find((item) => item.id === session?.agentId)
-        return {
-          messageId: message.id,
-          sessionId: message.sessionId,
-          sessionName: session?.name ?? '',
-          agentId: agent?.id,
-          agentName: agent?.name,
-          role: message.role,
-          snippet: buildSnippet(message.searchableText, query.q),
-          createdAt: message.createdAt
-        }
-      }),
-      nextCursor: hasNext && tail ? encodeSearchCursor(tail) : undefined
-    }
-  }
 }
 
 function upsertMessageInState(
@@ -238,27 +165,6 @@ function upsertMessageInState(
 
 function messageDataToSearchableText(data: MessageData): string {
   return getAgentMessagePromptText(data)
-}
-
-function encodeSearchCursor(message: AgentSessionMessageEntity): string {
-  return `${Date.parse(message.createdAt)}:${message.id}`
-}
-
-function decodeSearchCursor(raw: string | undefined): { createdAt: number; id: string } | null {
-  if (!raw) return null
-  const separatorIndex = raw.indexOf(':')
-  if (separatorIndex <= 0 || separatorIndex === raw.length - 1) return null
-  const createdAt = Number(raw.slice(0, separatorIndex))
-  const id = raw.slice(separatorIndex + 1)
-  return Number.isFinite(createdAt) && id ? { createdAt, id } : null
-}
-
-function isOlderThanSearchCursor(
-  message: AgentSessionMessageEntity,
-  cursor: { createdAt: number; id: string }
-): boolean {
-  const createdAt = Date.parse(message.createdAt)
-  return createdAt < cursor.createdAt || (createdAt === cursor.createdAt && message.id < cursor.id)
 }
 
 function createId(prefix: string): string {

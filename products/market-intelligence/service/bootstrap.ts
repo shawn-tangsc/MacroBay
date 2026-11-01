@@ -14,7 +14,9 @@ import { createPlatformWebSocketFactory } from '@platform/network/platformWebSoc
 import type { ModelDefaultsSettings, NetworkSettings } from '@platform/settings/schema/appSettings'
 import { createCrossAssetStore, crossAssetStoragePolicy } from './intelligence/cross-asset/crossAssetStore'
 import { analysisConclusionCutoffIso } from './intelligence/retention/analysisConclusionRetention'
+import { predictionLedgerCutoffIso } from './intelligence/retention/predictionLedgerRetention'
 import { createMarketHistoryRetention, registerMarketHistoryRetentionJob } from './intelligence/retention/marketHistoryRetentionJob'
+import { createNewsSentimentRetentionTarget } from './intelligence/news-sentiment/newsSentimentRetention'
 import { createCrossAssetRuntime } from './intelligence/cross-asset/crossAssetRuntime'
 import { createBinanceCrossAssetClient } from './intelligence/cross-asset/binanceCrossAssetClient'
 import { createBinanceCrossAssetStream } from './intelligence/cross-asset/binanceCrossAssetStream'
@@ -24,13 +26,14 @@ import { createCrossAssetIndexRuntime } from './intelligence/cross-asset/crossAs
 import { crossAssetPolicy } from './intelligence/cross-asset/crossAssetPolicy'
 import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossAssetIpc'
 
-import { getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
+import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
 import { registerDashboardSourceConnectionIpc } from './intelligence/ipc/registerDashboardSourceConnectionIpc'
 import { registerIntelligenceTranslationIpc } from './intelligence/ipc/registerIntelligenceTranslationIpc'
 import { registerMarketAnalysisIpc } from './intelligence/ipc/marketAnalysisIpc'
+import { registerDailyBriefingIpc } from './intelligence/ipc/registerDailyBriefingIpc'
 import type { AnalysisSessionDependencies } from './intelligence/analysis/analysisFollowUpSession'
 import { registerIntelligenceAgentToolHandlers } from './intelligence/agent-capabilities/handlerRegistry'
 import type {
@@ -38,6 +41,13 @@ import type {
   MacroCalendarOps
 } from './intelligence/agent-capabilities/operationFacades'
 import { createMacroCalendarScheduleBackend } from './intelligence/macro-calendar/macroCalendarScheduleBackend'
+import { createPolicyPathQueryService } from './intelligence/policy-path/policyPathQueryService'
+import { registerPolicyPathIpc } from './intelligence/policy-path/ipc/registerPolicyPathIpc'
+import { registerSyncRunIpc } from './intelligence/audit/ipc/registerSyncRunIpc'
+import { readPublishedTargetRange } from './intelligence/policy-path/readPublishedTargetRange'
+import { createSyncAuditStoreIfAvailable } from './intelligence/audit/syncAuditStore'
+import { withSyncAudit } from './intelligence/audit/syncAuditRecorder'
+import { createPolicyPathRuntime } from './intelligence/policy-path/policyPathRuntime'
 import { createMacroEconomicCalendarQueryService } from './intelligence/macro-calendar/macroEconomicCalendarQueryService'
 import { createMacroCalendarScheduleJobRuntime } from './intelligence/macro-calendar/macroCalendarScheduleJobRuntime'
 import { createZeroXRouterCalendarScheduler } from './intelligence/macro-calendar/0xrouter-calendar/zeroXRouterCalendarScheduler'
@@ -46,10 +56,12 @@ import { createBeaOfficialReleaseJobRuntime } from './intelligence/macro-calenda
 import { createMacroCalendarProviderSettingsService } from './intelligence/macro-calendar/macroCalendarProviderSettingsService'
 import { createUnifiedMacroCalendarProfileStore } from './intelligence/macro-calendar/macroCalendarUnifiedProfileStore'
 import { registerMacroEconomicCalendarIpc } from './intelligence/macro-calendar/ipc/registerMacroEconomicCalendarIpc'
+import { createMacroCalendarProviderProfileJsonStorage, createMacroCalendarProviderProfileStore } from './intelligence/macro-calendar/macroCalendarProviderProfileStore'
 import { createMacroCalendarWriteActions } from './intelligence/macro-calendar/macroCalendarWriteActions'
 import { registerMacroMarketIpc, registerDashboardFeedStatusIpc } from './intelligence/macro-market/ipc/registerMacroMarketIpc'
 import { createMacroMarketSnapshotQuery } from './intelligence/macro-market/macroMarketSnapshotQuery'
 import { registerMacroRatesIpc } from './intelligence/macro-rates/ipc/registerMacroRatesIpc'
+import { createMacroHistoryAsOfQuery } from './intelligence/public-query/macroHistoryAsOf'
 import { registerProvenanceIpc } from './intelligence/provenance/registerProvenanceIpc'
 import { createMacroRatesSnapshotQuery } from './intelligence/macro-rates/macroRatesSnapshotQuery'
 import { createDashboardSourceConnectionService } from './intelligence/application/dashboardSourceConnectionService'
@@ -81,6 +93,14 @@ export type ProductBootstrapDependencies = AnalysisSessionDependencies & {
   secretVault?: SecretVault
   platformFetch?: typeof fetch
   getNetworkSettings?: () => Promise<NetworkSettings>
+  createAgentSession?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
+  sendAgentMessage?: (request: import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeRequest) => Promise<import('@platform/ai/agent-platform/runtime/agentChatRuntime').AgentChatRuntimeResult>
+  cancelAgentSession?: (sessionId: string) => Promise<void> | void
+  appendAgentSessionMessages?: (input: import('@platform/ai/agent-platform/schemas/sessionSchemas').CreateAgentSessionMessagesDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionMessageEntity[]>
+  updateAgentSession?: (sessionId: string, patch: import('@platform/ai/agent-platform/schemas/sessionSchemas').UpdateAgentSessionDto) => Promise<import('@platform/ai/agent-platform/schemas/sessionSchemas').AgentSessionEntity>
+  deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+  updateAgent?: (agentId: string, patch: import('@platform/ai/agent-platform/schemas/agentSchemas').UpdateAgentDto) => Promise<import('@platform/ai/agent-platform/schemas/agentSchemas').AgentEntity>
+  isWebSearchProviderReady?: () => Promise<boolean>
 }
 
 export function getBlsApiCompatibilityProbe(): BlsApiCompatibilityProbe | undefined {
@@ -113,6 +133,14 @@ function sampleModeRecorderDirectory(): string | undefined {
   return join(app.getAppPath(), 'products/market-intelligence/demo/raw')
 }
 
+/**
+ * The cached volume as the cache page measures it: the JSON payload the store writes on disk.
+ * One implementation, so inspect, clear and compact cannot disagree about what a byte is.
+ */
+function translationRecordsBytes(records: readonly unknown[]): number {
+  return Buffer.byteLength(JSON.stringify(records), 'utf8')
+}
+
 export function registerServices(deps: ProductBootstrapDependencies): void {
   blsApiCompatibilityHost.initialize(Object.freeze({ platformFetch: deps.platformFetch }))
   /**
@@ -133,12 +161,26 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   const register: ProductIpcRegistrar = sampleMode.wrap(deps.register)
   sampleMode.registerIpc(register)
   let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
+  // A product-owned job arms its own schedule from the switch; the module only forwards the event.
+  const sourceEnableListeners = new Map<string, () => void>()
+  // The module can no longer fall back to the global fetch, so the composition root must hand the
+  // platform adapter over here rather than letting the module work without one.
+  if (!deps.platformFetch) throw new Error('market-intelligence-platform-fetch-required')
+  const platformFetch = deps.platformFetch
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
     getProviderState: deps.getProviderState,
     getAppLanguage: deps.getAppLanguage,
     getModelDefaults: deps.getModelDefaults,
     eventBusRuntime: deps.eventBusRuntime,
-    platformFetch: deps.platformFetch,
+    platformFetch,
+    createAgentSession: deps.createAgentSession,
+    sendAgentMessage: deps.sendAgentMessage,
+    cancelAgentSession: deps.cancelAgentSession,
+    appendAgentSessionMessages: deps.appendAgentSessionMessages,
+    updateAgentSession: deps.updateAgentSession,
+    deleteAgentSessions: deps.deleteAgentSessions,
+    updateAgent: deps.updateAgent,
+    isWebSearchProviderReady: deps.isWebSearchProviderReady,
     // The gold price stream needs the proxy-aware platform socket, and the shell can only build that
     // once network settings are readable — so it is handed over as a thunk, never as a raw WebSocket.
     ...(deps.getNetworkSettings
@@ -151,15 +193,45 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     await intelligenceModule.sourcesService.initializeRuntime()
     await intelligenceModule.marketAnalysisRuntime.startRecovery()
   }
+  // One switch store for both readers: the settings panel writes the unified profile, and the
+  // collector must read that same flag or it reports the provider as disabled behind an enabled UI.
+  // The legacy file stays only as the pre-migration fallback for installations that still hold it.
+  const legacyCalendarProfiles = createMacroCalendarProviderProfileStore(
+    createMacroCalendarProviderProfileJsonStorage(join(getIntelligenceProductDataDir(), 'macro-calendar-provider-profiles.json'))
+  )
+  const calendarProfiles = createUnifiedMacroCalendarProfileStore(intelligenceModule.sourceProfileStore, legacyCalendarProfiles)
   const macroCalendarBackend = createMacroCalendarScheduleBackend({
     dataDir: getIntelligenceProductDataDir(),
     rawRecords: intelligenceModule.rawRecordStore,
     blsScheduleBridge: blsPythonRequestsBridge,
     evidenceArchive: intelligenceModule.macroCalendarEvidenceArchive,
-    evidenceReady: intelligenceModule.macroCalendarEvidenceReady
+    evidenceReady: intelligenceModule.macroCalendarEvidenceReady,
+    profiles: calendarProfiles
   })
   const macroEconomicCalendarQueryService = createMacroEconomicCalendarQueryService({ repository: macroCalendarBackend.repository })
   intelligenceModule.publicQueryService.setMacroEconomicCalendarQuery(macroEconomicCalendarQueryService)
+  const policyPathRuntime = createPolicyPathRuntime({
+    jobRuntime: deps.jobRuntime,
+    repository: macroCalendarBackend.repository,
+    // Never fall back to the global fetch here: it would bypass the platform proxy and the
+    // collector would fail silently on a machine that needs one.
+    fetch: url => deps.platformFetch
+      ? deps.platformFetch(url)
+      : Promise.resolve({ ok: false, status: 0, text: async () => '' }),
+    isEnabled: async () => (await intelligenceModule.sourceProfileStore.resolveProfile('policy-path-market')).enabled
+  })
+  const policyPathQueryService = createPolicyPathQueryService({
+    calendar: macroEconomicCalendarQueryService,
+    facts: macroCalendarBackend.repository.policyFacts,
+    observations: macroCalendarBackend.repository.policyObservations,
+    marketLinks: macroCalendarBackend.repository.policyMarketLinks,
+    // The parsed statement wins when it exists; between meetings the published FRED series is the
+    // only current source of the range.
+    readTargetRange: () => readPublishedTargetRange(intelligenceModule.pipeline.listMetricEvents())
+  })
+  intelligenceModule.setPolicyPathQuery(policyPathQueryService)
+  policyPathRuntime.start()
+  sourceEnableListeners.set('policy-path-market', () => { void policyPathRuntime.sync() })
   const crossAssetConfiguration = createCrossAssetSourceConfiguration({ profileStore: intelligenceModule.crossAssetProfiles })
   let crossAssetStore: ReturnType<typeof createCrossAssetStore> | undefined
   try { crossAssetStore = createCrossAssetStore(join(getIntelligenceProductDataDir(), crossAssetStoragePolicy.fileName)) }
@@ -217,12 +289,19 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       stores: {
         macro: { retention: ({ cutoffs }) => macroStore.retention(cutoffs), note: (key, value) => macroStore.note(key, value) },
         crossAsset: { retention: ({ cutoffs }) => crossAssetStore.retention(cutoffs), note: (key, value) => crossAssetStore.note(key, value) },
-        // The conclusions keep their own window: fourteen days, then the whole graph goes. The bar
-        // cutoffs are ignored rather than reinterpreted — two policies, one clock.
+        // The conclusions keep their own window: fourteen days, then the whole graph goes — except the
+        // verdicts, which keep theirs (a hundred and eighty days) on the same clock. The bar cutoffs are
+        // ignored rather than reinterpreted — several policies, one clock.
         analysis: {
-          retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention(analysisConclusionCutoffIso(atMs)) }),
+          retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention({ conclusionCutoffIso: analysisConclusionCutoffIso(atMs), ledgerCutoffIso: predictionLedgerCutoffIso(atMs) }) }),
           note: (key, value) => analysisRepository.note(key, value)
-        }
+        },
+        // The news store keeps its own two windows (30 days of bodies, 365 of judgments) on this same
+        // clock. It joins this job rather than owning a timer of its own: one daily pass, one startup
+        // look, and a store whose database failed to open is simply absent from the pass.
+        ...(intelligenceModule.newsSentiment.store
+          ? { news: createNewsSentimentRetentionTarget(intelligenceModule.newsSentiment.store) }
+          : {})
       }
     }).run)
   }
@@ -269,7 +348,6 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     refresh: blsEmploymentMvpRefresh,
     now: () => new Date().toISOString()
   })
-  const calendarProfiles = createUnifiedMacroCalendarProfileStore(intelligenceModule.sourceProfileStore, macroCalendarBackend.profiles)
   const macroCalendarJobs = createMacroCalendarScheduleJobRuntime({
     jobRuntime: deps.jobRuntime,
     profiles: calendarProfiles,
@@ -321,6 +399,27 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       return beaOfficialReleaseJobs?.initialize()
     })
     .catch(() => undefined)
+  // Product-side audit lives beside the calendar but in its own file: it must not carry the
+  // calendar's schema version or backup policy.
+  const syncAudit = createSyncAuditStoreIfAvailable(join(getIntelligenceProductDataDir(), 'sync-audit.sqlite'))
+  // Catch-up: the decision refresh otherwise only runs while a release window is open, so a machine
+  // that was asleep on the meeting day would never collect that statement - and the policy card
+  // would keep a dash where the vote belongs.
+  void (async () => {
+    const refresh = macroCalendarBackend.fedFomcRefresh
+    if (!refresh) return
+    const now = new Date().toISOString()
+    const meetingDate = macroCalendarBackend.repository.policyFacts.readLatestMeeting(now)
+    if (!meetingDate) return
+    const decided = macroCalendarBackend.repository.policyFacts.read(meetingDate)
+    // Nothing decided yet, or decided without the meeting before it: the second case is what makes
+    // "hold or move" unreadable, so one refresh fills the prior statement's range.
+    const hasEarlier = macroCalendarBackend.repository.policyFacts.readLatestDecisionBefore(meetingDate) !== undefined
+    if (decided?.targetRange && hasEarlier) return
+    // The manual refresh service wants the event key and an explicit confirmation, not a run id.
+    await refresh.refresh({ eventKey: `US.FOMC.${meetingDate}`, confirmed: true })
+  })().catch(() => undefined)
+
   deps.registerProductDisposer?.(async () => {
     // The gold stream closes first: it must not survive the module whose store it reports against.
     await intelligenceModule.macroMarketLive.dispose()
@@ -334,6 +433,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     macroCalendarJobs.dispose()
     macroCalendarBackend.dispose()
     intelligenceModule.marketAnalysisRuntime.dispose()
+    syncAudit?.close()
   })
   deps.registerProductCache('market-intelligence', {
     cacheId: 'market-intelligence.translation-records',
@@ -372,7 +472,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
           cacheId: 'market-intelligence.translation-records',
           status: records.length > 0 ? 'ready' : 'empty',
           recordCount: records.length,
-          sizeBytes: Buffer.byteLength(JSON.stringify(records), 'utf8'),
+          sizeBytes: translationRecordsBytes(records),
           lastUpdatedAt: Number.isFinite(latestTranslatedAt) ? new Date(latestTranslatedAt).toISOString() : undefined,
           rebuildable: true,
           message: 'Translation display records can be regenerated from product-owned source items.'
@@ -380,7 +480,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
       },
       clear: async ({ dryRun }) => {
         const records = await intelligenceModule.translationService.listRecords()
-        const removedBytes = Buffer.byteLength(JSON.stringify(records), 'utf8')
+        // A clear removes every record, so the volume before the call is exactly what it removed.
+        const removedBytes = translationRecordsBytes(records)
         if (dryRun === true) {
           return {
             cacheId: 'market-intelligence.translation-records',
@@ -404,30 +505,38 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         }
       },
       compact: async ({ dryRun }) => {
+        // A compaction keeps most of the file, so its `removedBytes` is the difference between the
+        // measurements, not the size of the whole record set. The old code reported the latter: it
+        // said 131 KB for a run that dropped 20 records out of hundreds.
         const records = await intelligenceModule.translationService.listRecords()
+        const bytesBefore = translationRecordsBytes(records)
         if (dryRun === true) {
-          const result = await intelligenceModule.translationService.previewCompaction({ retentionMode: 'balanced' })
+          const plan = await intelligenceModule.translationService.previewCompaction({ retentionMode: 'balanced' })
+          // A dry run changes nothing; it reports what the same compaction would free, and the audit
+          // record carries `dryRun`, so a preview is never counted as a removal that happened.
+          const removableBytes = Math.max(0, bytesBefore - translationRecordsBytes(plan.next))
           return {
             cacheId: 'market-intelligence.translation-records',
             operation: 'compact',
             dryRun: true,
-            status: result.removedCount > 0 ? 'skipped' : 'succeeded',
-            removedRecords: result.removedCount,
-            removedBytes: Buffer.byteLength(JSON.stringify(records), 'utf8'),
+            status: plan.removedCount > 0 ? 'skipped' : 'succeeded',
+            removedRecords: plan.removedCount,
+            removedBytes: removableBytes,
             message:
-              result.removedCount > 0
+              plan.removedCount > 0
                 ? 'Dry run only. Translation records would be compacted.'
                 : 'No stale translation records need compaction.'
           }
         }
         const result = await intelligenceModule.translationService.compactDerivedRecords({ retentionMode: 'balanced' })
+        const bytesAfter = translationRecordsBytes(await intelligenceModule.translationService.listRecords())
         return {
           cacheId: 'market-intelligence.translation-records',
           operation: 'compact',
           dryRun: false,
           status: 'succeeded',
           removedRecords: result.removedCount,
-          removedBytes: Buffer.byteLength(JSON.stringify(records), 'utf8'),
+          removedBytes: Math.max(0, bytesBefore - bytesAfter),
           message:
             result.removedCount > 0 ? 'Translation records compaction finished.' : 'No stale translation records needed compaction.'
         }
@@ -435,21 +544,28 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     }
   })
 
-  registerIntelligenceIpc(register, deps.jobRuntime)
-  registerIntelligencePublicQueryIpc(register, deps.jobRuntime)
-  registerIntelligenceSourcesIpc(register, deps.jobRuntime)
+  // Audit the reader's own actions on the IPC seam: one place sees the payload, the duration and
+  // the failure, so no service has to grow a logging dependency for it.
+  const auditedRegister = syncAudit ? withSyncAudit(register, syncAudit) : register
+
+  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule)
+  registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
+  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
-  registerIntelligenceTranslationIpc(register, deps.jobRuntime)
+  registerIntelligenceTranslationIpc(register, deps.jobRuntime, intelligenceModule)
   registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
     // The same two queries the analysis macro route reads, so an event's context matches it.
     queryMacroEconomicCalendarMonth: macroEconomicCalendarQueryService.queryMonth,
     queryMarketCalendarMonth: marketCalendar.queryMonth
   }, {
     ...deps,
+    // 时间线的「哪个开盘」也按设置的读者时区换算。
+    timeZone: () => currentReaderTimeZone(),
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings
   })
+  registerDailyBriefingIpc(register, intelligenceModule.dailyBriefingService, intelligenceModule.dailyBriefingAiSettings)
   // Read-only startup diagnostic. The timeline renders the same empty state for "the
   // table is empty" and "the read failed", so the main process states the count it
   // can actually read. Counts only: no row contents and no credentials.
@@ -465,7 +581,9 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   } catch (error) {
     console.log(JSON.stringify({ marker: 'MI_ANALYSIS_READ_DIAGNOSTIC', state: 'failed', errorCode: error instanceof Error ? error.message : 'unknown' }))
   }
-  registerMacroEconomicCalendarIpc(register, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
+  registerPolicyPathIpc(register, policyPathQueryService)
+  registerSyncRunIpc(register, deps.jobRuntime, undefined, syncAudit)
+  registerMacroEconomicCalendarIpc(auditedRegister, macroCalendarBackend.repository, macroCalendarBackend.manualBlsIcs, macroCalendarProviderSettings, {
     ...macroCalendarBackend,
     releaseTimeOverrides: macroCalendarBackend.releaseTimeOverrides,
     releaseTimeOverrideStore: macroCalendarBackend.releaseTimeOverrideStore
@@ -485,6 +603,13 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // daily closes, so every reading carries its observation date and the `official-daily-close` caveat.
   const macroRatesSnapshot = createMacroRatesSnapshotQuery({ listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents() })
   registerMacroRatesIpc(register, { snapshot: macroRatesSnapshot.snapshot })
+  // The daily brief's backfill tool reads those same two stores as of an earlier instant — the stored
+  // macro-market points for the dollar and gold, and the stored FRED closes for the two 10-year yields.
+  // A projection can only answer from what was already collected; this wiring adds no request.
+  const macroHistoryAsOf = createMacroHistoryAsOfQuery({
+    macroMarket: intelligenceModule.macroMarket.store,
+    listMetricEvents: () => intelligenceModule.pipeline.listMetricEvents()
+  })
   // 口径查询：只读、无依赖（内核是纯函数），agent 侧按需问"这个数从哪来"用。
   registerProvenanceIpc(register)
   // The analysis reads the same two snapshots the panel reads, through the public query service rather
@@ -492,6 +617,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // from the table the reader is looking at.
   intelligenceModule.publicQueryService.setMacroMarketSnapshotQuery({ snapshot: macroMarketSnapshot.snapshot })
   intelligenceModule.publicQueryService.setMacroRatesSnapshotQuery({ snapshot: macroRatesSnapshot.snapshot })
+  intelligenceModule.publicQueryService.setMacroHistoryAsOfQuery(macroHistoryAsOf)
   // Start only now that the socket constructor is bound: a first reconcile before this would fail
   // once and then sit in backoff for a whole profile-check interval.
   void intelligenceModule.macroMarketLive.reconcile().catch(() => undefined)
@@ -565,8 +691,10 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   }
   registerIntelligenceAgentToolHandlers(deps.registerProductAgentToolHandler, {
     jobRuntime: deps.jobRuntime,
+    intelligenceModule,
     getAppLanguage: deps.getAppLanguage,
     macroCalendarOps,
-    crossAssetOps
+    crossAssetOps,
+    policyPath: { read: (input: { asOf: string }) => policyPathQueryService.read(input) }
   })
 }

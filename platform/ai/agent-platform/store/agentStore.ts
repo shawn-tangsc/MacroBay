@@ -28,6 +28,7 @@ import type { ScheduledTaskEntity, TaskRunLogEntity } from '../schemas/taskSchem
 import { DEFAULT_SYSTEM_WORKSPACE_PATH, type AgentWorkspaceEntity } from '../schemas/workspaceSchemas'
 import type { AgentSessionWorkspaceSource, CreateAgentWorkspaceDto, UpdateAgentWorkspaceDto } from '../schemas/workspaceSchemas'
 import type { McpToolsByServerId } from '../tools/agentToolCatalog'
+import { normalizeSessionAllowedTools } from '../tools/sessionAllowedTools'
 import type { AgentProductToolPackageBinding } from '../productTools/productAgentToolSchemas'
 
 export type { AgentProductToolPackageBinding }
@@ -234,6 +235,7 @@ export function createAgentSession(state: AgentStoreState, payload: CreateAgentS
     workspaceId: workspace.id,
     workspace,
     orderKey: createFirstOrderKey(state.sessions),
+    allowedTools: normalizeSessionAllowedTools(payload.allowedTools),
     createdAt: now,
     updatedAt: now
   }

@@ -26,7 +26,7 @@ export type AgentSessionNamingDependencyFactoryOptions = {
   getProviderState: () => Promise<ProviderState>
   getAgentState: () => Promise<AgentStoreState>
   saveAgentState: (state: AgentStoreState) => Promise<void>
-  fetch?: typeof fetch
+  fetch: typeof fetch
 }
 
 export function createAgentSessionNamingControl(

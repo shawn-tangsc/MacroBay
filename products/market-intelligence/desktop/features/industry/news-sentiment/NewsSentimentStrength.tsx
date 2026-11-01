@@ -2,9 +2,9 @@ import type { NewsSentimentText } from './NewsSentimentCard'
 
 export function strengthLabel(text: NewsSentimentText, strength: number): string {
   const levels = text.drawer.detail.strengthLevels
-  if (strength <= 2) return levels?.weak ?? '弱'
-  if (strength >= 4) return levels?.strong ?? '强'
-  return levels?.medium ?? '中'
+  if (strength <= 2) return levels.weak
+  if (strength >= 4) return levels.strong
+  return levels.medium
 }
 
 export function NewsSentimentStrength(props: {

@@ -1,0 +1,163 @@
+/* The shell, position and animation come from MiSideDrawer; this file styles the content only. */
+
+.mi-policy-drawer__chip { font-style: normal;
+  font-size: 9.5px;
+  color: #c8d77a;
+  border: 1px solid #4a552a;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+
+
+/* The same number as the card's lead, so the drawer does not read as a different product. */
+.mi-policy-drawer__hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--mi-border, #22252d);
+}
+.mi-policy-drawer__value { font-size: 40px; font-weight: 650; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__hero-label { font-size: 11.5px; color: var(--mi-text-muted, #8b8d94); }
+.mi-policy-drawer__delta { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__delta[data-direction='up'] { color: #e0524c; }
+.mi-policy-drawer__delta[data-direction='down'] { color: #3fbf6f; }
+.mi-policy-drawer__delta[data-direction='flat'] { color: var(--mi-text-muted, #8b8d94); }
+
+.mi-policy-drawer__section { padding: 16px 0; border-bottom: 1px solid var(--mi-border, #22252d); }
+.mi-policy-drawer__section:last-child { border-bottom: 0; padding-bottom: 4px; }
+.mi-policy-drawer__section h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--mi-text-muted, #8b8d94);
+}
+.mi-policy-drawer__section h3 a {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--mi-text-dim, #6c6f78);
+  text-decoration: none;
+}
+.mi-policy-drawer__section h3 a:hover { color: var(--mi-accent, #b7cf52); }
+
+/* Five columns of "value over year", read as one line: the cells had borders and a fill, which at
+   this width turned into five cramped boxes competing with the numbers. */
+.mi-policy-drawer__path {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  padding: 10px 0 9px;
+  border-top: 1px solid var(--mi-border, #22252d);
+  border-bottom: 1px solid var(--mi-border, #22252d);
+}
+.mi-policy-drawer__path > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0;
+}
+.mi-policy-drawer__path b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.mi-policy-drawer__path span { font-size: 9.5px; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__path > div[data-empty='true'] b { color: var(--mi-text-dim, #6c6f78); }
+
+.mi-policy-drawer__vote { display: flex; align-items: baseline; gap: 8px; }
+.mi-policy-drawer__vote b { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__vote span { font-size: 11px; color: var(--mi-text-muted, #8b8d94); }
+
+.mi-policy-drawer__kv { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.mi-policy-drawer__kv > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed color-mix(in srgb, var(--mi-border, #22252d) 70%, transparent);
+}
+.mi-policy-drawer__kv > div:last-child { border-bottom: 0; }
+.mi-policy-drawer__kv dt { color: var(--mi-text-muted, #8b8d94); font-size: 11px; }
+.mi-policy-drawer__kv dd { margin: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+
+.mi-policy-drawer__note { margin: 12px 0 0; font-size: 10.5px; line-height: 1.7; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__empty {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px dashed var(--mi-border, #22252d);
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--mi-text-muted, #8b8d94);
+}
+
+/* A dash with a reason reads as "not yet", not as "broken". */
+.mi-policy-drawer__muted { color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__muted + .mi-policy-drawer__muted { margin-left: 4px; font-size: 10px; }
+
+/* The settlement lines read as a record, not as a headline: the drawer's job here is the full
+   explanation behind the card's one-line verdict. */
+.mi-policy-drawer__settle { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin: 0 0 2px; font-size: 11.5px; }
+.mi-policy-drawer__settle b { font-size: 13px; font-weight: 600; }
+.mi-policy-drawer__settle span { font-size: 11.5px; color: var(--mi-text-muted, #8b8d94); }
+.mi-policy-drawer__conclusion { font-style: normal; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__conclusion[data-direction='hawkish'] { color: #e0524c; }
+.mi-policy-drawer__conclusion[data-direction='dovish'] { color: #3fbf6f; }
+.mi-policy-drawer__conclusion[data-direction='priced'] { color: var(--mi-text-muted, #8b8d94); }
+
+/* The statement is the evidence for this section; it sits under the conclusion, not in the header. */
+.mi-policy-drawer__source {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--mi-text-dim, #6c6f78);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+.mi-policy-drawer__source:hover { color: var(--mi-accent, #b7cf52); }
+
+
+
+/* One row per bucket, one column per time point - the shape lives in the first cell. */
+.mi-policy-drawer__distribution { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-policy-drawer__distribution thead th {
+  font-size: 9.5px; font-weight: 500; color: var(--mi-text-dim, #6c6f78);
+  text-align: right; padding: 0 0 6px; border-bottom: 1px solid var(--mi-border, #22252d);
+}
+.mi-policy-drawer__distribution thead th:first-child { text-align: left; }
+.mi-policy-drawer__distribution tbody th {
+  display: flex; align-items: center; gap: 8px;
+  font-weight: 400; color: var(--mi-text-muted, #8b8d94); text-align: left;
+  padding: 6px 10px 6px 0; white-space: nowrap;
+}
+.mi-policy-drawer__distribution tbody td {
+  text-align: right; padding: 6px 0 6px 6px; color: var(--mi-text-muted, #8b8d94);
+}
+.mi-policy-drawer__distribution tbody tr[data-leading='true'] th,
+.mi-policy-drawer__distribution tbody tr[data-leading='true'] td:first-of-type { color: var(--mi-text, #e8e9ec); font-weight: 600; }
+.mi-policy-drawer__distribution-bar { display: block; width: 54px; height: 4px; border-radius: 2px; background: #1b1f27; overflow: hidden; flex: none; }
+.mi-policy-drawer__distribution-bar i { display: block; height: 100%; border-radius: 2px; }
+/* Each row keeps its direction's colour; the leading row is brighter, not a different hue - a green
+   bar on a hike reads as a dovish signal, which is the opposite of what the row says. */
+/* Direction colours for the bands the reader was told about; anything at or below the floor is grey,
+   the same grey the card uses for 其他. */
+.mi-policy-drawer__distribution tbody tr[data-named='true'] .mi-policy-drawer__distribution-bar i { background: #e0524c; }
+.mi-policy-drawer__distribution tbody tr[data-named='true'][data-outcome='cut-25'] .mi-policy-drawer__distribution-bar i,
+.mi-policy-drawer__distribution tbody tr[data-named='true'][data-outcome='cut-50-plus'] .mi-policy-drawer__distribution-bar i { background: #3fbf6f; }
+.mi-policy-drawer__distribution tbody tr[data-named='true'][data-outcome='no-change'] .mi-policy-drawer__distribution-bar i { background: #d9a441; }
+.mi-policy-drawer__distribution tbody tr[data-named='false'] .mi-policy-drawer__distribution-bar i { background: #3b4048; }
+.mi-policy-drawer__distribution tbody tr:not([data-leading='true']) .mi-policy-drawer__distribution-bar i { opacity: .65; }
+.mi-policy-drawer__distribution tbody tr[data-leading='true'] .mi-policy-drawer__distribution-bar { width: 62px; height: 6px; }
+
+/* Two series, one prefix: the section heading stays a single line on a 488px drawer. */
+.mi-policy-drawer__source-links { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: var(--mi-text-dim, #6c6f78); }
+.mi-policy-drawer__source-links a { display: inline-flex; align-items: center; gap: 3px; color: var(--mi-text-muted, #8b8d94); text-decoration: none; }
+.mi-policy-drawer__source-links a:hover { color: var(--mi-accent, #b7cf52); }

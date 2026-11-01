@@ -95,7 +95,18 @@ export const crossAssetContractPolicy = Object.freeze({
   leaseMethods: Object.freeze([crossAssetMethods.renew, crossAssetMethods.release, crossAssetMethods.refresh])
 })
 export type CrossAssetRange = typeof crossAssetContractPolicy.ranges[number]
-export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string }
+/**
+ * Which version of a historical window answers it: `as-of` is what was known at that instant, `latest`
+ * is what is known now.
+ *
+ * The store is bitemporal (bar instant plus `observed_at`), and `as-of` is the default because a
+ * historical chart honestly reproduces "what the reader saw then". That same rule also hides every bar
+ * ingested after the instant — a late poll, or a whole window backfilled after a restart — which is
+ * wrong for a derived reading of a past window: the calendar card's ±30-minute reaction asks what the
+ * market did, not what this machine had already downloaded at minute +35. Such readers ask for `latest`.
+ */
+export type CrossAssetKnowledge = 'as-of' | 'latest'
+export type CrossAssetQueryInput = { range: CrossAssetRange; asOf?: string; knowledge?: CrossAssetKnowledge }
 export type CrossAssetInput = Record<string, never> | { leaseId: string } | CrossAssetQueryInput
 export type CrossAssetId = typeof crossAssetContractPolicy.assets[number]
 export type CrossAssetMacroProxyId = typeof crossAssetContractPolicy.macroProxies[number]
@@ -178,14 +189,19 @@ export function parseCrossAssetInput(method: string, value: unknown, nowMs: numb
       return keys.length === 1 && typeof value.leaseId === 'string' && value.leaseId.length <= policy.leaseIdMaxLength &&
         policy.leaseIdPattern.test(value.leaseId) ? { leaseId: value.leaseId } : undefined
     }
-    if (method !== crossAssetMethods.query || !keys.includes('range') || keys.some(key => key !== 'range' && key !== 'asOf') ||
+    if (method !== crossAssetMethods.query || !keys.includes('range') ||
+      keys.some(key => key !== 'range' && key !== 'asOf' && key !== 'knowledge') ||
       !policy.ranges.includes(value.range as CrossAssetRange)) return
     const range = value.range as CrossAssetRange
-    if (!Object.hasOwn(value, 'asOf')) return { range }
+    const knowledge = value.knowledge
+    if (knowledge !== undefined && knowledge !== 'as-of' && knowledge !== 'latest') return
+    // A version rule only means something next to a window end; without `asOf` the query is current and
+    // already reads the newest version of everything.
+    if (!Object.hasOwn(value, 'asOf')) return knowledge === undefined ? { range } : undefined
     const asOf = value.asOf
     if (typeof asOf !== 'string' || !policy.canonicalUtcPattern.test(asOf) || !Number.isFinite(Date.parse(asOf)) ||
       new Date(asOf).toISOString() !== asOf || Date.parse(asOf) > nowMs) return
-    return { range, asOf }
+    return knowledge === undefined ? { range, asOf } : { range, asOf, knowledge }
   } catch { return }
 }
 
@@ -258,11 +274,11 @@ function reading(value: unknown, range: string): value is CrossAssetReading {
 }
 
 /**
- * 曲线网格步长（毫秒）：窗口的 5 分钟网格 ÷ 该窗口曲线上的点数（7d 2017/169 → 每小时，30d 8641/181 → 每 4 小时）。
+ * 曲线网格步长（毫秒）：窗口的 5 分钟网格 ÷ 该窗口曲线上的点数（7d 2017/169 → 每小时）。
  *
- * 这是网格规则的**唯一**推导处：契约校验、服务侧画宏观线、渲染侧算步长都读它。评审发现服务侧仍在用
- * `range === '7d' ? hour : 5min` 的三元，于是 30d 的宏观线落在 5 分钟网格上、被契约自己拒收——整包快照
- * 因此非法（界面上就是「行情暂不可用」）。
+ * 这是网格规则的**唯一**推导处：契约校验、服务侧画宏观线、渲染侧算步长都读它。曾经服务侧自己写
+ * `range === '7d' ? hour : 5min` 的三元，于是长窗口的宏观线落在 5 分钟网格上、被契约自己拒收——整包
+ * 快照因此非法（界面上就是「行情暂不可用」）。
  */
 export function crossAssetCurveStrideMs(range: CrossAssetRange): number {
   return crossAssetContractPolicy.intervalMs *

@@ -95,11 +95,14 @@ export function NewsSentimentDrawer(props: {
   useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
     let cancelled = false
+    // Drop the previous article before the next read: a stale body under a new heading reads as
+    // "this row says that", and a failed read must not leave it in place either.
+    setDetail(undefined)
     setDetailFailed(false)
     void props.client
       .getItem({ itemId: activeId, asOf: view.asOf })
       .then((next) => {
-        if (!cancelled) setDetail(next)
+        if (!cancelled && next?.itemId === activeId) setDetail(next)
       })
       .catch(() => {
         if (!cancelled) setDetailFailed(true)
@@ -131,7 +134,9 @@ export function NewsSentimentDrawer(props: {
             onChange={(value: NewsSentimentWindow) => props.onWindowChange(value)}
             options={[
               ...NEWS_SENTIMENT_WINDOWS.map((window) => ({ value: window, label: window })),
-              { value: 'all', label: text.drawer.filters.all }
+              // The widest window is not "all history": the query returns at most 100 rows, and the
+              // label has to say so or the reader believes the list is complete.
+              { value: 'all', label: text.windowAll }
             ]}
             popupMatchSelectWidth={false}
             size="small"
@@ -275,7 +280,7 @@ export function NewsSentimentDrawer(props: {
                   </span>
                   {translationEnabled && rowState === 'waiting' ? (
                     <span className="mi-news-drawer__row-waiting" title={text.drawer.translationStatus?.waitingHint}>
-                      {text.drawer.translationStatus?.waiting ?? 'waiting'}
+                      {text.drawer.translationStatus?.waiting}
                     </span>
                   ) : null}
                   {translationEnabled && rowState === 'translating' ? (
@@ -283,7 +288,7 @@ export function NewsSentimentDrawer(props: {
                       <LoadingSpinner size="sm" />
                     </span>
                   ) : null}
-                  {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed ?? 'failed'}</span> : null}
+                  {translationEnabled && rowState === 'failed' ? <span className="mi-news-drawer__row-failed">{text.drawer.translationStatus?.failed}</span> : null}
                   <small className="mi-news-drawer__source">{row.sourceName}</small>
                   <span className="mi-news-drawer__symbols">
                     {row.symbols.map((symbol) => <i key={symbol}>{symbol}</i>)}

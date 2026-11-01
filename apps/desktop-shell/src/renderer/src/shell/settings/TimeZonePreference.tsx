@@ -54,6 +54,8 @@ export function TimeZonePreference(props: {
         filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
         onChange={props.onChange}
       />
+      {/* 常驻说明：开盘时刻跟这项设置走。与上面的「读不到系统时区」提示条件不同，这条始终显示。 */}
+      <p className="preference-hint">{t.timeZoneOpenTimesHint}</p>
       {systemTimeZone === fallbackTimeZone && props.value === systemTimeZoneSetting ? (
         <p className="preference-hint">{t.timeZoneUnavailable}</p>
       ) : null}

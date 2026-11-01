@@ -3,9 +3,14 @@ import type { AgentSessionRuntimeTurnPhase } from '@platform/ai/agent-platform/r
 import type { AgentText } from './agentTextTypes'
 import type { AgentRuntimeActivityCard } from './agentRuntimeActivityViewModel'
 
+/** After this long without a first chunk, "connecting" becomes an explicit wait. */
+export const AGENT_STILL_WAITING_THRESHOLD_MS = 90_000
+
 export type AgentRuntimePhaseTextInput = {
   phase: AgentSessionRuntimeTurnPhase | null | undefined
   cards: readonly AgentRuntimeActivityCard[]
+  /** Wall-clock time since the pending assistant message was created. */
+  elapsedMs?: number
   text: AgentText['runtimeText']
 }
 
@@ -15,14 +20,18 @@ export type AgentRuntimePhaseTextInput = {
  * keeps claiming it is connecting while the model is thinking, calling tools, or waiting.
  */
 export function resolveAgentRuntimePhaseText(input: AgentRuntimePhaseTextInput): string | null {
-  const { phase, cards, text } = input
+  const { phase, cards, elapsedMs, text } = input
   if (!phase || phase === 'idle' || phase === 'queued' || phase === 'resolving-context') {
     return null
   }
   if (phase === 'pausing' || phase === 'finishing') return null
-  // `opening-stream` still covers SDK startup and provider preflight, so the original
-  // "connecting" copy is the truthful one until the first runtime chunk arrives.
-  if (phase === 'opening-stream') return null
+  // `opening-stream` still covers SDK startup and provider preflight. Before the threshold the
+  // original "connecting" copy is the truthful one; past it the wait is long enough to name.
+  if (phase === 'opening-stream') {
+    return elapsedMs !== undefined && elapsedMs >= AGENT_STILL_WAITING_THRESHOLD_MS
+      ? text.stillWaiting
+      : null
+  }
 
   if (cards.some((card) => card.kind === 'reasoning' && card.status === 'running')) {
     return text.thinking

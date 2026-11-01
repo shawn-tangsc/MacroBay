@@ -50,15 +50,31 @@ import {
 } from './queryContracts'
 import { queryFearGreedSnapshot } from './fearGreedSnapshotQuery'
 import { queryFundingRateHistoryAsync } from './fundingRateHistoryQuery'
+import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
+import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
+import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
+import { createOpenInterestSignalQuery, type ModuleSignalProducer } from '../signals/moduleSignalQuery'
+import { isCanonicalSignalTime, type ModuleSignal } from '../../../contracts/moduleSignal'
+import { createPriceLegReader } from '../divergence/priceLegReading'
+import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
+import type { NewsSentimentQuery } from '../schema/newsSentiment'
 import type { FundingRateHistoryStore } from '../store/fundingRateHistoryStore'
+import type { PerpetualPositioningStore } from '../store/perpetualPositioningStore'
 import { impactMatchesScope, itemMatchesScope, normalizeQueryScope, type ResolvedQueryScope } from './queryScopeResolver'
 import { buildQueryResultHash } from './resultHash'
 import { buildSourceCoverageAsOf, summarizeSourceCoverage } from './sourceCoverageAsOf'
 import type { createCapitalConditionsSnapshotQueryService } from '../capital-conditions/capitalConditionsSnapshotQuery'
 import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEconomicCalendarQueryService'
+import type {
+  MacroHistoryAsOfQuery,
+  MacroHistoryAsOfRequest,
+  MacroHistoryAsOfResult
+} from './macroHistoryAsOf'
 import type { MacroMarketSnapshot } from '../macro-market/macroMarketSnapshotQuery'
 import type { MacroRatesSnapshot } from '../macro-rates/macroRatesSnapshotQuery'
 import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendarQueryContracts'
+import type { PolicyPathContextRead } from '../policy-path/policyPathQueryService'
 
 export type MarketIntelligencePublicQueryService = {
   querySentimentSnapshot: (
@@ -81,6 +97,17 @@ export type MarketIntelligencePublicQueryService = {
   ) => Promise<MarketIntelligenceQueryResult<EvidenceExcerptResult>>
   queryFearGreedSnapshot: (input: FearGreedSnapshotQueryInput) => Promise<FearGreedSnapshotResult>
   queryFundingRateHistory: (input: FundingRateHistoryQueryInput) => Promise<FundingRateHistoryResult>
+  queryOpenInterestHistory: (input: { asOf: string; window: unknown }) => Promise<OpenInterestHistoryResult>
+  queryMarketDivergence: (input: { asOf: string }) => Promise<MarketDivergenceResult>
+  /**
+   * The module rules' signals at one instant, for the chips the dashboard reads.
+   *
+   * A list, not a tree: a leg that can answer adds itself here when its wiring lands, so the page
+   * reads one shape whether one rule or four can speak today.
+   */
+  queryModuleSignals: (input: { asOf: string }) => Promise<readonly ModuleSignal[]>
+  /** Late-bound for the same reason the other readers are: the leg's store is built in bootstrap. */
+  addModuleSignalProducer: (producer: ModuleSignalProducer) => void
   queryCapitalConditionsSnapshot: (input: CapitalConditionsSnapshotQueryInput) => Promise<CapitalConditionsSnapshotResult>
   queryMacroEconomicCalendarMonth: (input: { month: string; asOf: string; maxEvents?: number }) => Promise<MacroEconomicCalendarMonthResult>
   setMacroEconomicCalendarQuery: (query: Pick<MacroEconomicCalendarQuery, 'queryMonth'> | undefined) => void
@@ -95,6 +122,8 @@ export type MarketIntelligencePublicQueryService = {
    */
   queryCrossAssetSnapshot: (input: { range: CrossAssetRange; asOf: string }) => Promise<CrossAssetSnapshot | undefined>
   setCrossAssetQuery: (query: Pick<CrossAssetQuery, 'query'> | undefined) => void
+  /** The scored-headline reader the news page and the analysis already share. */
+  setNewsSentimentQuery: (query: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined) => void
   /**
    * The macro snapshot the 市场状态 block reads: the dollar row (licensed `dxy-real`, or the labelled
    * `dxy-synthetic` fallback) and gold's stored level with its window returns.
@@ -112,6 +141,24 @@ export type MarketIntelligencePublicQueryService = {
    */
   queryMacroRatesSnapshot: () => MacroRatesSnapshot | undefined
   setMacroRatesSnapshotQuery: (query: Pick<MacroRatesSnapshotQuery, 'snapshot'> | undefined) => void
+  /**
+   * The dollar, gold and the two 10-year yields as they stood at an instant: the one historical read
+   * of those series, and the reader the daily brief's backfill tool is built on.
+   *
+   * Late-bound and synchronous for the same reasons as the two snapshots above. `undefined` means no
+   * historical reader is wired in this build — a caller has to report that as unavailable, never as
+   * an empty store and never by substituting the current snapshot.
+   */
+  queryMacroHistoryAsOf: (input: MacroHistoryAsOfRequest) => MacroHistoryAsOfResult | undefined
+  setMacroHistoryAsOfQuery: (query: Pick<MacroHistoryAsOfQuery, 'read'> | undefined) => void
+  /**
+   * The policy path the analysis reads: the next FOMC meeting, the market's odds for it, the target
+   * range, the latest SEP and the last vote. Late-bound like the rate blocks because the policy
+   * query is created in bootstrap; the implementation also checks the source switch, so a disabled
+   * source answers `disabled` rather than handing the analysis stale odds.
+   */
+  queryPolicyPath: (input: { asOf: string }) => Promise<PolicyPathContextRead>
+  setPolicyPathQuery: (query: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined) => void
 }
 
 type MacroEconomicCalendarQuery = {
@@ -139,6 +186,7 @@ export type CreateMarketIntelligencePublicQueryServiceInput = {
   listSourceDefinitions?: () => IntelligenceSourceDefinition[]
   capitalConditionsQuery?: ReturnType<typeof createCapitalConditionsSnapshotQueryService>
   fundingRateHistoryStore?: Pick<FundingRateHistoryStore, 'read'>
+  perpetualPositioningStore?: Pick<PerpetualPositioningStore, 'read'>
   macroEconomicCalendarQuery?: Pick<MacroEconomicCalendarQuery, 'queryMonth'>
   marketCalendarQuery?: Pick<MarketCalendarQuery, 'queryMonth'>
 }
@@ -150,10 +198,13 @@ export function createMarketIntelligencePublicQueryService(
   let macroEconomicCalendarQuery = input.macroEconomicCalendarQuery
   let marketCalendarQuery = input.marketCalendarQuery
   let crossAssetQuery: CrossAssetQuery | undefined
+  let newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined
   let macroMarketSnapshotQuery: MacroMarketSnapshotQuery | undefined
   let macroRatesSnapshotQuery: MacroRatesSnapshotQuery | undefined
+  let macroHistoryAsOfQuery: Pick<MacroHistoryAsOfQuery, 'read'> | undefined
+  let policyPathContextQuery: { read: (input: { asOf: string }) => Promise<PolicyPathContextRead> } | undefined
 
-  return {
+  const service = {
     querySentimentSnapshot: (queryInput) =>
       executeQuery({
         queryType: MARKET_INTELLIGENCE_QUERY_TYPES.sentimentSnapshot,
@@ -267,6 +318,9 @@ export function createMarketIntelligencePublicQueryService(
     queryFundingRateHistory: async (queryInput) => input.fundingRateHistoryStore
       ? queryFundingRateHistoryAsync({ ...queryInput, store: input.fundingRateHistoryStore })
       : { state: 'unavailable', failureCode: 'funding-rate-history-query-unavailable' },
+    queryOpenInterestHistory: async (queryInput) => input.perpetualPositioningStore
+      ? queryOpenInterestHistoryAsync({ ...queryInput, store: input.perpetualPositioningStore })
+      : openInterestUnavailable(),
     queryCapitalConditionsSnapshot: async (queryInput) => input.capitalConditionsQuery?.query(queryInput) ?? ({
       state: 'unavailable', failureCode: 'capital-conditions-query-unavailable'
     }),
@@ -294,6 +348,9 @@ export function createMarketIntelligencePublicQueryService(
     setCrossAssetQuery(query) {
       crossAssetQuery = query
     },
+    setNewsSentimentQuery(query) {
+      newsSentimentQuery = query
+    },
     // Fail closed to `undefined` exactly like the cross-asset read: an unwired or throwing snapshot
     // must leave the domain unavailable, never empty — "no data" and "no answer" are different facts.
     queryMacroMarketSnapshot() {
@@ -315,6 +372,96 @@ export function createMarketIntelligencePublicQueryService(
     },
     setMacroRatesSnapshotQuery(query) {
       macroRatesSnapshotQuery = query
+    },
+    // Fail closed to `undefined` like the two snapshots: an unwired reader is "no historical answer
+    // exists in this build", which the caller reports as a gap rather than as a stored zero.
+    queryMacroHistoryAsOf(input) {
+      try {
+        return macroHistoryAsOfQuery?.read(input)
+      } catch {
+        return undefined
+      }
+    },
+    setMacroHistoryAsOfQuery(query) {
+      macroHistoryAsOfQuery = query
+    },
+    async queryPolicyPath(input) {
+      if (!policyPathContextQuery) return { state: 'unavailable' as const }
+      try {
+        return await policyPathContextQuery.read(input)
+      } catch {
+        return { state: 'unavailable' as const }
+      }
+    },
+    setPolicyPathQuery(query) {
+      policyPathContextQuery = query
+    }
+  } as MarketIntelligencePublicQueryService
+
+  // The legs that can answer a signal today. The ETF leg joins this list when its own wiring lands —
+  // as a producer that answers, never as a placeholder that returns nothing.
+  const moduleSignalProducers: ModuleSignalProducer[] = [
+    createOpenInterestSignalQuery({ readHistory: input => service.queryOpenInterestHistory(input) })
+  ]
+  service.addModuleSignalProducer = (producer) => { moduleSignalProducers.push(producer) }
+  service.queryModuleSignals = async (queryInput) => {
+    if (!isCanonicalSignalTime(queryInput?.asOf)) return []
+    // One leg that throws must not take the others down: each producer answers for itself, and a
+    // failed read is already reported as an `unavailable` signal by the leg that owns it.
+    const perProducer = await Promise.all(moduleSignalProducers.map(async (producer) => {
+      try {
+        return await producer.query({ asOf: queryInput.asOf })
+      } catch (error) {
+        console.error('[signals] producer threw:', error instanceof Error ? `${error.name}: ${error.message}` : String(error))
+        return []
+      }
+    }))
+    return perProducer.flat()
+  }
+
+  // Reads the service's own legs rather than reaching into stores again: one implementation of
+  // "what the dashboard already knows", and the divergence rule never sees a second view of it.
+  service.queryMarketDivergence = async (queryInput) => queryMarketDivergenceAsync({
+    asOf: queryInput.asOf,
+    read: divergenceReader(service, queryInput.asOf, newsSentimentQuery)
+  })
+  return service
+}
+
+function divergenceReader(service: MarketIntelligencePublicQueryService, asOf: string, newsSentimentQuery: { query: (input: NewsSentimentQuery) => Promise<NewsSentimentView> } | undefined): DivergenceLegReader {
+  const readPriceLeg = createPriceLegReader(input => service.queryCrossAssetSnapshot(input))
+  return {
+    stablecoin: async () => {
+      const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
+      return snapshot.state === 'available'
+        ? { change7dPercent: snapshot.coreStablecoins.change7dPercent, observedAt: snapshot.coreStablecoins.observedAt }
+        : undefined
+    },
+    etf: async () => {
+      const snapshot = await service.queryCapitalConditionsSnapshot({ asOf })
+      if (snapshot.state !== 'available' || snapshot.etf === undefined || !('btc' in snapshot.etf)) return undefined
+      return { rows: snapshot.etf.btc.rows }
+    },
+    openInterest: async () => {
+      const result = await service.queryOpenInterestHistory({ asOf, window: '24h' })
+      const latest = result.state === 'available' ? result.btc.at(-1) : undefined
+      const change = result.state === 'available' ? result.change?.btc.h24Pct : undefined
+      return latest && change !== undefined ? { change24hPct: change, observedAt: latest.observedAt } : undefined
+    },
+    funding: async () => {
+      const result = await service.queryFundingRateHistory({ asOf })
+      const latest = result.state === 'available' ? result.btc.at(-1) : undefined
+      return latest ? { ratePercent: latest.ratePercent, observedAt: latest.observedAt } : undefined
+    },
+    // Anchored on the newest close the store can answer, not on the instant the card was opened:
+    // the bar closing exactly at `floor(asOf)` is not written yet for the first seconds after every
+    // five-minute boundary, and that made the card say "no price" while the price card showed one.
+    price: () => readPriceLeg(asOf),
+    sentiment: async () => {
+      // An unwired reader is a fault, not a quiet day: the card must say it could not read.
+      if (!newsSentimentQuery) return { state: 'unavailable' }
+      const view = await newsSentimentQuery.query({ asOf, window: '24h', scope: 'market', direction: 'all', limit: 100 })
+      return readSentimentLeg(view)
     }
   }
 }

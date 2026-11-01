@@ -68,6 +68,22 @@ export function createEconomicCalendarMonthQuery(month: string, asOf: string): {
   return { month, asOf }
 }
 
+/** True for a canonical `YYYY-MM` month the calendar queries accept. */
+export function isEconomicCalendarMonth(value: string): boolean {
+  return economicCalendarPresentationPolicy.monthPattern.test(value)
+}
+
+/**
+ * The month a clock instant belongs to, for the page the reader keeps open.
+ *
+ * One owner for "which month is current": the initial query, the month-follow effect and
+ * the "back to this month" button all read it, so a month boundary moves them together.
+ * The month is the query/storage month (UTC), not the display zone's month.
+ */
+export function economicCalendarCurrentMonth(instant: string): string {
+  return instant.slice(0, 7)
+}
+
 export function shiftEconomicCalendarMonth(month: string, offset: -1 | 1): string {
   const bounds = monthBounds(month)
   if (!bounds) return month
@@ -95,6 +111,28 @@ export function createEconomicCalendarProjection(input: {
   const byDate = new Map<string, EconomicCalendarEventView[]>()
   for (const event of events) byDate.set(event.scheduledDate, [...(byDate.get(event.scheduledDate) ?? []), event])
   return { month: input.month, asOf: input.asOf, events, days: monthGrid(bounds.start, input.month, byDate) }
+}
+
+/**
+ * The months one month's grid actually draws.
+ *
+ * The grid is six fixed weeks, so its first and last rows can hold days of the months on either
+ * side. Reading exactly these months is what lets a cell show its own day instead of a blank that
+ * means "outside the month we asked for". Chronological order, the given month always included.
+ */
+export function economicCalendarGridMonths(month: string): readonly string[] {
+  const bounds = monthBounds(month)
+  if (!bounds) return []
+  const start = new Date(`${bounds.start}T00:00:00.000Z`)
+  start.setUTCDate(start.getUTCDate() - start.getUTCDay())
+  const months: string[] = []
+  for (let index = 0; index < economicCalendarPresentationPolicy.calendarWeeks * economicCalendarPresentationPolicy.weekdaysPerWeek; index += 1) {
+    const date = new Date(start)
+    date.setUTCDate(start.getUTCDate() + index)
+    const key = date.toISOString().slice(0, 7)
+    if (!months.includes(key)) months.push(key)
+  }
+  return months
 }
 
 export function economicCalendarEventCategory(eventFamily: string): EconomicCalendarCategory | undefined {

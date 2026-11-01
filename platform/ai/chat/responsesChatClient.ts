@@ -58,7 +58,7 @@ export async function requestResponsesChatCompletion(input: ResponsesChatRequest
   let executedToolCalls = 0
 
   while (true) {
-    const response = await (input.fetch ?? fetch)(buildResponsesUrl(input.baseUrl), {
+    const response = await input.fetch(buildResponsesUrl(input.baseUrl), {
       method: 'POST',
       headers: {
         authorization: `Bearer ${input.apiKey}`,

@@ -2,8 +2,9 @@ import { createHash, randomUUID } from 'node:crypto'
 
 import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
-import type { ChannelDeliveryAttemptView, ChannelDeliverySource, ChannelDeliveryStatus, ChannelDeliveryAuditView } from './ChannelDeliveryContracts'
+import type { ChannelDeliveryAttemptView, ChannelDeliverySource, ChannelDeliverySkipReason, ChannelDeliveryStatus, ChannelDeliveryAuditView } from './ChannelDeliveryContracts'
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
+import { taskResultOutcomes, taskResultSourceId } from './taskResultSourceId'
 
 const SUPPORTED_CHANNEL_C_SQL = supportedChannelSql('c')
 
@@ -197,7 +198,7 @@ export class ChannelDeliveryRepository {
       input.executionClaim?.workItemId ?? null, input.executionClaim?.workItemId ?? '', input.executionClaim?.receiptId ?? '', input.executionClaim?.dispatchId ?? '', input.executionClaim?.leaseToken ?? '', input.executionClaim?.leaseExpiresAt ?? '', input.now.toISOString(), input.executionClaim?.generation ?? -1)))
   }
 
-  finishSkipped(attempt: DeliveryAttempt, code: string, now: Date): boolean {
+  finishSkipped(attempt: DeliveryAttempt, code: ChannelDeliverySkipReason, now: Date): boolean {
     return this.database.transact(() => {
       const changed = this.database.connection.prepare(
         `update channel_delivery_attempts set status = 'skipped', stable_error_code = ?, updated_at = ?, completed_at = ?
@@ -231,6 +232,20 @@ export class ChannelDeliveryRepository {
 
   hasEnabledTarget(channelId: string, agentId: string): boolean {
     return this.listEnabledTargets(channelId, agentId).length > 0
+  }
+
+  /**
+   * Whether any delivery target exists for this channel, enabled or not. Without this, "never
+   * bound" and "bound but disabled" collapse into one skip reason and one of the two users is
+   * told to do the wrong thing.
+   */
+  hasAnyTarget(channelId: string, agentId: string): boolean {
+    const row = this.database.connection.prepare(
+      `select 1 as present from channel_delivery_targets t
+       join agent_channels c on c.id = t.channel_id
+       where t.channel_id = ? and c.agent_id = ? limit 1`
+    ).get(channelId, agentId) as { present?: number } | undefined
+    return row?.present === 1
   }
 
   listAttempts(input: { channelId: string; agentId: string; limit?: number; offset?: number }): { attempts: ChannelDeliveryAttemptView[]; total: number } {
@@ -317,6 +332,6 @@ function deliveryBackoffMs(attemptCount: number): number {
   return [5_000, 30_000, 120_000, 600_000, 1_800_000][Math.max(0, Math.min(attemptCount - 1, 4))] ?? 1_800_000
 }
 function hash(value: string): string { return createHash('sha256').update(value).digest('base64url') }
-function taskHashes(runLogId: string): [string, string, string] { return ['completed', 'failed', 'cancelled'].map((status) => hash(`${runLogId}:${status}`)) as [string, string, string] }
+function taskHashes(runLogId: string): [string, string, string] { return taskResultOutcomes.map((outcome) => hash(taskResultSourceId(runLogId, outcome))) as [string, string, string] }
 function mapAttempt(row: AttemptRow): DeliveryAttempt { return { id: row.id, channelId: row.channel_id, agentId: row.agent_id, conversationId: row.conversation_id, source: row.source_type, sourceHash: row.source_hash, idempotencyKey: row.idempotency_key, status: row.status } }
 function mapView(row: AttemptViewRow): ChannelDeliveryAttemptView { return { id: row.id, channelId: row.channel_id, agentId: row.agent_id, conversationId: row.conversation_id, source: row.source_type, status: row.status, errorCode: row.stable_error_code, createdAt: row.created_at, updatedAt: row.updated_at, completedAt: row.completed_at } }

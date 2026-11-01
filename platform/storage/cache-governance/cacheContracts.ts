@@ -25,13 +25,20 @@ export type CacheDurability = (typeof CACHE_DURABILITIES)[number]
 export const CACHE_SENSITIVITIES = ['none', 'contains-user-content', 'contains-secret-ref'] as const
 export type CacheSensitivity = (typeof CACHE_SENSITIVITIES)[number]
 
-export const CACHE_BACKUP_POLICIES = ['exclude', 'include', 'metadata-only'] as const
+/**
+ * 备份执行器落地前只允许 `exclude`。
+ *
+ * `include` / `metadata-only` 是预留值：没有执行者时登记它们，界面就会展示一个不存在的保障。
+ * 加回来时必须与「备份执行器真的按它执行」在同一个提交里（2026-11-01 契约裁定，见 `MI-11-R16`）。
+ */
+export const CACHE_BACKUP_POLICIES = ['exclude'] as const
 export type CacheBackupPolicy = (typeof CACHE_BACKUP_POLICIES)[number]
 
 export const CACHE_INSPECTION_STATUSES = ['ready', 'empty', 'active', 'inspection_failed'] as const
 export type CacheInspectionStatus = (typeof CACHE_INSPECTION_STATUSES)[number]
 
-export const CACHE_OPERATION_TYPES = ['clear', 'compact', 'invalidate'] as const
+/** `invalidate` 已删除：没有任何生产者能写出它，服务与 IPC 只有 clear / compact（2026-11-01 契约裁定）。 */
+export const CACHE_OPERATION_TYPES = ['clear', 'compact'] as const
 export type CacheOperationType = (typeof CACHE_OPERATION_TYPES)[number]
 
 export const CACHE_OPERATION_STATUSES = ['succeeded', 'failed', 'skipped'] as const
@@ -55,12 +62,6 @@ export type CacheLocalizedText = {
   'en-US'?: string
 }
 
-export type CacheRetentionPolicy = {
-  ttlMs?: number
-  maxBytes?: number
-  maxRecords?: number
-}
-
 export type CacheRegistration = {
   cacheId: string
   ownerType: CacheOwnerType
@@ -76,7 +77,6 @@ export type CacheRegistration = {
   clearable: boolean
   compactable: boolean
   backupPolicy: CacheBackupPolicy
-  retentionPolicy?: CacheRetentionPolicy
   warnings?: string[]
   warningsI18n?: CacheLocalizedText[]
 }
@@ -103,6 +103,14 @@ export type CacheOperationResult = {
   operation: CacheOperationType
   dryRun: boolean
   status: CacheOperationStatus
+  /**
+   * 只入审计留证、无界面消费：审计列表与详情确实在读记录，但不渲染这一列。
+   *
+   * 它是**记录 JSON 的体积差**，不是「文件将缩小 X 字节」——SQLite 删行不缩文件，两个数不相等。
+   *
+   * 将来若要展示，只能写「记录体积将减少 X」；「可释放 / 回收空间」这类措辞一律禁止，
+   * 除非同批伴随 `VACUUM`（当前不做）。
+   */
   removedBytes?: number
   removedRecords?: number
   normalizedErrorCode?: CacheErrorCode
@@ -129,6 +137,14 @@ export type CacheOperationAuditRecord = {
   requestedAt: string
   completedAt?: string
   status: CacheOperationStatus
+  /**
+   * 只入审计留证、无界面消费：审计列表与详情确实在读记录，但不渲染这一列。
+   *
+   * 它是**记录 JSON 的体积差**，不是「文件将缩小 X 字节」——SQLite 删行不缩文件，两个数不相等。
+   *
+   * 将来若要展示，只能写「记录体积将减少 X」；「可释放 / 回收空间」这类措辞一律禁止，
+   * 除非同批伴随 `VACUUM`（当前不做）。
+   */
   removedBytes?: number
   removedRecords?: number
   normalizedErrorCode?: CacheErrorCode
@@ -163,7 +179,6 @@ export type SafeCacheView = {
   clearable: boolean
   compactable: boolean
   backupPolicy: CacheBackupPolicy
-  retentionPolicy?: CacheRetentionPolicy
   warnings: string[]
   warningsI18n?: CacheLocalizedText[]
   latestInspection?: CacheInspection
@@ -226,7 +241,6 @@ export function toSafeCacheView(
     clearable: registration.clearable,
     compactable: registration.compactable,
     backupPolicy: registration.backupPolicy,
-    retentionPolicy: registration.retentionPolicy,
     warnings: registration.warnings ?? [],
     warningsI18n: registration.warningsI18n,
     latestInspection: input?.latestInspection,

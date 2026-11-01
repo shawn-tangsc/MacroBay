@@ -1,11 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, safeStorage, session, shell, type IpcMainInvokeEvent, type OpenDialogOptions, type Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
-import { open, readFile, stat, writeFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { release } from 'node:os'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import type { AgentChatRuntimeRequest } from '../../ai/agent-platform/runtime/agentChatRuntime'
+import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/agent-platform/runtime/agentChatRuntime'
 import { AgentSessionRuntimeService } from '../../ai/agent-platform/runtime/AgentSessionRuntimeService'
 import { createAgentRuntimeConsoleTraceRecorder } from '../../ai/agent-platform/runtime/AgentRuntimeOpenTelemetryTraceRecorder'
 import { AgentRuntimeCompositionService } from '../../ai/agent-platform/runtime/AgentRuntimeCompositionService'
@@ -23,6 +23,7 @@ import {
   ChannelInboundExecutionRunner,
   ChannelInboundRepository,
   ChannelInboundService,
+  createChannelInboundContentGuard,
   ChannelDeliveryMaintenance,
   ChannelDeliveryRepository,
   ChannelDeliveryService,
@@ -72,13 +73,14 @@ import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
+import { registerAssistantSessionRetentionJob } from '../../ai/assistant-platform/retention/registerAssistantSessionRetentionJob'
+import { createRetentionRepository } from '../../ai/assistant-platform/repositories/retentionRepository'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createAssistantChatRuntimeService } from '../../ai/assistant-platform/runtime/AssistantChatRuntimeService'
 import { createWebSearchCredentialStore } from '../../ai/web-search/runtime/WebSearchCredentialStore'
 import { createWebSearchService } from '../../ai/web-search/runtime/WebSearchService'
 import { AssistantTemplateRegistry } from '../../ai/assistant-platform/library/AssistantTemplateRegistry'
 import { AssistantLibraryService } from '../../ai/assistant-platform/library/AssistantLibraryService'
-import { AssistantProgrammaticInvocationService } from '../../ai/assistant-platform/invocation/AssistantProgrammaticInvocationService'
 import { platformAssistantTemplates } from '../../ai/assistant-platform/library/platformAssistantTemplates'
 import { createAssistantTemplateRegistrationsFromManifests } from '../../ai/assistant-platform/library/assistantTemplateManifestAdapter'
 import { AssistantTopicNamingService } from '../../ai/assistant-platform/naming/AssistantTopicNamingService'
@@ -105,6 +107,11 @@ import { buildAgentSkillsRuntimeCatalog } from '../../ai/agent-platform/skills/s
 import { ToolRegistry } from '../../ai/agent-platform/tools'
 import type { ModelDefinition, ModelProviderInput, ProviderState, SafeModelProvider } from '../../ai/providers/modelProviderTypes'
 import { probeProviderProxyTarget, testModelProviderConnection } from '../../ai/providers/providerConnection'
+import { createInUseModelPatrolRuntime } from '../../ai/providers/inUseModelPatrolRuntime'
+import {
+  registerInUseModelPatrolHandler,
+  syncInUseModelPatrolSchedule
+} from '../../ai/providers/registerInUseModelPatrolJob'
 import { isEndpointProbeKind, probeProviderEndpoint } from '../../ai/providers/providerEndpointProbe'
 import { generateProviderImages, validateImageGenerationInput } from '../../ai/providers/providerImageGeneration'
 import {
@@ -124,6 +131,7 @@ import {
 import { createProviderStore } from '../../ai/providers/providerStore'
 import { createProviderSqliteStorage } from '../../ai/providers/storage/providerSqliteStorage'
 import { createElectronSecretVault } from '../../secrets'
+import { readTextFilePreview } from '../../files/attachments/textFilePreview'
 import { summarizeProductManifests, type ProductManifest } from '../../product-manifest'
 import {
   createPlatformAgentSeed,
@@ -132,7 +140,8 @@ import {
   type BuiltinSeedLanguageVariant
 } from '../../ai/agent-platform/seeds'
 import type { ProductAgentSeedFactory } from '../../ai/agent-platform/seeds/mergeAgentSeeds'
-import type { AgentSessionEntity, CreateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
+import type { AgentSessionEntity, AgentSessionMessageEntity, CreateAgentSessionDto, CreateAgentSessionMessagesDto, UpdateAgentSessionDto } from '../../ai/agent-platform/schemas/sessionSchemas'
+import type { AgentEntity, UpdateAgentDto } from '../../ai/agent-platform/schemas/agentSchemas'
 import type { ProductAgentToolHandlerRegistration } from '../../ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 import {
   ProductAgentToolRegistry,
@@ -149,10 +158,15 @@ import type { AppLanguage, AppSettingsPatch, ModelDefaultsSettings, NetworkSetti
 import { createDefaultAppSettings, supportedLanguages } from '../../settings/schema/appSettings'
 import { createSettingsStore } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
+import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
+import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy, probeDirectEgress } from '../../network/proxySelfTest'
+import { createShellTimeZoneProvider } from './shellTimeZone'
+import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
+import { createProductIpcInvoker } from './productIpcInvoker'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
@@ -164,6 +178,8 @@ import { createAppTray } from '../tray/appTray'
 import { createMainWindow, loadMainWindowRenderer } from '../window/createMainWindow'
 import { wireRendererProcessDiagnostics } from '../window/rendererProcessDiagnostics'
 import { createRendererProcessLog } from '../window/rendererProcessLog'
+import { createAppLog } from '../../observability/logging/appLog'
+import { redactText } from '../../secrets/redaction/redactText'
 import { composePanelWorkspace } from './workspace/composePanelWorkspace'
 import { createDetachedWindowFactory } from './workspace/panelDetachedWindowFactory'
 import { createPanelDetachedWindowHost } from './workspace/panelDetachedWindowHost'
@@ -280,6 +296,8 @@ mkdirSync(platformDataDirectory, { recursive: true })
 const settingsStore = createSettingsStore(
   createJsonFileStorage(join(app.getPath('userData'), 'platform', 'settings.json'), createDefaultAppSettings())
 )
+/** 主进程唯一的「读者时区」来源；任务排期、免打扰、日报调度、分析展示都从这里取。 */
+const shellTimeZone = createShellTimeZoneProvider({ settings: settingsStore })
 const providerSecretVault = createElectronSecretVault({
   directory: join(app.getPath('userData'), 'platform', 'secrets'),
   safeStorage
@@ -290,21 +308,17 @@ const providerStore = createProviderStore(
   createProviderSqliteStorage({ path: join(app.getPath('userData'), 'platform', 'model-providers.sqlite') }),
   providerSecretVault
 )
-const rendererProcessLog = createRendererProcessLog(
-  join(app.getPath('userData'), 'platform', 'logs', 'renderer-lifecycle.ndjson')
-)
+/** 唯一的日志落盘口：主进程与渲染层诊断共用 `userData/logs/app.log`，写入前统一脱敏。 */
+const appLog = createAppLog({
+  directory: join(app.getPath('userData'), 'logs'),
+  redact: (text) => redactText(text).text
+})
+appLog.log('info', 'app.start', { version: app.getVersion(), platform: process.platform })
+const rendererProcessLog = createRendererProcessLog(appLog)
 
-/** 运行时 IANA 时区（设置项 `system` 的解析输入）；解析不出时由调用方回落到 `fallbackTimeZone`。 */
-function systemTimeZoneSource(): { timeZone: string } {
-  return { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-}
-
-function taskIpcScheduleValidationOptions(): { now: Date; defaultTimezone: string } {
-  return {
-    now: new Date(),
-    defaultTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  }
-}
+const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions({
+  timeZone: () => shellTimeZone.get()
+})
 
 // Channel management re-validates every field at its own contract boundary, so the
 // IPC layer only proves that the payload is a plain object before handing it over.
@@ -416,6 +430,27 @@ const agentStore = createAgentSqliteStoreWithOptions(
     legacyStateLoader: () => legacyAgentStorage.read()
   }
 )
+
+const inUseModelPatrol = createInUseModelPatrolRuntime({
+    listProviders: async () => (await providerStore.getState()).providers,
+    loadAgentModelIds: async () => {
+      const state = await agentStore.getState()
+      return state.agents.flatMap((agent) =>
+        [agent.model, agent.planModel, agent.smallModel].filter(
+          (id): id is string => typeof id === 'string' && id.length > 0
+        )
+      )
+    },
+    configuredDefaultModelIds: async () =>
+      Object.values((await settingsStore.get()).modelDefaults).filter(
+        (value) => typeof value === 'string' && value.trim().length > 0
+      ),
+    testConnection: async (providerId, modelId) => {
+      const provider = await providerStore.resolveRuntimeProvider(providerId)
+      if (!provider) return null
+      return testModelProviderConnection(provider, { modelId, fetch: getPlatformFetch() })
+    }
+})
 const agentServices = createAgentPlatformServices(agentStore, {
   taskAutomation: {
     getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset,
@@ -426,7 +461,9 @@ const agentServices = createAgentPlatformServices(agentStore, {
         }
       })
     },
-    hasEnabledDeliveryTarget: (channelId, agentId) => channelDeliveryRepository.hasEnabledTarget(channelId, agentId)
+    hasEnabledDeliveryTarget: (channelId, agentId) => channelDeliveryRepository.hasEnabledTarget(channelId, agentId),
+    // 任务排期与「下次运行」都跟设置时区走；改时区当场生效，不等重启。
+    timeZone: () => shellTimeZone.get()
   },
   queries: {
     agents: {
@@ -439,7 +476,9 @@ const agentServices = createAgentPlatformServices(agentStore, {
       findByPath: agentRepositories.workspaces.findByPath
     },
     sessions: agentRepositories.sessions,
-    messages: agentRepositories.messages,
+    messages: {
+      listByCursor: agentRepositories.messages.listByCursor
+    },
     tasks: {
       get: agentRepositories.tasks.get,
       list: agentRepositories.tasks.list,
@@ -495,7 +534,6 @@ const skillService = createSkillService({
   }
 })
 const skillSearchService = createSkillSearchService()
-const TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024
 const agentSystemWorkspacesRoot = join(app.getPath('userData'), 'platform', 'agents', 'workspaces')
 const runtimeDriverRegistry = new RuntimeDriverRegistry()
 const toolApprovalRegistry = new ToolApprovalRegistry()
@@ -578,6 +616,23 @@ let quitDisposeSettled = false
 /** 退出清理挂起本轮退出的上界：清理再慢也绝不让进程永远退不出去（有界逃逸）。 */
 const QUIT_DISPOSE_BUDGET_MS = 15_000
 let jobRuntimeForDisposal: JobRuntime | null = null
+
+/** 供应商的启用/凭据/增删都会改变「有没有可探目标」，调度要跟着走。 */
+function syncInUseModelPatrolScheduleFromState(): void {
+  if (!jobRuntimeForDisposal) return
+  const runtime = jobRuntimeForDisposal
+  void syncInUseModelPatrolSchedule(runtime, {
+    isReady: async () => {
+      const providers = (await providerStore.getState()).providers
+      return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
+    }
+  })
+}
+/**
+ * 退出清理开始后 product IPC 只回答结构化 unavailable（见 `productIpcInvoker`）。
+ * 这里持有同一实例，保证「清理已开始」先于任何产品 DB 关闭被登记。
+ */
+let productIpcRegistryForDisposal: ReturnType<typeof createProductIpcRegistry> | null = null
 /** workspace 组合体：只在产品注册 seal 之后建立，用于退出时的有界布局 flush。 */
 let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null
 let disposeTaskAutomationMaintenance: (() => void) | null = null
@@ -603,6 +658,8 @@ async function flushPanelWorkspaceLayoutForExit(): Promise<void> {
 async function disposePlatformRuntimes(): Promise<void> {
   if (platformRuntimesDisposed) return
   platformRuntimesDisposed = true
+  // 先关产品 IPC 入口，再拆产品服务/DB：退出期迟到的 renderer 调用不应再触碰已关闭的连接。
+  productIpcRegistryForDisposal?.markClosed()
   await flushPanelWorkspaceLayoutForExit()
   disposeTaskAutomationMaintenance?.()
   disposeTaskAutomationMaintenance = null
@@ -709,6 +766,10 @@ channelInboundService = new ChannelInboundService({
     discardUnbound: async (sessionId) => { await agentServices.sessions.delete(sessionId) },
     exists: async (sessionId) => Boolean(await agentServices.sessions.get(sessionId))
   },
+  // Untrusted external text is wrapped and narrowly screened before it is encrypted and stored.
+  contentGuard: createChannelInboundContentGuard({
+    channelTypeForChannel: (channelId) => channelManagementRepository.channelType(channelId)
+  }),
   onInitialClaimAvailable: (dispatchId) => channelInboundExecutionRunner.onInitialClaim(channelInboundService, dispatchId)
 })
 const telegramRuntimeManager = new TelegramRuntimeManager({
@@ -836,6 +897,7 @@ const taskAutomationMaintenance = createTaskAutomationMaintenance({
 const agentTaskDispatchService = new AgentTaskDispatchService({
   services: agentServices,
   runtime: agentRuntimeService,
+  timeZone: () => shellTimeZone.get(),
   getJobBridge: () => agentTaskJobBridge,
   readHeartbeat: readHeartbeatFileFromWorkspace,
   deliverTaskResult: deliverTaskResultToChannels.deliver,
@@ -935,6 +997,22 @@ const claudeCodeRuntimeDependencies = createClaudeCodeRuntimeDriverDependencies(
   systemWorkspaceRoot: agentSystemWorkspacesRoot
 })
 let agentTaskRunController: ReturnType<typeof createAgentTaskRunController> | null = null
+const isAgentWebSearchProviderReady = async (): Promise<boolean> => {
+  const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
+  const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
+  const fetch = providers.find((provider) => provider.id === settings.defaultFetchProviderId)
+  return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
+}
+const platformAgentWebSearchBridge = {
+  search: async (request: Readonly<{ query: string; maxResults?: number }>, options?: Readonly<{ signal?: AbortSignal }>) => {
+    const response = await webSearchService.searchKeywords(
+      { keywords: [request.query] },
+      { ...(options?.signal ? { signal: options.signal } : {}), consumer: { kind: 'agent' } }
+    )
+    return request.maxResults ? { ...response, results: response.results.slice(0, request.maxResults) } : response
+  },
+  isReady: isAgentWebSearchProviderReady
+}
 const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
   loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
   getProviderState: providerStore.getState,
@@ -946,6 +1024,7 @@ const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
     }
     await replaceAgentState(state)
   },
+  platformWebSearchBridge: platformAgentWebSearchBridge,
   productAgentToolBridge: {
     registry: productAgentToolRegistry,
     runtime: productAgentToolRuntimeService,
@@ -969,6 +1048,7 @@ const claudeCodeRuntimeDriver = new ClaudeCodeRuntimeDriver({
   prewarmSession: (input) => claudeAgentSdkRuntime.prewarmSession(input),
   executeTurn: createClaudeSdkPreferredExecutor({
     sdkRuntime: claudeAgentSdkRuntime,
+    platformWebSearchBridge: platformAgentWebSearchBridge,
     loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
     getProviderState: providerStore.getState,
     getAgentState: () => agentStore.getState(),
@@ -1138,13 +1218,6 @@ const assistantLibraryService = new AssistantLibraryService({
   registry: assistantTemplateRegistry,
   repos: assistantRepositories
 })
-const assistantInvocationService = new AssistantProgrammaticInvocationService({
-  library: assistantLibraryService,
-  repos: assistantRepositories,
-  runtime: assistantChatRuntime,
-  getProviderState: providerStore.getState,
-  getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId
-})
 const assistantIpcHandlers = createAssistantIpcHandlers(
   assistantRepositories,
   assistantChatRuntime,
@@ -1255,6 +1328,8 @@ export type DesktopAppBootstrapOptions = {
     /** 模型服务页「默认模型」投影；产品只读，不能写回设置。 */
     getModelDefaults: () => Promise<ModelDefaultsSettings>
     getNetworkSettings: () => Promise<NetworkSettings>
+    /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
+    getTimeZone?: () => string
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
@@ -1262,12 +1337,18 @@ export type DesktopAppBootstrapOptions = {
     registerProductDisposer: ReturnType<typeof createProductServiceDisposerRegistry>['register']
     getAgentState?: () => Promise<AgentStoreState>
     createAgentSession?: (input: CreateAgentSessionDto) => Promise<AgentSessionEntity>
+    sendAgentMessage?: (request: AgentChatRuntimeRequest) => Promise<AgentChatRuntimeResult>
+    cancelAgentSession?: (sessionId: string) => Promise<void> | void
+    appendAgentSessionMessages?: (input: CreateAgentSessionMessagesDto) => Promise<AgentSessionMessageEntity[]>
+    updateAgentSession?: (sessionId: string, patch: UpdateAgentSessionDto) => Promise<AgentSessionEntity>
+    deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
+    updateAgent?: (agentId: string, patch: UpdateAgentDto) => Promise<AgentEntity>
+    isWebSearchProviderReady?: () => Promise<boolean>
     invokeProductAgentTool?: (
       state: AgentStoreState,
       input: ProductAgentToolInvokeInput
     ) => Promise<ProductAgentToolInvokeResult>
     invokeProductIpc?: (productId: string, method: string, payload?: unknown) => Promise<unknown>
-    assistantInvocation?: AssistantProgrammaticInvocationService
   }) => void | Promise<void>
 }
 
@@ -1483,12 +1564,16 @@ function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.settingsGet, () => settingsStore.get())
   ipcMain.handle(IpcChannels.settingsUpdate, async (_event: IpcMainInvokeEvent, patch: AppSettingsPatch) => {
+    // 非法代理地址必须在这里就被拒：校验先于落盘，settings.json 一个字都不写。
+    assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)
     const next = await settingsStore.update(patch)
     if (patch.language) {
       await ensureDefaultAssistantSeed()
       // 内置 Agent/会话文案按 id 重新解析到新语言；用户改过的字段不动，也不写任何迁移标记。
       await refreshBuiltinSeedCopy(next.language)
     }
+    // 时区改动必须立刻影响后续排期/日界，不必等重启。
+    await shellTimeZone.refresh()
     await applySessionProxySettings(next.network)
     // PLAT-32/S1：偏好的**唯一对账点** = 这条显式通知（受控读取不再带副作用；通知自身绝不 reject）
     void panelWorkspaceForDisposal?.notifyPreferencesChanged()
@@ -1584,16 +1669,19 @@ function registerIpcHandlers(
     // 保存 Key / 改地址后，旧的逐模型运行证据必须作废，否则会出现
     // "同一供应商有的模型说缺少 API Key、有的正常"（旧快照没失效）。
     await agentRuntimeProbeSnapshotStore.invalidateProvider(provider.id).catch(() => undefined)
+    syncInUseModelPatrolScheduleFromState()
     return result
   })
   ipcMain.handle(IpcChannels.modelProvidersRemove, async (_event: IpcMainInvokeEvent, providerId: string) => {
     const result = await providerStore.remove(providerId)
     invalidateAgentModelCompatibilityCache(providerId)
+    syncInUseModelPatrolScheduleFromState()
     return result
   })
   ipcMain.handle(IpcChannels.modelProvidersSetEnabled, (_event: IpcMainInvokeEvent, providerId: string, enabled: boolean) =>
     providerStore.setEnabled(providerId, enabled).then((result) => {
       invalidateAgentModelCompatibilityCache(providerId)
+      syncInUseModelPatrolScheduleFromState()
       return result
     })
   )
@@ -1629,7 +1717,27 @@ function registerIpcHandlers(
     ) => {
       // PLAT-61 代理自检（同一通道、additive 参数）：无鉴权 GET，用 Electron net.fetch 走当前 session 代理。
       if (typeof options?.proxyProbeUrl === 'string' && options.proxyProbeUrl.trim()) {
-        return probeProviderProxyTarget(options.proxyProbeUrl.trim(), getPlatformFetch())
+        const targetUrl = options.proxyProbeUrl.trim()
+        // 证据链三项：网络栈的真实解析结果、代理端点可达性、经代理请求的状态码与耗时。
+        // 不看用户输入：用户填了代理不代表这次真的走了代理。
+        const resolvedProxy = await session.defaultSession.resolveProxy(targetUrl)
+        const route = parseResolvedProxy(resolvedProxy)
+        // 对照探针与其它两项并行：它只回答「本机能不能出一个 TCP 连接」，不跟随代理。
+        const [endpointReachable, directProbeReachable] = await Promise.all([
+          route.endpoint ? isProxyEndpointReachable(route.endpoint) : Promise.resolve(null),
+          probeDirectEgress()
+        ])
+        const probe = await probeProviderProxyTarget(targetUrl, getPlatformFetch())
+        return {
+          ...probe,
+          resolvedProxy,
+          proxied: !route.direct,
+          endpointReachable,
+          proxyEndpoint: route.endpoint ? `${route.endpoint.host}:${route.endpoint.port}` : null,
+          proxyEndpointLoopback: route.endpoint ? isLoopbackProxyEndpoint(`${route.endpoint.host}:${route.endpoint.port}`) : null,
+          directProbeReachable,
+          directProbeEndpoint: DIRECT_PROBE_ENDPOINTS.map((endpoint) => `${endpoint.host}:${endpoint.port}`).join(',')
+        }
       }
       // PLAT-63：端点测试只接受已知端点类型 + http(s) 地址；校验先于任何网络请求。
       if (options?.endpointTest !== undefined) {
@@ -1779,6 +1887,7 @@ function registerIpcHandlers(
       runtimeId: 'claude-code' | 'openai-agents' = 'claude-code'
     ) => providerRuntimeCheckService.getReport(providerId, modelId, runtimeId)
   )
+  ipcMain.handle(IpcChannels.modelProvidersGetInUseRetired, () => inUseModelPatrol.getRetired())
   /**
    * PLAT-61 诊断可用性：模型同步失败**不再 throw**（原始 IPC Error 会带着
    * `Error invoking remote method '<channel>'` 泄漏到 UI）。改为结构化结果：
@@ -2225,50 +2334,25 @@ function registerIpcHandlers(
   )
 
   configureNotificationRuntime({
-    getSettings: async () => (await settingsStore.get()).notifications
+    getSettings: async () => (await settingsStore.get()).notifications,
+    // 免打扰窗口按设置的读者时区判断，不按运行机器；同一提供者随设置保存刷新。
+    clock: { now: () => new Date(), timeZone: () => shellTimeZone.get() }
   })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
 
   // 产品 IPC 统一入口：renderer 通过 preload.products.invoke 调用
+  // 退出/重启期 DB 已关闭时返回结构化 `platform-unavailable`，不把 DB 异常变成 handler rejection。
+  const invokeProductIpc = createProductIpcInvoker({
+    registry: productIpcRegistry,
+    isRuntimeClosed: () => platformRuntimesDisposed
+  })
   ipcMain.handle(
     IpcChannels.productIpcInvoke,
     (_event: IpcMainInvokeEvent, productId: string, method: string, payload?: unknown) =>
-      productIpcRegistry.invoke(productId, method, payload)
+      invokeProductIpc(productId, method, payload)
   )
-}
-
-async function readTextFilePreview(path: string): Promise<{ path: string; text: string; truncated: boolean }> {
-  const trimmedPath = path.trim()
-  if (!trimmedPath) throw new Error('File path is required.')
-
-  const info = await stat(trimmedPath)
-  if (!info.isFile()) throw new Error('Only files can be attached.')
-
-  const bytesToRead = Math.min(info.size, TEXT_FILE_READ_LIMIT_BYTES)
-  const buffer = Buffer.alloc(bytesToRead)
-  const file = await open(trimmedPath, 'r')
-  try {
-    await file.read(buffer, 0, bytesToRead, 0)
-    if (isLikelyBinary(buffer)) throw new Error('Binary files are not supported in text attachments yet.')
-  } finally {
-    await file.close()
-  }
-
-  return {
-    path: trimmedPath,
-    text: buffer.toString('utf8'),
-    truncated: info.size > TEXT_FILE_READ_LIMIT_BYTES
-  }
-}
-
-function isLikelyBinary(buffer: Buffer): boolean {
-  const sampleSize = Math.min(buffer.length, 1024)
-  for (let index = 0; index < sampleSize; index++) {
-    if (buffer[index] === 0) return true
-  }
-  return false
 }
 
 async function readHeartbeatFileFromWorkspace(workspacePath: string): Promise<string | null> {
@@ -2355,9 +2439,11 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     safeSendToMainWindow(getMainWindow, IpcChannels.productIpcEvent, { productId, event, data })
   })
   const productIpcRegistry = createProductIpcRegistry()
+  productIpcRegistryForDisposal = productIpcRegistry
   const jobRuntime = createJobRuntime({ store: jobRunStore })
   jobRuntimeForDisposal = jobRuntime
   jobRuntime.recover()
+  registerAssistantSessionRetentionJob(jobRuntime, { repo: createRetentionRepository(assistantDatabase) })
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
   const jobScheduleQueryService = createJobScheduleQueryService({ runtime: jobRuntime })
   agentTaskJobBridge = createAgentTaskJobBridge({ jobRuntime })
@@ -2411,6 +2497,9 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   })
 
   await app.whenReady()
+  appLog.log('info', 'app.ready')
+  // 提供者默认拿运行时系统时区；显式设置的时区要在任何消费者构造之前解析一次。
+  await shellTimeZone.refresh()
   // T1：`app-image://` 只读协议只在这里 handle 一次；scheme 已在模块加载时注册为特权 scheme。
   registerGeneratedImageProtocol(generatedImagesDirectory)
 
@@ -2480,7 +2569,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       getLanguage: async () => (await settingsStore.get()).language,
       getTheme: () => readWorkspaceContextTheme(settingsStore, nativeTheme), // P1-06h N3：与 shell 同源（settings.themeMode），只有 system 才回退 OS
       // 显示时区与 shell 同源（settings.timeZone），只有 system 才回退运行时 IANA 时区
-      getTimeZone: () => readWorkspaceContextTimeZone(settingsStore, systemTimeZoneSource())
+      // 运行时 IANA 时区只在 shellTimeZone 提供者内部读取；这里只取它解析好的结果
+      getTimeZone: () => readWorkspaceContextTimeZone(settingsStore, { timeZone: shellTimeZone.get() })
     }
   })
   // 宿主事件/原生关闭/外部销毁的接收方现在才存在：接线后所有宿主回调都回流到 compose
@@ -2491,7 +2581,10 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   mainWindow = await createMainWindow()
   wireWindowEvents(mainWindow)
   tray = createAppTray(getMainWindow)
-  await applySessionProxySettings((await settingsStore.get()).network)
+  await applySessionProxySettings((await settingsStore.get()).network, {
+    // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
+    onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
+  })
 
   try {
     if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({
@@ -2508,6 +2601,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
         const settings = await settingsStore.get()
         return settings.network
       },
+      // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
+      getTimeZone: () => shellTimeZone.get(),
       platformFetch: getPlatformFetch(),
       secretVault: providerSecretVault,
       registerProductAgentToolHandler,
@@ -2515,9 +2610,15 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       registerProductDisposer: productServiceDisposerRegistry.register,
       getAgentState: () => agentStore.getState(),
       createAgentSession: (input) => agentServices.sessions.create(input),
+      sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
+      cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
+      appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
+      updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
+      deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
+      updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
+      isWebSearchProviderReady: isAgentWebSearchProviderReady,
       invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
       invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
-      assistantInvocation: assistantInvocationService
     })
     const productIpcMethods = productIpcRegistry.seal(expectedProductIpcMethods(productManifests))
     if (productAcceptanceProfile.enabled) {
@@ -2596,6 +2697,13 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   taskAutomationMaintenance.recoverAfterRestart()
   disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
   disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)
+  registerInUseModelPatrolHandler(jobRuntime, { patrol: inUseModelPatrol })
+  await syncInUseModelPatrolSchedule(jobRuntime, {
+    isReady: async () => {
+      const providers = (await providerStore.getState()).providers
+      return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
+    }
+  })
   disposeChannelDeliveryMaintenance = channelDeliveryMaintenance.start()
   disposeChannelInboundRecovery = channelInboundExecutionRunner.startRecovery()
   disposeTelegramRuntimeMaintenance = telegramRuntimeMaintenance.start()

@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 import { guardProductToolOutput } from './sensitiveDataGuard'
 
@@ -43,8 +43,8 @@ export type AgentChangeLog = ReturnType<typeof createAgentChangeLog>
  */
 export function createAgentChangeLog(filePath: string) {
   mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
-  database.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const database = openSqliteDatabase(filePath)
+  database.exec('pragma synchronous = full;')
   database.exec(`
     create table if not exists intelligence_agent_change_log (
       id text primary key,

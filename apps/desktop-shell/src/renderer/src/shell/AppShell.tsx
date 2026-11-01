@@ -46,9 +46,10 @@ import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDe
 import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
+import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
-  formatProxySelfTestLine,
+  describeProxySelfTest,
   type ProxySelfTestResult
 } from './proxySelfTestDisplay'
 import {
@@ -239,19 +240,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [appInfo, setAppInfo] = useState<AppInfo | null>(null)
   const [products, setProducts] = useState<ProductSummary[]>([])
   const [providers, setProviders] = useState<SafeModelProvider[]>([])
-  // PLAT-75：在用模型巡检（启动 + 每天一次；只探默认聊天模型与智能体绑定模型，最多 3 个）。
-  const inUseRetiredModels = useInUseModelPatrol({
-    providers,
-    configuredDefaultModelIds: Object.values(settings.modelDefaults).filter((value) => value.trim().length > 0),
-    loadAgentModelIds: async () => {
-      const state = await window.platform.agents.getState() as {
-        agents?: Array<{ model?: string; planModel?: string; smallModel?: string }>
-      }
-      return (state.agents ?? []).flatMap((agent) =>
-        [agent.model, agent.planModel, agent.smallModel].filter((id): id is string => typeof id === 'string' && id.length > 0)
-      )
-    }
-  })
+  // PLAT-75：巡检已挪到主进程的每日任务；界面只读它的全局结论。
+  const inUseRetiredModels = useInUseModelPatrol()
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null)
   const [providerDraft, setProviderDraft] = useState<ProviderDraft>(createEmptyProviderDraft)
   const [apiKeyDraft, setApiKeyDraft] = useState('')
@@ -285,6 +275,14 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
+  // 结果行的文案、语气、第二行同时算出来：渲染层只照着 tone 上样式，不另算成败。
+  const proxySelfTestView =
+    proxySelfTest.result === null
+      ? null
+      : describeProxySelfTest(proxySelfTest.result, t, {
+          expectsProxy: settings.network.proxyMode === 'custom',
+          fallbackProxyLabel: resolveProxyDisplayLabel()
+        })
   const selectedProvider = useMemo(
     () => providers.find((provider) => provider.id === selectedProviderId) ?? null,
     [providers, selectedProviderId]
@@ -474,6 +472,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   useLayoutEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     // P1-06i（A）：主窗属性组逐字不变（仍由 toThemeAttributes 决定），只是写入动作与面板窗共用同一函数。
+    // 如实说明：这里写出的 `data-accent` 目前**没有任何样式消费者**（样式表零命中、组件库主题硬编码 lime），
+    // 改值不会改变外观；按 2026-11-01 用户裁决先保留写入与存储、不给设置入口，等真正接通再露出来。
     const applyTheme = (): void => {
       try {
         applyRootThemeAttributes(toThemeAttributes(settings.themeMode, settings.accentColor, media.matches))
@@ -572,8 +572,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       const nextSettings = (await window.platform.settings.update(patch)) as AppSettings
       setSettings(nextSettings)
       setNotice(t.status.saved)
-    } catch {
-      setNotice(t.status.failed)
+    } catch (error) {
+      setNotice(proxyRejectionNotice(error, t.preferences) ?? t.status.failed)
     }
   }
 
@@ -866,7 +866,14 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           status: typeof result?.status === 'number' ? result.status : null,
           durationMs: typeof result?.durationMs === 'number' ? result.durationMs : 0,
           reasonCode: typeof result?.reasonCode === 'string' ? result.reasonCode : null,
-          targetHost: typeof result?.targetHost === 'string' ? result.targetHost : resolveProviderHost(target)
+          targetHost: typeof result?.targetHost === 'string' ? result.targetHost : resolveProviderHost(target),
+          resolvedProxy: typeof result?.resolvedProxy === 'string' ? result.resolvedProxy : undefined,
+          proxied: typeof result?.proxied === 'boolean' ? result.proxied : undefined,
+          endpointReachable: typeof result?.endpointReachable === 'boolean' ? result.endpointReachable : null,
+          proxyEndpoint: typeof result?.proxyEndpoint === 'string' ? result.proxyEndpoint : null,
+          proxyEndpointLoopback: typeof result?.proxyEndpointLoopback === 'boolean' ? result.proxyEndpointLoopback : null,
+          directProbeReachable: typeof result?.directProbeReachable === 'boolean' ? result.directProbeReachable : null,
+          directProbeEndpoint: typeof result?.directProbeEndpoint === 'string' ? result.directProbeEndpoint : null
         }
       })
     } catch {
@@ -1411,11 +1418,18 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
               onClick={() => void runProxySelfTest()}>
               {proxySelfTest.running ? t.preferences.proxySelfTestRunning : t.preferences.proxySelfTest}
             </Button>
-            {proxySelfTest.result !== null ? (
+            {proxySelfTestView !== null ? (
               <p
-                className={proxySelfTest.result.ok ? 'preference-proxy-probe-result ok' : 'preference-proxy-probe-result failed'}
-                data-proxy-self-test-result>
-                {formatProxySelfTestLine(proxySelfTest.result, resolveProxyDisplayLabel(), t.preferences)}
+                className={`preference-proxy-probe-result ${proxySelfTestView.tone}`}
+                data-proxy-self-test-result
+                data-tone={proxySelfTestView.tone}>
+                {proxySelfTestView.line}
+                {proxySelfTestView.hint !== null ? (
+                  <>
+                    <br />
+                    <span className="preference-proxy-probe-hint">{proxySelfTestView.hint}</span>
+                  </>
+                ) : null}
               </p>
             ) : null}
           </div>
@@ -1434,6 +1448,11 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                   }
                   onBlur={(event) => void updateNetworkSettings({ proxyUrl: event.target.value.trim() })}
                 />
+                {proxyAddressUsesImplicitSocks5(settings.network.proxyUrl) ? (
+                  <p className="preference-hint" data-proxy-implicit-protocol>
+                    {t.preferences.proxySocks5Implicit}
+                  </p>
+                ) : null}
               </label>
               <label className="preference-field">
                 <span>{t.preferences.proxyBypassRules}</span>
@@ -1711,7 +1730,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()}>
       {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
       <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
-      {/* PLAT-64：platform/ui 的 markdown 折叠/卡片文案走语言上下文（产品页/停靠面板由各自的外层提供）。 */}
+      {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
       <ShellLanguageProvider language={settings.language}>
       <div className="app-shell">
       <header className="topbar">

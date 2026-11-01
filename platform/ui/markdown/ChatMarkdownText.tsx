@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react'
 
-import type { AppLanguage } from '../../settings/schema/appSettings'
-
 import { JsonBlockView } from './JsonBlockView'
 import { parseJsonBlock, type JsonBlock } from './jsonBlock'
 
@@ -21,8 +19,6 @@ type ChatMarkdownTextProps = {
   text: string
   className?: string
   codeClassName?: string
-  /** 结构化 JSON 的折叠/卡片文案语言；缺省时跟随 `ShellLanguageContext`。 */
-  language?: AppLanguage
 }
 
 type MarkdownBlock =
@@ -42,14 +38,13 @@ type InlineToken =
 export default function ChatMarkdownText({
   text,
   className,
-  codeClassName,
-  language
+  codeClassName
 }: ChatMarkdownTextProps): React.ReactElement | null {
   const blocks = parseMarkdownBlocks(text)
   if (blocks.length === 0) return null
   return (
     <div className={className ?? 'chat-markdown'}>
-      {blocks.map((block, index) => renderBlock(block, index, codeClassName, language))}
+      {blocks.map((block, index) => renderBlock(block, index, codeClassName))}
     </div>
   )
 }
@@ -57,8 +52,7 @@ export default function ChatMarkdownText({
 function renderBlock(
   block: MarkdownBlock,
   index: number,
-  codeClassName?: string,
-  language?: AppLanguage
+  codeClassName?: string
 ): React.ReactElement {
   if (block.kind === 'heading') {
     const HeadingTag = `h${block.depth}` as 'h1' | 'h2' | 'h3'
@@ -88,7 +82,7 @@ function renderBlock(
   }
 
   if (block.kind === 'json') {
-    return <JsonBlockView key={`json:${index}`} block={block.block} codeClassName={codeClassName} language={language} />
+    return <JsonBlockView key={`json:${index}`} block={block.block} codeClassName={codeClassName} />
   }
 
   if (block.kind === 'list') {

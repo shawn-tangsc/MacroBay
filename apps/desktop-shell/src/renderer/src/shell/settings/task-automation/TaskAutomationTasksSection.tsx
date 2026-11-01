@@ -181,6 +181,18 @@ function LastRun(props: {
     <>
       <span className={`task-automation-tag ${outcomeTone(outcome)}`}>{labels.outcome[outcome]}</span>
       {at ? <span className="task-automation-mono task-automation-muted"> {at}</span> : null}
+      {snapshot.skipReasons.length > 0 ? (
+        // Why it was skipped, in words: each reason leads to a different action, so a bare "skipped"
+        // would leave the reader guessing which one applies.
+        <span className="task-automation-note">
+          {snapshot.skipReasons.map((reason) => labels.deliverySkipReason[reason]).join(' / ')}
+        </span>
+      ) : null}
+      {snapshot.unexplainedSkips > 0 ? (
+        <span className="task-automation-note task-automation-tag-bad">
+          {labels.deliverySkipReasonUnrecorded(snapshot.unexplainedSkips)}
+        </span>
+      ) : null}
     </>
   )
 }

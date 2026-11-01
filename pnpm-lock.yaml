@@ -20,6 +20,9 @@ importers:
       grammy:
         specifier: ^1.44.0
         version: 1.44.0
+      html-to-image:
+        specifier: ^1.11.13
+        version: 1.11.13
       node-ical:
         specifier: 0.27.1
         version: 0.27.1
@@ -1876,6 +1879,9 @@ packages:
 
   html-comment-regex@1.1.2:
     resolution: {integrity: sha512-P+M65QY2JQ5Y0G9KKdlDpo0zK+/OHptU5AaBwUfAIDJZk1MYf32Frm84EcOytfJE0t5JvkAnKlmjsXDnWzCJmQ==}
+
+  html-to-image@1.11.13:
+    resolution: {integrity: sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==}
 
   http-cache-semantics@4.3.0:
     resolution: {integrity: sha512-M5t5LlJpS1UHMjvwRQVdFHvPISGeLAxNcrWuJkeGh0KxsqCHZ1O3NXZU/8x7cD0BDcGW8kapxMKTvwlqrNkHkA==}
@@ -5072,6 +5078,8 @@ snapshots:
       lru-cache: 6.0.0
 
   html-comment-regex@1.1.2: {}
+
+  html-to-image@1.11.13: {}
 
   http-cache-semantics@4.3.0: {}
 

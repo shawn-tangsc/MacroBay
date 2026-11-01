@@ -175,8 +175,11 @@ async function enabledDescriptors(profiles: Pick<MacroCalendarProviderProfileSto
   for (const profile of values) {
     if (!isPlainRecord(profile) || typeof profile.providerId !== 'string' || typeof profile.enabled !== 'boolean') return undefined
     if (!profile.enabled) continue
+    // The profile list also carries providers this job does not own (the market calendar's own
+    // providers). Skipping them keeps one unknown id from cancelling the Fed/BEA schedule that
+    // the reader just switched on.
     const descriptor = descriptorFor(profile.providerId)
-    if (!descriptor) return undefined
+    if (!descriptor) continue
     descriptors.push(descriptor)
   }
   return descriptors

@@ -67,7 +67,17 @@ export type ChannelSessionFactory = {
   exists?: (sessionId: string) => Promise<boolean>
 }
 
-export type ChannelContentGuard = (facts: ChannelInboundFacts) => 'channel-content-rejected' | null
+/**
+ * The inbound content guard runs before the payload is encrypted and stored, so a replayed or
+ * backfilled work item can never bypass it with the raw text. It returns the text to persist
+ * (wrapped for untrusted external input) or a rejection code; returning null text drops it.
+ */
+export type ChannelInboundGuardDecision = {
+  text: string | null
+  rejection: 'channel-content-rejected' | null
+}
+
+export type ChannelContentGuard = (facts: ChannelInboundFacts) => ChannelInboundGuardDecision
 
 export type ChannelInboundPayload = {
   providerMessageKey: string | null

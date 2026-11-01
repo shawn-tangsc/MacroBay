@@ -1,11 +1,19 @@
+import { instantForWallClock } from '@platform/time/timeZoneClock'
+
 import { analysisSchedulePolicy, type AnalysisSessionSlot } from './analysisSchedulePolicy'
 
-/** The local calendar day of an instant, as `YYYY-MM-DD`: the unit a slot belongs to. */
-export function localDayToken(value: Date | string): string {
+/**
+ * 去重键的日界：**固定 UTC**（计数语义）。
+ *
+ * 这里的日期只用来回答「同一次开盘是否已经处理过」，不是给人看的日期归属。
+ * 跟机器或设置时区走会让同一次开盘在换时区前后算出两个键，于是重复分析或漏分析。
+ * 读者侧的日期归属不在这里：它要跟设置时区，等有消费方时用 `slotCoverageDay` 那个名字实现，
+ * 不要再用一个函数同时承担两种语义。
+ */
+export function slotDedupeDay(value: Date | string): string {
   const date = typeof value === 'string' ? new Date(value) : value
   if (!Number.isFinite(date.getTime())) return ''
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  return date.toISOString().slice(0, 10)
 }
 
 /**
@@ -30,16 +38,30 @@ export type SessionSlotInstant = Readonly<{
  * to the wrong local time. Only ever used with the window's own day count, which is why the loop
  * starts at the oldest offset and walks forward.
  */
-export function slotInstantsWithin(now: Date, policy = analysisSchedulePolicy): readonly SessionSlotInstant[] {
+export function slotInstantsWithin(
+  now: Date,
+  timeZone: string,
+  policy = analysisSchedulePolicy
+): readonly SessionSlotInstant[] {
   const nowMs = now.getTime()
   if (!Number.isFinite(nowMs)) return []
   const oldestOffset = -(Math.ceil(policy.catchUpWindowMs / 86_400_000) + 1)
   const instants: SessionSlotInstant[] = []
+  // 「今天」按读者时区取，再用 `instantForWallClock` 把每个开盘的墙上小时换算成瞬时：
+  // 不再用本机 `new Date(y, m, d, hour)`，那会把别人的开盘按机器的时区算。
+  const today = wallClockDayInZone(now, timeZone)
+  if (today === null) return []
   for (let offset = oldestOffset; offset <= 0; offset += 1) {
+    const day = addDays(today, offset)
     for (const slot of policy.slots) {
-      // The local calendar day of `now`, shifted by whole days: the constructor normalizes month
-      // and year overflow and applies the offset's DST rules for that hour.
-      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, slot.hour)
+      const at = instantForWallClock({
+        timeZone,
+        year: day.year,
+        month: day.month,
+        day: day.day,
+        hour: slot.hour
+      })
+      if (at === null) continue
       const atMs = at.getTime()
       if (!Number.isFinite(atMs) || atMs > nowMs || atMs < nowMs - policy.catchUpWindowMs) continue
       instants.push({ slot: slot.slot, at: at.toISOString(), atMs })
@@ -64,6 +86,8 @@ export type DueSessionSlotsInput = Readonly<{
    */
   isAbandoned?: (instant: SessionSlotInstant) => boolean
   policy?: typeof analysisSchedulePolicy
+  /** 读者时区：开盘的墙上小时按它换算成瞬时。 */
+  timeZone: string
 }>
 
 /**
@@ -79,7 +103,7 @@ export function dueSessionSlots(input: DueSessionSlotsInput): readonly SessionSl
   if (!Number.isFinite(now.getTime())) return []
   // The single newest open decides everything: if it is served, or was attempted and missed, there
   // is nothing to catch up — an older open is history, not a queue the tick works through.
-  const newest = slotInstantsWithin(now, policy).at(-1)
+  const newest = slotInstantsWithin(now, input.timeZone, policy).at(-1)
   if (!newest || policy.maxRunsPerTick <= 0) return []
   if (input.isDelivered(newest) || (input.isAbandoned?.(newest) ?? false)) return []
   return [newest]
@@ -91,13 +115,47 @@ export function dueSessionSlots(input: DueSessionSlotsInput): readonly SessionSl
  * A delayed catch-up serves an open hours after it happened, and the prompt has to say which open
  * that was, so the model does not read the current snapshot as the open's own state.
  */
-export function slotInstantAtOrBefore(slot: AnalysisSessionSlot, at: Date, policy = analysisSchedulePolicy): string | null {
+export function slotInstantAtOrBefore(
+  slot: AnalysisSessionSlot,
+  at: Date,
+  timeZone: string,
+  policy = analysisSchedulePolicy
+): string | null {
   if (!Number.isFinite(at.getTime())) return null
   const hour = policy.slots.find(entry => entry.slot === slot)?.hour
   if (hour === undefined) return null
+  const today = wallClockDayInZone(at, timeZone)
+  if (today === null) return null
   for (let offset = 0; offset >= -2; offset -= 1) {
-    const candidate = new Date(at.getFullYear(), at.getMonth(), at.getDate() + offset, hour)
-    if (Number.isFinite(candidate.getTime()) && candidate.getTime() <= at.getTime()) return candidate.toISOString()
+    const day = addDays(today, offset)
+    const candidate = instantForWallClock({ timeZone, year: day.year, month: day.month, day: day.day, hour })
+    if (candidate !== null && candidate.getTime() <= at.getTime()) return candidate.toISOString()
   }
   return null
+}
+
+/** 某个瞬时在目标时区里是哪一个日历日。 */
+function wallClockDayInZone(at: Date, timeZone: string): { year: number; month: number; day: number } | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(at)
+    const read = (type: Intl.DateTimeFormatPartTypes): number =>
+      Number(parts.find((part) => part.type === type)?.value ?? 'NaN')
+    const wall = { year: read('year'), month: read('month'), day: read('day') }
+    return Number.isFinite(wall.year) && Number.isFinite(wall.month) && Number.isFinite(wall.day) ? wall : null
+  } catch {
+    return null
+  }
+}
+
+function addDays(
+  day: { year: number; month: number; day: number },
+  offset: number
+): { year: number; month: number; day: number } {
+  const shifted = new Date(Date.UTC(day.year, day.month - 1, day.day + offset))
+  return { year: shifted.getUTCFullYear(), month: shifted.getUTCMonth() + 1, day: shifted.getUTCDate() }
 }

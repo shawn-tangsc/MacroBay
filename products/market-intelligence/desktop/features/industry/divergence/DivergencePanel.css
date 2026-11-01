@@ -1,0 +1,193 @@
+.mi-divergence {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 0 2px;
+}
+/* The `?` leads the content instead of sitting in a title row: there is no title any more. */
+.mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
+.mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -1px; }
+/* A quiet day is one sentence with its badge at the end of the same line. */
+.mi-divergence__quiet { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
+.mi-divergence__quiet .mi-divergence__note { flex: 0 1 auto; margin: 0; }
+.mi-divergence__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* The `?` sits before the title: the explanation is an aside to the heading, not content. */
+.mi-divergence__help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--mi-dashboard-muted);
+  cursor: help;
+}
+.mi-divergence__help:hover { color: var(--mi-dashboard-text); }
+.mi-divergence__help-body { display: grid; gap: 5px; max-width: 360px; font-size: 11px; line-height: 1.55; }
+.mi-divergence__help-body b { font-weight: 400; }
+.mi-divergence__help-body b:first-child { color: var(--mi-dashboard-text); }
+.mi-divergence__retry {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.mi-divergence__retry:hover { color: var(--mi-dashboard-text); }
+/* The conclusion block carries the weight: a reader scanning the dashboard should see that
+   something here needs attention, the same way an error does but in the caution tone. */
+.mi-divergence__conclusion {
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-caution) 42%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--mi-dashboard-caution) 12%, var(--mi-dashboard-surface));
+}
+.mi-divergence__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 7px 10px;
+  border-radius: 5px;
+}
+.mi-divergence__status[data-tone='error'] {
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-negative) 50%, transparent);
+  background: color-mix(in srgb, var(--mi-dashboard-negative) 14%, var(--mi-dashboard-surface));
+  color: var(--mi-dashboard-text);
+}
+.mi-divergence__status b { font-size: 11px; }
+.mi-divergence__status-sub { color: var(--mi-dashboard-muted); font-size: 10px; }
+.mi-divergence__act {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-text) 28%, transparent);
+  border-radius: 4px;
+  background: none;
+  color: var(--mi-dashboard-text);
+  font-size: 9px;
+  cursor: pointer;
+}
+.mi-divergence__act:hover { background: color-mix(in srgb, var(--mi-dashboard-text) 8%, transparent); }
+.mi-divergence__judge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 3px;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  line-height: 1.4;
+  background: none;
+  cursor: pointer;
+}
+.mi-divergence__judge[data-judged-by='ai'] { color: var(--mi-dashboard-text); border-color: color-mix(in srgb, var(--mi-dashboard-text) 30%, transparent); }
+/* The word "结论" as a bordered label: a reader has to see at a glance that this block is a
+   judgement about the card above, not another reading. */
+.mi-divergence h2 {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+/* The banner carries the surface; the rows inside drop theirs so the block reads as one object. */
+.mi-divergence__banner {
+  display: grid;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid var(--mi-dashboard-line);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--mi-dashboard-surface) 78%, var(--mi-dashboard-line));
+}
+.mi-divergence[data-state='empty'] .mi-divergence__banner { background: color-mix(in srgb, var(--mi-dashboard-surface) 92%, transparent); }
+.mi-divergence__note {
+  margin: 0;
+  color: var(--mi-dashboard-text);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.mi-divergence__rows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mi-divergence__row {
+  display: grid;
+  gap: 3px;
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--mi-dashboard-line);
+}
+.mi-divergence__row[data-direction='bearish'] { border-left-color: var(--mi-dashboard-negative); }
+.mi-divergence__row[data-direction='bullish'] { border-left-color: var(--mi-dashboard-positive); }
+.mi-divergence__row[data-direction='unpriced'] { border-left-color: var(--mi-dashboard-caution); }
+.mi-divergence__line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.mi-divergence__direction { font-size: 11px; font-weight: 650; }
+.mi-divergence__direction[data-direction='bearish'] { color: var(--mi-dashboard-negative); }
+.mi-divergence__direction[data-direction='bullish'] { color: var(--mi-dashboard-positive); }
+.mi-divergence__direction[data-direction='unpriced'] { color: var(--mi-dashboard-caution); }
+.mi-divergence__legs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--mi-dashboard-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+.mi-divergence__leg i {
+  margin-right: 4px;
+  color: var(--mi-dashboard-muted);
+  font-family: inherit;
+  font-style: normal;
+}
+.mi-divergence__mechanism {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.mi-divergence__invalidation {
+  margin: 0;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  opacity: 0.8;
+}
+/* retired: the basis moved behind the help icon */
+.mi-divergence__retired {
+  margin: 0;
+  padding-left: 2px;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+.mi-divergence__withheld {
+  display: block;
+  padding-left: 2px;
+  color: var(--mi-dashboard-muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.mi-divergence__withheld-title { font-weight: 650; }
+.mi-divergence__withheld-item + .mi-divergence__withheld-item::before { content: '、'; }
+.mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }

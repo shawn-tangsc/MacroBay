@@ -40,7 +40,8 @@ export type AssistantTopicNamingDependencies = {
   getNamingModelId: () => string | null | Promise<string | null>
   getProviderState: ProviderStateAccessor
   renameTopic: (topicId: string, name: string) => Promise<void>
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入。 */
+  fetch: typeof fetch
   now?: () => number
   namedTtlMs?: number
 }

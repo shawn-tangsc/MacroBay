@@ -3,21 +3,17 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { ArrowLeft, ChevronLeft, ChevronRight, RefreshCw, Settings2, Upload } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
 
-import type { MacroEconomicCalendarEventView } from '../../../../contracts/macro/economicCalendarQueryContracts'
-import { macroEconomicCalendarCaveatPolicy } from '../../../shared/macroEconomicCalendarCaveatPolicy'
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
-import { productText } from '../../../shared/i18n/productText'
 import { NetworkProxyBanner } from '../../../shared/NetworkProxyBanner'
-import { openIntelligenceSourcesSettings, openMacroCalendarSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
+import { openIntelligenceSourcesSettings, openProxySettings } from '../../../shared/navigation/productShellNavigation'
 import {
   createEconomicCalendarProjection,
-  createEconomicCalendarMonthQuery,
   createEconomicCalendarQuery,
-  economicCalendarPresentationPolicy,
-  isReleaseTimeSource,
+  economicCalendarCurrentMonth,
+  economicCalendarGridMonths,
+  isEconomicCalendarMonth,
   selectEconomicCalendarMonth,
   shiftEconomicCalendarMonth,
-  toWallClock,
   type EconomicCalendarEventView,
   type EconomicCalendarProjection
 } from './economicCalendarModel'
@@ -40,14 +36,12 @@ import { useCalendarStatusClock } from './useCalendarStatusClock'
 import type { MarketCalendarEvent, MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
 import { shouldShowMarketCalendarProxyNotice } from './marketCalendarProxyNotice'
 import { DashboardPanelDrawer } from '../../../pages/intelligence/DashboardPanelDrawer'
+import { economicCalendarMonthLoadingPolicy, toDetailEvent } from './economicCalendarMonthResult'
+import type { EconomicCalendarText } from './economicCalendarText'
+import { useEconomicCalendarMonthWindow, type EconomicCalendarMonthState } from './useEconomicCalendarMonthWindow'
 
 import './economicCalendar.css'
 
-export type EconomicCalendarText = (typeof productText)[keyof typeof productText]['pages']['intelligence']['portal']['calendar']
-type MonthState =
-  | { state: 'loading' }
-  | { state: 'unavailable'; failureCode: keyof EconomicCalendarText['failures'] }
-  | { state: 'available'; projection: EconomicCalendarProjection; version: number }
 type DetailState =
   | { state: 'idle' }
   | { state: 'loading' }
@@ -75,11 +69,6 @@ const economicCalendarMonthPickerPolicy = {
 const economicCalendarEmptyStateActionPolicy = {
   emptyEventCount: 0
 } as const
-/** Bounds renderer-visible month loading when an IPC request never settles. */
-const economicCalendarMonthLoadingPolicy = {
-  budgetMs: 15_000,
-  unavailableFailureCode: 'calendar-query-unavailable'
-} as const
 type BlsScheduleFeedback = { year: string; schedule: 'updated' | 'unchanged'; cpi: 'updated' | 'current' | 'not-required' | 'unavailable'; employment: 'updated' | 'current' | 'not-required' | 'unavailable' }
 
 export const blsScheduleAndValuesAggregateUpdatePolicy = Object.freeze({
@@ -95,16 +84,34 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const [initialQuery] = useState(() => createEconomicCalendarQuery(now()))
   const [statusNow, updateStatusClock] = useCalendarStatusClock(now)
   const timeZone = useShellTimeZone()
-  const today = calendarDisplayDate(initialQuery.asOf, timeZone)
+  const today = calendarDisplayDate(statusNow, timeZone)
   const [selectedMonth, setSelectedMonth] = useState(initialQuery.month)
+  const selectedMonthRef = useRef(selectedMonth)
+  /**
+   * Whether the page is following the current month.
+   *
+   * True while the reader is looking at it, false once they pick another month. The clock can
+   * only move a page that is following; a month the reader chose stays where they put it.
+   */
+  const [followCurrentMonth, setFollowCurrentMonth] = useState(() =>
+    !openTarget?.month || openTarget.month === economicCalendarCurrentMonth(initialQuery.asOf))
   const [calendarPanelOpen, setCalendarPanelOpen] = useState(false)
-  const market = useMarketCalendar({ month: selectedMonth, locale: text.market.locale, now })
+  const gridMonths = economicCalendarGridMonths(selectedMonth)
+  // The named month leads the read: it owns the grid and is what a manual refresh targets.
+  const readMonths = [selectedMonth, ...gridMonths.filter(month => month !== selectedMonth)]
+  const market = useMarketCalendar({ months: readMonths, locale: text.market.locale, now })
   const [selectedMarket, setSelectedMarket] = useState<MarketCalendarEvent>()
   const [selectedLinkedMarket, setSelectedLinkedMarket] = useState<MarketCalendarEvent>()
   useEffect(() => { setSelectedMarket(undefined); setSelectedLinkedMarket(undefined) }, [selectedMonth, text.market.locale])
   const [asOf, setAsOf] = useState(initialQuery.asOf)
-  const [monthState, setMonthState] = useState<MonthState>({ state: 'loading' })
+  const { monthState, loadMonth } = useEconomicCalendarMonthWindow({ client, asOf, selectedMonthRef })
   const [selectedEventKey, setSelectedEventKey] = useState<string>()
+  // The reader's own selection survives a re-read; nothing is picked or dropped on their behalf.
+  useEffect(() => {
+    if (monthState.state === 'loading') return
+    if (monthState.state === 'unavailable') { setSelectedEventKey(undefined); return }
+    setSelectedEventKey((current) => monthState.events.some((event) => event.eventKey === current) ? current : undefined)
+  }, [monthState])
   const [detailState, setDetailState] = useState<DetailState>({ state: 'idle' })
   /** Bumped after the reader edits a release time, to re-read the detail and the month. */
   const [detailReload, setDetailReload] = useState(0)
@@ -129,7 +136,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     const targetKey = openTarget?.eventKey
     if (!targetKey || appliedOpenTargetEvent.current === targetKey) return
     const officialTarget = monthState.state === 'available'
-      ? monthState.projection.events.find(event => event.eventKey === targetKey) : undefined
+      ? monthState.events.find(event => event.eventKey === targetKey) : undefined
     if (officialTarget) {
       appliedOpenTargetEvent.current = targetKey
       setSelectedMarket(undefined)
@@ -163,10 +170,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const [refreshState, setRefreshState] = useState<EconomicCalendarRefreshState>()
   const [blsScheduleFeedback, setBlsScheduleFeedback] = useState<BlsScheduleFeedback>()
   const mountedRef = useRef(true)
-  const selectedMonthRef = useRef(selectedMonth)
-  const monthOperationRef = useRef<{ id: number; month: string } | undefined>(undefined)
-  const monthLoadingFallbackRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const nextOperationRef = useRef(0)
   const loadedInitialRef = useRef(false)
   const syncedYearsRef = useRef(new Set<string>())
 
@@ -189,51 +192,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     }
   }, [])
 
-  const loadMonth = useCallback((month: string, refresh = false, nextAsOf?: string): void => {
-    if (!isEconomicCalendarMonth(month)) return
-    const currentOperation = monthOperationRef.current
-    if (!refresh && currentOperation?.month === month) return
-
-    const operation = { id: ++nextOperationRef.current, month }
-    monthOperationRef.current = operation
-    if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
-    monthLoadingFallbackRef.current = undefined
-    setMonthState({ state: 'loading' })
-    const query = createEconomicCalendarMonthQuery(month, nextAsOf ?? asOf)
-    const isCurrentOperation = (): boolean => mountedRef.current && selectedMonthRef.current === month && monthOperationRef.current?.id === operation.id
-    const markUnavailable = (): void => {
-      if (!isCurrentOperation()) return
-      if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
-      monthLoadingFallbackRef.current = undefined
-      monthOperationRef.current = undefined
-      setMonthState({ state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
-      setSelectedEventKey(undefined)
-    }
-    monthLoadingFallbackRef.current = setTimeout(markUnavailable, economicCalendarMonthLoadingPolicy.budgetMs)
-    let queryResult: Promise<unknown>
-    try {
-      queryResult = Promise.resolve(client.queryMonth(query))
-    } catch {
-      markUnavailable()
-      return
-    }
-    void queryResult.then((result) => {
-      if (!isCurrentOperation()) return
-      if (monthLoadingFallbackRef.current) clearTimeout(monthLoadingFallbackRef.current)
-      monthLoadingFallbackRef.current = undefined
-      monthOperationRef.current = undefined
-      const nextState = toMonthState(result, query, operation.id)
-      setMonthState(nextState)
-      if (nextState.state === 'available') {
-        // The reader's own selection survives a re-read; nothing is picked on their behalf.
-        setSelectedEventKey((current) => nextState.projection.events.some((event) => event.eventKey === current) ? current : undefined)
-        return
-      }
-      setSelectedEventKey(undefined)
-    }).catch(() => {
-      markUnavailable()
-    })
-  }, [asOf, client])
 
   useEffect(() => {
     if (loadedInitialRef.current) return
@@ -253,7 +211,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   const blsIcsImport = useBlsIcsImport({
     client,
     onImported: async () => {
-      loadMonth(selectedMonthRef.current, true)
+      // The import just wrote rows with a later detection time; reading with the as-of the page
+      // opened with would hide them until the reader switched months.
+      const importedAsOf = toCanonicalUtcMillis(now())
+      setAsOf(importedAsOf)
+      loadMonth(selectedMonthRef.current, true, importedAsOf)
     }
   })
 
@@ -277,7 +239,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     const detailAsOf = asOf
     void client.getEventDetail({ eventKey: selectedEvent.event.eventKey, asOf: detailAsOf }).then((result) => {
       if (!active) return
-      const event = toDetailEvent(result, selectedEvent.event.eventKey, selectedMonth, detailAsOf)
+      const event = toDetailEvent(result, selectedEvent.event.eventKey, detailAsOf)
       setDetailState(event ? { state: 'available', event } : { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
     }).catch(() => {
       if (active) setDetailState({ state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode })
@@ -285,18 +247,22 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     return () => { active = false }
   }, [asOf, client, detailReload, selectedEvent?.event.eventKey, selectedEvent?.version, selectedMonth])
 
-  const selectMonth = (month: string): void => {
+  const selectMonth = (month: string, follow?: boolean): void => {
     if (month === selectedMonthRef.current || !isEconomicCalendarMonth(month)) return
     selectedMonthRef.current = month
     setSelectedMonth(month)
+    setFollowCurrentMonth(follow ?? month === economicCalendarCurrentMonth(toCanonicalUtcMillis(now())))
     setSelectedEventKey(undefined)
     setSelectedDay(calendarDayForMonth(month, today))
     setDetailState({ state: 'idle' })
-    void syncBlsYear(month.slice(0, 4)).then((updated) => {
-      const queryAsOf = updated ? toCanonicalUtcMillis(now()) : asOf
-      if (updated) setAsOf(queryAsOf)
+    // A read is what the reader is looking at now. Keeping the mount-time as-of hid every
+    // row collected since the page opened, including a month-end prefetch of the next month.
+    const read = (): void => {
+      const queryAsOf = toCanonicalUtcMillis(now())
+      setAsOf(queryAsOf)
       loadMonth(month, true, queryAsOf)
-    }).catch(() => loadMonth(month, true, asOf))
+    }
+    void syncBlsYear(month.slice(0, 4)).then(read).catch(read)
   }
   /**
    * A caller (the dashboard card) can ask for a specific month.
@@ -309,11 +275,24 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   useEffect(() => {
     if (openTarget?.month) selectMonth(openTarget.month)
   }, [openTarget?.month]) // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * The month boundary the reader does not have to press.
+   *
+   * The status clock already ticks once a minute for release statuses; the same tick is what
+   * moves a page that is following the current month into the next one. It carries a fresh
+   * as-of, so the month it lands on is read as of now rather than as of page entry.
+   */
+  useEffect(() => {
+    if (!followCurrentMonth) return
+    const current = economicCalendarCurrentMonth(statusNow)
+    if (current === selectedMonthRef.current) return
+    selectMonth(current, true)
+  }, [statusNow, followCurrentMonth]) // eslint-disable-line react-hooks/exhaustive-deps
   const coverage: CalendarDayCoverage = market.loading || monthState.state === 'loading' ? 'loading'
-    : market.failure || monthState.state !== 'available' ? 'incomplete' : 'complete'
+    : market.failure || monthState.state !== 'available' || monthState.incomplete ? 'incomplete' : 'complete'
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
   const formatTime = useShellTimeFormat()
-  const dayEvents = unifiedCalendarDay(selectedDay, monthState.state === 'available' ? monthState.projection.events : [], market.events, coverage, timeZone,
+  const dayEvents = unifiedCalendarDay(selectedDay, monthState.state === 'available' ? monthState.events : [], market.events, coverage, timeZone,
     new Set(market.events.filter(event => event.officialLink).map(event => event.eventKey)))
   const dayList = useRef<HTMLElement>(null)
   // A day the reader leaves keeps its scroll position, so coming back to it resumes where it was.
@@ -377,7 +356,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             value={toEconomicCalendarMonthPickerValue(selectedMonth)}
           />
           <button aria-label={text.monthNavigation.next} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, 1))} type="button"><ChevronRight aria-hidden="true" size={15} />{text.monthNavigation.next}</button>
-          <button aria-label={text.monthNavigation.current} onClick={() => selectMonth(initialQuery.month)} type="button">{text.monthNavigation.current}</button>
+          <button aria-label={text.monthNavigation.current} onClick={() => selectMonth(economicCalendarCurrentMonth(toCanonicalUtcMillis(now())), true)} type="button">{text.monthNavigation.current}</button>
           <Button aria-label={text.calendarSettings} icon={<Settings2 aria-hidden="true" size={15} />} onClick={() => setCalendarPanelOpen(true)}>{text.calendarSettings}</Button>
           <Button aria-label={text.market.refresh} disabled={market.pending} icon={<RefreshCw size={15} />} onClick={() => void market.refresh()}>{text.market.refresh}</Button>
           <button onClick={onBack} type="button"><ArrowLeft aria-hidden="true" size={15} />{text.backToDashboard}</button>
@@ -385,7 +364,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
       </header>
       {shouldShowMarketCalendarProxyNotice(market.sources) ? <NetworkProxyBanner onOpenProxySettings={openProxySettings} /> : null}
       <section className="mi-market-calendar__status" aria-live="polite">
-        <span>{text.unifiedDay.coverage.replace('{month}', selectedMonth)}</span>
+        <span>{text.unifiedDay.coverage.replace('{months}', gridMonths.join(' · '))}</span>
         {market.pending ? <span>{text.market.pending}</span> : market.feedback ? <span>{text.market[market.feedback.state]}</span> : null}
         {market.feedback?.failureCode === 'storage-unavailable' || market.feedback?.failureCode === 'storage-pressure' ? <span>{text.unifiedDay.storageUnavailable}</span> : null}
         {market.loading ? <LoadingState layout="inline" size="sm" label={text.market.loading} /> : null}
@@ -406,6 +385,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           onOpenDay={day => showDay(day)}
           onSelectItem={item => selectItem(item)}
           coverage={coverage}
+          events={monthState.state === 'available' ? monthState.events : []}
           marketEvents={market.events}
           marketSources={market.sources}
           selectedEventKey={selectedEventKey}
@@ -458,10 +438,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   )
 }
 
-function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onOpenDay, onSelectItem, selectedEventKey, state, text, marketEvents, marketSources, coverage }: {
+function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage }: {
   statusNow: string
   today: string
   asOf: string
+  events: readonly EconomicCalendarEventView[]
   marketEvents: readonly MarketCalendarEvent[]
   marketSources: readonly MarketCalendarSource[]
   onSelectItem: (item: CalendarDayItem) => void
@@ -470,13 +451,13 @@ function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onO
   onImportBlsIcs: () => void
   onOpenDay: (day: string) => void
   selectedEventKey: string | undefined
-  state: MonthState
+  state: EconomicCalendarMonthState
   text: EconomicCalendarText
 }): ReactElement {
   const status = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
   if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
 }
 
 function CalendarState({ month, text, loading }: { month: string; text: string; loading: boolean }): ReactElement {
@@ -485,9 +466,10 @@ function CalendarState({ month, text, loading }: { month: string; text: string; 
   </section>
 }
 
-function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
+function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
   statusNow: string
   today: string
+  events: readonly EconomicCalendarEventView[]
   marketEvents: readonly MarketCalendarEvent[]
   marketSources: readonly MarketCalendarSource[]
   onSelectItem: (item: CalendarDayItem) => void
@@ -505,7 +487,7 @@ function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, se
     <div className="mi-economic-calendar__weekdays">{text.weekdays.map((day) => <span key={day}>{day}</span>)}</div>
     <div className="mi-economic-calendar__grid">
       {projection.days.map((day) => {
-        const unified = unifiedCalendarDay(day.dateKey, projection.events, marketEvents, coverage, timeZone, linkedMarketKeys)
+        const unified = unifiedCalendarDay(day.dateKey, events, marketEvents, coverage, timeZone, linkedMarketKeys)
         return <article className="mi-economic-calendar__day" data-date={day.dateKey} data-month={day.month} key={day.dateKey}>
           <span className="mi-economic-calendar__date" aria-current={day.dateKey === today ? 'date' : undefined}>{day.day}</span>
           <div className="mi-economic-calendar__events">
@@ -515,7 +497,7 @@ function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, se
         </article>
       })}
     </div>
-    {projection.events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState onImportBlsIcs={onImportBlsIcs} text={text} /> : null}
+    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState onImportBlsIcs={onImportBlsIcs} text={text} /> : null}
   </section>
 }
 
@@ -526,7 +508,7 @@ function CalendarEmptyState({ onImportBlsIcs, text }: { onImportBlsIcs: () => vo
       <p className="mi-economic-calendar__more">{text.status.empty}</p>
     </div>
     <div className="mi-economic-calendar__empty-state-actions">
-      <Button onClick={openMacroCalendarSettings} size="small" type="primary">{text.emptyState.manageAction}</Button>
+      <Button onClick={openIntelligenceSourcesSettings} size="small" type="primary">{text.emptyState.manageAction}</Button>
       <Button icon={<Upload aria-hidden="true" size={15} />} onClick={onImportBlsIcs} size="small">{text.manualImport.action}</Button>
     </div>
   </section>
@@ -541,144 +523,9 @@ function calendarEventDay(event: EconomicCalendarEventView, timeZone: string): s
   return event.scheduledAt ? calendarDisplayDate(event.scheduledAt, timeZone) : event.scheduledDate
 }
 
-function readSelectedEvent(state: MonthState, eventKey: string | undefined): { event: EconomicCalendarEventView; version: number } | undefined {
+function readSelectedEvent(state: EconomicCalendarMonthState, eventKey: string | undefined): { event: EconomicCalendarEventView; version: number } | undefined {
   if (!eventKey) return undefined
   if (state?.state !== 'available') return undefined
-  const event = state.projection.events.find((candidate) => candidate.eventKey === eventKey)
+  const event = state.events.find((candidate) => candidate.eventKey === eventKey)
   return event ? { event, version: state.version } : undefined
-}
-
-function toMonthState(result: unknown, query: { month: string; asOf: string }, version: number): MonthState {
-  try {
-    if (isExactRecord(result, ['state', 'failureCode']) && result.state === 'unavailable' && isMonthFailureCode(result.failureCode)) {
-      return { state: 'unavailable', failureCode: result.failureCode }
-    }
-    if (!isExactRecord(result, ['state', 'asOf', 'events']) || result.state !== 'available' || result.asOf !== query.asOf || !isExactEventArray(result.events, query.asOf)) {
-      return { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
-    }
-    return { state: 'available', projection: createEconomicCalendarProjection({ month: query.month, asOf: query.asOf, events: result.events }), version }
-  } catch {
-    return { state: 'unavailable', failureCode: economicCalendarMonthLoadingPolicy.unavailableFailureCode }
-  }
-}
-
-function toDetailEvent(result: unknown, eventKey: string, month: string, asOf: string): EconomicCalendarEventView | undefined {
-  try {
-    if (!isExactRecord(result, ['state', 'asOf', 'event']) || result.state !== 'available' || result.asOf !== asOf || !isExactEvent(result.event, asOf)) return undefined
-    const projection = createEconomicCalendarProjection({ month, asOf, events: [result.event] })
-    return projection.events[0]?.eventKey === eventKey ? projection.events[0] : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function isEconomicCalendarMonth(value: string): boolean {
-  return economicCalendarPresentationPolicy.monthPattern.test(value)
-}
-
-function isMonthFailureCode(value: unknown): value is keyof EconomicCalendarText['failures'] {
-  return value === 'query-input-invalid' || value === 'calendar-query-unavailable'
-}
-
-function isExactEventArray(value: unknown, asOf: string): value is readonly MacroEconomicCalendarEventView[] {
-  try {
-    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertySymbols(value).length !== 0) return false
-    const length = Object.getOwnPropertyDescriptor(value, 'length')?.value
-    const names = Object.getOwnPropertyNames(value)
-    return Number.isSafeInteger(length) && names.length === length + 1 && names.every((name) => name === 'length' || /^(?:0|[1-9]\d*)$/.test(name)) &&
-      Array.from({ length }, (_, index) => Object.getOwnPropertyDescriptor(value, String(index))).every((descriptor) => descriptor?.enumerable === true && Object.hasOwn(descriptor, 'value') && isExactEvent(descriptor.value, asOf))
-  } catch {
-    return false
-  }
-}
-
-function isExactEvent(value: unknown, asOf: string): value is MacroEconomicCalendarEventView {
-  const required = [
-    'eventKey', 'releaseGroupKey', 'eventFamily', 'titleKey', 'countryCode', 'importance', 'periodKey', 'lifecycleState',
-    'coverage', 'scheduledDate', 'detectedAt', 'consensus', 'consensusState', 'surprise', 'providerIds', 'caveats'
-  ]
-  // `releaseTimeSource` is optional here although the contract requires it: main always sends it, but a
-  // payload from a main process that predates it must still draw — making it required here blanked the
-  // detail pane. A missing source means neither a convention nor an edit is on record, so it is
-  // normalised to the published-time case rather than rejected.
-  const optional = ['scheduledAt', 'releaseTimeSource', 'conventionScheduledAt', 'officialReleaseDate', 'publishedAt', 'actual', 'previous']
-  if (!isExactRecord(value, [...required, ...optional], required)) return false
-  return isBoundedText(value.eventKey) && isBoundedText(value.releaseGroupKey) && isBoundedText(value.eventFamily) && isBoundedText(value.titleKey) &&
-    isBoundedText(value.periodKey) && value.countryCode === 'US' && value.importance === 'high' && isLifecycleState(value.lifecycleState) &&
-    isCoverage(value.coverage) && isDate(value.scheduledDate) && isCanonicalUtcMillis(value.detectedAt) && value.detectedAt <= asOf &&
-    value.consensus === null && value.consensusState === 'unavailable' && value.surprise === 'consensus-unavailable' &&
-    isExactStringArray(value.providerIds, ['macro-calendar-fed', 'macro-calendar-bea', 'macro-calendar-bls'], 1) &&
-    isExactStringArray(value.caveats, macroEconomicCalendarCaveatPolicy.admittedCaveats) &&
-    (value.releaseTimeSource === undefined || isReleaseTimeSource(value.releaseTimeSource)) &&
-    isOptionalCanonicalUtcMillis(value.scheduledAt) && isOptionalDate(value.officialReleaseDate) && isOptionalCanonicalUtcMillis(value.publishedAt) && isOptionalValue(value.actual) && isOptionalValue(value.previous)
-}
-
-function isBoundedText(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && value.length <= 160
-}
-
-function isCanonicalUtcMillis(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) return false
-  const timestamp = Date.parse(value)
-  const date = new Date(timestamp)
-  return Number.isFinite(timestamp) && `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}T${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')}.${String(date.getUTCMilliseconds()).padStart(3, '0')}Z` === value
-}
-
-function isOptionalCanonicalUtcMillis(value: unknown): boolean {
-  return value === undefined || isCanonicalUtcMillis(value)
-}
-
-function isDate(value: unknown): value is string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
-  const date = new Date(`${value}T00:00:00.000Z`)
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}` === value
-}
-
-function isOptionalDate(value: unknown): boolean {
-  return value === undefined || isDate(value)
-}
-
-function isLifecycleState(value: unknown): boolean {
-  return value === 'scheduled' || value === 'released' || value === 'cancelled'
-}
-
-function isCoverage(value: unknown): boolean {
-  return value === 'available' || value === 'partial' || value === 'unavailable'
-}
-
-function isOptionalValue(value: unknown): boolean {
-  return value === undefined || (isExactRecord(value, ['displayValue', 'numericValue', 'numericLowerBound', 'numericUpperBound', 'unit'], ['displayValue']) && typeof value.displayValue === 'string' &&
-    (value.numericValue === undefined || (typeof value.numericValue === 'number' && Number.isFinite(value.numericValue))) &&
-    (value.numericLowerBound === undefined || (typeof value.numericLowerBound === 'number' && Number.isFinite(value.numericLowerBound))) &&
-    (value.numericUpperBound === undefined || (typeof value.numericUpperBound === 'number' && Number.isFinite(value.numericUpperBound))) &&
-    ((value.numericLowerBound === undefined && value.numericUpperBound === undefined) ||
-      (value.numericLowerBound !== undefined && value.numericUpperBound !== undefined && value.numericLowerBound < value.numericUpperBound)) &&
-    (value.unit === undefined || isBoundedText(value.unit)))
-}
-
-function isExactStringArray(value: unknown, allowed: readonly string[], minimumLength = 0): boolean {
-  try {
-    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype || Object.getOwnPropertySymbols(value).length !== 0) return false
-    const length = Object.getOwnPropertyDescriptor(value, 'length')?.value
-    const names = Object.getOwnPropertyNames(value)
-    const values = Array.from({ length }, (_, index) => Object.getOwnPropertyDescriptor(value, String(index)))
-    return Number.isSafeInteger(length) && length >= minimumLength && names.length === length + 1 && names.every((name) => name === 'length' || /^(?:0|[1-9]\d*)$/.test(name)) &&
-      values.every((descriptor) => descriptor?.enumerable === true && Object.hasOwn(descriptor, 'value') && typeof descriptor.value === 'string' && allowed.includes(descriptor.value)) &&
-      new Set(values.map((descriptor) => descriptor?.value)).size === length
-  } catch {
-    return false
-  }
-}
-
-function isExactRecord(value: unknown, allowed: readonly string[], required = allowed): value is Record<string, unknown> {
-  try {
-    if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype || Object.getOwnPropertySymbols(value).length !== 0) return false
-    const names = Object.getOwnPropertyNames(value)
-    return names.every((key) => allowed.includes(key)) && required.every((key) => Object.hasOwn(value, key)) && names.every((key) => {
-      const descriptor = Object.getOwnPropertyDescriptor(value, key)
-      return Boolean(descriptor && Object.hasOwn(descriptor, 'value'))
-    })
-  } catch {
-    return false
-  }
 }

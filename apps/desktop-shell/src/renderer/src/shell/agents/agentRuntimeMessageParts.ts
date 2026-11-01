@@ -1,3 +1,4 @@
+import { formatShellClock, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 import type { AgentSessionMessageEntity } from '@platform/ai/agent-platform/schemas/sessionSchemas'
 import { runtimeTextKeys } from '@platform/ai/agent-platform/runtime/runtimeText'
 
@@ -35,7 +36,7 @@ type AgentMessagePart = AgentSessionMessageEntity['data']['parts'][number]
 export function buildAgentRuntimeMessagePartBlocks(
   parts: AgentMessagePart[],
   text: BuildAgentRuntimeMessagePartBlocksText,
-  options: { runtimeTextOverride?: string } = {}
+  options: { runtimeTextOverride?: string; timeZone?: string } = {}
 ): AgentRuntimeMessagePartBlock[] {
   const hasCommandResult = parts.some((part) => isAgentRuntimeCommandResultPart(part))
   const toolBlockByCallId = new Map<string, AgentRuntimeMessagePartRuntime>()
@@ -60,7 +61,7 @@ function buildPartBlock(
   part: AgentMessagePart,
   index: number,
   text: BuildAgentRuntimeMessagePartBlocksText,
-  options: { runtimeTextOverride?: string },
+  options: { runtimeTextOverride?: string; timeZone?: string },
   toolBlockByCallId: Map<string, AgentRuntimeMessagePartRuntime>
 ): AgentRuntimeMessagePartBlock[] {
   if (part.type === 'runtime-text') {
@@ -105,7 +106,7 @@ function buildPartBlock(
   }
 
   if (part.type === 'text' && typeof part.text === 'string') {
-    const legacy = parseLegacyAnalysisReference(part.text, text.runtimeActivity.contextReference ?? 'Context')
+    const legacy = parseLegacyAnalysisReference(part.text, text.runtimeActivity.contextReference ?? 'Context', options.timeZone)
     if (legacy) {
       return [
         {
@@ -285,17 +286,16 @@ function isClaudeSdkRuntimeControlPart(part: AgentMessagePart): part is AgentMes
  */
 function parseLegacyAnalysisReference(
   value: string,
-  label: string
+  label: string,
+  timeZone?: string
 ): { text: string; label: string; detail?: string; payload: Record<string, unknown> } | null {
   const match = value.match(
     /\n\n\[eventGroupId=([^;\]]+); analysisRunId=([^;\]]+); summaryId=([^;\]]+); asOf=([^\]]+)\]$/
   )
   if (!match) return null
-  const date = new Date(match[4])
-  const pad = (value: number) => String(value).padStart(2, '0')
-  const detail = Number.isNaN(date.getTime())
-    ? undefined
-    : `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+  // 时间只走平台口径：自己拼 `MM-DD HH:mm` 会用系统时区，和同屏其它时间对不上。
+  const detail =
+    formatShellClock(match[4] ?? '', { timeZone: timeZone ?? resolveSystemTimeZone() }) ?? undefined
   return {
     text: value.slice(0, match.index).trimEnd(),
     label,

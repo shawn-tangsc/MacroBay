@@ -39,7 +39,7 @@ export const NEWS_SENTIMENT_SOURCE_IDS = [
   'okx-latest-announcements'
 ] as const
 
-/** 正文可抓的三个源；Binance 文章页被 WAF 拦截，只做标题级。 */
+/** 正文可抓的四个源；Binance 公告页有 WAF，正文改走公开 CMS detail API（§21.1 D7）。 */
 export const NEWS_SENTIMENT_BODY_SOURCE_IDS = ['sec-rss', 'coindesk-rss', 'binance-announcements', 'okx-latest-announcements'] as const
 
 /** OKX 只对这三类公告打分（采集与时间线不变）。 */
@@ -50,6 +50,23 @@ export const OKX_SENTIMENT_ANN_TYPES = [
 ] as const
 
 export const NEWS_SENTIMENT_WINDOWS: readonly NewsSentimentWindow[] = ['1h', '4h', '24h', '7d']
+
+/**
+ * 只有这三个窗口能产出汇总分：既有情绪聚合（`aggregateSentimentSignals`）的 horizon 只有
+ * `15m/1h/4h/24h`，7d 与 all 没有对应 horizon。7d 曾被原样当成 horizon 传进去，聚合按
+ * `ageMs <= undefined` 把每条信号都滤掉——于是「7 天里有 66 条方向性标题」被写成
+ * `directionalCount: 0` / `score: 0` / `label: neutral`。这不是「今天平静」，是把「算不了」
+ * 说成了 0（170 §2「缺失必须具名、不补零」）。宁可没有 summary，也不给假读数。
+ */
+export const NEWS_SENTIMENT_AGGREGATE_WINDOWS = ['1h', '4h', '24h'] as const
+
+export type NewsSentimentAggregateWindow = (typeof NEWS_SENTIMENT_AGGREGATE_WINDOWS)[number]
+
+export function isNewsSentimentAggregateWindow(
+  window: NewsSentimentWindow
+): window is NewsSentimentAggregateWindow {
+  return (NEWS_SENTIMENT_AGGREGATE_WINDOWS as readonly string[]).includes(window)
+}
 
 export const NEWS_SENTIMENT_WINDOW_MS: Readonly<Record<NewsSentimentWindow, number>> = {
   '1h': 60 * 60 * 1000,
@@ -143,10 +160,37 @@ export type NewsSentimentQuery = {
   limit?: number
 }
 
+/**
+ * 四个源背后的状态，读时算好再交给界面。
+ *
+ * 卡片要分得清「四源没开」「开了没跑」「采集失败」这三种空——「窗口内没有消息」是第四种，
+ * 「有数据但过期」是第五种。这五个状态如果让界面自己拼接，同一个判断就会在卡片、抽屉与
+ * 后续消费者里各写一遍。这里只做汇总，逐源状态来自 `buildSourceCoverageAsOf` 的
+ * `productionState`（那一处已经是「这个源现在怎么样」的唯一实现）。
+ */
+export type NewsSentimentSourceReadiness = Readonly<{
+  total: number
+  enabledCount: number
+  failedCount: number
+  neverRanCount: number
+  failedSourceIds: string[]
+  neverRanSourceIds: string[]
+  lastSuccessAt?: string
+  /**
+   * 已启用源里最慢的那个采集周期（毫秒），来自 `resolveRuntimeConfig` 的 `pollingIntervalSec`，
+   * 不是写死的常数。卡片用它 ×3 判断「看到的这几条本身已经旧了」；没有任何可定周期的源时缺省。
+   */
+  maxCollectionIntervalMs?: number
+}>
+
 export const NEWS_SENTIMENT_CAVEATS = Object.freeze({
   bodyLimited: 'news-body-limited',
   modelUnavailable: 'news-model-unavailable',
   modelInvalidOutput: 'news-model-invalid-output',
+  /** 本轮模型调用额度用完：其余条目按规则判断，下一次运行会再试。 */
+  modelBudgetExhausted: 'news-model-budget-exhausted',
+  /** 连续三条没有拿到模型判断后，本轮余下条目不再调用模型（154 §7.1 的熔断）。 */
+  modelDegraded: 'news-model-degraded',
   emptyWindow: 'news-empty-window',
   queryFailed: 'news-query-failed'
 })

@@ -1,6 +1,17 @@
-import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
+import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 
-import type { JobLogEntry, JobProgress, JobRunPage, JobRunQuery, JobRunRecord, JobStatus } from '../contracts/jobTypes'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
+
+import type {
+  JobLogEntry,
+  JobProgress,
+  JobRunAggregateQuery,
+  JobRunDailyAggregate,
+  JobRunPage,
+  JobRunQuery,
+  JobRunRecord,
+  JobStatus
+} from '../contracts/jobTypes'
 
 // Platform-owned read budget: retain default/zero semantics; oversized pages use cursors.
 export const JOB_RUN_PAGE_POLICY = { defaultLimit: 20, maximumLimit: 1000 } as const
@@ -28,12 +39,7 @@ type JobRunRow = {
 }
 
 /** One day of history for one definition, kept after the run details are dropped. */
-export type JobRunDailyAggregate = Readonly<{
-  day: string
-  definitionId: string
-  runs: number
-  failures: number
-}>
+export type { JobRunDailyAggregate } from '../contracts/jobTypes'
 
 export type JobRunRetentionSweep = Readonly<{
   /** Number of run details removed by this sweep. */
@@ -49,14 +55,14 @@ export type JobRunSqliteRepository = {
   allocateRunId: () => string
   /** Aggregates runs older than `cutoff` into daily counters, then removes them. */
   purgeRunsOlderThan: (cutoff: string, batchLimit: number) => JobRunRetentionSweep
-  listRunAggregates: () => readonly JobRunDailyAggregate[]
+  /** Daily counters, filtered by half-open UTC day window and definition prefix, both ascending. */
+  listRunAggregates: (query?: JobRunAggregateQuery) => readonly JobRunDailyAggregate[]
   close: () => void
 }
 
 export function createJobRunSqliteRepository(path: string): JobRunSqliteRepository {
-  const db = new DatabaseSync(path)
+  const db = openSqliteDatabase(path)
   db.exec('pragma foreign_keys = on;')
-  db.exec('pragma journal_mode = wal;')
   db.exec('pragma synchronous = full;')
   applySchema(db)
 
@@ -158,10 +164,29 @@ export function createJobRunSqliteRepository(path: string): JobRunSqliteReposito
         throw error
       }
     },
-    listRunAggregates() {
+    listRunAggregates(query = {}) {
+      const conditions: string[] = []
+      const parameters: string[] = []
+      const fromDay = requireDay(query.fromDay, 'fromDay')
+      if (fromDay) {
+        conditions.push('day >= ?')
+        parameters.push(fromDay)
+      }
+      const toDay = requireDay(query.toDay, 'toDay')
+      if (toDay) {
+        // Half-open: `toDay` is excluded, so a caller's range cannot be one day off.
+        conditions.push('day < ?')
+        parameters.push(toDay)
+      }
+      if (query.definitionIdPrefix) {
+        // `escape` keeps `%` and `_` in a definition id literal instead of silently widening the match.
+        conditions.push("definition_id like ? escape '\\'")
+        parameters.push(`${escapeLike(query.definitionIdPrefix)}%`)
+      }
+      const where = conditions.length > 0 ? ` where ${conditions.join(' and ')}` : ''
       return db.prepare(
-        'select day, definition_id, runs, failures from job_run_daily_aggregates order by day asc, definition_id asc'
-      ).all().map((row) => {
+        `select day, definition_id, runs, failures from job_run_daily_aggregates${where} order by day asc, definition_id asc`
+      ).all(...parameters).map((row) => {
         const value = row as { day: string; definition_id: string; runs: number; failures: number }
         return { day: String(value.day), definitionId: String(value.definition_id), runs: Number(value.runs), failures: Number(value.failures) }
       })
@@ -314,11 +339,19 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
   }
 
   if (query.cursor) {
-    const cursor = db.prepare(`select id from job_runs where ${[...where, 'id = ?'].join(' and ')}`)
-      .get(...params, query.cursor)
-    if (!cursor) return []
-    where.push('id < ?')
-    params.push(query.cursor)
+    if (query.newestFirst) {
+      const cursor = db.prepare(`select id, created_at from job_runs where ${[...where, 'id = ?'].join(' and ')}`)
+        .get(...params, query.cursor) as { id: string; created_at: string } | undefined
+      if (!cursor) return []
+      where.push('(created_at < ? or (created_at = ? and id < ?))')
+      params.push(cursor.created_at, cursor.created_at, query.cursor)
+    } else {
+      const cursor = db.prepare(`select id from job_runs where ${[...where, 'id = ?'].join(' and ')}`)
+        .get(...params, query.cursor)
+      if (!cursor) return []
+      where.push('id < ?')
+      params.push(query.cursor)
+    }
   }
 
   const rows = db
@@ -329,7 +362,7 @@ function queryRows(db: DatabaseSync, query: JobRunQuery, limit: number): JobRunR
          progress_json, logs_json
        from job_runs
        ${where.length > 0 ? `where ${where.join(' and ')}` : ''}
-       order by id desc limit ?`
+       order by ${query.newestFirst ? 'created_at desc, id desc' : 'id desc'} limit ?`
     )
     .all(...params, limit + 1) as JobRunRow[]
   return rows
@@ -378,4 +411,20 @@ function normalizeLimit(limit: number | undefined): number {
 
 function escapeLike(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')
+}
+
+const UTC_DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+/**
+ * Rejects a malformed day instead of ignoring it.
+ *
+ * A dropped filter would widen the answer to every day, which reads as success while returning
+ * data the caller never asked for — the opposite of the failure this read path exists to avoid.
+ */
+function requireDay(value: string | undefined, name: 'fromDay' | 'toDay'): string | undefined {
+  if (value === undefined) return undefined
+  if (!UTC_DAY_PATTERN.test(value)) {
+    throw new Error(`${name} must be a UTC day formatted YYYY-MM-DD, received "${value}".`)
+  }
+  return value
 }

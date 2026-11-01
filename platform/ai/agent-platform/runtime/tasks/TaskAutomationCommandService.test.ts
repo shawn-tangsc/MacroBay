@@ -51,7 +51,7 @@ function createService(state: AgentStoreState) {
   return new TaskAutomationCommandService({
     store: createStore(state),
     now: () => new Date('2026-01-01T10:30:00.000Z'),
-    defaultTimezone: 'Asia/Shanghai',
+    timeZone: () => 'Asia/Shanghai',
     getPolicyPreset: async () => 'balanced'
   })
 }
@@ -72,7 +72,7 @@ describe('TaskAutomationCommandService', () => {
     const service = new TaskAutomationCommandService({
       store,
       now: () => new Date(now),
-      defaultTimezone: 'UTC',
+      timeZone: () => 'UTC',
       getPolicyPreset: async () => 'balanced'
     })
 
@@ -98,6 +98,51 @@ describe('TaskAutomationCommandService', () => {
       provenance: { createdBy: 'user' }, revision: 1
     })
     expect(result.nextRun).toBe('2026-01-02T01:00:00.000Z')
+  })
+
+  it('falls back to UTC, not the machine zone, when no reader is injected', async () => {
+    const service = new TaskAutomationCommandService({
+      store: createStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
+      now: () => new Date('2026-01-01T10:30:00.000Z'),
+      getPolicyPreset: async () => 'balanced'
+    })
+
+    const created = await service.execute({
+      type: 'create',
+      actor: { kind: 'user', source: 'renderer-agent-drawer' },
+      agentId: agent.id,
+      task: { name: 'Untitled zone', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
+    })
+
+    expect(created.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'UTC' } })
+  })
+
+  it('follows the shell time zone instead of reading the machine zone once at construction', async () => {
+    let zone = 'Asia/Tokyo'
+    const service = new TaskAutomationCommandService({
+      store: createStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
+      now: () => new Date('2026-01-01T10:30:00.000Z'),
+      timeZone: () => zone,
+      getPolicyPreset: async () => 'balanced'
+    })
+
+    const first = await service.execute({
+      type: 'create',
+      actor: { kind: 'user', source: 'renderer-agent-drawer' },
+      agentId: agent.id,
+      task: { name: 'Tokyo run', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
+    })
+    expect(first.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'Asia/Tokyo' } })
+
+    // 用户在设置里换了时区：新建任务的默认时区当场跟着变，不需要重启。
+    zone = 'America/New_York'
+    const second = await service.execute({
+      type: 'create',
+      actor: { kind: 'user', source: 'renderer-agent-drawer' },
+      agentId: agent.id,
+      task: { name: 'New York run', prompt: 'x', trigger: { kind: 'cron', expr: '0 9 * * *' }, workspace: { type: 'system' } }
+    })
+    expect(second.task).toMatchObject({ trigger: { kind: 'cron', timezone: 'America/New_York' } })
   })
 
   it('rejects non-autonomous Agents and foreign channels before mutation', async () => {
@@ -150,7 +195,7 @@ describe('TaskAutomationCommandService', () => {
   it('rejects completed task updates without changing it', async () => {
     const completed = task({ enabled: false, status: 'completed' })
     const store = createStore(createAgentStoreState({ agents: [agent], workspaces: [workspace], tasks: [completed] }))
-    const service = new TaskAutomationCommandService({ store, now: () => new Date('2026-01-01T10:30:00.000Z'), defaultTimezone: 'UTC', getPolicyPreset: async () => 'balanced' })
+    const service = new TaskAutomationCommandService({ store, now: () => new Date('2026-01-01T10:30:00.000Z'), timeZone: () => 'UTC', getPolicyPreset: async () => 'balanced' })
 
     await expect(service.execute({ type: 'resume', actor: { kind: 'user', source: 'renderer-settings' }, agentId: agent.id, taskId: completed.id, expectedRevision: 3 })).rejects.toMatchObject({ code: 'task-completed' })
     await expect(service.execute({ type: 'update', actor: { kind: 'user', source: 'renderer-settings' }, agentId: agent.id, taskId: completed.id, expectedRevision: 3, patch: { name: 'Cannot rename' } })).rejects.toMatchObject({ code: 'task-completed' })

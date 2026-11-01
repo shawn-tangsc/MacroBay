@@ -1,14 +1,40 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+
+const { mockGetAgentView } = vi.hoisted(() => ({ mockGetAgentView: vi.fn() }))
+
+vi.mock('../../shared/ipc/intelligenceSourcesClient', () => ({
+  intelligenceSourcesClient: {
+    getAgentView: mockGetAgentView,
+    getPanelView: vi.fn(async () => undefined)
+  }
+}))
 
 import { productText } from '../../shared/i18n/productText'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 
 import IntelligencePage from './index'
+
+/** A configured reader: one enabled dashboard provider behind the crypto card. */
+const configuredView = {
+  groups: [{
+    groupId: 'spot-momentum',
+    tier: 'required',
+    sources: [{
+      sourceId: 'coingecko-market', providerId: 'coingecko', displayName: 'CoinGecko',
+      enabled: true, visibility: 'visible', readiness: 'live', panels: ['dashboard']
+    }]
+  }]
+}
+
+beforeEach(() => {
+  mockGetAgentView.mockReset()
+  mockGetAgentView.mockResolvedValue(configuredView)
+})
 
 let root: Root | null = null
 
@@ -53,7 +79,7 @@ describe('crypto agent card entry flow', () => {
 
     expect(page).toContain("from '../../features/macro/economic-calendar'")
     expect(page).toContain("from '../../features/industry/fear-greed'")
-    expect(page).toContain("from '../../features/industry/funding-rates'")
+    expect(page).toContain("from '../../features/industry/positioning'")
     expect(page).not.toContain("shared/ipc/macroEconomicCalendarClient")
     expect(page).not.toContain("shared/ipc/intelligenceFearGreedClient")
     expect(page).not.toContain("shared/ipc/intelligenceFundingRatePairClient")
@@ -71,5 +97,17 @@ describe('crypto agent card entry flow', () => {
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
     expect(document.body.textContent).not.toContain(text.dashboard.title)
     window.removeEventListener('app-shell:navigate', navigation)
+  })
+
+  it('does not draw an empty setup when the activation read fails', async () => {
+    const text = productText['zh-CN'].pages.intelligence.portal
+    mockGetAgentView.mockRejectedValue(new Error('bridge missing'))
+    const container = await renderPage()
+
+    expect(container.textContent).toContain(text.data.temporarilyUnavailable)
+    expect(container.textContent).toContain(text.data.retry)
+    expect(container.textContent).not.toContain(text.data.sourcesNotConfigured)
+    expect(container.querySelector('.mi-agent-card__progress')).toBeNull()
+    expect(container.textContent).not.toMatch(/0\/0/)
   })
 })

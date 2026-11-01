@@ -12,7 +12,8 @@ export const agentTextEnRuntime: Pick<AgentText, 'runtimeText' | 'runtimeActivit
     providerRequestFailed: 'Model request failed. Try again.',
     modelRetired: 'This model has been retired. Switch to another model.',
     modelNotActivated: 'This model is not activated. Enable it in the provider console.',
-    modelNotFound: 'This model no longer exists. Switch to another model.'
+    modelNotFound: 'This model no longer exists. Switch to another model.',
+    stillWaiting: 'Still waiting for the model…'
   },
   runtimeActivity: {
     title: 'Runtime activity',

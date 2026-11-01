@@ -1,4 +1,6 @@
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '../sqlite/openSqliteDatabase'
 
 import type {
   CacheOperationAuditRecord,
@@ -24,7 +26,7 @@ export class InMemoryCacheOperationAuditRepository implements CacheOperationAudi
 }
 
 export function createSqliteCacheOperationAuditRepository(path: string): CacheOperationAuditRepository {
-  const connection = new DatabaseSync(path)
+  const connection = openSqliteDatabase(path)
   connection.exec('pragma foreign_keys = on;')
   applyMigrations(connection)
 

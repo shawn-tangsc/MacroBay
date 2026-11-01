@@ -124,6 +124,22 @@ describe('PLAT-55 masked API key field', () => {
     expect(container.innerHTML).not.toContain(savedKey)
   })
 
+  it('copies the revealed key and takes the copy affordance away with the mask', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const container = await mount()
+
+    // 掩码态没有复制：看不到就不该能复制。
+    expect(container.querySelector('.web-search-api-key-copy')).toBeNull()
+
+    await click(container, '.web-search-api-key-eye')
+    await click(container, '.web-search-api-key-copy')
+    expect(writeText).toHaveBeenCalledWith(savedKey)
+
+    await click(container, '.web-search-api-key-eye')
+    expect(container.querySelector('.web-search-api-key-copy')).toBeNull()
+  })
+
   it('auto-hides the revealed key after 30 seconds', async () => {
     vi.useFakeTimers()
     const container = await mount()

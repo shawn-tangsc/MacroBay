@@ -5,10 +5,10 @@ import { marketIntelligenceProductManifest } from '../../../product.manifest'
 
 describe('intelligence agent capability catalog', () => {
   it('declares the full read, write, discovery, and handoff surface', () => {
-    expect(intelligenceAgentCapabilities).toHaveLength(28)
-    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.id)).size).toBe(28)
-    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.handlerId)).size).toBe(28)
-    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(21)
+    expect(intelligenceAgentCapabilities).toHaveLength(31)
+    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.id)).size).toBe(31)
+    expect(new Set(intelligenceAgentCapabilities.map((capability) => capability.handlerId)).size).toBe(31)
+    expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'read')).toHaveLength(24)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'write')).toHaveLength(5)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'handoff')).toHaveLength(1)
     expect(intelligenceAgentCapabilities.filter((capability) => capability.kind === 'discovery')).toHaveLength(1)
@@ -97,6 +97,13 @@ describe('intelligence agent capability catalog', () => {
     )
     expect(manifestTools.map((tool) => tool.handlerId)).toEqual(
       intelligenceAgentCapabilities.map((capability) => capability.handlerId)
+    )
+  })
+
+  it('carries capability titles into the derived manifest so the editor can label tools', () => {
+    const manifestTools = marketIntelligenceProductManifest.productAgentTools ?? []
+    expect(manifestTools.map((tool) => tool.title)).toEqual(
+      intelligenceAgentCapabilities.map((capability) => capability.title)
     )
   })
 

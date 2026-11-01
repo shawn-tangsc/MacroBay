@@ -1,3 +1,4 @@
+import { minutesOfDayInTimeZone } from '../../time/timeZoneClock'
 import type { NotificationChannel, NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationRequest } from '../contracts/notificationContracts'
@@ -15,10 +16,16 @@ export type DeliveryHooks = {
   desktop?: (record: NotificationRecord) => Promise<{ ok: boolean; reason?: string }>
 }
 
+/** 读者的一天的「现在」：设置时区 + 当前时刻。缺省 UTC，绝不读机器时区。 */
+export type NotificationClock = { now: () => Date; timeZone: () => string }
+
+const defaultClock: NotificationClock = { now: () => new Date(), timeZone: () => 'UTC' }
+
 export function routeTransientDelivery(
   record: NotificationRecord,
   settings: NotificationRuntimeSettings,
-  hooks: DeliveryHooks
+  hooks: DeliveryHooks,
+  clock: NotificationClock = defaultClock
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
   const now = new Date().toISOString()
@@ -30,7 +37,12 @@ export function routeTransientDelivery(
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-disabled' })
         continue
       }
-      hooks.toast?.(record)
+      // A channel with no delivery hook cannot be recorded as sent: that would be a false success.
+      if (!hooks.toast) {
+        attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'toast-unavailable' })
+        continue
+      }
+      hooks.toast(record)
       attempts.push({ channel, attemptedAt: now, result: 'sent' })
       continue
     }
@@ -40,7 +52,11 @@ export function routeTransientDelivery(
         attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'popup-disabled' })
         continue
       }
-      hooks.popup?.(record)
+      if (!hooks.popup) {
+        attempts.push({ channel, attemptedAt: now, result: 'skipped', reason: 'popup-unavailable' })
+        continue
+      }
+      hooks.popup(record)
       attempts.push({ channel, attemptedAt: now, result: 'sent' })
     }
   }
@@ -48,8 +64,13 @@ export function routeTransientDelivery(
   const desktopChannel = transientChannels.includes('desktop')
   if (!desktopChannel) return Promise.resolve(attempts)
 
-  if (!settings.desktopEnabled || !hooks.desktop) {
+  if (!settings.desktopEnabled) {
     attempts.push({ channel: 'desktop', attemptedAt: now, result: 'skipped', reason: 'desktop-disabled' })
+    return Promise.resolve(attempts)
+  }
+
+  if (!hooks.desktop) {
+    attempts.push({ channel: 'desktop', attemptedAt: now, result: 'skipped', reason: 'desktop-unavailable' })
     return Promise.resolve(attempts)
   }
 
@@ -64,7 +85,11 @@ export function routeTransientDelivery(
   })
 }
 
-export function normalizeRequestedChannels(request: NotificationRequest, settings: NotificationRuntimeSettings): NotificationChannel[] {
+export function normalizeRequestedChannels(
+  request: NotificationRequest,
+  settings: NotificationRuntimeSettings,
+  clock: NotificationClock = defaultClock
+): NotificationChannel[] {
   const requested = request.requestedChannels.includes('center')
     ? request.requestedChannels
     : ['center', ...request.requestedChannels]
@@ -78,7 +103,7 @@ export function normalizeRequestedChannels(request: NotificationRequest, setting
     return false
   })
 
-  return applyQuietHoursAndPriority(filtered, request.priority, settings)
+  return applyQuietHoursAndPriority(filtered, request.priority, settings, clock)
 }
 
 function isProductNotificationAllowed(request: NotificationRequest, settings: NotificationRuntimeSettings): boolean {
@@ -102,7 +127,8 @@ function hasProductChannelPermission(
 function applyQuietHoursAndPriority(
   channels: NotificationChannel[],
   priority: NotificationRequest['priority'],
-  settings: NotificationRuntimeSettings
+  settings: NotificationRuntimeSettings,
+  clock: NotificationClock
 ): NotificationChannel[] {
   const minimumPriority = settings.minimumDisruptivePriority
   const disruptive = new Set<NotificationChannel>(['toast', 'popup', 'desktop'])
@@ -116,16 +142,19 @@ function applyQuietHoursAndPriority(
   return channels.filter((channel) => {
     if (!disruptive.has(channel)) return true
     if (minimumPriority && priorityRank[priority] < priorityRank[minimumPriority]) return false
-    if (settings.quietHours?.enabled && isWithinQuietHours(settings.quietHours)) {
+    if (settings.quietHours?.enabled && isWithinQuietHours(settings.quietHours, clock)) {
       return priority === 'urgent'
     }
     return true
   })
 }
 
-function isWithinQuietHours(quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>): boolean {
-  const now = new Date()
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+function isWithinQuietHours(
+  quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>,
+  clock: NotificationClock
+): boolean {
+  // 免打扰窗口按设置的读者时区判断，不按运行这台机器的本地时间。
+  const currentMinutes = minutesOfDayInTimeZone(clock.now(), clock.timeZone())
   const start = parseLocalMinutes(quietHours.startLocalTime)
   const end = parseLocalMinutes(quietHours.endLocalTime)
   if (start === end) return false

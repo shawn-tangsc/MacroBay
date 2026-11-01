@@ -1,9 +1,14 @@
+import { computeEtfCumulativeFlow, etfFlowPolicy } from '../../../contracts/etfFlows'
+import type { MarketDivergenceResult } from '../../../contracts/marketDivergence'
+import type { OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
+import { resolvePositioningState } from '../../../contracts/openInterestPositioning'
+
 import {
+  MARKET_ANALYSIS_CONTRACT_POLICY,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENT,
   MARKET_ANALYSIS_CROSS_ASSET_REAL_INSTRUMENT,
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_CONTEXT_POLICY,
-  MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
+  MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS,
   isMarketAnalysisCanonicalUtc,
   type AgentFact,
   type AnalysisDomain,
@@ -68,11 +73,52 @@ export function isContextInput(value: unknown): value is MarketAnalysisContextIn
 }
 
 export function normalizeContextMaxFacts(value: number | undefined): number | undefined {
-  if (value === undefined) return MARKET_ANALYSIS_CONTEXT_POLICY.defaultMaxFacts
-  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, MARKET_ANALYSIS_CONTEXT_POLICY.defaultMaxFacts) : undefined
+  if (value === undefined) return MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems
+  return Number.isSafeInteger(value) && value > 0 ? Math.min(value, MARKET_ANALYSIS_CONTRACT_POLICY.maximumCollectionItems) : undefined
 }
 
-export function projectCapital(result: CapitalConditionsSnapshotResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
+/**
+ * How many daily ETF flow rows one asset contributes to the analysis snapshot.
+ *
+ * The long window is carried by the cumulative facts (the 5- and 20-trading-day totals); the daily
+ * rows only carry the recent rhythm, which is why five is enough and why the number is not tied to
+ * how many rows the panel draws. A panel view change must not silently rewrite what the model reads,
+ * so the two numbers are given two names: the snapshot query keeps its own row cap.
+ *
+ * The rows arrive in ascending `tradingDate` order (the ETF window validates that), so the newest
+ * five are the tail. Re-sorting here would be a second implementation of an ordering the window
+ * already guarantees.
+ */
+export const analysisRowsPerAsset = 5
+
+function projectEtfDailyFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number; observedAt: string }>[] }, sourceId: string, asOf: string, facts: AgentFact[]): number {
+  const rows = asset.rows.slice(-analysisRowsPerAsset)
+  for (const row of rows) facts.push(fact('capital', asset.asset, 'etf-net-flow-usd', row.netFlowUsd, 'USD', sourceId, row.observedAt, asOf, 'comparable', row.tradingDate))
+  return rows.length
+}
+
+/**
+ * The cumulative windows are what carry the long view now that the daily rows are capped: a model
+ * cannot total twenty daily rows it was never handed.
+ *
+ * Only a complete window becomes a fact. A five-day total summed over two days is a different
+ * number wearing the same name, so it is not published at all — absence is the honest answer, and
+ * the model is not asked to notice that `coveredDays` fell short.
+ */
+function projectEtfCumulativeFlows(asset: { asset: 'BTC' | 'ETH'; rows: readonly Readonly<{ tradingDate: string; netFlowUsd: number; observedAt: string }>[] }, sourceId: string, asOf: string, facts: AgentFact[]): number {
+  const windows = computeEtfCumulativeFlow(asset.rows, etfFlowPolicy.cumulativeWindows)
+  const newest = asset.rows.at(-1)
+  if (!windows || !newest) return 0
+  let projected = 0
+  for (const window of windows) {
+    if (!window.complete) continue
+    facts.push(fact('capital', asset.asset, `etf-net-flow-${window.windowDays}d-usd`, window.netFlowUsd, 'USD', sourceId, newest.observedAt, asOf, 'comparable', `${window.windowDays}d`))
+    projected += 1
+  }
+  return projected
+}
+
+export function projectCapital(result: CapitalConditionsSnapshotResult | undefined, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.capital = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
     return
@@ -88,18 +134,19 @@ export function projectCapital(result: CapitalConditionsSnapshotResult | undefin
     ['stablecoins', 'change-30d-usd', result.coreStablecoins.change30dUsd, 'USD']
   ]
   for (const [subject, metric, value, unit] of rows) facts.push(fact('capital', subject, metric, value, unit, 'defillama-stablecoins', result.coreStablecoins.observedAt, asOf, 'comparable'))
-  if (result.etf.state === 'available') {
-    for (const asset of [result.etf.btc, result.etf.eth]) {
-      for (const row of asset.rows) facts.push(fact('capital', asset.asset, 'etf-net-flow-usd', row.netFlowUsd, 'USD', result.etf.sourceId, row.observedAt, asOf, 'comparable', row.tradingDate))
-    }
-  }
+  const etfFactCount = result.etf.state === 'available'
+    ? projectEtfDailyFlows(result.etf.btc, result.etf.sourceId, asOf, facts) + projectEtfDailyFlows(result.etf.eth, result.etf.sourceId, asOf, facts)
+      + projectEtfCumulativeFlows(result.etf.btc, result.etf.sourceId, asOf, facts) + projectEtfCumulativeFlows(result.etf.eth, result.etf.sourceId, asOf, facts)
+    : 0
   const caveat = result.etf.state === 'unavailable' ? 'etf-unavailable' : undefined
   if (caveat) caveats.add(caveat)
-  const etfFactCount = result.etf.state === 'available' ? result.etf.btc.rows.length + result.etf.eth.rows.length : 0
-  observations.capital = observation('available', 'fresh', rows.length + etfFactCount, 0, caveat ? [caveat] : [])
+  // A divergence is a combination of legs that are already facts. It enters the domain of its
+  // slowest leg, so the card and the model look the same sentence up in the same place.
+  const divergenceFactCount = pushDivergenceFacts('capital', divergence, asOf, facts, ['liquidity-leverage', 'flows-price'])
+  observations.capital = observation('available', 'fresh', rows.length + etfFactCount + divergenceFactCount, 0, caveat ? [caveat] : [])
 }
 
-export function projectSentiment(result: FearGreedSnapshotResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
+export function projectSentiment(result: FearGreedSnapshotResult | undefined, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.sentiment = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
     return
@@ -110,14 +157,14 @@ export function projectSentiment(result: FearGreedSnapshotResult | undefined, as
   }
   if ('score' in result && typeof result.score === 'number') {
     facts.push(fact('sentiment', 'market', 'fear-greed-index', result.score, 'score', 'alternative-fear-greed', result.observedAt, asOf, 'comparable'))
-    observations.sentiment = observation('available', 'fresh', 1, 0, [])
+    observations.sentiment = observation('available', 'fresh', 1 + pushDivergenceFacts('sentiment', divergence, asOf, facts, ['narrative-price']), 0, [])
     return
   }
   observations.sentiment = observation('missing', 'missing', 0, 0, ['sentiment-not-computed-as-of'])
   caveats.add('sentiment-not-computed-as-of')
 }
 
-export function projectFunding(result: FundingRateHistoryResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
+export function projectFunding(result: FundingRateHistoryResult | undefined, positioning: OpenInterestHistoryResult | undefined, asOf: string, facts: AgentFact[], caveats: Set<string>, observations: Partial<Record<AnalysisDomain, MarketAnalysisDomainObservation>>): void {
   if (!result || result.state === 'unavailable') {
     observations.funding = observation('unavailable', 'unavailable', 0, 0, [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryUnavailable])
     return
@@ -128,6 +175,7 @@ export function projectFunding(result: FundingRateHistoryResult | undefined, asO
   }
   const points = [...result.btc.map(point => ['BTC', point] as const), ...result.eth.map(point => ['ETH', point] as const)]
   for (const [index, [asset, point]] of points.entries()) facts.push(fact('funding', asset, 'funding-rate-percent', point.ratePercent, '%', 'binance-futures-positioning', point.observedAt, asOf, 'comparable', `point-${index}`))
+  projectPositioning(positioning, result, asOf, facts)
   const state = points.length ? 'available' : 'empty'
   const freshness = points.length ? 'fresh' : 'missing'
   const pointCaveat = points.length ? [] : [MARKET_ANALYSIS_CONTEXT_CAVEATS.queryEmpty]
@@ -323,17 +371,17 @@ export function projectMacroCalendar(
       facts[facts.length - 1] = { ...facts[facts.length - 1]!, evidenceRefId }
       factCount += 1
     }
-    add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.eventName, event.titleKey)
-    add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.lifecycleState, event.lifecycleState)
-    add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.scheduledDate, event.scheduledDate, 'date')
-    if (event.scheduledAt) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.scheduledAt, event.scheduledAt, 'UTC')
-    if (event.officialReleaseDate) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.officialReleaseDate, event.officialReleaseDate, 'date')
-    if (event.actual) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.actual, event.actual.displayValue, event.actual.unit ?? null)
-    if (event.previous) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.previous, event.previous.displayValue, event.previous.unit ?? null)
-    if (event.consensus) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.consensus, event.consensus.displayValue, event.consensus.unit ?? null)
+    add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.eventName, event.titleKey)
+    add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.lifecycleState, event.lifecycleState)
+    add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.scheduledDate, event.scheduledDate, 'date')
+    if (event.scheduledAt) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.scheduledAt, event.scheduledAt, 'UTC')
+    if (event.officialReleaseDate) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.officialReleaseDate, event.officialReleaseDate, 'date')
+    if (event.actual) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.actual, event.actual.displayValue, event.actual.unit ?? null)
+    if (event.previous) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.previous, event.previous.displayValue, event.previous.unit ?? null)
+    if (event.consensus) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.consensus, event.consensus.displayValue, event.consensus.unit ?? null)
     const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
     if (surprise.presentation) {
-      add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.surprise, surprise.presentation.value, surprise.presentation.unit)
+      add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.surprise, surprise.presentation.value, surprise.presentation.unit)
     } else if (event.actual && event.consensus) {
       // Both sides exist but no displayable difference can be computed (unit form or a zero
       // denominator). A scheduled event with an expectation is not this case: it has no actual yet.
@@ -359,7 +407,7 @@ export async function safeSourceHealth(service: Pick<PublicQueryService, 'getSou
   return isEnvelope(result) && isSourceHealthData(result.data) ? result as MarketIntelligenceQueryResult<SourceHealthData> : undefined
 }
 
-export function fact(domain: AnalysisDomain, subject: string, metric: string, value: string | number | null, unit: string | null, sourceId: string, observedAt: string | null, asOf: string, comparability: AgentFact['comparability'], identitySuffix = '', options: Readonly<{ identityFromEventOnly?: boolean; subjectLabel?: string }> = {}): AgentFact {
+export function fact(domain: AnalysisDomain, subject: string, metric: string, value: string | number | null, unit: string | null, sourceId: string, observedAt: string | null, asOf: string, comparability: AgentFact['comparability'], identitySuffix = '', options: Readonly<{ identityFromEventOnly?: boolean; subjectLabel?: string; sourceUrl?: string }> = {}): AgentFact {
   // `identityFromEventOnly` is for observations whose collection instant changes on every
   // refresh (the 0xRouter macro route): with the instant in the identity, re-collecting the
   // same values produced a whole new set of facts, so the frozen "what changed" record read
@@ -374,7 +422,8 @@ export function fact(domain: AnalysisDomain, subject: string, metric: string, va
     // `subjectLabel` is how a fact is *said*, never which fact it is: it is not part of `factId`, and
     // the change diff compares values (design 141 §3.4). It exists for the calendar facts whose
     // subject is only their kind — `economic-indicator` tells a reader nothing about which release.
-    ...(options.subjectLabel ? { subjectLabel: options.subjectLabel } : {})
+    ...(options.subjectLabel ? { subjectLabel: options.subjectLabel } : {}),
+    ...(options.sourceUrl ? { sourceUrl: options.sourceUrl } : {})
   }
 }
 
@@ -416,4 +465,69 @@ function calendarSubjectIsAKind(family: string): boolean {
 function blankToUndefined(value: string): string | undefined {
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : undefined
+}
+
+/**
+ * Notional open interest, its 24-hour change and the state the two series make together.
+ *
+ * Three facts per asset, not a point per bucket: the series is 672 rows, the analysis needs the
+ * level, the direction and the read. The identity is fixed (`latest`) so a moving number shows
+ * up as `changed` in the snapshot diff instead of "everything removed, everything added" every
+ * fifteen minutes.
+ */
+function projectPositioning(positioning: OpenInterestHistoryResult | undefined, funding: FundingRateHistoryResult, asOf: string, facts: AgentFact[]): void {
+  if (!positioning || positioning.state !== 'available' || funding.state !== 'available') return
+  for (const [asset, subject] of [['btc', 'BTC'], ['eth', 'ETH']] as const) {
+    const points = positioning[asset]
+    const latest = points.at(-1)
+    if (latest) {
+      facts.push(fact('funding', subject, 'open-interest-notional-usd', latest.notionalUsd, 'USD', positioningSourceId, latest.observedAt, asOf, 'comparable', 'latest', { identityFromEventOnly: true }))
+    }
+    const change = positioning.change?.[asset]
+    if (latest && change?.h24Pct !== undefined) {
+      facts.push(fact('funding', subject, 'open-interest-change-24h-pct', change.h24Pct, 'percent', positioningSourceId, latest.observedAt, asOf, 'comparable', 'latest', { identityFromEventOnly: true }))
+    }
+    const rates = funding[asset]
+    const state = resolvePositioningState({
+      notionalChange24hPct: change?.h24Pct,
+      fundingNowPct: rates.at(-1)?.ratePercent,
+      fundingAgoPct: rates.at(-4)?.ratePercent
+    })
+    if (latest && state) {
+      facts.push(fact('funding', subject, 'positioning-state', state, null, positioningSourceId, latest.observedAt, asOf, 'comparable', 'latest', { identityFromEventOnly: true }))
+    }
+  }
+}
+
+const positioningSourceId = 'binance-futures-positioning'
+
+const divergenceAnchorSource: Readonly<Record<string, string>> = {
+  'liquidity-leverage': 'defillama-stablecoins',
+  'flows-price': '0xrouter',
+  'narrative-price': 'fear-greed'
+}
+
+/**
+ * One fact per diverging pair, in the domain of the leg that defines its window.
+ *
+ * The value is the pair's direction (`bearish` / `bullish` / `unpriced`), not a number: the two
+ * readings that produced it are already facts of their own, and the new information is that they
+ * point opposite ways. `identityFromEventOnly` keeps a re-run of the same day from reading as a
+ * new fact each time.
+ */
+function pushDivergenceFacts(domain: AnalysisDomain, divergence: MarketDivergenceResult | undefined, asOf: string, facts: AgentFact[], pairs: readonly string[]): number {
+  if (!divergence || divergence.state !== 'available') return 0
+  // An unusual reading is handed to the written analysis: the card publishes the rule answer, and
+  // the page's AI summary is the only place a model explains it.
+  if (divergence.escalated) {
+    facts.push(fact(domain, 'divergence', 'divergence-escalation', divergence.rows.length, null, 'market-divergence', divergence.asOf, asOf, 'comparable', 'escalation', { identityFromEventOnly: true }))
+  }
+  let count = 0
+  for (const row of divergence.rows) {
+    if (!pairs.includes(row.pairId)) continue
+    const oldest = row.legs.reduce<string>((instant, leg) => (leg.observedAt < instant ? leg.observedAt : instant), row.legs[0]!.observedAt)
+    facts.push(fact(domain, 'divergence', `divergence-${row.pairId}`, row.direction, null, divergenceAnchorSource[row.pairId] ?? 'market-divergence', oldest, asOf, 'comparable', row.pairId, { identityFromEventOnly: true }))
+    count += 1
+  }
+  return count + (divergence.escalated ? 1 : 0)
 }

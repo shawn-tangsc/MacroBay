@@ -1,7 +1,8 @@
 import { normalizeMacroRouteMonths, type MacroRoute } from '../public-query/macroRouteQuery'
+import { decideBudget } from './analysisBudgetPolicy'
 import { countAnalysisRuns, lastAutoRunAt, type AnalysisRunCounts } from './analysisRunCounter'
 import { evaluateSignificance, type SignificanceDecision } from './analysisSignificancePolicy'
-import { isGateEligible } from './analysisTriggerSourcePolicy'
+import { analysisRunLineOf, isGateEligible } from './analysisTriggerSourcePolicy'
 import { projectPreviousBaseline, type PreviousSignificanceBaseline } from './previousSignificanceBaseline'
 import type { SignificanceSignal } from './significanceChangeMatcher'
 
@@ -22,9 +23,15 @@ import type { SignificanceSignal } from './significanceChangeMatcher'
 export type SignificanceGateDependencies = Readonly<{
   now: () => string
   queryMacroRoute: (input: Readonly<{ asOf: string; months: readonly string[] }>) => Promise<MacroRoute>
-  countRuns: (now: string) => AnalysisRunCounts
+  countRuns: (now: string, excludedRowId?: string) => AnalysisRunCounts
   lastAutoRunAt: (eventGroupId: string, now: string) => string | null
   recordDecision: (input: Readonly<{ eventGroupId: string; triggerKey: string; changeHash: string; decision: 'queued' | 'skipped'; reasonCode: string }>) => void
+  /**
+   * Flips one attempt's own row to skipped. Required, not optional: a gate that refuses an attempt
+   * without being able to mark it is precisely the case where the counting formula keeps charging
+   * the day for a model call that never happened.
+   */
+  updateDecision: (rowId: string, decision: 'skipped', reasonCode: string) => void
 }>
 
 export type SignificanceGateInput = Readonly<{
@@ -32,6 +39,12 @@ export type SignificanceGateInput = Readonly<{
   triggerKey: string
   asOf: string
   previousSnapshot: Readonly<{ facts: readonly unknown[]; asOf: string }> | undefined | null
+  /**
+   * The ledger row the trigger line wrote for this attempt. Present only for attempts that were
+   * recorded as allowed before reaching the gate; keys the trigger line does not own (the calendar
+   * line) have no attempt row and the gate records its own decision as before.
+   */
+  attemptLedgerId?: string
 }>
 
 export type SignificanceGateOutcome = Readonly<{
@@ -46,6 +59,25 @@ export type SignificanceGateOutcome = Readonly<{
 export function createAnalysisSignificanceGate(dependencies: SignificanceGateDependencies) {
   return {
     async evaluate(input: SignificanceGateInput): Promise<SignificanceGateOutcome> {
+      const line = analysisRunLineOf(input.triggerKey)
+      // The item line is budgeted here but never judged for significance: its own trigger policy
+      // already decided that the change was worth a look. It reaches the budget with the same
+      // counts every other line uses, and a refusal rewrites its attempt row instead of adding one.
+      if (line === 'event') {
+        const now = dependencies.now()
+        const budget = decideBudget({
+          triggerKey: input.triggerKey, now,
+          lastAutoRunAt: dependencies.lastAutoRunAt(input.eventGroupId, now),
+          ...dependencies.countRuns(now, input.attemptLedgerId)
+        })
+        if (budget.decision === 'skipped' && budget.reasonCode !== null) {
+          // The freeze boundary refuses an item-line payload without its attempt row, so the id is
+          // always present here; without one there is no counted attempt to correct either.
+          if (input.attemptLedgerId !== undefined) dependencies.updateDecision(input.attemptLedgerId, 'skipped', budget.reasonCode)
+          return { decision: 'skipped', reasonCode: budget.reasonCode, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null }
+        }
+        return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null }
+      }
       // Not a key this gate judges: hand it back untouched and record nothing.
       if (!isGateEligible(input.triggerKey)) {
         return { decision: 'queued', reasonCode: null, signals: [], triggeredEventKeys: new Set(), route: null, usedPreviousAsOf: null }
@@ -63,10 +95,16 @@ export function createAnalysisSignificanceGate(dependencies: SignificanceGateDep
         ...dependencies.countRuns(now)
       })
       if (decision.reasonCode !== null) {
-        dependencies.recordDecision({
-          eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: decision.changeHash,
-          decision: decision.decision, reasonCode: decision.reasonCode
-        })
+        // A refused attempt that arrived with its own ledger row rewrites that row; anything else
+        // (the calendar line, the session slots) records a decision of its own as it always has.
+        if (input.attemptLedgerId !== undefined && decision.decision === 'skipped') {
+          dependencies.updateDecision(input.attemptLedgerId, 'skipped', decision.reasonCode)
+        } else {
+          dependencies.recordDecision({
+            eventGroupId: input.eventGroupId, triggerKey: input.triggerKey, changeHash: decision.changeHash,
+            decision: decision.decision, reasonCode: decision.reasonCode
+          })
+        }
       }
       return {
         decision: decision.decision, reasonCode: decision.reasonCode, signals: decision.signals,

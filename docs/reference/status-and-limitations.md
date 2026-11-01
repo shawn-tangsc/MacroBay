@@ -2,7 +2,7 @@
 
 # Status and limitations
 
-MacroBay is at `0.2.2`. This page describes what is usable today and what is intentionally not
+MacroBay is at `0.3.0`. This page describes what is usable today and what is intentionally not
 supported yet.
 
 ## Usable from source
@@ -16,13 +16,15 @@ supported yet.
 - Structured agent questions and tool approvals are rendered in the conversation.
 - The repository passes `pnpm typecheck`, `pnpm test`, and `pnpm build`.
 
-## Not exposed in this release
+## Not usable in this release
 
 ### Channel integrations
 
-Platform code for Telegram, Slack, Lark, Discord, QQ, and WeChat is present, but the settings page
-and agent runtime panels are hidden. The channel test suites are excluded from the default test
-run. Treat channels as unavailable until they are deliberately re-enabled with their UI and tests.
+Platform code for Telegram, Slack, Lark, Discord, QQ, and WeChat is present, and the channel settings
+page is reachable from the desktop shell: channels can be created, and credentials can be stored for
+the adapters that have a runtime implementation. No adapter is enabled in this release, and the app
+offers no way to enable one, so a channel created here sends and receives nothing. Treat channels as
+unavailable until an adapter is deliberately enabled.
 
 ### Packaged installers
 
@@ -84,7 +86,7 @@ hiding it.
 
 ## API and configuration stability
 
-The `0.2.2` release does not promise stable internal APIs, database schemas, or settings shapes.
+The `0.3.0` release does not promise stable internal APIs, database schemas, or settings shapes.
 Back up `userData` before upgrading. Product manifests and platform contracts may change between
 minor releases while the public surface is being stabilized.
 

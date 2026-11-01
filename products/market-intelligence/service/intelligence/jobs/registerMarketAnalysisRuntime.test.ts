@@ -210,7 +210,9 @@ describe('registerMarketAnalysisRuntime trigger severity', () => {
     const runtime = registerMarketAnalysisRuntime({
       jobRuntime, pipeline: { listItems: () => [classifiedItem], listRevisions: () => [] } as never,
       publicQueryService: {} as never, structuredModelInvocation: { invoke: vi.fn() } as never,
-      settingsService: createRuntimeSettingsService(), dataDir: directory, now: () => now
+      settingsService: createRuntimeSettingsService(), dataDir: directory, now: () => now,
+      // 开盘按读者时区换算；这条用例用本机墙上时间写的 now，所以读者时区与 suite 一致。
+      timeZone: () => 'Asia/Shanghai'
     })
     try {
       const handler = registerHandler.mock.calls.find(([id]) => id === ANALYSIS_SESSION_SLOTS_JOB)?.[1] as

@@ -1,9 +1,11 @@
+
 import { describe, expect, it } from 'vitest'
 
 import { fallbackTimeZone, systemTimeZoneSetting } from '../../settings/schema/appSettings'
 import {
   formatShellInstant,
   formatShellTimeZoneLabel,
+  formatShellYearMonth,
   resolveShellTimeZone,
   resolveSystemTimeZone
 } from './shellTimeFormat'
@@ -44,5 +46,15 @@ describe('shell time formatting', () => {
 
   it('falls back to a named zone rather than guessing one', () => {
     expect(fallbackTimeZone).toBe('UTC')
+  })
+})
+
+describe('formatShellYearMonth', () => {
+  it('formats the month in the display zone, not in UTC', () => {
+    const instant = new Date('2026-11-30T23:30:00.000Z')
+
+    expect(formatShellYearMonth(instant, 'UTC')).toBe('2026-11')
+    // 东京此刻已是 12 月 1 日。
+    expect(formatShellYearMonth(instant, 'Asia/Tokyo')).toBe('2026-12')
   })
 })

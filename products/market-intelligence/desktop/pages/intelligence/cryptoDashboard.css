@@ -89,10 +89,12 @@
 .mi-crypto-dashboard h1 { color: #fff; font-size: 30px; font-weight: 650; letter-spacing: -.035em; line-height: 1.16; }
 .mi-crypto-dashboard__heading > p:last-child { max-width: 660px; margin-top: 8px; color: var(--mi-dashboard-muted); font-size: 14px; line-height: 1.5; }
 .mi-crypto-dashboard__tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.mi-crypto-dashboard__briefing,
 .mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { border: 1px solid var(--mi-dashboard-line); background: var(--mi-dashboard-surface); color: var(--mi-dashboard-text); font: inherit; font-size: 12px; }
+.mi-crypto-dashboard__back { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px; font: inherit; font-size: 12px; line-height: 1; white-space: nowrap; }
+.mi-crypto-dashboard__briefing,
 .mi-crypto-dashboard__configure,
-.mi-crypto-dashboard__back { display: inline-flex; gap: 6px; align-items: center; padding: 11px 12px; border-radius: 8px; cursor: pointer; }
+.mi-crypto-dashboard__back { cursor: pointer; }
 .mi-crypto-dashboard__configure { border-color: color-mix(in srgb, var(--mi-dashboard-lime) 42%, var(--mi-dashboard-line)); color: var(--mi-dashboard-lime); }
 .mi-crypto-dashboard__back { color: var(--mi-dashboard-muted); }
 .mi-crypto-dashboard__configure:focus-visible,
@@ -101,11 +103,14 @@
 .mi-crypto-dashboard__source-row button { border: 0; background: transparent; color: var(--mi-dashboard-lime); cursor: pointer; font: inherit; font-size: 11px; padding: 0; text-align: left; }
 .mi-crypto-dashboard__source-row button:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
 
-.mi-crypto-dashboard__capital-positioning-row { display: grid; min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
-.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation)); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__capital-positioning-row {
+  display: grid;
+  grid-template-columns: minmax(190px, var(--mi-dashboard-positioning-sentiment-allocation)) minmax(0, var(--mi-dashboard-positioning-funding-allocation));
+  min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); border-bottom: 1px solid var(--mi-dashboard-line); }
 .mi-capital-conditions h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 14px; font-weight: 650; }
 .mi-capital-conditions { display: grid; align-content: start; row-gap: var(--mi-dashboard-capital-content-row-gap); min-width: 0; }
-.mi-crypto-dashboard__sentiment { display: grid; align-content: start; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
+.mi-crypto-dashboard__sentiment { display: grid; align-content: center; row-gap: 2px; container-name: mi-sentiment-positioning; container-type: inline-size; min-width: 0; padding-left: var(--mi-dashboard-band-zone-inline); padding-right: var(--mi-dashboard-band-zone-inline); }
 .mi-crypto-dashboard__sentiment h2 { color: var(--mi-dashboard-text); font-size: 12px; font-weight: 650; text-align: center; }
 .mi-capital-conditions__summary > p { color: var(--mi-dashboard-muted); font-size: 12px; }
 .mi-capital-conditions__header-band { display: flex; flex-wrap: wrap; align-items: baseline; min-width: 0; gap: var(--mi-dashboard-capital-header-row-gap) var(--mi-dashboard-capital-header-column-gap); }
@@ -179,26 +184,46 @@
 .mi-capital-conditions__chart-tooltip b { color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
 .mi-capital-conditions__chart-ticks { display: flex; justify-content: space-between; min-width: 0; margin: 4px 0 0 var(--mi-dashboard-etf-flow-axis-width); color: var(--mi-dashboard-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; line-height: 1; }
 .mi-crypto-dashboard__sentiment-gauge { display: grid; justify-items: center; min-width: 0; padding: var(--mi-dashboard-gauge-block-padding); text-align: center; }
-.mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 64px; overflow: visible; }
+.mi-crypto-dashboard__sentiment-gauge svg { width: 112px; height: 80px; overflow: visible; }
+/* The dial is the positioning context: the svg renders 112x80 from a 120x86 viewBox, and the
+   score is centred on the readout disc at y=60 (69.77% down). The disc is painted after the
+   needle, so the blade only exists outside its ring. */
+.mi-crypto-dashboard__sentiment-dial { position: relative; display: grid; justify-items: center; }
+.mi-crypto-dashboard__sentiment-dial strong {
+  /* top 60/86 = 69.77%: the disc's centre in the rendered dial. */
+  position: absolute; top: 69.77%; right: 0; left: 0; transform: translateY(-50%);
+  color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 17px; font-variant-numeric: tabular-nums; font-weight: 650; line-height: 1; text-align: center;
+}
 .mi-crypto-dashboard__gauge-segment { fill: none; stroke-width: 10; }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='fear'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='neutral'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='greed'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-greed'],
-.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-greed'],
-.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); stroke: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__gauge-tick { stroke: var(--mi-dashboard-text); stroke-width: .8; opacity: .26; }
+/* The blade is text-coloured and only its halo takes the bucket tone: an orange needle on the
+   orange fear band dissolved into the segment it was pointing at. */
+.mi-crypto-dashboard__gauge-needle { fill: none; stroke: var(--mi-dashboard-text); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 1.8px var(--mi-gauge-glow)); }
+/* The disc is the needle's mask and the score's backdrop; its ring carries the bucket tone. */
+.mi-crypto-dashboard__gauge-readout { fill: var(--mi-dashboard-surface); stroke-width: 1.2; }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-fear'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='extreme-fear'] { stroke: var(--mi-dashboard-sentiment-extreme-fear); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='fear'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='fear'] { stroke: var(--mi-dashboard-sentiment-fear); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='neutral'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='neutral'] { stroke: var(--mi-dashboard-sentiment-neutral); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='greed'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='greed'] { stroke: var(--mi-dashboard-sentiment-greed); }
+.mi-crypto-dashboard__gauge-segment[data-gauge-tone='extreme-greed'] { stroke: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__gauge-needle[data-gauge-bucket='extreme-greed'] { --mi-gauge-glow: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__gauge-readout[data-gauge-bucket='extreme-greed'] { stroke: var(--mi-dashboard-sentiment-extreme-greed); }
+.mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-greed'] { color: var(--mi-dashboard-sentiment-extreme-greed); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='extreme-fear'] { color: var(--mi-dashboard-sentiment-extreme-fear); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='fear'] { color: var(--mi-dashboard-sentiment-fear); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='neutral'] { color: var(--mi-dashboard-sentiment-neutral); }
 .mi-crypto-dashboard__sentiment-gauge > span[data-gauge-bucket-text='greed'] { color: var(--mi-dashboard-sentiment-greed); }
-.mi-crypto-dashboard__gauge-needle { fill: none; stroke-width: 3; stroke-dasharray: 2 150; transform-origin: 60px 60px; }
-.mi-crypto-dashboard__sentiment-gauge > strong { margin-top: -44px; color: var(--mi-dashboard-text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 25px; line-height: 1; }
-.mi-crypto-dashboard__sentiment-gauge > span { margin-top: 5px; font-size: 12px; }
+/* Only the bucket label, not the dial, takes this margin: the dial is a span too. */
+.mi-crypto-dashboard__sentiment-gauge > [data-gauge-bucket-text] { margin-top: 5px; font-size: 12px; }
 .mi-crypto-dashboard__sentiment-gauge small,
 .mi-crypto-dashboard__sentiment-gauge p { margin: 5px 0 0; color: var(--mi-dashboard-muted); font-size: 10px; }
 /*
@@ -210,7 +235,8 @@
  * Agent 列或页边距就会再次错位；让列自己按比例收放，这种错位就不存在了。
  */
 /* 并排形态的装饰（区内边距、列间分隔线）写在基础规则里，堆叠分支再把它们撤掉。 */
-.mi-crypto-dashboard__positioning-row > .mi-funding-rate-history { padding-left: var(--mi-dashboard-band-zone-inline); border-left: 1px solid var(--mi-dashboard-line); }
+.mi-crypto-dashboard__positioning-row > .mi-positioning-panel { padding-left: 0; border-left: 0; }
+.mi-crypto-dashboard__positioning-row > .mi-divergence { padding: 8px var(--mi-dashboard-band-zone-inline) 0 0; border-top: 1px solid var(--mi-dashboard-line); }
 
 .mi-crypto-dashboard__source-region { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 18px; margin-top: 16px; padding: var(--mi-dashboard-band-block-padding) 0; border-top: 1px solid var(--mi-dashboard-line); }
 .mi-crypto-dashboard__source-region > header { grid-column: 1 / -1; }
@@ -245,12 +271,14 @@
  */
 @container (max-width: 899px) {
   .mi-capital-conditions__content-row { grid-template-columns: minmax(0, 1fr); }
+  .mi-crypto-dashboard__capital-positioning-row,
   .mi-crypto-dashboard__positioning-row { grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .mi-crypto-dashboard__sentiment,
-  .mi-crypto-dashboard__positioning-row > .mi-funding-rate-history {
+  .mi-crypto-dashboard__capital-positioning-row > .mi-capital-conditions {
     padding: 16px 0 0;
     border-top: 1px solid var(--mi-dashboard-line);
     border-left: 0;
+    border-right: 0;
   }
   .mi-capital-conditions__etf-flow { margin-right: 0; }
   .mi-crypto-dashboard__source-region { grid-template-columns: minmax(0, 1fr); }
@@ -468,3 +496,16 @@
 :root[data-theme='light'] .mi-crypto-dashboard .mi-crypto-dashboard__label {
   color: var(--mi-dashboard-lime);
 }
+
+.mi-crypto-dashboard__briefing {
+  border: 1px solid color-mix(in srgb, var(--mi-dashboard-lime) 55%, var(--mi-dashboard-line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mi-dashboard-lime) 9%, var(--mi-dashboard-surface));
+  color: var(--mi-dashboard-lime);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mi-crypto-dashboard__briefing:hover { background: color-mix(in srgb, var(--mi-dashboard-lime) 15%, var(--mi-dashboard-surface)); }
+.mi-crypto-dashboard__briefing:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }

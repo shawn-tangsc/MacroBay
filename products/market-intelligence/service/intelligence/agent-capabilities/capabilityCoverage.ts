@@ -85,6 +85,18 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.macro.economicCalendar.importManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.previewManualBlsIcs': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.queryMonth': exposed('query_macro_calendar'),
+  // The policy row is a dashboard read; the Agent reaches the same facts through the calendar tool.
+  'intelligence.macro.policyPath.read': exposed('get_policy_path'),
+  // Declared by 2d16872 without its coverage row; the panel reads it, no agent tool exists yet.
+  'intelligence.queryOpenInterestHistory': excluded('internal-view'),
+  // The divergence card's own read: the reader sees it on the dashboard; the Agent gets the same
+  // judgement as an analysis fact instead of calling the view.
+  'intelligence.queryMarketDivergence': excluded('internal-view'),
+  // The chips the dashboard draws; the analysis reads its own facts, not this panel view.
+  'intelligence.queryModuleSignals': excluded('internal-view'),
+  'intelligence.syncRuns.list': excluded('internal-view'),
+  // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
+  'intelligence.syncRuns.aggregates': excluded('internal-view'),
   'intelligence.macro.economicCalendar.setReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.clearReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.refreshBlsEmploymentRelease': exposed('operate_macro_calendar'),
@@ -100,6 +112,12 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.queryFundingRateHistory': excluded('internal-view'),
   'intelligence.queryCapitalConditionsSnapshot': excluded('internal-view'),
   'intelligence.queryFearGreedSnapshot': excluded('internal-view'),
+  'intelligence.dailyBriefing.getToday': excluded('internal-view'),
+  'intelligence.dailyBriefing.list': excluded('internal-view'),
+  'intelligence.dailyBriefing.get': excluded('internal-view'),
+  'intelligence.dailyBriefing.regenerate': excluded('internal-view'),
+  'intelligence.dailyBriefing.getSettings': excluded('user-private-data'),
+  'intelligence.dailyBriefing.saveSettings': excluded('user-private-data'),
   'intelligence.queryRelatedEvents': exposed('query_related_events'),
   'intelligence.querySentimentSeries': exposed('query_sentiment_series'),
   'intelligence.querySentimentSnapshot': exposed('query_sentiment_snapshot'),

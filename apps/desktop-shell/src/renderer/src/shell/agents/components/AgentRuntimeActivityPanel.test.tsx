@@ -93,6 +93,41 @@ describe('AgentRuntimeActivityPanel', () => {
     expect(markup).toContain('&quot;command&quot;: &quot;pnpm test&quot;')
   })
 
+  it('shows the completed duration without an activity list when the turn has no cards', () => {
+    const markup = renderToStaticMarkup(
+      <AgentRuntimeActivityPanel
+        cards={[]}
+        onRuntimeSnapshotChange={() => undefined}
+        elapsedMs={65_000}
+      />
+    )
+
+    expect(markup).toContain('已完成，用时 1 分 5 秒')
+    expect(markup).not.toContain('agent-runtime-activity-list')
+  })
+
+  it('shows the running summary with the live elapsed time', () => {
+    const markup = renderToStaticMarkup(
+      <AgentRuntimeActivityPanel
+        cards={[]}
+        onRuntimeSnapshotChange={() => undefined}
+        elapsedMs={12_000}
+        running
+      />
+    )
+
+    expect(markup).toContain('执行中 · 12 秒')
+    expect(markup).not.toContain('agent-runtime-activity-list')
+  })
+
+  it('renders nothing without cards, failure, or elapsed time', () => {
+    const markup = renderToStaticMarkup(
+      <AgentRuntimeActivityPanel cards={[]} onRuntimeSnapshotChange={() => undefined} />
+    )
+
+    expect(markup).toBe('')
+  })
+
   it('nests approvals as activity rows instead of cards', () => {
     const markup = renderToStaticMarkup(
       <AgentRuntimeActivityPanel

@@ -38,6 +38,19 @@ describe('time zone preference', () => {
     expect(combobox).not.toBeNull()
   })
 
+  it('always says that open times follow this setting', async () => {
+    const text = platformText['zh-CN'].preferences
+    const following = await mount(systemTimeZoneSetting)
+    expect(following.textContent).toContain('开盘时刻按这里选择的时区计算')
+
+    // 显式选了别的时区也照样显示：这条不是「跟随系统」专属的提示。
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+    const explicit = await mount('Asia/Tokyo')
+    expect(explicit.textContent).toContain(text.timeZoneOpenTimesHint)
+  })
+
   it('lists real IANA time zones and nothing invented when the runtime cannot list them', () => {
     const options = supportedTimeZoneOptions()
 

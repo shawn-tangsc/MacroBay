@@ -108,7 +108,7 @@ function createRuntime(state: AgentStoreState) {
   const commands = new TaskAutomationCommandService({
     store,
     now: () => new Date('2026-01-02T00:00:00.000Z'),
-    defaultTimezone: 'UTC',
+    timeZone: () => 'UTC',
     getPolicyPreset: async () => 'balanced'
   })
   return {
@@ -193,7 +193,7 @@ describe('TaskManagementToolRuntimeService', () => {
     const commands = new TaskAutomationCommandService({
       store,
       now: () => new Date('2026-01-02T00:00:00.000Z'),
-      defaultTimezone: 'UTC',
+      timeZone: () => 'UTC',
       getPolicyPreset: async () => 'balanced'
     })
     const runTask = vi.fn(async () => ({ taskId: 'task-1', runLogId: 'queued-run-1' }))

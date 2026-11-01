@@ -6,6 +6,7 @@ import {
 } from './marketAnalysisJobIds'
 import { analysisSlotTickPolicy } from '../analysis/analysisSlotTick'
 import { analysisTriggerPolicy } from '../analysis/analysisTriggerPolicy'
+import { analysisTriggerSourcePolicy } from '../analysis/analysisTriggerSourcePolicy'
 
 export const marketAnalysisJobPolicy = Object.freeze({
   productId: 'market-intelligence',
@@ -37,12 +38,24 @@ export function registerMarketAnalysisJobs(jobRuntime: JobRuntime, deps: Depende
     assertPayload(payload, ['changeId', 'eventRef'])
     const result = await deps.groupChange(payload, context)
     if (!result || result.shouldFreeze !== true) return
+    // The attempt's ledger row id travels with the freeze work: the gate rewrites that row when it
+    // refuses the attempt, so a refused attempt stops counting as a spent model call.
+    const attemptLedgerId = typeof result.attemptLedgerId === 'string' ? result.attemptLedgerId : undefined
     await enqueue(jobRuntime, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, {
-      eventGroupId: result.eventGroupId, triggerKey: result.triggerKey, analysisPhase: result.analysisPhase, asOf: result.asOf
+      eventGroupId: result.eventGroupId, triggerKey: result.triggerKey, analysisPhase: result.analysisPhase, asOf: result.asOf,
+      ...(attemptLedgerId ? { attemptLedgerId } : {})
     }, `freeze:${String(result.eventGroupId)}`)
   })
   jobRuntime.registerHandler(FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, async (payload, context) => {
-    assertPayload(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'])
+    assertPayload(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'], ['attemptLedgerId'])
+    // The trigger line owns the attempt row; without its id a later refusal cannot be recorded
+    // against that attempt, so the work is refused rather than run and counted unmarked. Enforced
+    // at the payload boundary so no caller can enqueue this work without the id it needs.
+    // `assertPayload` proved both fields are strings when present.
+    const attemptTriggerKey = payload.triggerKey as string
+    if ((analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(attemptTriggerKey) && typeof payload.attemptLedgerId !== 'string') {
+      throw new Error('analysis-missing-attempt-ledger-row')
+    }
     const result = await deps.freezeSnapshot(payload, context)
     if (!result || typeof result.analysisRunId !== 'string') return
     if (typeof result.eventGroupId !== 'string') throw new Error('analysis-invalid-job-result')
@@ -171,7 +184,7 @@ function redactMarketAnalysisPayload(handlerId: string, value: unknown): unknown
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
   const payload = value as Record<string, unknown>
   if (handlerId === GROUP_MARKET_ANALYSIS_CHANGE_JOB) return pickStrings(payload, ['changeId', 'eventRef'])
-  if (handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB) return pickStrings(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf'])
+  if (handlerId === FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB) return pickStrings(payload, ['eventGroupId', 'triggerKey', 'analysisPhase', 'asOf', 'attemptLedgerId'])
   if (handlerId === RUN_MARKET_ANALYSIS_JOB) return pickStrings(payload, ['analysisRunId', 'significanceSignals'])
   if (handlerId === VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB) return pickStrings(payload, ['asOf'])
   return {}

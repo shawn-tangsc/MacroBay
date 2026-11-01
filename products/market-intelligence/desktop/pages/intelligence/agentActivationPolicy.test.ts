@@ -35,8 +35,10 @@ describe('projectActivation', () => {
     expect(projection).toEqual({ enabledSourceCount: 1, totalSourceCount: 1 })
   })
 
-  it('reports zero providers before the agent view is loaded', () => {
-    expect(projectActivation(undefined)).toEqual({ enabledSourceCount: 0, totalSourceCount: 0 })
+  it('reports an empty setup only for a view that actually answered (zero providers)', () => {
+    // "No source configured" is a fact about a successful read. A failed read never reaches this
+    // function: the hook carries it as `unavailable`, so 0/0 cannot stand in for "could not ask".
+    expect(projectActivation(view([]))).toEqual({ enabledSourceCount: 0, totalSourceCount: 0 })
   })
 
   it('increments as soon as one provider is enabled, regardless of health', () => {

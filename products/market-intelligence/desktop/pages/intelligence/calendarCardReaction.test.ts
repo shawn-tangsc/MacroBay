@@ -154,7 +154,9 @@ describe('reading the window for one row', () => {
     expect(reaction?.index).toBeCloseTo(expected, 12)
     // 终点的选择不是随意的：曲线以 asOf 为终点（并被主进程截到 5 分钟网格上），所以要向 +30 分钟
     // 之后再要一个网格步长，右端才有"已经发生"的点——发布时间不在网格上时（12:31 这种）尤其如此。
-    expect(query).toHaveBeenCalledWith({ range: '24h', asOf: iso(30 + 5) })
+    // `knowledge: 'latest'` 是口径的另一半：收在 +30 的那根 bar 要等下一次轮询才入库，按"当时已知"读
+    // 会把窗口右端判成那时还不存在（停机后补采的窗口更是一整段都读不到）。
+    expect(query).toHaveBeenCalledWith({ range: '24h', asOf: iso(30 + 5), knowledge: 'latest' })
   })
 
   it('treats an unavailable read, a throw and a malformed instant as "no reaction"', async () => {

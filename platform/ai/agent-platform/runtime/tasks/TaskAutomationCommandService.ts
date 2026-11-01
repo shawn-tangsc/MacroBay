@@ -39,7 +39,8 @@ export class TaskAutomationCommandError extends Error {
 type Dependencies = {
   store: AgentPlatformStateStore
   now?: () => Date
-  defaultTimezone?: string
+  /** 主进程唯一的读者时区来源；没有它时用运行时系统时区兜底。 */
+  timeZone?: () => string
   getPolicyPreset: () => Promise<TaskAutomationPolicyPreset>
   hasEnabledDeliveryTarget?: (channelId: string, agentId: string) => boolean
 }
@@ -68,12 +69,11 @@ export type TaskChannelDeleteCleanupMutation = {
 }
 
 export class TaskAutomationCommandService {
-  private readonly defaultTimezone: string
+  private readonly timeZone: () => string
 
   constructor(private readonly deps: Dependencies) {
-    const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-    this.defaultTimezone =
-      deps.defaultTimezone ?? (validateTaskTimezone(systemTimezone).ok ? systemTimezone : 'UTC')
+    // 没有注入时固定 UTC：绝不回落到运行这台机器的时区——那正是「谁少注入一次就悄悄复活旧行为」。
+    this.timeZone = deps.timeZone ?? (() => 'UTC')
   }
 
   async execute(command: TaskAutomationCommand): Promise<TaskCommandResult> {
@@ -451,7 +451,7 @@ export class TaskAutomationCommandService {
   }
 
   private materializeTrigger(trigger: Trigger): Trigger {
-    const options = { now: this.now(), defaultTimezone: this.defaultTimezone }
+    const options = { now: this.now(), defaultTimezone: this.timeZone() }
     const validation = validateTaskSchedule(trigger, options)
     if (!validation.ok) throw new TaskAutomationCommandError(validation.code)
     const materialized = materializeTaskTriggerTimezone(trigger, options)
@@ -510,7 +510,7 @@ export class TaskAutomationCommandService {
   }
 
   private toResult(task: ScheduledTaskEntity | null, channels: readonly AgentChannelEntity[]): TaskCommandResult {
-    const nextRun = task ? previewNextTaskRun(task, { now: this.now(), defaultTimezone: this.defaultTimezone }) : null
+    const nextRun = task ? previewNextTaskRun(task, { now: this.now(), defaultTimezone: this.timeZone() }) : null
     return {
       task,
       nextRun: nextRun && nextRun.ok ? nextRun.nextRunAt : null,

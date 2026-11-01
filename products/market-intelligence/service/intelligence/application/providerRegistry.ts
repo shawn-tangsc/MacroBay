@@ -130,6 +130,22 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     ]
   }),
   provider({
+    providerId: 'policy-path',
+    displayName: 'Polymarket',
+    category: 'macro',
+    credential: 'none',
+    // The odds are collected by the product's own ten-minute job; the generic adapter must not arm a
+    // second poller, and there is nothing for the reader to test.
+    sources: [src({
+      sourceId: 'policy-path-market',
+      displayName: 'FOMC decision market',
+      panels: ['dashboard'],
+      collection: 'none',
+      capabilities: { runNow: 'none', testConnection: true },
+      adapterRef: 'policy-path-market'
+    })]
+  }),
+  provider({
     providerId: 'fred',
     displayName: 'Federal Reserve Economic Data (FRED)',
     category: 'macro',
@@ -246,7 +262,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     category: 'aggregate',
     credential: 'api-key',
     sources: [
-      src({ sourceId: '0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
+      src({ sourceId: '0xrouter-aggregate-provider', displayName: '0xRouter aggregate market', panels: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: '0xrouter-aggregate-provider', requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-economic-data', displayName: '0xRouter economic data', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-financial-events', displayName: '0xRouter financial events', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true }),
       src({ sourceId: 'macro-calendar-0xrouter-central-bank-activities', displayName: '0xRouter central bank activities', panels: dashboardAndCalendar, collection: 'job', kind: 'market-calendar', capabilities: { runNow: 'job', testConnection: true }, requiresProxy: true })
@@ -257,7 +273,7 @@ const providerDefinitions: readonly ProviderDefinition[] = [
     displayName: 'RealMarketAPI',
     category: 'aggregate',
     credential: 'api-key',
-    sources: [src({ sourceId: 'realmarketapi-market', displayName: 'RealMarketAPI DXY', panels: ['dashboard'], capabilities: { runNow: 'adapter', testConnection: true }, adapterRef: 'realmarketapi-market' })]
+    sources: [src({ sourceId: 'realmarketapi-market', displayName: 'RealMarketAPI DXY', panels: ['dashboard'], capabilities: { runNow: 'none', testConnection: true }, adapterRef: 'realmarketapi-market' })]
   }),
   provider({
     providerId: 'twelve-data',
@@ -327,7 +343,8 @@ export const agentRegistry: readonly AgentDefinition[] = [
           'macro-calendar-coinmarketcal',
           'federal-reserve-rss',
           'fred-rates-liquidity',
-          'treasury-fiscal-data'
+          'treasury-fiscal-data',
+          'policy-path-market'
         ]
       },
       { groupId: 'stablecoin-defi', agentId: 'crypto', tier: 'recommended', sourceIds: ['defillama-stablecoins', 'defillama-tvl'] },
@@ -378,6 +395,7 @@ const providerLinks: Readonly<Record<string, Pick<ProviderDefinition, 'website' 
   cryptopanic: { website: 'https://cryptopanic.com/', signupUrl: 'https://cryptopanic.com/developers/api/' },
   '0xrouter': { website: 'https://0xrouter.app/', signupUrl: 'https://0xrouter.app/index.html?invite=tangscsh', invite: true },
   realmarketapi: { website: 'https://realmarketapi.com/', signupUrl: 'https://realmarketapi.com/?via=Macrobay', invite: true },
+  'policy-path': { website: 'https://polymarket.com/zh?tag=fed' },
   twelvedata: { website: 'https://twelvedata.com/', signupUrl: 'https://twelvedata.com/pricing' },
   coinbase: { website: 'https://www.coinbase.com/' },
   kraken: { website: 'https://www.kraken.com/' },

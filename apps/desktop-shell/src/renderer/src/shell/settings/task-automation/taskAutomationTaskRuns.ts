@@ -1,7 +1,7 @@
 import type { ScheduledTaskEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 
 import { getTaskDeliveryAttemptsViaApi, getTaskLogsViaApi } from '../../agents/agentTaskDataApi'
-import { countDeliveryHealth, type TaskRunSnapshot } from './taskAutomationSettingsViewModel'
+import { collectDeliverySkipReasons, countDeliveryHealth, type TaskRunSnapshot } from './taskAutomationSettingsViewModel'
 
 /**
  * 每个定时任务只取「最近一次运行」与它这一轮的投递尝试（有界：1 + 1 次查询/任务），
@@ -20,10 +20,13 @@ export async function loadTaskRunSnapshots(
         limit: 50,
         offset: 0
       })
+      const skip = collectDeliverySkipReasons(attemptPage.attempts)
       return [task.id, {
         status: latestRun.status,
         at: latestRun.startedAt ?? null,
-        health: countDeliveryHealth(attemptPage.attempts)
+        health: countDeliveryHealth(attemptPage.attempts),
+        skipReasons: skip.skipReasons,
+        unexplainedSkips: skip.unexplainedSkips
       } satisfies TaskRunSnapshot] as const
     } catch {
       return null

@@ -1,3 +1,4 @@
+import { collectDeliverySkipReasons } from './taskAutomationSettingsViewModel'
 import { describe, expect, it } from 'vitest'
 
 import type { ScheduledTaskEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
@@ -69,12 +70,16 @@ describe('taskAutomationSettingsViewModel', () => {
         [first.id]: {
           status: 'failed',
           at: '2026-07-17T08:00:00.000Z',
-          health: { delivered: 1, failed: 0, pending: 0, skipped: 0, unknown: 1 }
+          health: { delivered: 1, failed: 0, pending: 0, skipped: 0, unknown: 1 },
+          skipReasons: [],
+          unexplainedSkips: 0
         },
         [second.id]: {
           status: 'completed',
           at: '2026-07-17T09:00:00.000Z',
-          health: { delivered: 2, failed: 0, pending: 1, skipped: 1, unknown: 0 }
+          health: { delivered: 2, failed: 0, pending: 1, skipped: 1, unknown: 0 },
+          skipReasons: [],
+          unexplainedSkips: 0
         }
       }
     })
@@ -109,7 +114,9 @@ function snapshot(health: Partial<TaskRunSnapshot['health']>): TaskRunSnapshot {
   return {
     status: 'completed',
     at: '2026-07-17T08:00:00.000Z',
-    health: { delivered: 0, failed: 0, pending: 0, skipped: 0, unknown: 0, ...health }
+    health: { delivered: 0, failed: 0, pending: 0, skipped: 0, unknown: 0, ...health },
+    skipReasons: [],
+    unexplainedSkips: 0
   }
 }
 
@@ -121,3 +128,31 @@ function task(overrides: Partial<ScheduledTaskEntity>): ScheduledTaskEntity {
     ...overrides
   }
 }
+
+describe('collectDeliverySkipReasons', () => {
+  const attempt = (status: string, errorCode: string | null) =>
+    ({ status, errorCode }) as Parameters<typeof collectDeliverySkipReasons>[0][number]
+
+  it('names the reasons it can explain, deduplicated', () => {
+    const result = collectDeliverySkipReasons([
+      attempt('skipped-no-active-target', 'delivery-no-target-bound'),
+      attempt('skipped-channel-inactive', 'delivery-target-disabled'),
+      attempt('skipped-channel-inactive', 'delivery-target-disabled')
+    ])
+
+    expect(result.skipReasons).toEqual(['delivery-no-target-bound', 'delivery-target-disabled'])
+    expect(result.unexplainedSkips).toBe(0)
+  })
+
+  // A skipped delivery without a reason is a writer defect: count it so the surface can say so.
+  it('counts skips whose reason is missing or is not a known code', () => {
+    const result = collectDeliverySkipReasons([
+      attempt('skipped-no-active-target', null),
+      attempt('skipped-no-active-target', 'some-future-code'),
+      attempt('delivered', null)
+    ])
+
+    expect(result.skipReasons).toEqual([])
+    expect(result.unexplainedSkips).toBe(2)
+  })
+})

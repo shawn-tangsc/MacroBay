@@ -206,17 +206,22 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
       <h2>{text.title}</h2>
       <button aria-label={text.openCalendar} className="mi-calendar-card__open" onClick={() => onOpenCalendar(month)} type="button"><CalendarDays aria-hidden="true" size={15} /></button>
     </header>
-    {projection.state === 'unavailable' ? <p className="mi-calendar-card__state">{text.unavailable}
-      {onRefresh ? <Button icon={<RefreshCw aria-hidden="true" size={13} />} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
-    </p> : null}
-    {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
-    {projection.today.length > 0 ? <>
-      <p className="mi-calendar-card__section">{text.todaySection}</p>
-      <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
-    </> : null}
-    {projection.upcoming.length > 0 ? <>
-      <p className="mi-calendar-card__section">{text.upcomingSection}</p>
-      <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
-    </> : null}
+    {/* Only the list scrolls. The header is the card's identity — the reader keeps seeing what
+        they are looking at while scanning further down the schedule — so it stays outside the
+        scroll region instead of travelling with the rows. */}
+    <div className="mi-calendar-card__body">
+      {projection.state === 'unavailable' ? <p className="mi-calendar-card__state">{text.unavailable}
+        {onRefresh ? <Button icon={<RefreshCw aria-hidden="true" size={13} />} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
+      </p> : null}
+      {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+      {projection.today.length > 0 ? <>
+        <p className="mi-calendar-card__section">{text.todaySection}</p>
+        <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
+      </> : null}
+      {projection.upcoming.length > 0 ? <>
+        <p className="mi-calendar-card__section">{text.upcomingSection}</p>
+        <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>
+      </> : null}
+    </div>
   </section>
 }

@@ -2,6 +2,10 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import 'antd/dist/reset.css'
 
+// Design tokens first: every stylesheet below reads them. Kept as a module import rather than a
+// CSS `@import` so the path goes through the `@platform` alias and survives a directory move.
+import '@platform/ui/tokens/tokens.css'
+
 import { AppShell } from './shell/AppShell'
 import { markRendererPlatform } from './shell/window/windowPlatform'
 import './styles.css'

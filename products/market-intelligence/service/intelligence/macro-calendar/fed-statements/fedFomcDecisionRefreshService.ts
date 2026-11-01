@@ -8,6 +8,7 @@ import { parseFedFomcStatements } from './fedFomcStatementParser'
 import { parseFedFomcDecisionDocument, type FedFomcDecisionDocument } from './fedFomcDecisionParser'
 import { parseFedFomcStatementHistory } from './fedFomcStatementHistoryParser'
 import type { FedFomcDecisionEvidence } from './fedFomcDecisionEvidence'
+import type { PolicyPathFactStore } from '../../policy-path/policyPathFactStore'
 
 export const fedFomcDecisionRefreshPolicy = Object.freeze({
   statementDescriptorId: 'macro-calendar-fed-statement',
@@ -38,6 +39,8 @@ export function createFedFomcDecisionRefreshService(deps: Readonly<{
   }>
   evidence: FedFomcDecisionEvidence
   repository: Pick<MacroCalendarRepository, 'getEffectiveEventAsOf' | 'appendIfNew'>
+  /** Official policy facts; optional so the refresh keeps working in isolation. */
+  facts?: Pick<PolicyPathFactStore, 'recordDecision'>
 }>): FedFomcDecisionRefreshService {
   let inFlight = false
   return Object.freeze({
@@ -53,8 +56,26 @@ export function createFedFomcDecisionRefreshService(deps: Readonly<{
         })
         if (!currentEvidence || signal?.aborted) return unavailable()
         currentWrite = deps.repository.appendIfNew(revisionForCurrent(current, currentEvidence, input.detectedAt))
+        deps.facts?.recordDecision({
+          meetingDate: current.document.decisionDate,
+          targetRange: { lowerPercent: current.document.targetRange.lowerPercent, upperPercent: current.document.targetRange.upperPercent },
+          ...(current.document.vote ? { vote: current.document.vote } : {}),
+          ...(current.document.dissents ? { dissents: current.document.dissents } : {}),
+          statementUrl: current.statementUrl,
+          detectedAt: input.detectedAt
+        })
         const prior = await adjacentPrior(current, input, signal, deps)
         if (!prior) return currentWrite.inserted ? updated() : unchanged()
+        // The prior decision is a fact too: without its range, "what did this meeting do" (hold, hike,
+        // cut) cannot be read from the two ranges, and the card falls back to a dash.
+        deps.facts?.recordDecision({
+          meetingDate: prior.document.decisionDate,
+          targetRange: { lowerPercent: prior.document.targetRange.lowerPercent, upperPercent: prior.document.targetRange.upperPercent },
+          ...(prior.document.vote ? { vote: prior.document.vote } : {}),
+          ...(prior.document.dissents ? { dissents: prior.document.dissents } : {}),
+          statementUrl: prior.statementUrl,
+          detectedAt: input.detectedAt
+        })
         if (signal?.aborted) return unavailable()
         const priorEvidence = deps.evidence.appendVerifiedBody({
           kind: 'prior', officialStatementUrl: prior.statementUrl, body: prior.body, detectedAt: input.detectedAt, runId: input.runId
@@ -96,8 +117,12 @@ async function currentDecision(
   const response = await deps.http.request(fedFomcDecisionRefreshPolicy.statementDescriptorId, signal)
   if (!descriptor || !isSuccessfulResponse(response, descriptor.descriptorId)) return undefined
   const statements = parseFedFomcStatements({ descriptor, body: response.body })
-  if (statements.length !== 1) return undefined
-  const statement = statements[0]!
+  // The feed keeps the previous meeting's release inside its window, so more than one statement is
+  // normal. "Current" is the newest, and a tie on the release time is the only real ambiguity.
+  const newestReleasedAt = statements.map((entry) => entry.releasedAt).sort().at(-1)
+  const newest = statements.filter((entry) => entry.releasedAt === newestReleasedAt)
+  if (newest.length !== 1) return undefined
+  const statement = newest[0]!
   const bodyResponse = await deps.http.requestFomcStatement(statement.officialStatementUrl, signal)
   if (!isSuccessfulResponse(bodyResponse, fedFomcDecisionRefreshPolicy.statementBodyDescriptorId)) return undefined
   const document = parseFedFomcDecisionDocument({ body: Buffer.from(bodyResponse.body, 'utf8'), officialStatementUrl: statement.officialStatementUrl })

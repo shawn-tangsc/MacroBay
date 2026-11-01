@@ -441,7 +441,7 @@ describe('agent platform services', () => {
     expect(page.items.map((item) => item.id)).toEqual([thirdSession.id, session.id, secondSession.id])
   })
 
-  it('hydrates message pages and search results from query adapters instead of full state scans', async () => {
+  it('hydrates message pages from query adapters instead of full state scans', async () => {
     const state = createAgentStoreState({
       agents: [agent],
       sessions: [session],
@@ -451,13 +451,6 @@ describe('agent platform services', () => {
       }
     })
     const listCalls: Array<{ sessionId: string; limit?: number; cursor?: string }> = []
-    const searchCalls: Array<{
-      q: string
-      limit?: number
-      cursor?: string
-      createdAtFrom?: string
-      sessionId?: string
-    }> = []
     const services = createAgentPlatformServices(createMemoryStateStore(state), {
       queries: {
         messages: {
@@ -466,21 +459,6 @@ describe('agent platform services', () => {
             return {
               items: [{ id: 'message-002' }, { id: 'message-001' }],
               nextCursor: 'repo-message-cursor'
-            }
-          },
-          search(query) {
-            searchCalls.push(query)
-            return {
-              items: [
-                {
-                  messageId: 'message-003',
-                  sessionId: session.id,
-                  role: 'assistant',
-                  snippet: 'repo snippet',
-                  createdAt: '2026-01-01T00:00:03.000Z'
-                }
-              ],
-              nextCursor: 'repo-search-cursor'
             }
           }
         }
@@ -491,40 +469,10 @@ describe('agent platform services', () => {
       limit: 2,
       cursor: 'input-message-cursor'
     })
-    const search = await services.messages.search({
-      q: 'message',
-      limit: 1,
-      cursor: 'input-search-cursor',
-      createdAtFrom: '2026-01-01T00:00:00.000Z',
-      sessionId: session.id
-    })
 
     expect(page.items.map((item) => item.id)).toEqual(['message-002', 'message-001'])
     expect(page.nextCursor).toBe('repo-message-cursor')
     expect(listCalls).toEqual([{ sessionId: session.id, limit: 2, cursor: 'input-message-cursor' }])
-
-    expect(search.items).toEqual([
-      {
-        messageId: 'message-003',
-        sessionId: session.id,
-        sessionName: session.name,
-        agentId: agent.id,
-        agentName: agent.name,
-        role: 'assistant',
-        snippet: 'repo snippet',
-        createdAt: '2026-01-01T00:00:03.000Z'
-      }
-    ])
-    expect(search.nextCursor).toBe('repo-search-cursor')
-    expect(searchCalls).toEqual([
-      {
-        q: 'message',
-        limit: 1,
-        cursor: 'input-search-cursor',
-        createdAtFrom: '2026-01-01T00:00:00.000Z',
-        sessionId: session.id
-      }
-    ])
   })
 
   it('keeps workspace find-or-create idempotent and cascades workspace deletion through sessions and messages', async () => {
@@ -764,7 +712,7 @@ describe('agent platform services', () => {
   it('routes compatibility task mutations through automation commands and materializes the default timezone', async () => {
     const services = createAgentPlatformServices(
       createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
-      { taskAutomation: { defaultTimezone: 'Asia/Shanghai' } }
+      { taskAutomation: { timeZone: () => 'Asia/Shanghai' } }
     )
 
     const created = await services.tasks.create(agent.id, {

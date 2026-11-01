@@ -37,6 +37,17 @@ describe('newsSentimentModel', () => {
     expect(parsed).toMatchObject({ ok: false, errorCode: 'news-model-invalid-output' })
   })
 
+  it('keeps an over-long quote a verbatim substring instead of appending an ellipsis', () => {
+    // The prompt asks for ≤200 characters; when the model ignores it, cutting the quote is fine,
+    // but the stored text is shown as evidence and must still exist in the article word for word.
+    const longBody = 'A'.repeat(300)
+    const parsed = parseNewsPolarityModelOutput(output({ evidenceQuote: 'A'.repeat(201) }), longBody)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.value.evidenceQuote).toHaveLength(200)
+    expect(longBody.includes(parsed.value.evidenceQuote!)).toBe(true)
+  })
+
   it('rejects unknown symbols, invalid ranges and a missing reason', () => {
     expect(parseNewsPolarityModelOutput(output({ symbols: ['DOGE'] }), BODY).ok).toBe(false)
     expect(parseNewsPolarityModelOutput(output({ strength: 9 }), BODY).ok).toBe(false)

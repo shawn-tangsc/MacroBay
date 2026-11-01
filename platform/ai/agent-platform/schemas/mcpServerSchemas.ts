@@ -4,7 +4,11 @@ export type McpServerType = (typeof mcpServerTypes)[number]
 export const mcpServerInstallSources = ['builtin', 'manual', 'protocol', 'unknown'] as const
 export type McpServerInstallSource = (typeof mcpServerInstallSources)[number]
 
-export const mcpRuntimeStates = ['connected', 'connecting', 'error', 'disabled'] as const
+/**
+ * 运行时可上报的状态。`idle` 表示「还没有过任何一次运行时上报」——不是「正在连接」。
+ * 与下方 `mcpRuntimeLifecycleStates` 的 `idle` 同名同义，不允许再引入第二个词描述同一件事。
+ */
+export const mcpRuntimeStates = ['idle', 'connected', 'connecting', 'error', 'disabled'] as const
 export type McpRuntimeState = (typeof mcpRuntimeStates)[number]
 
 export const mcpRuntimeErrorKinds = ['abort', 'config', 'dependency', 'auth', 'transient'] as const

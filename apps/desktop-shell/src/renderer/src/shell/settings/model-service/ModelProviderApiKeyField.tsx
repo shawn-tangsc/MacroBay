@@ -1,8 +1,9 @@
 import { type FocusEvent, useEffect, useRef, useState } from 'react'
 import { Input } from 'antd'
-import { Eye, EyeOff } from 'lucide-react'
+import { Check, Copy, Eye, EyeOff } from 'lucide-react'
 
 import type { PlatformText } from '../../../i18n/platformText'
+import { copyTextToClipboard } from '../../clipboard'
 
 /**
  * PLAT-58：产品 owner 决定允许在 UI 里显式查看已保存的完整 API Key。
@@ -18,7 +19,10 @@ import type { PlatformText } from '../../../i18n/platformText'
  * 4. 眼睛只负责「查看已保存的完整 Key」：自带 `visibilityToggle` 的一次切换驱动**一次**按需 IPC 读取
  *    （受控 `visible ? plain : masked`），30 秒自动回掩码、失焦回掩码、切换供应商/卸载即清除
  *    （含在途请求序号作废）；
- * 5. 掩码直接作为 `value`，不做绝对定位覆盖层；不写日志、不写剪贴板。
+ * 5. 掩码直接作为 `value`，不做绝对定位覆盖层；**不写日志**。
+ * 6. 公开承诺（AGENTS.md Model Service Rules）：默认掩码 → 可按需展开 → **展开后可复制**。
+ *    复制按钮只在明文可见时出现，复制的就是这次读到的完整 Key；回掩码后按钮一起消失，
+ *    避免「看不到还能复制」这种自相矛盾的状态。
  */
 export const MODEL_PROVIDER_API_KEY_AUTO_HIDE_MS = 30_000
 
@@ -55,7 +59,9 @@ export function ModelProviderApiKeyField({
   const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null)
   const [revealError, setRevealError] = useState<string | null>(null)
   const [revealPending, setRevealPending] = useState(false)
+  const [copied, setCopied] = useState(false)
   const requestSequence = useRef(0)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 切换供应商即清除：编辑态、已揭示的 Key、错误、明文可见性；同时作废在途读取。
   useEffect(() => {
@@ -89,10 +95,37 @@ export function ModelProviderApiKeyField({
         ? apiKeyPreview || ALL_MASK
         : value
 
+  // 「已复制」只提示两秒，然后在同一处收回；卸载时清掉定时器，避免对已卸载组件 setState。
+  useEffect(() => {
+    return () => {
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    }
+  }, [])
+
   function clearReveal(): void {
     requestSequence.current += 1
     setRevealedApiKey(null)
     setPlainVisible(false)
+    markUncopied()
+  }
+
+  function markUncopied(): void {
+    if (copiedTimer.current) {
+      clearTimeout(copiedTimer.current)
+      copiedTimer.current = null
+    }
+    setCopied(false)
+  }
+
+  async function copyRevealedKey(): Promise<void> {
+    if (revealedApiKey === null) return
+    await copyTextToClipboard(revealedApiKey)
+    setCopied(true)
+    if (copiedTimer.current) clearTimeout(copiedTimer.current)
+    copiedTimer.current = setTimeout(() => {
+      setCopied(false)
+      copiedTimer.current = null
+    }, 2_000)
   }
 
   /** 按需读取完整 Key：成功 ⇒ true（调用方据此把眼睛切到明文）。 */
@@ -188,15 +221,28 @@ export function ModelProviderApiKeyField({
         onChange={(event) => handleChange(event.target.value)}
         onBlur={handleBlur}
         suffix={(
-          <button
-            type="button"
-            className="provider-api-key-eye"
-            aria-label={plainVisible ? labels.hideApiKey : labels.showApiKey}
-            aria-pressed={plainVisible}
-            disabled={!canToggle || revealPending}
-            onClick={() => void handleVisibleChange(!plainVisible)}>
-            {plainVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-          </button>
+          <span className="provider-api-key-actions">
+            {plainVisible && revealedApiKey !== null ? (
+              <button
+                type="button"
+                className="provider-api-key-copy"
+                aria-label={labels.copyModelId}
+                title={copied ? labels.copied : labels.copyModelId}
+                onClick={() => void copyRevealedKey()}>
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="provider-api-key-eye"
+              aria-label={plainVisible ? labels.hideApiKey : labels.showApiKey}
+              aria-pressed={plainVisible}
+              disabled={!canToggle || revealPending}
+              onClick={() => void handleVisibleChange(!plainVisible)}>
+              {plainVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+            {copied ? <span className="provider-api-key-copied" role="status">{labels.copied}</span> : null}
+          </span>
         )}
       />
       {revealError !== null ? (

@@ -1,3 +1,4 @@
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import {
   AudioLines,
   Boxes,
@@ -129,6 +130,7 @@ export function ModelServiceModelRow({
     chips.push({ key: 'tools', title: labels.capabilityToolsTitle, icon: <Wrench size={12} /> })
   }
 
+  const timeZone = useShellTimeZone()
   return (
     <div
       className={`model-service-model-row${model.probeReason === 'model_retired' ? ' is-retired' : ''}${failedProtocols.length > 0 ? ' is-protocol-failed' : ''}`}
@@ -144,7 +146,7 @@ export function ModelServiceModelRow({
         <span
           className="model-service-model-availability"
           data-model-availability={availability.stale ? 'stale' : availability.status}
-          title={modelAvailabilityTitle(labels, availability)}>
+          title={modelAvailabilityTitle(labels, availability, timeZone)}>
           {modelAvailabilityLabel(labels, availability)}
         </span>
       ) : null}

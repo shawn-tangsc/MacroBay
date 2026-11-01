@@ -1,11 +1,14 @@
-import { Select, Tag } from 'antd'
 import { Package } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { ProductAgentToolPackageEditorView } from '@platform/ai/agent-platform/productTools/productAgentToolViewModel'
+import type { LocalizedText } from '@platform/product-manifest'
 
 import type { AgentText } from '../../../agentText'
+import { useAgentLanguage } from '../../../agentTextProvider'
 import { EmptyCatalog } from './EmptyCatalog'
+import { ProductToolPackageCard } from './ProductToolPackageCard'
+import { filterProductToolPackages } from './productToolPackageFilter'
 
 type ProductToolPackagePermissionMode = ProductAgentToolPackageEditorView['permissionMode']
 
@@ -20,7 +23,9 @@ export function ProductToolPackagesCatalog({
   agentId,
   search
 }: ProductToolPackagesCatalogProps): React.ReactElement {
+  const language = useAgentLanguage()
   const [packages, setPackages] = useState<ProductAgentToolPackageEditorView[]>([])
+  const [productNames, setProductNames] = useState<Readonly<Record<string, LocalizedText>>>({})
 
   useEffect(() => {
     if (!agentId) {
@@ -39,12 +44,51 @@ export function ProductToolPackagesCatalog({
     }
   }, [agentId])
 
-  const filtered = packages.filter((pkg) => {
-    const haystack = [pkg.productId, ...pkg.tools.map((tool) => tool.toolName), ...pkg.diagnostics].join(' ').toLowerCase()
-    return haystack.includes(search.trim().toLowerCase())
-  })
+  // 产品显示名来自产品清单；拿不到时回退到 productId，不影响其余信息。
+  useEffect(() => {
+    const getSummaries = window.platform.app?.getProductSummaries
+    if (typeof getSummaries !== 'function') return
 
-  if (filtered.length === 0) {
+    let cancelled = false
+    void Promise.resolve()
+      .then(() => getSummaries.call(window.platform.app))
+      .then((summaries: ReadonlyArray<{ id: string; name?: LocalizedText }>) => {
+        if (cancelled || !Array.isArray(summaries)) return
+        setProductNames(
+          Object.fromEntries(summaries.filter((item) => item.name).map((item) => [item.id, item.name as LocalizedText]))
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setProductNames({})
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const visiblePackages = useMemo(
+    () => filterProductToolPackages(packages, productNames, search),
+    [packages, productNames, search]
+  )
+
+  function changePermission(productId: string, permissionMode: ProductToolPackagePermissionMode): void {
+    const previous = packages.find((pkg) => pkg.productId === productId)?.permissionMode
+    setPackages((current) =>
+      current.map((pkg) => (pkg.productId === productId ? { ...pkg, permissionMode } : pkg))
+    )
+    void window.platform.agents.productTools
+      .updatePackageBinding(agentId, productId, permissionMode)
+      .catch(() => {
+        // 写入失败时回滚，避免界面停在一个没有真正生效的权限上。
+        if (!previous) return
+        setPackages((current) =>
+          current.map((pkg) => (pkg.productId === productId ? { ...pkg, permissionMode: previous } : pkg))
+        )
+      })
+  }
+
+  if (visiblePackages.length === 0) {
     return (
       <EmptyCatalog
         icon={<Package size={17} />}
@@ -55,46 +99,18 @@ export function ProductToolPackagesCatalog({
   }
 
   return (
-    <div className="agent-tool-catalog compact">
-      {filtered.map((pkg) => (
-        <article key={pkg.productId} className="agent-tool-row">
-          <header className="agent-tool-row-header">
-            <div>
-              <strong>{pkg.productId}</strong>
-              <div className="agent-tool-row-meta">
-                <Tag color={pkg.status === 'available' ? 'green' : 'default'}>{pkg.status}</Tag>
-                {pkg.staleBinding ? <Tag color="orange">{text.editor.tools.staleProductToolBinding}</Tag> : null}
-              </div>
-            </div>
-            <Select<ProductToolPackagePermissionMode>
-              size="small"
-              value={pkg.permissionMode}
-              options={[
-                { value: 'disabled', label: text.editor.tools.productToolPermissionDisabled },
-                { value: 'allow-read-only', label: text.editor.tools.productToolPermissionAllowReadOnly },
-                { value: 'prompt', label: text.editor.tools.productToolPermissionPrompt }
-              ]}
-              onChange={(permissionMode) => {
-                void window.platform.agents.productTools.updatePackageBinding(agentId, pkg.productId, permissionMode)
-              }}
-            />
-          </header>
-          {pkg.diagnostics.length > 0 ? (
-            <p className="agent-tool-row-description">{pkg.diagnostics.join(' ')}</p>
-          ) : null}
-          <ul className="agent-tool-row-tools">
-            {pkg.tools.map((tool) => (
-              <li key={tool.toolName}>
-                <span>{tool.toolName}</span>
-                <Tag color={tool.readOnly ? undefined : 'orange'}>
-                  {tool.readOnly ? text.editor.tools.readOnlyBadge : text.editor.tools.writableBadge}
-                </Tag>
-                {tool.requiresTemporalBoundary ? <Tag>{text.editor.tools.requiresAsOfBadge}</Tag> : null}
-                <Tag>v{tool.schemaVersion}</Tag>
-              </li>
-            ))}
-          </ul>
-        </article>
+    <div className="agent-product-packages">
+      {visiblePackages.map((row) => (
+        <ProductToolPackageCard
+          key={row.package.productId}
+          text={text}
+          language={language}
+          package={row.package}
+          productName={row.productName}
+          tools={row.tools}
+          filtered={row.filtered}
+          onPermissionChange={(permissionMode) => changePermission(row.package.productId, permissionMode)}
+        />
       ))}
     </div>
   )

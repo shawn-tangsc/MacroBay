@@ -66,6 +66,60 @@ export function formatShellInstant(
   return [date, time, zone].filter(Boolean).join(shellTimeFormatPolicy.dateTimeSeparator)
 }
 
+/**
+ * 把某个瞬时按显示时区写成 `YYYY-MM`（日历刷新这类按月取数的入口用）。
+ * 不能用 `toISOString().slice(0,7)`：那是 UTC 的月份，月末差一天会取到错误的月。
+ */
+export function formatShellYearMonth(at: Date, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit' }).formatToParts(at)
+    const year = parts.find((part) => part.type === 'year')?.value ?? ''
+    const month = parts.find((part) => part.type === 'month')?.value ?? ''
+    if (!year || !month) return at.toISOString().slice(0, 7)
+    return `${year}-${month}`
+  } catch {
+    return at.toISOString().slice(0, 7)
+  }
+}
+
+/**
+ * 同一个显示口径下的**紧凑时刻**，用于消息行这类空间紧张的位置：
+ * 同一显示日 → `HH:mm`；跨日 → `MM-DD HH:mm`。
+ *
+ * 为什么不直接用 `formatShellInstant`：消息行放不下 `2026-11-01 15:44 GMT+8`。但时区与
+ * `hourCycle` 必须还是这一份实现说了算，否则「时区设成非系统时区后同屏两套时间」的老毛病会回来。
+ */
+export function formatShellClock(
+  instant: string,
+  options: Readonly<{ timeZone: string; now?: Date }>
+): string | null {
+  const parsed = Date.parse(instant)
+  if (!Number.isFinite(parsed)) return null
+  const now = options.now ?? new Date()
+  const partsOf = (at: Date): Intl.DateTimeFormatPart[] =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: options.timeZone,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(at)
+  const read = (parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? ''
+
+  let parts: Intl.DateTimeFormatPart[]
+  try {
+    parts = partsOf(new Date(parsed))
+  } catch {
+    return null
+  }
+  const time = `${read(parts, 'hour')}:${read(parts, 'minute')}`
+  const today = partsOf(now)
+  const sameDay =
+    read(parts, 'year') === read(today, 'year') &&
+    read(parts, 'month') === read(today, 'month') &&
+    read(parts, 'day') === read(today, 'day')
+  return sameDay ? time : `${read(parts, 'month')}-${read(parts, 'day')} ${time}`
+}
+
 /** 时区在界面上的短名称（`GMT+8` / `UTC`），用于设置项与时间标签。 */
 export function formatShellTimeZoneLabel(timeZone: string, locale = 'zh-CN', at: Date = new Date()): string {
   try {

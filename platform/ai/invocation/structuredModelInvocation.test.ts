@@ -17,6 +17,8 @@ function createReadyProviderState(): ProviderState {
   return state
 }
 
+const fetchStub = (() => Promise.reject(new Error('unexpected network call in test'))) as unknown as typeof fetch
+
 describe('resolveChatModel', () => {
   it('returns missing-api-key when provider is enabled without a key', () => {
     const state = createReadyProviderState()
@@ -71,6 +73,7 @@ describe('resolveChatModel', () => {
 describe('createStructuredModelInvocationService', () => {
   it('returns model-not-ready when no provider is configured', async () => {
     const service = createStructuredModelInvocationService({
+      fetch: fetchStub,
       getProviderState: async () => createDefaultProviderState()
     })
 

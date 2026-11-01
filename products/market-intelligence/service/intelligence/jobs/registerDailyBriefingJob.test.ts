@@ -1,0 +1,89 @@
+import { describe, expect, it, vi } from 'vitest'
+
+import type { JobRuntime } from '@platform/jobs'
+
+import { registerDailyBriefingJob, scheduleDailyBriefingJob } from './registerDailyBriefingJob'
+import { INTELLIGENCE_DAILY_BRIEFING_JOB } from './intelligenceJobIds'
+
+function runtime() {
+  let handler: (() => Promise<unknown>) | undefined
+  const schedules: unknown[] = []
+  const runtime = {
+    registerHandler: (_id: string, next: () => Promise<unknown>) => { handler = next },
+    setSchedule: (definition: unknown) => { schedules.push(definition) }
+  } as unknown as JobRuntime
+  return { runtime, schedules, run: () => handler!() }
+}
+
+describe('daily briefing job', () => {
+  it('registers the default 08:00 cron and generates through the same service', async () => {
+    const { runtime: jobRuntime, schedules, run } = runtime()
+    const getToday = vi.fn(async () => ({
+      state: 'available' as const,
+      document: { edition: { date: '2026-10-30' } }
+    }))
+    registerDailyBriefingJob(jobRuntime, { service: { getToday }, getLocale: async () => 'zh-CN', timeZone: () => 'Asia/Shanghai' })
+
+    expect(schedules).toEqual([expect.objectContaining({
+      id: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      trigger: { kind: 'cron', expression: '0 8 * * *', timezone: 'Asia/Shanghai' }
+    })])
+    expect(await run()).toBeUndefined()
+    expect(getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+  })
+
+  it('generates with the zone the reader reports at each run, not the one captured at registration', async () => {
+    const { runtime: jobRuntime, run } = runtime()
+    let zone = 'Asia/Shanghai'
+    const getToday = vi.fn(async () => ({ state: 'available' as const, document: { edition: { date: '2026-10-30' } } }))
+
+    registerDailyBriefingJob(jobRuntime, { service: { getToday }, getLocale: async () => 'zh-CN', timeZone: () => zone })
+
+    await run()
+    // 用户改了时区：下一次生成必须按新时区问「今天」，不必等重新排期。
+    zone = 'America/New_York'
+    await run()
+
+    expect(getToday).toHaveBeenNthCalledWith(1, { locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(getToday).toHaveBeenNthCalledWith(2, { locale: 'zh-CN', timeZone: 'America/New_York' })
+  })
+
+  it('follows the saved generation time and re-registers the same job when it changes', async () => {
+    const { runtime: jobRuntime, schedules } = runtime()
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday: vi.fn() },
+      getLocale: async () => 'zh-CN',
+      timeZone: () => 'Asia/Shanghai',
+      getGenerationTime: async () => '07:30'
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(schedules).toEqual([expect.objectContaining({
+      id: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      trigger: { kind: 'cron', expression: '30 7 * * *', timezone: 'Asia/Shanghai' }
+    })])
+
+    scheduleDailyBriefingJob(jobRuntime, { timeZone: 'Asia/Shanghai', generationTime: '09:30' })
+    expect(schedules).toHaveLength(2)
+    expect(schedules.at(-1)).toMatchObject({
+      id: INTELLIGENCE_DAILY_BRIEFING_JOB,
+      trigger: { kind: 'cron', expression: '30 9 * * *', timezone: 'Asia/Shanghai' }
+    })
+  })
+
+  it('surfaces a generation failure and survives a runtime without a scheduler', async () => {
+    const { runtime: jobRuntime, run } = runtime()
+    registerDailyBriefingJob(jobRuntime, {
+      service: { getToday: async () => ({ state: 'unavailable' as const, failureCode: 'source-failed' as const }) },
+      getLocale: async () => 'en-US',
+      timeZone: () => 'UTC'
+    })
+    await expect(run()).rejects.toThrow('daily-briefing-generation-source-failed')
+
+    const noScheduler = { registerHandler: vi.fn() } as unknown as JobRuntime
+    expect(() => registerDailyBriefingJob(noScheduler, {
+      service: { getToday: vi.fn() }, getLocale: async () => 'zh-CN', timeZone: () => 'UTC'
+    })).not.toThrow()
+  })
+})

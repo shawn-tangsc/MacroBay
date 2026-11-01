@@ -14,12 +14,18 @@ const PRODUCT_ID = 'market-intelligence'
 
 export const marketHistoryRetentionPolicy = Object.freeze({
   intervalMs: 24 * 3_600_000,
-  /** The two stores this pass owns, and the note prefix each ledger line is filed under. */
-  stores: Object.freeze({ macro: 'macro-market', crossAsset: 'cross-asset', analysis: 'analysis' } as const)
+  /** The stores this pass owns, and the note prefix each ledger line is filed under. */
+  stores: Object.freeze({ macro: 'macro-market', crossAsset: 'cross-asset', analysis: 'analysis', news: 'news-sentiment' } as const)
 })
 
 type StoreId = keyof typeof marketHistoryRetentionPolicy.stores
-export type MarketHistoryRetentionResult = Readonly<{ thinned: number; deleted: number; oldestKeptAtMs: number | null }>
+/**
+ * What one store's pass did. `ledgerDeleted` is optional because only the analysis store has a second
+ * clock: its verdicts outlive their conclusions, so the pass reports two counts and the bar stores
+ * report one. `capped` says the pass hit its own row budget and more is waiting — without it a capped
+ * store would look finished.
+ */
+export type MarketHistoryRetentionResult = Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; oldestKeptAtMs: number | null; capped?: boolean }>
 /**
  * What a store has to offer to be retained: the pass itself, and somewhere to write its own ledger.
  *
@@ -34,11 +40,15 @@ export type RetainedStore = Readonly<{
 
 export type MarketHistoryRetentionSummary = Readonly<{
   atMs: number
-  results: Readonly<Record<StoreId, MarketHistoryRetentionResult | { state: 'failed'; failureCode: 'retention-failed' }>>
+  results: Readonly<Partial<Record<StoreId, MarketHistoryRetentionResult | { state: 'failed'; failureCode: 'retention-failed' }>>>
 }>
 
+/**
+ * A store whose database could not be opened is simply absent from the pass, not a failure: it has
+ * nothing to retain today and must not stop the other stores from being retained.
+ */
 export function createMarketHistoryRetention(deps: Readonly<{
-  stores: Readonly<Record<StoreId, RetainedStore>>
+  stores: Readonly<Partial<Record<StoreId, RetainedStore>>>
   now?: () => number
   onError?: (error: unknown, storeId: StoreId) => void
 }>): Readonly<{ run: (atMs?: number) => Promise<MarketHistoryRetentionSummary> }> {
@@ -48,14 +58,17 @@ export function createMarketHistoryRetention(deps: Readonly<{
       // One clock reading for both stores: a pass that straddled midnight would thin one store against a
       // different edge than the other, and the ledger would say two things about one night.
       const cutoffs = barRetentionCutoffs(atMs)
-      const results: Record<string, MarketHistoryRetentionResult | { state: 'failed'; failureCode: 'retention-failed' }> = {}
-      for (const [storeId, store] of Object.entries(deps.stores) as [StoreId, RetainedStore][]) {
+      const results: Partial<Record<string, MarketHistoryRetentionResult | { state: 'failed'; failureCode: 'retention-failed' }>> = {}
+      for (const [storeId, store] of Object.entries(deps.stores) as [StoreId, RetainedStore | undefined][]) {
+        if (!store) continue
         const prefix = `${marketHistoryRetentionPolicy.stores[storeId]}.retention`
         try {
           const result = store.retention({ atMs, cutoffs })
           store.note(`${prefix}.lastRunAtMs`, String(atMs))
           store.note(`${prefix}.lastThinned`, String(result.thinned))
           store.note(`${prefix}.lastDeleted`, String(result.deleted))
+          if (result.ledgerDeleted !== undefined) store.note(`${prefix}.lastLedgerDeleted`, String(result.ledgerDeleted))
+          if (result.capped) store.note(`${prefix}.lastCapped`, 'true')
           store.note(`${prefix}.oldestKeptAtMs`, result.oldestKeptAtMs === null ? 'none' : String(result.oldestKeptAtMs))
           results[storeId] = result
         } catch (error) {

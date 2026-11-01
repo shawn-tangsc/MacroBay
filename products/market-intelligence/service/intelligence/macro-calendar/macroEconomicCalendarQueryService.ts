@@ -8,7 +8,18 @@ import { resolveDisplayedReleaseTime } from './macroCalendarConventionTime'
 export type MacroEconomicCalendarQueryService = {
   queryMonth: (input: unknown) => MacroEconomicCalendarMonthResult
   getEventDetail: (input: unknown) => MacroEconomicCalendarEventResult
+  /**
+   * The next FOMC meeting at or after `asOf`, read from the same month query the calendar grid uses.
+   *
+   * The policy block needs a meeting date to price against; without this the reader would have to
+   * scan months itself and would get a different answer than the calendar shows.
+   */
+  nextFomcMeeting: (input: unknown) => MacroEconomicCalendarNextFomcResult
 }
+
+export type MacroEconomicCalendarNextFomcResult =
+  | { state: 'available'; meeting: { eventKey: string; scheduledDate: string; scheduledAt?: string } }
+  | { state: 'unavailable'; failureCode: 'query-input-invalid' | 'calendar-query-unavailable' | 'meeting-not-found' }
 
 export type MacroEconomicCalendarMonthResult =
   | { state: 'available'; asOf: string; events: readonly MacroEconomicCalendarEventView[] }
@@ -43,6 +54,7 @@ export const macroEconomicCalendarQueryPolicy = {
   monthResultLimit: 200,
   canonicalUtcMillisPattern: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
   monthPattern: /^\d{4}-(?:0[1-9]|1[0-2])$/,
+  nextFomcLookaheadMonths: 14,
   eventKeyMaxLength: 160
 } as const
 
@@ -78,6 +90,22 @@ export function createMacroEconomicCalendarQueryService(deps: {
         return { state: 'available', asOf: input.asOf, events }
       } catch {
         return monthUnavailable('calendar-query-unavailable')
+      }
+    },
+    nextFomcMeeting(input) {
+      if (!isNextFomcInput(input)) return { state: 'unavailable', failureCode: 'query-input-invalid' }
+      try {
+        for (let offset = 0; offset <= macroEconomicCalendarQueryPolicy.nextFomcLookaheadMonths; offset += 1) {
+          const bounds = monthBounds(shiftMonth(input.asOf.slice(0, 7), offset))
+          if (!bounds) return { state: 'unavailable', failureCode: 'query-input-invalid' }
+          const meeting = deps.repository.listEffectiveMonthAsOf({ ...bounds, asOf: input.asOf, limit: macroEconomicCalendarQueryPolicy.monthResultLimit })
+            .filter((revision) => revision.eventFamily === 'fomc' && revision.scheduledDate >= input.asOf.slice(0, 10))
+            .sort((left, right) => left.scheduledDate.localeCompare(right.scheduledDate) || left.scheduledAt?.localeCompare(right.scheduledAt ?? '') || 0)[0]
+          if (meeting) return { state: 'available', meeting: { eventKey: meeting.eventKey, scheduledDate: meeting.scheduledDate, ...(meeting.scheduledAt ? { scheduledAt: meeting.scheduledAt } : {}) } }
+        }
+        return { state: 'unavailable', failureCode: 'meeting-not-found' }
+      } catch {
+        return { state: 'unavailable', failureCode: 'calendar-query-unavailable' }
       }
     },
     getEventDetail(input) {
@@ -212,6 +240,16 @@ function isMonthInput(value: unknown): value is { month: string; asOf: string; m
 
 function isDetailInput(value: unknown): value is { eventKey: string; asOf: string } {
   return isObject(value) && typeof value.eventKey === 'string' && value.eventKey.trim().length > 0 && value.eventKey.length <= macroEconomicCalendarQueryPolicy.eventKeyMaxLength && isCanonicalUtcMillis(value.asOf)
+}
+
+function isNextFomcInput(value: unknown): value is { asOf: string } {
+  return isObject(value) && isCanonicalUtcMillis(value.asOf)
+}
+
+function shiftMonth(month: string, offset: number): string {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year, monthNumber - 1 + offset, 1))
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
 function monthBounds(month: string): { monthStart: string; monthEndExclusive: string } | undefined {

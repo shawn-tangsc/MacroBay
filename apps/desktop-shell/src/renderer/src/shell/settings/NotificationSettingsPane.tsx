@@ -1,6 +1,7 @@
 import { Bell } from 'lucide-react'
-import { Switch } from 'antd'
+import { Switch, Tag } from 'antd'
 
+import { notificationProducerWired } from '@platform/notifications/contracts/notificationContracts'
 import type { NotificationSettings } from '@platform/settings/schema/appSettings'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -29,6 +30,9 @@ export function NotificationSettingsPane(props: {
   onChange: (patch: Partial<NotificationSettings>) => void
 }): React.ReactElement {
   const { labels, settings } = props
+  // No producer means these switches cannot change what the user receives: show that instead of a
+  // toggle that silently does nothing (MI-11-R7).
+  const available = notificationProducerWired
 
   return (
     <section className="settings-detail-pane preferences-pane notification-settings-pane">
@@ -43,6 +47,7 @@ export function NotificationSettingsPane(props: {
           <span>{labels.channelsHeading}</span>
         </div>
         <p>{labels.channelsDescription}</p>
+        {available ? null : <p className="notification-settings-unavailable" role="note">{labels.unavailableNotice}</p>}
       </div>
 
       <div className="notification-channel-list">
@@ -52,12 +57,16 @@ export function NotificationSettingsPane(props: {
               <strong className="notification-channel-title">{labels[row.titleKey]}</strong>
               <span className="notification-channel-description">{labels[row.descriptionKey]}</span>
             </span>
-            <Switch
-              className="notification-channel-switch"
-              size="small"
-              checked={settings[row.key]}
-              onChange={(checked) => props.onChange({ [row.key]: checked })}
-            />
+            <span className="notification-channel-controls">
+              {available ? null : <Tag>{labels.unavailableBadge}</Tag>}
+              <Switch
+                className="notification-channel-switch"
+                size="small"
+                disabled={!available}
+                checked={settings[row.key]}
+                onChange={(checked) => props.onChange({ [row.key]: checked })}
+              />
+            </span>
           </label>
         ))}
       </div>

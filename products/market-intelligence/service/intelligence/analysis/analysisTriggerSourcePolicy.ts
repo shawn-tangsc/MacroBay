@@ -1,5 +1,5 @@
 import { isMarketAnalysisCanonicalUtc, type AnalysisPhase } from '../../../contracts/marketAnalysisContracts'
-import { analysisSessionSlots, triggerKeyForSlot, type AnalysisSessionSlot } from './analysisSchedulePolicy'
+import { analysisSessionSlots, isScheduledSlotTriggerKey, triggerKeyForSlot, type AnalysisSessionSlot } from './analysisSchedulePolicy'
 
 /**
  * Which caller asked for this analysis, and what that means for the significance gate.
@@ -67,6 +67,22 @@ export function isGateEligible(triggerKey: string): boolean {
  */
 export function phaseForNewTriggerKey(triggerKey: string): AnalysisPhase {
   return isGateEligible(triggerKey) ? analysisTriggerSourcePolicy.correctionPhase : analysisTriggerSourcePolicy.defaultPhase
+}
+
+/**
+ * Which budget line a delivery belongs to. One function, so the day and the hour and the quota
+ * cannot disagree about the same attempt:
+ *
+ * - `scheduled` — the three session opens, which carry their own daily reserve.
+ * - `event` — the item line's two keys, registered in `itemTriggerKeys`.
+ * - `calendar` — everything else, including any future key. The default is the stricter line:
+ *   a new source must be registered explicitly to get the event line's larger allowance.
+ */
+export type AnalysisRunLine = 'event' | 'calendar' | 'scheduled'
+
+export function analysisRunLineOf(triggerKey: string): AnalysisRunLine {
+  if (isScheduledSlotTriggerKey(triggerKey)) return 'scheduled'
+  return (analysisTriggerSourcePolicy.itemTriggerKeys as readonly string[]).includes(triggerKey) ? 'event' : 'calendar'
 }
 
 /** Kept next to the policy so a caller cannot smuggle a malformed `asOf` past the gate. */

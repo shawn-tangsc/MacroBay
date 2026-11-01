@@ -1,4 +1,6 @@
-import { DatabaseSync } from 'node:sqlite'
+import type { DatabaseSync } from 'node:sqlite'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 type AgentPlatformMigration = {
   id: string
@@ -89,8 +91,6 @@ const migrations: AgentPlatformMigration[] = [
       create index if not exists idx_agent_session_messages_session_created
         on agent_session_messages(session_id, created_at desc, id desc);
 
-      create virtual table if not exists agent_session_messages_fts
-        using fts5(message_id UNINDEXED, session_id UNINDEXED, searchable_text);
     `
   },
   {
@@ -1444,6 +1444,69 @@ const migrations: AgentPlatformMigration[] = [
       create index idx_agent_channels_lifecycle_state on agent_channels(lifecycle_state, updated_at asc, id asc);
       create index idx_agent_channels_adapter_key on agent_channels(adapter_key);
     `
+  },
+  {
+    id: '0044_require_daily_brief_session_tools',
+    up: `
+      update agent_entities
+      set configuration_json = json_set(coalesce(configuration_json, '{}'), '$.requireSessionToolAllowlist', json('true')),
+          updated_at = '2026-10-30T00:00:00.000Z'
+      where id = 'daily-brief-editor';
+    `
+  },
+  {
+    id: '0042_unbind_daily_brief_editor_model',
+    up: `
+      update agent_entities
+      set model = 'unconfigured:default-chat-model',
+          model_name = '默认智能体模型',
+          updated_at = '2026-10-30T00:00:00.000Z'
+      where id = 'daily-brief-editor';
+    `
+  },
+  {
+    id: '0041_clear_daily_brief_websearch_block',
+    up: `
+      update agent_entities
+      set disabled_tools_json = '[]', updated_at = '2026-10-30T00:00:00.000Z'
+      where id = 'daily-brief-editor';
+    `
+  },
+  {
+    id: '0040_dedupe_product_tool_bindings',
+    up: `
+      delete from agent_product_tool_package_bindings
+      where rowid not in (
+        select min(rowid)
+        from agent_product_tool_package_bindings
+        group by product_id
+      );
+    `
+  },
+  {
+    id: '0043_agent_session_allowed_tools',
+    up: `
+      alter table agent_sessions
+        add column allowed_tools_json text not null default '[]';
+    `
+  },
+  {
+    id: '0045_daily_brief_editor_effort_low',
+    up: `
+      update agent_entities
+      set configuration_json = json_set(coalesce(configuration_json, '{}'), '$.effort', 'low'),
+          updated_at = '2026-10-31T00:00:00.000Z'
+      where id = 'daily-brief-editor'
+        and json_type(coalesce(configuration_json, '{}'), '$.effort') is null;
+    `
+  },
+  {
+    id: '0046_drop_agent_session_messages_fts',
+    up: `
+      -- 跨会话检索已删除（MI-11-R26）：这张虚拟表不再被写入也不再被读取。
+      -- 已有用户库里它还在，留着就是一张没人知道干什么的孤儿表，所以显式删掉。
+      drop table if exists agent_session_messages_fts;
+    `
   }
 ]
 
@@ -1453,7 +1516,7 @@ export type AgentPlatformDatabase = {
 }
 
 export function createAgentPlatformDatabase(path: string): AgentPlatformDatabase {
-  const connection = new DatabaseSync(path)
+  const connection = openSqliteDatabase(path)
   let transactionDepth = 0
   connection.exec('pragma foreign_keys = on;')
   applyMigrations(connection)

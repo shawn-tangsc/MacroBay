@@ -16,6 +16,8 @@ export type AgentTextWorkbench = {
     responseNeedsErrorHandling: string
     agentResponseCompleted: string
     waitingAgentResponse: string
+    /** Appended to the responding row while a pending assistant message is timed. */
+    elapsed: (duration: string) => string
   }
   taskCenter: {
     title: string
@@ -156,6 +158,17 @@ export type AgentTextWorkbench = {
       productToolPermissionDisabled: string
       productToolPermissionAllowReadOnly: string
       productToolPermissionPrompt: string
+      productToolPermissionLabel: string
+      productToolStatusAvailable: string
+      productToolStatusMissingHandler: string
+      productToolStatusNotInstalled: string
+      productToolSummary: (total: number, readOnly: number, writable: number, asOf: number) => string
+      productToolDisabledNote: string
+      productToolColumnTool: string
+      productToolColumnType: string
+      productToolColumnAsOf: string
+      productToolExpand: (count: number) => string
+      productToolCollapse: string
       staleProductToolBinding: string
       readOnlyBadge: string
       writableBadge: string
@@ -180,6 +193,15 @@ export type AgentTextWorkbench = {
       mcpConnecting: string
       mcpError: string
       mcpDisabled: string
+      mcpIdle: string
+      mcpEmptyToolsIdle: string
+      mcpEmptyToolsConnecting: string
+      mcpEmptyToolsError: string
+      mcpEmptyToolsConnected: string
+      mcpSwitchBound: (name: string) => string
+      mcpSwitchBind: (name: string) => string
+      mcpSwitchBindUnavailable: (name: string) => string
+      mcpUnbind: string
       mcpActionOpenUrl: string
       mcpActionRestart: string
       mcpActionOpenSettings: string

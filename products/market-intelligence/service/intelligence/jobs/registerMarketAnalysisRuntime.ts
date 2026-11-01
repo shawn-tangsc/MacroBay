@@ -2,10 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { JobContext, JobRuntime } from '@platform/jobs'
 
-import {
-  INTELLIGENCE_EVENT_TOPICS,
-} from '../schema/intelligenceEvents'
-import { MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
+import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
 import { crossAssetAnalysisWindowPolicy, type CrossAssetPriceHorizon } from '../cross-asset/crossAssetAnalysisWindows'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
@@ -61,6 +59,28 @@ export function formatMarketAnalysisContextDiagnostic(input: Readonly<{
 }
 
 const MARKET_ANALYSIS_CONSUMER_ID = 'market-intelligence.market-analysis-trigger'
+
+/**
+ * 订阅话题与处理函数名都从 manifest 读（`MI-11-R22` A1）：手写第二份数组就是漂移的源头，
+ * 之前 manifest 写着 `eventConsumers: []` 而这里实注册 3 个 topic，就是这么来的。
+ *
+ * 声明缺失时**返回 null 并报一条具名诊断，不抛**：这段跑在 `registerProductServices` 里，
+ * 而外层的 `catch { markUnavailable(); return }`（`app.ts:2630`）会在主窗渲染（`:2723`）之前
+ * 直接返回——抛出去就是「白窗 + 用户看不到任何报错」，等于拿整个应用陪一条声明。
+ * 缺声明由用例钉住（`product.manifest.test.ts`），运行期由这条日志留痕。
+ */
+export function resolveMarketAnalysisConsumerRegistration(
+  manifest: { eventConsumers?: readonly { id: string; topics: readonly string[]; handlerId: string }[] } = marketIntelligenceProductManifest
+): { topics: readonly string[]; handlerId: string } | null {
+  const registration = manifest.eventConsumers?.find((consumer) => consumer.id === MARKET_ANALYSIS_CONSUMER_ID)
+  if (!registration) {
+    console.error(
+      `market-intelligence.event-consumer-undeclared: the manifest does not declare "${MARKET_ANALYSIS_CONSUMER_ID}", so the market analysis trigger stays off.`
+    )
+    return null
+  }
+  return registration
+}
 
 export function resolveMarketAnalysisSeverity(item: import('../schema/intelligenceRecord').IntelligenceItem): 'low' | 'medium' | 'high' | 'critical' {
   const labels = safeJson(item.processingLabelsJson)
@@ -198,9 +218,15 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   newsSentimentQuery?: import('../analysis/analysisNewsSentimentEvidence').AnalysisNewsSentimentQuery
   dataDir: string
   now?: () => string
+  /**
+   * 读者时区（主进程唯一提供者）。缺省 UTC：headless 与绝大多数测试没有读者可问，
+   * 固定值比「回落到运行机器的时区」诚实得多。
+   */
+  timeZone?: () => string
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
 }>): MarketAnalysisRuntime {
   const now = input.now ?? (() => new Date().toISOString())
+  const timeZone = input.timeZone ?? (() => 'UTC')
   // Wiring with no settings service (headless product probes and most tests) keeps the previous
   // behaviour — enabled, following the platform default model — because there is no reader to ask.
   // The product itself always passes the file-backed service, whose default is off.
@@ -218,6 +244,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const triggerPolicy = createAnalysisTriggerPolicy()
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
+    timeZone,
     structuredModelInvocation: input.structuredModelInvocation,
     now,
     idFactory: () => randomUUID(),
@@ -231,9 +258,10 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const significanceGate = createAnalysisSignificanceGate({
     now,
     queryMacroRoute: ({ asOf, months }) => queryMacroRoute(input.publicQueryService, { asOf, months }),
-    countRuns: (at) => countAnalysisRuns(repository, at),
+    countRuns: (at, excludedRowId) => countAnalysisRuns(repository, at, excludedRowId),
     lastAutoRunAt: (eventGroupId, at) => lastAutoRunAt(repository, eventGroupId, at),
-    recordDecision: (decision) => runs.recordDecision(decision)
+    recordDecision: (decision) => { void runs.recordDecision(decision) },
+    updateDecision: (rowId, decision, reasonCode) => repository.updateTriggerLedgerDecision(rowId, decision, reasonCode)
   })
   let crossAssetQuery = input.crossAssetQuery
   let disposed = false
@@ -273,6 +301,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
   const slotTick = createAnalysisSlotTick({
     now,
+    timeZone,
     isDelivered: isSlotDelivered,
     isAbandoned: isSlotAbandoned,
     // The schedule only needs something to analyse; see `hasSlotAnchor` for why the analysis
@@ -374,13 +403,14 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // specific missed open instead of producing an unattributed refresh.
   }
 
-  if (input.eventBusRuntime) {
+  const consumerRegistration = resolveMarketAnalysisConsumerRegistration()
+  if (input.eventBusRuntime && consumerRegistration) {
     input.eventBusRuntime.registerConsumer(
       {
         consumerId: MARKET_ANALYSIS_CONSUMER_ID,
         owner: 'product',
         productId: 'market-intelligence',
-        topics: [INTELLIGENCE_EVENT_TOPICS.itemCreated, INTELLIGENCE_EVENT_TOPICS.impactCreated, INTELLIGENCE_EVENT_TOPICS.sentimentUpdated],
+        topics: [...consumerRegistration.topics],
         retryPolicy: { maxAttempts: 3, backoff: 'exponential', baseDelayMs: 1_000, maxDelayMs: 30_000 }
       },
       async (event) => {
@@ -468,17 +498,20 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
       lastTriggeredAt: previousLedger.at(-1)?.createdAt ?? null,
       lastTriggeredPhase: previousLedger.at(-1) ? toTriggerHistory(previousLedger.at(-1)!).phase : undefined
     })
-    runs.recordDecision({ eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash, decision: decision.decision, reasonCode: decision.reasonCode })
+    const attemptLedgerId = runs.recordDecision({ eventGroupId: result.group.id, triggerKey: decision.triggerKey, changeHash: change.nextHash, decision: decision.decision, reasonCode: decision.reasonCode })
     if (decision.decision !== 'queued' || !decision.phase) return
-    return { eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now() }
+    // The row id rides the freeze payload so a later refusal can rewrite this very attempt instead
+    // of leaving it counted as a spent call.
+    return { eventGroupId: result.group.id, shouldFreeze: true, triggerKey: decision.triggerKey, analysisPhase: decision.phase, asOf: now(), ...(attemptLedgerId ? { attemptLedgerId } : {}) }
   }
 
   async function freezeSnapshot(payload: unknown): Promise<Record<string, unknown> | void> {
-    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string }
+    const value = payload as { eventGroupId: string; triggerKey: string; analysisPhase: 'initial' | 'review' | 'correction'; asOf: string; attemptLedgerId?: string }
     const previousSnapshot = repository.listSnapshots(value.eventGroupId).at(-1)
     // Decided before anything is built: a skipped evaluation must not leave a snapshot or a run.
     const gate = await significanceGate.evaluate({
-      eventGroupId: value.eventGroupId, triggerKey: value.triggerKey, asOf: value.asOf, previousSnapshot
+      eventGroupId: value.eventGroupId, triggerKey: value.triggerKey, asOf: value.asOf, previousSnapshot,
+      ...(value.attemptLedgerId ? { attemptLedgerId: value.attemptLedgerId } : {})
     })
     if (gate.decision === 'skipped') return { eventGroupId: value.eventGroupId }
     const context = await buildMarketAnalysisContext({ eventGroupId: value.eventGroupId, asOf: value.asOf }, input.publicQueryService,
@@ -488,7 +521,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     console.log(formatMarketAnalysisContextDiagnostic({
       asOf: context.asOf,
       macroQueryState: macro?.queryState ?? 'missing',
-      macroEventCount: context.facts.filter(fact => fact.domain === 'macro' && fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.eventName).length,
+      macroEventCount: context.facts.filter(fact => fact.domain === 'macro' && fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.eventName).length,
       macroFactCount: context.facts.filter(fact => fact.domain === 'macro').length,
       macroEvidenceCount: context.evidenceRefs.filter(ref => ref.sourceId.startsWith('macro-calendar-')).length,
       macroCaveats: macro?.caveats ?? ['macro-domain-missing']
@@ -505,6 +538,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // 模块再把窗口压到「理论上的上一档盘口」——分析最大跨度 8 小时，关播三天也不会倒灌三天新闻。
     const sentimentSince = newsSentimentSince(runHistory, previousSnapshot?.asOf)
     const withSentiment = await appendAnalysisNewsSentiment(enriched, input.publicQueryService, input.newsSentimentQuery, {
+      timeZone: timeZone(),
       asOf: value.asOf,
       ...(sentimentSince ? { since: sentimentSince } : {})
     }, () => input.pipeline.listRevisions())

@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
-vi.mock('../intelligenceModule', () => ({ getIntelligenceModule: vi.fn() }))
-
-import { getIntelligenceModule } from '../intelligenceModule'
 import { handleGetCrossAssetSnapshot } from './readHandlers'
+
+/** The composition root builds the module once; the handler reads the instance from its deps. */
+let injectedModule: unknown
+const injectModule = (value: unknown) => { injectedModule = value }
+
 
 const snapshot = { range: '24h' as const, mode: 'current' as const }
 
@@ -16,6 +18,8 @@ function deps(input: {
 }) {
   return {
     jobRuntime: {} as JobRuntime,
+    // Read lazily: these deps objects are built once, while each case injects its own module.
+    get intelligenceModule() { return injectedModule as never },
     getAppLanguage: async () => 'zh-CN' as const,
     macroCalendarOps: {} as never,
     crossAssetOps: {
@@ -26,7 +30,7 @@ function deps(input: {
 }
 
 beforeEach(() => {
-  vi.mocked(getIntelligenceModule).mockReset()
+  injectedModule = undefined
 })
 
 function moduleWith(value: unknown) {
@@ -39,7 +43,7 @@ function moduleWith(value: unknown) {
 
 describe('handleGetCrossAssetSnapshot interface state', () => {
   it('reports a disabled interface together with an unavailable reading', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith(undefined) as never)
+    injectModule(moduleWith(undefined) as never)
 
     const result = (await handleGetCrossAssetSnapshot(
       { range: '24h' },
@@ -54,7 +58,7 @@ describe('handleGetCrossAssetSnapshot interface state', () => {
   })
 
   it('reports an expired lease without hiding the available snapshot', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith(snapshot) as never)
+    injectModule(moduleWith(snapshot) as never)
 
     const result = (await handleGetCrossAssetSnapshot(
       { range: '24h' },
@@ -70,7 +74,7 @@ describe('handleGetCrossAssetSnapshot interface state', () => {
   })
 
   it('reports an active lease on the normal path', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith(snapshot) as never)
+    injectModule(moduleWith(snapshot) as never)
 
     const result = (await handleGetCrossAssetSnapshot(
       { range: '24h' },
@@ -81,7 +85,7 @@ describe('handleGetCrossAssetSnapshot interface state', () => {
   })
 
   it('keeps an unreadable state unknown instead of calling it closed', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith(undefined) as never)
+    injectModule(moduleWith(undefined) as never)
 
     const result = (await handleGetCrossAssetSnapshot(
       { range: '24h' },

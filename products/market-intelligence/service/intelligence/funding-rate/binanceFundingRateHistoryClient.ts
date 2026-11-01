@@ -1,11 +1,10 @@
-import { getPlatformFetch } from '@platform/network/platformFetch'
 
 import type { FundingRateHistoryPoint } from '../store/fundingRateHistoryStore'
 import { fundingRateCollectionWindowPolicy } from './fundingRateHistoryRefreshService'
 
 export { fundingRateCollectionWindowPolicy } from './fundingRateHistoryRefreshService'
 
-export function createBinanceFundingRateHistoryClient(deps: { platformFetch?: typeof fetch } = {}) {
+export function createBinanceFundingRateHistoryClient(deps: { platformFetch: typeof fetch }) {
   return {
     async requestHistory(input: { btc: typeof fundingRateCollectionWindowPolicy.assets.btc; eth: typeof fundingRateCollectionWindowPolicy.assets.eth }) {
       const [btc, eth] = await Promise.all([
@@ -17,8 +16,8 @@ export function createBinanceFundingRateHistoryClient(deps: { platformFetch?: ty
   }
 }
 
-async function requestAsset(input: { asset: 'btc' | 'eth'; symbol: string }, platformFetch?: typeof fetch): Promise<readonly FundingRateHistoryPoint[] | undefined> {
-  const fetchImpl = platformFetch ?? getPlatformFetch()
+async function requestAsset(input: { asset: 'btc' | 'eth'; symbol: string }, platformFetch: typeof fetch): Promise<readonly FundingRateHistoryPoint[] | undefined> {
+  const fetchImpl = platformFetch
   const url = `${fundingRateCollectionWindowPolicy.endpoint}?symbol=${input.symbol}&limit=${fundingRateCollectionWindowPolicy.limit}`
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), fundingRateCollectionWindowPolicy.timeoutMs)

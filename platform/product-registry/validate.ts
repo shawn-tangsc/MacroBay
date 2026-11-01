@@ -48,6 +48,13 @@ function assertWorkspacePanelModule(productDir: string, modulePath: unknown): vo
 }
 
 const KEBAB_CASE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+/**
+ * 事件话题的形状（`MI-11-R22` A1）：小写、点/横线分段，例如 `market-intelligence.item.created`。
+ *
+ * 事件总线本身只要求「非空字符串」，这里更严是**故意**的：这份目录用来给读者选订阅目标，
+ * 带空格或大写的拼写错误会让任务「建得成、永远不触发」，而在生成期就报错能立刻看见。
+ */
+const EVENT_TOPIC_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/
 
 export class ProductRegistryValidationError extends Error {
   constructor(message: string) {
@@ -78,6 +85,36 @@ export function assertKebabCaseId(value: string, label: string): void {
 export function assertLocalizedText(title: ProductMenuPageContribution['title'], label: string): void {
   if (!title['zh-CN']?.trim() || !title['en-US']?.trim()) {
     throw new ProductRegistryValidationError(`${label} must include both zh-CN and en-US text`)
+  }
+}
+
+/**
+ * 该产品**发布**的话题声明（`MI-11-R22` A1）。任务的订阅校验以这份声明为目录，
+ * 所以形状错误必须在生成期就报出来，而不是等到读者建任务时才发现订阅永远不命中。
+ */
+function assertPublishableEventTopics(manifest: ProductManifest, productId: string): void {
+  const topics = manifest.eventTopics
+  if (topics === undefined) return
+  if (!Array.isArray(topics)) {
+    throw new ProductRegistryValidationError(`product "${productId}" eventTopics must be an array`)
+  }
+
+  const seen = new Set<string>()
+  for (const topic of topics) {
+    if (typeof topic !== 'string' || topic.trim() === '' || topic !== topic.trim()) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" eventTopics must contain non-empty trimmed strings`
+      )
+    }
+    if (!EVENT_TOPIC_PATTERN.test(topic)) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" event topic must be lowercase dot or dash separated: ${topic}`
+      )
+    }
+    if (seen.has(topic)) {
+      throw new ProductRegistryValidationError(`product "${productId}" declares duplicate event topic: ${topic}`)
+    }
+    seen.add(topic)
   }
 }
 
@@ -241,6 +278,7 @@ export function validateDiscoveredProductManifest(
   }
 
   assertLocalizedText(manifest.name, `product "${productId}" name`)
+  assertPublishableEventTopics(manifest, productId)
 
   const reservedProductIds = RESERVED_SHELL_ROUTE_PATHS.map((routePath) => routePath.slice(1))
   if (reservedProductIds.includes(productId)) {

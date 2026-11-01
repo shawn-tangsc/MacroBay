@@ -6,7 +6,7 @@ import { createMarketHistoryRetention, MARKET_HISTORY_RETENTION_JOB_ID, register
 const atMs = Date.UTC(2026, 9, 15, 12, 0, 0)
 
 /** A store that records what it was asked and what its ledger was told. */
-function storeFor(result: Readonly<{ thinned: number; deleted: number; oldestKeptAtMs: number | null }> | Error) {
+function storeFor(result: Readonly<{ thinned: number; deleted: number; ledgerDeleted?: number; oldestKeptAtMs: number | null }> | Error) {
   const notes = new Map<string, string>()
   return {
     notes,
@@ -19,7 +19,9 @@ describe('the market history retention pass', () => {
   it('retains both stores against one clock reading and writes each one its own ledger', async () => {
     const macro = storeFor({ thinned: 412, deleted: 96, oldestKeptAtMs: atMs - 30 * 24 * 3_600_000 })
     const crossAsset = storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null })
-    const summary = await createMarketHistoryRetention({ stores: { macro, crossAsset, analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }) }, now: () => atMs }).run()
+    // The analysis store has two windows, so its pass reports two counts; the bar stores report one.
+    const analysis = storeFor({ thinned: 0, deleted: 3, ledgerDeleted: 7, oldestKeptAtMs: null })
+    const summary = await createMarketHistoryRetention({ stores: { macro, crossAsset, analysis }, now: () => atMs }).run()
 
     // Both stores are handed the same edges: a pass that straddled midnight would thin one store against
     // a different instant than the other and the ledger would describe two nights.
@@ -34,6 +36,9 @@ describe('the market history retention pass', () => {
       'macro-market.retention.lastDeleted': '96', 'macro-market.retention.oldestKeptAtMs': String(atMs - 30 * 24 * 3_600_000)
     })
     expect(crossAsset.notes.get('cross-asset.retention.oldestKeptAtMs')).toBe('none')
+    // The second clock is only recorded where it exists; a bar store that has none gets no empty note.
+    expect(analysis.notes.get('analysis.retention.lastLedgerDeleted')).toBe('7')
+    expect(macro.notes.has('macro-market.retention.lastLedgerDeleted')).toBe(false)
   })
 
   it('keeps going when one store refuses, and records the refusal as a code', async () => {
@@ -49,6 +54,39 @@ describe('the market history retention pass', () => {
     // The exception itself never reaches the scheduler; only the code travels.
     expect(onError).toHaveBeenCalledTimes(1)
     expect(String(onError.mock.calls[0]?.[1])).toBe('macro')
+  })
+
+  it('absorbs the news store into the same pass without a second registration', async () => {
+    // The news store joins this job instead of owning a timer: one schedule, one startup look, and its
+    // own two windows are reported in the same summary as the bar stores.
+    const news = storeFor({ thinned: 0, deleted: 12, oldestKeptAtMs: null, capped: true })
+    const summary = await createMarketHistoryRetention({
+      stores: {
+        macro: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        crossAsset: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        news
+      },
+      now: () => atMs
+    }).run()
+    expect(Object.keys(summary.results)).toEqual(['macro', 'crossAsset', 'analysis', 'news'])
+    expect(summary.results.news).toMatchObject({ deleted: 12, capped: true })
+    expect(news.notes.get('news-sentiment.retention.lastDeleted')).toBe('12')
+    // A capped pass is a fact the ledger must carry: otherwise it reads like a finished pass.
+    expect(news.notes.get('news-sentiment.retention.lastCapped')).toBe('true')
+  })
+
+  it('treats a store whose database never opened as absent, not as failed', async () => {
+    const summary = await createMarketHistoryRetention({
+      stores: {
+        macro: storeFor({ thinned: 0, deleted: 1, oldestKeptAtMs: null }),
+        crossAsset: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null })
+      },
+      now: () => atMs
+    }).run()
+    expect(Object.keys(summary.results)).not.toContain('news')
+    expect(Object.values(summary.results).every((entry) => entry !== undefined && !('state' in entry))).toBe(true)
   })
 
   it('registers one daily job and looks at startup as well', () => {

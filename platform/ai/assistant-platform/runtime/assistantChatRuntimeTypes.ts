@@ -22,7 +22,8 @@ export type AssistantChatRuntimeEventSink = {
 export type AssistantChatRuntimeDependencies = {
   repos: AssistantPlatformRepositories
   getProviderState: ProviderStateAccessor
-  fetch?: typeof fetch
+  /** 出网通道，必传；由组合根注入 `platformFetch`。 */
+  fetch: typeof fetch
   events?: AssistantChatRuntimeEventSink
   now?: () => Date
   topicNaming?: AssistantTopicNamingService

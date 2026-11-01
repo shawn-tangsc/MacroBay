@@ -2,7 +2,7 @@ import type { AnalysisPhase } from '../../../contracts/marketAnalysisContracts'
 import { hashMarketAnalysisJson } from './analysisHash'
 import { decideBudget, type BudgetDecision } from './analysisBudgetPolicy'
 import { isScheduledSlotTriggerKey, slotForTriggerKey, type AnalysisSessionSlot } from './analysisSchedulePolicy'
-import { localDayToken } from './analysisSlotCoverage'
+import { slotDedupeDay } from './analysisSlotCoverage'
 import { isGateEligible } from './analysisTriggerSourcePolicy'
 import { providerReleaseSurprisePolicy, providerReleaseSurprises, type ProviderReleaseSurprise } from './providerReleaseSurprisePolicy'
 import { diffSignificance, type PreviousFactKey, type SignificanceBaseline, type SignificanceSignal } from './significanceChangeMatcher'
@@ -57,6 +57,9 @@ export type SignificanceEvaluationInput = Readonly<{
   dayRuns: number
   eventRunsToday: number
   scheduledRunsToday: number
+  eventRunsThisHour: number
+  calendarRunsToday: number
+  calendarRunsThisHour: number
 }>
 
 export function significanceChangeHash(signals: readonly SignificanceSignal[]): string {
@@ -76,7 +79,7 @@ export function evaluateSignificance(input: SignificanceEvaluationInput): Signif
   if (!isGateEligible(input.triggerKey) && !isScheduledSlotTriggerKey(input.triggerKey)) return decide('queued', null, [])
   const budget: BudgetDecision = decideBudget({
     triggerKey: input.triggerKey, now: input.now, lastAutoRunAt: input.lastAutoRunAt,
-    hourRuns: input.hourRuns, dayRuns: input.dayRuns, eventRunsToday: input.eventRunsToday, scheduledRunsToday: input.scheduledRunsToday
+    hourRuns: input.hourRuns, dayRuns: input.dayRuns, eventRunsToday: input.eventRunsToday, scheduledRunsToday: input.scheduledRunsToday, eventRunsThisHour: input.eventRunsThisHour, calendarRunsToday: input.calendarRunsToday, calendarRunsThisHour: input.calendarRunsThisHour
   })
   if (budget.decision === 'skipped') return decide('skipped', budget.reasonCode ?? analysisSignificancePolicy.reasonCodes.invalidInput, [])
   const slot = slotForTriggerKey(input.triggerKey)
@@ -133,5 +136,5 @@ export function sessionSlotReasonCode(slot: AnalysisSessionSlot): string {
  * day's delivery its own row and its own timestamp.
  */
 export function sessionSlotChangeHash(slot: AnalysisSessionSlot, now: string): string {
-  return `session-slot:${slot}:${localDayToken(now)}`
+  return `session-slot:${slot}:${slotDedupeDay(now)}`
 }

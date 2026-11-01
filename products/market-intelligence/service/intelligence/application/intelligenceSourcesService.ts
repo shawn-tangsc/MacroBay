@@ -111,6 +111,8 @@ export function createIntelligenceSourcesService(deps: {
   }
   credentialStore?: IntelligenceCredentialStore
   onCalendarEnabledChanged?: () => void | Promise<void>
+  /** Every switch, including the product-owned ones that arm their own job. */
+  onSourceEnabledChanged?: (sourceId: string) => void | Promise<void>
   validateCredential?: typeof validateIntelligenceCredential
   requestGovernanceQueue?: ReturnType<typeof createSourceRequestGovernanceQueue>
   /** Proxy-aware platform transport for credentialed-provider probes; defaults to the platform fetch. */
@@ -356,6 +358,13 @@ export function createIntelligenceSourcesService(deps: {
 
       const saved = await deps.profileStore.saveProfile(input)
       applyRuntimeEligibility(definition, saved)
+      // A product-owned job arms or drops its own schedule from this signal; failing to notify must
+      // not fail the save the reader just made.
+      try {
+        await deps.onSourceEnabledChanged?.(saved.sourceId)
+      } catch {
+        // The switch is saved; the next boot re-syncs the job registry anyway.
+      }
       return this.getDetail(saved.sourceId)
     },
 

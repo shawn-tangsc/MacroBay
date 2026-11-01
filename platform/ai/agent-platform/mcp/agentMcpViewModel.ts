@@ -50,7 +50,9 @@ export function buildAgentMcpCatalog(
 }
 
 function toCatalogItem(server: McpServerEntity, bound: boolean, runtimeStatus?: McpRuntimeStatus): AgentMcpCatalogItem {
-  const status: McpRuntimeState = server.isActive ? (runtimeStatus?.state ?? 'connecting') : 'disabled'
+  // 没有运行时上报就是「还没启动过」，不是「正在连接」。用 `error` 兜底同样不行——
+  // 那是把未知说成失败，和编一个「连接中」是同一类错误，只是方向相反。
+  const status: McpRuntimeState = server.isActive ? (runtimeStatus?.state ?? 'idle') : 'disabled'
   const statusText = server.isActive ? runtimeStatus?.message ?? '' : ''
   const errorKind = status === 'error' ? runtimeStatus?.errorKind : undefined
   const retryable = status === 'error' ? runtimeStatus?.retryable : undefined

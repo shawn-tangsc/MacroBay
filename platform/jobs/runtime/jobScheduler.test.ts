@@ -1,10 +1,47 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { JobDefinition } from '../contracts/jobTypes'
-import { createJobScheduler } from './jobScheduler'
+import {
+  MAX_TIMER_DELAY_MS,
+  createJobScheduler,
+  cronTimerDelayMs,
+  nextCronSearchStartMs
+} from './jobScheduler'
 import { computeNextCronRunAt } from './jobCronSchedule'
 
 describe('jobScheduler', () => {
+  it('caps a far-future cron delay so the timer cannot fire at the wrong time', () => {
+    const nowMs = Date.UTC(2026, 0, 1)
+    // A yearly cron is 365 days out; the runtime would clamp that raw delay to 1 ms.
+    expect(cronTimerDelayMs(Date.UTC(2027, 0, 1), nowMs)).toBe(MAX_TIMER_DELAY_MS)
+    expect(MAX_TIMER_DELAY_MS).toBe(2_147_483_647)
+    expect(cronTimerDelayMs(nowMs + 30_000, nowMs)).toBe(30_000)
+    expect(cronTimerDelayMs(nowMs, nowMs)).toBe(0)
+    expect(cronTimerDelayMs(nowMs - 1, nowMs)).toBe(0)
+  })
+
+  it('does not fire a cron whose next slot is months away', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-02T00:00:00.000Z'))
+    const enqueue = vi.fn()
+    const scheduler = createJobScheduler({ enqueue, isLocked: () => false })
+
+    scheduler.setSchedule(createDefinition({ id: 'cron-yearly', trigger: { kind: 'cron', expression: '0 0 1 1 *' } }))
+    await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
+
+    expect(enqueue).not.toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it('restarts the cron search at wake-up time so missed slots are not replayed', () => {
+    const slotMs = Date.UTC(2026, 0, 1, 10, 5)
+    expect(nextCronSearchStartMs(slotMs, slotMs)).toBe(slotMs + 60_000)
+    expect(nextCronSearchStartMs(slotMs, slotMs + 30_000)).toBe(slotMs + 60_000)
+    // Two days asleep: every slot in between is missed and must not be replayed.
+    const wokeAtMs = slotMs + 2 * 24 * 60 * 60_000
+    expect(nextCronSearchStartMs(slotMs, wokeAtMs)).toBe(wokeAtMs)
+  })
+
   it('fails cron calculation fast for invalid timezone and start values', () => {
     expect(computeNextCronRunAt('0 9 * * *', 'Bad/Zone', Date.UTC(2026, 0, 1))).toBeNull()
     for (const startMs of [Number.NaN, Infinity, Number.MAX_SAFE_INTEGER, 8_640_000_000_000_001]) {

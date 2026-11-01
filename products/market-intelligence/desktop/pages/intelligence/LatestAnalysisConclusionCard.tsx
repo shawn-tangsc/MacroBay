@@ -8,6 +8,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { LoadingState } from '@platform/ui/components/loading'
 import { analysisConclusionSurfacePolicy } from './analysisWorkspaceLayoutPolicy'
 import { analysisConclusionDirectionPolicy } from './analysisConclusionDirectionPolicy'
+import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 import { AnalysisDirectionsBlock } from './AnalysisDirectionsBlock'
 import { readConclusion } from './analysisConclusionBlocks'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
@@ -23,10 +24,7 @@ export type LatestConclusionText = Readonly<{
   openDetail: string
 }>
 
-/** The newest published node, or undefined when nothing usable is published. */
-export function selectLatestPublishedEntry(entries: readonly MarketAnalysisTimelineEntry[]): MarketAnalysisTimelineEntry | undefined {
-  return entries.find(entry => entry.status === 'published' && (entry.kind === 'analysis' || entry.kind === 'review'))
-}
+export { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 
 /**
  * Prominent main-area conclusion surface. It always shows the newest published

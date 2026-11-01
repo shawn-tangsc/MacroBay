@@ -4,6 +4,10 @@ import type {
   TaskRunLogEntity
 } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
+import {
+  isChannelDeliverySkipReason,
+  type ChannelDeliverySkipReason
+} from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 
 export type TaskAutomationStatusFilter = 'all' | ScheduledTaskEntity['status']
 
@@ -20,6 +24,17 @@ export type TaskRunSnapshot = {
   /** 最近一次运行的开始时刻；用于表格「最近结果」时间与聚合「最近更新」。 */
   at: string | null
   health: DeliveryHealthCounts
+  /**
+   * Why the skipped deliveries were skipped, deduplicated. The reason is written by the delivery
+   * kernel and must be explained, not echoed as a code: each one needs a different user action.
+   */
+  skipReasons: ChannelDeliverySkipReason[]
+  /**
+   * Skipped attempts that carry no reason or a code we cannot explain. A skipped row without a
+   * reason is a defect in the writer, so it is surfaced as such instead of being hidden behind a
+   * dash.
+   */
+  unexplainedSkips: number
 }
 
 export type TaskAutomationRow = {
@@ -63,6 +78,24 @@ export function countDeliveryHealth(
     else health.skipped += 1
   }
   return health
+}
+
+/**
+ * A skipped delivery always has a reason (`finishSkipped` writes it). This separates the reasons we
+ * can explain from the ones we cannot, so the interface never shows a raw code and never pretends
+ * an unexplained skip is normal.
+ */
+export function collectDeliverySkipReasons(
+  attempts: readonly Pick<TaskDeliveryAttemptEntity, 'status' | 'errorCode'>[]
+): { skipReasons: ChannelDeliverySkipReason[]; unexplainedSkips: number } {
+  const reasons = new Set<ChannelDeliverySkipReason>()
+  let unexplainedSkips = 0
+  for (const attempt of attempts) {
+    if (attempt.status !== 'skipped-no-active-target' && attempt.status !== 'skipped-channel-inactive') continue
+    if (isChannelDeliverySkipReason(attempt.errorCode)) reasons.add(attempt.errorCode)
+    else unexplainedSkips += 1
+  }
+  return { skipReasons: [...reasons].sort(), unexplainedSkips }
 }
 
 export function resolveTaskEmptyState(input: {

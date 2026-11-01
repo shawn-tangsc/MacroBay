@@ -41,6 +41,7 @@ export function registerIntelligenceJobs(
     capitalConditions?: { refresh: () => Promise<unknown> }
     etfFlowHistory?: { refresh: () => Promise<unknown> }
     fundingRateHistory?: { refresh: () => Promise<unknown> }
+    openInterest?: { refresh: () => Promise<unknown> }
   }
 ): void {
   const { pipeline, archiveService, replayService, translationService } = deps
@@ -56,8 +57,12 @@ export function registerIntelligenceJobs(
       await deps.etfFlowHistory?.refresh()
       return
     }
+    // One source, two series: the funding rate and the notional open interest it cannot be
+    // read without. Both live behind this source's single enable switch, so both are
+    // refreshed here rather than in a second job definition.
     if (input.sourceId === 'binance-futures-positioning') {
       await deps.fundingRateHistory?.refresh()
+      await deps.openInterest?.refresh()
       return
     }
     const result = await pipeline.collectSource({

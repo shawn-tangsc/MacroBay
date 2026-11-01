@@ -98,8 +98,6 @@ export function formatStorageOperationType(operation: CacheOperationType, langua
       return labels.operationClear
     case 'compact':
       return labels.operationCompact
-    case 'invalidate':
-      return labels.operationInvalidate
   }
 }
 

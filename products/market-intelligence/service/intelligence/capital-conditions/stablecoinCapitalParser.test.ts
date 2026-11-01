@@ -13,8 +13,7 @@ describe('parseStablecoinCapitalSnapshot', () => {
         change7dUsd: 10,
         change7dPercent: 10 / 300 * 100,
         change30dUsd: 30,
-        change30dPercent: 30 / 280 * 100,
-        usdStablecoinSupplyUsd: 315
+        change30dPercent: 30 / 280 * 100
       }
     })
   })
@@ -32,7 +31,7 @@ describe('parseStablecoinCapitalSnapshot', () => {
     expect(parseStablecoinCapitalSnapshot(payload)).toEqual({ state: 'unavailable', failureCode: 'core-stablecoin-invalid' })
   })
 
-  it('does not allow optional non-core USD background entries to invalidate a verified core group', () => {
+  it('ignores non-core entries instead of letting one invalidate a verified core group', () => {
     const payload = validPayload()
     payload.peggedAssets.push({
       id: '999',
@@ -44,7 +43,7 @@ describe('parseStablecoinCapitalSnapshot', () => {
 
     expect(parseStablecoinCapitalSnapshot(payload)).toMatchObject({
       state: 'available',
-      snapshot: { coreCurrentUsd: 310, usdStablecoinSupplyUsd: 315 }
+      snapshot: { coreCurrentUsd: 310 }
     })
   })
 

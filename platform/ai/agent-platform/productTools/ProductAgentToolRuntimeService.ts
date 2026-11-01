@@ -73,7 +73,15 @@ export class ProductAgentToolRuntimeService {
         .listToolsForProduct(pkg.productId)
         .filter((tool) => tool.hasHandler)
         .map((tool) => toRuntimeTool(agentId, pkg.productId, pkg.permissionMode, tool))
-      toolRegistry.registerTools(sourceId, tools)
+      try {
+        toolRegistry.registerTools(sourceId, tools)
+      } catch (error) {
+        // Two agents can carry the same product package after an older seed or a manual import.
+        // Tool ids are product-scoped, so only one source can own them. Skip the duplicate
+        // binding instead of rejecting the whole startup; the first owner keeps the tools.
+        if (error instanceof Error && error.message.includes('is already registered by source')) continue
+        throw error
+      }
     }
 
     for (const binding of (state.agentProductToolPackages ?? []).filter((item) => item.agentId === agentId)) {

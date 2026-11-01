@@ -247,7 +247,8 @@ describe('desktop main IPC surface', () => {
   it('creates a visible boot window before product registration and loads the renderer only after sealing product IPC', () => {
     const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
     const bootWindow = 'mainWindow = await createMainWindow()'
-    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network)'
+    // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
+    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
@@ -275,7 +276,8 @@ describe('desktop main IPC surface', () => {
 
   it('treats proxy application failure as a startup boundary before products and the normal renderer', () => {
     const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
-    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network)'
+    // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
+    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
     const proxyApplyIndex = bootstrapSource.indexOf(proxyApply)
@@ -356,7 +358,24 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("import { wireRendererProcessDiagnostics } from '../window/rendererProcessDiagnostics'")
     expect(appSource).toContain("import { createRendererProcessLog } from '../window/rendererProcessLog'")
     expect(appSource).toContain('wireRendererProcessDiagnostics(window')
-    expect(appSource).toContain("'renderer-lifecycle.ndjson'")
+    // 渲染层诊断不再有自己的 ndjson 管道：改走唯一的应用日志写入器，来源由 category 区分。
+    expect(appSource).toContain('createRendererProcessLog(appLog)')
+    expect(appSource).not.toContain('renderer-lifecycle.ndjson')
+  })
+
+  it('answers product IPC with structured unavailability once quit cleanup has closed the runtime', () => {
+    expect(appSource).toContain("import { createProductIpcInvoker } from './productIpcInvoker'")
+    expect(appSource).toContain('const invokeProductIpc = createProductIpcInvoker({')
+    // 退出标记是入口的短路条件：产品 DB 关闭后绝不再进入产品 handler。
+    expect(appSource).toContain('isRuntimeClosed: () => platformRuntimesDisposed')
+    expect(appSource).toContain('invokeProductIpc(productId, method, payload)')
+    // 关闭登记与 renderer 入口共用同一 registry 实例。
+    expect(appSource).toContain('productIpcRegistryForDisposal = productIpcRegistry')
+    expect(appSource).toContain('productIpcRegistryForDisposal?.markClosed()')
+    // 登记关闭必须早于产品服务/DB 拆除。
+    expect(appSource.indexOf('productIpcRegistryForDisposal?.markClosed()')).toBeLessThan(
+      appSource.indexOf('productServiceDisposerRegistry.disposeAll()')
+    )
   })
 
   it('owns product service disposal alongside platform runtime disposal', () => {
@@ -464,6 +483,7 @@ describe('desktop main IPC surface', () => {
       'platform:model-providers-detection-done',
       'platform:model-providers-detection-progress',
       'platform:model-providers-generate-image',
+      'platform:model-providers-get-in-use-retired',
       'platform:model-providers-get-runtime-check-report',
       'platform:model-providers-list',
       'platform:model-providers-preview-model-sync',
@@ -543,6 +563,35 @@ describe('desktop main IPC surface', () => {
     // Clipboard pixels are an attachment write path, not a generated-image read path.
     expect(appSource).toContain('IpcChannels.appSaveClipboardImage')
     expect(appSource).toContain("app.getPath('temp')")
+  })
+
+  it('runs the comparison probe only inside the on-demand self-test', () => {
+    // 本地优先的应用不该每次启动去握手外部 IP：探针只允许出现在自检 handler 里。
+    expect(appSource.split('probeDirectEgress(').length - 1).toBe(1)
+  })
+
+  it('rejects an invalid proxy address before the settings file is written', () => {
+    expect(appSource).toContain("import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'")
+    const guardIndex = appSource.indexOf('assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)')
+    expect(guardIndex).toBeGreaterThan(-1)
+    // 校验必须先于落盘：抛错时 settingsStore.update 根本没被调用，settings.json 不会留下坏地址。
+    expect(guardIndex).toBeLessThan(appSource.indexOf('const next = await settingsStore.update(patch)'))
+  })
+
+  it('keeps the attachment text preview on its existing channel but reads it from platform/files', () => {
+    // 附件读取归位后只剩这一条接缝：通道不变，preload 不变，实现改由 platform/files/attachments 提供。
+    expect(appSource).toContain(
+      "import { readTextFilePreview } from '../../files/attachments/textFilePreview'"
+    )
+    expect(appSource).toContain(
+      'ipcMain.handle(IpcChannels.appReadTextFile, async (_event: IpcMainInvokeEvent, path: string) => readTextFilePreview(path))'
+    )
+    expect(preloadSource).toContain(
+      'readTextFile: (path: string) => ipcRenderer.invoke(IpcChannels.appReadTextFile, path)'
+    )
+    // 实现只留一份：启动文件里不允许再长出第二个读取实现或第二个 128 KiB 上限。
+    expect(appSource).not.toContain('TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024')
+    expect(appSource).not.toContain('function isLikelyBinary')
   })
 
   it('wires the PLAT-82 detection channels end to end (memory-only, no writes)', () => {

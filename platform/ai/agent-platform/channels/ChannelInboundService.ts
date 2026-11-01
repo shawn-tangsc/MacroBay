@@ -18,7 +18,8 @@ export type ChannelInboundServiceDependencies = {
   repository: ChannelInboundRepository
   encryption: ChannelInboundEncryption
   sessions: ChannelSessionFactory
-  contentGuard?: ChannelContentGuard
+  // Required on purpose: an optional boundary hook means the default behaviour is "no boundary".
+  contentGuard: ChannelContentGuard
   now?: () => Date
   leaseMs?: number
   beforeAcknowledge?: () => Promise<void>
@@ -54,18 +55,21 @@ export class ChannelInboundService {
         this.enqueueInitialClaim(this.deps.repository.findInitialClaim(request.channelId, eventHash, this.now()))
         return { disposition: 'duplicate' }
       }
+      // Guard before the payload is encrypted: what the agent later reads is already protected,
+      // so replaying stored work cannot reintroduce raw external text.
+      const guarded = this.deps.contentGuard(request)
       const [event, encryptedConversation, encryptedUser, payload] = await Promise.all([
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerEventKey)),
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerConversationKey)),
         this.deps.encryption.cipher.encrypt(request.channelId, bytes(request.providerUserKey)),
-        this.deps.encryption.cipher.encrypt(request.channelId, encodeChannelInboundPayload(request))
+        this.deps.encryption.cipher.encrypt(request.channelId, encodeChannelInboundPayload({ ...request, text: guarded.text ?? undefined }))
       ])
       const [conversationHash, userHash] = await Promise.all([
         this.deps.encryption.cipher.keyedHash(request.channelId, bytes(request.providerConversationKey)),
         this.deps.encryption.cipher.keyedHash(request.channelId, bytes(request.providerUserKey))
       ])
       const now = this.now()
-      const decision = this.policyDecision(request, userHash, conversationHash)
+      const decision = guarded.rejection ?? this.policyDecision(request, userHash, conversationHash)
       if (decision === 'channel-policy-denied') {
         try {
           this.deps.repository.upsertCandidate({
@@ -242,7 +246,7 @@ export class ChannelInboundService {
   private policyDecision(request: ChannelInboundRequest, userHash: string, conversationHash: string): ChannelInboundAuditCode | null {
     if ((request.conversationKind === 'group' || request.conversationKind === 'channel') && !request.mentionedBot) return 'channel-mention-required'
     if (!this.deps.repository.isAllowed(request.channelId, userHash, conversationHash, request.conversationKind)) return 'channel-policy-denied'
-    return this.deps.contentGuard?.(request) ?? null
+    return null
   }
 
   private async ensureConversationSession(input: {

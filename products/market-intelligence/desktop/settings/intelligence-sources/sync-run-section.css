@@ -1,0 +1,64 @@
+.mi-sync-run { display: flex; flex-direction: column; min-height: 0; height: 100%; padding: 12px 16px; gap: 10px; }
+.mi-sync-run__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mi-sync-run__head h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.mi-sync-run__filters { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-secondary); }
+.mi-sync-run__filters label { display: inline-flex; align-items: center; gap: 6px; }
+.mi-sync-run__filters select { background: var(--surface-2, #14171e); color: inherit; border: 1px solid var(--border, #22252d); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+.mi-sync-run__filters button { border: 1px solid var(--border, #22252d); background: none; color: inherit; border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; }
+.mi-sync-run__notice { color: var(--accent, #b7cf52); }
+.mi-sync-run__empty { color: var(--text-secondary); font-size: 12px; margin: 12px 0; }
+.mi-sync-run__time, .mi-sync-run__duration { font-variant-numeric: tabular-nums; color: var(--text-secondary); white-space: nowrap; }
+/* A handler id is one long token; without a clamp it widens the fixed column and pushes the whole
+   table sideways, which reads as a second kind of misalignment. */
+.mi-sync-run__detail { display: flex; gap: 8px; align-items: baseline; }
+.mi-sync-run__detail .mi-sync-run__failure { color: #d9a441; background: rgb(217 164 65 / 12%); border-radius: 3px; padding: 0 4px; }
+.mi-sync-run__detail span { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The table owns the scroll: the page must not grow with the run count. */
+.mi-sync-run__scroll { flex: 1; min-height: 0; overflow: auto; }
+.mi-sync-run__foot { color: var(--text-secondary, #8b8d94); font-size: 10.5px; padding-top: 6px; }
+
+/* One grid template for the header and every row: alignment is structural, not negotiated. */
+.mi-sync-run__grid {
+  display: grid;
+  grid-template-columns: 92px 232px 84px 68px 64px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #1c1f26);
+  font-size: 11.5px;
+}
+.mi-sync-run__grid--head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-1, #0f1116);
+  border-bottom-color: var(--border, #22252d);
+  color: var(--text-secondary, #8b8d94);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.mi-sync-run__source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mi-sync-run__grid[data-outcome='failed'] span[data-outcome='failed'] { color: #e0524c; }
+.mi-sync-run__grid span[data-outcome='succeeded'] { color: #3fbf6f; }
+
+.mi-sync-run__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mi-sync-run__pager { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary, #8b8d94); }
+.mi-sync-run__pager button {
+  border: 1px solid var(--border, #22252d);
+  background: none;
+  color: inherit;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.mi-sync-run__pager button:disabled { opacity: 0.4; cursor: default; }
+
+/* The daily totals keep the run grid's look but not its columns: four cells, one job per day. */
+.mi-sync-run__aggregates { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+.mi-sync-run__aggregates h3 { font-size: 12px; margin: 0 0 4px; }
+.mi-sync-run__aggregate-note { color: var(--muted); font-size: 11px; margin: 0 0 6px; }
+.mi-sync-run__aggregate-table { max-height: 240px; overflow: auto; }
+.mi-sync-run__grid--aggregate { grid-template-columns: 92px minmax(0, 1fr) 56px 56px; }
+.mi-sync-run__grid--aggregate span[data-has-failures='true'] { color: var(--danger); }

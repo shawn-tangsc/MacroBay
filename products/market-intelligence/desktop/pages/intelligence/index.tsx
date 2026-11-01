@@ -5,12 +5,15 @@ import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import { EconomicCalendar, macroEconomicCalendarClient, marketCalendarClient } from '../../features/macro/economic-calendar'
 import { intelligenceFearGreedClient } from '../../features/industry/fear-greed'
-import { intelligenceFundingRateHistoryClient } from '../../features/industry/funding-rates'
+import { intelligenceFundingRateHistoryClient, intelligenceOpenInterestClient } from '../../features/industry/positioning'
 import { collectCapitalConditionsSources, intelligenceCapitalConditionsClient } from '../../features/industry/capital-conditions'
 import { AgentPortal } from './AgentPortal'
 import { useCryptoActivation } from './useCryptoActivation'
 import { marketIntelligenceAgents } from './agentPortalModel'
 import { CryptoIntelligenceDashboard } from './CryptoIntelligenceDashboard'
+import { DailyBriefingPage } from './DailyBriefingPage'
+import { DailyBriefingGeneratedBanner } from './DailyBriefingGeneratedBanner'
+import { openWebSearchSettings } from '../../shared/navigation/productShellNavigation'
 import { MarketAnalysisDashboardLayout } from './MarketAnalysisDashboardLayout'
 import { SelectedCalendarEventDrawer } from './SelectedCalendarEventDrawer'
 import { DashboardPanelDrawer } from './DashboardPanelDrawer'
@@ -27,6 +30,7 @@ import { createCrossAssetObservationClient } from '../../shared/ipc/crossAssetOb
 import { createDashboardFeedStatusClient } from '../../shared/ipc/dashboardFeedStatusClient'
 import { createMacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnapshotClient'
 import { createMacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
+import { marketDivergenceClient } from '../../shared/ipc/marketDivergenceClient'
 
 const crossAssetClient = createCrossAssetObservationClient()
 /**
@@ -56,9 +60,9 @@ function IntelligencePageBody(): React.ReactElement {
   const sample = useSampleMode()
   const sampleText = text.sampleMode
   const sampleNow = sample.now
-  const { activation, sourceCounts } = useCryptoActivation()
+  const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
-  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar'>('portal')
+  const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('portal')
   const sampleAvailable = sample.state.scenarioCount > 0
     && sample.state.unavailableReason !== 'no-scenario'
   const openCryptoPrimary = (): void => {
@@ -109,7 +113,14 @@ function IntelligencePageBody(): React.ReactElement {
   return (
     <div className="mi-sample-surface">
       {sample.state.active ? <SampleWatermark text={sampleText.watermark} /> : null}
-      {/* 横幅只属于看板：门户是入口页，不该挂一条状态条。 */}
+      {/*
+        「今日简报已生成」在页面顶部。示例模式回放历史数据、简报不可用；简报页自己就显示生成状态，
+        两处都不挂这条提示。
+      */}
+      {!sample.state.active && activeView === 'dashboard' ? (
+        <DailyBriefingGeneratedBanner locale={language} text={text.dailyBriefingGeneratedBanner} />
+      ) : null}
+      {/* 示例模式横幅只属于看板：门户是入口页，不该挂一条状态条。 */}
       {sample.state.active && activeView === 'dashboard' ? (
         <SampleModeBanner
           busy={sample.busy}
@@ -119,7 +130,16 @@ function IntelligencePageBody(): React.ReactElement {
           text={sampleText.banner as SampleModeBannerText}
         />
       ) : null}
-      {activeView === 'calendar' ? (
+      {activeView === 'briefing' ? (
+        <DailyBriefingPage
+          locale={language}
+          text={text.dashboard.dailyBriefing}
+          eventTitles={text.analysisWorkspace.readableNames.eventName}
+          onBack={() => setActiveView('dashboard')}
+          onConfigureSources={() => setSourceDrawerOpen(true)}
+          onConfigureWebSearch={openWebSearchSettings}
+        />
+      ) : activeView === 'calendar' ? (
         <EconomicCalendar
           client={macroEconomicCalendarClient}
           now={sampleNow}
@@ -131,6 +151,9 @@ function IntelligencePageBody(): React.ReactElement {
         <MarketAnalysisDashboardLayout
           key={sample.sessionKey}
           onOpenCalendar={(month, eventKey) => { setCalendarTarget({ month, ...(eventKey ? { eventKey } : {}) }); setActiveView('calendar') }}
+          // The news card's "sources are off" state opens the same drawer the header's
+          // configure button does — one settings surface, not a second one.
+          onOpenSources={() => setSourceDrawerOpen(true)}
           text={text}
           locale={language}
           // The one event-title list the product keeps, read here because the page entry owns the
@@ -154,9 +177,14 @@ function IntelligencePageBody(): React.ReactElement {
         >
         <CryptoIntelligenceDashboard
           key={sample.sessionKey}
+          locale={language}
+          briefingEnabled={!sample.state.active}
+          onOpenBriefing={() => setActiveView('briefing')}
           client={macroEconomicCalendarClient}
           fearGreedClient={intelligenceFearGreedClient}
           fundingRateClient={intelligenceFundingRateHistoryClient}
+          openInterestClient={intelligenceOpenInterestClient}
+          divergenceClient={marketDivergenceClient}
           capitalConditionsClient={intelligenceCapitalConditionsClient}
           collectCapitalConditionsSources={collectCapitalConditionsSources}
           crossAssetClient={crossAssetClient}
@@ -180,6 +208,7 @@ function IntelligencePageBody(): React.ReactElement {
           agents={marketIntelligenceAgents}
           onOpenSources={openCryptoSources}
           onPrimary={openCryptoPrimary}
+          onRetryActivation={retryActivation}
           onToggleSample={() => { void toggleSample() }}
           sample={{ active: sample.state.active, available: sampleAvailable, busy: sample.busy }}
           sourceCounts={sourceCounts}
@@ -189,6 +218,9 @@ function IntelligencePageBody(): React.ReactElement {
       {sourceDrawerOpen ? <DashboardPanelDrawer
         onClose={() => setSourceDrawerOpen(false)}
         open
+        // The registry projection may stand in for a failed read only while the reader is looking
+        // at sample data: outside it, a failed read is stated as failed, never as a source list.
+        sampleActive={sample.state.active}
       /> : null}
     </div>
   )

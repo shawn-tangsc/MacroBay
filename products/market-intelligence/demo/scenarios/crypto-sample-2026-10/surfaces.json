@@ -8,6 +8,7 @@
   "intelligence.macro.economicCalendar.queryMonth",
   "intelligence.macro.marketCalendar.queryMonth",
   "intelligence.macro.marketSnapshot.query",
+  "intelligence.macro.policyPath.read",
   "intelligence.macro.ratesSnapshot.query",
   "intelligence.queryCapitalConditionsSnapshot",
   "intelligence.queryFearGreedSnapshot",

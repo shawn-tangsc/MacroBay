@@ -7,6 +7,7 @@ import {
   resolveWindowAntdTokenValues,
   resolveWindowBackgroundColor,
   WINDOW_ACCENT_COLOR,
+  WINDOW_ACCENT_COLOR_LIGHT,
   WINDOW_ANTD_COLOR_TOKENS,
   WINDOW_ANTD_SIZING,
   WINDOW_BACKGROUND_COLOR,
@@ -93,6 +94,7 @@ function singleSourceColors(): Set<string> {
     for (const value of Object.values(tokens.segmented)) colors.add(String(value).toLowerCase())
   }
   for (const value of Object.values(WINDOW_ACCENT_COLOR)) colors.add(String(value).toLowerCase())
+  for (const value of Object.values(WINDOW_ACCENT_COLOR_LIGHT)) colors.add(String(value).toLowerCase())
   return colors
 }
 
@@ -133,7 +135,7 @@ describe('PLAT-42 ②：antd token 由同一单源产出', () => {
       for (const accent of ['lime', 'cyan', 'violet'] as const) {
         const config = buildWindowAntdTheme(variant, accent)
         expect(config.algorithm).toBe(variant === 'dark' ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm)
-        expect(config.token?.colorPrimary).toBe(WINDOW_ACCENT_COLOR[accent])
+        expect(config.token?.colorPrimary).toBe((variant === 'dark' ? WINDOW_ACCENT_COLOR : WINDOW_ACCENT_COLOR_LIGHT)[accent])
         expect(config.token).toMatchObject(WINDOW_ANTD_COLOR_TOKENS[variant])
         expect(config.token).toMatchObject(WINDOW_ANTD_SIZING)
         // 单源判据：ThemeConfig 里出现的每个 hex 颜色都必须是单源里的值
@@ -144,7 +146,7 @@ describe('PLAT-42 ②：antd token 由同一单源产出', () => {
 
   it('accent 底上的文字色由单源给出，并与 styles.css --accent-contrast 逐字一致', () => {
     expect(WINDOW_ANTD_COLOR_TOKENS.dark.colorTextLightSolid).toBe('#141512')
-    expect(WINDOW_ANTD_COLOR_TOKENS.light.colorTextLightSolid).toBe('#11130f')
+    expect(WINDOW_ANTD_COLOR_TOKENS.light.colorTextLightSolid).toBe('#ffffff')
     expect(cssVariable(':root', '--accent-contrast')).toBe(WINDOW_ANTD_COLOR_TOKENS.dark.colorTextLightSolid)
     expect(cssVariable(':root[data-theme="light"]', '--accent-contrast')).toBe(
       WINDOW_ANTD_COLOR_TOKENS.light.colorTextLightSolid
@@ -154,6 +156,18 @@ describe('PLAT-42 ②：antd token 由同一单源产出', () => {
         WINDOW_ANTD_COLOR_TOKENS[variant].colorTextLightSolid
       )
     }
+  })
+
+  it('浅色 accent 与 antd 取自同一处，且 --accent-contrast 在浅色只有一处定义', () => {
+    // 浅色主题里 --accent 必须就是 accent 单源里的那一格，不允许再手写一个绿。
+    expect(cssVariable(':root[data-theme="light"]', '--accent')).toBe(WINDOW_ACCENT_COLOR_LIGHT.lime)
+
+    // 只留一处定义：重复定义会因「后出现的胜出」把前面的修正整块盖掉（2026-11-01 出过一次）。
+    const lightBlocks = withoutComments(shellCss).match(/:root\[data-theme=["']light["']\]\s*\{[^}]*\}/g) ?? []
+    const definitions = lightBlocks.flatMap((block) =>
+      block.match(/(?:^|[;{\s])--accent-contrast\s*:/g) ?? []
+    )
+    expect(definitions).toHaveLength(1)
   })
 
   it('分段控件选中色按主题分化：深色用 accent、浅色用深色块（与修复前 antd 观感逐字一致）', () => {

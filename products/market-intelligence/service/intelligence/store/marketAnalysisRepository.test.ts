@@ -12,6 +12,7 @@ import type {
 } from '../../../contracts/marketAnalysisContracts'
 import { buildAnalysisSnapshotHash } from '../analysis/analysisHash'
 import { createMarketAnalysisRepository } from './marketAnalysisRepository'
+import { countAnalysisRuns } from '../analysis/analysisRunCounter'
 
 const asOf = '2026-09-25T08:30:00.000Z'
 const later = '2026-09-25T08:31:00.000Z'
@@ -72,7 +73,7 @@ function timeline(id: string, eventGroupId: string, analysisRunId: string | null
 }
 
 describe('marketAnalysisRepository', () => {
-  it('creates all eight tables and can rerun migrations without changing rows', () => {
+  it('creates all nine tables and can rerun migrations without changing rows', () => {
     const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
     const first = repository.inspectSchema()
     repository.appendEventGroup(group())
@@ -80,7 +81,7 @@ describe('marketAnalysisRepository', () => {
     expect(repository.inspectSchema()).toEqual(first)
     expect(first.tables).toEqual(expect.arrayContaining([
       'mi_analysis_event_groups', 'mi_analysis_snapshots', 'mi_analysis_runs', 'mi_analysis_summaries',
-      'mi_analysis_predictions', 'mi_analysis_prediction_verifications', 'mi_analysis_timeline', 'mi_analysis_trigger_ledger'
+      'mi_analysis_predictions', 'mi_analysis_prediction_verifications', 'mi_analysis_prediction_ledger', 'mi_analysis_timeline', 'mi_analysis_trigger_ledger'
     ]))
     expect(repository.getEventGroup('mi-eg-0001')).toEqual(group())
     repository.close()
@@ -112,6 +113,32 @@ describe('marketAnalysisRepository', () => {
     repository.appendSnapshot(snapshot('mi-es-CH2', 'mi-eg-0001', 'B'))
     repository.appendSnapshot(snapshot('mi-es-CH3', 'mi-eg-0001', 'C'))
     expect(repository.listSnapshots('mi-eg-0001').map(item => item.id)).toEqual(['mi-es-CH1', 'mi-es-CH2', 'mi-es-CH3'])
+    repository.close()
+  })
+
+  it('accepts a schema-2 snapshot whose facts and evidence carry a source URL', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    const base = snapshot('mi-es-S2', 'mi-eg-0001', 'A')
+    const facts = [{ ...base.facts[0]!, sourceUrl: 'https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm' }]
+    const evidenceRefs = [{ ...base.evidenceRefs[0]!, sourceUrl: facts[0]!.sourceUrl }]
+    const withUrls: EvidenceSnapshot = {
+      ...base,
+      schemaVersion: 2,
+      facts,
+      evidenceRefs,
+      snapshotHash: buildAnalysisSnapshotHash({
+        profileId: 'crypto-market-analysis-v1', asOf: base.asOf, dataCutoff: base.dataCutoff,
+        facts, missingDomains: [], caveats: [], evidenceRefs
+      })
+    }
+
+    expect(() => repository.appendSnapshot(withUrls)).not.toThrow()
+    expect(repository.getSnapshot('mi-es-S2')).toMatchObject({
+      schemaVersion: 2,
+      facts: [expect.objectContaining({ sourceUrl: facts[0]!.sourceUrl })],
+      evidenceRefs: [expect.objectContaining({ sourceUrl: facts[0]!.sourceUrl })]
+    })
     repository.close()
   })
 
@@ -243,7 +270,7 @@ describe('marketAnalysisRepository', () => {
     expect(repository.claimRun('mi-ar-0001', later)).toBe(true)
     repository.commitSuccessfulAnalysis({ runId: 'mi-ar-0001', summary: summary('mi-as-0001', 'mi-ar-0001', 'mi-eg-0001'), predictions: [prediction('mi-pr-0001', 'mi-as-0001')], timeline: timeline('mi-tl-0001', 'mi-eg-0001', 'mi-ar-0001', 'mi-as-0001') })
 
-    repository.appendPredictionVerificationAndUpdateStatus({ id: 'mi-pv-atomic', predictionId: 'mi-pr-0001', status: 'confirmed', evaluatedAt: '2026-09-25T08:45:00.000Z', ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], reasonCode: 'confirmed', reason: '满足条件。' })
+    repository.appendPredictionVerificationAndUpdateStatus({ id: 'mi-pv-atomic', predictionId: 'mi-pr-0001', status: 'confirmed', evaluatedAt: '2026-09-25T08:45:00.000Z', ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], reasonCode: 'confirmed', reason: '满足条件。' }, { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 1 })
 
     expect(repository.hasPredictionVerificationAt('mi-pr-0001', '2026-09-25T08:45:00.000Z')).toBe(true)
     expect(repository.listPredictions('mi-as-0001')).toEqual([expect.objectContaining({ id: 'mi-pr-0001', status: 'confirmed' })])
@@ -259,9 +286,11 @@ describe('marketAnalysisRepository', () => {
     repository.commitSuccessfulAnalysis({ runId: 'mi-ar-0001', summary: summary('mi-as-0001', 'mi-ar-0001', 'mi-eg-0001'), predictions: [prediction('mi-pr-0001', 'mi-as-0001')], timeline: timeline('mi-tl-0001', 'mi-eg-0001', 'mi-ar-0001', 'mi-as-0001') })
     repository.updatePredictionStatus({ id: 'mi-pr-0001', status: 'confirmed' })
 
-    expect(() => repository.appendPredictionVerificationAndUpdateStatus({ id: 'mi-pv-rollback', predictionId: 'mi-pr-0001', status: 'invalidated', evaluatedAt: '2026-09-25T08:46:00.000Z', ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], reasonCode: 'invalidated', reason: '不满足条件。' })).toThrow('analysis-prediction-status-not-pending')
+    expect(() => repository.appendPredictionVerificationAndUpdateStatus({ id: 'mi-pv-rollback', predictionId: 'mi-pr-0001', status: 'invalidated', evaluatedAt: '2026-09-25T08:46:00.000Z', ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], reasonCode: 'invalidated', reason: '不满足条件。' }, { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 1 })).toThrow('analysis-prediction-status-not-pending')
     expect(repository.hasPredictionVerificationAt('mi-pr-0001', '2026-09-25T08:46:00.000Z')).toBe(false)
     expect(repository.listPredictions('mi-as-0001')).toEqual([expect.objectContaining({ id: 'mi-pr-0001', status: 'confirmed' })])
+    // The ledger line travels with the verdict, so a rolled-back verdict leaves no line behind either.
+    expect(repository.listPredictionLedger()).toEqual([])
     repository.close()
   })
 
@@ -280,7 +309,7 @@ describe('marketAnalysisRepository', () => {
     expect(second.items).toHaveLength(1)
     expect(new Set([...first.items, ...second.items].map(item => item.id)).size).toBe(51)
     expect(second.nextCursor).toBeNull()
-    console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A02', event: 'sqlite-transaction', status: 'pass', details: { tables: 8, idempotentRuns: 1, snapshotHistory: 3, timelinePageSize: first.items.length, orphanArchives: 0 } }))
+    console.log(JSON.stringify({ marker: 'MI_ANALYSIS_ACCEPTANCE', package: 'MI-A02', event: 'sqlite-transaction', status: 'pass', details: { tables: 9, idempotentRuns: 1, snapshotHistory: 3, timelinePageSize: first.items.length, orphanArchives: 0 } }))
     repository.close()
   })
 
@@ -296,6 +325,94 @@ describe('marketAnalysisRepository', () => {
     const second = repository.listTimeline({ eventGroupId: 'mi-eg-0001', cursor: first.nextCursor })
     expect(second.items).toEqual([expect.objectContaining({ id: 'mi-tl-0000' })])
     expect(new Set([...first.items, ...second.items].map(item => item.id)).size).toBe(51)
+    repository.close()
+  })
+
+  it('records the verdict in a ledger row read off the prediction it judges', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendSnapshot(snapshot('mi-es-A1', 'mi-eg-0001', 'A'))
+    repository.enqueueRun(run('mi-ar-0001', 'mi-eg-0001', 'mi-es-A1', 'key-1'))
+    expect(repository.claimRun('mi-ar-0001', later)).toBe(true)
+    repository.commitSuccessfulAnalysis({ runId: 'mi-ar-0001', summary: summary('mi-as-0001', 'mi-ar-0001', 'mi-eg-0001'), predictions: [prediction('mi-pr-0001', 'mi-as-0001')], timeline: timeline('mi-tl-0001', 'mi-eg-0001', 'mi-ar-0001', 'mi-as-0001') })
+
+    repository.appendPredictionVerificationAndUpdateStatus({ id: 'mi-pv-ledger', predictionId: 'mi-pr-0001', status: 'confirmed', evaluatedAt: '2026-09-25T08:45:00.000Z', ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], reasonCode: 'confirmed', reason: '满足条件。' }, { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 3 })
+
+    // Asset, horizon and the creation instant come from the prediction row, not from the caller: a ledger
+    // line cannot describe a prediction shape that never existed.
+    expect(repository.listPredictionLedger()).toEqual([{
+      predictionId: 'mi-pr-0001', schemaVersion: 1, asset: 'BTC', horizonStart: later, horizonEnd: '2026-09-25T08:45:00.000Z',
+      predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 3, status: 'confirmed', reasonCode: 'confirmed',
+      ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], evidenceRefCount: 1,
+      predictionCreatedAt: later, evaluatedAt: '2026-09-25T08:45:00.000Z'
+    }])
+    repository.close()
+  })
+
+  it('keeps the verdict when the conclusion expires and drops it on its own later cutoff', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendSnapshot(snapshot('mi-es-A1', 'mi-eg-0001', 'A'))
+    repository.enqueueRun(run('mi-ar-0001', 'mi-eg-0001', 'mi-es-A1', 'key-1'))
+    expect(repository.claimRun('mi-ar-0001', later)).toBe(true)
+    repository.commitSuccessfulAnalysis({ runId: 'mi-ar-0001', summary: summary('mi-as-0001', 'mi-ar-0001', 'mi-eg-0001'), predictions: [prediction('mi-pr-0001', 'mi-as-0001')], timeline: timeline('mi-tl-0001', 'mi-eg-0001', 'mi-ar-0001', 'mi-as-0001') })
+    repository.appendPredictionVerificationAndUpdateStatus({ id: 'mi-pv-ledger', predictionId: 'mi-pr-0001', status: 'confirmed', evaluatedAt: '2026-09-25T08:45:00.000Z', ruleVersion: 'prediction-verification.v1', evidenceRefs: ['ev-A'], reasonCode: 'confirmed', reason: '满足条件。' }, { predicate: 'price_return(BTC,15m)>=0.5%', conditionCount: 1 })
+
+    // October 20th: the conclusion is older than fourteen days, the verdict is not yet older than a
+    // hundred and eighty. The conclusion graph goes; the verdict about it stays.
+    const first = repository.retention({ conclusionCutoffIso: '2026-10-06T00:00:00.000Z', ledgerCutoffIso: '2026-04-23T00:00:00.000Z' })
+    expect(first.deleted).toBe(1)
+    expect(first.ledgerDeleted).toBe(0)
+    expect(repository.getSummary('mi-as-0001')).toBeUndefined()
+    expect(repository.listPredictions('mi-as-0001')).toEqual([])
+    expect(repository.listPredictionLedger()).toHaveLength(1)
+
+    // A cutoff that precedes the conclusion leaves both alone: the two windows cannot move each other.
+    expect(repository.retention({ conclusionCutoffIso: '2000-01-01T00:00:00.000Z', ledgerCutoffIso: '2000-01-01T00:00:00.000Z' })).toEqual({ deleted: 0, ledgerDeleted: 0, oldestKeptAtMs: null })
+
+    const last = repository.retention({ conclusionCutoffIso: '2027-04-01T00:00:00.000Z', ledgerCutoffIso: '2027-03-01T00:00:00.000Z' })
+    expect(last.ledgerDeleted).toBe(1)
+    expect(repository.listPredictionLedger()).toEqual([])
+    repository.close()
+  })
+})
+
+describe('marketAnalysisRepository trigger ledger rows', () => {
+  const ledgerRow = (id: string, changeHash: string, overrides: Record<string, unknown> = {}) => ({
+    id, eventGroupId: 'mi-eg-0001', triggerKey: 'macro.actual.first-confirmed', changeHash,
+    decision: 'queued', reasonCode: 'severity-confirmed', snapshotHash: null, analysisRunId: null, createdAt: asOf, ...overrides
+  })
+
+  it('answers a repeated attempt with the row id already stored, not the one just generated', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    const first = repository.appendTriggerLedger(ledgerRow('mi-ledger-1', 'hash-a'))
+    // Same (group, key, change hash): the conflict target keeps the first row, so the second write
+    // must answer with that id — the caller flips it later.
+    const second = repository.appendTriggerLedger(ledgerRow('mi-ledger-2', 'hash-a', { decision: 'skipped', reasonCode: 'hour-budget-exhausted' }))
+    expect(first).toBe('mi-ledger-1')
+    expect(second).toBe('mi-ledger-1')
+    expect(repository.listTriggerLedger('mi-eg-0001')).toHaveLength(1)
+    repository.close()
+  })
+
+  it('rewrites only the row named by id, leaving a same-key attempt alone', () => {
+    const repository = createMarketAnalysisRepository({ filePath: ':memory:' })
+    repository.appendEventGroup(group())
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-1', 'hash-a'))
+    repository.appendTriggerLedger(ledgerRow('mi-ledger-2', 'hash-b'))
+    expect(countAnalysisRuns(repository, asOf).dayRuns).toBe(2)
+
+    // By id, never by (group, key): that pair repeats, and flipping the older row would rewrite an
+    // attempt that really ran as one that never did.
+    repository.updateTriggerLedgerDecision('mi-ledger-2', 'skipped', 'hour-budget-exhausted')
+
+    const rows = repository.listTriggerLedger('mi-eg-0001')
+    expect(rows.map(row => [row.id, row.decision, row.reasonCode])).toEqual([
+      ['mi-ledger-1', 'queued', 'severity-confirmed'],
+      ['mi-ledger-2', 'skipped', 'hour-budget-exhausted']
+    ])
+    expect(countAnalysisRuns(repository, asOf).dayRuns).toBe(1)
     repository.close()
   })
 })

@@ -47,7 +47,11 @@ describe('loadTaskRunSnapshots', () => {
     expect(snapshots['task-1']).toEqual({
       status: 'completed',
       at: '2026-07-17T08:00:00.000Z',
-      health: { delivered: 1, failed: 1, pending: 1, skipped: 1, unknown: 1 }
+      health: { delivered: 1, failed: 1, pending: 1, skipped: 1, unknown: 1 },
+      // The fixture's skipped attempt carries no reason code: that is a writer defect and must be
+      // surfaced as such rather than reported as a normal skip.
+      skipReasons: [],
+      unexplainedSkips: 1
     })
     expect(snapshots['task-2']?.health.delivered).toBe(1)
   })

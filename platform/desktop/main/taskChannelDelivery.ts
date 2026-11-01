@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { ChannelDeliveryRepository, ChannelDeliveryService } from '../../ai/agent-platform/channels'
+import { taskResultSourceId } from '../../ai/agent-platform/channels/taskResultSourceId'
 import type { AppLanguage } from '../../settings/schema/appSettings'
 
 type TaskChannelDeliveryInput = {
@@ -46,7 +47,7 @@ export function createTaskChannelDelivery(deps: TaskChannelDeliveryDependencies)
       const summary: Summary = { delivered: 0, failed: 0, skipped: 0, unknown: 0 }
       for (const channelId of [...new Set(input.channelIds)]) {
         const outcomes = await deps.delivery.deliverToEnabledTargets({
-          channelId, agentId: input.agentId, source: 'task-result', sourceId: `${input.runLogId}:${input.status}`, text
+          channelId, agentId: input.agentId, source: 'task-result', sourceId: taskResultSourceId(input.runLogId, input.status), text
         })
         for (const outcome of outcomes) {
           if (outcome.status === 'delivered') summary.delivered += 1
@@ -69,7 +70,7 @@ export function createTaskChannelDelivery(deps: TaskChannelDeliveryDependencies)
       if (!text || createHash('sha256').update(text).digest('hex') !== run.resultHash) return { delivered: 0, failed: 0, skipped: 0, unknown: 0 }
       const status = sourceStatus(runLogId, attempt.sourceHash)
       if (!status) return { delivered: 0, failed: 0, skipped: 0, unknown: 0 }
-      const outcome = await deps.delivery.deliver({ channelId: attempt.channelId, agentId, conversationId: attempt.conversationId, source: 'task-result', sourceId: `${runLogId}:${status}`, text, retryUnknown: true })
+      const outcome = await deps.delivery.deliver({ channelId: attempt.channelId, agentId, conversationId: attempt.conversationId, source: 'task-result', sourceId: taskResultSourceId(runLogId, status), text, retryUnknown: true })
       const summary: Summary = { delivered: outcome.status === 'delivered' ? 1 : 0, failed: outcome.status === 'failed' ? 1 : 0, skipped: outcome.status === 'skipped' ? 1 : 0, unknown: outcome.status === 'unknown-after-send' ? 1 : 0 }
       await deps.patchDeliverySummary(runLogId, summary)
       return summary
@@ -79,7 +80,7 @@ export function createTaskChannelDelivery(deps: TaskChannelDeliveryDependencies)
 
 function sourceStatus(runLogId: string, sourceHash: string): TaskChannelDeliveryInput['status'] | null {
   for (const status of ['completed', 'failed', 'cancelled'] as const) {
-    if (createHash('sha256').update(`${runLogId}:${status}`).digest('base64url') === sourceHash) return status
+    if (createHash('sha256').update(taskResultSourceId(runLogId, status)).digest('base64url') === sourceHash) return status
   }
   return null
 }

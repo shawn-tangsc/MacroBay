@@ -44,10 +44,10 @@ function cssRule(styles: string, selector: string): string {
 
 import { productText } from '../../shared/i18n/productText'
 import { AgentPortal } from './AgentPortal'
-import { projectActivation } from './agentActivationPolicy'
 import { marketIntelligenceAgents } from './agentPortalModel'
 
-const activation = projectActivation(undefined)
+/** A configured reader: the layout cases only need the progress chip to exist. */
+const activation = { status: 'ready' as const, enabledSourceCount: 1, totalSourceCount: 12 }
 const sample = { active: false, available: true, busy: false }
 
 describe('market intelligence agent portal layout', () => {
@@ -59,6 +59,7 @@ describe('market intelligence agent portal layout', () => {
         agents: marketIntelligenceAgents,
         onOpenSources: () => undefined,
         onPrimary: () => undefined,
+        onRetryActivation: () => undefined,
         onToggleSample: () => undefined,
         sample,
         text
@@ -77,6 +78,7 @@ describe('market intelligence agent portal layout', () => {
         agents: marketIntelligenceAgents,
         onOpenSources: () => undefined,
         onPrimary: () => undefined,
+        onRetryActivation: () => undefined,
         onToggleSample: () => undefined,
         sample,
         text: productText['zh-CN'].pages.intelligence.portal

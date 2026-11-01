@@ -1,7 +1,12 @@
 import type { ModelChatProtocol, ModelDefinition, ModelProvider } from './modelProviderTypes'
 import { inferModelCapabilities, resolveModelCapabilities } from './modelCapabilityInference'
 import { normalizeProviderChatEndpoints, resolveProviderPrimaryBase } from './providerChatEndpoints'
-import type { PresetModelInput, PresetProtocolDeclaration, ProviderPresetInput } from './presets/presetTypes'
+import type {
+  PresetModelInput,
+  PresetProtocolDeclaration,
+  ProviderPresetInput,
+  ProviderServerToolSupport
+} from './presets/presetTypes'
 import { PRESET_GROUPS } from './presets/groups'
 import type { ProviderCategoryId } from './presets/groups'
 // `export ... from` 不建立本地绑定；解析函数要用真实的邀请链接表，所以单独 import 一份。
@@ -97,6 +102,26 @@ const PROVIDER_PROTOCOL_DECLARATION_BY_ID: Readonly<Record<string, PresetProtoco
 
 export function providerProtocolDeclarationOf(providerId: string): PresetProtocolDeclaration | undefined {
   return PROVIDER_PROTOCOL_DECLARATION_BY_ID[providerId.trim()]
+}
+
+/**
+ * Anthropic server-side 工具支持 —— 唯一来源是各供应商配置里的 `serverTools`。
+ *
+ * **未声明 = 不支持**（fail closed）。只有官方 Anthropic 预设声明 `webSearch: true`；第三方
+ * Anthropic 兼容端点即使有 `messages` 端点也不能据此推断。
+ */
+const PROVIDER_SERVER_TOOL_SUPPORT_BY_ID: Readonly<Record<string, ProviderServerToolSupport>> = Object.freeze(
+  Object.fromEntries(
+    PRESET_GROUPS.flatMap((group) =>
+      group.presets
+        .filter((preset) => preset.serverTools !== undefined)
+        .map((preset) => [preset.id, Object.freeze({ ...preset.serverTools! })] as const)
+    )
+  )
+)
+
+export function providerServerToolSupportOf(providerId: string): ProviderServerToolSupport | undefined {
+  return PROVIDER_SERVER_TOOL_SUPPORT_BY_ID[providerId.trim()]
 }
 
 /**

@@ -3,6 +3,7 @@ import { lstat, mkdir, readdir, readFile, rm, stat, symlink, unlink } from 'node
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 
+import { getPlatformFetch } from '../../../network/platformFetch'
 import type {
   InstalledSkill,
   LocalSkill,
@@ -597,7 +598,8 @@ async function inspectZipWithUnzip(zipFilePath: string): Promise<SkillZipInspect
 }
 
 async function fetchHttp(url: string, init?: { headers?: Record<string, string> }): Promise<SkillHttpResponse> {
-  return fetch(url, init)
+  // 走平台出网适配器：它会按设置走代理，裸 fetch 不会。
+  return getPlatformFetch()(url, init)
 }
 
 async function writeFileFromArrayBuffer(filePath: string, arrayBuffer: ArrayBuffer): Promise<void> {

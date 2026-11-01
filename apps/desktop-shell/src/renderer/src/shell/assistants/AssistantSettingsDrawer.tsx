@@ -141,8 +141,13 @@ export function AssistantSettingsForm({
 
       <label className="assistant-settings-field">
         <span>{labels.mcpMode}</span>
+        {/*
+         * 助手运行时没有 MCP 执行链路（Phase 9 deferred），这里只回显已存的值。
+         * 不禁用就是一个点了没反应的假开关，所以禁用并说明；保留字段是为了不丢历史值。
+         */}
         <Select<AssistantMcpMode>
           value={settings.mcpMode}
+          disabled
           options={[
             { value: 'disabled', label: labels.mcpDisabled },
             { value: 'auto', label: labels.mcpAuto },
@@ -151,6 +156,9 @@ export function AssistantSettingsForm({
           onChange={(value) => onSettingsChange({ ...settings, mcpMode: value })}
         />
       </label>
+      <p className="assistant-settings-note" data-assistant-mcp-unavailable>
+        {labels.mcpModeUnavailableHint}
+      </p>
 
       <div className="assistant-settings-toggle">
         <span>{labels.enableWebSearch}</span>
@@ -160,7 +168,6 @@ export function AssistantSettingsForm({
         />
       </div>
       <p className="status-line">{labels.webSearchHint}</p>
-      <p className="status-line">{labels.contextSourcesPlaceholder}</p>
     </div>
   )
 }

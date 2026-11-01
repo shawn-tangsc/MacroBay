@@ -58,7 +58,8 @@ describe('Claude Code query options adapter', () => {
       model: 'claude-sonnet-4-5',
       cwd: '/tmp/workspace',
       env: {
-        FOO: 'bar'
+        FOO: 'bar',
+        CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000'
       },
       permissionMode: 'acceptEdits',
       allowedTools: ['Read', 'Edit'],
@@ -85,6 +86,7 @@ describe('Claude Code query options adapter', () => {
       skillToolIds: ['skill__code-reader__read'],
       runtimeMcpToolNames: [],
       skillContext: ['Enabled skills:', '', '- Code Reader. Declared tools: Read. Source: local.'].join('\n'),
+      outputLimit: { maxOutputTokens: 32000, source: 'safe-default' },
       toolPolicy: expect.objectContaining({
         permissionMode: 'acceptEdits',
         allowedTools: ['Read', 'Edit'],
@@ -118,7 +120,8 @@ describe('Claude Code query options adapter', () => {
     expect(query.sdkOptions.env).toEqual({
       FOO: 'bar',
       ANTHROPIC_API_KEY: 'provider-secret',
-      ANTHROPIC_MODEL: 'claude-sonnet-4-5'
+      ANTHROPIC_MODEL: 'claude-sonnet-4-5',
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000'
     })
   })
 
@@ -248,7 +251,8 @@ describe('Claude Code query options adapter', () => {
     expect(query.sdkOptions.env).toEqual({
       FOO: 'bar',
       ANTHROPIC_API_KEY: 'key',
-      CLAUDE_CODE_EFFORT_LEVEL: 'max'
+      CLAUDE_CODE_EFFORT_LEVEL: 'max',
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000'
     })
   })
 
@@ -264,7 +268,8 @@ describe('Claude Code query options adapter', () => {
 
     expect(query.sdkOptions.env).toEqual({
       FOO: 'bar',
-      ANTHROPIC_API_KEY: 'key'
+      ANTHROPIC_API_KEY: 'key',
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000'
     })
     expect(query.sdkOptions.thinking).toEqual({ type: 'disabled' })
   })
@@ -284,7 +289,8 @@ describe('Claude Code query options adapter', () => {
     expect(query.sdkOptions).not.toHaveProperty('effort')
     expect(query.sdkOptions.env).toEqual({
       FOO: 'bar',
-      ANTHROPIC_API_KEY: 'key'
+      ANTHROPIC_API_KEY: 'key',
+      CLAUDE_CODE_MAX_OUTPUT_TOKENS: '32000'
     })
   })
 
@@ -296,5 +302,49 @@ describe('Claude Code query options adapter', () => {
 
     expect(query.sdkOptions.effort).toBe('high')
     expect(query.sdkOptions).not.toHaveProperty('thinking')
+  })
+
+  it('requests the model output capability as the single-turn max output tokens', () => {
+    const query = createClaudeCodeQueryOptionsFromSettings({
+      modelId: 'deepseek-v4.1-flash-1017',
+      settings: baseSettings,
+      modelMaxOutputTokens: 65536
+    })
+
+    expect(query.sdkOptions.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('65536')
+    expect(query.runtimeMetadata.outputLimit).toEqual({
+      maxOutputTokens: 65536,
+      source: 'model-capability'
+    })
+  })
+
+  it('falls back to the documented safe default when the model declares no output capability', () => {
+    const query = createClaudeCodeQueryOptionsFromSettings({
+      modelId: 'deepseek-v4.1-flash-1017',
+      settings: baseSettings
+    })
+
+    expect(query.sdkOptions.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('32000')
+    expect(query.runtimeMetadata.outputLimit).toEqual({
+      maxOutputTokens: 32000,
+      source: 'safe-default'
+    })
+  })
+
+  it('keeps an explicitly configured max output tokens and records it as configured', () => {
+    const query = createClaudeCodeQueryOptionsFromSettings({
+      modelId: 'deepseek-v4.1-flash-1017',
+      settings: {
+        ...baseSettings,
+        env: { ...baseSettings.env, CLAUDE_CODE_MAX_OUTPUT_TOKENS: '24000' }
+      },
+      modelMaxOutputTokens: 65536
+    })
+
+    expect(query.sdkOptions.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS).toBe('24000')
+    expect(query.runtimeMetadata.outputLimit).toEqual({
+      maxOutputTokens: 24000,
+      source: 'configured'
+    })
   })
 })

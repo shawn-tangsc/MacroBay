@@ -1,3 +1,4 @@
+import { extractSseEvents, tryParseJsonChunk } from '../../chat/sseStreamParser'
 import { buildChatCompletionsUrl } from '../../providers/providerEndpoints'
 import {
   classifyModelLifecycleFailure,
@@ -35,6 +36,10 @@ import { resolveRuntimeMentionedModels, type AgentRuntimeMentionedModelInput } f
 import { resolveEffectiveAgentModel } from './effectiveAgentModel'
 import type { AgentRuntimeStopReason } from './runtimeTypes'
 
+function parseChunk(raw: string): ChatCompletionStreamChunk | null {
+  return tryParseJsonChunk(raw) as ChatCompletionStreamChunk | null
+}
+
 export type AgentChatRuntimeMentionedModelInput = AgentRuntimeMentionedModelInput
 
 /** Display-only context card for a user message; the raw reference stays in `text`. */
@@ -62,6 +67,8 @@ export type AgentChatRuntimeResult = {
   state: AgentStoreState
   userMessage: AgentSessionMessageEntity
   assistantMessage: AgentSessionMessageEntity
+  /** Tool calls completed during this turn; null when the runtime did not expose any. */
+  toolInvocations?: readonly import('./runtimeTypes').AgentRuntimeToolInvocation[]
 }
 
 export type AgentChatRuntime = {
@@ -74,7 +81,7 @@ export type AgentChatRuntimeDependencies = {
   getAgentState: () => Promise<AgentStoreState>
   saveAgentState: (state: AgentStoreState, options?: { mergeSessionId?: string }) => Promise<void>
   getProviderState: ProviderStateAccessor
-  fetch?: typeof fetch
+  fetch: typeof fetch
   aiNaming?: AgentSessionAiNamingHook
   resolveNamingModelId?: (input: {
     agentModelId: string | null
@@ -365,7 +372,7 @@ async function runProviderChatCompletion(input: {
   session: AgentSessionEntity
   text: string
   signal?: AbortSignal
-  fetch?: typeof fetch
+  fetch: typeof fetch
   onDelta?: (partialText: string) => Promise<void> | void
 }): Promise<{
   text: string
@@ -400,7 +407,7 @@ async function runProviderChatCompletion(input: {
     messages: buildRuntimeMessages(input.state, input.session.id, input.agent, input.text),
     temperature: 0.2,
     ...(input.signal ? { signal: input.signal } : {}),
-    ...(input.fetch ? { fetch: input.fetch } : {}),
+    fetch: input.fetch,
     ...(input.onDelta ? { onDelta: input.onDelta } : {})
   })
   if (configuredProtocol) {
@@ -417,7 +424,7 @@ async function runProviderChatCompletion(input: {
     }
   }
 
-  const response = await (input.fetch ?? fetch)(buildChatCompletionsUrl(provider.baseUrl), {
+  const response = await input.fetch(buildChatCompletionsUrl(provider.baseUrl), {
     method: 'POST',
     headers: mergeProviderHeaders({
       authorization: `Bearer ${provider.apiKey?.trim() ?? ''}`,
@@ -499,7 +506,7 @@ async function readStreamingChatCompletion(
     buffer = events.remainder
     for (const event of events.items) {
       if (event === '[DONE]') continue
-      const chunk = parseStreamChunk(event)
+      const chunk = parseChunk(event)
       if (!chunk) continue
 
       if (typeof chunk.id === 'string') runtimeResumeToken = chunk.id
@@ -595,30 +602,7 @@ function extractDeltaText(payload: ChatCompletionStreamChunk): string {
   return ''
 }
 
-function parseStreamChunk(raw: string): ChatCompletionStreamChunk | null {
-  try {
-    return JSON.parse(raw) as ChatCompletionStreamChunk
-  } catch {
-    return null
-  }
-}
 
-function extractSseEvents(buffer: string): { items: string[]; remainder: string } {
-  const normalized = buffer.replace(/\r\n/g, '\n')
-  const parts = normalized.split('\n\n')
-  const remainder = parts.pop() ?? ''
-  const items = parts
-    .map((block) =>
-      block
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice('data:'.length).trim())
-        .join('\n')
-    )
-    .filter(Boolean)
-
-  return { items, remainder }
-}
 
 function normalizeUsage(usage: ChatCompletionUsage | undefined): MessageStats | null {
   if (!usage) return null

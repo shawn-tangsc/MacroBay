@@ -7,6 +7,7 @@ import {
   type WebSearchSettings,
   type WebSearchSubscribeSource
 } from './webSearchContracts'
+import { webSearchProviderPresets } from '../providers/webSearchProviderPresets'
 import {
   isWebSearchProviderId,
   normalizeWebSearchApiHost,
@@ -31,8 +32,18 @@ export function createDefaultWebSearchSettings(): WebSearchSettings {
       cutoffLimit: 2000,
       cutoffUnit: 'token'
     },
-    providerOverrides: {}
+    providerOverrides: createDefaultProviderOverrides()
   }
+}
+
+function createDefaultProviderOverrides(): WebSearchSettings['providerOverrides'] {
+  const overrides: WebSearchSettings['providerOverrides'] = {}
+  for (const preset of webSearchProviderPresets) {
+    if (preset.enabledByDefault) {
+      overrides[preset.id] = { enabled: true }
+    }
+  }
+  return overrides
 }
 
 export function normalizeWebSearchSettings(
@@ -141,7 +152,9 @@ function normalizeProviderOverrides(
 ): WebSearchSettings['providerOverrides'] {
   if (!value || typeof value !== 'object') return defaults
   const candidate = value as Record<string, unknown>
-  const normalized: WebSearchSettings['providerOverrides'] = {}
+  // Start from the defaults so a provider enabled by default stays enabled for settings written
+  // before that default existed. An explicit entry below still wins, including `enabled: false`.
+  const normalized: WebSearchSettings['providerOverrides'] = { ...defaults }
 
   for (const [providerId, override] of Object.entries(candidate)) {
     if (!isWebSearchProviderId(providerId)) continue

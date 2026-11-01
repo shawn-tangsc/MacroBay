@@ -7,7 +7,7 @@ const asOf = '2026-10-29T12:00:00.000Z'
 
 function context(overrides: Partial<MarketAnalysisContextAvailable> = {}): MarketAnalysisContextAvailable {
   return {
-    state: 'available', schemaVersion: 1, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1',
+    state: 'available', schemaVersion: 2, profileId: 'crypto-market-analysis-v1', eventGroupId: 'mi-eg-1',
     asOf, dataCutoff: asOf, snapshotId: null, snapshotHash: null, facts: [], missingDomains: [], caveats: [],
     evidenceRefs: [], sourceHealth: [], domainAccess: [], ...overrides
   } as MarketAnalysisContextAvailable
@@ -43,16 +43,16 @@ describe('analysisNewsSentiment', () => {
   it('uses the previous 8-hour open as the occurrence floor and the last run as the visibility floor', () => {
     // asOf = 20:00 Asia/Shanghai; the previous open strictly before it is 16:00 local (08:00Z).
     const previousSlot = Date.parse('2026-10-29T08:00:00.000Z')
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T11:30:00.000Z')).toMatchObject({
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T11:30:00.000Z', 'Asia/Shanghai')).toMatchObject({
       windowStartMs: previousSlot, scoredSinceMs: Date.parse('2026-10-29T11:30:00.000Z'), window: '4h'
     })
     // Older than the previous open: the occurrence floor wins over the stale run.
-    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T06:00:00.000Z')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
+    expect(resolveNewsSentimentWindow(asOf, '2026-10-29T06:00:00.000Z', 'Asia/Shanghai')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
     // No previous analysis at all, and a run from days ago, both land on the same floor.
-    expect(resolveNewsSentimentWindow(asOf, undefined)).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
-    expect(resolveNewsSentimentWindow(asOf, '2026-09-01T00:00:00.000Z')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
+    expect(resolveNewsSentimentWindow(asOf, undefined, 'Asia/Shanghai')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
+    expect(resolveNewsSentimentWindow(asOf, '2026-09-01T00:00:00.000Z', 'Asia/Shanghai')).toMatchObject({ windowStartMs: previousSlot, scoredSinceMs: previousSlot })
     // A run serving the 16:00 open looks back to 08:00, not to the instant it stands on.
-    expect(resolveNewsSentimentWindow('2026-10-29T08:00:00.000Z', undefined).windowStartMs).toBe(Date.parse('2026-10-29T00:00:00.000Z'))
+    expect(resolveNewsSentimentWindow('2026-10-29T08:00:00.000Z', undefined, 'Asia/Shanghai').windowStartMs).toBe(Date.parse('2026-10-29T00:00:00.000Z'))
   })
 
   it('adds only non-neutral items published after the previous analysis, as citable facts', async () => {

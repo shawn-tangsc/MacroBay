@@ -7,6 +7,7 @@ import { toReadableConclusionText } from '../../../contracts/marketAnalysisReada
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { analysisTimelinePaging, analysisTimelinePagingPolicy } from './analysisTimelinePaging'
+import { groupCaptionFor, timelineSpansGroups } from './analysisTimelineGrouping'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import { conclusionSummaryText, conclusionWithoutDirection, readConclusionDirection } from './analysisConclusionBlocks'
 import { analysisConclusionDirectionPolicy, localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
@@ -61,6 +62,11 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   loadMore: string
   status: Record<string, string>
   triggerStatus: { label: string; since: string; slotOpen: string; slotDelayed: string; reasons: Record<string, string> }
+  /**
+   * Names for the event kinds. Optional so a partial text object (a test, an older bundle) still
+   * renders: the caption then falls back to the event's own subject.
+   */
+  groupTypes?: Record<string, string>
 }>
 
 type Props = Readonly<{
@@ -97,6 +103,10 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
   // re-widened the button on every request.
   const actionLabel = attempt && !['queued', 'running'].includes(attempt.status) ? text.retryAnalysis : text.requestInitialAnalysis
   const language = useShellLanguage()
+  // Only a list that mixes events needs the caption: scoped to one event, it would repeat the same
+  // line on every row. The page is read across groups, so this is usually on.
+  const spansGroups = timelineSpansGroups(state.entries)
+  const groupTypes = text.groupTypes ?? {}
   const settingsState = useMarketAnalysisSettings()
   // `undefined` means "not read yet". Only an explicit `false` draws the mask: a read that failed
   // must not cover a panel whose capability is in fact enabled.
@@ -189,8 +199,11 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
             dismissLabel={text.dismissError}
             onDismiss={refreshError.dismiss}
           /> : null}
-          {state.entries.slice(0, shown.visible).map((entry) => { const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? ''); return <button className={`mi-analysis-timeline__entry${state.selected?.id === entry.id ? ' is-selected' : ''}`} key={entry.id} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button">
+          {state.entries.slice(0, shown.visible).map((entry) => { const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? ''); const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null; return <button className={`mi-analysis-timeline__entry${state.selected?.id === entry.id ? ' is-selected' : ''}`} key={entry.id} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button">
             <span><time>{formatTime(entry.occurredAt, 'second')}</time><em>{text.status[entry.status]}</em></span>
+            {/* Which event this row is about. Two conclusions published seconds apart are two
+                different events; without the name they read as one conclusion posted twice. */}
+            {groupCaption ? <small className="mi-analysis-timeline__group">{groupCaption}</small> : null}
             {/* The tag and the conclusion share one line, so they live in one flex item: a row is a
                 column flex container, and siblings there would stack whatever their display is. */}
             {direction || entry.safeExcerpt ? <span className="mi-analysis-timeline__headline">

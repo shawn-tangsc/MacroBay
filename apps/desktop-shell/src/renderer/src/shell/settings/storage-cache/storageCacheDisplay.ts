@@ -111,10 +111,6 @@ export function formatBackupPolicy(policy: CacheBackupPolicy, labels: StorageCac
   switch (policy) {
     case 'exclude':
       return labels.backupExclude
-    case 'include':
-      return labels.backupInclude
-    case 'metadata-only':
-      return labels.backupMetadataOnly
   }
 }
 

@@ -48,18 +48,21 @@
 /* 节点详情抽屉：非模态，无遮罩，覆盖在主看板之上但不覆盖 Agent 栏。 */
 .mi-analysis-drawer { position: absolute; inset: 0 auto 0 0; z-index: 3; display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(var(--mi-drawer-width), 100%); border-right: 1px solid var(--border); background: var(--surface); box-shadow: 12px 0 32px color-mix(in srgb, var(--text) 18%, transparent); animation: mi-analysis-drawer-in 180ms ease-out; }
 .mi-analysis-dashboard-layout { --mi-drawer-width: 520px; }
-.mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.mi-analysis-drawer__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 16px 16px 12px; border-bottom: 1px solid var(--border); }
 .mi-analysis-conclusion-card__body { display: grid; gap: 6px; padding-left: 10px; border-left: 2px solid transparent; }
-.mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 12px; }
+.mi-analysis-drawer__header h2 { margin: 0; color: var(--text-strong); font-size: 13.5px; font-weight: 600; letter-spacing: .02em; }
 .mi-analysis-drawer__meta { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.mi-analysis-drawer__meta time { color: var(--muted); font-size: 10px; }
+.mi-analysis-drawer__meta time { color: var(--muted); font-size: 10.5px; }
 .mi-analysis-drawer__meta em { color: var(--accent); font-size: 10px; font-style: normal; }
-.mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 14px; }
+.mi-analysis-drawer__meta span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.mi-analysis-drawer__body { min-height: 0; overflow: auto; padding: 16px; }
 .mi-analysis-drawer__body .mi-analysis-timeline__state { display: flex; align-items: center; gap: 6px; }
 @keyframes mi-analysis-drawer-in { from { transform: translateX(-12px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .mi-analysis-drawer { animation: none; } }
 .mi-analysis-dashboard-layout__switch { display: none; padding: var(--mi-agent-gap); }
-.mi-analysis-agent-workspace { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
+/* The column is a flex stack: the policy card sits above the split, which owns the rest. */
+.mi-analysis-agent-workspace { display: flex; flex-direction: column;
+ min-height: 0; min-width: 0; overflow: hidden; border-left: 1px solid var(--border); background: var(--surface); color: var(--text); }
 .mi-analysis-chat { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 /* The calendar card takes the conversation's grid row, so it inherits the same sizing. */
 .mi-analysis-agent-workspace__card { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -193,6 +196,9 @@
   gap: 6px;
 }
 .mi-analysis-timeline__headline { display: grid; gap: 6px; justify-items: start; margin-top: 4px; }
+/* Which event a row belongs to. One muted line, cut rather than wrapped: a news headline can run
+   long, and a caption taller than the conclusion would become the thing the reader reads. */
+.mi-analysis-timeline__group { display: block; max-width: 100%; margin-top: 2px; color: var(--muted); font-size: 12px; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mi-analysis-timeline__conclusion-line { width: 100%; min-width: 0; overflow-wrap: anywhere; color: var(--text, #edf3ef); font-size: 13px; line-height: 1.45; }
 /* The analysis action is disabled for the whole request/run, so its own glyph carries the
    in-flight state: the reader sees work happening instead of a frozen icon. */
@@ -297,3 +303,7 @@
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Below the policy card the calendar and the news split the remaining height evenly; the divider
+   still drags the split, so it starts at half rather than at the old 52%. */
+.mi-analysis-agent-workspace__panes { display: grid; grid-template-rows: minmax(0, var(--mi-chat-percent)) var(--mi-agent-divider) minmax(0, 1fr); flex: 1; min-height: 0; }

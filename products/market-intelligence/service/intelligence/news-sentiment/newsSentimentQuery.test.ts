@@ -76,6 +76,8 @@ describe('newsSentimentQuery', () => {
     const view = await query(seed()).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
     expect(view.state).toBe('available')
     expect(view.summary).toMatchObject({ itemCount: 2, engineMix: { model: 1, rules: 1 } })
+    // The age badge on a populated card reads the same field the stale empty state does.
+    expect(view.latestKnownItemAt).toBe('2026-10-24T12:00:00.000Z')
     expect(view.items.map((item) => item.sourceName)).toEqual(['CoinDesk RSS', 'Binance Announcements'])
   })
 
@@ -104,6 +106,100 @@ describe('newsSentimentQuery', () => {
   it('returns empty for a window with no items', async () => {
     const view = await query(seed()).query({ asOf: '2026-10-25T13:00:00.000Z', window: '1h' })
     expect(view.state).toBe('empty')
+  })
+})
+
+describe('the widest window is capped at 100 rows', () => {
+  // The UI no longer calls this window "all": it returns at most 100 rows, and the label says so.
+  // This is the other half of that promise — 120 stored judgments really do come back as 100.
+  it('returns the newest 100 of 120 rows', async () => {
+    const store = createNewsSentimentSqliteStore(':memory:')
+    const items = []
+    for (let index = 0; index < 120; index += 1) {
+      const at = new Date(Date.UTC(2026, 9, 24, 0, index, 0)).toISOString()
+      items.push({ itemId: `item-${index}`, sourceId: 'coindesk-rss', title: `News ${index}`, publishedAt: at })
+      store.upsertSentiment({
+        itemId: `item-${index}`, sourceId: 'coindesk-rss', publishedAt: at, scoredAt: at,
+        polarity: 'neutral', strength: 1, confidence: 50, symbols: [], reasonCode: 'news.no-rule.v1',
+        engine: 'rules', ruleId: 'news.no-rule.v1', caveats: []
+      })
+    }
+    const view = await createNewsSentimentQuery({
+      store,
+      pipeline: { listItems: () => items as never },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: 'all', limit: 500 })
+    expect(view.items).toHaveLength(100)
+    expect(view.items[0]?.itemId).toBe('item-119')
+  })
+})
+
+describe('empty windows carry their cause', () => {
+  const readiness = {
+    total: 4, enabledCount: 4, failedCount: 1, neverRanCount: 0,
+    failedSourceIds: ['sec-rss'], neverRanSourceIds: [],
+    lastSuccessAt: '2026-10-24T12:00:00.000Z'
+  }
+
+  it('reports the newest judgment even when it is outside the window', async () => {
+    // Without this the DTO cannot tell "this hour had no news" from "nothing arrived since yesterday".
+    const view = await createNewsSentimentQuery({
+      store: seed(),
+      pipeline: { listItems: () => ITEMS },
+      readSourceReadiness: async () => readiness,
+      now: () => '2026-10-25T13:00:00.000Z'
+    }).query({ asOf: '2026-10-25T13:00:00.000Z', window: '1h' })
+    expect(view.state).toBe('empty')
+    expect(view.latestKnownItemAt).toBe('2026-10-24T12:00:00.000Z')
+    expect(view.readiness).toEqual(readiness)
+  })
+
+  it('stays readable when the source status itself fails', async () => {
+    const view = await createNewsSentimentQuery({
+      store: seed(),
+      pipeline: { listItems: () => ITEMS },
+      readSourceReadiness: async () => { throw new Error('sources down') },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+    expect(view.state).toBe('available')
+    expect(view.readiness).toBeUndefined()
+  })
+})
+
+describe('seven-day window', () => {
+  // Regression: '7d' is not a sentiment horizon, so the aggregate filtered every signal out and
+  // reported "0 directional / score 0 / neutral" for a window full of directional items. The query
+  // now publishes no summary at all for windows it cannot express — absence, not a fake zero.
+  it('returns the items but publishes no summary it cannot compute', async () => {
+    const store = seed()
+    store.upsertSentiment({
+      itemId: 'item-3d',
+      sourceId: 'coindesk-rss',
+      publishedAt: '2026-10-21T12:00:00.000Z',
+      scoredAt: '2026-10-21T12:05:00.000Z',
+      polarity: 'bearish',
+      strength: 5,
+      confidence: 80,
+      symbols: ['BTC'],
+      reasonCode: 'exploit',
+      engine: 'model',
+      modelRef: 'p:m',
+      promptVersion: 'news-polarity-v1',
+      caveats: []
+    })
+    const view = await createNewsSentimentQuery({
+      store,
+      pipeline: { listItems: () => [...ITEMS, { itemId: 'item-3d', sourceId: 'coindesk-rss', title: 'Exchange exploit', publishedAt: '2026-10-21T12:00:00.000Z' }] as never },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '7d' })
+    expect(view.state).toBe('available')
+    expect(view.items.map((item) => item.itemId)).toContain('item-3d')
+    expect(view.summary).toBeUndefined()
+  })
+
+  it('still summarizes the windows that have a real horizon', async () => {
+    const view = await query(seed()).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+    expect(view.summary?.directionalCount).toBeGreaterThan(0)
   })
 })
 

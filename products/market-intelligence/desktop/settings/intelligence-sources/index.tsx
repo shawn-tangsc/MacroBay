@@ -9,6 +9,7 @@ import { SourceSpecificSection } from './SourceSpecificSection'
 import { useIntelligenceSourcesSettings } from './useIntelligenceSourcesSettings'
 import { ProviderDetail } from './ProviderDetail'
 import { SettingsSourceTree, type SourceFilter } from './SettingsSourceTree'
+import { SyncRunSection } from './SyncRunSection'
 import type { SourceView } from '../../../service/intelligence/application/sourceProjection'
 import { useIntelligenceTranslationSettings } from './useIntelligenceTranslationSettings'
 
@@ -16,6 +17,8 @@ import './intelligence-sources.css'
 
 export default function IntelligenceSourcesSettingsSection(): React.ReactElement {
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
+  // Two views, one page: sources are what you configure, the run record is what happened.
+  const [view, setView] = useState<'sources' | 'runs'>('sources')
   const [selectedProviderId, setSelectedProviderId] = useState<string>()
   const language = useShellLanguage()
   const t = productText[language].settings.intelligenceSources
@@ -45,6 +48,22 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     savingFocusMarkets
   } = useIntelligenceSourcesSettings(t)
   const translation = useIntelligenceTranslationSettings(t.translationPreferences)
+  // The source filter lists every registered source: a source that has not run lately is exactly
+  // the one a reader opens the run record to look for.
+  const knownSources = (() => {
+    const byId = new Map<string, string>()
+    for (const group of settingsView?.groups ?? []) {
+      for (const provider of group.providers) {
+        for (const source of provider.sources) {
+          // The name map is a literal with known keys; a source added elsewhere falls back to the
+          // registry's own display name instead of failing the build.
+          const named = (t.sourceNames as Readonly<Record<string, string>>)[source.sourceId]
+          byId.set(source.sourceId, named ?? source.displayName)
+        }
+      }
+    }
+    return [...byId.entries()].map(([sourceId, label]) => ({ sourceId, label }))
+  })()
 
   useEffect(() => {
     if (selectedProviderId || !settingsView) return
@@ -62,6 +81,14 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
 
   return (
     <section className="settings-workspace intelligence-sources-workspace">
+      <div className="intelligence-sources-view-switch">
+        <button aria-pressed={view === 'sources'} className={view === 'sources' ? 'is-active' : undefined} onClick={() => setView('sources')} type="button">{t.viewSources}</button>
+        <button aria-pressed={view === 'runs'} className={view === 'runs' ? 'is-active' : undefined} onClick={() => setView('runs')} type="button">{t.viewRuns}</button>
+      </div>
+      {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection
+        knownSources={knownSources}
+        text={{ ...t.syncRun, sourceNames: t.sourceNames }}
+      /></div> : <>
       <SettingsSourceTree
         filter={sourceFilter}
         labels={{ title: t.title, categories: t.sourceCategories, filters: t.sourceFilters, providerNames: t.providerNames, providerSummary: t.providerSummary }}
@@ -78,11 +105,12 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
             provider={provider}
             showSourceDetails
             sourceDetailLabels={{ sourceNames: t.sourceNames, providerNames: t.providerNames, enabled: t.status.enabled, disabled: t.status.disabled, pending: t.sourceBadges.pending, runNow: t.header.runNow, testConnection: t.testConnection, connectionSucceeded: t.connectionSucceeded, connectionFailed: t.connectionFailed, health: t.health, sourceSpecific: t.sourceSpecific }}
-            translation={language !== 'en-US' ? { settings: translation.settings, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorCode: translation.errorCode, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: () => void translation.queueMissing() } : undefined}
+            translation={language !== 'en-US' ? { settings: translation.settings, moduleStatus: translation.moduleStatus, modelProviders: translation.modelProviders, saving: translation.saving, queuing: translation.queuing, labels: t.translationPreferences, notice: translation.notice, errorMessage: translation.errorMessage, onChange: (patch) => void translation.updateSettings(patch), onQueueMissing: (sourceIds) => void translation.queueMissing(sourceIds) } : undefined}
             onSelectSource={() => undefined}
           /></div> : null
         })() : null}
       </div>
+      </>}
     </section>
   )
 }

@@ -1,4 +1,3 @@
-import { getIntelligenceModule } from '../intelligenceModule'
 import type {
   IntelligenceTranslationSettings,
   TranslateIntelligenceItemsJobInput
@@ -14,6 +13,7 @@ type TranslationAction = 'save-settings' | 'queue-missing' | 'retry-failed'
 
 type TranslationFilters = {
   timeRange?: '24h' | '7d' | '30d' | 'all'
+  sourceIds?: string[]
   sourceGroup?: string
   scope?: string
   symbol?: string
@@ -40,7 +40,7 @@ export async function handleConfigureTranslation(
   context: ToolCallContext
 ): Promise<unknown> {
   const value = input as TranslationInput
-  const translationService = getIntelligenceModule(deps.jobRuntime).translationService
+  const translationService = deps.intelligenceModule.translationService
 
   if (value.action === 'save-settings') {
     const patch = settingsPatch(value)

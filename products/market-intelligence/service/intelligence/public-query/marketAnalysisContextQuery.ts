@@ -1,8 +1,11 @@
 import { applyReservedFacts } from '../analysis/analysisImpactDisclosurePolicy'
+import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
+import { MARKET_ANALYSIS_RUN_SOURCE_BUDGET } from '../analysis/analysisRunPolicy'
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_CONTEXT_POLICY,
-  MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
+  MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION,
+  MARKET_ANALYSIS_CONTRACT_POLICY,
+  MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
   type MarketAnalysisCrossAssetInstrument,
   MARKET_ANALYSIS_ERROR_CODES,
@@ -24,6 +27,8 @@ import type { MarketIntelligencePublicQueryService as PublicQueryService } from 
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
 import { projectMacroMarket } from './macroMarketFactProjection'
 import { projectMacroRates } from './macroRatesFactProjection'
+import { applyMacroFactCap } from './macroFactBudget'
+import { projectPolicyPath } from './policyPathFactProjection'
 import {
   compareObservedAt,
   defaultObservation,
@@ -61,20 +66,22 @@ const DOMAIN_DEFINITIONS: readonly DomainDefinition[] = Object.freeze([
       'macro-calendar-bea-schedule', 'macro-calendar-bea-release-rss',
       'macro-calendar-0xrouter-economic-data', 'macro-calendar-0xrouter-financial-events',
       'macro-calendar-0xrouter-central-bank-activities',
-      'fred-rates-liquidity', 'twelve-data-market'
+      'fred-rates-liquidity', 'twelve-data-market', 'policy-path-market'
     ]),
     admission: 'connected-but-not-agent-tool',
     publicQueryMethods: Object.freeze([
       'macroEconomicCalendarQueryService.queryMonth',
       'marketCalendarPublicQueryService.queryMonth',
       'publicQueryService.queryMacroMarketSnapshot',
-      'publicQueryService.queryMacroRatesSnapshot'
+      'publicQueryService.queryMacroRatesSnapshot',
+      'publicQueryService.queryPolicyPath'
     ]),
     ipcMethods: Object.freeze([
       'intelligence.macro.economicCalendar.queryMonth',
       'intelligence.macro.marketCalendar.queryMonth',
       'intelligence.macro.marketSnapshot.query',
-      'intelligence.macro.ratesSnapshot.query'
+      'intelligence.macro.ratesSnapshot.query',
+      'intelligence.macro.policyPath.read'
     ])
   }),
   Object.freeze({
@@ -124,9 +131,12 @@ export type MarketAnalysisSourceAccess = Readonly<{
   domains: readonly AnalysisDomain[]
 }>
 
-type MarketAnalysisContextQueryService = Pick<PublicQueryService, 'queryFearGreedSnapshot' | 'queryFundingRateHistory' | 'queryCapitalConditionsSnapshot' | 'queryCrossAssetSnapshot' | 'getSourceHealth'> &
+type MarketAnalysisContextQueryService = Pick<PublicQueryService, 'queryFearGreedSnapshot' | 'queryFundingRateHistory' | 'queryOpenInterestHistory' | 'queryCapitalConditionsSnapshot' | 'queryCrossAssetSnapshot' | 'getSourceHealth'> &
+  // Optional so a test double or an older wiring still compiles; the projection treats an absent
+  // reader exactly like an unavailable answer.
+  Partial<Pick<PublicQueryService, 'queryMarketDivergence'>> &
   Partial<Pick<PublicQueryService,
-    'queryMacroEconomicCalendarMonth' | 'queryMarketCalendarMonth' | 'queryMacroMarketSnapshot' | 'queryMacroRatesSnapshot'>>
+    'queryMacroEconomicCalendarMonth' | 'queryMarketCalendarMonth' | 'queryMacroMarketSnapshot' | 'queryMacroRatesSnapshot' | 'queryPolicyPath'>>
 
 const SOURCE_ACCESS_REGISTRY: readonly MarketAnalysisSourceAccess[] = Object.freeze([
   source('macro-calendar-fed-schedule', ['macro'], 'production-ready', ['macroEconomicCalendarQueryService.queryMonth'], ['intelligence.macro.economicCalendar.queryMonth'], true),
@@ -161,6 +171,13 @@ const SOURCE_ACCESS_REGISTRY: readonly MarketAnalysisSourceAccess[] = Object.fre
   source('twelve-data-market', ['macro'], 'production-ready', ['macroMarketSnapshotQuery.snapshot'],
     ['intelligence.macro.marketSnapshot.query'], false,
     [macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex, macroMarketSnapshotPublicPolicy.caveats.providerTimeSeries], true),
+  // The policy path is read by the panel's card and the analysis context: one service, two
+  // consumers. It stays a contextual source — being able to price a meeting is not permission to
+  // start an analysis from that price — and the two caveats name what a conclusion must not
+  // over-read: the odds are a venue's price, and the SEP belongs to the last publishing meeting.
+  source('policy-path-market', ['macro'], 'connected-but-not-agent-tool', ['publicQueryService.queryPolicyPath'],
+    ['intelligence.macro.policyPath.read'], false,
+    ['odds-are-market-pricing', 'projections-from-latest-sep-meeting'], true),
   // The zero-credential feeds lit this round: both OKX announcement lists, the go-ethereum release
   // feed and CoinGecko's global market snapshot. They feed the event pipeline an analysis can be
   // triggered by, not one of the five context domains — the `domains` list is empty rather than
@@ -257,7 +274,8 @@ export async function buildMarketAnalysisContext(
         detectedAt: ref.detectedAt ?? null,
         computedAt: ref.computedAt ?? null,
         visibleAt: ref.visibleAt,
-        excerptHash: ref.excerptHash ?? ''
+        excerptHash: ref.excerptHash ?? '',
+        ...(ref.sourceUrl ? { sourceUrl: ref.sourceUrl } : {})
       })
     }
   }
@@ -271,7 +289,7 @@ export async function buildMarketAnalysisContext(
     } else {
       const month = input.asOf.slice(0, 7)
       const official = officialQuery
-        ? await safeQuery(() => officialQuery({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.maxEvents }))
+        ? await safeQuery(() => officialQuery({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents }))
         : undefined
       safeProject(() => projectMacroCalendar({
         official,
@@ -286,21 +304,41 @@ export async function buildMarketAnalysisContext(
     safeProject(() => projectMacroMarket(macroMarket ? macroMarket() : undefined, input.asOf, facts, caveats, observations), observations, 'macro')
     const macroRates = publicQueryService.queryMacroRatesSnapshot
     safeProject(() => projectMacroRates(macroRates ? macroRates() : undefined, input.asOf, facts, caveats, observations), observations, 'macro')
+    // The policy path is the fourth macro producer, and the only asynchronous one: it joins the
+    // meeting date, the venue's odds, the target range, the latest SEP and the last vote into the
+    // same context the freeze will persist. A disabled source answers `disabled` and contributes
+    // nothing; an enabled but empty one contributes a named gap.
+    const policyPath = publicQueryService.queryPolicyPath
+    if (policyPath) {
+      const policyRead = await safeQuery(() => policyPath({ asOf: input.asOf }))
+      safeProject(() => projectPolicyPath(policyRead ?? { state: 'unavailable' }, input.asOf, facts, caveats, observations), observations, 'macro')
+    }
   } else observations.macro = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
+
+  // Read once: both the capital and the sentiment projections consume it, and the reading is
+  // as-of a single instant by construction.
+  const divergence = (requestedDomains.includes('capital') || requestedDomains.includes('sentiment')) && publicQueryService.queryMarketDivergence
+    ? await safeQuery(() => publicQueryService.queryMarketDivergence!({ asOf: input.asOf }))
+    : undefined
 
   if (requestedDomains.includes('capital')) {
     const result = await safeQuery(() => publicQueryService.queryCapitalConditionsSnapshot({ asOf: input.asOf }))
-    safeProject(() => projectCapital(result, input.asOf, facts, caveats, observations), observations, 'capital')
+    safeProject(() => projectCapital(result, divergence, input.asOf, facts, caveats, observations), observations, 'capital')
   } else observations.capital = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('sentiment')) {
     const result = await safeQuery(() => publicQueryService.queryFearGreedSnapshot({ asOf: input.asOf }))
-    safeProject(() => projectSentiment(result, input.asOf, facts, caveats, observations), observations, 'sentiment')
+    safeProject(() => projectSentiment(result, divergence, input.asOf, facts, caveats, observations), observations, 'sentiment')
   } else observations.sentiment = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('funding')) {
-    const result = await safeQuery(() => publicQueryService.queryFundingRateHistory({ asOf: input.asOf }))
-    safeProject(() => projectFunding(result, input.asOf, facts, caveats, observations), observations, 'funding')
+    // The two halves of the same source are read together: a funding rate without the open
+    // interest behind it cannot tell deleveraging from crowding, which is the whole point.
+    const [result, positioning] = await Promise.all([
+      safeQuery(() => publicQueryService.queryFundingRateHistory({ asOf: input.asOf })),
+      safeQuery(() => publicQueryService.queryOpenInterestHistory({ asOf: input.asOf, window: '24h' }))
+    ])
+    safeProject(() => projectFunding(result, positioning, input.asOf, facts, caveats, observations), observations, 'funding')
   } else observations.funding = observation('missing', 'missing', 0, 0, ['domain-not-requested'])
 
   if (requestedDomains.includes('cross-asset')) {
@@ -338,24 +376,25 @@ export async function buildMarketAnalysisContext(
     .sort((left, right) => CONTEXT_FACT_DOMAIN_ORDER.indexOf(left.domain) - CONTEXT_FACT_DOMAIN_ORDER.indexOf(right.domain) || compareObservedAt(left, right) || left.factId.localeCompare(right.factId))
   // Cap the macro share before the global budget, so one provider's routine rows can never
   // evict the other domains: the model needs capital, sentiment and funding to explain a move.
-  const macroFacts = sortedFacts.filter(fact => fact.domain === 'macro')
-  if (macroFacts.length > MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts) {
-    const keptMacro = new Set(macroFacts.slice(0, MARKET_ANALYSIS_CONTEXT_POLICY.maximumMacroFacts).map(fact => fact.factId))
-    for (let index = sortedFacts.length - 1; index >= 0; index -= 1) {
-      if (sortedFacts[index]!.domain === 'macro' && !keptMacro.has(sortedFacts[index]!.factId)) sortedFacts.splice(index, 1)
-    }
-    caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
-  }
+  // The cap protects the policy path's fixed share; a busy month must not drop the SEP or the vote.
+  const macroCapped = applyMacroFactCap(sortedFacts, MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.maximumMacroFacts)
+  if (macroCapped.truncated) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
   // The reserve reorders inside the budget so the facts explaining a triggered change survive
-  // truncation; with no triggers this is exactly `sortedFacts.slice(0, maxFacts)`.
-  const keptFacts = applyReservedFacts(sortedFacts, internal.triggeredEventKeys ?? new Set(), maxFacts,
-    undefined, MARKET_ANALYSIS_CONTEXT_POLICY.minimumFactsPerDomain)
-  if (keptFacts.length < sortedFacts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
+  // truncation; with no triggers this is exactly `macroCapped.facts.slice(0, maxFacts)`.
+  const keptFacts = applyReservedFacts(macroCapped.facts, internal.triggeredEventKeys ?? new Set(), maxFacts,
+    undefined, MARKET_ANALYSIS_CONTEXT_FACT_BUDGET.minimumFactsPerDomain)
+  if (keptFacts.length < macroCapped.facts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
+  // A caller may ask for fewer facts than the macro share; say the policy set was cut rather than
+  // letting the generic truncation caveat hide which evidence went missing.
+  const policySourceId = MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID
+  const policyAvailable = macroCapped.facts.filter(fact => fact.sourceId === policySourceId).length
+  const policyKept = keptFacts.filter(fact => fact.sourceId === policySourceId).length
+  if (policyAvailable > 0 && policyKept < policyAvailable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathTruncated)
 
   const output: MarketAnalysisContextAvailable = {
     state: 'available',
-    schemaVersion: MARKET_ANALYSIS_CONTEXT_POLICY.schemaVersion,
-    profileId: 'crypto-market-analysis-v1',
+    schemaVersion: MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION,
+    profileId: MARKET_ANALYSIS_CONTRACT_POLICY.dataAccessProfileId,
     eventGroupId: input.eventGroupId,
     asOf: input.asOf,
     dataCutoff: input.asOf,
@@ -368,7 +407,7 @@ export async function buildMarketAnalysisContext(
     sourceHealth: Object.freeze(sourceHealth?.data.sources.map(source => toSourceHealthFlag(source, input.asOf)) ?? []),
     domainAccess: matrix.domains
   }
-  if (utf8JsonBytes(output) > MARKET_ANALYSIS_CONTEXT_POLICY.maximumOutputBytes) {
+  if (utf8JsonBytes(output) > MARKET_ANALYSIS_CONTRACT_POLICY.maximumModelOutputBytes) {
     return { state: 'unavailable', errorCode: MARKET_ANALYSIS_ERROR_CODES.contextTooLarge }
   }
   return output
@@ -481,7 +520,8 @@ function attachQueryEvidence(facts: AgentFact[], evidenceRefs: Map<string, Agent
       detectedAt: fact.observedAt,
       computedAt: asOf,
       visibleAt: asOf,
-      excerptHash
+      excerptHash,
+      ...(fact.sourceUrl ? { sourceUrl: fact.sourceUrl } : {})
     })
   }
 }

@@ -93,6 +93,11 @@ export type ProductAgentToolRegistration = {
   outputSchema: Record<string, unknown>
   schemaVersion: number
   description: string
+  /**
+   * 工具的本地化短名，给配置界面和运行记录用；省略时界面回退到 `toolName`。
+   * `description` 是写给模型的长指令，不能直接当标题。
+   */
+  title?: LocalizedText
   /** Read-only tools may run without a prompt under `allow-read-only`; mutating tools always ask. */
   readOnly: boolean
   requiresTemporalBoundary: boolean
@@ -176,6 +181,14 @@ export interface ProductManifest {
   policies: readonly unknown[]
   evaluations: readonly unknown[]
   jobHandlers: readonly unknown[]
+  /**
+   * 该产品**发布**的话题（`MI-11-R22` A1）。定时任务的事件订阅只允许选这里声明过的 topic，
+   * 校验目录由生成物 `products/generated/productManifests.ts` 汇总而来。
+   *
+   * 与下面的 `eventConsumers`（该产品**消费**的话题）方向相反：两字段不是同义词，谁也不许从谁推导。
+   * 没声明的话题不可订阅——发布方新增话题必须同批声明，否则任务建得成、永远不触发。
+   */
+  eventTopics?: readonly string[]
   eventConsumers?: readonly ProductEventConsumerRegistration[]
   productAgentTools?: readonly ProductAgentToolRegistration[]
   assistantTemplates?: readonly ProductAssistantTemplateRegistration[]

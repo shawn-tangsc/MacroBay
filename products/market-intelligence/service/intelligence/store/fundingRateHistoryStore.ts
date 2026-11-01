@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { DatabaseSync } from 'node:sqlite'
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
 export const fundingRateHistoryStoragePolicy = Object.freeze({
   fileName: 'funding-rate-history.sqlite',
@@ -10,6 +10,10 @@ export const fundingRateHistoryStoragePolicy = Object.freeze({
 })
 
 export type FundingRateHistoryAsset = typeof fundingRateHistoryStoragePolicy.assets[number]
+/**
+ * `fundingTimeMs` is epoch milliseconds in UTC — the settlement instant the exchange reported.
+ * One representation only: nothing converts it to a local time on the way in or out of here.
+ */
 export type FundingRateHistoryPoint = Readonly<{ asset: FundingRateHistoryAsset; fundingTimeMs: number; ratePercent: number }>
 export type FundingRateHistoryReadResult =
   | Readonly<{ state: 'available'; btc: readonly Readonly<{ observedAt: string; ratePercent: number }>[]; eth: readonly Readonly<{ observedAt: string; ratePercent: number }>[] }>
@@ -20,8 +24,8 @@ export type FundingRateHistoryStore = ReturnType<typeof createFundingRateHistory
 
 export function createFundingRateHistorySqliteStore(filePath: string) {
   mkdirSync(dirname(filePath), { recursive: true })
-  const database = new DatabaseSync(filePath)
-  database.exec('pragma journal_mode = wal; pragma synchronous = full;')
+  const database = openSqliteDatabase(filePath)
+  database.exec('pragma synchronous = full;')
   database.exec('create table if not exists funding_rate_history (asset text not null check (asset in (\'btc\', \'eth\')), funding_time_ms integer not null, rate_percent real not null, collected_at text not null, primary key (asset, funding_time_ms))')
 
   return {

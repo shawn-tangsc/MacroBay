@@ -43,13 +43,35 @@ describe('web search provider resolver', () => {
     })
   })
 
-  it('keeps providers disabled until explicitly enabled', () => {
+  it('resolves the credential-free fetch provider without an explicit enable', () => {
     const resolver = createWebSearchProviderResolver()
 
     expect(
       resolver.resolve({
         capability: 'fetchUrls',
         settings: createDefaultWebSearchSettings(),
+        secrets: {}
+      })
+    ).toMatchObject({ ok: true, provider: { providerId: 'fetch', capability: 'fetchUrls' } })
+
+    // Providers that need a key still stay off by default.
+    expect(
+      resolver.resolve({
+        providerId: 'jina',
+        capability: 'fetchUrls',
+        settings: createDefaultWebSearchSettings(),
+        secrets: { apiKeys: ['jina-key'] }
+      })
+    ).toMatchObject({ ok: false, errorCode: 'provider_disabled' })
+  })
+
+  it('keeps an explicitly disabled provider off', () => {
+    const resolver = createWebSearchProviderResolver()
+
+    expect(
+      resolver.resolve({
+        capability: 'fetchUrls',
+        settings: { ...createDefaultWebSearchSettings(), providerOverrides: { fetch: { enabled: false } } },
         secrets: {}
       })
     ).toMatchObject({ ok: false, errorCode: 'provider_disabled' })

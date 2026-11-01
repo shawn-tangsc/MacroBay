@@ -1,3 +1,9 @@
+/**
+ * 通道链路有两个测试根，只跑一个会「看起来全绿却漏掉消费者」：
+ *   platform/ai/agent-platform/channels/   与   platform/desktop/main/taskChannelDelivery.test.ts
+ * 本文件是 sourceId 格式与跳过码的消费方，不在 channels 目录内。改这条链路时两个必须一起跑：
+ *   pnpm exec vitest run platform/ai/agent-platform/channels platform/desktop/main/taskChannelDelivery.test.ts
+ */
 import { describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 
@@ -26,7 +32,8 @@ describe('ChannelDeliveryService', () => {
     const result = await service.deliverToEnabledTargets({
       channelId: 'channel-a', agentId: 'agent-a', source: 'agent-notify', sourceId: 'notify-1', text: 'notice'
     })
-    expect(result).toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-no-enabled-target' }])
+    // No target row at all is "bind a channel", not "enable the bound one".
+    expect(result).toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-no-target-bound' }])
     expect(transport.send).not.toHaveBeenCalled()
     expect(database.connection.prepare('select count(*) as count from channel_delivery_attempts').get()).toEqual({ count: 0 })
   })
@@ -237,3 +244,19 @@ function harness(enabled = true, beforeSendOwnership?: () => void) {
 
 function cipherForTests() { return { encrypt: async () => ({ ciphertext: new Uint8Array(), keyRef: 'ref', keyRevision: 1 }), decrypt: async (input: { ciphertext: Uint8Array }) => input.ciphertext, keyedHash: async () => 'hash', rotate: async () => ({ keyRef: 'ref', keyRevision: 1 }), revoke: async () => {} } }
 function hashForTests(value: string): string { return createHash('sha256').update(value).digest('base64url') }
+
+describe('skip reasons name the action the user has to take', () => {
+  it('distinguishes a bound but disabled target from no target at all', async () => {
+    const { service, database } = harness()
+    database.connection.exec(`
+      update channel_delivery_targets set enabled = 0
+      where channel_id = 'channel-a'
+    `)
+
+    const result = await service.deliverToEnabledTargets({
+      channelId: 'channel-a', agentId: 'agent-a', source: 'agent-notify', sourceId: 'notify-disabled', text: 'notice'
+    })
+
+    expect(result).toEqual([{ status: 'skipped', attemptId: null, errorCode: 'delivery-target-disabled' }])
+  })
+})

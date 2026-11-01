@@ -1,5 +1,4 @@
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
-import { getIntelligenceModule } from '../intelligenceModule'
 import { computeConfigurationRevision } from './configurationRevision'
 import {
   projectSourceDetail,
@@ -18,7 +17,7 @@ export async function handleGetOperationsHealth(
   _input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
-  const health = await getIntelligenceService(deps.jobRuntime).getOperationsHealth()
+  const health = await getIntelligenceService(deps.intelligenceModule).getOperationsHealth()
   const ownedRuns = deps.jobRuntime
     .listRecentRuns(RUN_SAMPLE_LIMIT)
     .filter((run) => run.productId === 'market-intelligence' || run.handlerId.startsWith('market-intelligence.'))
@@ -56,7 +55,7 @@ export async function handleListIntelligenceSources(
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { domain = 'all', includeDisabled = false } = (input ?? {}) as ListSourcesInput
-  const sourcesService = getIntelligenceModule(deps.jobRuntime).sourcesService
+  const sourcesService = deps.intelligenceModule.sourcesService
   const [definitions, profiles, focusSettings] = await Promise.all([
     Promise.resolve(sourcesService.listDefinitions()),
     sourcesService.listProfiles(),
@@ -90,7 +89,7 @@ export async function handleGetSourceDetail(
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { sourceId } = (input ?? {}) as SourceDetailInput
-  const sourcesService = getIntelligenceModule(deps.jobRuntime).sourcesService
+  const sourcesService = deps.intelligenceModule.sourcesService
   const known = sourcesService.listDefinitions().some((definition) => definition.sourceId === sourceId)
   if (!known) {
     return { state: 'unavailable', caveats: ['unknown-source'] }

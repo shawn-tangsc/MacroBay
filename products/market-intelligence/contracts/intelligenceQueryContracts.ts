@@ -154,6 +154,8 @@ export function isFundingRateHistoryRate(value: unknown): value is number {
 
 export type CapitalConditionsSnapshotQueryInput = {
   asOf: string
+  /** Daily briefing may read a stale snapshot with its observedAt; normal queries stay strict. */
+  allowStale?: boolean
 }
 
 export type EtfPublicFlow = Readonly<{
@@ -194,7 +196,6 @@ export type CapitalConditionsSnapshotResult =
         change30dPercent: number
         dailyFlows?: readonly { tradingDate: string; netFlowUsd: number }[]
       }
-      usdStablecoinSupplyUsd?: number
       conclusion: 'partial' | 'unavailable'
     }
   | { state: 'empty'; asOf: string }
@@ -324,7 +325,8 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
 }
 
-function isWithinUtf8JsonBudget(value: unknown, maximumBytes: number): boolean {
+/** Shared byte budget check: a second implementation would let two DTO caps drift apart. */
+export function isWithinUtf8JsonBudget(value: unknown, maximumBytes: number): boolean {
   try {
     const serialized = JSON.stringify(value)
     return typeof serialized === 'string' && new TextEncoder().encode(serialized).byteLength <= maximumBytes
@@ -379,6 +381,8 @@ export type AgentSafeEvidenceRef = {
   visibleAt: string
   rendererSafeSummary: string
   excerptHash?: string
+  /** The public page behind the evidence, when the projection knows one. Never model-facing. */
+  sourceUrl?: string
   caveats: MarketIntelligenceQueryCaveat[]
 }
 

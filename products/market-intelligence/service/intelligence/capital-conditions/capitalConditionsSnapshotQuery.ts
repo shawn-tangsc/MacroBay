@@ -14,7 +14,7 @@ import type { EtfCurrentStateStore } from '../store/etfCurrentStateStore'
 
 export const capitalConditionsSafeQueryPolicy = Object.freeze({
   ...capitalConditionsSnapshotPolicy,
-  exactInputFields: ['asOf']
+  exactInputFields: ['asOf', 'allowStale']
 })
 
 export type CapitalConditionsSnapshotQueryResult = CapitalConditionsSnapshotResult
@@ -30,8 +30,13 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
       try {
         if (deps.isEnabled && !await deps.isEnabled()) return unavailable()
         const state = await deps.store.read()
-        const snapshot = state?.snapshot
-        const lastSuccessAt = state?.health.lastSuccessAt
+        const history = await deps.store.readHistory?.() ?? []
+        const currentSnapshot = state?.snapshot
+        const historical = input.asOf < (currentSnapshot?.verifiedAt ?? '')
+          ? newestSnapshotAtOrBefore(history, input.asOf)
+          : undefined
+        const snapshot = historical ?? currentSnapshot
+        const lastSuccessAt = snapshot?.verifiedAt ?? state?.health.lastSuccessAt
         if (!snapshot || !lastSuccessAt || !isCanonicalCapitalConditionsSnapshotTime(snapshot.observedAt) || !isCanonicalCapitalConditionsSnapshotTime(snapshot.verifiedAt) || !isCanonicalCapitalConditionsSnapshotTime(lastSuccessAt) || snapshot.observedAt > snapshot.verifiedAt || snapshot.verifiedAt !== lastSuccessAt) {
           return state ? unavailable() : Object.freeze({ state: 'empty' as const, asOf: input.asOf })
         }
@@ -40,10 +45,11 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
           return Object.freeze({ state: 'empty' as const, asOf: input.asOf })
         }
         const ageMs = Date.parse(input.asOf) - Date.parse(lastSuccessAt)
-        if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > capitalConditionsSafeQueryPolicy.maximumAgeMs) return unavailable()
+        if (!Number.isFinite(ageMs) || ageMs < 0) return unavailable()
+        if (!input.allowStale && ageMs > capitalConditionsSafeQueryPolicy.maximumAgeMs) return unavailable()
         if (!isValidSnapshot(snapshot)) return unavailable()
 
-        const etf = deps.etfStore ? await projectEtf(deps.etfStore, input.asOf) : Object.freeze({ state: 'unavailable' as const })
+        const etf = deps.etfStore ? await projectEtf(deps.etfStore, input.asOf, input.allowStale === true) : Object.freeze({ state: 'unavailable' as const })
         const result = Object.freeze({
           state: 'available' as const,
           asOf: input.asOf,
@@ -60,7 +66,6 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
             change30dPercent: snapshot.change30dPercent,
             ...(snapshot.dailyFlows ? { dailyFlows: snapshot.dailyFlows.filter((row) => row.tradingDate <= input.asOf.slice(0, 10)) } : {})
           }),
-          ...(snapshot.usdStablecoinSupplyUsd === undefined ? {} : { usdStablecoinSupplyUsd: snapshot.usdStablecoinSupplyUsd }),
           conclusion: snapshot.change30dUsd === 0 ? 'unavailable' as const : 'partial' as const
         })
         return isWithinCapitalConditionsSnapshotDtoBudget(result) ? result : unavailable()
@@ -71,8 +76,8 @@ export function createCapitalConditionsSnapshotQueryService(deps: {
   }
 }
 
-async function projectEtf(store: EtfCurrentStateStore, asOf: string): Promise<EtfPublicSnapshot | { state: 'unavailable' }> {
-  const available = await store.readAvailable({ asOf })
+async function projectEtf(store: EtfCurrentStateStore, asOf: string, allowStale = false): Promise<EtfPublicSnapshot | { state: 'unavailable' }> {
+  const available = await store.readAvailable({ asOf, allowStale })
   if (available.state !== 'available') return Object.freeze({ state: 'unavailable' as const })
   const { window, verifiedAt } = available
   const dto: EtfPublicSnapshot = Object.freeze({
@@ -88,16 +93,31 @@ function isExactInput(value: unknown): value is CapitalConditionsSnapshotQueryIn
   try {
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype || Object.getOwnPropertySymbols(value).length !== 0) return false
     const names = Object.getOwnPropertyNames(value)
-    if (names.length !== capitalConditionsSafeQueryPolicy.exactInputFields.length || !names.every((name) => capitalConditionsSafeQueryPolicy.exactInputFields.includes(name))) return false
+    if (!names.every((name) => capitalConditionsSafeQueryPolicy.exactInputFields.includes(name))) return false
     const descriptor = Object.getOwnPropertyDescriptor(value, 'asOf')
-    return Boolean(descriptor?.enumerable && 'value' in descriptor && isCanonicalCapitalConditionsSnapshotTime(descriptor.value))
+    const stale = Object.getOwnPropertyDescriptor(value, 'allowStale')
+    return Boolean(descriptor?.enumerable && 'value' in descriptor && isCanonicalCapitalConditionsSnapshotTime(descriptor.value) && (!stale || (stale.enumerable && 'value' in stale && typeof stale.value === 'boolean')))
   } catch {
     return false
   }
 }
 
-export function isCanonicalCapitalConditionsTime(value: unknown): value is string {
-  return isCanonicalCapitalConditionsSnapshotTime(value)
+/**
+ * The newest retained point that was already known at the instant.
+ *
+ * A point may answer for an instant only when it was observed and verified by then, so both
+ * timestamps are checked and an entry carrying a malformed one is skipped rather than allowed to
+ * win the comparison. Retention is age-based, so the winner can be a thinned point hours older than
+ * the instant; the caller's freshness gate decides whether that age is acceptable.
+ */
+function newestSnapshotAtOrBefore(history: readonly CapitalConditionsSnapshotState[], asOf: string): CapitalConditionsSnapshotState | undefined {
+  let newest: CapitalConditionsSnapshotState | undefined
+  for (const entry of history) {
+    if (!isCanonicalCapitalConditionsSnapshotTime(entry.verifiedAt) || !isCanonicalCapitalConditionsSnapshotTime(entry.observedAt)) continue
+    if (entry.verifiedAt > asOf || entry.observedAt > asOf) continue
+    if (!newest || entry.verifiedAt > newest.verifiedAt || (entry.verifiedAt === newest.verifiedAt && entry.observedAt > newest.observedAt)) newest = entry
+  }
+  return newest
 }
 
 function isValidSnapshot(snapshot: CapitalConditionsSnapshotState): boolean {
@@ -108,8 +128,7 @@ function isValidSnapshot(snapshot: CapitalConditionsSnapshotState): boolean {
     snapshot.change7dUsd,
     snapshot.change7dPercent,
     snapshot.change30dUsd,
-    snapshot.change30dPercent,
-    snapshot.usdStablecoinSupplyUsd
+    snapshot.change30dPercent
   ].every((value) => value === undefined || (typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER))
 }
 

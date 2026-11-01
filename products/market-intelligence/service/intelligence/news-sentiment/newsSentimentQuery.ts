@@ -1,13 +1,16 @@
 import { getIntelligenceSourceDefinition } from '../application/sourceCatalog'
 import { aggregateSentimentSignals } from '../application/sentimentScoring'
 import type { IntelligencePipeline } from '../application/intelligencePipeline'
-import type { IntelligenceSentimentHorizon, SentimentSignalInput } from '../schema/intelligenceSentiment'
+import type { SentimentSignalInput } from '../schema/intelligenceSentiment'
 import {
   NEWS_SENTIMENT_CAVEATS,
   NEWS_SENTIMENT_WINDOW_MS,
+  isNewsSentimentAggregateWindow,
   type NewsPolarity,
+  type NewsSentimentAggregateWindow,
   type NewsSentimentQuery,
   type NewsSentimentRecord,
+  type NewsSentimentSourceReadiness,
   type NewsSentimentSymbol,
   type NewsSentimentWindow
 } from '../schema/newsSentiment'
@@ -64,6 +67,18 @@ export type NewsSentimentView = {
   /** Every source with rows in this window, before direction/source filters or routine filtering. */
   availableSources?: { sourceId: string; sourceName: string }[]
   caveats: string[]
+  /**
+   * What the four sources behind the feed are doing, so the card can name the cause of an empty
+   * window instead of printing "no data" for five different situations. Absent when the reader did
+   * not wire one; the card then falls back to the window-only wording.
+   */
+  readiness?: NewsSentimentSourceReadiness
+  /**
+   * The newest judgment on record at `asOf`, whatever window was asked for. Two readers share this
+   * one value on purpose: the `stale` empty state ("nothing in this window, something earlier") and
+   * the card's age badge ("what you are looking at is already old").
+   */
+  latestKnownItemAt?: string
 }
 
 export type NewsSentimentItemDetail = NewsSentimentItemView & {
@@ -84,6 +99,8 @@ export function createNewsSentimentQuery(deps: {
   bodyTranslation?: {
     get: (itemId: string, targetLocale?: string) => NewsBodyTranslationRecord | undefined
   }
+  /** Optional: a source status that cannot be read must not fail the news read itself. */
+  readSourceReadiness?: (asOf: string) => Promise<NewsSentimentSourceReadiness>
   now: () => string
 }) {
   return {
@@ -97,6 +114,7 @@ export function createNewsSentimentQuery(deps: {
 
       try {
         const displayLocale = await deps.getDisplayLocale?.()
+        const readiness = await readReadiness(deps.readSourceReadiness, asOf)
         const from = new Date(Date.parse(asOf) - NEWS_SENTIMENT_WINDOW_MS[window]).toISOString()
         const rows = deps.store.listLatestSentiment({ from, to: asOf, limit: 500 })
         const itemsById = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item]))
@@ -117,8 +135,25 @@ export function createNewsSentimentQuery(deps: {
           .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
           .slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)))
 
+        // One reading for both purposes: the stale state ("this window has nothing, but something
+        // earlier did") and the card's age badge must never come from two different places, or one
+        // says "5 minutes ago" while the other says "3 hours".
+        const latestKnownItemAt = deps.store.listLatestSentiment({ from: EPOCH_ISO, to: asOf, limit: 1 })[0]?.publishedAt
+
         if (visible.length === 0) {
-          return { state: 'empty', asOf, generatedAt, window, items: [], availableSources, caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow] }
+          // An empty window still has to say whether anything ever arrived: without this the card
+          // cannot tell "quiet period" from "the feed stopped hours ago".
+          return {
+            state: 'empty',
+            asOf,
+            generatedAt,
+            window,
+            items: [],
+            availableSources,
+            caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow],
+            ...(readiness ? { readiness } : {}),
+            ...(latestKnownItemAt ? { latestKnownItemAt } : {})
+          }
         }
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
@@ -130,7 +165,11 @@ export function createNewsSentimentQuery(deps: {
             bodyTranslationState: (body?.state === 'translated' || body?.state === 'failed' ? body.state : 'missing') as NewsSentimentItemView['bodyTranslationState']
           }
         })
-        const aggregate = window === 'all' ? undefined : aggregateView(visible, itemsById, input, asOf)
+        // Only windows the existing aggregate can express get a summary. 7d and all have no
+        // horizon, and guessing one would publish a number the list contradicts.
+        const aggregate = isNewsSentimentAggregateWindow(window)
+          ? aggregateView(visible, itemsById, input, asOf, window)
+          : undefined
         const caveats = [...new Set(visible.flatMap((row) => row.caveats))]
 
         return {
@@ -154,6 +193,8 @@ export function createNewsSentimentQuery(deps: {
           } } : {}),
           items,
           availableSources,
+          ...(readiness ? { readiness } : {}),
+          ...(latestKnownItemAt ? { latestKnownItemAt } : {}),
           caveats
         }
       } catch {
@@ -191,13 +232,14 @@ function aggregateView(
   rows: NewsSentimentRecord[],
   itemsById: Map<string, { sourceCategory?: string; sourceTrust?: string }>,
   input: NewsSentimentQuery,
-  asOf: string
+  asOf: string,
+  window: NewsSentimentAggregateWindow
 ) : { label: NonNullable<NewsSentimentView['summary']>['label']; score: number; directionalCount: number; sourceBreakdown: Record<string, number> } {
   const scopeType = input.scope === 'BTC' || input.scope === 'ETH' ? 'symbol' : 'crypto-market'
   const scopeKey = scopeType === 'symbol' ? input.scope! : 'global'
-  const signals = rows.map((row) => toSignal(row, itemsById.get(row.itemId), scopeType, scopeKey, input.window))
+  const signals = rows.map((row) => toSignal(row, itemsById.get(row.itemId), scopeType, scopeKey, window))
   const aggregate = aggregateSentimentSignals(
-    { scopeType, scopeKey, horizon: input.window as IntelligenceSentimentHorizon, signals },
+    { scopeType, scopeKey, horizon: window, signals },
     Date.parse(asOf)
   )
   return {
@@ -213,14 +255,14 @@ function toSignal(
   item: { sourceCategory?: string; sourceTrust?: string } | undefined,
   scopeType: 'crypto-market' | 'symbol',
   scopeKey: string,
-  window: NewsSentimentWindow
+  window: NewsSentimentAggregateWindow
 ): SentimentSignalInput {
   return {
     signalId: `news:${row.itemId}:${scopeType}:${scopeKey}:${window}`,
     itemId: row.itemId,
     scopeType,
     scopeKey,
-    horizon: (window === 'all' ? '24h' : window) as IntelligenceSentimentHorizon,
+    horizon: window,
     sourceGroup: item?.sourceCategory ?? row.sourceId,
     sentimentLabel: polarityToLabel(row.polarity),
     strength: row.strength,
@@ -255,6 +297,25 @@ function toItemView(
     ...(row.modelRef ? { modelRef: row.modelRef } : {}),
     ...(row.promptVersion ? { promptVersion: row.promptVersion } : {}),
     caveats: row.caveats
+  }
+}
+
+/** Anything stored is newer than this; the empty read only needs "has any judgment ever existed". */
+const EPOCH_ISO = '1970-01-01T00:00:00.000Z'
+
+/**
+ * The source status is context, never a reason to fail the list: a broken status read must leave the
+ * items readable, and the card then says only what the window itself supports.
+ */
+async function readReadiness(
+  reader: ((asOf: string) => Promise<NewsSentimentSourceReadiness>) | undefined,
+  asOf: string
+): Promise<NewsSentimentSourceReadiness | undefined> {
+  if (!reader) return undefined
+  try {
+    return await reader(asOf)
+  } catch {
+    return undefined
   }
 }
 

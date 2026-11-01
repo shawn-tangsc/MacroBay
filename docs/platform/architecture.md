@@ -126,7 +126,8 @@ produced it.
 
 ## Current limitations
 
-- Channel integrations are present in the platform code but hidden in this release.
+- Channel integrations are present in the platform code, with a channel settings page; no adapter is
+  enabled for messaging in this release.
 - Packaged installers and auto-update are not included.
 - macOS is the verified development platform; Windows and Linux are experimental.
 

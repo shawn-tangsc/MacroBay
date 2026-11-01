@@ -111,6 +111,7 @@ function toDescriptor(
     productId: registration.productId,
     handlerId: registration.handlerId,
     description: registration.description,
+    title: registration.title,
     schemaVersion: registration.schemaVersion,
     readOnly: registration.readOnly,
     requiresTemporalBoundary: registration.requiresTemporalBoundary,

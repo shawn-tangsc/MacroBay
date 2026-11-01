@@ -44,7 +44,8 @@
 
 /* 在自己内部滚动的页面（看板、日历）：拿剩余高度，滚动留给各自的 pane。 */
 .mi-sample-surface > .mi-analysis-dashboard-layout,
-.mi-sample-surface > .mi-economic-calendar {
+.mi-sample-surface > .mi-economic-calendar,
+.mi-sample-surface > .mi-daily-briefing-page {
   flex: 1 1 0;
   min-height: 0;
 }

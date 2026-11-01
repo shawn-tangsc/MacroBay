@@ -1,3 +1,4 @@
+import { extractSseEvents, tryParseJsonChunk } from './sseStreamParser'
 import { ChatProtocolFailureError } from './chatProtocolFailure'
 import type { ChatProtocolStats, ChatProtocolToolCall } from './chatProtocolTypes'
 import { readResponsesFunctionCalls } from './responsesToolLoop'
@@ -127,30 +128,11 @@ function createAbortError(): Error {
 
 function parseStreamEvent(raw: string): ResponsesStreamEvent | null {
   if (!raw || raw === '[DONE]') return null
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== 'object') return null
-    return parsed as ResponsesStreamEvent
-  } catch {
-    return null
-  }
+  const parsed = tryParseJsonChunk(raw)
+  if (!parsed || typeof parsed !== 'object') return null
+  return parsed as ResponsesStreamEvent
 }
 
-function extractSseEvents(buffer: string): { items: string[]; remainder: string } {
-  const normalized = buffer.replace(/\r\n/g, '\n')
-  const parts = normalized.split('\n\n')
-  const remainder = parts.pop() ?? ''
-  const items = parts
-    .map((block) =>
-      block
-        .split('\n')
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice('data:'.length).trim())
-        .join('\n')
-    )
-    .filter(Boolean)
-  return { items, remainder }
-}
 
 function toNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
