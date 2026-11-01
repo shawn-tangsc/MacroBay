@@ -4,7 +4,21 @@ import type { StateSize } from '../empty-state'
 import { LoadingState } from '../loading'
 
 import { useStateViewText } from './stateViewText'
+import type {
+  DisabledReasonCode,
+  EmptyReasonCode,
+  ErrorReasonCode,
+  PermissionReasonCode
+} from '@platform/contracts/queryOutcome'
 import './stateView.css'
+
+/** 码表归 `platform/contracts/queryOutcome`（数据层与 UI 共用一份）；这里只做转出，方便组件与产品沿用旧入口。 */
+export type {
+  DisabledReasonCode,
+  EmptyReasonCode,
+  ErrorReasonCode,
+  PermissionReasonCode
+} from '@platform/contracts/queryOutcome'
 
 /**
  * 六态统一状态视图（契约：`docs-private/05-desktop/ui-state-components-contract.md` §13）。
@@ -73,7 +87,7 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.select-target',
   'ui.state.action.restart-app',
   'ui.state.action.open-system-settings',
-  'ui.state.action.widen-window',
+  'ui.state.action.widen-time-window',
   'ui.state.action.focus-form',
   'ui.state.action.open-assistant'
 ] as const
@@ -96,22 +110,6 @@ type StateViewBase = {
   size?: StateSize
   className?: string
 }
-
-export type EmptyReasonCode =
-  | 'never-created'
-  | 'filtered-out'
-  | 'no-target-bound'
-  | 'nothing-enabled'
-  | 'none-installed'
-  | 'no-target-selected'
-  | 'not-yet'
-  // 「有数据，但都在窗口之外」与「这段确实没有」是两句话：都不能用 `not-yet`（那是「还没到」）顶替。
-  | 'older-than-window'
-  | 'nothing-in-window'
-
-export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart'
-export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
-export type PermissionReasonCode = 'not-granted'
 
 type StateDetails = { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
 

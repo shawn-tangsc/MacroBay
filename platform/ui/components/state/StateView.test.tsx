@@ -338,8 +338,8 @@ describe('窗口三种「没有」互不顶替（§3：查过没有 ≠ 还没�
     const key = (value: string): string => value
     const html = [
       markup({ state: 'empty', reasonCode: 'not-yet', resolveText: key }),
-      markup({ state: 'empty', reasonCode: 'older-than-window', resolveText: key, action: { labelKey: 'ui.state.action.widen-window', onSelect: () => {} } }),
-      markup({ state: 'empty', reasonCode: 'nothing-in-window', resolveText: key, action: { labelKey: 'ui.state.action.widen-window', onSelect: () => {} } })
+      markup({ state: 'empty', reasonCode: 'older-than-window', resolveText: key, action: { labelKey: 'ui.state.action.widen-time-window', onSelect: () => {} } }),
+      markup({ state: 'empty', reasonCode: 'nothing-in-window', resolveText: key, action: { labelKey: 'ui.state.action.widen-time-window', onSelect: () => {} } })
     ]
 
     const reasons = html.map((item) => item.match(/ui\.state\.empty\.reason\.[a-z-]+/)?.[0])
