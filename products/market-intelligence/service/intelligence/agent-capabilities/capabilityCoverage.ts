@@ -95,6 +95,8 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   // The chips the dashboard draws; the analysis reads its own facts, not this panel view.
   'intelligence.queryModuleSignals': excluded('internal-view'),
   'intelligence.syncRuns.list': excluded('internal-view'),
+  // The same panel's per-day counts: a reader-facing view with no agent tool behind it.
+  'intelligence.syncRuns.aggregates': excluded('internal-view'),
   'intelligence.macro.economicCalendar.setReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.clearReleaseTime': exposed('operate_macro_calendar'),
   'intelligence.macro.economicCalendar.refreshBlsEmploymentRelease': exposed('operate_macro_calendar'),
