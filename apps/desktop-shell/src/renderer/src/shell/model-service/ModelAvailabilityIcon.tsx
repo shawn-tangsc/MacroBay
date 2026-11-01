@@ -1,3 +1,4 @@
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { CircleCheck, CircleDashed, CircleX } from 'lucide-react'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -21,6 +22,7 @@ export function ModelAvailabilityIcon({
   /** 没有结论时也显示「尚未检测」灰圈（默认不显示，避免每个下拉都挂一圈灰点）。 */
   pending?: boolean
 }): React.ReactElement | null {
+  const timeZone = useShellTimeZone()
   const state = view === undefined
     ? (pending ? 'pending' : null)
     : view.stale
@@ -32,7 +34,7 @@ export function ModelAvailabilityIcon({
     ? labels.modelAvailabilityNeverChecked
     : state === 'stale'
       ? labels.modelAvailabilityStaleHint
-      : modelAvailabilityTitle(labels, view)
+      : modelAvailabilityTitle(labels, view, timeZone)
   const Icon = state === 'ok' ? CircleCheck : state === 'failed' ? CircleX : CircleDashed
 
   return (

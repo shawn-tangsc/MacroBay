@@ -1,3 +1,4 @@
+import { formatShellInstant } from '@platform/ui/time/shellTimeFormat'
 import type { PlatformText } from '../../i18n/platformText'
 
 import type { ModelAvailabilityView } from './modelAvailabilityView'
@@ -14,9 +15,14 @@ export function modelAvailabilityLabel(labels: PlatformText['models'], view: Mod
   return view.status === 'ok' ? labels.modelAvailabilityOk : labels.modelAvailabilityFailed
 }
 
-export function modelAvailabilityTitle(labels: PlatformText['models'], view: ModelAvailabilityView): string {
+export function modelAvailabilityTitle(
+  labels: PlatformText['models'],
+  view: ModelAvailabilityView,
+  timeZone: string
+): string {
   if (view.stale) return labels.modelAvailabilityStaleHint
-  const checkedAt = new Date(view.checkedAt).toLocaleString()
+  // 时间只走平台口径：`toLocaleString()` 既没有指定时区，也没有跟随显示语言。
+  const checkedAt = formatShellInstant(view.checkedAt, { timeZone })
   const status = view.status === 'ok'
     ? labels.modelAvailabilityOk
     : labels.modelAvailabilityFailedWithReason(probeReasonLabel(labels, view.reasonCode))

@@ -6,6 +6,7 @@ import type { AgentSessionMessageEntity } from '@platform/ai/agent-platform/sche
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { AgentChatBubble } from '@platform/ui/agent-chat'
+import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 
 import { copyAgentMessageText, resendAgentMessage } from '../agentMessageActions'
 import { deleteSessionMessage } from '../agentStateActions'
@@ -127,6 +128,7 @@ function AgentSessionMessageUnit({
     message.status === 'pending' && pendingStatusText ? pendingStatusText : undefined
   const replyElapsedMs = assistantReplyElapsedMs(message)
 
+  const timeZone = useShellTimeZone()
   return (
     <div
       ref={(element) => {
@@ -142,7 +144,7 @@ function AgentSessionMessageUnit({
             runtimeText: text.runtimeText,
             input: text.input
           },
-          runtimeTextOverride ? { runtimeTextOverride } : {}
+          runtimeTextOverride ? { runtimeTextOverride, timeZone } : { timeZone }
         )}
         {...(contextRenderers ? { contextRenderers } : {})}
         text={{
