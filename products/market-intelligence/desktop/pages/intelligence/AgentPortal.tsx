@@ -1,6 +1,6 @@
 import { Bitcoin, CandlestickChart, ChartLine } from 'lucide-react'
 
-import type { ActivationProjection } from './agentActivationPolicy'
+import type { ActivationState } from './agentActivationPolicy'
 import type { MarketIntelligenceAgent } from './agentPortalModel'
 import cryptoPortraitUrl from './assets/mi-crypto-analyst.jpg'
 import equitiesPortraitUrl from './assets/mi-equities-analyst.jpg'
@@ -8,6 +8,8 @@ import futuresPortraitUrl from './assets/mi-futures-analyst.jpg'
 
 type AgentPortalText = {
   moduleLabel: string
+  /** 「暂时读不到」与「还没配置来源」的唯一用词；两种状态的动作也在这一块。 */
+  data: { temporarilyUnavailable: string; retry: string; sourceNotConfigured: string; configureSources: string }
   agents: Record<MarketIntelligenceAgent['id'], { name: string; lens: string; sourceSummary: string }>
   states: { available: string; comingSoon: string }
   sourceSummary: { count: string; pending: string }
@@ -35,7 +37,9 @@ type AgentPortalProps = {
   agents: MarketIntelligenceAgent[]
   text: AgentPortalText
   sourceCounts?: Partial<Record<MarketIntelligenceAgent['id'], number>>
-  activation: ActivationProjection
+  activation: ActivationState
+  /** The failed-read retry: it must ask again, not just clear the error. */
+  onRetryActivation: () => void
   sample: Readonly<{
     active: boolean
     available: boolean
@@ -51,6 +55,7 @@ export function AgentPortal({
   agents,
   onOpenSources,
   onPrimary,
+  onRetryActivation,
   onToggleSample,
   sample,
   sourceCounts,
@@ -71,9 +76,19 @@ export function AgentPortal({
             const sourceSummary = sourceCount > 0
               ? text.sourceSummary.count.replace('{count}', String(sourceCount))
               : text.sourceSummary.pending
-            const progress = text.activation.progress
-              .replace('{enabled}', String(activation.enabledSourceCount))
-              .replace('{total}', String(activation.totalSourceCount))
+            const progress = activation.status === 'ready'
+              ? text.activation.progress
+                .replace('{enabled}', String(activation.enabledSourceCount))
+                .replace('{total}', String(activation.totalSourceCount))
+              : ''
+            // The card's own three answers. A failed read must never borrow the not-configured
+            // sentence: one asks the reader to configure, the other asks them to wait and retry.
+            // "Configured" means at least one provider is enabled — a 0/12 read is still an
+            // unanswered setup, and printing it as a fraction reads like a working counter.
+            const activationState = activation.status === 'loading' ? 'loading'
+              : activation.status === 'unavailable' ? 'unavailable'
+                : activation.enabledSourceCount === 0 ? 'not-configured'
+                  : 'configured'
             const sampleSwitchDisabled = sample.busy || (!sample.available && !sample.active)
 
             return (
@@ -106,17 +121,50 @@ export function AgentPortal({
                       </span>
                     )}
                     {isCrypto ? (
-                      <button
-                        aria-label={`${text.activation.actions.configure} · ${progress}`}
-                        className="mi-agent-card__progress"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onOpenSources()
-                        }}
-                        type="button"
-                      >
-                        {progress}
-                      </button>
+                      activationState === 'configured' ? (
+                        <button
+                          aria-label={`${text.activation.actions.configure} · ${progress}`}
+                          className="mi-agent-card__progress"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onOpenSources()
+                          }}
+                          type="button"
+                        >
+                          {progress}
+                        </button>
+                      ) : (
+                        <span className="mi-agent-card__activation" data-activation-state={activationState}>
+                          <span className="mi-agent-card__activation-state">
+                            {activationState === 'unavailable' ? text.data.temporarilyUnavailable
+                              : activationState === 'not-configured' ? text.data.sourceNotConfigured
+                                : '—'}
+                          </span>
+                          {activationState === 'unavailable' ? (
+                            <button
+                              className="mi-agent-card__activation-action"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                onRetryActivation()
+                              }}
+                              type="button"
+                            >
+                              {text.data.retry}
+                            </button>
+                          ) : activationState === 'not-configured' ? (
+                            <button
+                              className="mi-agent-card__activation-action"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                onOpenSources()
+                              }}
+                              type="button"
+                            >
+                              {text.data.configureSources}
+                            </button>
+                          ) : null}
+                        </span>
+                      )
                     ) : null}
                   </span>
                   <span className="mi-agent-card__identity">

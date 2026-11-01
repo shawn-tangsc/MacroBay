@@ -353,6 +353,46 @@ button.mi-agent-card__status:focus-visible {
   outline-offset: 2px;
 }
 
+/*
+ * 「暂时读不到」/「还没配置来源」占住进度位：状态词与它的动作并排，尺寸沿用进度行的 9px，
+ * 不加底色、不加边框，免得一个失败态看起来像一块新面板。
+ */
+.mi-agent-card__activation {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: baseline;
+  color: var(--mi-terminal-muted);
+  font-size: 9px;
+}
+
+.mi-agent-card__activation-state {
+  white-space: nowrap;
+}
+
+.mi-agent-card__activation-action {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mi-terminal-lime);
+  cursor: pointer;
+  font: inherit;
+  font-size: 9px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mi-agent-card__activation-action:hover {
+  color: var(--mi-terminal-lime);
+}
+
+.mi-agent-card__activation-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .mi-agent-card__entry,
 .mi-crypto-dashboard__back {
   border: 0;

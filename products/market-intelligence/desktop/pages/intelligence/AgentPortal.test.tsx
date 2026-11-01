@@ -1,22 +1,24 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../shared/i18n/productText'
 import { AgentPortal } from './AgentPortal'
 import { marketIntelligenceAgents } from './agentPortalModel'
+import type { ActivationState } from './agentActivationPolicy'
 
 const text = productText['zh-CN'].pages.intelligence.portal
 const baseSample = { active: false, available: true, busy: false }
-const activation = { enabledSourceCount: 1, totalSourceCount: 12 }
+const ready: ActivationState = { status: 'ready', enabledSourceCount: 1, totalSourceCount: 12 }
 
-function render(active = false): string {
+function render(activation: ActivationState = ready, active = false, onRetryActivation = () => undefined): string {
   return renderToStaticMarkup(createElement(AgentPortal, {
     activation,
     agents: marketIntelligenceAgents,
     onOpenSources: () => undefined,
     onPrimary: () => undefined,
+    onRetryActivation,
     onToggleSample: () => undefined,
     sample: { ...baseSample, active },
     sourceCounts: { crypto: 7 },
@@ -24,7 +26,7 @@ function render(active = false): string {
   }))
 }
 
-describe('AgentPortal sample switch', () => {
+describe('AgentPortal activation read', () => {
   it('puts the switch in the old status slot and source readiness on the right', () => {
     const markup = render()
     expect(markup).toContain('7 个静态情报源')
@@ -36,9 +38,39 @@ describe('AgentPortal sample switch', () => {
   })
 
   it('shows the switch as on while the sample is active', () => {
-    const markup = render(true)
+    const markup = render(ready, true)
     expect(markup).toContain('aria-checked="true"')
     expect(markup).toContain('示例模式')
     expect(markup).not.toContain('示例中')
+  })
+
+  it('says the read failed instead of drawing an empty setup', () => {
+    const markup = render({ status: 'unavailable' })
+    expect(markup).toContain('暂时读不到')
+    expect(markup).toContain('再试一次')
+    expect(markup).not.toContain('还没配置来源')
+    expect(markup).not.toContain('已启用')
+    expect(markup).not.toMatch(/0\/0/)
+  })
+
+  it('offers the reader’s own action when nothing is configured', () => {
+    const markup = render({ status: 'ready', enabledSourceCount: 0, totalSourceCount: 12 })
+    expect(markup).toContain('还没配置来源')
+    expect(markup).toContain('去设置配置')
+    expect(markup).not.toContain('暂时读不到')
+    expect(markup).not.toMatch(/0\/12/)
+  })
+
+  it('still calls an answered empty view not-configured, not a failed read', () => {
+    const markup = render({ status: 'ready', enabledSourceCount: 0, totalSourceCount: 0 })
+    expect(markup).toContain('还没配置来源')
+    expect(markup).not.toContain('暂时读不到')
+  })
+
+  it('renders the retry control only for a failed read', () => {
+    const failed = render({ status: 'unavailable' }, false, vi.fn())
+    const empty = render({ status: 'ready', enabledSourceCount: 0, totalSourceCount: 0 })
+    expect(failed).toContain('再试一次')
+    expect(empty).not.toContain('再试一次')
   })
 })

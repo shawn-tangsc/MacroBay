@@ -60,7 +60,7 @@ function IntelligencePageBody(): React.ReactElement {
   const sample = useSampleMode()
   const sampleText = text.sampleMode
   const sampleNow = sample.now
-  const { activation, sourceCounts } = useCryptoActivation()
+  const { activation, sourceCounts, retry: retryActivation } = useCryptoActivation()
   const [sourceDrawerOpen, setSourceDrawerOpen] = useState(false)
   const [activeView, setActiveView] = useState<'portal' | 'dashboard' | 'calendar' | 'briefing'>('portal')
   const sampleAvailable = sample.state.scenarioCount > 0
@@ -208,6 +208,7 @@ function IntelligencePageBody(): React.ReactElement {
           agents={marketIntelligenceAgents}
           onOpenSources={openCryptoSources}
           onPrimary={openCryptoPrimary}
+          onRetryActivation={retryActivation}
           onToggleSample={() => { void toggleSample() }}
           sample={{ active: sample.state.active, available: sampleAvailable, busy: sample.busy }}
           sourceCounts={sourceCounts}
@@ -217,6 +218,9 @@ function IntelligencePageBody(): React.ReactElement {
       {sourceDrawerOpen ? <DashboardPanelDrawer
         onClose={() => setSourceDrawerOpen(false)}
         open
+        // The registry projection may stand in for a failed read only while the reader is looking
+        // at sample data: outside it, a failed read is stated as failed, never as a source list.
+        sampleActive={sample.state.active}
       /> : null}
     </div>
   )
