@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -169,5 +172,29 @@ describe('light form for short fields', () => {
 
     expect(result.guardedText).toBe('BTC 站上 70000 美元')
     expect(result.suspiciousPatternNames).toEqual([])
+  })
+})
+
+describe('bundling boundary', () => {
+  it('imports no Node built-in, because this guard is also bundled into the renderer', () => {
+    // The renderer reaches this module through the shared web-search and tool chains. A `node:`
+    // import here does not fail a unit test — it fails `pnpm build` with an externalized module.
+    const source = readFileSync(resolve(__dirname, './ExternalContentGuard.ts'), 'utf8')
+    const nodeImports = [...source.matchAll(/from '(node:[^']+)'/g)].map((match) => match[1])
+
+    expect(nodeImports).toEqual([])
+  })
+
+  it('produces a hex boundary id of a fixed width', () => {
+    const result = guardExternalContent('hello', {
+      kind: 'channel',
+      chatId: 'chat-1',
+      userId: 'user-1',
+      userName: 'Trader',
+      channelType: 'telegram'
+    })
+    const boundary = /boundary="([0-9a-f]+)"/.exec(result.guardedText)?.[1]
+
+    expect(boundary).toMatch(/^[0-9a-f]{16}$/)
   })
 })
