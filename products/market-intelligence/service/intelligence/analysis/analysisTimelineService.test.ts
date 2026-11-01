@@ -4,17 +4,20 @@ import { createAnalysisTimelineService } from './analysisTimelineService'
 
 describe('analysisTimelineService', () => {
   it('allows follow-up on a historical successful run without replacing it with the current summary', async () => {
-    const service = createAnalysisTimelineService({ repository: {
+    const service = createAnalysisTimelineService({
+    timeZone: () => 'Asia/Shanghai',
+    repository: {
       getEventGroup: () => ({ id: 'mi-eg-1', currentSummaryId: 'mi-as-new' }),
       getRun: () => ({ id: 'mi-ar-old', eventGroupId: 'mi-eg-1', status: 'succeeded' }),
       getSummaryForRun: () => ({ id: 'mi-as-old', analysisRunId: 'mi-ar-old', eventGroupId: 'mi-eg-1' }),
       getSummary: () => ({ id: 'mi-as-new', analysisRunId: 'mi-ar-new', eventGroupId: 'mi-eg-1' })
-    } as never, createFollowUpSession: async () => 's-1' })
+    } as never, timeZone: () => 'Asia/Shanghai', createFollowUpSession: async () => 's-1' })
     await expect(service.startFollowUp({ eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-old' })).resolves.toMatchObject({ analysisRunId: 'mi-ar-old', sessionId: 's-1' })
   })
   it('returns renderer-safe paged timeline data with an opaque cursor', () => {
     const fullAssessment = `${'宏观数据已发布，资本流向与价格反应需要结合后续证据判断。'.repeat(12)}结论仍需观察。`
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: vi.fn(() => ({ items: [{ id: 'mi-tl-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: fullAssessment.slice(0, 240), version: 1 }], nextCursor: 'opaque-cursor' })),
         getSummary: vi.fn(() => ({ eventAssessment: fullAssessment }))
@@ -29,6 +32,7 @@ describe('analysisTimelineService', () => {
 
   it('publishes the structured verdict and its direction key for current summaries', () => {
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: vi.fn(() => ({ items: [{ id: 'mi-tl-2', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-2', kind: 'analysis', status: 'published', occurredAt: '2026-09-29T00:00:00.000Z', summaryRef: 'mi-as-2', safeTitle: '市场分析已生成', safeExcerpt: null, version: 2 }], nextCursor: null })),
         getSummary: vi.fn(() => ({ conclusion: { direction: 'bearish', summary: '收益率上行压制风险资产。' } }))
@@ -45,6 +49,7 @@ describe('analysisTimelineService', () => {
     const truncated = fullAssessment.slice(0, 240)
     const entry = { id: 'mi-tl-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: truncated, version: 1 }
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: { listTimeline: vi.fn(() => ({ items: [entry], nextCursor: null })), getSummary: vi.fn(() => ({ eventAssessment: fullAssessment })) } as never
     })
 
@@ -56,6 +61,7 @@ describe('analysisTimelineService', () => {
   it('reads the complete assessment through the entry lookup used by node selection', () => {
     const fullAssessment = `${'宏观数据已发布，资本流向与价格反应需要结合后续证据判断。'.repeat(12)}结论仍需观察。`
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         getTimelineEntry: vi.fn(() => ({ id: 'mi-tl-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: fullAssessment.slice(0, 240), version: 1 })),
         getSummary: vi.fn(() => ({ eventAssessment: fullAssessment }))
@@ -68,6 +74,7 @@ describe('analysisTimelineService', () => {
   it('keeps an empty published assessment instead of falling back to the stored excerpt', () => {
     const entry = { id: 'mi-tl-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '历史截断摘要', version: 1 }
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: { listTimeline: vi.fn(() => ({ items: [entry], nextCursor: null })), getSummary: vi.fn(() => ({ eventAssessment: '' })) } as never
     })
 
@@ -77,6 +84,7 @@ describe('analysisTimelineService', () => {
   it('falls back to the stored excerpt when the summary is unreadable', () => {
     const entry = { id: 'mi-tl-1', schemaVersion: 1, eventGroupId: 'mi-eg-1', analysisRunId: 'mi-ar-1', kind: 'analysis', status: 'published', occurredAt: '2026-09-28T00:00:00.000Z', summaryRef: 'mi-as-1', safeTitle: '市场分析已生成', safeExcerpt: '历史截断摘要', version: 1 }
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: vi.fn(() => ({ items: [entry], nextCursor: null })),
         getSummary: vi.fn(() => { throw new Error('analysis-summary-not-found') })
@@ -89,6 +97,7 @@ describe('analysisTimelineService', () => {
   it('renders the frozen change summary for a run, deriving it when the stored record is absent', () => {
     const facts = [{ factId: 'f1', domain: 'macro', metric: 'actual', value: '3.4' }]
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         getRun: vi.fn(() => ({ id: 'mi-ar-1', eventGroupId: 'mi-eg-1', analysisPhase: 'initial', status: 'succeeded', failureCode: null, queuedAt: '2026-09-28T00:00:00.000Z', startedAt: null, completedAt: null, snapshotId: 'mi-es-2' })),
         getSnapshot: vi.fn(() => ({ id: 'mi-es-2', eventGroupId: 'mi-eg-1', createdAt: '2026-09-28T00:00:00.000Z', asOf: '2026-09-28T00:00:00.000Z', dataCutoff: '2026-09-28T00:00:00.000Z', snapshotHash: 'h2', facts, missingDomains: [], caveats: [], evidenceRefs: [], change: undefined })),
@@ -110,6 +119,7 @@ describe('analysisTimelineService', () => {
       return 'session-1'
     })
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         getEventGroup: vi.fn((id: string) => id === 'mi-eg-1' ? ({ id: 'mi-eg-1', currentSummaryId: 'mi-as-1' }) : undefined),
         getRun: vi.fn(() => ({ id: 'mi-ar-1', eventGroupId: 'mi-eg-1', status: 'succeeded' })),
@@ -133,7 +143,9 @@ function timelineEntry(runId = 'mi-ar-1') {
 const floorDecision = { triggerKey: 'schedule.asia.open', reasonCode: 'session-slot', decision: 'queued', createdAt: '2026-09-27T07:02:09.203Z' }
 
 function serviceFor(run: Record<string, unknown>, entryRunId = String(run.id)) {
-  return createAnalysisTimelineService({ repository: {
+  return createAnalysisTimelineService({
+    timeZone: () => 'Asia/Shanghai',
+    repository: {
     listTimeline: vi.fn(() => ({ items: [timelineEntry(entryRunId)], nextCursor: null })),
     listTriggerLedger: () => [
       { triggerKey: 'calendar.refresh', reasonCode: 'interval-active', decision: 'skipped', createdAt: '2026-09-28T00:00:00.000Z' },
@@ -177,6 +189,7 @@ describe('analysisTimelineService group identity', () => {
 
   it('names each row with its own group type and subject', () => {
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: () => ({ items: [entry('mi-tl-2', 'mi-eg-news', '2026-10-31T13:36:23.000Z'), entry('mi-tl-1', 'mi-eg-macro', '2026-10-31T13:36:04.000Z')], nextCursor: null }),
         getEventGroup: (id: string) => groups[id],
@@ -191,6 +204,7 @@ describe('analysisTimelineService group identity', () => {
 
   it('drops a subject that is only a placeholder instead of captioning the row with it', () => {
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: () => ({ items: [entry('mi-tl-3', 'mi-eg-blank', '2026-10-31T13:36:23.000Z')], nextCursor: null }),
         getEventGroup: (id: string) => groups[id],
@@ -203,6 +217,7 @@ describe('analysisTimelineService group identity', () => {
 
   it('keeps the list readable when the group row cannot be read', () => {
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: () => ({ items: [entry('mi-tl-4', 'mi-eg-gone', '2026-10-31T13:36:23.000Z')], nextCursor: null }),
         getEventGroup: () => { throw new Error('mi_analysis_event_groups is locked') },
@@ -216,6 +231,7 @@ describe('analysisTimelineService group identity', () => {
   it('reads one event group once per page, however many of its rows are shown', () => {
     const getEventGroup = vi.fn((id: string) => groups[id])
     const service = createAnalysisTimelineService({
+     timeZone: () => 'Asia/Shanghai',
       repository: {
         listTimeline: () => ({
           items: [

@@ -148,6 +148,8 @@ export function createAnalysisOrchestrator(deps: Readonly<{
   repository: Repository
   structuredModelInvocation: Pick<StructuredModelInvocationService, 'invoke'>
   now: () => string
+  /** 读者时区：本次运行服务的开盘按它换算。 */
+  timeZone: () => string
   idFactory: () => string
   /**
    * 正文语言在**提交时**读取：读者切换语言后，后续运行按新语言写，已发布结论保持原样。
@@ -174,7 +176,7 @@ export function createAnalysisOrchestrator(deps: Readonly<{
     // The run's own trigger key says which open it serves; recovery runs and manual runs keep the
     // prompt they had.
     const brief = sessionBriefForTriggerKey(runRecord.triggerKey)
-    const openInstant = brief ? slotInstantAtOrBefore(brief.slot, new Date(runRecord.queuedAt)) : null
+    const openInstant = brief ? slotInstantAtOrBefore(brief.slot, new Date(runRecord.queuedAt), deps.timeZone()) : null
     const session: AnalysisSessionInput | undefined = brief && openInstant ? { brief, openInstant } : undefined
     // The run carries the model it was queued for, so the analysis calls exactly the model the
     // reader chose instead of whatever provider happens to be first in the store. Runs without a

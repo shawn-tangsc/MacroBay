@@ -53,9 +53,13 @@ export type NewsSentimentWindowResolution = Readonly<{
  * `publishedAt > since` can never become true again. Comparing score time instead picks it up on
  * the next run — and the same comparison is what keeps an already-analysed headline out.
  */
-export function resolveNewsSentimentWindow(asOf: string, since: string | undefined): NewsSentimentWindowResolution {
+export function resolveNewsSentimentWindow(
+  asOf: string,
+  since: string | undefined,
+  timeZone: string
+): NewsSentimentWindowResolution {
   const asOfMs = Date.parse(asOf)
-  const floorMs = previousSessionSlotMs(asOfMs)
+  const floorMs = previousSessionSlotMs(asOfMs, timeZone)
   const windowStartMs = Number.isFinite(floorMs) ? floorMs : asOfMs - analysisNewsSentimentPolicy.fallbackLookbackMs
   const sinceMs = since ? Date.parse(since) : Number.NaN
   const scoredSinceMs = Math.min(asOfMs, Number.isFinite(sinceMs) ? Math.max(sinceMs, windowStartMs) : windowStartMs)
@@ -73,9 +77,9 @@ export function resolveNewsSentimentWindow(asOf: string, since: string | undefin
  * Strictly before: a run serving the 16:00 open must look back to 08:00, not to the instant it is
  * already standing on (which would leave it with an empty news window).
  */
-function previousSessionSlotMs(asOfMs: number): number {
+function previousSessionSlotMs(asOfMs: number, timeZone: string): number {
   if (!Number.isFinite(asOfMs)) return Number.NaN
-  const instants = slotInstantsWithin(new Date(asOfMs))
+  const instants = slotInstantsWithin(new Date(asOfMs), timeZone)
   for (let index = instants.length - 1; index >= 0; index -= 1) {
     if (instants[index]!.atMs < asOfMs) return instants[index]!.atMs
   }
@@ -84,6 +88,8 @@ function previousSessionSlotMs(asOfMs: number): number {
 
 export type AppendNewsSentimentInput = Readonly<{
   asOf: string
+  /** 读者时区：新闻窗口的盘口下界按它换算。 */
+  timeZone: string
   /** 上一次分析开始的时间；缺省（或早于理论盘口）时由盘口下界决定。 */
   since?: string
 }>
@@ -127,7 +133,7 @@ export async function appendAnalysisNewsSentiment(
 ): Promise<MarketAnalysisContextAvailable> {
   if (!reader) return withCaveat(context, MARKET_ANALYSIS_CONTEXT_CAVEATS.newsSentimentUnavailable)
 
-  const { windowStartMs, scoredSinceMs, window } = resolveNewsSentimentWindow(input.asOf, input.since)
+  const { windowStartMs, scoredSinceMs, window } = resolveNewsSentimentWindow(input.asOf, input.since, input.timeZone)
   let view: NewsSentimentView
   try {
     view = await reader.query({ asOf: input.asOf, window, scope: 'market', direction: 'all', limit: 100 })

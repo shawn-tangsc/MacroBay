@@ -70,6 +70,8 @@ export type RendererTimelinePage = Readonly<{ schemaVersion: 1; items: readonly 
 
 export function createAnalysisTimelineService(deps: Readonly<{
   repository: Repository
+  /** 读者时区：时间线的「哪个开盘」按它换算。 */
+  timeZone: () => string
   createFollowUpSession?: (input: AnalysisFollowUpInput) => Promise<string>
 }>): Readonly<{
   listTimeline: (input: { eventGroupId?: string; cursor?: string | null; limit?: number }) => RendererTimelinePage
@@ -153,10 +155,10 @@ function readSummary(deps: { repository: Repository }, entry: TimelineEntry): { 
  * "nothing to say". Attributing the group's newest decision to every row is what made a reader's
  * 重新分析 row carry the staleness floor's wording.
  */
-function readTriggerStatus(deps: { repository: Repository }, entry: TimelineEntry): TriggerStatus | null {
+function readTriggerStatus(deps: { repository: Repository; timeZone: () => string }, entry: TimelineEntry): TriggerStatus | null {
   try {
     const run = entry.analysisRunId ? deps.repository.getRun(entry.analysisRunId) : undefined
-    return projectTriggerStatus(deps.repository.listTriggerLedger?.(entry.eventGroupId), run)
+    return projectTriggerStatus(deps.repository.listTriggerLedger?.(entry.eventGroupId), run, deps.timeZone())
   } catch {
     return null
   }

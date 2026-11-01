@@ -26,7 +26,7 @@ import { createCrossAssetIndexRuntime } from './intelligence/cross-asset/crossAs
 import { crossAssetPolicy } from './intelligence/cross-asset/crossAssetPolicy'
 import { registerCrossAssetIpc } from './intelligence/cross-asset/registerCrossAssetIpc'
 
-import { getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
+import { currentReaderTimeZone, getIntelligenceModule, getIntelligenceProductDataDir } from './intelligence/intelligenceModule'
 import { registerIntelligenceIpc } from './intelligence/ipc/registerIntelligenceIpc'
 import { registerIntelligencePublicQueryIpc } from './intelligence/ipc/registerIntelligencePublicQueryIpc'
 import { registerIntelligenceSourcesIpc } from './intelligence/ipc/registerIntelligenceSourcesIpc'
@@ -542,6 +542,8 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
     queryMarketCalendarMonth: marketCalendar.queryMonth
   }, {
     ...deps,
+    // 时间线的「哪个开盘」也按设置的读者时区换算。
+    timeZone: () => currentReaderTimeZone(),
     requestInitialAnalysis: intelligenceModule.marketAnalysisRuntime.requestInitialAnalysis,
     getAnalysisSettings: intelligenceModule.marketAnalysisRuntime.getSettings,
     updateAnalysisSettings: intelligenceModule.marketAnalysisRuntime.updateSettings

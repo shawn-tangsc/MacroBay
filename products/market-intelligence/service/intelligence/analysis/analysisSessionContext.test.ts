@@ -44,7 +44,7 @@ it('resolves a session only from a slot trigger key', () => {
 it('names the open a delayed catch-up is serving', () => {
   // 09:05 catching up the 00:00 open: the prompt must carry both instants, or the model reads the
   // current snapshot as the open's own state.
-  const open = slotInstantAtOrBefore('us', new Date(2026, 9, 14, 9, 5))
+  const open = slotInstantAtOrBefore('us', new Date(2026, 9, 14, 9, 5), 'Asia/Shanghai')
   expect(open).toBe(new Date(2026, 9, 14, 0, 0).toISOString())
   const session = { brief: analysisSessionContext.us, openInstant: open! }
   expect(body(session).session).toMatchObject({ open: '美洲盘开盘（本机 24:00）', delayed: true })

@@ -19,10 +19,16 @@ export function registerMarketAnalysisIpc(register: ProductIpcRegistrar, reposit
   calendar: MacroCalendarEventContextQuerySources = {},
   sessions: AnalysisSessionDependencies & {
     requestInitialAnalysis?: (itemId: string | undefined, retryRunId: string | undefined, mode: 'initial' | 'refresh', source: AnalysisTriggerSource) => Promise<{ itemId: string; queued: true }>
+    /** 读者时区：时间线的「哪个开盘」按它换算。 */
+    timeZone?: () => string
     getAnalysisSettings?: () => Promise<MarketAnalysisSettings>
     updateAnalysisSettings?: (patch: Readonly<{ enabled?: boolean; providerId?: string; modelId?: string }>) => Promise<MarketAnalysisSettings>
   } = {}): void {
-  const service = createAnalysisTimelineService({ repository, createFollowUpSession: createAnalysisFollowUpSession(sessions) })
+  const service = createAnalysisTimelineService({
+    repository,
+    timeZone: sessions.timeZone ?? (() => 'UTC'),
+    createFollowUpSession: createAnalysisFollowUpSession(sessions)
+  })
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.listTimeline, (payload) => service.listTimeline(asTimelineInput(payload)))
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.getTimelineEntry, (payload) => service.getTimelineEntry(requiredId(payload, 'id')))
   register(PRODUCT_ID, MARKET_ANALYSIS_IPC_METHODS.getAnalysisRun, (payload) => service.getAnalysisRun(requiredId(payload, 'id')))

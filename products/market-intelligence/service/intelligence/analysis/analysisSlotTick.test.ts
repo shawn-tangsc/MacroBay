@@ -12,6 +12,8 @@ const tick = (overrides: Record<string, unknown> = {}) => {
   const log = vi.fn(async () => undefined)
   const instance = createAnalysisSlotTick({
     now: () => local(14, 9).toISOString(),
+    // 与 suite 的 TZ（Asia/Shanghai）一致：开盘墙上小时按读者时区换算。
+    timeZone: () => 'Asia/Shanghai',
     isDelivered: () => false,
     hasEligibleAnchor: () => true,
     requestSlotAnalysis,
@@ -46,7 +48,8 @@ it('serves the US open when the app opens just after it, not the European one it
   // passed. Only the US session is analysed.
   const requestSlotAnalysis = vi.fn(async () => undefined)
   const instance = createAnalysisSlotTick({
-    now: () => local(14, 1).toISOString(), isDelivered: () => false, hasEligibleAnchor: () => true,
+    now: () => local(14, 1).toISOString(), timeZone: () => 'Asia/Shanghai',
+    isDelivered: () => false, hasEligibleAnchor: () => true,
     requestSlotAnalysis, log: vi.fn(async () => undefined)
   } as never)
   const result = await instance.run()

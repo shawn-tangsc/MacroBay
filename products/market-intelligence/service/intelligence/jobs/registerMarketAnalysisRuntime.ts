@@ -212,9 +212,15 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   newsSentimentQuery?: import('../analysis/analysisNewsSentimentEvidence').AnalysisNewsSentimentQuery
   dataDir: string
   now?: () => string
+  /**
+   * 读者时区（主进程唯一提供者）。缺省 UTC：headless 与绝大多数测试没有读者可问，
+   * 固定值比「回落到运行机器的时区」诚实得多。
+   */
+  timeZone?: () => string
   crossAssetQuery?: (input: { range: '1h' | '24h' | '7d'; asOf: string }) => unknown
 }>): MarketAnalysisRuntime {
   const now = input.now ?? (() => new Date().toISOString())
+  const timeZone = input.timeZone ?? (() => 'UTC')
   // Wiring with no settings service (headless product probes and most tests) keeps the previous
   // behaviour — enabled, following the platform default model — because there is no reader to ask.
   // The product itself always passes the file-backed service, whose default is off.
@@ -232,6 +238,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   const triggerPolicy = createAnalysisTriggerPolicy()
   const analysisOrchestrator = createAnalysisOrchestrator({
     repository,
+    timeZone,
     structuredModelInvocation: input.structuredModelInvocation,
     now,
     idFactory: () => randomUUID(),
@@ -288,6 +295,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
   }
   const slotTick = createAnalysisSlotTick({
     now,
+    timeZone,
     isDelivered: isSlotDelivered,
     isAbandoned: isSlotAbandoned,
     // The schedule only needs something to analyse; see `hasSlotAnchor` for why the analysis
@@ -524,6 +532,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     // 模块再把窗口压到「理论上的上一档盘口」——分析最大跨度 8 小时，关播三天也不会倒灌三天新闻。
     const sentimentSince = newsSentimentSince(runHistory, previousSnapshot?.asOf)
     const withSentiment = await appendAnalysisNewsSentiment(enriched, input.publicQueryService, input.newsSentimentQuery, {
+      timeZone: timeZone(),
       asOf: value.asOf,
       ...(sentimentSince ? { since: sentimentSince } : {})
     }, () => input.pipeline.listRevisions())

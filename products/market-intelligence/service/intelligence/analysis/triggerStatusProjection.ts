@@ -95,11 +95,15 @@ export const triggerStatusPolicy = Object.freeze({
   manualTriggerKeys: ['manual.refresh', 'manual.initial'] as readonly string[]
 })
 
-export function projectTriggerStatus(rows: readonly TriggerStatusRow[] | undefined, run: TriggerStatusRun | undefined): TriggerStatus | null {
+export function projectTriggerStatus(
+  rows: readonly TriggerStatusRow[] | undefined,
+  run: TriggerStatusRun | undefined,
+  timeZone: string
+): TriggerStatus | null {
   if (!run) return null
   const reasonCodes: readonly string[] = Object.values(triggerStatusPolicy.explainableReasonCodes)
   if (triggerStatusPolicy.manualTriggerKeys.includes(run.triggerKey)) {
-    return withSlotOpen({ triggerKey: run.triggerKey, reasonCode: triggerStatusPolicy.explainableReasonCodes.manualRequest, decidedAt: run.queuedAt }, run)
+    return withSlotOpen({ triggerKey: run.triggerKey, reasonCode: triggerStatusPolicy.explainableReasonCodes.manualRequest, decidedAt: run.queuedAt }, run, timeZone)
   }
   // Gate keys and item keys are both explainable, each from its own ledger rows: the gate writes
   // them for the data-driven sources, `analysisTriggerPolicy` and the restart compensation write
@@ -118,7 +122,7 @@ export function projectTriggerStatus(rows: readonly TriggerStatusRow[] | undefin
   const candidates = forThisRun.length > 0 ? forThisRun : explainable.filter(row => !row.analysisRunId)
   if (candidates.length === 0) return null
   const latest = [...candidates].sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0]!
-  return withSlotOpen({ triggerKey: latest.triggerKey, reasonCode: latest.reasonCode, decidedAt: latest.createdAt }, run)
+  return withSlotOpen({ triggerKey: latest.triggerKey, reasonCode: latest.reasonCode, decidedAt: latest.createdAt }, run, timeZone)
 }
 
 /**
@@ -129,10 +133,10 @@ export function projectTriggerStatus(rows: readonly TriggerStatusRow[] | undefin
  * open served at 01:21 the next morning would otherwise be reported as an open that had not happened
  * yet.
  */
-function withSlotOpen(status: TriggerStatus, run: TriggerStatusRun): TriggerStatus {
+function withSlotOpen(status: TriggerStatus, run: TriggerStatusRun, timeZone: string): TriggerStatus {
   const slot = slotForTriggerKey(status.triggerKey)
   if (!slot) return status
-  const open = slotInstantAtOrBefore(slot, new Date(run.queuedAt))
+  const open = slotInstantAtOrBefore(slot, new Date(run.queuedAt), timeZone)
   if (!open) return status
   return {
     ...status,

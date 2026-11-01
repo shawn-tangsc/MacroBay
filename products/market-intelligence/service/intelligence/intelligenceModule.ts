@@ -296,6 +296,11 @@ function shellTimeZone(): string {
   return resolveBriefingTimeZone(modulePlatformHooks)
 }
 
+/** 供产品内其它装配点读取「读者时区」（同一提供者，不另起来源）。 */
+export function currentReaderTimeZone(): string {
+  return shellTimeZone()
+}
+
 function getProductDataDir(): string {
   return join(app.getPath('userData'), 'products', PRODUCT_ID)
 }
@@ -729,6 +734,8 @@ export function getIntelligenceModule(
     })
     const marketAnalysisRuntime = registerMarketAnalysisRuntime({
       jobRuntime,
+      // 开盘时刻按设置的读者时区换算（唯一提供者）。
+      timeZone: shellTimeZone,
       eventBusRuntime: hooks?.eventBusRuntime,
       pipeline,
       publicQueryService,
