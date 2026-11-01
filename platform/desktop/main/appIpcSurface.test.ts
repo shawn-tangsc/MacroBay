@@ -15,6 +15,16 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+
+/**
+ * 顺序断言用的比较：先把两端空白折叠成单空格再比。
+ *
+ * 这些锚点已经长到一行放不下，任何一次 prettier 换行都会让 `toContain` 失败——那是一次
+ * 与语义无关的红，会教会下一个人「重跑一下就好」。折叠空白只影响比较，不改任何断言结构。
+ */
+const collapseWhitespace = (text: string): string => text.replace(/\s+/gu, ' ')
+const looseIndexOf = (source: string, needle: string): number =>
+  collapseWhitespace(source).indexOf(collapseWhitespace(needle))
 const preloadSource = readSource('../preload/index.ts')
 const taskIpcHelperSource = readSource('registerAgentTaskIpcHandlers.ts')
 const generatedProductManifestsSource = readSource('../../../products/generated/productManifests.ts')
@@ -131,7 +141,9 @@ describe('desktop main IPC surface', () => {
     expect(appSource).not.toContain('channelRuntimeService')
     expect(appSource).toContain('if (taskAutomationSmokeProfile.enabled)')
     expect(appSource).toContain('resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled)')
-    expect(appSource).toContain('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
+    expect(collapseWhitespace(appSource)).toContain(
+      collapseWhitespace('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
+    )
     expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
@@ -245,7 +257,7 @@ describe('desktop main IPC surface', () => {
   })
 
   it('creates a visible boot window before product registration and loads the renderer only after sealing product IPC', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     const bootWindow = 'mainWindow = await createMainWindow()'
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
@@ -257,34 +269,34 @@ describe('desktop main IPC surface', () => {
     expect(bootstrapSource).toContain(proxyApply)
     expect(bootstrapSource).toContain(productSeal)
     expect(bootstrapSource).toContain(rendererLoad)
-    expect(bootstrapSource.indexOf(bootWindow)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
-    expect(bootstrapSource.indexOf(proxyApply)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
-    expect(bootstrapSource.indexOf(productRegistration)).toBeLessThan(bootstrapSource.indexOf(productSeal))
-    expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
+    expect(looseIndexOf(bootstrapSource, bootWindow)).toBeLessThan(looseIndexOf(bootstrapSource, productRegistration))
+    expect(looseIndexOf(bootstrapSource, proxyApply)).toBeLessThan(looseIndexOf(bootstrapSource, productRegistration))
+    expect(looseIndexOf(bootstrapSource, productRegistration)).toBeLessThan(looseIndexOf(bootstrapSource, productSeal))
+    expect(looseIndexOf(bootstrapSource, productSeal)).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     expect(bootstrapSource).toContain('platformFetch: getPlatformFetch()')
-    expect(bootstrapSource.indexOf(proxyApply)).toBeLessThan(bootstrapSource.indexOf('platformFetch: getPlatformFetch()'))
+    expect(looseIndexOf(bootstrapSource, proxyApply)).toBeLessThan(looseIndexOf(bootstrapSource, 'platformFetch: getPlatformFetch()'))
   })
 
   it('recovers stale persistent job runs before product startup can enqueue current-process work', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     const staleRecovery = 'jobRuntime.recover()'
     const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
 
     expect(bootstrapSource).toContain(staleRecovery)
-    expect(bootstrapSource.indexOf(staleRecovery)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
+    expect(looseIndexOf(bootstrapSource, staleRecovery)).toBeLessThan(looseIndexOf(bootstrapSource, productRegistration))
   })
 
   it('treats proxy application failure as a startup boundary before products and the normal renderer', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
-    const proxyApplyIndex = bootstrapSource.indexOf(proxyApply)
-    const productRegistrationIndex = bootstrapSource.indexOf(productRegistration)
+    const proxyApplyIndex = looseIndexOf(bootstrapSource, proxyApply)
+    const productRegistrationIndex = looseIndexOf(bootstrapSource, productRegistration)
 
     expect(proxyApplyIndex).toBeLessThan(productRegistrationIndex)
-    expect(proxyApplyIndex).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
+    expect(proxyApplyIndex).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     expect(bootstrapSource.slice(proxyApplyIndex, productRegistrationIndex)).not.toContain('catch')
   })
 
@@ -385,7 +397,7 @@ describe('desktop main IPC surface', () => {
   })
 
   it('registers the panel workspace channels before the boot window and restores after product sealing', () => {
-    const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
+    const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     const compose = 'const panelWorkspace = composePanelWorkspace({'
     const registerChannels = 'panelWorkspace.registerChannels()'
     const bootWindow = 'mainWindow = await createMainWindow()'
@@ -406,7 +418,7 @@ describe('desktop main IPC surface', () => {
     expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(restore))
     expect(bootstrapSource.indexOf(compose)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
     expect(bootstrapSource.indexOf(restore)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
-    expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
+    expect(looseIndexOf(bootstrapSource, productSeal)).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     // 退出走 workspace 有界 flush
     expect(appSource).toContain('await panelWorkspaceForDisposal?.dispose()')
     expect(appSource).toContain('let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null')
