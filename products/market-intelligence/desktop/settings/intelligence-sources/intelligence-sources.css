@@ -518,30 +518,6 @@
   background: color-mix(in srgb, var(--surface) 68%, transparent);
 }
 
-.intelligence-health-value {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: 12px;
-  font-weight: 650;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.intelligence-health-value[data-status='healthy'] {
-  color: var(--accent);
-}
-
-.intelligence-health-value[data-status='degraded'],
-.intelligence-health-value[data-status='failed'] {
-  color: var(--danger);
-}
-
-.intelligence-health-value[data-status='paused'] {
-  color: var(--muted-strong);
-}
-
 .intelligence-translation-preferences {
   gap: 14px;
 }
