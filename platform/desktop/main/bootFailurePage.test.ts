@@ -103,7 +103,8 @@ describe('boot failure page', () => {
     expect(cardRule).toContain('width:100%')
     // flex 子项的 min-width:auto 会让卡片撑到内容最小宽度，`width:100%` 也压不住。
     expect(cardRule).toContain('min-width:0')
-    expect(cardRule).not.toContain('width:472px')
+    // 只断言「不再是固定宽度」：`max-width:472px` 里也含 `width:472px` 这个子串，用 toContain 会误判。
+    expect(cardRule).not.toMatch(/(?:^|[^-\s])width:472px/u)
   })
 
   it('lets only this module turn failure text into markup', () => {
