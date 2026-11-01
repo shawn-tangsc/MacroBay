@@ -285,13 +285,21 @@ describe('CapitalConditionsPanel', () => {
     }
   })
 
-  it('keeps empty and unavailable as short safe states', () => {
+  it('renders the empty state through the platform StateView, not a local sentence', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    for (const [state, expected] of [[{ state: 'empty' as const }, text.empty], [{ state: 'unavailable' as const }, text.unavailable]]) {
-      const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state }))
-      expect(markup).toContain(expected)
-      expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
-    }
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'empty' } }))
+    expect(markup).toContain('data-state="empty"')
+    expect(markup).toContain('data-size="md"')
+    // The panel no longer owns this sentence: the platform state table does.
+    expect(markup).not.toContain(text.empty)
+    expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
+  })
+
+  it('keeps the unavailable state as a short safe state until the reason contract lands', () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' } }))
+    expect(markup).toContain(text.unavailable)
+    expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {

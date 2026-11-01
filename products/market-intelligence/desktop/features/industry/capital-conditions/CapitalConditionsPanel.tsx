@@ -5,12 +5,12 @@ import { Button } from 'antd'
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
 import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 type Text = {
   title: string
   loading: string
-  empty: string
   unavailable: string
   stablecoin: string
   asset: string
@@ -53,7 +53,9 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
       <h2>{text.title}</h2>
       {state.state === 'loading'
         ? <LoadingState label={text.loading} minHeight={140} />
-        : <p>{text[state.state]}</p>}
+        : state.state === 'empty'
+          ? <StateView state="empty" reasonCode="not-yet" />
+          : <p>{text.unavailable}</p>}
       {/* The state above is what the last read returned. Re-reading it changes nothing, so the
           only useful action here is to ask the sources to be collected again. */}
       {onRefresh ? <Button className="mi-capital-conditions__refresh" disabled={refreshing || state.state === 'loading'}
