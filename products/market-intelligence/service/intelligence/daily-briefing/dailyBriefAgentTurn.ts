@@ -114,6 +114,17 @@ function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly 
   })
 }
 
+/**
+ * The sentence the model reads after its reply was rejected.
+ *
+ * The reason has to travel in this text: the model cannot read our logs, so a detail recorded only
+ * there leaves the next attempt guessing — which is exactly the loop that produced three identical
+ * failures in one evening (MI-2-R16).
+ */
+export function repairPromptFor(failureCode: string, failureDetail: string | undefined): string {
+  return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
+}
+
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {
   let document = input.document
   const priorConclusions = input.priorConclusions ?? []
@@ -200,7 +211,7 @@ export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): P
       throwIfAborted(input.signal)
       const repairStage: DailyBriefTurnStage = attempt === 0 ? 'repair-1' : 'repair-2'
       stage({ stage: repairStage, state: 'begin' })
-      const repair = await input.runner.continue(started.sessionId, `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`, undefined, input.signal)
+      const repair = await input.runner.continue(started.sessionId, repairPromptFor(failureCode, failureDetail), undefined, input.signal)
       response = repair.assistantText
       toolInvocations.push(...repair.toolInvocations)
       stage({ stage: repairStage, state: 'success' })

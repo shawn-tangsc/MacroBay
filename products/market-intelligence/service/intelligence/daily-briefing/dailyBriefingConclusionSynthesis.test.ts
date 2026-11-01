@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import { briefingConclusionBasis, validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
+import { repairPromptFor } from './dailyBriefAgentTurn'
 
 const document = (): DailyBriefingDocument => ({
   schemaVersion: 1,
@@ -201,6 +202,34 @@ describe('daily briefing conclusion synthesis', () => {
       equalDoc, [bearishPrior()]
     )
     expect(allowed.ok ? '' : allowed.failureCode).not.toBe('asset-equality-claim')
+  })
+
+  // MI-2-R16: a refusal that names no defect is what turned one rejection into three identical
+  // attempts. Both directions are asserted: a missing field names the field, a bad value names it too.
+  // The model reads the repair sentence, not our logs: whatever the refusal says has to reach it.
+  it('carries the refusal reason into the sentence the model reads next', () => {
+    const repair = repairPromptFor('invalid-conclusion-synthesis', 'missing: outlook')
+    expect(repair).toContain('invalid-conclusion-synthesis')
+    expect(repair).toContain('missing: outlook')
+  })
+
+  it('names the field a reply left out, so the repair round can add it', () => {
+    const missingOutlook: Record<string, unknown> = { ...synthesis() }
+    delete missingOutlook.outlook
+    const result = validateDailyBriefingEditorial(
+      editorial(missingOutlook), document(), 'zh-CN', [], [bearishPrior()]
+    )
+    expect(result).toMatchObject({ ok: false, failureCode: 'invalid-conclusion-synthesis' })
+    expect(result.ok ? '' : result.detail ?? '').toContain('outlook')
+  })
+
+  it('names the field whose value is out of range', () => {
+    const result = validateDailyBriefingEditorial(
+      editorial(synthesis({ confidence: 'certain' as never })), document(), 'zh-CN', [], [bearishPrior()]
+    )
+    expect(result).toMatchObject({ ok: false, failureCode: 'invalid-conclusion-synthesis' })
+    expect(result.ok ? '' : result.detail ?? '').toContain('confidence')
+    expect(result.ok ? '' : result.detail ?? '').toContain('certain')
   })
 
   it('names the citation cap instead of refusing silently when a reply cites too many facts', () => {

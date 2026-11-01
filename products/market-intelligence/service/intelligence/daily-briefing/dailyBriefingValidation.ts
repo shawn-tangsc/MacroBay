@@ -115,7 +115,9 @@ export function validateDailyBriefingEditorial(
     if (!isExact(item, ['factId', 'why'])) return fail('invalid-shape')
     if (!isText(item.factId) || !isText(item.why)) return fail('invalid-shape')
     if (item.why.length > 200) return fail('too-long')
-    if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) return fail('unknown-fact')
+    // The id is the whole diagnosis: without it the repair round can only guess which citation to
+    // drop, which is how one rejection turned into three identical attempts.
+    if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) return fail('unknown-fact', `${item.factId} is not a fact in this edition`)
     if (items.some((existing) => existing.factId === item.factId)) return fail('invalid-shape')
     items.push({ factId: item.factId, why: item.why })
   }
@@ -133,7 +135,7 @@ export function validateDailyBriefingEditorial(
     if (!isExact(entry, ['factId', 'reason'])) return fail('invalid-shape')
     if (!isText(entry.factId) || !isText(entry.reason)) return fail('invalid-shape')
     if (entry.reason.length > 200) return fail('too-long')
-    if (!newsIds.has(entry.factId) && !macroIds.has(entry.factId)) return fail('unknown-fact')
+    if (!newsIds.has(entry.factId) && !macroIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a fact in this edition`)
     if (items.some((shown) => shown.factId === entry.factId) || hidden.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
     hidden.push({ factId: entry.factId, reason: entry.reason })
   }
@@ -148,7 +150,7 @@ export function validateDailyBriefingEditorial(
       if (!isExact(entry, ['eventKey', 'field', 'value', 'sourceName', 'sourceUrl', 'publishedAt'], [])) return fail('invalid-shape')
       if (!isText(entry.eventKey) || !isText(entry.field) || !isText(entry.value) || !isText(entry.sourceName) || !isText(entry.sourceUrl) || !isText(entry.publishedAt)) return fail('invalid-shape')
       const macro = document.news.macro.find((item) => item.eventKey === entry.eventKey)
-      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact')
+      if (!macroIds.has(`macro:${entry.eventKey}`)) return fail('unknown-fact', `macro:${entry.eventKey} is not in this edition`)
       if (entry.field === 'actual' && macro?.actual) return fail('invalid-shape')
       if (!['actual', 'consensus', 'previous', 'reaction'].includes(entry.field)) return fail('invalid-shape')
       const result = results.get(entry.sourceUrl)
@@ -181,7 +183,7 @@ export function validateDailyBriefingEditorial(
   for (const entry of raw.importance) {
     if (!isExact(entry, ['factId', 'tier'], ['reasonText'])) return fail('invalid-shape')
     if (!isText(entry.factId) || !isText(entry.tier)) return fail('invalid-shape')
-    if (!dataIds.has(entry.factId)) return fail('unknown-fact')
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a data fact in this edition`)
     if (entry.tier !== 'must' && entry.tier !== 'support' && entry.tier !== 'reference') return fail('invalid-shape')
     if (entry.reasonText !== undefined && (!isText(entry.reasonText) || entry.reasonText.length > 200)) return fail('too-long')
     if (importance.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
@@ -192,7 +194,7 @@ export function validateDailyBriefingEditorial(
     if (!isExact(entry, ['factId', 'reason'])) return fail('invalid-shape')
     if (!isText(entry.factId) || !isText(entry.reason)) return fail('invalid-shape')
     if (entry.reason.length > 200) return fail('too-long')
-    if (!dataIds.has(entry.factId)) return fail('unknown-fact')
+    if (!dataIds.has(entry.factId)) return fail('unknown-fact', `${entry.factId} is not a data fact in this edition`)
     if (importance.some((shown) => shown.factId === entry.factId) || hiddenData.some((existing) => existing.factId === entry.factId)) return fail('invalid-shape')
     hiddenData.push({ factId: entry.factId, reason: entry.reason })
   }
