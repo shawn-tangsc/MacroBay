@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
+import { ConfigProvider } from 'antd'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -225,7 +227,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root!.render(<DailyBriefingPage
+    root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><DailyBriefingPage
       locale={locale}
       text={locale === 'zh-CN' ? text : englishText}
       eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }}
@@ -233,7 +235,7 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
       {...(onConfigureSources ? { onConfigureSources } : {})}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
       client={client}
-    />)
+    /></ConfigProvider>)
   })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
   return container

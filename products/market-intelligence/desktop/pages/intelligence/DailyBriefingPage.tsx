@@ -375,7 +375,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         {issues.length > 0 ? <>
           <header className="mi-daily-briefing-page__appendix-head">
             <h2>{text.sections.limits}</h2>
-            <Button className="mi-daily-briefing-page__appendix-toggle" autoInsertSpace={false} aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
+            <Button className="mi-daily-briefing-page__appendix-toggle" aria-expanded={issuesOpen} onClick={() => setIssuesOpen((open) => !open)}>
               {issuesOpen ? text.limits.collapse : text.limits.expand}
             </Button>
           </header>
