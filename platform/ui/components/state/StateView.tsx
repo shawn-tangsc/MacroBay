@@ -3,6 +3,7 @@ import type { ReactElement, ReactNode } from 'react'
 import type { StateSize } from '../empty-state'
 import { LoadingState } from '../loading'
 
+import { useStateViewText } from './stateViewText'
 import './stateView.css'
 
 /**
@@ -84,8 +85,11 @@ export type StateViewAction = {
 }
 
 type StateViewBase = {
-  /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传 `(key) => key`）。 */
-  resolveText: (key: string) => string
+  /**
+   * 文案解析入口。**默认不用传**：组件内部走 `useStateViewText()`（语言取自壳层上下文）。
+   * 只有测试需要注入 `(key) => key` 时才传——不要把它当成「产品自带一份文案表」的入口。
+   */
+  resolveText?: (key: StateViewTextKey) => string
   /** 尺寸词只有一个来源（§3）：`lg` 整页 220、`md` 卡内 80、`sm` 本批不开放。 */
   size?: StateSize
   className?: string
@@ -205,6 +209,10 @@ function rootClassName(state: StateViewState, className?: string): string {
  * `normal` 只渲染 `children`，不套壳、不留标题/原因/动作的位置（不是空占位）。
  */
 export function StateView(props: StateViewProps): ReactElement {
+  // 唯一一处取文案：默认走平台，测试可注入。两者共用同一个纯函数，行为不会各漂各的。
+  const contextText = useStateViewText()
+  const resolveText = props.resolveText ?? ((key: string) => contextText(key as StateViewTextKey))
+
   if (props.state === 'normal') {
     return <>{props.children}</>
   }
@@ -215,13 +223,13 @@ export function StateView(props: StateViewProps): ReactElement {
     // 等待只走平台唯一的加载组件：不在这里再写旋转，也不再包一层 live region。
     return (
       <LoadingState
-        label={props.resolveText('ui.state.loading')}
+        label={resolveText('ui.state.loading')}
         {...(minHeight === undefined ? {} : { minHeight })}
       />
     )
   }
 
-  const { state, reasonCode, resolveText } = props
+  const { state, reasonCode } = props
   const keys = stateViewTextKeys(state, reasonCode)
   // `details` 只挂在 error 上（判别联合已挡住别的态传它），收成局部量给 JSX 收窄。
   const details = state === 'error' ? props.details : undefined

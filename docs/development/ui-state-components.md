@@ -35,7 +35,7 @@ instead of falling back to a generic sentence.
 | Prop | Type | Required for | Meaning |
 | --- | --- | --- | --- |
 | `state` | `StateViewState` | always | Which of the six states this region is in. |
-| `resolveText` | `(key: string) => string` | always | The caller's text resolver. The component holds no copy and imports no i18n. |
+| `resolveText` | `(key: StateViewTextKey) => string` | optional | Test-only override. Production resolves through `useStateViewText()`, whose copy lives once in `platform/ui/components/state/stateViewText.ts`. |
 | `reasonCode` | a closed set, one per state | `empty` / `error` / `disabled` / `permission` | A **code**, never a sentence. The key is `ui.state.<state>.reason.<code>`. A code that belongs to another state does not compile. |
 | `action` | `{ labelKey, onSelect }` | `empty` except `not-yet`; `error`; `disabled` / `target-disabled`; `permission`; never for `not-yet`, `capability-not-wired` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
 | `details` | `{ summaryKey, bodyKey }` | `error` only | Troubleshooting detail, folded by default. |
@@ -98,7 +98,7 @@ a pixel value from a call site, and do not write a second `min-height` in page C
 
 - Title key: `ui.state.<state>`.
 - Reason key: `ui.state.<state>.reason.<code>`.
-- The component resolves both through the `resolveText` you pass in; it never imports a text table.
+- By default the component resolves copy through `useStateViewText()` (language from `ShellLanguageProvider`); `resolveText` is a test-only override. The copy table and the action-key constants live once in `platform/ui`.
 - A new reason code is a contract change: get it approved, add the sentence in **both** languages in
   the same commit, then use it. Product pages must not invent a code or a sentence of their own.
 

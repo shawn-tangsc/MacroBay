@@ -34,7 +34,7 @@ import { StateView } from '@platform/ui/components/state'
 | 字段 | 类型 | 必填于 | 含义 |
 | --- | --- | --- | --- |
 | `state` | `StateViewState` | 总是 | 这个区域现在是六态里的哪一态。 |
-| `resolveText` | `(key: string) => string` | 总是 | 调用方的文案解析入口。组件内零文案、不 import i18n。 |
+| `resolveText` | `(key: StateViewTextKey) => string` | 可选 | 仅供测试注入。生产走 `useStateViewText()`（语言取自壳层上下文），句子唯一一份在 `platform/ui/components/state/stateViewText.ts`。 |
 | `reasonCode` | 闭集，每个态一套 | `empty` / `error` / `disabled` / `permission` | 原因**码**，不是句子。键是 `ui.state.<state>.reason.<code>`。别的态的码用在这里编译不过。 |
 | `action` | `{ labelKey, onSelect }` | `empty`（除 `not-yet`）、`error`、`disabled` / `target-disabled`、`permission` 必填；`not-yet`、`capability-not-wired` 不许有 | 至多一个动作，文案也只收键。读者没有可做的事时，传动作编译不过。 |
 | `details` | `{ summaryKey, bodyKey }` | 仅 `error` | 排障详情，默认折叠。 |
@@ -96,7 +96,7 @@ import { StateView } from '@platform/ui/components/state'
 
 - 标题键：`ui.state.<state>`。
 - 原因键：`ui.state.<state>.reason.<code>`。
-- 两个键都经你传入的 `resolveText` 解析；组件不 import 任何文案表。
+- 默认经 `useStateViewText()` 解析（语言取自 `ShellLanguageProvider`），`resolveText` 只是测试用的覆盖入口；句子表与动作键常量都只有一份，在 `platform/ui`。
 - 新增原因码属于契约变更：先经架构师批准，更正反两语言同笔补句，再使用。产品页不许自己造码，
   也不许自己造句子。
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { resolvePlatformTextKey } from '@renderer/i18n/platformText'
+import { useStateViewText } from '@platform/ui/components/state/stateViewText'
 
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { newsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
@@ -44,7 +44,8 @@ export function NewsSentimentFeature(props: {
   const language = props.language ?? 'zh-CN'
   const translationEnabled = language !== 'en-US'
   // StateView prints platform state sentences; the product only chooses the state and its code.
-  const resolveStateText = (key: string): string => resolvePlatformTextKey(language, key)
+  // 语言来自壳层上下文——产品不许自带语言参数，也不再从 app 层借解析函数。
+  const resolveStateText = useStateViewText()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
