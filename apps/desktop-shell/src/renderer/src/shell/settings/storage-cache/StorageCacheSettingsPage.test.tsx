@@ -1,8 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+import { resolveStateViewText, STATE_VIEW_ACTION_KEYS, stateViewTextKeys } from '@platform/ui/components/state'
 import { platformText } from '../../../i18n/platformText'
 import { StorageCacheSettingsPage } from './StorageCacheSettingsPage'
+
+/** Mutable so a test can render the same page in its failed-read state. */
+const mockFeed = vi.hoisted(() => ({
+  loading: false,
+  error: null as string | null,
+  caches: [] as unknown[]
+}))
 
 const inspectCache = vi.fn(async () => undefined)
 const clearCache = vi.fn(async () => ({
@@ -77,9 +86,9 @@ const caches = [
 
 vi.mock('./useStorageCacheSettings', () => ({
   useStorageCacheSettings: () => ({
-    loading: false,
-    error: null,
-    caches,
+    loading: mockFeed.loading,
+    error: mockFeed.error,
+    caches: mockFeed.caches,
     operations: [
       {
         operationId: 'op-1',
@@ -102,6 +111,9 @@ vi.mock('./useStorageCacheSettings', () => ({
 
 describe('Storage and Cache settings UI', () => {
   beforeEach(() => {
+    mockFeed.loading = false
+    mockFeed.error = null
+    mockFeed.caches = caches
     inspectCache.mockClear()
     clearCache.mockClear()
     compactCache.mockClear()
@@ -147,5 +159,20 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).toContain('Agent 运行时兼容性')
     expect(markup).toContain(labels.metaSummary(2, '1.1 KB', 2, 1))
     expect(markup).not.toContain('Derived analysis cache')
+  })
+  it('renders an empty list as a failed read and offers the retry that re-reads', () => {
+    // The registry always has entries, so no rows means the read failed; it must not say "none yet".
+    mockFeed.caches = []
+    const markup = renderToStaticMarkup(
+      <ShellLanguageProvider language="en-US">
+        <StorageCacheSettingsPage language="en-US" />
+      </ShellLanguageProvider>
+    )
+
+    expect(markup).toContain('data-state="error"')
+    expect(markup).toContain('data-state-icon="error"')
+    expect(markup).toContain(resolveStateViewText('en-US', stateViewTextKeys('error', 'unreadable').reason))
+    expect(markup).toContain(resolveStateViewText('en-US', STATE_VIEW_ACTION_KEYS.retry))
+    expect(markup).not.toContain('data-state="empty"')
   })
 })

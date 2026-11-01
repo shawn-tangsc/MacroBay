@@ -1,10 +1,11 @@
-import { Button, Empty, Switch, message } from 'antd'
+import { Button, Switch, message } from 'antd'
 import { ChevronRight, RotateCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { StorageCacheDetailDrawer } from './StorageCacheDetailDrawer'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
 import { StorageCacheTable } from './StorageCacheTable'
@@ -144,8 +145,15 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
             <LoadingState label={labels.loading} />
           </div>
         ) : state.caches.length === 0 ? (
+          // The registry always has entries, so an empty list is a failed read, not "no caches yet":
+          // it renders the shared error state with the retry that actually re-reads.
           <div className="storage-cache-placeholder">
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={labels.noCaches} />
+            <StateView
+              state="error"
+              reasonCode="unreadable"
+              size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void state.reload() }}
+            />
           </div>
         ) : (
           <section className="storage-cache-panel">

@@ -1003,6 +1003,19 @@ export type PlatformText = {
     toastDescription: string
     popupEnabled: string
     popupDescription: string
+    bell: string
+    bellUnread: (count: string) => string
+    centerTitle: string
+    centerUnreadGroup: string
+    centerEarlierGroup: string
+    centerMarkAllRead: string
+    centerMarkRead: string
+    centerReadDone: string
+    centerDeleteRead: string
+    centerDeleteReadConfirm: string
+    centerDeleteReadDone: (count: string) => string
+    centerDeleteReadEmpty: string
+    centerCancel: string
     channelsHeading: string
   }
   webSearch: {
@@ -1184,7 +1197,6 @@ export type PlatformText = {
     recheckFailed: string
     flagSensitive: string
     filterEmpty: string
-    noCaches: string
     emptyValue: string
     ownerPlatform: string
     ownerProduct: (productId: string) => string
@@ -2062,7 +2074,20 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       toastEnabled: '应用内提示',
       toastDescription: '在应用内显示轻量横幅，适合日常运行状态与普通提醒。',
       popupEnabled: '高优先级弹窗',
-      popupDescription: '为高优先级事件提供更明显的应用内弹窗提示。'
+      popupDescription: '为高优先级事件提供更明显的应用内弹窗提示。',
+      bell: '通知',
+      bellUnread: (count) => `通知，${count} 条未读`,
+      centerTitle: '通知',
+      centerUnreadGroup: '未读',
+      centerEarlierGroup: '已读',
+      centerMarkAllRead: '全部标为已读',
+      centerMarkRead: '标为已读',
+      centerReadDone: '已全部标为已读',
+      centerDeleteRead: '删除已读',
+      centerDeleteReadConfirm: '删除所有已读通知？此操作不可撤销；未读通知不会被删除。',
+      centerDeleteReadDone: (count) => `已删除 ${count} 条已读通知`,
+      centerDeleteReadEmpty: '没有已读通知可删。',
+      centerCancel: '取消'
     },
     webSearch: {
       title: '网页搜索',
@@ -2244,7 +2269,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       recheckFailed: '重新检查失败',
       flagSensitive: '含用户内容',
       filterEmpty: '此分类下没有缓存',
-      noCaches: '当前没有已注册缓存',
       emptyValue: '暂无',
       ownerPlatform: '平台',
       ownerProduct: (productId) => `产品：${productId}`,
@@ -3140,7 +3164,20 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       toastEnabled: 'In-app toasts',
       toastDescription: 'Show lightweight banners inside the app for routine status changes and reminders.',
       popupEnabled: 'High-priority popups',
-      popupDescription: 'Show stronger in-app popups for events that need immediate attention.'
+      popupDescription: 'Show stronger in-app popups for events that need immediate attention.',
+      bell: 'Notifications',
+      bellUnread: (count) => `Notifications, ${count} unread`,
+      centerTitle: 'Notifications',
+      centerUnreadGroup: 'Unread',
+      centerEarlierGroup: 'Earlier',
+      centerMarkAllRead: 'Mark all as read',
+      centerMarkRead: 'Mark as read',
+      centerReadDone: 'All marked as read',
+      centerDeleteRead: 'Delete read',
+      centerDeleteReadConfirm: 'Delete every read notification? This cannot be undone; unread notifications are not deleted.',
+      centerDeleteReadDone: (count) => `Deleted ${count} read notifications`,
+      centerDeleteReadEmpty: 'There are no read notifications to delete.',
+      centerCancel: 'Cancel'
     },
     webSearch: {
       title: 'Web Search',
@@ -3322,7 +3359,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       recheckFailed: 'Recheck failed',
       flagSensitive: 'User content',
       filterEmpty: 'No caches in this category',
-      noCaches: 'No registered caches yet',
       emptyValue: 'None',
       ownerPlatform: 'Platform',
       ownerProduct: (productId) => `Product: ${productId}`,
