@@ -188,15 +188,19 @@ export function createClaudeCodeAgentSdkOptions(
       }
     },
     hooks: {
-      // Which servers are external is decided here, by the composition root: the SDK registers the
-      // user's own servers under their display names, while the platform's own servers arrive
-      // through `additionalMcpServers`. The guard therefore judges membership, never the mcp__
-      // prefix — that prefix also covers macrobay_web, agent-skills, agent-task-management and the
-      // product tools, whose output must reach the model unchanged.
+      // The guard defaults to guarding every mcp__ result and excludes only the servers this
+      // platform builds itself (`additionalMcpServers`: macrobay_web, agent-skills,
+      // agent-task-management, product tools). Judging by the user's display names cannot work:
+      // the SDK rewrites a display name into the wire name (non-alphanumerics become `_`), and a
+      // mismatch would silently pass external content through.
       PostToolUse: [
         {
           matcher: '*',
-          hooks: [createExternalMcpPostToolUseGuard({ externalServerNames: Object.keys(externalMcpServers) })]
+          hooks: [
+            createExternalMcpPostToolUseGuard({
+              platformServerNames: Object.keys(options.additionalMcpServers ?? {})
+            })
+          ]
         }
       ],
       PreToolUse: [

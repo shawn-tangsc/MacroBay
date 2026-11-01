@@ -81,7 +81,7 @@ server.connect(new StdioServerTransport()).catch(() => process.exit(1))
                 }
               : {
                   id: 'msg_1', type: 'message', role: 'assistant', model: 'probe',
-                  content: [{ type: 'tool_use', id: 'toolu_1', name: 'mcp__probe__echo', input: {} }],
+                  content: [{ type: 'tool_use', id: 'toolu_1', name: 'mcp__My_GitHub-Server__echo', input: {} }],
                   stop_reason: 'tool_use', stop_sequence: null,
                   usage: { input_tokens: 10, output_tokens: 5 }
                 }
@@ -110,7 +110,7 @@ server.connect(new StdioServerTransport()).catch(() => process.exit(1))
           ANTHROPIC_API_KEY: 'probe-key'
         },
         permissionMode: 'bypassPermissions',
-        allowedTools: ['mcp__probe__echo'],
+        allowedTools: ['mcp__My_GitHub-Server__echo'],
         disallowedTools: []
       },
       metadata: {
@@ -118,7 +118,8 @@ server.connect(new StdioServerTransport()).catch(() => process.exit(1))
         mcpServers: [
           {
             serverId: 'probe',
-            serverName: 'probe',
+            // A display name that the SDK must sanitise into the wire name: `My_GitHub-Server`.
+            serverName: 'My GitHub-Server',
             transport: 'stdio',
             command: process.execPath,
             args: [join(workDir, 'mcp-server.cjs')]
@@ -149,7 +150,7 @@ server.connect(new StdioServerTransport()).catch(() => process.exit(1))
     expect(withToolResult.length).toBeGreaterThan(0)
     const toolResult = JSON.stringify(withToolResult[0].messages)
     expect(toolResult).toContain('external tool server')
-    expect(toolResult).toContain('probe')
+    expect(toolResult).toContain('My_GitHub-Server')
     expect(toolResult).toContain('echo')
     expect(toolResult).toContain('[WARNING: Suspicious injection patterns detected: ignore-previous')
     expect(toolResult).toContain('<<<EXTERNAL_UNTRUSTED_CONTENT boundary=')

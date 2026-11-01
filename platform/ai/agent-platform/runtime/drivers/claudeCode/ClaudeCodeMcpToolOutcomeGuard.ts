@@ -6,18 +6,21 @@ import { guardExternalContent, type ExternalContentMetadata } from '../../../cha
  * Guards tool results that come from **externally configured MCP servers** before the model reads
  * them, on the SDK-direct path that never passes through our own host.
  *
- * Which servers count as external is decided by the caller: the composition root knows which
- * servers the user configured and which ones this platform builds itself. The four platform-owned
- * servers share the `mcp__` prefix (`macrobay_web`, `agent-skills`, `agent-task-management`, product
- * tools), so a prefix match would label our own data untrusted and wrap it twice — the judgement is
- * membership in the external set, never the prefix.
+ * The judgement defaults to guarding: every `mcp__` tool result is treated as external unless the
+ * server is one this platform builds itself. The reason is asymmetry — the SDK derives the wire
+ * name from a server's display name by replacing non-alphanumerics (`My GitHub-Server` becomes
+ * `My_GitHub-Server`), the rule is undocumented and lossy, and a mismatch would silently let
+ * external content through with no boundary. A false positive over our own data is visible and
+ * fixable; a false negative on a stranger's text is neither.
  *
  * `updatedToolOutput` replaces only the copy sent to the model; the stored transcript keeps the
- * original text. Consequently this guard says nothing about replay or later re-ingestion of stored
- * results: those paths must run the guard again.
+ * original text. That is why "the guard is wired" never means "the archive is protected": any path
+ * that feeds a stored result back into the model (replay, summarising, re-analysis) must run the
+ * guard again, because the stored copy has never passed it.
  */
 
-export type ExternalMcpToolIdentity = {
+export type GuardedMcpToolIdentity = {
+  /** Server segment exactly as it appears in the wire tool name. */
   serverName: string
   toolName: string
 }
@@ -29,26 +32,28 @@ export type McpPostToolUseEvent = {
 
 const BOUNDARY_MARKER = '<<<EXTERNAL_UNTRUSTED_CONTENT'
 
-/** `mcp__<serverName>__<tool>` → the server, but only when that server is user-configured. */
-export function resolveExternalMcpTool(
+/**
+ * Returns the server/tool split for `mcp__<server>__<tool>`, or null when the result must pass
+ * through untouched: not an MCP tool at all, or one of the platform's own servers.
+ */
+export function resolveGuardedMcpTool(
   toolName: string | undefined,
-  externalServerNames: readonly string[]
-): ExternalMcpToolIdentity | null {
+  platformServerNames: readonly string[]
+): GuardedMcpToolIdentity | null {
   if (!toolName || !toolName.startsWith('mcp__')) return null
-  for (const serverName of externalServerNames) {
-    const prefix = `mcp__${serverName}__`
-    if (toolName.startsWith(prefix)) {
-      return { serverName, toolName: toolName.slice(prefix.length) }
-    }
-  }
-  return null
+  if (platformServerNames.some((name) => toolName.startsWith(`mcp__${name}__`))) return null
+
+  const rest = toolName.slice('mcp__'.length)
+  const separator = rest.indexOf('__')
+  if (separator < 0) return null
+  return { serverName: rest.slice(0, separator), toolName: rest.slice(separator + 2) }
 }
 
 export function createExternalMcpPostToolUseGuard(input: {
-  externalServerNames: readonly string[]
+  platformServerNames: readonly string[]
 }): (event: McpPostToolUseEvent) => Promise<Record<string, unknown>> {
   return async (event) => {
-    const identity = resolveExternalMcpTool(event.tool_name, input.externalServerNames)
+    const identity = resolveGuardedMcpTool(event.tool_name, input.platformServerNames)
     if (!identity) return {}
 
     const metadata: ExternalContentMetadata = {

@@ -24,7 +24,8 @@ const MAX_SCAN_DEPTH = 6
  * carry text the model may read, and skipping them would leave a field-sized hole.
  *
  * Applies to the path we own (`McpRuntimeServerHostFactory.invokeTool`). Tool calls the SDK makes
- * through its own connection never reach this function — that path is a known gap, not a covered one.
+ * through its own connection do not reach this function; that path is covered separately by the
+ * `PostToolUse` hook in `ClaudeCodeMcpToolOutcomeGuard`, which guards the copy sent to the model.
  */
 export function guardMcpToolInvokeResult(
   result: McpRuntimeToolInvokeResult,
