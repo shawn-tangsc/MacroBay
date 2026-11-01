@@ -23,7 +23,13 @@ const MEASUREMENT_TESTS = [
   'platform/ai/agent-platform/channels/ChannelInboundPaginationCost.test.ts',
   // 这条扫全仓 import 图（读上千个文件），单跑 1.4 秒、并发时撞 5 秒默认预算：它量的是文件系统，
   // 不是功能。两条都按同一口径进串行池，功能断言仍留在主 run。
-  'platform/ai/agent-platform/channels/channelTestSupportBoundary.test.ts'
+  'platform/ai/agent-platform/channels/channelTestSupportBoundary.test.ts',
+  // 「10 万条回执 + 1 万条工作项」的分页预算：同机实测 899ms–2552ms，量的是有界扫描的代价。
+  // 5 秒默认预算下并发时会撞线，而这条断言要的是绝对预算，不是负载。
+  'platform/ai/agent-platform/channels/ChannelInboundService.test.ts',
+  // 「5000 条审计上限的清理」：同机单跑 3.2s–16.2s（事件循环被清理页占满），并发下必然超 5 秒。
+  // 它量的是清理代价，功能断言另有覆盖。
+  'platform/ai/agent-platform/channels/slack/SlackRuntimeManager.test.ts'
 ]
 
 export default {
