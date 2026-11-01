@@ -113,12 +113,14 @@ it('reports an empty window instead of rendering nothing', async () => {
   expect(host.textContent).toContain(text.empty)
 })
 
-it('reports unavailable data and offers a refresh', async () => {
+it('reports a readable failure through the shared state view and offers a retry', async () => {
   const onRefresh = vi.fn()
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'unavailable' }}
     onOpenCalendar={() => undefined} onRefresh={onRefresh} text={text} />)
-  expect(host.textContent).toContain(text.unavailable)
-  await act(async () => host.querySelector('button.ant-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+  // The sentence now comes from the platform's state table; the card no longer owns a copy of it.
+  expect(host.textContent).not.toContain(text.unavailable)
+  expect(host.querySelector('.state-view')).not.toBeNull()
+  await act(async () => host.querySelector('.state-view__action')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   expect(onRefresh).toHaveBeenCalledTimes(1)
 })
 

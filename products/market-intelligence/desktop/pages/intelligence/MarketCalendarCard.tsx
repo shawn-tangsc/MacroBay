@@ -1,5 +1,6 @@
 import { CalendarDays, Copy, RefreshCw } from 'lucide-react'
 import { Button, Tooltip } from 'antd'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
 import type { CrossAssetId } from '../../../contracts/crossAssetObservationContracts'
 import { formatReadableAnalysisValue, readableAnalysisName } from '../../../contracts/marketAnalysisReadableText'
@@ -213,9 +214,8 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
         they are looking at while scanning further down the schedule — so it stays outside the
         scroll region instead of travelling with the rows. */}
     <div className="mi-calendar-card__body">
-      {projection.state === 'unavailable' ? <p className="mi-calendar-card__state">{text.unavailable}
-        {onRefresh ? <Button icon={<RefreshCw aria-hidden="true" size={13} />} onClick={onRefresh} size="small" type="link">{text.refresh}</Button> : null}
-      </p> : null}
+      {projection.state === 'unavailable' ? <StateView state="error" reasonCode="unreadable" size="md"
+        {...(onRefresh ? { action: { labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh } } : {})} /> : null}
       {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
       {projection.state === 'available' && projection.today.length === 0
         ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
