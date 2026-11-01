@@ -71,24 +71,24 @@ needs one gets the code and the key in the same change, never the key on its own
 
 | `state` | `reasonCode` | Action | Meaning |
 | --- | --- | --- | --- |
-| `empty` | `never-created` | required: create | Nothing has ever been created. |
-| `empty` | `filtered-out` | required: clear the filter | There is data; the filter hides it. |
-| `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
-| `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
+| `empty` | `never-created` | required: create — `create` | Nothing has ever been created. |
+| `empty` | `filtered-out` | required: clear the filter — `clear-filter` | There is data; the filter hides it. |
+| `empty` | `no-target-bound` | required: bind a target — `bind-target` | No target is bound yet. |
+| `empty` | `nothing-enabled` | required: enable — `enable` | Nothing is enabled. |
 | `empty` | `none-installed` | required: one recovery per site — `install` (a list to pick from) / `focus-form` (a form on screen) / `bind-target` (a target to bind) / `open-settings` (no entry here) | Nothing has ever been installed or bound here; the reader can fix it. |
-| `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
+| `empty` | `no-target-selected` | required: focus the selector — `select-target` / `focus-form` | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | forbidden | It only appears once something has happened; a button here would be a fake action. |
-| `empty` | `never-ran` | required: run it now | Nothing has run yet; the reader can start it. Kept apart from `not-yet`, which is a fact with nothing to do. |
-| `empty` | `older-than-window` | required: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
-| `empty` | `nothing-in-window` | required: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
-| `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
-| `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
-| `error` | `operation-failed` | required: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
-| `error` | `needs-restart` | required: restart the app | A local interface is missing; only a restart loads it. |
+| `empty` | `never-ran` | required: run it now — `run-now` | Nothing has run yet; the reader can start it. Kept apart from `not-yet`, which is a fact with nothing to do. |
+| `empty` | `older-than-window` | required: view all — `widen-time-window` | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
+| `empty` | `nothing-in-window` | required: view all — `widen-time-window` | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
+| `error` | `unreadable` | required: retry — `retry` | The data could not be read — this is not "there is none". |
+| `error` | `unavailable` | required: check the source — `check-source` / `retry` / `refresh` | The source itself is unavailable; retrying blindly achieves nothing. |
+| `error` | `operation-failed` | required: retry — `retry` | A write (create, save, update, delete) did not go through — this is not a read failure. |
+| `error` | `needs-restart` | required: restart the app — `restart-app` | A local interface is missing; only a restart loads it. |
 | `disabled` | `capability-not-wired` | forbidden | The platform side is not connected; nothing is wrong on the reader's side. |
-| `disabled` | `target-disabled` | required: enable | The target was switched off. |
-| `disabled` | `precondition-unsaved` | required: save | The form has unsaved changes; saving unlocks it. |
-| `permission` | `not-granted` | required: open system settings | Only for capabilities where the system can answer whether permission was granted. |
+| `disabled` | `target-disabled` | required: enable — `enable` | The target was switched off. |
+| `disabled` | `precondition-unsaved` | required: save — `save` | The form has unsaved changes; saving unlocks it. |
+| `permission` | `not-granted` | required: open system settings — `open-system-settings` | Only for capabilities where the system can answer whether permission was granted. |
 
 ### Sizes
 

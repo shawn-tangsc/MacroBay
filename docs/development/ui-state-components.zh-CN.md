@@ -67,24 +67,24 @@ import { StateView } from '@platform/ui/components/state'
 
 | `state` | `reasonCode` | 动作 | 含义 |
 | --- | --- | --- | --- |
-| `empty` | `never-created` | 必填：创建 | 从来没有创建过。 |
-| `empty` | `filtered-out` | 必填：清除筛选 | 有数据，被当前筛选挡住。 |
-| `empty` | `no-target-bound` | 必填：去绑定 | 目标还没绑。 |
-| `empty` | `nothing-enabled` | 必填：去启用 | 一个都没启用。 |
+| `empty` | `never-created` | 必填：创建 —— `create` | 从来没有创建过。 |
+| `empty` | `filtered-out` | 必填：清除筛选 —— `clear-filter` | 有数据，被当前筛选挡住。 |
+| `empty` | `no-target-bound` | 必填：去绑定 —— `bind-target` | 目标还没绑。 |
+| `empty` | `nothing-enabled` | 必填：去启用 —— `enable` | 一个都没启用。 |
 | `empty` | `none-installed` | 必填：按站点选一种恢复方式——`install`（有列表可挑）/ `focus-form`（同屏有表单）/ `bind-target`（已有目标可绑）/ `open-settings`（本屏给不了入口） | 这里从来没有装过或绑定过；读者自己能解决。 |
-| `empty` | `no-target-selected` | 必填：聚焦选择区 | 目标可以挑，但还没选。 |
+| `empty` | `no-target-selected` | 必填：聚焦选择区 —— `select-target` / `focus-form` | 目标可以挑，但还没选。 |
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现；在这里给按钮就是假动作。 |
-| `empty` | `never-ran` | 必填：现在跑一次 | 一次都还没跑过，读者能自己启动。与 `not-yet`（事实、无事可做）分开，是一个码装两种处境时拆出来的。 |
-| `empty` | `older-than-window` | 必填：查看全部 | 有数据，但都在这段窗口之外——这是「查过了，有」，不是「还没到」。 |
-| `empty` | `nothing-in-window` | 必填：查看全部 | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。 |
-| `error` | `unreadable` | 必填：重试 | 没读出来，不是「没有」。 |
-| `error` | `unavailable` | 必填：检查来源 | 数据源本身不可用，盲目重试没有意义。 |
-| `error` | `operation-failed` | 必填：重试 | 写操作（创建、保存、更新、删除）没成功——不是读失败。 |
-| `error` | `needs-restart` | 必填：重启应用 | 本地接口缺失，只有重启才加载。 |
+| `empty` | `never-ran` | 必填：现在跑一次 —— `run-now` | 一次都还没跑过，读者能自己启动。与 `not-yet`（事实、无事可做）分开，是一个码装两种处境时拆出来的。 |
+| `empty` | `older-than-window` | 必填：查看全部 —— `widen-time-window` | 有数据，但都在这段窗口之外——这是「查过了，有」，不是「还没到」。 |
+| `empty` | `nothing-in-window` | 必填：查看全部 —— `widen-time-window` | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。 |
+| `error` | `unreadable` | 必填：重试 —— `retry` | 没读出来，不是「没有」。 |
+| `error` | `unavailable` | 必填：检查来源 —— `check-source` / `retry` / `refresh` | 数据源本身不可用，盲目重试没有意义。 |
+| `error` | `operation-failed` | 必填：重试 —— `retry` | 写操作（创建、保存、更新、删除）没成功——不是读失败。 |
+| `error` | `needs-restart` | 必填：重启应用 —— `restart-app` | 本地接口缺失，只有重启才加载。 |
 | `disabled` | `capability-not-wired` | 不许有 | 平台侧没接通，读者没做错。 |
-| `disabled` | `target-disabled` | 必填：去启用 | 目标被停用了。 |
-| `disabled` | `precondition-unsaved` | 必填：保存 | 表单还没保存，保存之后才能继续。 |
-| `permission` | `not-granted` | 必填：去系统设置 | 只用于系统能回答「授没授权」的能力。 |
+| `disabled` | `target-disabled` | 必填：去启用 —— `enable` | 目标被停用了。 |
+| `disabled` | `precondition-unsaved` | 必填：保存 —— `save` | 表单还没保存，保存之后才能继续。 |
+| `permission` | `not-granted` | 必填：去系统设置 —— `open-system-settings` | 只用于系统能回答「授没授权」的能力。 |
 
 ### 尺寸
 
