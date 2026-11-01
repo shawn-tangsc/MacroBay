@@ -854,6 +854,8 @@ export const productText = {
                 detailLabel: '详情',
                 suggestionLabel: '建议',
                 unknownCode: '未知原因',
+                // 结论校验类的失败码（缺字段/写法不合规）过去落到「未知原因」，读者看不出该改什么方向。
+                conclusionRejected: '结论未通过校验：缺字段或写法不合规',
                 advice: {
                   model: '打开模型服务或 AI 设置，确认供应商已启用、API Key 已填写，并选择一个可用模型后重试。',
                   retryOrModel: '换一个模型，或稍后重新生成；若反复出现，请在 AI 设置里换用输出上限更高的模型。',
@@ -2686,6 +2688,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 detailLabel: 'Details',
                 suggestionLabel: 'Suggested fix',
                 unknownCode: 'Unknown cause',
+                conclusionRejected: 'The conclusion failed validation: a field is missing or the wording does not match the contract',
                 advice: {
                   model: 'Open the model service or AI settings, confirm the provider is enabled and has an API key, then pick an available model and retry.',
                   retryOrModel: 'Switch to another model, or regenerate later; if it keeps happening, choose a model with a higher output limit in AI settings.',

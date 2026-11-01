@@ -27,3 +27,48 @@ export function readableFailureDetail(
   if (!cleaned) return undefined
   return cleaned.length > FAILURE_DETAIL_LIMIT ? `${cleaned.slice(0, FAILURE_DETAIL_LIMIT)}…` : cleaned
 }
+
+export type BriefFailureAdvice = 'model' | 'retryOrModel' | 'retryOrSettings' | 'data' | 'system'
+
+/**
+ * The reason a generation stopped is a machine code from the service; the panel shows a readable
+ * label and a next step instead. Model/provider failures send the reader to model settings, output
+ * failures to a retry, and collection failures to the sources.
+ */
+export function failureAdvice(code: string | undefined): BriefFailureAdvice {
+  switch (code) {
+    case 'model-unavailable':
+    case 'model-not-ready':
+    case 'provider-disabled':
+    case 'missing-api-key':
+      return 'model'
+    case 'editorial-timeout':
+    case 'agent-turn-output-truncated':
+    case 'timeout':
+      return 'retryOrModel'
+    case 'source-failed':
+    case 'candidate-overflow':
+    case 'build-failed':
+      return 'data'
+    case 'store-failed':
+    case 'time-invalid':
+      return 'system'
+    default:
+      return 'retryOrSettings'
+  }
+}
+
+/** Conclusion-validation failures: the reader is told the class, never the internal ids behind it. */
+const conclusionFailureCodes: ReadonlySet<string> = new Set([
+  'invalid-conclusion-synthesis', 'missing-conclusion-synthesis', 'missing-conclusion-evidence',
+  'missing-conclusion-divergence', 'missing-mechanism', 'data-only-summary', 'missing-outlook',
+  'repeated-direction', 'duplicate-statement', 'forbidden-forecast', 'invalid-number-format',
+  'copied-conclusion', 'asset-equality-claim'
+])
+
+/** The reader-facing name of a failure: a known code's own sentence, or the class it belongs to. */
+export function briefFailureCodeLabel(code: string | undefined, labels: Readonly<{ failure: Record<string, string>; failurePanel: Readonly<{ unknownCode: string; conclusionRejected: string }> }>): string {
+  if (!code) return labels.failurePanel.unknownCode
+  return labels.failure[code]
+    ?? (conclusionFailureCodes.has(code) ? labels.failurePanel.conclusionRejected : labels.failurePanel.unknownCode)
+}

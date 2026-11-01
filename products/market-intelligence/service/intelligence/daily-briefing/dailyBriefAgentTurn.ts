@@ -1,6 +1,6 @@
 import type { BriefingMarketRow, BriefingNextItem, BriefingPriorConclusion, BriefingPulseRow, BriefingValueFormat, DailyBriefingDocument, DailyBriefingLocale, DailyBriefingReadingState } from '../../../contracts/dailyBriefing'
 import { dailyBriefingPolicy } from '../../../contracts/dailyBriefing'
-import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt } from './dailyBriefingPrompt'
+import { buildDailyBriefingPrompt, buildDailyBriefingSelectionPrompt, repairPromptFor } from './dailyBriefingPrompt'
 import { applyDailyBriefingEditorial, hasBriefingNextTransmission, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { dailyBriefEditionKey, dailyBriefSessionCopy, dailyBriefSessionCopyText } from './dailyBriefEditorSessionNaming'
@@ -112,17 +112,6 @@ function applyBackfillFacts(document: DailyBriefingDocument, outcomes: readonly 
     ...document,
     data: Object.freeze({ ...document.data, market: Object.freeze(document.data.market.map(patch)), funds: Object.freeze(document.data.funds.map(patch)) })
   })
-}
-
-/**
- * The sentence the model reads after its reply was rejected.
- *
- * The reason has to travel in this text: the model cannot read our logs, so a detail recorded only
- * there leaves the next attempt guessing — which is exactly the loop that produced three identical
- * failures in one evening (MI-2-R16).
- */
-export function repairPromptFor(failureCode: string, failureDetail: string | undefined): string {
-  return `Your previous JSON failed validation: ${failureCode}${failureDetail ? ` (${failureDetail})` : ''}. Rewrite the full JSON using only facts from the prompt.`
 }
 
 export async function runDailyBriefAgentTurn(input: DailyBriefAgentTurnInput): Promise<DailyBriefAgentTurnResult> {

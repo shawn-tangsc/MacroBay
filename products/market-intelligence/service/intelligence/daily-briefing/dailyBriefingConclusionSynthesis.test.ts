@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BriefingPriorConclusion, DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { applyDailyBriefingEditorial, validateDailyBriefingEditorial } from './dailyBriefingValidation'
 import { briefingConclusionBasis, validateConclusionSynthesis } from './dailyBriefingConclusionValidation'
-import { repairPromptFor } from './dailyBriefAgentTurn'
+import { repairPromptFor } from './dailyBriefingPrompt'
 
 const document = (): DailyBriefingDocument => ({
   schemaVersion: 1,

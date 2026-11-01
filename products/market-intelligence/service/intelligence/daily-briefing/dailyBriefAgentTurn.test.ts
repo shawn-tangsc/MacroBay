@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { repairPromptFor } from './dailyBriefAgentTurn'
+import { repairPromptFor } from './dailyBriefingPrompt'
 
 import type { BriefingNextItem, DailyBriefingDocument, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { DailyBriefTurnAbortedError, runDailyBriefAgentTurn } from './dailyBriefAgentTurn'

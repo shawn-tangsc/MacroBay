@@ -11,6 +11,7 @@ import {
   normalizeConclusionText
 } from './dailyBriefingPriorConclusions'
 import { briefingDataFactIds } from './dailyBriefingDataSelection'
+import { describeValue, evidenceReferenceDefect, knownEvidenceIds, listFieldDefect, textFieldDefect } from './briefingRefusalReasons'
 import { buildNumericFactWhitelist, findUnknownNumber } from './dailyBriefingNumericFacts'
 
 export type ConclusionSynthesisFailure =
@@ -87,28 +88,28 @@ export function validateConclusionSynthesis(
       extra.length > 0 ? `not part of the contract: ${extra.join(', ')}` : ''
     ].filter(Boolean).join('; '))
   }
-  if (!isConclusionDirection(raw.direction)) return fail('invalid-conclusion-synthesis', `direction: must be one of bullish, bearish, range, undecided, mixed (got ${describe(raw.direction)})`)
-  if (raw.confidence !== 'high' && raw.confidence !== 'medium' && raw.confidence !== 'low') return fail('invalid-conclusion-synthesis', `confidence: must be high, medium or low (got ${describe(raw.confidence)})`)
+  if (!isConclusionDirection(raw.direction)) return fail('invalid-conclusion-synthesis', `direction: must be one of bullish, bearish, range, undecided, mixed (got ${describeValue(raw.direction)})`)
+  if (raw.confidence !== 'high' && raw.confidence !== 'medium' && raw.confidence !== 'low') return fail('invalid-conclusion-synthesis', `confidence: must be high, medium or low (got ${describeValue(raw.confidence)})`)
   const summary = boundedText(raw.summary, maximumSummaryLength)
-  if (summary === false) return fail('invalid-conclusion-synthesis', boundedTextDefect('summary', raw.summary, maximumSummaryLength))
+  if (summary === false) return fail('invalid-conclusion-synthesis', textFieldDefect('summary', raw.summary, maximumSummaryLength))
   const outlook = boundedText(raw.outlook, maximumFieldLength)
-  if (outlook === false) return fail('invalid-conclusion-synthesis', boundedTextDefect('outlook', raw.outlook, maximumFieldLength))
+  if (outlook === false) return fail('invalid-conclusion-synthesis', textFieldDefect('outlook', raw.outlook, maximumFieldLength))
   const regimeChange = boundedText(raw.regimeChange, maximumRegimeMarkerLength)
   if (regimeChange === false) return fail('invalid-conclusion-synthesis', `regimeChange: keep the marker to one short phrase (max ${maximumRegimeMarkerLength} characters) or write 无重要变化 / "no material change".`)
   const coreTension = boundedText(raw.coreTension, maximumFieldLength)
-  if (coreTension === false) return fail('invalid-conclusion-synthesis', boundedTextDefect('coreTension', raw.coreTension, maximumFieldLength))
+  if (coreTension === false) return fail('invalid-conclusion-synthesis', textFieldDefect('coreTension', raw.coreTension, maximumFieldLength))
   const whatWouldChange = boundedText(raw.whatWouldChange, maximumFieldLength)
-  if (whatWouldChange === false) return fail('invalid-conclusion-synthesis', boundedTextDefect('whatWouldChange', raw.whatWouldChange, maximumFieldLength))
+  if (whatWouldChange === false) return fail('invalid-conclusion-synthesis', textFieldDefect('whatWouldChange', raw.whatWouldChange, maximumFieldLength))
   const conditions = boundedList(raw.conditions, maximumConditions, maximumListItemLength)
-  if (conditions === false || conditions.length === 0) return fail('invalid-conclusion-synthesis', listDefect('conditions', raw.conditions, maximumConditions, maximumListItemLength))
+  if (conditions === false || conditions.length === 0) return fail('invalid-conclusion-synthesis', listFieldDefect('conditions', raw.conditions, maximumConditions, maximumListItemLength))
   const counterEvidence = boundedList(raw.counterEvidence, maximumCounterEvidence, maximumListItemLength)
-  if (counterEvidence === false || counterEvidence.length === 0) return fail('invalid-conclusion-synthesis', listDefect('counterEvidence', raw.counterEvidence, maximumCounterEvidence, maximumListItemLength))
+  if (counterEvidence === false || counterEvidence.length === 0) return fail('invalid-conclusion-synthesis', listFieldDefect('counterEvidence', raw.counterEvidence, maximumCounterEvidence, maximumListItemLength))
   const watch = boundedList(raw.watch, maximumWatchItems, maximumListItemLength)
-  if (watch === false || watch.length === 0) return fail('invalid-conclusion-synthesis', listDefect('watch', raw.watch, maximumWatchItems, maximumListItemLength))
+  if (watch === false || watch.length === 0) return fail('invalid-conclusion-synthesis', listFieldDefect('watch', raw.watch, maximumWatchItems, maximumListItemLength))
   const confirmed = textList(raw.confirmed)
-  if (confirmed === false) return fail('invalid-conclusion-synthesis', `confirmed: a list of at most ${maximumListItems} short sentences (got ${describe(raw.confirmed)})`)
+  if (confirmed === false) return fail('invalid-conclusion-synthesis', `confirmed: a list of at most ${maximumListItems} short sentences (got ${describeValue(raw.confirmed)})`)
   const refuted = textList(raw.refuted)
-  if (refuted === false) return fail('invalid-conclusion-synthesis', `refuted: a list of at most ${maximumListItems} short sentences (got ${describe(raw.refuted)})`)
+  if (refuted === false) return fail('invalid-conclusion-synthesis', `refuted: a list of at most ${maximumListItems} short sentences (got ${describeValue(raw.refuted)})`)
   const evidenceRefs = evidenceReferences(raw.evidenceRefs, document)
   // A refused citation list used to come back as a bare false, so a reply that cited nine facts was
   // rejected with "invalid-conclusion-synthesis" and nothing else — and the repair round cited nine
@@ -424,34 +425,6 @@ function assetEqualityClaim(prose: string, document: DailyBriefingDocument): str
   return `BTC and ETH are not the same: their raw 24h values differ (${btc} vs ${eth}); the two-decimal display only rounds them together. Say which is stronger, or drop the comparison.`
 }
 
-function knownEvidenceIds(document: DailyBriefingDocument): ReadonlySet<string> {
-  return new Set<string>([
-    ...document.news.items.map((item) => `news:${item.itemId}`),
-    ...document.news.macro.map((item) => `macro:${item.eventKey}`),
-    ...briefingDataFactIds(document)
-  ])
-}
-
-/**
- * Why a citation list was refused, in words the repair round can act on: which entry is unknown, or
- * how many were offered against the cap. A bare refusal taught the model nothing, so it repeated
- * the same answer until the run ran out of attempts.
- */
-function evidenceReferenceDefect(value: unknown, document: DailyBriefingDocument): string {
-  if (!Array.isArray(value)) return 'evidenceRefs: list the news:/macro:/data: ids the call rests on.'
-  if (value.length > maximumEvidenceRefs) {
-    return `evidenceRefs: cite at most ${maximumEvidenceRefs} facts (got ${value.length}); keep the few the call actually rests on.`
-  }
-  const known = knownEvidenceIds(document)
-  for (const entry of value) {
-    if (typeof entry !== 'string' || entry.trim().length === 0 || entry.length > 200) {
-      return 'evidenceRefs: every entry must be one news:/macro:/data: id printed in FACTS.'
-    }
-    if (!known.has(entry)) return `evidenceRefs: "${entry}" is not a fact in this brief; use an id printed in FACTS.`
-  }
-  return 'evidenceRefs: check the ids against FACTS.'
-}
-
 function evidenceReferences(
   value: unknown,
   document: DailyBriefingDocument
@@ -494,30 +467,6 @@ function boundedText(value: unknown, maximum: number): string | false {
   const text = value.trim()
   if (text.length === 0 || text.length > maximum) return false
   return text
-}
-
-/** What a value actually was, in the few characters a repair sentence can spend on it. */
-function describe(value: unknown): string {
-  if (value === undefined) return 'missing'
-  if (value === null) return 'null'
-  if (Array.isArray(value)) return `a list of ${value.length}`
-  if (typeof value === 'string') return `"${value.slice(0, 40)}"`
-  return typeof value
-}
-
-function boundedTextDefect(field: string, value: unknown, maximum: number): string {
-  if (typeof value !== 'string') return `${field}: must be text (got ${describe(value)})`
-  const length = value.trim().length
-  if (length === 0) return `${field}: must not be empty`
-  return `${field}: at most ${maximum} characters (got ${length})`
-}
-
-function listDefect(field: string, value: unknown, maximumItems: number, maximumLength: number): string {
-  if (!Array.isArray(value)) return `${field}: must be a list of at most ${maximumItems} items (got ${describe(value)})`
-  if (value.length === 0) return `${field}: at least one item is required`
-  if (value.length > maximumItems) return `${field}: at most ${maximumItems} items (got ${value.length})`
-  const overlong = value.findIndex((entry) => typeof entry !== 'string' || entry.trim().length === 0 || entry.trim().length > maximumLength)
-  return `${field}[${overlong}]: each item must be text of at most ${maximumLength} characters`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

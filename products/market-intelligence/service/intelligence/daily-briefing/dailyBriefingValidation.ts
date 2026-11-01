@@ -115,8 +115,6 @@ export function validateDailyBriefingEditorial(
     if (!isExact(item, ['factId', 'why'])) return fail('invalid-shape')
     if (!isText(item.factId) || !isText(item.why)) return fail('invalid-shape')
     if (item.why.length > 200) return fail('too-long')
-    // The id is the whole diagnosis: without it the repair round can only guess which citation to
-    // drop, which is how one rejection turned into three identical attempts.
     if (!newsIds.has(item.factId) && !macroIds.has(item.factId)) return fail('unknown-fact', `${item.factId} is not a fact in this edition`)
     if (items.some((existing) => existing.factId === item.factId)) return fail('invalid-shape')
     items.push({ factId: item.factId, why: item.why })
