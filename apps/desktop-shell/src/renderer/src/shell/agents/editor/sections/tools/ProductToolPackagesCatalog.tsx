@@ -1,4 +1,3 @@
-import { Package } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import type { ProductAgentToolPackageEditorView } from '@platform/ai/agent-platform/productTools/productAgentToolViewModel'
@@ -6,7 +5,8 @@ import type { LocalizedText } from '@platform/product-manifest'
 
 import type { AgentText } from '../../../agentText'
 import { useAgentLanguage } from '../../../agentTextProvider'
-import { EmptyState } from '@platform/ui/components/empty-state'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { ProductToolPackageCard } from './ProductToolPackageCard'
 import { filterProductToolPackages } from './productToolPackageFilter'
 
@@ -16,12 +16,14 @@ type ProductToolPackagesCatalogProps = {
   text: AgentText
   agentId: string
   search: string
+  onClearSearch: () => void
 }
 
 export function ProductToolPackagesCatalog({
   text,
   agentId,
-  search
+  search,
+  onClearSearch
 }: ProductToolPackagesCatalogProps): React.ReactElement {
   const language = useAgentLanguage()
   const [packages, setPackages] = useState<ProductAgentToolPackageEditorView[]>([])
@@ -90,12 +92,17 @@ export function ProductToolPackagesCatalog({
 
   if (visiblePackages.length === 0) {
     return (
-      <EmptyState
-        className="agent-empty-catalog"
-        icon={<Package size={17} />}
-        title={text.editor.tools.noProductToolPackagesTitle}
-        reason={text.editor.tools.noProductToolPackagesDescription}
-      />
+      search.trim() ? (
+        <StateView
+          state="empty"
+          reasonCode="filtered-out"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: onClearSearch }}
+        />
+      ) : (
+        // 工具包由产品自己注册，读者此刻没有可做的动作：等产品提供后这里才会出现。
+        <StateView state="empty" reasonCode="not-yet" size="md" />
+      )
     )
   }
 

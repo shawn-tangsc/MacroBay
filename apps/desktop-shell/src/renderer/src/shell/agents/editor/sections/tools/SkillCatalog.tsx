@@ -9,7 +9,8 @@ import type { AgentText } from '../../../agentText'
 import SkillDetailModal from '../../SkillDetailModal'
 import SkillMarketplaceModal from '../../SkillMarketplaceModal'
 import { buildAgentSkillRuntimeViewModel } from '../../agentSkillRuntimeViewModel'
-import { EmptyState } from '@platform/ui/components/empty-state'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 type SkillCatalogProps = {
   text: AgentText
@@ -20,6 +21,9 @@ type SkillCatalogProps = {
   onInstallFromZip: () => void
   onRefresh: () => void
   onUninstall: (skillId: string) => void
+  /** 列表为空时区分「搜不到」与「一个都没装」：前者给人清筛选的动作，后者给人安装入口。 */
+  searchActive: boolean
+  onClearSearch: () => void
 }
 
 export function SkillCatalog({
@@ -30,7 +34,9 @@ export function SkillCatalog({
   onInstallFromDirectory,
   onInstallFromZip,
   onRefresh,
-  onUninstall
+  onUninstall,
+  searchActive,
+  onClearSearch
 }: SkillCatalogProps): React.ReactElement {
   const [marketplaceOpen, setMarketplaceOpen] = useState(false)
   const [detailSkillId, setDetailSkillId] = useState<string | null>(null)
@@ -78,12 +84,21 @@ export function SkillCatalog({
         onClose={() => setDetailSkillId(null)}
       />
       {skills.length === 0 ? (
-        <EmptyState
-          className="agent-empty-catalog"
-          icon={<Sparkles size={17} />}
-          title={text.editor.tools.noSkillTitle}
-          reason={text.editor.tools.noSkillDescription}
-        />
+        searchActive ? (
+          <StateView
+            state="empty"
+            reasonCode="filtered-out"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: onClearSearch }}
+          />
+        ) : (
+          <StateView
+            state="empty"
+            reasonCode="none-installed"
+            size="md"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.install, onSelect: () => setMarketplaceOpen(true) }}
+          />
+        )
       ) : (
         skills.map((skill) => (
           <SkillCatalogRow

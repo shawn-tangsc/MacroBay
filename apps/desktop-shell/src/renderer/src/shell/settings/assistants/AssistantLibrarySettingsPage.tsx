@@ -92,6 +92,10 @@ export function AssistantLibrarySettingsPage({
             loadingLabel={platformText[language].status.loading}
             onInstall={(templateId) => void installTemplate(templateId)}
             onOpen={(templateId) => void openTemplateDetail(templateId)}
+            onClearFilters={() => {
+              library.setSearch('')
+              library.setSelectedProductId(null)
+            }}
           />
         </main>
       </div>

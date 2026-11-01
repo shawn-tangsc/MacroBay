@@ -216,6 +216,7 @@ export default function AgentConfigPage({
               skillBindings={skillBindingsDraft}
               onChange={updateForm}
               onSkillToggle={toggleSkillDraft}
+              onSave={save}
             />
           ) : null}
           {activeSection === 'advanced' ? <AdvancedSection form={form} onChange={updateForm} /> : null}

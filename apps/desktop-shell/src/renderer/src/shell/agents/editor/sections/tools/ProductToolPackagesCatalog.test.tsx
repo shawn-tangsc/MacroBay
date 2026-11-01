@@ -134,7 +134,7 @@ async function mount({ search }: { search: string }): Promise<HTMLElement> {
   await act(async () => {
     root?.render(
       <AgentTextProvider language="zh-CN">
-        <ProductToolPackagesCatalog text={text} agentId="agent-1" search={search} />
+        <ProductToolPackagesCatalog text={text} agentId="agent-1" search={search} onClearSearch={() => undefined} />
       </AgentTextProvider>
     )
   })

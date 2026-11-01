@@ -1,4 +1,6 @@
+import { useRef } from 'react'
 import { Button, Input, Switch, Tag, Tooltip, message } from 'antd'
+import type { InputRef } from 'antd'
 import { Copy, ExternalLink, Network, Plus, RefreshCw, Settings2 } from 'lucide-react'
 
 import type { AgentMcpCatalogItem } from '@platform/ai/agent-platform/mcp/agentMcpViewModel'
@@ -7,7 +9,8 @@ import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
-import { EmptyState } from '@platform/ui/components/empty-state'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import {
   emptyToolsHint,
   McpStatusTag,
@@ -43,15 +46,19 @@ export function McpCatalog({
   onRemove,
   onRefresh
 }: McpCatalogProps): React.ReactElement {
+  const manualInputRef = useRef<InputRef | null>(null)
+  // 「去添加」是真的能做的一步：把光标送到同一面板里的手动添加框，而不是指去一个不存在的设置页。
+  const focusManualInput = (): void => manualInputRef.current?.focus()
+
   return (
     <div className="agent-tool-catalog">
       <div className="agent-tool-list-heading">{text.editor.tools.boundHeading}</div>
       {catalog.bound.length === 0 && manualMcps.length === 0 ? (
-        <EmptyState
-          className="agent-empty-catalog"
-          icon={<Network size={17} />}
-          title={text.editor.tools.noMcpTitle}
-          reason={text.editor.tools.noMcpDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.focus_form, onSelect: focusManualInput }}
         />
       ) : (
         <div className="agent-tool-catalog compact">
@@ -84,12 +91,7 @@ export function McpCatalog({
 
       <div className="agent-tool-list-heading">{text.editor.tools.mcpRegistryHeading}</div>
       {catalog.addable.length === 0 ? (
-        <EmptyState
-          className="agent-empty-catalog"
-          icon={<Network size={17} />}
-          title={text.editor.tools.noMcpRegistryTitle}
-          reason={text.editor.tools.noMcpRegistryDescription}
-        />
+        <StateView state="empty" reasonCode="not-yet" size="md" />
       ) : (
         <div className="agent-tool-catalog compact">
           {catalog.addable.map((mcp) => (
@@ -111,6 +113,7 @@ export function McpCatalog({
       <div className="agent-tool-list-heading">{text.editor.tools.mcpManualHeading}</div>
       <div className="agent-mcp-add-row">
         <Input
+          ref={manualInputRef}
           value={value}
           placeholder={text.editor.tools.mcpPlaceholder}
           onChange={(event) => onValueChange(event.target.value)}

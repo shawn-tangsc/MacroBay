@@ -1,6 +1,6 @@
-import { Empty } from 'antd'
 import type { AssistantTemplateCatalogItem } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
-import { EmptyState } from '@platform/ui/components/empty-state'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { LoadingState } from '@platform/ui/components/loading'
 import type { PlatformText } from '../../../i18n/platformText'
 import { AssistantTemplateCard } from './AssistantTemplateCard'
@@ -13,6 +13,8 @@ type AssistantTemplateGridProps = {
   loadingLabel: string
   onInstall: (templateId: string) => void
   onOpen: (templateId: string) => void
+  /** 空列表来自筛选（分类 / 关键词）：给一个真的能回到全量的动作。 */
+  onClearFilters: () => void
 }
 
 export function AssistantTemplateGrid({
@@ -21,7 +23,8 @@ export function AssistantTemplateGrid({
   loading,
   loadingLabel,
   onInstall,
-  onOpen
+  onOpen,
+  onClearFilters
 }: AssistantTemplateGridProps): React.ReactElement {
   if (loading) {
     return (
@@ -34,10 +37,11 @@ export function AssistantTemplateGrid({
   if (items.length === 0) {
     return (
       <div className="assistant-library-empty">
-        <EmptyState
-          icon={Empty.PRESENTED_IMAGE_DEFAULT}
-          title={labels.emptyTitle}
-          reason={labels.emptyDescription}
+        <StateView
+          state="empty"
+          reasonCode="filtered-out"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: onClearFilters }}
         />
       </div>
     )

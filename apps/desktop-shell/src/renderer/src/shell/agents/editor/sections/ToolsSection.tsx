@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Input, Tabs, message } from 'antd'
-import { Search, Sparkles, Wrench, Package } from 'lucide-react'
+import { Search, Wrench } from 'lucide-react'
 
 import type { AgentFormState } from '@platform/ai/agent-platform/agents/agentConfigDescriptor'
 import { buildAgentMcpCatalog } from '@platform/ai/agent-platform/mcp/agentMcpViewModel'
@@ -14,7 +14,8 @@ import type { AgentSkillBinding, AgentStoreState } from '@platform/ai/agent-plat
 
 import { useAgentText } from '../../agentTextProvider'
 import { BuiltinToolCatalog } from './tools/BuiltinToolCatalog'
-import { EmptyState } from '@platform/ui/components/empty-state'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { McpCatalog } from './tools/McpCatalog'
 import { SkillCatalog } from './tools/SkillCatalog'
 import { ProductToolPackagesCatalog } from './tools/ProductToolPackagesCatalog'
@@ -29,6 +30,8 @@ type ToolsSectionProps = {
   skillBindings: AgentSkillBinding[]
   onChange: (patch: Partial<AgentFormState>) => void
   onSkillToggle: (skillId: string, checked: boolean) => void | Promise<void>
+  /** 新智能体还没保存时，工具页的两个空态要能把人送到「保存」这一步。 */
+  onSave: () => void
 }
 
 type ToolTab = 'tools' | 'mcp' | 'skills' | 'product-packages'
@@ -40,7 +43,8 @@ export default function ToolsSection({
   form,
   skillBindings,
   onChange,
-  onSkillToggle
+  onSkillToggle,
+  onSave
 }: ToolsSectionProps): React.ReactElement {
   const t = useAgentText()
   const [activeTab, setActiveTab] = useState<ToolTab>('tools')
@@ -175,13 +179,13 @@ export default function ToolsSection({
             key: 'product-packages',
             label: t.editor.tools.productPackagesTab,
             children: agentId ? (
-              <ProductToolPackagesCatalog text={t} agentId={agentId} search={search} />
+              <ProductToolPackagesCatalog text={t} agentId={agentId} search={search} onClearSearch={() => setSearch('')} />
             ) : (
-              <EmptyState
-                className="agent-empty-catalog"
-                icon={<Package size={17} />}
-                title={t.editor.tools.saveAgentBeforeProductToolsTitle}
-                reason={t.editor.tools.saveAgentBeforeProductToolsDescription}
+              <StateView
+                state="disabled"
+                reasonCode="precondition-unsaved"
+                size="md"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.save, onSelect: onSave }}
               />
             )
           },
@@ -198,13 +202,15 @@ export default function ToolsSection({
                 onInstallFromZip={installSkillFromZip}
                 onRefresh={() => void window.platform.agents.skills.list(agentId ? { agentId } : undefined)}
                 onUninstall={(skillId) => void window.platform.agents.skills.uninstall(skillId)}
+                searchActive={search.trim().length > 0}
+                onClearSearch={() => setSearch('')}
               />
             ) : (
-              <EmptyState
-                className="agent-empty-catalog"
-                icon={<Sparkles size={17} />}
-                title={t.editor.tools.saveAgentBeforeSkillTitle}
-                reason={t.editor.tools.saveAgentBeforeSkillDescription}
+              <StateView
+                state="disabled"
+                reasonCode="precondition-unsaved"
+                size="md"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.save, onSelect: onSave }}
               />
             )
           }
