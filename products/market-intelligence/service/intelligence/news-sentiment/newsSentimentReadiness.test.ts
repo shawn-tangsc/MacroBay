@@ -36,6 +36,20 @@ describe('news sentiment source readiness', () => {
     expect(readiness.lastSuccessAt).toBe('2026-10-23T00:00:00.000Z')
   })
 
+  it('takes the slowest enabled cycle, ignoring disabled and manual sources', () => {
+    // The card's age threshold is three cycles of the slowest source that actually feeds it.
+    const readiness = summarizeNewsSentimentReadiness([
+      { sourceId: 'sec-rss', productionState: 'fresh', collectionIntervalMs: 15 * 60_000 },
+      { sourceId: 'coindesk-rss', productionState: 'fresh', collectionIntervalMs: 15 * 60_000 },
+      { sourceId: 'binance-announcements', productionState: 'fresh', collectionIntervalMs: 30 * 60_000 },
+      { sourceId: 'okx-latest-announcements', productionState: 'disabled', collectionIntervalMs: 6 * 60 * 60_000 }
+    ])
+    expect(readiness.maxCollectionIntervalMs).toBe(30 * 60_000)
+    expect(summarizeNewsSentimentReadiness([
+      { sourceId: 'sec-rss', productionState: 'fresh' }
+    ]).maxCollectionIntervalMs).toBeUndefined()
+  })
+
   it('ignores coverage rows for sources outside the four', () => {
     const readiness = summarizeNewsSentimentReadiness([
       row('fred-rates-liquidity', 'failed'), row('sec-rss', 'fresh', '2026-10-31T00:00:00.000Z')

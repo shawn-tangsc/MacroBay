@@ -228,6 +228,9 @@ export const productText = {
             engine: { model: '模型', rules: '规则' },
             bodyLimited: '部分条目仅依据标题', neutralFilter: { label: '中性', all: '带中性', exclude: '不带中性' },
             openAll: '查看舆情列表',
+            // 与「数据已过期 · 最后更新 {time}」同一个字段（latestKnownItemAt）、同一个格式化器，
+            // 两处永远指向同一时刻。
+            updatedAt: '更新于 {time}',
             settings: '舆情设置',
             // 五种「没有条目」互不相同，且不靠颜色区分：四源没开 / 开了没跑 / 采集失败 / 数据过期 /
             // 这段时间确实没有。除「确实没有」外都给出下一步（§9 的 filtered-empty 仍由抽屉负责）。
@@ -2018,6 +2021,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             bodyLimited: 'Some items are headline-only',
             neutralFilter: { label: 'Neutral', all: 'With neutral', exclude: 'Without neutral' },
             openAll: 'Open sentiment list',
+            updatedAt: 'Updated {time}',
             settings: 'Sentiment settings',
             emptyStates: {
               sourcesDisabled: 'Data sources are off',

@@ -76,6 +76,12 @@ async function mount(node: React.ReactElement): Promise<HTMLElement> {
   return container
 }
 
+const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof NewsSentimentCard>[0]> = {}) =>
+  mount(
+    <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
+      onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
+  )
+
 describe('card empty states', () => {
   const readiness = (overrides: Partial<NonNullable<NewsSentimentView['readiness']>> = {}) => ({
     total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0,
@@ -87,11 +93,6 @@ describe('card empty states', () => {
     state: 'empty', asOf: '2026-10-24T13:00:00.000Z', generatedAt: '2026-10-24T13:00:00.000Z',
     window: '1h', items: [], caveats: [], ...overrides
   })
-  const mountCard = (view: NewsSentimentView, props: Partial<Parameters<typeof NewsSentimentCard>[0]> = {}) =>
-    mount(
-      <NewsSentimentCard failed={false} loading={false} onOpenAll={() => undefined} onOpenSettings={() => undefined}
-        onRefresh={props.onRefresh ?? (() => undefined)} onSelectItem={() => undefined} text={text} view={view} {...props} />
-    )
 
   it('tells the five no-rows situations apart, each with its own next step', async () => {
     const onOpenSources = vi.fn()
@@ -304,6 +305,44 @@ describe('NewsSentimentFeature', () => {
     expect(text.windowAll).toBe('最近 100 条')
     // The whole sentiment surface (card + drawer + the open dropdown) must not promise "全部".
     expect(document.body.textContent).not.toContain('全部')
+  })
+
+  it('shows the same timestamp in the age badge and in the stale sentence', async () => {
+    // Acceptance: the badge and "数据已过期 · 最后更新 {时刻}" must come from one field. They answer
+    // different questions (age vs. empty window) with different edges, but never two times for one fact.
+    const readinessWithCadence = {
+      total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0,
+      failedSourceIds: [], neverRanSourceIds: [],
+      lastSuccessAt: '2026-10-24T09:00:00.000Z',
+      maxCollectionIntervalMs: 30 * 60_000
+    }
+    const latest = '2026-10-24T11:00:00.000Z'
+    const badge = await mountCard(
+      { ...VIEW, asOf: '2026-10-24T13:00:00.000Z', window: '24h', latestKnownItemAt: latest, readiness: readinessWithCadence },
+      {}
+    )
+    const stale = await mountCard(
+      { ...VIEW, state: 'empty', summary: undefined, items: [], asOf: '2026-10-24T13:00:00.000Z', window: '1h', latestKnownItemAt: latest, readiness: readinessWithCadence },
+      {}
+    )
+    const badgeText = badge.querySelector('[data-news-sentiment-updated]')?.textContent ?? ''
+    const staleText = stale.querySelector('[data-news-sentiment-state="stale"]')?.textContent ?? ''
+    expect(badgeText).toContain(text.updatedAt.split('{time}')[0]!)
+    expect(staleText).toContain(text.emptyStates.stale.split('{time}')[0]!)
+    // Both sentences must quote the same rendered time.
+    const badgeTime = badgeText.replace(text.updatedAt.split('{time}')[0]!, '').trim()
+    const staleTime = staleText.replace(text.emptyStates.stale.split('{time}')[0]!, '').replace(text.emptyStates.actions.refresh, '').trim()
+    expect(badgeTime.length).toBeGreaterThan(0)
+    expect(staleTime).toContain(badgeTime)
+  })
+
+  it('does not put an age badge on rows that are within three collection cycles', async () => {
+    const container = await mountCard({
+      ...VIEW, asOf: '2026-10-24T13:00:00.000Z', window: '24h',
+      latestKnownItemAt: '2026-10-24T12:30:00.000Z',
+      readiness: { total: 4, enabledCount: 4, failedCount: 0, neverRanCount: 0, failedSourceIds: [], neverRanSourceIds: [], maxCollectionIntervalMs: 30 * 60_000 }
+    }, {})
+    expect(container.querySelector('[data-news-sentiment-updated]')).toBeNull()
   })
 
   it('shows the empty state without pretending neutral zero', async () => {

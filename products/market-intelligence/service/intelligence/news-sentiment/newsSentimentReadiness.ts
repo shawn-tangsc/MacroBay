@@ -12,6 +12,8 @@ export type NewsSentimentCoverageRow = Readonly<{
   sourceId: string
   productionState: string
   latestSuccessAt?: string
+  /** That source's own polling cycle, from `resolveRuntimeConfig`; absent for manual sources. */
+  collectionIntervalMs?: number
 }>
 
 export function summarizeNewsSentimentReadiness(
@@ -31,6 +33,13 @@ export function summarizeNewsSentimentReadiness(
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1)
+  // The slowest enabled source decides how long "no new row" is normal: a feed fed by a 30-minute
+  // poller cannot be called out of date after five minutes. Derived from the registry, never a constant.
+  const maxCollectionIntervalMs = enabled
+    .map((row) => row.collectionIntervalMs)
+    .filter((value): value is number => typeof value === 'number' && value > 0)
+    .sort((left, right) => right - left)
+    .at(0)
   return {
     total: NEWS_SENTIMENT_SOURCE_IDS.length,
     enabledCount: enabled.length,
@@ -38,6 +47,7 @@ export function summarizeNewsSentimentReadiness(
     neverRanCount: neverRan.length,
     failedSourceIds: failed.map((row) => row.sourceId),
     neverRanSourceIds: neverRan.map((row) => row.sourceId),
-    ...(lastSuccessAt ? { lastSuccessAt } : {})
+    ...(lastSuccessAt ? { lastSuccessAt } : {}),
+    ...(maxCollectionIntervalMs ? { maxCollectionIntervalMs } : {})
   }
 }

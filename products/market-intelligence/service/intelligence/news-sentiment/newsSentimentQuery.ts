@@ -74,8 +74,9 @@ export type NewsSentimentView = {
    */
   readiness?: NewsSentimentSourceReadiness
   /**
-   * Only on an empty window: the newest judgment there is, whenever it was published. Without it
-   * "this window has no news" and "nothing has arrived for hours" are the same DTO.
+   * The newest judgment on record at `asOf`, whatever window was asked for. Two readers share this
+   * one value on purpose: the `stale` empty state ("nothing in this window, something earlier") and
+   * the card's age badge ("what you are looking at is already old").
    */
   latestKnownItemAt?: string
 }
@@ -134,10 +135,14 @@ export function createNewsSentimentQuery(deps: {
           .sort((left, right) => right.publishedAt.localeCompare(left.publishedAt))
           .slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)))
 
+        // One reading for both purposes: the stale state ("this window has nothing, but something
+        // earlier did") and the card's age badge must never come from two different places, or one
+        // says "5 minutes ago" while the other says "3 hours".
+        const latestKnownItemAt = deps.store.listLatestSentiment({ from: EPOCH_ISO, to: asOf, limit: 1 })[0]?.publishedAt
+
         if (visible.length === 0) {
           // An empty window still has to say whether anything ever arrived: without this the card
           // cannot tell "quiet period" from "the feed stopped hours ago".
-          const newest = deps.store.listLatestSentiment({ from: EPOCH_ISO, to: asOf, limit: 1 })[0]
           return {
             state: 'empty',
             asOf,
@@ -147,7 +152,7 @@ export function createNewsSentimentQuery(deps: {
             availableSources,
             caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow],
             ...(readiness ? { readiness } : {}),
-            ...(newest ? { latestKnownItemAt: newest.publishedAt } : {})
+            ...(latestKnownItemAt ? { latestKnownItemAt } : {})
           }
         }
         const itemIds = visible.map((row) => row.itemId)
@@ -189,6 +194,7 @@ export function createNewsSentimentQuery(deps: {
           items,
           availableSources,
           ...(readiness ? { readiness } : {}),
+          ...(latestKnownItemAt ? { latestKnownItemAt } : {}),
           caveats
         }
       } catch {

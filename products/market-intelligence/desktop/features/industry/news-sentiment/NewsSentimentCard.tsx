@@ -10,6 +10,7 @@ import { NEWS_SENTIMENT_WINDOW_MS } from '../../../../service/intelligence/schem
 import { labelText } from './newsSentimentPresentation'
 import { passesNeutralFilter } from './newsSentimentFilters'
 import { resolveNewsSentimentEmptyState } from './newsSentimentEmptyState'
+import { isNewsSentimentOutOfDate } from './newsSentimentFreshness'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 
 export type NewsSentimentText = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['newsSentiment']
@@ -60,6 +61,13 @@ export function NewsSentimentCard(props: {
   // Without a source status an empty window has no known cause. Saying "no related news" there would
   // turn "I cannot tell" into a reading, which is the one thing this card must not do.
   const causeUnknown = view?.state === 'empty' && !view.readiness
+  const outOfDate = view && available
+    ? isNewsSentimentOutOfDate({
+        asOf: view.asOf,
+        ...(view.latestKnownItemAt ? { latestKnownItemAt: view.latestKnownItemAt } : {}),
+        ...(view.readiness ? { readiness: view.readiness } : {})
+      })
+    : false
   const emptyAction = emptyState && !causeUnknown ? emptyStateAction(emptyState.kind, props, text) : undefined
   const emptySentence = emptyState && !causeUnknown ? emptyStateText(emptyState, text, formatTime) : undefined
 
@@ -128,6 +136,12 @@ export function NewsSentimentCard(props: {
               </button>
             ))}
           </div>
+          {/* Not a fault indicator: when the newest judgment is older than three collection cycles of
+              the slowest source, the rows are still true but they are old, and the reader should know
+              that without asking. Same field (`latestKnownItemAt`) as the stale empty state. */}
+          {outOfDate && view?.latestKnownItemAt
+            ? <p className="mi-news-sentiment__updated" data-news-sentiment-updated>{text.updatedAt.replace('{time}', formatTime(view.latestKnownItemAt, 'minute'))}</p>
+            : null}
           {/* The footer used to carry a card-wide "Rules" badge whenever any visible item was
               scored by the rule engine. It named no item, looked like a dead control, and the
               drawer already reports each item's engine, so only the caveat remains — and the

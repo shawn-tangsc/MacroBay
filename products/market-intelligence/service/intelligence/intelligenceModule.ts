@@ -89,6 +89,7 @@ import {
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
 import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
+import { resolveRuntimeConfig } from './application/sourceRuntimeConfig'
 import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
 import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
@@ -586,14 +587,28 @@ export function getIntelligenceModule(
           readSourceReadiness: async (asOf) => {
             const profiles = await profileStore.listProfiles()
             const enabledSourceIds = new Set(profiles.filter((profile) => profile.enabled).map((profile) => profile.sourceId))
-            return summarizeNewsSentimentReadiness(buildSourceCoverageAsOf({
-              definitions: listIntelligenceSourceDefinitions().filter((definition) =>
-                (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(definition.sourceId)
-              ),
+            const profileBySource = new Map(profiles.map((profile) => [profile.sourceId, profile]))
+            const definitions = listIntelligenceSourceDefinitions().filter((definition) =>
+              (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(definition.sourceId)
+            )
+            const coverage = buildSourceCoverageAsOf({
+              definitions,
               runtimeStates: pipeline.listRuntimeStatesAsOf(asOf),
               items: pipeline.listItems(),
               asOf,
               enabledSourceIds
+            })
+            return summarizeNewsSentimentReadiness(coverage.map((row) => {
+              // The cycle comes from the resolver the scheduler itself uses, so the card's idea of
+              // "old" cannot drift away from how often this source is really collected.
+              const definition = definitions.find((entry) => entry.sourceId === row.sourceId)
+              const pollingIntervalSec = definition
+                ? resolveRuntimeConfig({ definition, profile: profileBySource.get(row.sourceId) }).pollingIntervalSec
+                : undefined
+              return {
+                ...row,
+                ...(pollingIntervalSec ? { collectionIntervalMs: pollingIntervalSec * 1_000 } : {})
+              }
             }))
           },
           now: () => new Date().toISOString()

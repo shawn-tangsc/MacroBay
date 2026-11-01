@@ -76,6 +76,8 @@ describe('newsSentimentQuery', () => {
     const view = await query(seed()).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
     expect(view.state).toBe('available')
     expect(view.summary).toMatchObject({ itemCount: 2, engineMix: { model: 1, rules: 1 } })
+    // The age badge on a populated card reads the same field the stale empty state does.
+    expect(view.latestKnownItemAt).toBe('2026-10-24T12:00:00.000Z')
     expect(view.items.map((item) => item.sourceName)).toEqual(['CoinDesk RSS', 'Binance Announcements'])
   })
 

@@ -176,6 +176,11 @@ export type NewsSentimentSourceReadiness = Readonly<{
   failedSourceIds: string[]
   neverRanSourceIds: string[]
   lastSuccessAt?: string
+  /**
+   * 已启用源里最慢的那个采集周期（毫秒），来自 `resolveRuntimeConfig` 的 `pollingIntervalSec`，
+   * 不是写死的常数。卡片用它 ×3 判断「看到的这几条本身已经旧了」；没有任何可定周期的源时缺省。
+   */
+  maxCollectionIntervalMs?: number
 }>
 
 export const NEWS_SENTIMENT_CAVEATS = Object.freeze({
