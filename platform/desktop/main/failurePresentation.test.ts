@@ -109,6 +109,17 @@ describe('failure presentation', () => {
     expect(truncateForScreen('a'.repeat(FAILURE_REASON_BUDGET + 1)).endsWith(FAILURE_ELLIPSIS)).toBe(true)
   })
 
+  it('exposes exactly the screen fields the page renders, no extras', () => {
+    const screen = presentBootFailure({
+      code: 'product-bootstrap-failed',
+      stage: 'register-product-services',
+      productId: 'market-intelligence',
+      reason: 'boom'
+    })
+    // 多一个键不会报错，只会在半年后被人当成事实；三个名字各说明一层。
+    expect(Object.keys(screen).sort()).toEqual(['code', 'productId', 'reason', 'reasonFull', 'stage'])
+  })
+
   it('never truncates or rewrites the error code', () => {
     const screen = presentBootFailure({
       code: 'product-bootstrap-failed',

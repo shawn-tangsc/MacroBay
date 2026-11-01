@@ -90,7 +90,9 @@ export function renderBootFailurePage(failure: ScreenFailure, options: BootFailu
   details { border-top:1px solid var(--line); padding-top:10px; }
   summary { cursor:pointer; color:var(--muted); display:flex; justify-content:space-between; gap:8px; }
   pre { max-height:118px; overflow-y:auto; overflow-x:hidden; white-space:pre-wrap; word-break:break-all;
-        font-family:ui-monospace, SFMono-Regular, Menlo, monospace; margin:8px 0 0; }
+        font-family:ui-monospace, SFMono-Regular, Menlo, monospace; margin:8px 0 0;
+        /* 技术详情必须有自己的视觉边界：否则用户分不清哪段能复制、哪段是我们的说明。 */
+        border:1px solid var(--line); background:var(--bg); border-radius:6px; padding:8px; }
   .log { color:var(--muted); margin:12px 0 0; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; word-break:break-all; user-select:text; }
   .actions { display:flex; gap:8px; margin:16px 0 0; }
   a.button { flex:1; text-align:center; padding:7px 10px; border-radius:6px; border:1px solid var(--line); color:var(--fg); text-decoration:none; }

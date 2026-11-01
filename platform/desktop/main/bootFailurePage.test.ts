@@ -25,6 +25,17 @@ describe('boot failure page', () => {
     expect(zh).not.toContain('platformText')
   })
 
+  it('gives the technical details their own visual boundary', () => {
+    const html = renderBootFailurePage(failure, options)
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'))
+    const preRule = style.slice(style.indexOf('pre {'), style.indexOf('}', style.indexOf('pre {')))
+
+    // 这一页的价值是让人在截图里指出「问题在哪」；没有边界，技术信息和我们写的说明就分不开。
+    expect(preRule).toContain('border:1px solid var(--line)')
+    expect(preRule).toContain('background:var(--bg)')
+    expect(preRule).toContain('padding:8px')
+  })
+
   it('keeps the error code outside the truncated reason block', () => {
     const html = renderBootFailurePage(failure, options)
     const reasonBlock = html.slice(html.indexOf('class="reason"'), html.indexOf('class="code-row"'))
