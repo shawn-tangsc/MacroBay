@@ -1105,6 +1105,8 @@ export type PlatformText = {
     clickToReplace: string
     revealApiKeyFailed: string
     revealApiKeyUnavailable: string
+    copyApiKey: string
+    apiKeyCopied: string
     revealApiKeyBridgeFailed: string
     revealApiKeyMissing: string
     retry: string
@@ -2150,6 +2152,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clickToReplace: '点击可替换 Key',
       revealApiKeyFailed: '读取已保存 Key 失败，已保持掩码。',
       revealApiKeyUnavailable: '应用进程缺少该接口，请重启应用后重试。',
+      copyApiKey: '复制密钥',
+      apiKeyCopied: '已复制',
       revealApiKeyBridgeFailed: '与主进程通信失败，请重启应用后重试。',
       revealApiKeyMissing: '没有找到已保存的 Key（可能已被移除）。',
       retry: '重试',
@@ -3213,6 +3217,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clickToReplace: 'Click to replace the key',
       revealApiKeyFailed: 'Could not read the saved key; keeping the mask.',
       revealApiKeyUnavailable: 'The app process is missing this interface; restart the app and retry.',
+      copyApiKey: 'Copy key',
+      apiKeyCopied: 'Copied',
       revealApiKeyBridgeFailed: 'Failed to reach the main process; restart the app and retry.',
       revealApiKeyMissing: 'No saved key was found (it may have been removed).',
       retry: 'Retry',

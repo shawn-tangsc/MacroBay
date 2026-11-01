@@ -148,6 +148,29 @@ describe('PLAT-58 model provider API key reveal field', () => {
     expect(eyeButton(container).getAttribute('aria-label')).toBe(labels.hideApiKey)
   })
 
+  it('offers copy only while the key is on screen, and copies the revealed value', async () => {
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const container = await mount({ revealApiKey: async () => ({ apiKey: savedKey }) })
+
+    // 掩码态没有复制入口：看不到就不该能复制。
+    expect(container.querySelector('.provider-api-key-copy')).toBeNull()
+
+    await clickEye(container)
+    const copy = container.querySelector<HTMLElement>('.provider-api-key-copy')
+    expect(copy).not.toBeNull()
+
+    await act(async () => {
+      copy!.click()
+    })
+    expect(writeText).toHaveBeenCalledWith(savedKey)
+    expect(container.textContent).toContain(labels.copied)
+
+    // 收起明文后复制入口一起消失，不会出现「掩码还能复制」的状态。
+    await clickEye(container)
+    expect(container.querySelector('.provider-api-key-copy')).toBeNull()
+  })
+
   it('returns to the mask after the named 30s auto-hide window and drops the key from the DOM', async () => {
     vi.useFakeTimers()
     const container = await mount()

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Input } from 'antd'
-import { Eye, EyeOff, Pencil } from 'lucide-react'
+import { Check, Copy, Eye, EyeOff, Pencil } from 'lucide-react'
 
 import type { PlatformText } from '../../../i18n/platformText'
+import { copyTextToClipboard } from '../../clipboard'
 
 const ALL_MASK = '••••••••'
 export const API_KEY_REVEAL_TIMEOUT_MS = 30_000
@@ -47,7 +48,9 @@ export function WebSearchApiKeyField({
   const [revealError, setRevealError] = useState<string | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const [copied, setCopied] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const hasDraft = value.length > 0
   const savedMode = hasApiKey && !editing
@@ -60,12 +63,34 @@ export function WebSearchApiKeyField({
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
+    markUncopied()
     setRevealedKey(null)
+  }
+
+  // 「已复制」只提示两秒；卸载时清掉定时器。
+  function markUncopied(): void {
+    if (copiedTimerRef.current) {
+      clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = null
+    }
+    setCopied(false)
+  }
+
+  async function copyRevealedKey(): Promise<void> {
+    if (revealedKey === null) return
+    await copyTextToClipboard(revealedKey)
+    setCopied(true)
+    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+    copiedTimerRef.current = setTimeout(() => {
+      setCopied(false)
+      copiedTimerRef.current = null
+    }, 2_000)
   }
 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
     }
   }, [])
 
@@ -194,6 +219,16 @@ export function WebSearchApiKeyField({
                   <Pencil size={13} />
                 </button>
               ) : null}
+              {revealedKey ? (
+                <button
+                  type="button"
+                  className="web-search-api-key-copy"
+                  aria-label={labels.copyApiKey}
+                  title={copied ? labels.apiKeyCopied : labels.copyApiKey}
+                  onClick={() => void copyRevealedKey()}>
+                  {copied ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="web-search-api-key-eye"
@@ -207,6 +242,7 @@ export function WebSearchApiKeyField({
           }
         />
         {revealedKey ? <span className="web-search-api-key-revealed-indicator">{labels.apiKeyRevealedHint}</span> : null}
+        {copied ? <span className="web-search-api-key-copied" role="status">{labels.apiKeyCopied}</span> : null}
         {revealError ? (
           <span className="web-search-api-key-error" role="alert">
             {revealError}
