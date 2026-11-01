@@ -33,6 +33,22 @@
   --font-metric-md: 30px;
   --font-metric-lg: 42px;
 
+  /*
+   * Motion: durations and easing live here and nowhere else. A component that writes `180ms` or
+   * its own `@keyframes` is not allowed to; it reads these. The media query at the bottom zeroes
+   * every one of them in one place when the reader asked the system for less motion.
+   */
+  --motion-feedback: 120ms; /* hover, press, colour changes */
+  --motion-enter: 180ms; /* a surface arriving: drawer, modal */
+  --motion-exit: 120ms; /* leaving is faster: the reader already decided */
+  --motion-overlay: 150ms; /* the scrim fading in or out */
+  --motion-toast-in: 160ms;
+  --motion-toast-out: 120ms;
+  --motion-spin: 720ms; /* the one repeating motion in the app: the loading ring */
+  --ease-feedback: ease-out;
+  --ease-enter: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.2, 0, 0, 1);
+
   /* Legacy aliases kept so existing rules resolve; they add no new colour. */
   --text-primary: var(--text-strong);
   --panel: var(--surface);
@@ -53,4 +69,20 @@
   --font-metric-lg: 42px;
 
   --warning: var(--caution);
+}
+
+/*
+ * One switch for the whole app: the reader asked the system for less motion, so every duration
+ * collapses to zero. Zero, not "shorter" — a shorter movement still moves, and the point is that
+ * the interface stops moving. Easing stays defined so rules keep resolving.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-feedback: 0ms;
+    --motion-enter: 0ms;
+    --motion-exit: 0ms;
+    --motion-overlay: 0ms;
+    --motion-toast-in: 0ms;
+    --motion-toast-out: 0ms;
+  }
 }
