@@ -944,6 +944,10 @@ export type PlatformText = {
     proxySelfTestRunning: string
     proxySelfTestPassed: (status: number, seconds: string, proxy: string) => string
     proxySelfTestFailed: (code: string, host: string) => string
+    proxyRejectedEmpty: string
+    proxyRejectedUnsupportedProtocol: string
+    proxyRejectedUnparsable: string
+    proxySocks5Implicit: string
     proxyAddressPlaceholder: string
     proxyBypassPlaceholder: string
     proxySystem: string
@@ -1967,6 +1971,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestRunning: '测试中…',
       proxySelfTestPassed: (status, seconds, proxy) => `代理自检：通过（HTTP ${status}，${seconds}s，经 ${proxy}）`,
       proxySelfTestFailed: (code, host) => `代理自检：失败（${code}）· 目标 ${host}`,
+      proxyRejectedEmpty: '请先填写代理地址。',
+      proxyRejectedUnsupportedProtocol: '代理地址只支持 http、https、socks5 三种协议，请写成 `http://主机:端口`。',
+      proxyRejectedUnparsable: '代理地址格式不对，请写成 `http://主机:端口` 或 `socks5://主机:端口`。',
+      proxySocks5Implicit: '未写协议，按 socks5 解释；若你的代理是 HTTP，请写成 `http://主机:端口`。',
       proxyAddressPlaceholder: '例如 socks5://127.0.0.1:6153',
       proxyBypassPlaceholder: 'localhost,127.0.0.1,::1',
       proxySystem: '系统代理',
@@ -2997,6 +3005,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxySelfTestRunning: 'Testing…',
       proxySelfTestPassed: (status, seconds, proxy) => `Proxy check: passed (HTTP ${status}, ${seconds}s, via ${proxy})`,
       proxySelfTestFailed: (code, host) => `Proxy check: failed (${code}) · target ${host}`,
+      proxyRejectedEmpty: 'Enter a proxy address first.',
+      proxyRejectedUnsupportedProtocol: 'Only http, https and socks5 addresses are supported; write it as `http://host:port`.',
+      proxyRejectedUnparsable: 'That proxy address cannot be parsed; write it as `http://host:port` or `socks5://host:port`.',
+      proxySocks5Implicit: 'No protocol given, so this is read as socks5; if your proxy speaks HTTP, write `http://host:port`.',
       proxyAddressPlaceholder: 'e.g. socks5://127.0.0.1:6153',
       proxyBypassPlaceholder: 'localhost,127.0.0.1,::1',
       proxySystem: 'System Proxy',

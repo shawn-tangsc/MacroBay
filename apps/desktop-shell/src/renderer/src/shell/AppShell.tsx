@@ -46,6 +46,7 @@ import { ModelServiceDefaultModelsSection } from './model-service/ModelServiceDe
 import { useInUseModelPatrol } from './model-service/useInUseModelPatrol'
 import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
+import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
   formatProxySelfTestLine,
@@ -572,8 +573,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       const nextSettings = (await window.platform.settings.update(patch)) as AppSettings
       setSettings(nextSettings)
       setNotice(t.status.saved)
-    } catch {
-      setNotice(t.status.failed)
+    } catch (error) {
+      setNotice(proxyRejectionNotice(error, t.preferences) ?? t.status.failed)
     }
   }
 
@@ -1434,6 +1435,11 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                   }
                   onBlur={(event) => void updateNetworkSettings({ proxyUrl: event.target.value.trim() })}
                 />
+                {proxyAddressUsesImplicitSocks5(settings.network.proxyUrl) ? (
+                  <p className="preference-hint" data-proxy-implicit-protocol>
+                    {t.preferences.proxySocks5Implicit}
+                  </p>
+                ) : null}
               </label>
               <label className="preference-field">
                 <span>{t.preferences.proxyBypassRules}</span>

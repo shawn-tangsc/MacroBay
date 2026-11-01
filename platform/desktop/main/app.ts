@@ -153,6 +153,7 @@ import type { AppLanguage, AppSettingsPatch, ModelDefaultsSettings, NetworkSetti
 import { createDefaultAppSettings, supportedLanguages } from '../../settings/schema/appSettings'
 import { createSettingsStore } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
+import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
@@ -1523,6 +1524,8 @@ function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.settingsGet, () => settingsStore.get())
   ipcMain.handle(IpcChannels.settingsUpdate, async (_event: IpcMainInvokeEvent, patch: AppSettingsPatch) => {
+    // 非法代理地址必须在这里就被拒：校验先于落盘，settings.json 一个字都不写。
+    assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)
     const next = await settingsStore.update(patch)
     if (patch.language) {
       await ensureDefaultAssistantSeed()
@@ -2507,7 +2510,10 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   mainWindow = await createMainWindow()
   wireWindowEvents(mainWindow)
   tray = createAppTray(getMainWindow)
-  await applySessionProxySettings((await settingsStore.get()).network)
+  await applySessionProxySettings((await settingsStore.get()).network, {
+    // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
+    onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
+  })
 
   try {
     if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({

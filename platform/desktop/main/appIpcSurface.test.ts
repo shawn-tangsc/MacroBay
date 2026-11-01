@@ -247,7 +247,8 @@ describe('desktop main IPC surface', () => {
   it('creates a visible boot window before product registration and loads the renderer only after sealing product IPC', () => {
     const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
     const bootWindow = 'mainWindow = await createMainWindow()'
-    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network)'
+    // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
+    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
@@ -275,7 +276,8 @@ describe('desktop main IPC surface', () => {
 
   it('treats proxy application failure as a startup boundary before products and the normal renderer', () => {
     const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
-    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network)'
+    // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
+    const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
     const proxyApplyIndex = bootstrapSource.indexOf(proxyApply)
@@ -560,6 +562,14 @@ describe('desktop main IPC surface', () => {
     // Clipboard pixels are an attachment write path, not a generated-image read path.
     expect(appSource).toContain('IpcChannels.appSaveClipboardImage')
     expect(appSource).toContain("app.getPath('temp')")
+  })
+
+  it('rejects an invalid proxy address before the settings file is written', () => {
+    expect(appSource).toContain("import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'")
+    const guardIndex = appSource.indexOf('assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)')
+    expect(guardIndex).toBeGreaterThan(-1)
+    // 校验必须先于落盘：抛错时 settingsStore.update 根本没被调用，settings.json 不会留下坏地址。
+    expect(guardIndex).toBeLessThan(appSource.indexOf('const next = await settingsStore.update(patch)'))
   })
 
   it('keeps the attachment text preview on its existing channel but reads it from platform/files', () => {
