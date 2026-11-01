@@ -20,7 +20,7 @@ export function createAgentPlatformServices(
     taskAutomation?: {
       getPolicyPreset?: () => Promise<TaskAutomationPolicyPreset>
       setPolicyPreset?: (preset: TaskAutomationPolicyPreset) => Promise<void>
-      defaultTimezone?: string
+      timeZone?: () => string
       now?: () => Date
       hasEnabledDeliveryTarget?: (channelId: string, agentId: string) => boolean
     }
@@ -29,7 +29,7 @@ export function createAgentPlatformServices(
   const taskCommands = new TaskAutomationCommandService({
     store,
     getPolicyPreset: options.taskAutomation?.getPolicyPreset ?? (async () => 'balanced'),
-    defaultTimezone: options.taskAutomation?.defaultTimezone,
+    timeZone: options.taskAutomation?.timeZone,
     now: options.taskAutomation?.now,
     hasEnabledDeliveryTarget: options.taskAutomation?.hasEnabledDeliveryTarget
   })
@@ -46,7 +46,7 @@ export function createAgentPlatformServices(
       queries: options.queries ?? {},
       getPolicyPreset: options.taskAutomation?.getPolicyPreset ?? (async () => 'balanced'),
       setPolicyPreset: options.taskAutomation?.setPolicyPreset ?? (async () => undefined),
-      defaultTimezone: options.taskAutomation?.defaultTimezone,
+      timeZone: options.taskAutomation?.timeZone,
       now: options.taskAutomation?.now
     })
   }

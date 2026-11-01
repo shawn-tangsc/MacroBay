@@ -18,21 +18,23 @@ type Dependencies = {
   queries: AgentPlatformQueryAdapters
   getPolicyPreset: () => Promise<TaskAutomationPolicyPreset>
   setPolicyPreset: (preset: TaskAutomationPolicyPreset) => Promise<void>
-  defaultTimezone?: string
+  /** 主进程唯一的读者时区来源；没有它时用运行时系统时区兜底。 */
+  timeZone?: () => string
   now?: () => Date
 }
 
 export class AgentTaskAutomationQueryService {
-  private readonly defaultTimezone: string
+  private readonly timeZone: () => string
   private readonly now: () => Date
 
   constructor(private readonly deps: Dependencies) {
-    this.defaultTimezone = deps.defaultTimezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC'
+    const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    this.timeZone = deps.timeZone ?? (() => fallback)
     this.now = deps.now ?? (() => new Date())
   }
 
   async previewTaskSchedule(trigger: Trigger): Promise<TaskSchedulePreview> {
-    return previewTaskSchedule(trigger, { now: this.now(), defaultTimezone: this.defaultTimezone })
+    return previewTaskSchedule(trigger, { now: this.now(), defaultTimezone: this.timeZone() })
   }
 
   async listTaskPage(query: {

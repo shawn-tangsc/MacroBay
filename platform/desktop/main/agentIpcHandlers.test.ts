@@ -508,7 +508,7 @@ describe('agent ipc handlers', () => {
           setPolicyPreset: async (next) => {
             policyPreset = next
           },
-          defaultTimezone: 'Asia/Shanghai',
+          timeZone: () => 'Asia/Shanghai',
           now: () => new Date('2026-07-16T00:00:00.000Z')
         }
       }

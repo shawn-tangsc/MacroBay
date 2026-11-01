@@ -8,7 +8,7 @@ describe('AgentTaskAutomationQueryService', () => {
       queries: {},
       getPolicyPreset: async () => 'balanced',
       setPolicyPreset: async () => undefined,
-      defaultTimezone: 'Asia/Shanghai',
+      timeZone: () => 'Asia/Shanghai',
       now: () => new Date('2026-07-16T00:00:00.000Z')
     })
 

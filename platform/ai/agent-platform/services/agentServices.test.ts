@@ -712,7 +712,7 @@ describe('agent platform services', () => {
   it('routes compatibility task mutations through automation commands and materializes the default timezone', async () => {
     const services = createAgentPlatformServices(
       createMemoryStateStore(createAgentStoreState({ agents: [agent], workspaces: [workspace] })),
-      { taskAutomation: { defaultTimezone: 'Asia/Shanghai' } }
+      { taskAutomation: { timeZone: () => 'Asia/Shanghai' } }
     )
 
     const created = await services.tasks.create(agent.id, {

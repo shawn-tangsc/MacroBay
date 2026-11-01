@@ -435,7 +435,9 @@ const agentServices = createAgentPlatformServices(agentStore, {
         }
       })
     },
-    hasEnabledDeliveryTarget: (channelId, agentId) => channelDeliveryRepository.hasEnabledTarget(channelId, agentId)
+    hasEnabledDeliveryTarget: (channelId, agentId) => channelDeliveryRepository.hasEnabledTarget(channelId, agentId),
+    // 任务排期与「下次运行」都跟设置时区走；改时区当场生效，不等重启。
+    timeZone: () => shellTimeZone.get()
   },
   queries: {
     agents: {
