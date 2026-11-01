@@ -100,6 +100,53 @@ describe('ErrorState', () => {
     expect(source).not.toMatch(/setInterval|spin|rotate|Loading/i)
     expect(css).not.toMatch(/var\([^)]*,\s*#/)
   })
+
+  /**
+   * 源码不变式：`--danger` 只允许出现在「变体作用域」那一个规则块里（它靠 currentColor 给图标上色）。
+   * 名字只说它证明的事：这是**源码不变式**，不是「正文在深色下可读」——后者要读渲染效果。
+   * 数字：深色 --danger 对 surface 3.94 / soft 3.25，正文门槛 4.5:1；浅色 5.33 / 4.70 是过的。
+   */
+  describe('keeps --danger on the icon scope only in the error stylesheet', () => {
+    function findDangerViolations(text: string): Array<{ selector: string; line: number }> {
+      const violations: Array<{ selector: string; line: number }> = []
+      let selector = ''
+      text.split('\n').forEach((line, index) => {
+        const open = line.indexOf('{')
+        if (selector === '' && open >= 0) selector = line.slice(0, open).trim()
+        if (selector !== '' && line.includes('--danger')) {
+          if (!/^\.error-state\[data-variant='error'\]$/.test(selector)) {
+            violations.push({ selector, line: index + 1 })
+          }
+        }
+        if (selector !== '' && line.includes('}')) selector = ''
+      })
+      return violations
+    }
+
+    it('passes on the stylesheet as shipped', () => {
+      expect(findDangerViolations(css)).toEqual([])
+    })
+
+    it('reports the selector and line when a body rule paints with --danger', () => {
+      // 故意变红的夹具：正文选择器拿了 --danger，守卫必须点名它，而不是只报一句 false。
+      const broken = [
+        ".error-state[data-variant='error'] {",
+        '  color: var(--danger);',
+        '}',
+        '',
+        '.error-state strong {',
+        '  color: var(--danger);',
+        '}',
+        ''
+      ].join('\n')
+
+      const violations = findDangerViolations(broken)
+
+      expect(violations).toHaveLength(1)
+      expect(violations[0]?.selector).toBe('.error-state strong')
+      expect(violations[0]?.line).toBe(6)
+    })
+  })
 })
 
 /**

@@ -10,7 +10,12 @@
 .error-state[data-variant='error'] {
   /* 只给图标（currentColor）。实测对比度（WCAG 计算值）：
      深色 --danger 对 surface 3.94、对 surface-soft 3.25 —— 达图形 3:1，不达正文 4.5:1。
-     所以这一支的颜色**不许**用在正文上；正文一律走 --text-strong / --muted。 */
+     浅色是 5.33 / 4.70，**过的**；所以这条禁令的理由只是「深色不达标」，不是「全主题不够」。
+     改 --danger 时要复算的是深色那一支，不是两个主题一起调。
+     这一支的颜色**不许**用在正文上；正文一律走 --text-strong / --muted。
+
+     顺带记最脆的一格：`--muted` 对 `--surface-soft` 在**浅色**下是 4.68，离正文门槛 4.5
+     只剩 0.18。谁调 `--muted` 或 `--surface-soft`，第一个跌破门槛的就是这一格。 */
   color: var(--danger);
 }
 
