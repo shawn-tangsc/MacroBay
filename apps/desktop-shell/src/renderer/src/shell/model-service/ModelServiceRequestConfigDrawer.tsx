@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button, Drawer } from 'antd'
+import { Button } from 'antd'
+
+import { Drawer } from '@platform/ui/components/drawer'
 
 import type {
   ProviderChatEndpoint,
@@ -26,9 +28,16 @@ import { ModelServiceRequestConfigEndpointFields } from './ModelServiceRequestCo
  */
 type ImageEndpointKind = 'generation' | 'edit'
 
+/** 标题的键：句子由调用页从 `labels` 解析进来，组件自己不认识这句话。 */
+export const MODEL_REQUEST_CONFIG_TITLE_KEY = 'models.requestConfig'
+
 type Props = {
   open: boolean
   labels: PlatformText['models']
+  /** 标题的 i18n 键；不收句子。 */
+  titleKey: string
+  /** 调用方的文案解析入口，只用来把这个键换成句子。 */
+  resolveText: (key: string) => string
   provider: SafeModelProvider
   onClose: () => void
   /** 整份端点清单（顺序即优先级，`[0]` = 默认端点）。 */
@@ -41,6 +50,8 @@ type Props = {
 export function ModelServiceRequestConfigDrawer({
   open,
   labels,
+  titleKey,
+  resolveText,
   provider,
   onClose,
   onSaveEndpoints,
@@ -58,11 +69,11 @@ export function ModelServiceRequestConfigDrawer({
 
   return (
     <Drawer
-      title={labels.requestConfig}
-      placement="right"
-      // 窄抽屉：440px，小屏时最多占 92vw（内容在抽屉内部滚动）。
-      width={440}
-      styles={{ wrapper: { maxWidth: '92vw' } }}
+      // 收起成 440→narrow（420）：宽度只有组件内一张表，`92vw` 上限也在组件里。
+      mode="modal"
+      size="narrow"
+      titleKey={titleKey}
+      resolveText={resolveText}
       open={open}
       onClose={onClose}
       className="model-drawer request-config-drawer"

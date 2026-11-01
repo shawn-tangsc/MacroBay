@@ -16,11 +16,15 @@ import {
 } from '@platform/ai/providers/providerEndpoints'
 
 import { platformText } from '../../i18n/platformText'
-import { ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
+import { MODEL_REQUEST_CONFIG_TITLE_KEY, ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['en-US'].models
 const css = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
+const drawerSource = readFileSync(
+  resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceRequestConfigDrawer.tsx'),
+  'utf8'
+)
 let root: Root | undefined
 
 /** 取某个选择器的**最后一条**规则（后写的覆盖前面的）。 */
@@ -75,6 +79,8 @@ async function mount(options: { provider?: SafeModelProvider } = {}): Promise<Mo
     root?.render(createElement(ModelServiceRequestConfigDrawer, {
       open: true,
       labels,
+      resolveText: (key: string) => (key === MODEL_REQUEST_CONFIG_TITLE_KEY ? labels.requestConfig : ''),
+      titleKey: MODEL_REQUEST_CONFIG_TITLE_KEY,
       provider: options.provider ?? provider,
       onClose: () => undefined,
       onSaveEndpoints,
@@ -132,10 +138,11 @@ describe('PLAT-62 request configuration drawer', () => {
   it('keeps the drawer narrow with the close button outside the scrolling body', async () => {
     await mount()
 
-    const wrapper = document.querySelector<HTMLElement>('.ant-drawer-content-wrapper')
-    // 440px 宽的窄抽屉，小屏时最多占 92vw（响应式上限）。
-    expect(wrapper?.style.width).toBe('440px')
-    expect(wrapper?.style.maxWidth).toBe('92vw')
+    // 宽度只有平台组件里一张表（narrow = 420，上限 92vw）；调用点不再写像素，也不再写 styles。
+    expect(document.querySelector('.drawer--narrow')).not.toBeNull()
+    expect(drawerSource).not.toMatch(/\bwidth=\{/)
+    expect(drawerSource).not.toContain('styles={{')
+    expect(drawerSource).not.toContain('placement=')
     expect(document.querySelector('.ant-drawer-footer [data-request-config-close]')).not.toBeNull()
     expect(document.querySelector('.ant-drawer-body [data-request-config-close]')).toBeNull()
   })

@@ -26,7 +26,7 @@ import { ModelServiceKeySection } from './ModelServiceKeySection'
 import { ModelServiceModelsSection } from './ModelServiceModelsSection'
 import { ModelServiceProviderRail } from './ModelServiceProviderRail'
 import { resolveProviderDisplayName } from './providerDisplayName'
-import { ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
+import { MODEL_REQUEST_CONFIG_TITLE_KEY, ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
 import { useModelServiceAutosave } from './useModelServiceAutosave'
 
 /**
@@ -352,6 +352,9 @@ export function ModelServiceProviderPage({
         <ModelServiceRequestConfigDrawer
           open={requestConfigOpen}
           labels={labels}
+          titleKey={MODEL_REQUEST_CONFIG_TITLE_KEY}
+          // 未知键返回空串，不回退键名：宁可标题空着，也不能把 `models.requestConfig` 念给读者。
+          resolveText={(key) => (key === MODEL_REQUEST_CONFIG_TITLE_KEY ? labels.requestConfig : '')}
           provider={provider}
           onClose={() => setRequestConfigOpen(false)}
           onSaveEndpoints={(endpoints) => saveEndpoints(endpoints).then(() => undefined)}
