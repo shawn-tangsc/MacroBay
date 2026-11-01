@@ -1,4 +1,4 @@
-import { Tooltip } from 'antd'
+import { Button, Tooltip } from 'antd'
 import { Info } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -34,9 +34,8 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
       <div className="mi-divergence__lead">
         <Tooltip title={<span className="mi-divergence__help-body">{text.helpLines.map(line => <b key={line}>{line}</b>)}</span>}
           trigger={['hover', 'focus', 'click']}>
-          <button type="button" className="mi-divergence__help" aria-label={text.helpLabel}>
-            <Info size={11} aria-hidden="true" />
-          </button>
+          <Button type="text" size="small" className="mi-divergence__help" aria-label={text.helpLabel}
+            icon={<Info size={11} aria-hidden="true" />} />
         </Tooltip>
       </div>
       <div className="mi-divergence__content">
@@ -51,7 +50,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             ) : (
               <span className="mi-divergence__status-sub">{text.unavailableWhy[state.reason]}</span>
             )}
-            {onRetry ? <button type="button" className="mi-divergence__act" onClick={onRetry}>{text.retry}</button> : null}
+            {onRetry ? <Button size="small" className="mi-divergence__act" onClick={onRetry}>{text.retry}</Button> : null}
           </div>
         ) : null}
         {state.state === 'empty' && !nothingCompared ? (

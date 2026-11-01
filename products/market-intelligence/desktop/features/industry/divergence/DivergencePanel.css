@@ -19,15 +19,12 @@
   min-width: 0;
 }
 /* The `?` sits before the title: the explanation is an aside to the heading, not content. */
-.mi-divergence__help {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Geometry only: the base, its colour and its focus ring belong to the shared button. */
+.mi-divergence .mi-divergence__help {
   width: 11px;
+  min-width: 0;
   height: 11px;
   padding: 0;
-  border: 0;
-  background: none;
   color: var(--mi-dashboard-muted);
   cursor: help;
 }
@@ -69,17 +66,8 @@
 }
 .mi-divergence__status b { font-size: 11px; }
 .mi-divergence__status-sub { color: var(--mi-dashboard-muted); font-size: 10px; }
-.mi-divergence__act {
-  margin-left: auto;
-  padding: 2px 8px;
-  border: 1px solid color-mix(in srgb, var(--mi-dashboard-text) 28%, transparent);
-  border-radius: 4px;
-  background: none;
-  color: var(--mi-dashboard-text);
-  font-size: 9px;
-  cursor: pointer;
-}
-.mi-divergence__act:hover { background: color-mix(in srgb, var(--mi-dashboard-text) 8%, transparent); }
+/* Placement only: size, paint and hover come from the shared button base. */
+.mi-divergence .mi-divergence__act { margin-left: auto; }
 .mi-divergence__judge {
   display: inline-flex;
   align-items: center;
