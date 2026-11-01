@@ -49,7 +49,7 @@ import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
-  formatProxySelfTestLine,
+  describeProxySelfTest,
   type ProxySelfTestResult
 } from './proxySelfTestDisplay'
 import {
@@ -286,6 +286,14 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
+  // 结果行的文案、语气、第二行同时算出来：渲染层只照着 tone 上样式，不另算成败。
+  const proxySelfTestView =
+    proxySelfTest.result === null
+      ? null
+      : describeProxySelfTest(proxySelfTest.result, t, {
+          expectsProxy: settings.network.proxyMode === 'custom',
+          fallbackProxyLabel: resolveProxyDisplayLabel()
+        })
   const selectedProvider = useMemo(
     () => providers.find((provider) => provider.id === selectedProviderId) ?? null,
     [providers, selectedProviderId]
@@ -1416,14 +1424,18 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
               onClick={() => void runProxySelfTest()}>
               {proxySelfTest.running ? t.preferences.proxySelfTestRunning : t.preferences.proxySelfTest}
             </Button>
-            {proxySelfTest.result !== null ? (
+            {proxySelfTestView !== null ? (
               <p
-                className={proxySelfTest.result.ok ? 'preference-proxy-probe-result ok' : 'preference-proxy-probe-result failed'}
-                data-proxy-self-test-result>
-                {formatProxySelfTestLine(proxySelfTest.result, t, {
-                  expectsProxy: settings.network.proxyMode === 'custom',
-                  fallbackProxyLabel: resolveProxyDisplayLabel()
-                })}
+                className={`preference-proxy-probe-result ${proxySelfTestView.tone}`}
+                data-proxy-self-test-result
+                data-tone={proxySelfTestView.tone}>
+                {proxySelfTestView.line}
+                {proxySelfTestView.hint !== null ? (
+                  <>
+                    <br />
+                    <span className="preference-proxy-probe-hint">{proxySelfTestView.hint}</span>
+                  </>
+                ) : null}
               </p>
             ) : null}
           </div>

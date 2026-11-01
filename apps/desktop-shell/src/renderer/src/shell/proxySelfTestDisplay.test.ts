@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { platformText } from '../i18n/platformText'
 
-import { formatProxySelfTestLine, type ProxySelfTestResult } from './proxySelfTestDisplay'
+import { describeProxySelfTest, formatProxySelfTestLine, type ProxySelfTestResult } from './proxySelfTestDisplay'
 
 const text = platformText['zh-CN']
 const labels = text.preferences
@@ -105,6 +105,33 @@ describe('formatProxySelfTestLine', () => {
       expect(line).toBe(`${expected[code]} · aihubmix.com`)
       for (const candidate of codes) expect(line).not.toContain(candidate)
     }
+  })
+
+  it('reports a tone beside the copy: pass only when the proxy carried it', () => {
+    expect(describeProxySelfTest(result({ proxied: true }), text, customContext).tone).toBe('pass')
+    expect(describeProxySelfTest(result({ proxied: false }), text, customContext).tone).toBe('partial')
+    // 拿不到解析结论也算「部分」：不能因为没证据就报通过。
+    expect(describeProxySelfTest(result({ proxied: undefined }), text, customContext).tone).toBe('partial')
+    expect(
+      describeProxySelfTest(result({ ok: false, status: 401, reasonCode: 'http_401' }), text, customContext)
+    ).toMatchObject({ tone: 'partial', hint: labels.proxySelfTestAuthenticationHint })
+    expect(
+      describeProxySelfTest(result({ ok: false, status: 500, reasonCode: 'http_5xx' }), text, customContext).tone
+    ).toBe('partial')
+    expect(
+      describeProxySelfTest(
+        result({ ok: false, status: null, reasonCode: 'network_timeout', endpointReachable: true }),
+        text,
+        customContext
+      ).tone
+    ).toBe('fail')
+    expect(describeProxySelfTest(result({ endpointReachable: false, ok: false }), text, customContext).tone).toBe('fail')
+    expect(
+      describeProxySelfTest(result({ proxied: false, resolvedProxy: 'DIRECT' }), text, {
+        expectsProxy: false,
+        fallbackProxyLabel: '系统代理'
+      }).tone
+    ).toBe('pass')
   })
 
   it('never falls back to the typed address when reporting success', () => {

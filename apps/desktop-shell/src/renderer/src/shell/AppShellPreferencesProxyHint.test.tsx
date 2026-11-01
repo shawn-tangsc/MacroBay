@@ -73,6 +73,8 @@ describe('PLAT-61 基础设置代理说明', () => {
     expect(result?.textContent).toContain('HTTP 200')
     // 绿档不再印地址；没确认经过代理时只说「能连到」。
     expect(result?.textContent).toContain(labels.proxySelfTestReachable(200, '1.2'))
+    // 自定义模式下拿不到「经代理」的证据：琥珀 partial，不是绿色 pass。
+    expect(result?.getAttribute('data-tone')).toBe('partial')
     // 账号密码绝不出现。
     expect(result?.textContent).not.toContain('super-secret')
     expect(result?.textContent).not.toContain('user:')

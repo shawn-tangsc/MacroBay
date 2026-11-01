@@ -18,6 +18,14 @@ export type ProxySelfTestResult = {
   proxyEndpoint?: string | null
 }
 
+/**
+ * 结果的三档语气：`pass` 真走了代理（或系统模式下直连本来就合法），`partial` 到了站但没走代理
+ * 或站点没给 2xx，`fail` 根本没到站。文案与语气必须同时从这个函数出，别让颜色另算一套判断。
+ */
+export type ProxySelfTestTone = 'pass' | 'partial' | 'fail'
+
+export type ProxySelfTestView = { line: string; tone: ProxySelfTestTone; hint: string | null }
+
 export type ProxySelfTestContext = {
   /** 只有「自定义代理」模式下，解析成 DIRECT 才算没生效。 */
   expectsProxy: boolean
@@ -38,35 +46,73 @@ export function buildProxyProbeUrl(baseUrl: string | null | undefined): string {
   return fallback
 }
 
+/**
+ * 一次同时给出文案、语气与可选第二行。渲染层只照着 `tone` 上样式，不再自己判断成败。
+ */
+export function describeProxySelfTest(
+  result: ProxySelfTestResult,
+  labels: PlatformText,
+  context: ProxySelfTestContext
+): ProxySelfTestView {
+  const preferences = labels.preferences
+
+  // 代理端点连不上：代理坏了，与目标站无关。
+  if (result.endpointReachable === false) {
+    return {
+      line: preferences.proxySelfTestProxyUnreachable(result.proxyEndpoint?.trim() || result.targetHost),
+      tone: 'fail',
+      hint: null
+    }
+  }
+
+  // 目标站自己拒绝（401/403）：请求到了站，是「部分成功」，并给一行解释消解「代理坏了」的误判。
+  const rejectedStatus = targetRejectedStatus(result)
+  if (rejectedStatus !== null) {
+    return {
+      line: preferences.proxySelfTestTargetRejected(rejectedStatus, result.targetHost),
+      tone: 'partial',
+      hint: preferences.proxySelfTestAuthenticationHint
+    }
+  }
+
+  if (result.ok) {
+    const status = result.status ?? 0
+    const seconds = (result.durationMs / 1000).toFixed(1)
+    // 自定义模式下只有网络栈确认经代理才算通过；解析成直连或拿不到结论都只是「部分」。
+    if (context.expectsProxy && result.proxied !== true) {
+      return {
+        line:
+          result.proxied === false
+            ? preferences.proxySelfTestNotApplied(result.resolvedProxy?.trim() || 'DIRECT')
+            : preferences.proxySelfTestReachable(status, seconds),
+        tone: 'partial',
+        hint: null
+      }
+    }
+    return {
+      line:
+        result.proxied === true
+          ? preferences.proxySelfTestPassedViaProxy(status, seconds)
+          : preferences.proxySelfTestReachable(status, seconds),
+      tone: 'pass',
+      hint: null
+    }
+  }
+
+  // 没拿到 2xx：有 HTTP 状态码说明到了站（5xx/4xx 属「部分」），没有状态码说明没到站。
+  return {
+    line: `${proxyFailureSentence(result, labels)} · ${result.targetHost}`,
+    tone: result.status === null ? 'fail' : 'partial',
+    hint: null
+  }
+}
+
 export function formatProxySelfTestLine(
   result: ProxySelfTestResult,
   labels: PlatformText,
   context: ProxySelfTestContext
 ): string {
-  const preferences = labels.preferences
-  // 想走代理、网络栈却解析成直连：这次没走代理，不管请求是否成功都不许显示「通过」。
-  if (context.expectsProxy && result.proxied === false) {
-    return preferences.proxySelfTestNotApplied(result.resolvedProxy?.trim() || 'DIRECT')
-  }
-  // 代理端点连不上是「代理坏了」，与目标站无关。
-  if (result.endpointReachable === false) {
-    return preferences.proxySelfTestProxyUnreachable(result.proxyEndpoint?.trim() || result.targetHost)
-  }
-  // 目标站点自己拒绝（401/403）：先说人话，别让用户以为代理坏了，也别把内部码当句子。
-  const rejectedStatus = targetRejectedStatus(result)
-  if (rejectedStatus !== null) {
-    return preferences.proxySelfTestTargetRejected(rejectedStatus, result.targetHost)
-  }
-  if (result.ok) {
-    const status = result.status ?? 0
-    const seconds = (result.durationMs / 1000).toFixed(1)
-    // 绿档分两支：只有网络栈确认走了代理才说「通过代理」；模式判断只来自 context，不在这里另算。
-    return result.proxied === true
-      ? preferences.proxySelfTestPassedViaProxy(status, seconds)
-      : preferences.proxySelfTestReachable(status, seconds)
-  }
-  // 兜底分支同样不许把内部码当句子：按码映射到连接检查那套人话，码只留在主进程返回值与日志里。
-  return `${proxyFailureSentence(result, labels)} · ${result.targetHost}`
+  return describeProxySelfTest(result, labels, context).line
 }
 
 function proxyFailureSentence(result: ProxySelfTestResult, labels: PlatformText): string {
