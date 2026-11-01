@@ -31,6 +31,15 @@ export type DailyBriefingGenerationSettingsService = Readonly<{
   getSettings: () => Promise<DailyBriefingGenerationSettings>
   getView: () => Promise<DailyBriefingGenerationSettingsView>
   save: (patch: DailyBriefingGenerationSettingsPatch) => Promise<DailyBriefingGenerationSettingsView>
+  /**
+   * Move the stored zone to the reader's display zone after they change it.
+   *
+   * The schedule's clock has to follow the reader: 08:05 was meant as their 08:05, and leaving the
+   * old zone behind means the job fires at one boundary while the page counts its day at another —
+   * which is how one real day produced two editions. Returns the settings as they now read; a write
+   * is skipped when the zone already matches.
+   */
+  reanchor: (timeZone: string) => Promise<DailyBriefingGenerationSettings>
 }>
 
 export function createInMemoryDailyBriefingGenerationSettingsStorage(
@@ -107,12 +116,24 @@ export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
     return migrated
   }
 
+  async function applyReanchor(current: DailyBriefingGenerationSettings, timeZone: string): Promise<DailyBriefingGenerationSettings> {
+    const next = normalizeDailyBriefingGenerationSettings({ ...current, generationTimeZone: timeZone }, now())
+    await deps.storage.write(next).catch(() => undefined)
+    return next
+  }
+
   return {
     async getSettings() {
       return load()
     },
     async getView() {
       return view(await load())
+    },
+    async reanchor(timeZone) {
+      const current = await load()
+      if (!isDailyBriefingTimeZoneId(timeZone) || current.generationTimeZone === timeZone) return current
+      const next = await applyReanchor(current, timeZone)
+      return next
     },
     async save(patch) {
       const current = await load()

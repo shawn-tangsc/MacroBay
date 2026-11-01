@@ -67,6 +67,7 @@ import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBrief
 import { ensureDailyBriefFactsAtStartup } from './daily-briefing/dailyBriefFactEnsureStartup'
 import { DAILY_BRIEFING_SOURCE_IDS } from './daily-briefing/dailyBriefingReadingSources'
 import { briefingScheduleFrom, briefingScheduleInput, registerDailyBriefingJob, scheduleDailyBriefingJob } from './jobs/registerDailyBriefingJob'
+import { resolveBriefingTimeZone } from './daily-briefing/readerTimeZone'
 import { registerDailyBriefSessionRetentionJob } from './jobs/registerDailyBriefSessionRetentionJob'
 import { createDailyBriefSessionLinkStore } from './daily-briefing/dailyBriefSessionLinks'
 import { createDailyBriefEditorSessionPort } from './daily-briefing/dailyBriefEditorSessionPort'
@@ -280,17 +281,6 @@ export type IntelligenceModule = {
 
 let intelligenceModule: IntelligenceModule | null = null
 let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
-
-/**
- * The reader time zone the brief schedule, its cutoff and the "today" it reads all use.
- * Comes from the platform hook (the shell's single time zone reader); fixed UTC when a host
- * has not injected one, never the machine's zone.
- */
-export function resolveBriefingTimeZone(
-  hooks: Pick<IntelligenceModulePlatformHooks, 'getTimeZone'> | undefined
-): string {
-  return hooks?.getTimeZone?.() ?? 'UTC'
-}
 
 function shellTimeZone(): string {
   return resolveBriefingTimeZone(modulePlatformHooks)

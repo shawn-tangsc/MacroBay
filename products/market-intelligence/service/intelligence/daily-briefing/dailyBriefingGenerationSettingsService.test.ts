@@ -52,6 +52,29 @@ describe('daily briefing generation settings service', () => {
     expect(await storage.read()).toMatchObject({ generationTime: '08:30', generationTimeZone: 'Asia/Shanghai' })
   })
 
+  it('moves the stored zone when the reader changes the display zone, without touching the moment', async () => {
+    // The schedule has to follow the reader: leaving the old zone behind makes the job fire at one
+    // boundary while the page counts its day at another, which is how one day produced two editions.
+    const storage = createInMemoryDailyBriefingGenerationSettingsStorage({
+      generationTime: '08:30', windowHours: 24, generationTimeZone: 'Asia/Shanghai', updatedAt: '2026-10-30T00:00:00.000Z'
+    })
+    const write = vi.spyOn(storage, 'write')
+    const service = createDailyBriefingGenerationSettingsService({ storage, timeZone: () => 'Asia/Shanghai' })
+
+    const moved = await service.reanchor('America/New_York')
+    expect(moved).toMatchObject({ generationTime: '08:30', generationTimeZone: 'America/New_York' })
+    expect(write).toHaveBeenCalledTimes(1)
+
+    // Same zone again is a no-op: a change notification must not rewrite the file every time.
+    await service.reanchor('America/New_York')
+    expect(write).toHaveBeenCalledTimes(1)
+
+    // A value that is not a zone changes nothing at all.
+    await service.reanchor('Asia/Shangai')
+    expect(write).toHaveBeenCalledTimes(1)
+    expect((await service.getView()).generationTimeZone).toBe('America/New_York')
+  })
+
   it('reports a zone it cannot read instead of repairing it', async () => {
     const storage = createInMemoryDailyBriefingGenerationSettingsStorage({
       generationTime: '08:30', windowHours: 24, updatedAt: '2026-10-30T00:00:00.000Z',
