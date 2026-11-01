@@ -155,6 +155,8 @@ import { createSettingsStore } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
 import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
 import { isProxyEndpointReachable, parseResolvedProxy } from '../../network/proxySelfTest'
+import { createShellTimeZoneProvider } from './shellTimeZone'
+import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
 import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
@@ -289,6 +291,8 @@ mkdirSync(platformDataDirectory, { recursive: true })
 const settingsStore = createSettingsStore(
   createJsonFileStorage(join(app.getPath('userData'), 'platform', 'settings.json'), createDefaultAppSettings())
 )
+/** 主进程唯一的「读者时区」来源；任务排期、免打扰、日报调度、分析展示都从这里取。 */
+const shellTimeZone = createShellTimeZoneProvider({ settings: settingsStore })
 const providerSecretVault = createElectronSecretVault({
   directory: join(app.getPath('userData'), 'platform', 'secrets'),
   safeStorage
@@ -307,17 +311,9 @@ const appLog = createAppLog({
 appLog.log('info', 'app.start', { version: app.getVersion(), platform: process.platform })
 const rendererProcessLog = createRendererProcessLog(appLog)
 
-/** 运行时 IANA 时区（设置项 `system` 的解析输入）；解析不出时由调用方回落到 `fallbackTimeZone`。 */
-function systemTimeZoneSource(): { timeZone: string } {
-  return { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
-}
-
-function taskIpcScheduleValidationOptions(): { now: Date; defaultTimezone: string } {
-  return {
-    now: new Date(),
-    defaultTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  }
-}
+const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions({
+  timeZone: () => shellTimeZone.get()
+})
 
 // Channel management re-validates every field at its own contract boundary, so the
 // IPC layer only proves that the payload is a plain object before handing it over.
@@ -1533,6 +1529,8 @@ function registerIpcHandlers(
       // 内置 Agent/会话文案按 id 重新解析到新语言；用户改过的字段不动，也不写任何迁移标记。
       await refreshBuiltinSeedCopy(next.language)
     }
+    // 时区改动必须立刻影响后续排期/日界，不必等重启。
+    await shellTimeZone.refresh()
     await applySessionProxySettings(next.network)
     // PLAT-32/S1：偏好的**唯一对账点** = 这条显式通知（受控读取不再带副作用；通知自身绝不 reject）
     void panelWorkspaceForDisposal?.notifyPreferencesChanged()
@@ -2444,6 +2442,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
 
   await app.whenReady()
   appLog.log('info', 'app.ready')
+  // 提供者默认拿运行时系统时区；显式设置的时区要在任何消费者构造之前解析一次。
+  await shellTimeZone.refresh()
   // T1：`app-image://` 只读协议只在这里 handle 一次；scheme 已在模块加载时注册为特权 scheme。
   registerGeneratedImageProtocol(generatedImagesDirectory)
 
@@ -2513,7 +2513,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       getLanguage: async () => (await settingsStore.get()).language,
       getTheme: () => readWorkspaceContextTheme(settingsStore, nativeTheme), // P1-06h N3：与 shell 同源（settings.themeMode），只有 system 才回退 OS
       // 显示时区与 shell 同源（settings.timeZone），只有 system 才回退运行时 IANA 时区
-      getTimeZone: () => readWorkspaceContextTimeZone(settingsStore, systemTimeZoneSource())
+      // 运行时 IANA 时区只在 shellTimeZone 提供者内部读取；这里只取它解析好的结果
+      getTimeZone: () => readWorkspaceContextTimeZone(settingsStore, { timeZone: shellTimeZone.get() })
     }
   })
   // 宿主事件/原生关闭/外部销毁的接收方现在才存在：接线后所有宿主回调都回流到 compose

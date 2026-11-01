@@ -107,10 +107,13 @@ describe('app.ts 接线护栏（受保护 seam）：上下文主题必须走本�
     expect(appSource).not.toContain("getTheme: () => (nativeTheme.shouldUseDarkColors ? 'dark' : 'light')")
   })
 
-  it('getTimeZone 委托给 readWorkspaceContextTimeZone(settingsStore, systemTimeZoneSource())', () => {
+  it('getTimeZone 委托给 readWorkspaceContextTimeZone(settingsStore, shellTimeZone)', () => {
     // 显示时区必须与 shell 同源（settings.timeZone）；缺这条接线时分离窗与产品页会各自猜时区。
-    expect(appSource).toContain('getTimeZone: () => readWorkspaceContextTimeZone(settingsStore, systemTimeZoneSource())')
-    // 运行时 IANA 时区只允许在 systemTimeZoneSource 里读取，不得在偏好注入处直取
+    expect(appSource).toContain(
+      'getTimeZone: () => readWorkspaceContextTimeZone(settingsStore, { timeZone: shellTimeZone.get() })'
+    )
+    // 运行时 IANA 时区只允许在 shellTimeZone 提供者内部读取，偏好注入处不得直取
     expect(appSource).not.toContain("getTimeZone: async () => (await settingsStore.get()).timeZone")
+    expect(appSource).not.toContain('systemTimeZoneSource')
   })
 })
