@@ -45,7 +45,6 @@
   "apps/desktop-shell/src/renderer/src/styles.css :: .web-search-api-key-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .web-search-drawer-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .web-search-summary-warning": 1,
-  "platform/ui/agent-chat/agentChat.css :: .agent-chat-composer__notices > p[role='alert']": 1,
   "platform/ui/components/error-state/errorState.css :: .error-state[data-variant='error']": 1,
   "products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css :: .mi-economic-calendar__values [data-market-value='surprise'][data-surprise='miss'] strong": 1,
   "products/market-intelligence/desktop/pages/intelligence/intelligence.css :: .mi-analysis-error__body strong": 1,
