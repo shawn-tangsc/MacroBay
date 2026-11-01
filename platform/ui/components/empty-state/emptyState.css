@@ -1,17 +1,22 @@
 /*
- * 空态基座。迁移期与旧类名共存：旧页面的 `.agent-empty-catalog strong/span` 仍然生效，
- * 这里只补颜色与动作按钮，**不加任何布局规则**——加了就会在迁移当天改变间距，
- * 「零外观变化」当场作废。布局由所在容器决定。
+ * 空态基座。迁移期与旧类名共存：旧页面的 `.agent-empty-catalog strong/span` 仍然生效。
+ *
+ * strong / span 必须显式 `display: block`：它们是行内元素，离开 grid 容器就会并排成一行。
+ * 现在六处站点被旧类的 grid 兜住看不出问题，而 `className` 的退役条件正是「旧类名 grep = 0」——
+ * 那天一到，六处会一起塌。这条不是美观修正，是组件离开旧类那天能不能自立的预演。
+ * 对现有站点零影响：grid 子项本来就会被 blockify。
  */
 .empty-state {
   display: block;
 }
 
 .empty-state strong {
+  display: block;
   color: var(--text-strong);
 }
 
 .empty-state span {
+  display: block;
   color: var(--muted);
 }
 

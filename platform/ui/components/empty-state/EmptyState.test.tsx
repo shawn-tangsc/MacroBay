@@ -1,3 +1,5 @@
+// @vitest-environment happy-dom
+
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -61,6 +63,21 @@ describe('EmptyState', () => {
     expect(withoutComments).not.toMatch(/[\u4e00-\u9fa5]/)
     expect(source).not.toMatch(/setInterval|spin|rotate/i)
     expect(css).not.toMatch(/var\([^)]*,\s*#/)
+  })
+
+  it('stays readable when the legacy grid class is gone', () => {
+    // 旧类名退役那天（grep 旧类名 = 0）预演：裸容器里标题与说明必须各占一行。
+    const style = document.createElement('style')
+    style.textContent = css
+    document.head.append(style)
+    const host = document.createElement('div')
+    host.innerHTML = renderToStaticMarkup(<EmptyState title="Nothing yet" reason="Nothing is registered." />)
+    document.body.append(host)
+
+    const strong = host.querySelector('.empty-state strong')!
+    const span = host.querySelector('.empty-state span')!
+    expect(getComputedStyle(strong).display).toBe('block')
+    expect(getComputedStyle(span).display).toBe('block')
   })
 })
 
