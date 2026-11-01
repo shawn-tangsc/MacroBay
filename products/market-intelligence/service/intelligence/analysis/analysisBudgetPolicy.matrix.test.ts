@@ -116,6 +116,23 @@ describe('the budget rule set the old gate is replaced by', () => {
     expect(decideBudget({ ...base, scheduledRunsToday: 3 }).decision).toBe('skipped')
   })
 
+  it('refuses the fourth slot once the data lines and the reserve reach 60, so 60 is a hard ceiling', () => {
+    // 48 + 9 + 3 = 60: the day is spent. The slots are exempt from the global gate because their own
+    // reserve already keeps them inside the ceiling — that exemption is only safe while this holds.
+    const spent = input({
+      eventToday: 48, calendarToday: 9, scheduledToday: 3,
+      eventHour: 0, calendarHour: 0, lastAutoRunAt: null
+    }, SLOT_KEY)
+    expect(spent.dayRuns).toBe(60)
+    expect(decideBudget(spent)).toEqual({ decision: 'skipped', reasonCode: 'schedule-reserve-exhausted' })
+    // And the data line is refused by the global day gate at the same point.
+    expect(decideBudget({ ...spent, triggerKey: EVENT_KEY, eventRunsToday: 47 }))
+      .toEqual({ decision: 'skipped', reasonCode: 'day-budget-exhausted' })
+    // Two slots spent and a day at 59: the third slot is still allowed, so the refusal above comes
+    // from the reserve being used up, not from the global gate or from the order of the checks.
+    expect(decideBudget({ ...spent, scheduledRunsToday: 2, dayRuns: 59 }).decision).toBe('queued')
+  })
+
   it('states the only differences from the deleted gate: 48 → 60 a day, 12 → 15 an hour', () => {
     const widened: Point[] = []
     const tightened: Point[] = []
