@@ -59,6 +59,7 @@ export function McpCatalog({
                 if (!checked) onRemove(mcp.id)
               }}
               onRefresh={() => onRefresh(mcp.id)}
+              onUnbind={() => onRemove(mcp.id)}
             />
           ))}
           {manualMcps.map((mcpId) => (
@@ -150,7 +151,8 @@ function McpRow({
   text,
   checked,
   onToggle,
-  onRefresh
+  onRefresh,
+  onUnbind
 }: {
   item: AgentMcpCatalogItem
   tools: readonly McpTool[]
@@ -158,6 +160,7 @@ function McpRow({
   checked: boolean
   onToggle: (checked: boolean) => void
   onRefresh?: () => void
+  onUnbind?: () => void
 }): React.ReactElement {
   return (
     <div className="agent-tool-row agent-mcp-row">
@@ -202,6 +205,15 @@ function McpRow({
         }>
         {mcpStatusLabel(item.status, text)}
       </Tag>
+      {checked && item.status !== 'connected' && onUnbind ? (
+        <Button
+          className="ant-secondary-button"
+          size="small"
+          aria-label={text.editor.tools.mcpUnbind}
+          onClick={onUnbind}>
+          {text.editor.tools.mcpUnbind}
+        </Button>
+      ) : null}
       {checked && onRefresh ? (
         <Button
           className="ant-icon-button"
@@ -215,9 +227,8 @@ function McpRow({
       <Switch
         size="small"
         checked={checked}
-        // 说法必须与上面那枚标签同源：标签写什么，这个开关就读出什么。
-        // 这里不再按 `pickable` 判禁用——能进这个列表的条目按定义都可 pick，那个条件是旧语义的残骸。
-        aria-label={mcpStatusLabel(item.status, text)}
+        // 读屏名说清楚「绑没绑」，而不是把状态词当开关名念出来（那会读成「不可用，开关」）。
+        aria-label={switchAccessibleName(item, checked, text)}
         onChange={onToggle}
       />
     </div>
@@ -294,6 +305,13 @@ async function runCredentialAction(
   if (action.id === 'restart' || action.id === 'retry') {
     onRestart?.()
   }
+}
+
+/** 读屏名说的是「绑没绑」，把当前状态只作为不可用时的补充。 */
+function switchAccessibleName(item: AgentMcpCatalogItem, checked: boolean, text: AgentText): string {
+  if (checked) return text.editor.tools.mcpSwitchBound(item.name)
+  if (item.status === 'connected') return text.editor.tools.mcpSwitchBind(item.name)
+  return text.editor.tools.mcpSwitchBindUnavailable(item.name)
 }
 
 /** 四句按状态分开说：连不上、正在连、没启动、连上了但这个服务没有工具，是四件事。 */

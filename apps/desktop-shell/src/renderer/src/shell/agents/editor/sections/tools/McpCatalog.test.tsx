@@ -58,9 +58,9 @@ describe('McpCatalog', () => {
       addable: [{ ...baseItem, status: 'error', statusText: 'Process exited' }]
     })
 
-    // 无障碍名必须与标签同源；「可添加」是旧标签，出现即说明两套说法又分叉了。
+    // 读屏名说的是「绑没绑」，不再把状态词当开关名念出来。
     expect(markup).not.toContain(`aria-label="${agentTextZh.common.available}"`)
-    expect(markup).toContain(`aria-label="${agentTextZh.editor.tools.mcpError}"`)
+    expect(markup).toContain(`aria-label="${agentTextZh.editor.tools.mcpSwitchBindUnavailable('Filesystem')}"`)
     // 错误态保持可勾：说明归说明，绑定归绑定。
     expect(markup).toContain('role="switch"')
     expect(markup).not.toContain('disabled=""')
@@ -77,6 +77,20 @@ describe('McpCatalog', () => {
     const markup = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'connecting' }] })
 
     expect(markup).toContain(agentTextZh.editor.tools.mcpEmptyToolsConnecting)
+  })
+
+  it('names a bound switch by binding, not by status', () => {
+    const markup = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'error', statusText: 'Process exited' }] })
+
+    expect(markup).toContain(`aria-label="${agentTextZh.editor.tools.mcpSwitchBound('Filesystem')}"`)
+  })
+
+  it('offers an unbind exit only on a bound row that cannot work', () => {
+    const broken = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'error', statusText: 'Process exited' }] })
+    const healthy = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'connected' }] })
+
+    expect(broken).toContain(`aria-label="${agentTextZh.editor.tools.mcpUnbind}"`)
+    expect(healthy).not.toContain(`aria-label="${agentTextZh.editor.tools.mcpUnbind}"`)
   })
 
   it('does not explain an empty tool list on a server that is not bound yet', () => {

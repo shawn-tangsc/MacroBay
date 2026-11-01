@@ -198,6 +198,10 @@ export type AgentTextWorkbench = {
       mcpEmptyToolsConnecting: string
       mcpEmptyToolsError: string
       mcpEmptyToolsConnected: string
+      mcpSwitchBound: (name: string) => string
+      mcpSwitchBind: (name: string) => string
+      mcpSwitchBindUnavailable: (name: string) => string
+      mcpUnbind: string
       mcpActionOpenUrl: string
       mcpActionRestart: string
       mcpActionOpenSettings: string
