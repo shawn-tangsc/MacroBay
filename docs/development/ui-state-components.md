@@ -3,8 +3,8 @@
 # State components
 
 Every region that can be empty, waiting, broken, switched off or not permitted renders `StateView`.
-It replaces the three older ids `EmptyState`, `ErrorState` and `DisabledHint`; there is no
-compatibility layer and no second implementation.
+It is the one state surface; the older `EmptyState`, `ErrorState` and `DisabledHint` are retired as
+each call site migrates, with no compatibility layer and no second implementation.
 
 One component, six states, and copy that is chosen by code rather than written by hand. That is the
 whole point: twenty-three spellings of "empty" and eighteen of "error" grew because every page wrote
@@ -36,8 +36,8 @@ instead of falling back to a generic sentence.
 | --- | --- | --- | --- |
 | `state` | `StateViewState` | always | Which of the six states this region is in. |
 | `resolveText` | `(key: string) => string` | always | The caller's text resolver. The component holds no copy and imports no i18n. |
-| `reasonCode` | `string` | `empty` / `error` / `disabled` / `permission` | A **code**, never a sentence. The key is `ui.state.<state>.reason.<code>`. |
-| `action` | `{ labelKey, onSelect }` | `disabled`; optional elsewhere | At most one action. The label is a key, not text. |
+| `reasonCode` | a closed set, one per state | `empty` / `error` / `disabled` / `permission` | A **code**, never a sentence. The key is `ui.state.<state>.reason.<code>`. A code that belongs to another state does not compile. |
+| `action` | `{ labelKey, onSelect }` | `empty` except `not-yet`; `disabled` / `target-disabled`; optional for `error`; never for `not-yet`, `capability-not-wired`, `permission` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
 | `details` | `{ summaryKey, bodyKey }` | `error` only | Troubleshooting detail, folded by default. |
 | `size` | `'sm' \| 'md' \| 'lg'` | optional, default `md` | `lg` = full page (220), `md` = inside a card (80). `sm` is reserved and must not be used yet. |
 | `children` | `ReactNode` | `normal` only | The region's own content. |
@@ -54,12 +54,27 @@ Icons come from one table inside the component and are chosen by `state` alone.
 | `loading` | `LoadingState` | by `LoadingState` | What is being waited for. |
 | `empty` | circle | no | Why there is nothing (not configured / filtered out / not collected yet). |
 | `error` | `!` | `role="status"` + `aria-live="polite"` | What failed and what the reader can do. |
-| `disabled` | circle-slash | no | Why it cannot be used, and one action that unlocks it. |
-| `permission` | lock | no | What is missing and who grants it. No primary action in this app. |
+| `disabled` | circle-slash | no | Why it cannot be used, and one action that unlocks it — or none when the platform side is not wired. |
+| `permission` | lock | no | What is missing and who grants it. No action in this batch: the local single-user build has no administrator to ask. |
 
 `disabled` and `permission` share the same neutral colour on purpose. They stay distinguishable in
-grayscale because the outline differs (circle-slash vs lock) and the action slot differs (`disabled`
-must offer an action, `permission` offers none). Do not separate them by colour.
+grayscale because the outline differs (circle-slash vs lock) and the action slot differs. Do not
+separate them by colour.
+
+The reason codes are a closed set. The action column is enforced by the type, not by review:
+
+| `state` | `reasonCode` | Action | Meaning |
+| --- | --- | --- | --- |
+| `empty` | `never-created` | required: create | Nothing has ever been created. |
+| `empty` | `filtered-out` | required: clear the filter | There is data; the filter hides it. |
+| `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
+| `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
+| `empty` | `not-yet` | never | It only appears once something has happened. |
+| `error` | `unreadable` | retry, when the reader can | The data could not be read — this is not "there is none". |
+| `error` | `unavailable` | check the source, when the reader can | The source itself is unavailable; retrying blindly achieves nothing. |
+| `disabled` | `capability-not-wired` | never | The platform side is not connected; nothing is wrong on the reader's side. |
+| `disabled` | `target-disabled` | required: enable | The target was switched off. |
+| `permission` | `not-granted` | never in this batch | Only for capabilities where the system can answer whether permission was granted. |
 
 ### Sizes
 
@@ -84,19 +99,22 @@ a pixel value from a call site, and do not write a second `min-height` in page C
 // Correct: state + code, text resolved by the shell.
 <StateView
   state="empty"
-  reasonCode="no-source"
+  reasonCode="never-created"
   resolveText={t}
-  action={{ labelKey: 'ui.action.open-settings', onSelect: openSettings }}
+  action={{ labelKey: 'ui.state.action.create', onSelect: create }}
 />
 
 // Correct: a page-level error with folded detail and a retry.
 <StateView
   state="error"
-  reasonCode="unreachable"
+  reasonCode="unreadable"
   resolveText={t}
-  details={{ summaryKey: 'ui.error.details.summary', bodyKey: 'ui.error.details.body' }}
-  action={{ labelKey: 'ui.action.retry', onSelect: retry }}
+  details={{ summaryKey: 'ui.state.error.details', bodyKey: 'ui.error.details.body' }}
+  action={{ labelKey: 'ui.state.action.retry', onSelect: retry }}
 />
+
+// Correct: nothing has happened yet, so there is no action to give.
+<StateView state="empty" reasonCode="not-yet" resolveText={t} />
 
 // Wrong: hand-written copy, a boolean switch, a pixel size, an icon prop.
 <StateView state="empty" title="No data" spinner size={120} icon={<Empty />} />

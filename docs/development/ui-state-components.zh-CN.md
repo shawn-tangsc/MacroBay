@@ -2,8 +2,9 @@
 
 # 状态组件
 
-任何可能出现「空 / 等待 / 出错 / 已关闭 / 无权限」的区域，都渲染 `StateView`。它取代
-`EmptyState`、`ErrorState`、`DisabledHint` 三个旧身份；不留兼容层，也不许有第二份实现。
+任何可能出现「空 / 等待 / 出错 / 已关闭 / 无权限」的区域，都渲染 `StateView`。它是唯一的状态面；
+`EmptyState`、`ErrorState`、`DisabledHint` 三个旧身份随各调用点迁移逐个退役，不留兼容层，
+也不许有第二份实现。
 
 一个组件、六个态，文案由码选出而不是手写。理由很直接：全仓曾经长出 23 种「空」的写法和
 18 种「错」的写法，因为每一页都自己造句子；而一个把异常 catch 掉、显示「暂无数据」的页面，
@@ -34,8 +35,8 @@ import { StateView } from '@platform/ui/components/state'
 | --- | --- | --- | --- |
 | `state` | `StateViewState` | 总是 | 这个区域现在是六态里的哪一态。 |
 | `resolveText` | `(key: string) => string` | 总是 | 调用方的文案解析入口。组件内零文案、不 import i18n。 |
-| `reasonCode` | `string` | `empty` / `error` / `disabled` / `permission` | 原因**码**，不是句子。键是 `ui.state.<state>.reason.<code>`。 |
-| `action` | `{ labelKey, onSelect }` | `disabled` 必填；其余可选 | 至多一个动作，文案也只收键。 |
+| `reasonCode` | 闭集，每个态一套 | `empty` / `error` / `disabled` / `permission` | 原因**码**，不是句子。键是 `ui.state.<state>.reason.<code>`。别的态的码用在这里编译不过。 |
+| `action` | `{ labelKey, onSelect }` | `empty`（除 `not-yet`）、`disabled` / `target-disabled` 必填；`error` 可选；`not-yet`、`capability-not-wired`、`permission` 不许有 | 至多一个动作，文案也只收键。读者没有可做的事时，传动作编译不过。 |
 | `details` | `{ summaryKey, bodyKey }` | 仅 `error` | 排障详情，默认折叠。 |
 | `size` | `'sm' \| 'md' \| 'lg'` | 可选，默认 `md` | `lg` 整页（220）、`md` 卡内（80）。`sm` 保留、本批不许用。 |
 | `children` | `ReactNode` | 仅 `normal` | 区域自己的内容。 |
@@ -52,11 +53,26 @@ import { StateView } from '@platform/ui/components/state'
 | `loading` | `LoadingState` | 由 `LoadingState` 自己播报 | 在等什么。 |
 | `empty` | 圆圈 | 不播报 | 为什么空（没配置 / 被筛选掉 / 还没采集）。 |
 | `error` | `!` | `role="status"` + `aria-live="polite"` | 出了什么错、读者能做什么。 |
-| `disabled` | 圈加斜杠 | 不播报 | 为什么不能操作，以及一个点了就能解锁的动作。 |
-| `permission` | 锁 | 不播报 | 缺什么、谁给得了。本应用不给主按钮。 |
+| `disabled` | 圈加斜杠 | 不播报 | 为什么不能操作，以及一个点了就能解锁的动作；平台没接通时没有动作。 |
+| `permission` | 锁 | 不播报 | 缺什么、谁给得了。本批不给动作：本地单用户版没有「管理员」这个人。 |
 
 `disabled` 与 `permission` 刻意共用中性色。灰度下仍可分辨，靠的是轮廓不同（圈加斜杠 vs 锁）
-和动作位不同（`disabled` 必须给动作，`permission` 不给）。**不许用颜色把它们分开。**
+和动作位不同。**不许用颜色把它们分开。**
+
+原因码是闭集；下表的动作列由类型强制，不靠评审盯：
+
+| `state` | `reasonCode` | 动作 | 含义 |
+| --- | --- | --- | --- |
+| `empty` | `never-created` | 必填：创建 | 从来没有创建过。 |
+| `empty` | `filtered-out` | 必填：清除筛选 | 有数据，被当前筛选挡住。 |
+| `empty` | `no-target-bound` | 必填：去绑定 | 目标还没绑。 |
+| `empty` | `nothing-enabled` | 必填：去启用 | 一个都没启用。 |
+| `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现。 |
+| `error` | `unreadable` | 读者能重试时给重试 | 没读出来，不是「没有」。 |
+| `error` | `unavailable` | 读者能查时给检查来源 | 数据源本身不可用，盲目重试没有意义。 |
+| `disabled` | `capability-not-wired` | 不许有 | 平台侧没接通，读者没做错。 |
+| `disabled` | `target-disabled` | 必填：去启用 | 目标被停用了。 |
+| `permission` | `not-granted` | 本批不许有 | 只用于系统能回答「授没授权」的能力。 |
 
 ### 尺寸
 
@@ -81,19 +97,22 @@ import { StateView } from '@platform/ui/components/state'
 // 对：状态 + 码，句子由壳层解析。
 <StateView
   state="empty"
-  reasonCode="no-source"
+  reasonCode="never-created"
   resolveText={t}
-  action={{ labelKey: 'ui.action.open-settings', onSelect: openSettings }}
+  action={{ labelKey: 'ui.state.action.create', onSelect: create }}
 />
 
 // 对：整页错误，详情折叠，带重试。
 <StateView
   state="error"
-  reasonCode="unreachable"
+  reasonCode="unreadable"
   resolveText={t}
-  details={{ summaryKey: 'ui.error.details.summary', bodyKey: 'ui.error.details.body' }}
-  action={{ labelKey: 'ui.action.retry', onSelect: retry }}
+  details={{ summaryKey: 'ui.state.error.details', bodyKey: 'ui.error.details.body' }}
+  action={{ labelKey: 'ui.state.action.retry', onSelect: retry }}
 />
+
+// 对：什么都还没发生，本来就没有动作可给。
+<StateView state="empty" reasonCode="not-yet" resolveText={t} />
 
 // 错：手写文案、布尔开关、像素尺寸、图标入口。
 <StateView state="empty" title="暂无数据" spinner size={120} icon={<Empty />} />

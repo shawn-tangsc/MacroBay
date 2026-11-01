@@ -1305,7 +1305,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.grant': '去开启',
       'ui.state.action.open-settings': '打开设置',
       'ui.state.action.contact-admin': '联系管理员'
-    },    windowChrome: {
+    },
+    windowChrome: {
       controls: '窗口控制',
       minimize: '最小化',
       maximize: '最大化',
@@ -2391,7 +2392,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.grant': 'Grant',
       'ui.state.action.open-settings': 'Open settings',
       'ui.state.action.contact-admin': 'Contact an administrator'
-    },    windowChrome: {
+    },
+    windowChrome: {
       controls: 'Window controls',
       minimize: 'Minimize',
       maximize: 'Maximize',
