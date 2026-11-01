@@ -1290,6 +1290,8 @@ export type DesktopAppBootstrapOptions = {
     /** 模型服务页「默认模型」投影；产品只读，不能写回设置。 */
     getModelDefaults: () => Promise<ModelDefaultsSettings>
     getNetworkSettings: () => Promise<NetworkSettings>
+    /** 主进程唯一的读者时区来源（产品侧的日报日界、日历月份）。 */
+    getTimeZone?: () => string
     platformFetch: typeof fetch
     secretVault: ReturnType<typeof createElectronSecretVault>
     registerProductAgentToolHandler: (registration: ProductAgentToolHandlerRegistration) => void
@@ -2548,6 +2550,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
         const settings = await settingsStore.get()
         return settings.network
       },
+      // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
+      getTimeZone: () => shellTimeZone.get(),
       platformFetch: getPlatformFetch(),
       secretVault: providerSecretVault,
       registerProductAgentToolHandler,

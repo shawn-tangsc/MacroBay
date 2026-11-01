@@ -191,6 +191,8 @@ export type IntelligenceModulePlatformHooks = {
   eventBusRuntime?: EventBusRuntime
   /** Required: the first call must inject it, and every consumer reads this one. */
   platformFetch: CapitalConditionsPlatformFetch
+  /** The shell's single time zone reader; a product job's day boundary follows the setting, never the machine. */
+  getTimeZone?: () => string
   /**
    * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
    * constructor because the desktop shell can only build it once network settings are readable —
@@ -279,13 +281,19 @@ export type IntelligenceModule = {
 let intelligenceModule: IntelligenceModule | null = null
 let modulePlatformHooks: IntelligenceModulePlatformHooks | undefined
 
-/** The local wall-clock zone the brief schedule and its cutoff both use. */
-function systemLocalTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
+/**
+ * The reader time zone the brief schedule, its cutoff and the "today" it reads all use.
+ * Comes from the platform hook (the shell's single time zone reader); fixed UTC when a host
+ * has not injected one, never the machine's zone.
+ */
+export function resolveBriefingTimeZone(
+  hooks: Pick<IntelligenceModulePlatformHooks, 'getTimeZone'> | undefined
+): string {
+  return hooks?.getTimeZone?.() ?? 'UTC'
+}
+
+function shellTimeZone(): string {
+  return resolveBriefingTimeZone(modulePlatformHooks)
 }
 
 function getProductDataDir(): string {
@@ -789,7 +797,7 @@ export function getIntelligenceModule(
     // generation time, so a change never rewrites an edition that already exists.
     const dailyBriefingGenerationSettings = createDailyBriefingGenerationSettingsService({
       storage: createDailyBriefingGenerationSettingsJsonStorage(join(dataDir, 'daily-briefing-generation-settings.json')),
-      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, { timeZone: systemLocalTimeZone(), generationTime: settings.generationTime })
+      onSaved: (settings) => scheduleDailyBriefingJob(jobRuntime, { timeZone: shellTimeZone(), generationTime: settings.generationTime })
     })
     const dailyBriefingSettings = createDailyBriefingSettingsService({
       ai: dailyBriefingAiSettings,
@@ -936,7 +944,7 @@ export function getIntelligenceModule(
     registerDailyBriefingJob(jobRuntime, {
       service: dailyBriefingService,
       getLocale: getAppLanguage,
-      timeZone: systemLocalTimeZone,
+      timeZone: shellTimeZone,
       getGenerationTime: async () => (await dailyBriefingGenerationSettings.getView()).generationTime
     })
     // The deterministic pass runs once per module start, after the default sources exist and the
@@ -957,10 +965,10 @@ export function getIntelligenceModule(
         links: dailyBriefSessionLinks,
         deleteSessions: (ids) => hooks.deleteAgentSessions!(ids),
         today: () => {
-          const zone = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } })()
+          const zone = shellTimeZone()
           return localDate(new Date().toISOString(), zone) ?? new Date().toISOString().slice(0, 10)
         },
-        timeZone: () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch { return 'UTC' } }
+        timeZone: shellTimeZone
       })
     }
     intelligenceModule = {
