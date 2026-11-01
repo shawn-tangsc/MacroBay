@@ -7,8 +7,6 @@ export const analysisTriggerPolicy = Object.freeze({
   reviewWindowMs: 120 * 60 * 1_000,
   maximumReviews: 2,
   maximumConcurrentRuns: 2,
-  maximumHourlyTriggers: 12,
-  maximumDailyTriggers: 48,
   verificationIntervalMs: 5 * 60 * 1_000,
   marketMove15mThresholdPct: 0.75,
   fundingDelta8hThresholdPctPoints: 0.01,
@@ -78,8 +76,9 @@ export function createAnalysisTriggerPolicy(): AnalysisTriggerPolicy {
     if (input.lastTriggeredAt && input.lastTriggeredPhase === phase && Date.parse(input.now) - Date.parse(input.lastTriggeredAt) < analysisTriggerPolicy.cooldownMs) return skip('cooldown-active')
     const latestPhaseTrigger = [...input.recentTriggers].reverse().find(trigger => trigger.phase === (input.hasInitialRun ? 'review' : 'initial'))
     if (latestPhaseTrigger && Date.parse(input.now) - Date.parse(latestPhaseTrigger.triggeredAt) < analysisTriggerPolicy.cooldownMs) return skip('cooldown-active')
-    if (input.hourTriggerCount >= analysisTriggerPolicy.maximumHourlyTriggers) return skip('hour-budget-exhausted')
-    if (input.dayTriggerCount >= analysisTriggerPolicy.maximumDailyTriggers) return skip('day-budget-exhausted')
+    // No hourly or daily check here: every quota number lives in `analysisBudgetPolicy`, which
+    // judges the same counts one step earlier in the pipeline. Keeping a second copy here is how the
+    // combined 48/12 guard and the per-line split ended up disagreeing.
     if (input.runningCount >= analysisTriggerPolicy.maximumConcurrentRuns) return skip('concurrency-budget-exhausted')
     if (!input.change.confirmed) return skip('change-unconfirmed')
     const reaction = Math.abs(input.change.marketMove15mPct ?? 0) >= analysisTriggerPolicy.marketMove15mThresholdPct || Math.abs(input.change.fundingDeltaPctPoints ?? 0) >= analysisTriggerPolicy.fundingDelta8hThresholdPctPoints
