@@ -211,11 +211,11 @@ and lives outside this guide.
 ## Verification before a release
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm docs:check
+pnpm verify
 ```
+
+`pnpm verify` is the single definition of the checks (`docs:check`, `check:file-size`, typecheck, test,
+build); CI runs the same command, so this page never keeps its own copy of the list.
 
 Then install the produced package on a clean machine and verify:
 

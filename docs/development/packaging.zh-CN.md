@@ -192,11 +192,11 @@ gate 通过后从 `main` 打 tag。发布清单属于维护材料，不在本文
 ## 发布前验证
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm docs:check
+pnpm verify
 ```
+
+`pnpm verify` 是检查步骤的唯一一处定义（`docs:check`、`check:file-size`、typecheck、test、build），
+CI 跑的也是同一条命令，所以本页不再自己维护一份清单。
 
 然后在干净机器上安装产物，验证：
 
