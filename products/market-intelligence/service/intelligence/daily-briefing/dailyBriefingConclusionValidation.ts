@@ -150,7 +150,10 @@ export function validateConclusionSynthesis(
   const refuted = textList(raw.refuted)
   if (refuted === false) return fail('invalid-conclusion-synthesis')
   const evidenceRefs = evidenceReferences(raw.evidenceRefs, document)
-  if (evidenceRefs === false) return fail('invalid-conclusion-synthesis')
+  // A refused citation list used to come back as a bare false, so a reply that cited nine facts was
+  // rejected with "invalid-conclusion-synthesis" and nothing else — and the repair round cited nine
+  // again. The cap is stated in the reply schema now, and the refusal names what is wrong.
+  if (evidenceRefs === false) return fail('invalid-conclusion-synthesis', evidenceReferenceDefect(raw.evidenceRefs, document))
   if (evidenceRefs.length === 0) return fail('missing-conclusion-evidence')
   // The summary is read as market prose, not as a status report about the synthesis. Internal
   // vocabulary and bare labels fail here with a repair hint that names the concrete replacement.
@@ -441,16 +444,40 @@ function splitSentences(text: string): readonly string[] {
  * deliberately not in this space: their assertions are claims, and citing a claim as evidence is
  * exactly the laundering the synthesis exists to stop.
  */
+function knownEvidenceIds(document: DailyBriefingDocument): ReadonlySet<string> {
+  return new Set<string>([
+    ...document.news.items.map((item) => `news:${item.itemId}`),
+    ...document.news.macro.map((item) => `macro:${item.eventKey}`),
+    ...briefingDataFactIds(document)
+  ])
+}
+
+/**
+ * Why a citation list was refused, in words the repair round can act on: which entry is unknown, or
+ * how many were offered against the cap. A bare refusal taught the model nothing, so it repeated
+ * the same answer until the run ran out of attempts.
+ */
+function evidenceReferenceDefect(value: unknown, document: DailyBriefingDocument): string {
+  if (!Array.isArray(value)) return 'evidenceRefs: list the news:/macro:/data: ids the call rests on.'
+  if (value.length > maximumEvidenceRefs) {
+    return `evidenceRefs: cite at most ${maximumEvidenceRefs} facts (got ${value.length}); keep the few the call actually rests on.`
+  }
+  const known = knownEvidenceIds(document)
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.trim().length === 0 || entry.length > 200) {
+      return 'evidenceRefs: every entry must be one news:/macro:/data: id printed in FACTS.'
+    }
+    if (!known.has(entry)) return `evidenceRefs: "${entry}" is not a fact in this brief; use an id printed in FACTS.`
+  }
+  return 'evidenceRefs: check the ids against FACTS.'
+}
+
 function evidenceReferences(
   value: unknown,
   document: DailyBriefingDocument
 ): readonly string[] | false {
   if (!Array.isArray(value) || value.length > maximumEvidenceRefs) return false
-  const known = new Set<string>([
-    ...document.news.items.map((item) => `news:${item.itemId}`),
-    ...document.news.macro.map((item) => `macro:${item.eventKey}`),
-    ...briefingDataFactIds(document)
-  ])
+  const known = knownEvidenceIds(document)
   const refs: string[] = []
   for (const entry of value) {
     if (typeof entry !== 'string' || entry.trim().length === 0 || entry.length > 200) return false

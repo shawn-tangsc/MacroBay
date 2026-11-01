@@ -142,7 +142,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
             refuted: ['market outcome that contradicts the earlier read: the fact and its number, one sentence. Empty when not worth mentioning'],
             coreTension: 'the live contradiction in market terms: which buyers/sellers, prices or flows disagree right now. No bare labels.',
             whatWouldChange: 'the single clearest observable threshold that would overturn the base case, with the number from FACTS',
-            evidenceRefs: ['news:<id>|macro:<key>|data:<id>']
+            evidenceRefs: ['news:<id>|macro:<key>|data:<id>', 'at most 8, most important first: the few facts the call actually rests on, not every fact you were given']
           },
           nextFocus: {
             eventKey: 'FACTS.nextFocus.eventKey',

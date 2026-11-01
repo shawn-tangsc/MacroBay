@@ -171,6 +171,20 @@ describe('daily briefing conclusion synthesis', () => {
       editorial(synthesis({ evidenceRefs: ['prior:analysis:mi-as-1'] })), document(), 'zh-CN', [], [bearishPrior()]
     )
     expect(unknown).toMatchObject({ ok: false, failureCode: 'invalid-conclusion-synthesis' })
+    // The refusal has to say which id it refused, or the repair round repeats the same answer.
+    expect(unknown.ok ? '' : unknown.detail ?? '').toContain('prior:analysis:mi-as-1')
+  })
+
+  it('names the citation cap instead of refusing silently when a reply cites too many facts', () => {
+    // The reported defect: two nights in a row a reply cited 9 and 10 facts against a cap of 8, was
+    // rejected with a bare code, cited the same facts again, and the run failed after its repairs.
+    const tooMany = ['data:btc', 'data:eth', 'data:etf-btc', 'data:etf-eth', 'data:us10y', 'data:gold', 'data:funding-btc', 'data:stablecoin', 'data:index']
+    const result = validateDailyBriefingEditorial(
+      editorial(synthesis({ evidenceRefs: tooMany })), document(), 'zh-CN', [], [bearishPrior()]
+    )
+    expect(result).toMatchObject({ ok: false, failureCode: 'invalid-conclusion-synthesis' })
+    expect(result.ok ? '' : result.detail ?? '').toContain('at most 8')
+    expect(result.ok ? '' : result.detail ?? '').toContain('9')
   })
 
   it('forces a conflicting window to state the divergence instead of averaging it', () => {
