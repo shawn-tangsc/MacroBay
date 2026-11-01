@@ -37,7 +37,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `ariaLabelParams` | `Record<string, string>` | 否 | 读屏名模板里的实体名（事件、来源、模型）。句子骨架在文案表里，如「在日历中打开「{name}」」；缺少的参数**原样留下 `{name}`**，不静默删掉半句。 |
 | `icon` | `LucideIcon` | 是 | lucide 图标组件。组件负责给它 `aria-hidden`；不许传 `<img>` 或文字当图标。 |
 | `size` | `'sm' \| 'md'` | 是 | `sm` 行内 22、`md` 卡片头与工具栏 24。 |
-| `onSelect` | `() => void` | 是 | 点击回调。 |
+| `onSelect` | `(event: React.MouseEvent) => void` | 是 | 点击回调，**带事件**。图标按钮大量出现在可点击的行里，处理器要靠 `event.stopPropagation()` 挡住整行；写成必填参数而不是可选，新站点才不会再忘记。零参处理器照样编译、照样触发（少写参数是合法的）。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析入口；组件内零文案、不 import i18n。 |
 | `disabled` | `boolean` | 否 | 原生 `disabled`：不进 Tab 序列、点了不触发。与 `tooltipKey` 不能并存，一起传编译不过。 |
 | `loading` | `boolean` | 否 | 这次点击还在等结果：按钮 disabled、图形换成平台唯一的转圈（`LoadingSpinner`，`sm` 档）、不再触发 `onSelect`。**读屏名与 22/24 尺寸不变**——用户要知道是哪个按钮在忙。它不是第三个尺寸，也不是新变体。 |

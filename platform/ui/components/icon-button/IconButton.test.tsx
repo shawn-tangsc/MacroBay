@@ -43,9 +43,12 @@ function markup(overrides: Partial<IconButtonProps> = {}): string {
   return renderToStaticMarkup(<IconButton {...props(overrides)} />)
 }
 
-function mountElement(overrides: Partial<IconButtonProps> = {}): HTMLButtonElement {
+function mountElement(
+  overrides: Partial<IconButtonProps> = {},
+  parent: HTMLElement = document.body
+): HTMLButtonElement {
   const host = document.createElement('div')
-  document.body.append(host)
+  parent.append(host)
   root = createRoot(host)
   renderButton(root, overrides)
   const button = host.querySelector('button')
@@ -189,6 +192,36 @@ describe('IconButton', () => {
     expect(button.disabled).toBe(false)
     act(() => button.click())
     expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it('hands the click event to the handler, so a row underneath does not also fire', () => {
+    const onSelect = vi.fn((event: MouseEvent) => event.stopPropagation())
+    const onRowClick = vi.fn()
+    const row = document.createElement('div')
+    document.body.append(row)
+    const button = mountElement({ onSelect }, row)
+    row.addEventListener('click', onRowClick)
+
+    act(() => button.click())
+
+    expect(onSelect).toHaveBeenCalledTimes(1)
+    const [event] = onSelect.mock.calls[0] ?? []
+    // 底子是 antd 的 Button，事件是它包装过的合成事件；`currentTarget` 在分发结束后会被置空，
+    // 所以判据落在「拿到了一个真事件」上，而不是它的字段。
+    expect(event).toBeDefined()
+    expect((event as MouseEvent).type).toBe('click')
+    expect(typeof (event as MouseEvent).stopPropagation).toBe('function')
+    // 事件被按钮拿走之后，外层的行不该再收到一次——这正是「点图标连带选中整行」的判据。
+    expect(onRowClick).not.toHaveBeenCalled()
+  })
+
+  it('still accepts a zero-argument handler, and still calls it', () => {
+    let calls = 0
+    const button = mountElement({ onSelect: () => { calls += 1 } })
+
+    act(() => button.click())
+
+    expect(calls).toBe(1)
   })
 
   it('resolves the tooltip copy through the same resolver and never uses a native title', () => {

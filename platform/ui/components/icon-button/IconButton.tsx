@@ -1,6 +1,6 @@
 import { Button, Tooltip } from 'antd'
 import type { LucideIcon } from 'lucide-react'
-import type { ReactElement } from 'react'
+import type { MouseEvent, ReactElement } from 'react'
 
 import { LoadingSpinner } from '../loading'
 
@@ -67,7 +67,15 @@ type IconButtonCommon = {
   icon: LucideIcon
   /** `sm` = 行内（22），`md` = 卡片头与工具栏（24）。 */
   size: IconButtonSize
-  onSelect: () => void
+  /**
+   * 点击回调，**带原生鼠标事件**。
+   *
+   * 必须带：图标按钮大量出现在可点击的行里（日历事件行、舆情行、供应商行），行本身有选中/打开行为。
+   * 不给事件，调用方就没法 `event.stopPropagation()`，点一次图标会连带触发整行——按钮自己反而成了
+   * 「顺手做了别的事」。写成必填参数而不是可选：可选会让新站点继续忘记它，而忽略实参的老处理器
+   * 照样能编译（多给一个实参不会影响零参函数），所以这条对存量是无痛的。
+   */
+  onSelect: (event: MouseEvent<HTMLElement>) => void
   /**
    * 正在等待这次点击的结果。为真时按钮 `disabled`、图形换成平台唯一的转圈，并且**不再触发 `onSelect`**。
    *
