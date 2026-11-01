@@ -1551,7 +1551,17 @@ export const productText = {
           showing: '显示 {shown} 条，共 {total} 条',
           retention: '明细保留 30 天，更早的只留每日汇总',
           page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页',
-          csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明']
+          csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明'],
+          aggregates: {
+            title: '每日汇总',
+            note: '明细只留 30 天；更早的日子只剩当天的次数与失败数（日期按 UTC 日界）。',
+            columns: { day: '日期（UTC）', task: '任务', runs: '次数', failures: '失败' },
+            empty: '这一年里还没有汇总数据。',
+            unavailable: {
+              'memory-store-has-no-aggregates': '当前存储模式不保留每日汇总，换成本地数据库后才有历史。',
+              'aggregates-unavailable': '每日汇总暂时读不到。'
+            }
+          }
         },
 
         sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
@@ -3350,7 +3360,17 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           showing: 'Showing {shown} of {total}',
           retention: 'Details are kept 30 days; older runs only survive as daily counts',
           page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next',
-          csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail']
+          csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail'],
+          aggregates: {
+            title: 'Daily totals',
+            note: 'Detail is kept for 30 days; older days keep only their run and failure counts (UTC day boundaries).',
+            columns: { day: 'Day (UTC)', task: 'Task', runs: 'Runs', failures: 'Failures' },
+            empty: 'No daily totals in the past year.',
+            unavailable: {
+              'memory-store-has-no-aggregates': 'This storage mode keeps no daily totals; history appears once the local database is in use.',
+              'aggregates-unavailable': 'The daily totals cannot be read right now.'
+            }
+          }
         },
 
         sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },

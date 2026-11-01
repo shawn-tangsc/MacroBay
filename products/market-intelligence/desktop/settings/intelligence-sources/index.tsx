@@ -48,6 +48,22 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     savingFocusMarkets
   } = useIntelligenceSourcesSettings(t)
   const translation = useIntelligenceTranslationSettings(t.translationPreferences)
+  // The source filter lists every registered source: a source that has not run lately is exactly
+  // the one a reader opens the run record to look for.
+  const knownSources = (() => {
+    const byId = new Map<string, string>()
+    for (const group of settingsView?.groups ?? []) {
+      for (const provider of group.providers) {
+        for (const source of provider.sources) {
+          // The name map is a literal with known keys; a source added elsewhere falls back to the
+          // registry's own display name instead of failing the build.
+          const named = (t.sourceNames as Readonly<Record<string, string>>)[source.sourceId]
+          byId.set(source.sourceId, named ?? source.displayName)
+        }
+      }
+    }
+    return [...byId.entries()].map(([sourceId, label]) => ({ sourceId, label }))
+  })()
 
   useEffect(() => {
     if (selectedProviderId || !settingsView) return
@@ -69,7 +85,10 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
         <button aria-pressed={view === 'sources'} className={view === 'sources' ? 'is-active' : undefined} onClick={() => setView('sources')} type="button">{t.viewSources}</button>
         <button aria-pressed={view === 'runs'} className={view === 'runs' ? 'is-active' : undefined} onClick={() => setView('runs')} type="button">{t.viewRuns}</button>
       </div>
-      {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection text={{ ...t.syncRun, sourceNames: t.sourceNames }} /></div> : <>
+      {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection
+        knownSources={knownSources}
+        text={{ ...t.syncRun, sourceNames: t.sourceNames }}
+      /></div> : <>
       <SettingsSourceTree
         filter={sourceFilter}
         labels={{ title: t.title, categories: t.sourceCategories, filters: t.sourceFilters, providerNames: t.providerNames, providerSummary: t.providerSummary }}

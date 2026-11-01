@@ -54,3 +54,11 @@
   cursor: pointer;
 }
 .mi-sync-run__pager button:disabled { opacity: 0.4; cursor: default; }
+
+/* The daily totals keep the run grid's look but not its columns: four cells, one job per day. */
+.mi-sync-run__aggregates { border-top: 1px solid var(--border, #1c1f26); margin-top: 10px; padding-top: 8px; }
+.mi-sync-run__aggregates h3 { font-size: 12px; margin: 0 0 4px; }
+.mi-sync-run__aggregate-note { color: var(--text-secondary, #8b8d94); font-size: 10.5px; margin: 0 0 6px; }
+.mi-sync-run__aggregate-table { max-height: 240px; overflow: auto; }
+.mi-sync-run__grid--aggregate { grid-template-columns: 92px minmax(0, 1fr) 56px 56px; }
+.mi-sync-run__grid--aggregate span[data-has-failures='true'] { color: var(--danger, #e0524c); }

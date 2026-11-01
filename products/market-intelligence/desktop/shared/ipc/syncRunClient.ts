@@ -1,4 +1,11 @@
-import { SYNC_RUN_IPC_METHODS, type SyncRunQuery, type SyncRunResult, type SyncRunRow } from '../../../contracts/syncRunRecords'
+import {
+  SYNC_RUN_IPC_METHODS,
+  type SyncRunAggregateResult,
+  type SyncRunDailyRow,
+  type SyncRunQuery,
+  type SyncRunResult,
+  type SyncRunRow
+} from '../../../contracts/syncRunRecords'
 
 const productId = 'market-intelligence'
 
@@ -6,6 +13,36 @@ export const syncRunClient = {
   async list(query: SyncRunQuery): Promise<SyncRunResult> {
     return sanitize(await invoke(SYNC_RUN_IPC_METHODS.list, query))
   },
+  async aggregates(): Promise<SyncRunAggregateResult> {
+    return sanitizeAggregates(await invoke(SYNC_RUN_IPC_METHODS.aggregates, undefined))
+  },
+}
+
+/**
+ * A summary answer keeps its state: `unavailable` carries a reason and must reach the page as
+ * "cannot answer", never as an empty history.
+ */
+export function sanitizeAggregates(value: unknown): SyncRunAggregateResult {
+  if (!isObject(value)) return { state: 'unavailable', reason: 'aggregates-unavailable', rows: [] }
+  const rows = (Array.isArray(value.rows) ? value.rows : []).map(readDailyRow).filter((row): row is SyncRunDailyRow => row !== undefined)
+  if (value.state === 'available') return { state: 'available', rows }
+  return {
+    state: 'unavailable',
+    reason: value.reason === 'memory-store-has-no-aggregates' ? value.reason : 'aggregates-unavailable',
+    rows
+  }
+}
+
+function readDailyRow(value: unknown): SyncRunDailyRow | undefined {
+  if (!isObject(value) || typeof value.day !== 'string' || typeof value.handlerId !== 'string') return undefined
+  if (typeof value.runs !== 'number' || typeof value.failures !== 'number') return undefined
+  return {
+    day: value.day,
+    handlerId: value.handlerId,
+    taskLabel: typeof value.taskLabel === 'string' ? value.taskLabel : value.handlerId,
+    runs: value.runs,
+    failures: value.failures
+  }
 }
 
 async function invoke(method: string, payload: unknown): Promise<unknown> {

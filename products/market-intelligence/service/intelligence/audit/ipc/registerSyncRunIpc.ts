@@ -2,9 +2,10 @@ import type { JobRuntime } from '@platform/jobs'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import {
-  SYNC_RUN_IPC_METHODS, SYNC_RUN_LIMITS,
-  type SyncRunQuery, type SyncRunResult, type SyncRunWindow
+  SYNC_RUN_IPC_METHODS, SYNC_RUN_LIMITS, syncRunAggregateDayWindow,
+  type SyncRunAggregateResult, type SyncRunQuery, type SyncRunResult, type SyncRunWindow
 } from '../../../../contracts/syncRunRecords'
+import { projectDailyAggregates } from '../syncRunAggregation'
 import { projectSyncAudit, projectSyncRuns } from '../syncRunProjection'
 import type { SyncAuditStore } from '../syncAuditStore'
 
@@ -13,7 +14,7 @@ const productId = 'market-intelligence'
 /** Both reads are projections of the platform's job runs; nothing is written here. */
 export function registerSyncRunIpc(
   register: ProductIpcRegistrar,
-  jobRuntime: Pick<JobRuntime, 'listRuns'>,
+  jobRuntime: Pick<JobRuntime, 'listRuns' | 'listRunAggregates'>,
   now: () => string = () => new Date().toISOString(),
   audit?: Pick<SyncAuditStore, 'list'>
 ): void {
@@ -38,7 +39,23 @@ export function registerSyncRunIpc(
       return { state: 'unavailable', failureCode: 'runs-unavailable' }
     }
   }
+  /**
+   * The per-day counts that outlive the 30-day detail window.
+   *
+   * A store that cannot answer says so with a reason code: the reader must never see an empty
+   * history where the truth is "this store keeps no history".
+   */
+  const readAggregates = (): SyncRunAggregateResult => {
+    try {
+      const { fromDay, toDay } = syncRunAggregateDayWindow(Date.parse(now()))
+      return projectDailyAggregates(jobRuntime.listRunAggregates({ fromDay, toDay, definitionIdPrefix: `${productId}.` }))
+    } catch {
+      return { state: 'unavailable', reason: 'aggregates-unavailable', rows: [] }
+    }
+  }
+
   register(productId, SYNC_RUN_IPC_METHODS.list, async (payload) => read(payload))
+  register(productId, SYNC_RUN_IPC_METHODS.aggregates, async () => readAggregates())
 }
 
 function sinceOf(window: SyncRunWindow, nowMs: number): string {

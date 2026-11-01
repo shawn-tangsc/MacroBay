@@ -31,13 +31,23 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-const render = async () => {
+const render = async (options?: { text?: typeof text; knownSources?: readonly { sourceId: string; label: string }[] }) => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
-  await act(async () => root!.render(createElement(SyncRunSection, { text })))
+  await act(async () => root!.render(createElement(SyncRunSection, { text: options?.text ?? text, ...(options?.knownSources ? { knownSources: options.knownSources } : {}) })))
   await act(async () => { await Promise.resolve() })
   return host
+}
+
+
+async function selectAllWindow(host: HTMLElement) {
+  const select = host.querySelector('select') as HTMLSelectElement
+  await act(async () => {
+    select.value = 'all'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await Promise.resolve()
+  })
 }
 
 describe('sync run section', () => {
@@ -69,6 +79,39 @@ describe('sync run section', () => {
     const dom = await render()
     expect(dom.textContent).toContain(text.failureUnknown)
     expect(dom.textContent).not.toContain('derived-pragma')
+  })
+
+  it('shows the day 31 days ago in the daily totals, where the detail is already gone', async () => {
+    vi.spyOn(syncRunClient, 'aggregates').mockResolvedValue({
+      state: 'available',
+      rows: [{ day: '2026-09-30', handlerId: 'market-intelligence.collectSource', taskLabel: '情报源采集', runs: 6, failures: 1 }]
+    })
+    const dom = await render()
+    await selectAllWindow(dom)
+
+    expect(dom.textContent).toContain(text.aggregates.title)
+    expect(dom.textContent).toContain('2026-09-30')
+    expect(dom.textContent).toContain('情报源采集')
+  })
+
+  it('says why the daily totals cannot be read instead of drawing an empty history', async () => {
+    vi.spyOn(syncRunClient, 'aggregates').mockResolvedValue({
+      state: 'unavailable',
+      reason: 'memory-store-has-no-aggregates',
+      rows: []
+    })
+    const dom = await render()
+    await selectAllWindow(dom)
+
+    expect(dom.textContent).toContain(text.aggregates.unavailable['memory-store-has-no-aggregates'])
+    expect(dom.textContent).not.toContain(text.aggregates.empty)
+  })
+
+  it('offers every registered source in the filter, including one that has not run lately', async () => {
+    const dom = await render({ knownSources: [{ sourceId: 'github-releases', label: 'GitHub 版本发布' }] })
+    const options = [...dom.querySelectorAll('select')[2].querySelectorAll('option')].map((option) => option.textContent)
+
+    expect(options).toContain('GitHub 版本发布')
   })
 
   it('names a known job in the reader\u2019s language instead of the catalog\u2019s own label', async () => {

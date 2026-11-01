@@ -4,7 +4,13 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellClock } from '@platform/ui/time/shellTimeFormat'
 
-import type { SyncRunQuery, SyncRunRow, SyncRunWindow } from '../../../contracts/syncRunRecords'
+import type {
+  SyncRunAggregateResult,
+  SyncRunAggregateUnavailableReason,
+  SyncRunQuery,
+  SyncRunRow,
+  SyncRunWindow
+} from '../../../contracts/syncRunRecords'
 import { syncRunsCsv } from '../../../contracts/syncRunRecords'
 import { syncRunClient } from '../../shared/ipc/syncRunClient'
 import './sync-run-section.css'
@@ -20,6 +26,15 @@ export type SyncRunText = Readonly<{
   columns: Readonly<Record<'time' | 'task' | 'source' | 'action' | 'outcome' | 'duration' | 'detail', string>>
   /** The separator between two names on one line, so a locale can pick its own glyph. */
   joiner: string
+  /** What is left of a task's history once its run details are dropped. */
+  aggregates: Readonly<{
+    title: string
+    note: string
+    columns: Readonly<Record<'day' | 'task' | 'runs' | 'failures', string>>
+    empty: string
+    /** A store that cannot answer says why; it is never drawn as an empty history. */
+    unavailable: Readonly<Record<SyncRunAggregateUnavailableReason, string>>
+  }>
   allTasks: string
   /** Shown when a run names no source: it reads stored records or every source at once. */
   allSourcesNote: string
@@ -48,8 +63,14 @@ export type SyncRunText = Readonly<{
 const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
 /** Thirty rows a page: one screen of recent history without a wall of scroll. */
 const SYNC_RUN_PAGE_SIZE = 30
+/** A year of daily counts across every task would be a wall of rows; the newest days come first. */
+const SYNC_RUN_AGGREGATE_ROWS = 60
 
-export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React.ReactElement {
+export function SyncRunSection({ knownSources, text }: Readonly<{
+  text: SyncRunText
+  /** Every registered source, so a source that has not run lately can still be filtered to. */
+  knownSources?: readonly Readonly<{ sourceId: string; label: string }>[]
+}>): React.ReactElement {
   const timeZone = useShellTimeZone()
   const [window, setWindow] = useState<SyncRunWindow>('24h')
   const [outcome, setOutcome] = useState<SyncRunQuery['outcome']>()
@@ -59,9 +80,17 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   const [sourceFilter, setSourceFilter] = useState('')
   const [page, setPage] = useState(0)
   const [notice, setNotice] = useState<string>()
+  const [aggregates, setAggregates] = useState<SyncRunAggregateResult>()
   // The window is the server-side filter; outcome and source narrow what is already on screen so
   // the source list can be built from the same fetch instead of a second round trip.
   const query: SyncRunQuery = { window, limit: 500 }
+
+  useEffect(() => {
+    if (window !== 'all') { setAggregates(undefined); return }
+    let cancelled = false
+    void syncRunClient.aggregates().then((result) => { if (!cancelled) setAggregates(result) })
+    return () => { cancelled = true }
+  }, [window])
 
   useEffect(() => {
     let cancelled = false
@@ -85,7 +114,10 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
   const sourceLabelOf = (source: SyncRunRow['sources'][number]): string =>
     text.sourceNames?.[source.sourceId] ?? source.label
   const tasks = [...new Set(rows.map(taskLabelOf))].sort()
-  const sources = [...new Map(rows.flatMap((row) => row.sources).map((source) => [source.sourceId, sourceLabelOf(source)])).entries()].sort((left, right) => left[1].localeCompare(right[1]))
+  const sources = [...new Map([
+    ...(knownSources ?? []).map((source) => [source.sourceId, source.label] as const),
+    ...rows.flatMap((row) => row.sources).map((source) => [source.sourceId, sourceLabelOf(source)] as const)
+  ]).entries()].sort((left, right) => left[1].localeCompare(right[1]))
   const filtered = rows
     .filter((row) => taskFilter === '' || taskLabelOf(row) === taskFilter)
     .filter((row) => sourceFilter === '' || row.sources.some((source) => source.sourceId === sourceFilter))
@@ -191,6 +223,36 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
         </span> : null}
       </footer>
       : null}
+    {window === 'all' ? <section className="mi-sync-run__aggregates" aria-label={text.aggregates.title}>
+      <h3>{text.aggregates.title}</h3>
+      <p className="mi-sync-run__aggregate-note">{text.aggregates.note}</p>
+      {!aggregates ? <LoadingState label={text.loading} minHeight={80} /> : null}
+      {aggregates?.state === 'unavailable'
+        ? <p className="mi-sync-run__empty">{text.aggregates.unavailable[aggregates.reason]}</p>
+        : null}
+      {aggregates?.state === 'available' && aggregates.rows.length === 0
+        ? <p className="mi-sync-run__empty">{text.aggregates.empty}</p>
+        : null}
+      {aggregates?.state === 'available' && aggregates.rows.length > 0
+        ? <div className="mi-sync-run__aggregate-table" role="table" aria-label={text.aggregates.title}>
+          <div className="mi-sync-run__grid mi-sync-run__grid--aggregate" role="row">
+            <span role="columnheader">{text.aggregates.columns.day}</span>
+            <span role="columnheader">{text.aggregates.columns.task}</span>
+            <span role="columnheader">{text.aggregates.columns.runs}</span>
+            <span role="columnheader">{text.aggregates.columns.failures}</span>
+          </div>
+          {[...aggregates.rows]
+            .sort((left, right) => right.day.localeCompare(left.day) || left.taskLabel.localeCompare(right.taskLabel))
+            .slice(0, SYNC_RUN_AGGREGATE_ROWS)
+            .map((row) => <div className="mi-sync-run__grid mi-sync-run__grid--aggregate" key={`${row.day}:${row.handlerId}`} role="row">
+            <span role="cell">{row.day}</span>
+            <span role="cell">{row.taskLabel}</span>
+            <span role="cell">{String(row.runs)}</span>
+            <span role="cell" data-has-failures={row.failures > 0 ? 'true' : undefined}>{String(row.failures)}</span>
+          </div>)}
+        </div>
+        : null}
+    </section> : null}
   </section>
 }
 
