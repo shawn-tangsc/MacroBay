@@ -22,9 +22,13 @@ function git(root: string, args: string[]): string | null {
   }
 }
 
-const [platform, arch, outDirArg] = process.argv.slice(2)
+const args = process.argv.slice(2)
+// `--require-clean`：发布通道用。带着未提交改动打出来的包，`commit` 记的是 HEAD，
+// 但真正参与构建的改动不在那个提交里——记录得再准，记的也不是事实。
+const requireClean = args.includes('--require-clean')
+const [platform, arch, outDirArg] = args.filter((arg) => !arg.startsWith('--'))
 if (!platform || !arch) {
-  process.stderr.write('usage: write-build-info.mts <darwin|win32> <arm64|x64> [outDir]\n')
+  process.stderr.write('usage: write-build-info.mts <darwin|win32> <arm64|x64> [outDir] [--require-clean]\n')
   process.exit(2)
 }
 
@@ -51,6 +55,13 @@ const info = createBuildInfo({
   platform,
   arch
 })
+
+if (requireClean && info.dirty) {
+  process.stderr.write(
+    'build-info: the working tree has uncommitted changes, so this build cannot be traced to its commit\n'
+  )
+  process.exit(1)
+}
 
 mkdirSync(outDir, { recursive: true })
 const target = join(outDir, BUILD_INFO_FILE_NAME)

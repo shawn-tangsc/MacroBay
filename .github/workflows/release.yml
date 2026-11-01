@@ -74,11 +74,12 @@ jobs:
         run: pnpm build
 
       # 打包前写 build-info.json：产物必须能反查提交与 tag，这条不依赖 Actions 页面留存。
+      # `--require-clean`：带未提交改动打出的包，commit 记的是 HEAD，但构建用的不是它，发布通道直接红。
       - name: Write build info
         env:
           BUILD_PLATFORM: darwin
           BUILD_ARCH: arm64
-        run: pnpm build:info "$BUILD_PLATFORM" "$BUILD_ARCH"
+        run: pnpm build:info "$BUILD_PLATFORM" "$BUILD_ARCH" --require-clean
 
       - name: Package macOS dmg
         run: pnpm exec electron-builder --mac --arm64 --publish never
@@ -144,7 +145,7 @@ jobs:
         env:
           BUILD_PLATFORM: win32
           BUILD_ARCH: x64
-        run: pnpm build:info "$env:BUILD_PLATFORM" "$env:BUILD_ARCH"
+        run: pnpm build:info "$env:BUILD_PLATFORM" "$env:BUILD_ARCH" --require-clean
 
       - name: Package Windows installer
         run: pnpm exec electron-builder --win --x64 --publish never
