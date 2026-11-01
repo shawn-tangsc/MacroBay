@@ -8,7 +8,9 @@ import './stateView.css'
 /**
  * 六态统一状态视图（契约：`docs-private/05-desktop/ui-state-components-contract.md` §13）。
  *
- * 取代 `EmptyState` / `ErrorState` / `DisabledHint`。组件内**零文案、零 i18n**：标题与原因句
+ * 接替 `EmptyState`（7 处调用 / 5 文件）与各处手写空态。**`ErrorState` 零消费方，直接删**；
+ * **`DisabledHint` 从来不是组件**（全仓只有 `providerDisabledHint` 这类 i18n 字段名）——别再拿
+ * 「取代三个旧组件」这句话去全仓找第三个。组件内**零文案、零 i18n**：标题与原因句
  * 只收键，句子由调用方经 `resolveText` 解析；图标由本文件一张表按 `state` 决定，**不收 `icon`**
  * （收图标等于允许同一状态两种图标，`disabled` 与 `permission` 的轮廓判据当场作废）。
  *
