@@ -170,6 +170,53 @@ describe('CacheGovernanceService', () => {
     })
   })
 
+  it('re-reads every inspection on every list, so Refresh shows the current numbers', async () => {
+    let sizeBytes = 512
+    const inspect = vi.fn(async () => ({
+      cacheId: 'platform.agent-runtime-compatibility',
+      status: 'ready' as const,
+      recordCount: 3,
+      sizeBytes,
+      lastUpdatedAt: '2026-07-12T12:00:00.000Z'
+    }))
+    const service = createService({
+      registration: createRegistration({ provider: { inspect } })
+    })
+
+    const beforeRefresh = await service.listCaches()
+    sizeBytes = 1024
+    const afterRefresh = await service.listCaches()
+
+    expect(inspect).toHaveBeenCalledTimes(2)
+    expect(beforeRefresh[0]?.latestInspection).toMatchObject({ sizeBytes: 512 })
+    expect(afterRefresh[0]?.latestInspection).toMatchObject({ sizeBytes: 1024 })
+  })
+
+  it('shares one in-flight refresh between overlapping lists instead of stacking inspections', async () => {
+    let release!: () => void
+    const pending = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const inspect = vi.fn(async () => {
+      await pending
+      return { cacheId: 'platform.agent-runtime-compatibility', status: 'ready' as const, sizeBytes: 1 }
+    })
+    const service = createService({
+      registration: createRegistration({ provider: { inspect } })
+    })
+
+    const first = service.listCaches()
+    const second = service.listCaches()
+    release()
+    await Promise.all([first, second])
+
+    expect(inspect).toHaveBeenCalledOnce()
+
+    // 巡检结束后再点刷新，仍然重新读一遍。
+    await service.listCaches()
+    expect(inspect).toHaveBeenCalledTimes(2)
+  })
+
   it('preserves localized cache metadata in list and inspect results', async () => {
     const service = createService({
       registration: createRegistration({

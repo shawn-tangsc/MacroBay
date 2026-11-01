@@ -26,11 +26,12 @@ export class CacheGovernanceService {
   private readonly operationLocks = new Set<string>()
   private readonly latestInspections = new Map<string, CacheInspection>()
   private readonly latestOperations = new Map<string, CacheOperationAuditRecord>()
+  private refreshInFlight: Promise<void> | null = null
 
   constructor(private readonly deps: CacheGovernanceServiceDeps) {}
 
   async listCaches(): Promise<SafeCacheView[]> {
-    await this.primeInspectionSummaries()
+    await this.refreshInspectionSummaries()
     const latestOperations = await this.listLatestOperationsByCache()
     return this.deps.registry.toSafeViews({
       inspections: this.latestInspections,
@@ -64,17 +65,26 @@ export class CacheGovernanceService {
     return this.deps.auditRepository.listPage(query)
   }
 
-  private async primeInspectionSummaries(): Promise<void> {
-    const registrations = this.deps.registry.list()
-    const uncached = registrations
-      .map((registration) => registration.cacheId)
-      .filter((cacheId) => !this.latestInspections.has(cacheId))
+  /**
+   * 每次列表都重新巡检，而不是只补"没巡检过"的那些。
+   *
+   * 治理页的「刷新」就是重新读一遍磁盘：只补空缺时，点刷新返回的是内存里的旧数字，页面等于
+   * 没刷新。并发调用（挂载与连点刷新撞在一起）共用同一次巡检，但一次巡检结束后再点，一定会
+   * 重新读。巡检失败也会覆盖成 `inspection_failed`——刷新时如实显示失败，比继续展示旧数值好。
+   */
+  private refreshInspectionSummaries(): Promise<void> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.runRegisteredInspections().finally(() => {
+        this.refreshInFlight = null
+      })
+    }
+    return this.refreshInFlight
+  }
 
-    if (uncached.length === 0) return
-
+  private async runRegisteredInspections(): Promise<void> {
     await Promise.all(
-      uncached.map(async (cacheId) => {
-        await this.runInspection(cacheId).catch(() => undefined)
+      this.deps.registry.list().map(async (registration) => {
+        await this.runInspection(registration.cacheId).catch(() => undefined)
       })
     )
   }
