@@ -15,6 +15,7 @@ export function crossAssetIndexJobDefinitions(): readonly Readonly<Record<string
   const definition = {
     id: CROSS_ASSET_INDEX_COLLECT_JOB_ID, owner: 'product' as const, productId: PRODUCT_ID,
     handlerId: CROSS_ASSET_INDEX_COLLECT_JOB_ID, title: 'Collect the real Nasdaq 100 index',
+    visibility: 'resource' as const,
     trigger: { kind: 'interval' as const, intervalMs: crossAssetPolicy.index.intervalMs, anchor: 'lastComplete' as const },
     payload: {}
   }

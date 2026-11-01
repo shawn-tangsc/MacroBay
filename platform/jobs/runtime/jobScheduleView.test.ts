@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import type { JobDefinition, JobRunQuery, JobRunRecord } from '../contracts/jobTypes'
+import type { JobDefinition, JobRunQuery, JobRunRecord, ScheduledJobDefinition } from '../contracts/jobTypes'
 import { projectJobSchedules } from './jobScheduleView'
 
 const now = new Date('2026-07-17T09:30:00.000Z')
+
+  it('leaves an internal definition registered but out of the user-facing table', () => {
+    const internal = definition({ id: 'job-internal', title: 'Notification retention', visibility: 'internal' })
+    const resource = definition({ id: 'job-resource', title: 'Collect the dollar index' })
+    const source = { listSchedules: () => [internal, resource], listRuns: () => [] }
+
+    const projected = projectJobSchedules(source, { now })
+    expect(projected.map((view) => view.id)).toEqual(['job-resource'])
+    // Two assertions, not one: "not in the table" alone would also pass if the projection were
+    // broken and returned nothing, and it would not distinguish hiding from unregistering.
+    expect(source.listSchedules().map((item) => item.id)).toEqual(['job-internal', 'job-resource'])
+  })
 
 describe('projectJobSchedules', () => {
   it('projects the safe schedule fields and never leaks payload, handler, or redaction internals', () => {
@@ -129,9 +141,28 @@ describe('projectJobSchedules', () => {
     expect(views.map((view) => view.nextRunAt)).toEqual([null, null, null, null])
     expect(views.map((view) => view.trigger.kind)).toEqual(['manual', 'startup', 'event', 'cron'])
   })
+
+  /**
+   * 守卫（`MI-11-R40` 第 3 步）：`internal` 是平台自己维护的活（保留期清理、投递重试、状态巡检），
+   * 用户既配置不了也停不了。它一旦出现在这张表里，读者就要面对一行看不懂、点不动的技术条目——
+   * 所以这里断言的是「表里不可能有 internal」，不是「默认没有」。
+   */
+  it('never shows an internal maintenance definition in the table the reader sees', () => {
+    const views = projectJobSchedules({
+      listSchedules: () => [
+        definition({ id: 'resource-job', title: 'Collect a source', visibility: 'resource' }),
+        definition({ id: 'internal-job', title: 'Retention sweep', visibility: 'internal' }),
+        definition({ id: 'another-resource', title: 'Refresh a calendar', visibility: 'resource' })
+      ],
+      listRuns: () => []
+    }, { now })
+
+    expect(views.map((view) => view.id)).toEqual(['resource-job', 'another-resource'])
+    expect(views.some((view) => view.id === 'internal-job')).toBe(false)
+  })
 })
 
-function definition(overrides: Partial<JobDefinition> = {}): JobDefinition {
+function definition(overrides: Partial<JobDefinition> = {}): ScheduledJobDefinition {
   return {
     id: 'job-1',
     owner: 'platform',
@@ -139,6 +170,7 @@ function definition(overrides: Partial<JobDefinition> = {}): JobDefinition {
     title: 'Job',
     trigger: { kind: 'manual' },
     payload: {},
+    visibility: 'resource',
     ...overrides
   }
 }

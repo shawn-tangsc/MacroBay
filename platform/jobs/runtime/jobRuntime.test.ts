@@ -12,8 +12,8 @@ describe('jobRuntime terminal hook', () => {
     runtime.registerHandler('boom', async () => {
       throw new Error('collector failed')
     })
-    runtime.setSchedule({ id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
-    runtime.setSchedule({ id: 'job-boom', owner: 'platform', handlerId: 'boom', title: 'Boom', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-boom', owner: 'platform', handlerId: 'boom', title: 'Boom', trigger: { kind: 'manual' }, payload: {} })
 
     await runtime.enqueueManual('job-ok')
     await runtime.enqueueManual('job-boom')
@@ -31,7 +31,7 @@ describe('jobRuntime terminal hook', () => {
       trigger: { kind: 'manual' as const }, payload: {}
     }
     runtime.registerHandler('noop', async () => {})
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
 
     const run = runtime.createQueuedRun(definition)
     runtime.cancel(run.id)
@@ -66,20 +66,57 @@ describe('jobRuntime terminal hook', () => {
     runtime.registerHandler('ok', async () => {
       calls.push('ran')
     })
-    runtime.setSchedule({ id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
 
     await runtime.enqueueManual('job-ok')
     await vi.waitFor(() => expect(calls).toEqual(['ran']))
     runtime.registerHandler('ok2', async () => {
       calls.push('ran-again')
     })
-    runtime.setSchedule({ id: 'job-ok-2', owner: 'platform', handlerId: 'ok2', title: 'Ok 2', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-ok-2', owner: 'platform', handlerId: 'ok2', title: 'Ok 2', trigger: { kind: 'manual' }, payload: {} })
     await runtime.enqueueManual('job-ok-2')
     await vi.waitFor(() => expect(calls).toEqual(['ran', 'ran-again']))
   })
 })
 
+/**
+ * Test-local wrapper: the fixtures here are about "can this run", not about which audience the
+ * definition belongs to, so they all register as a user-facing resource by default.
+ */
+function setSchedule(runtime: ReturnType<typeof createJobRuntime>, definition: Record<string, unknown> | object): void {
+  runtime.setSchedule({ ...(definition as object), visibility: 'resource' } as never)
+}
+
+  it('refuses to register a definition that declares no visibility', () => {
+    const runtime = createJobRuntime()
+    runtime.registerHandler('noop', async () => {})
+
+    // The cast is the point: `visibility` is required by the type, and a cast can walk past the
+    // type, so the runtime check is what actually holds. The id must be in the message, otherwise
+    // the eighteen registration sites have to guess which one is missing.
+    expect(() => runtime.setSchedule({ id: 'job-no-audience', owner: 'platform', handlerId: 'noop', title: 'No audience', trigger: { kind: 'manual' }, payload: {} } as never))
+      .toThrow(/job-no-audience.*must declare visibility/)
+  })
+
 describe('jobRuntime', () => {
+  /**
+   * 类型能被 `as never` 之类绕开，注册这一步挡得住才是真的挡得住（`MI-11-R40`）。
+   * 不设默认值的理由：默认可见会让内部维护任务悄悄出现在读者面前，默认隐藏会让真实任务悄悄消失。
+   */
+  it('refuses a scheduled definition that never declared its audience', () => {
+    const runtime = createJobRuntime()
+    runtime.registerHandler('noop', async () => {})
+
+    expect(() => (runtime.setSchedule as (definition: unknown) => void)({
+      id: 'job-undeclared',
+      owner: 'platform',
+      handlerId: 'noop',
+      title: 'Undeclared',
+      trigger: { kind: 'manual' },
+      payload: {}
+    })).toThrow(/must declare visibility/)
+  })
+
   it('registers handlers and enqueues manual jobs', async () => {
     const runtime = createJobRuntime()
     const calls: string[] = []
@@ -98,7 +135,7 @@ describe('jobRuntime', () => {
       payload: 'hello'
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     await runtime.enqueueManual('job-echo')
 
     await vi.waitFor(() => {
@@ -118,7 +155,7 @@ describe('jobRuntime', () => {
         calls.push(String(payload))
       })
 
-      runtime.setSchedule({
+      setSchedule(runtime, { visibility: 'resource' as const,
         id: 'job-cron-runtime',
         owner: 'platform',
         handlerId: 'cron',
@@ -162,7 +199,7 @@ describe('jobRuntime', () => {
       payload: {}
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = runtime.createQueuedRun(definition)
     runtime.markRunningForTest(run.id)
 
@@ -185,7 +222,7 @@ describe('jobRuntime', () => {
       payload: {}
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const queued = runtime.createQueuedRun(definition)
 
     const recovered = runtime.recover()
@@ -214,7 +251,7 @@ describe('jobRuntime', () => {
       retryPolicy: DEFAULT_RETRY_POLICY
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = await runtime.enqueueManual('job-cancel')
     runtime.cancel(run.id, {
       kind: 'cancelled',
@@ -242,7 +279,7 @@ describe('jobRuntime', () => {
       retryPolicy: DEFAULT_RETRY_POLICY
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = runtime.createQueuedRun(definition)
     runtime.cancel(run.id, {
       kind: 'cancelled',
@@ -364,7 +401,7 @@ describe('jobRuntime', () => {
       retryPolicy: DEFAULT_RETRY_POLICY
     }
 
-    runtime.setSchedule(definition)
+    setSchedule(runtime, definition)
     const run = runtime.createQueuedRun(definition)
     runtime.cancel(run.id, {
       kind: 'cancelled',
@@ -512,7 +549,7 @@ describe('jobRuntime', () => {
       observedReason = context.signal.reason
     })
 
-    runtime.setSchedule({
+    setSchedule(runtime, { visibility: 'resource' as const,
       id: 'job-stop-running',
       owner: 'platform',
       handlerId: 'wait',
@@ -639,7 +676,7 @@ describe('jobRuntime', () => {
 
   it('rejects enqueue when handler is not registered', async () => {
     const runtime = createJobRuntime()
-    runtime.setSchedule({
+    setSchedule(runtime, { visibility: 'resource' as const,
       id: 'job-missing',
       owner: 'platform',
       handlerId: 'missing',

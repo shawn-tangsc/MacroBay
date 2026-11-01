@@ -1,12 +1,14 @@
 import type {
   JobCancelReason,
   JobDefinition,
+  JobVisibility,
   JobHandler,
   JobRunAggregateQuery,
   JobRunAggregateResult,
   JobRunPage,
   JobRunQuery,
-  JobRunRecord
+  JobRunRecord,
+  ScheduledJobDefinition
 } from '../contracts/jobTypes'
 import { DEFAULT_RETRY_POLICY } from '../contracts/jobTypes'
 import { createConcurrencyLock } from './concurrencyLock'
@@ -18,10 +20,10 @@ import { createJobScheduler } from './jobScheduler'
 
 export type JobRuntime = {
   registerHandler: (handlerId: string, handler: JobHandler) => void
-  setSchedule: (definition: JobDefinition) => void
+  setSchedule: (definition: ScheduledJobDefinition) => void
   removeSchedule: (definitionId: string) => void
-  /** Definitions currently registered with the runtime scheduler. */
-  listSchedules: () => readonly JobDefinition[]
+  /** Definitions currently registered with the runtime scheduler, with their audience. */
+  listSchedules: () => readonly ScheduledJobDefinition[]
   enqueueManual: (definitionId: string) => Promise<JobRunRecord>
   enqueueStartup: (definitionId: string) => Promise<JobRunRecord>
   enqueueDefinition: (definition: JobDefinition) => Promise<JobRunRecord>
@@ -80,12 +82,20 @@ export type JobRuntimeOptions = {
   onRunTerminal?: (input: JobRunTerminalHookInput) => void
 }
 
+/** 运行时校验：类型能被 `as never` 之类绕开，注册这一步挡得住才是真的挡得住。 */
+function assertVisibility(definition: JobDefinition & { visibility?: JobVisibility }): void {
+  if (definition.visibility === 'resource' || definition.visibility === 'internal') return
+  throw new Error(
+    `Job definition "${definition.id}" must declare visibility ('resource' or 'internal').`
+  )
+}
+
 export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
   const registry = createHandlerRegistry()
   const store = options.store ?? createJobRunStore()
   const lock = createConcurrencyLock()
   const executor = createJobExecutor({ registry, store })
-  const definitions = new Map<string, JobDefinition>()
+  const definitions = new Map<string, ScheduledJobDefinition>()
   const queuedRunWaits = new Map<string, QueuedRunWait>()
   const terminalRunWaits = new Map<string, Set<TerminalRunWait>>()
   const reportedTerminalRuns = new Set<string>()
@@ -116,6 +126,7 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
       registry.register(handlerId, handler)
     },
     setSchedule(definition) {
+      assertVisibility(definition)
       definitions.set(definition.id, definition)
       scheduler.setSchedule(definition)
     },

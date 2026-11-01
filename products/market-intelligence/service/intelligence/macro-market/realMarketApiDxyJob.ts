@@ -12,6 +12,7 @@ export function realMarketApiDxyJobDefinitions(): readonly Readonly<Record<strin
   const definition = {
     id: REAL_MARKET_API_DXY_COLLECT_JOB_ID, owner: 'product' as const, productId: PRODUCT_ID,
     handlerId: REAL_MARKET_API_DXY_COLLECT_JOB_ID, title: 'Collect the real dollar index',
+    visibility: 'resource' as const,
     trigger: { kind: 'interval' as const, intervalMs: realMarketApiPolicy.intervalMs, anchor: 'lastComplete' as const },
     payload: {}
   }

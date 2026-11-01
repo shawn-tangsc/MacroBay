@@ -1,4 +1,4 @@
-import type { JobDefinition, JobRuntime } from '@platform/jobs'
+import type { JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
 
 import { dailyBriefingGenerationPolicy, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { dailyBriefingGenerationCronExpression, isDailyBriefingTimeZoneId } from '../daily-briefing/dailyBriefingGenerationSettings'
@@ -15,13 +15,14 @@ export const dailyBriefingJobPolicy = Object.freeze({
 /** The one trigger definition, so registration and a settings change build it the same way. */
 export function dailyBriefingScheduleDefinition(
   input: Readonly<{ timeZone: string; generationTime: string }>
-): JobDefinition {
+): ScheduledJobDefinition {
   return {
     id: INTELLIGENCE_DAILY_BRIEFING_JOB,
     owner: 'product',
     productId: dailyBriefingJobPolicy.productId,
     handlerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
     title: dailyBriefingJobPolicy.title,
+    visibility: 'resource' as const,
     trigger: {
       kind: 'cron',
       expression: dailyBriefingGenerationCronExpression({ generationTime: input.generationTime }),

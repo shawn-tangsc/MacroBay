@@ -1,4 +1,4 @@
-import type { JobDefinition, JobRuntime } from '@platform/jobs'
+import type { JobDefinition, JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
 import type { MarketCalendarSource } from '../../../../contracts/macro/marketCalendarQueryContracts'
 
 /**
@@ -12,6 +12,7 @@ export const zeroXRouterCalendarSchedulerPolicy = Object.freeze({
   definitionId: 'market-intelligence.refreshMarketCalendar.automatic',
   handlerId: 'market-intelligence.refreshMarketCalendar',
   title: 'Refresh 0xRouter market calendar',
+  visibility: 'resource' as const,
   intervalMs: 30 * 60 * 1_000,
   /** One automatic batch is six serial transport requests; this must outlast them. */
   jobTimeoutMs: 4 * 60 * 1_000,
@@ -39,7 +40,7 @@ export type ZeroXRouterCalendarScheduler = Readonly<{
   dispose: () => void
 }>
 
-function definitionFor(feed: CalendarFeed): JobDefinition {
+function definitionFor(feed: CalendarFeed): ScheduledJobDefinition {
   const policy = zeroXRouterCalendarSchedulerPolicy
   return {
     id: `${policy.definitionId}.${feed.key}`,
@@ -47,6 +48,7 @@ function definitionFor(feed: CalendarFeed): JobDefinition {
     productId: 'market-intelligence',
     handlerId: `${policy.handlerId}.${feed.key}`,
     title: `${policy.title}: ${feed.key}`,
+    visibility: 'resource' as const,
     trigger: { kind: 'interval', intervalMs: policy.intervalMs, anchor: 'lastStart' },
     payload: { sourceId: feed.sourceId },
     concurrencyKey: `${policy.handlerId}.${feed.key}`,

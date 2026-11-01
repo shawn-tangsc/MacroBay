@@ -111,3 +111,20 @@ describe('policy drawer distribution', () => {
     expect(rows[3]?.textContent).toContain('—')
   })
 })
+
+describe('policy path drawer uncollected sections', () => {
+  it('renders the shared empty state for each official section it has not collected yet', async () => {
+    const rendered = await render({
+      ...reading,
+      phase: { kind: 'normal' },
+      settlement: undefined,
+      lastDecision: undefined,
+      sep: undefined
+    })
+    // SEP and the previous decision are two sections that fill in independently; each one says "not yet"
+    // through the shared surface instead of a paragraph the drawer wrote itself.
+    expect(rendered.querySelectorAll('[data-state="empty"]')).toHaveLength(2)
+    // No hand-written empty paragraph survives beside the shared component.
+    expect(rendered.querySelector('.mi-policy-drawer__empty')).toBeNull()
+  })
+})

@@ -35,6 +35,7 @@ export function registerNotificationRetentionJob(
     owner: 'platform',
     handlerId: notificationRetentionJobId,
     title: 'Notification retention',
+    visibility: 'internal' as const,
     // 凌晨跑，避开用户活跃时段；时区取读者时区，和「运行语义跟设置时区」一致。
     trigger: { kind: 'cron', expression: '40 3 * * *', timezone: deps.timeZone() },
     payload: {}

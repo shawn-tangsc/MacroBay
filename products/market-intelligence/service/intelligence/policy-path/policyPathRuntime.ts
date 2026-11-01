@@ -101,6 +101,7 @@ export function createPolicyPathRuntime(deps: {
         productId: policyPathRuntimePolicy.productId,
         handlerId: policyPathRuntimePolicy.jobId,
         title: 'Collect the policy path odds',
+        visibility: 'resource' as const,
         trigger: { kind: 'interval', intervalMs: policyPathRuntimePolicy.intervalMs, anchor: 'lastComplete' },
       payload: {}
     } as never)

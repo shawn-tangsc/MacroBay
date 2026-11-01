@@ -24,6 +24,7 @@ export function registerDailyBriefSessionRetentionJob(
     productId: 'market-intelligence',
     handlerId: dailyBriefSessionRetentionJobId,
     title: 'Prune daily brief sessions',
+    visibility: 'resource' as const,
     trigger: { kind: 'cron', expression: '10 8 * * *', timezone: deps.timeZone() },
     payload: {}
   })

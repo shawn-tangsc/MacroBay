@@ -42,6 +42,7 @@ export async function syncInUseModelPatrolSchedule(
       owner: 'platform',
       handlerId: inUseModelPatrolJobId,
       title: 'In-use model patrol',
+      visibility: 'internal' as const,
       trigger: { kind: 'cron', expression: '30 3 * * *' },
       payload: {}
     })

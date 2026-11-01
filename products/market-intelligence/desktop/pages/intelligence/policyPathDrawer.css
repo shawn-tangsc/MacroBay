@@ -89,16 +89,6 @@
 .mi-policy-drawer__kv dd { margin: 0; font-size: 11.5px; font-variant-numeric: tabular-nums; }
 
 .mi-policy-drawer__note { margin: 12px 0 0; font-size: 10.5px; line-height: 1.7; color: var(--mi-text-dim, #6c6f78); }
-.mi-policy-drawer__empty {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px dashed var(--mi-border, #22252d);
-  border-radius: 8px;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--mi-text-muted, #8b8d94);
-}
-
 /* A dash with a reason reads as "not yet", not as "broken". */
 .mi-policy-drawer__muted { color: var(--mi-text-dim, #6c6f78); }
 .mi-policy-drawer__muted + .mi-policy-drawer__muted { margin-left: 4px; font-size: 10px; }

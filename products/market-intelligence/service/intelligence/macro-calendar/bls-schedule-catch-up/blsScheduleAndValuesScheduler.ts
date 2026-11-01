@@ -1,4 +1,4 @@
-import type { JobDefinition, JobRuntime } from '@platform/jobs'
+import type { JobDefinition, JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
 import type { BlsScheduleAndValuesSyncWorkflow } from './blsScheduleAndLatestValuesSyncWorkflow'
 
 /**
@@ -14,6 +14,7 @@ export const blsScheduleAndValuesSchedulerPolicy = Object.freeze({
   definitionId: 'market-intelligence.syncBlsScheduleAndValues.automatic',
   handlerId: 'market-intelligence.syncBlsScheduleAndValues',
   title: 'Sync BLS schedule and latest values',
+  visibility: 'resource' as const,
   /** BLS releases are monthly; six hours keeps a released value visible the same day. */
   intervalMs: 6 * 60 * 60 * 1_000,
   /** One tick syncs the schedule and at most two value requests. */
@@ -42,13 +43,14 @@ export function createBlsScheduleAndValuesScheduler(deps: Readonly<{
   const policy = blsScheduleAndValuesSchedulerPolicy
   let disposed = false
 
-  function automaticDefinition(): JobDefinition {
+  function automaticDefinition(): ScheduledJobDefinition {
     return {
       id: policy.definitionId,
       owner: 'product',
       productId: 'market-intelligence',
       handlerId: policy.handlerId,
       title: policy.title,
+      visibility: 'resource' as const,
       trigger: { kind: 'interval', intervalMs: policy.intervalMs, anchor: 'lastStart' },
       payload: {},
       concurrencyKey: policy.handlerId,

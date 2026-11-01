@@ -1,5 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 
+import { StateView } from '@platform/ui/components/state'
+
 import { MiSideDrawer } from './MiSideDrawer'
 
 import { POLICY_PATH_OUTCOME_ORDER, POLICY_PATH_OUTCOMES, namedOutcomes } from '../../../contracts/policyPath'
@@ -18,7 +20,6 @@ export type PolicyPathDrawerText = Readonly<{
   title: string; sepPath: string; decision: string; basis: string; close: string; openSource: string
   median: string; sepRange: string; previous: string; vote: string; dissents: string; venue: string; asOf: string; empty: string
   odds: string; change24h: string; range30d: string; quote: string
-  sepMissing: string; decisionMissing: string
   meeting: string; daysAway: string; projection: string; unchanged: string; range: string
   /** Same split as the card: the month and the bucket stay separate so English can order them. */
   outcomeLead: string
@@ -150,7 +151,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
             : text.sepSteps.replace('{steps}', String(Math.abs(reading.sep.stepsFromCurrent)))
               .replace('{direction}', reading.sep.stepsFromCurrent > 0 ? '↑' : '↓')}
         </p>}
-      </> : <p className="mi-policy-drawer__empty">{text.sepMissing}</p>}
+      </> : <StateView state="empty" reasonCode="not-yet" size="md" />}
     </section>
 
     <section className="mi-policy-drawer__section">
@@ -163,7 +164,7 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         </div>
         <p className="mi-policy-drawer__note">{text.dissents} {(reading.lastDecision?.dissents ?? [])
           .map((row) => `${row.name}（${text.preferred[row.preferred]}）`).join('、') || '—'}</p>
-      </> : <p className="mi-policy-drawer__empty">{text.decisionMissing}</p>}
+      </> : <StateView state="empty" reasonCode="not-yet" size="md" />}
     </section>
 
     <section className="mi-policy-drawer__section">
