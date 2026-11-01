@@ -1,13 +1,15 @@
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { getIntelligenceModule, INTELLIGENCE_PRODUCT_ID } from '../intelligenceModule'
 import type { IntelligenceTranslationSettings } from '../schema/intelligenceTranslation'
 import type { TranslateIntelligenceItemsJobInput } from '../schema/intelligenceTranslation'
 
-export function registerIntelligenceTranslationIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime): void {
+export function registerIntelligenceTranslationIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime, intelligenceModule: IntelligenceModule): void {
   const invoke = (method: string, payload?: unknown) => {
-    const service = getIntelligenceModule(jobRuntime).translationService
+    const service = intelligenceModule.translationService
     switch (method) {
       case 'getSettings':
         return service.getSettings()

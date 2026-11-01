@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
-vi.mock('../intelligenceModule', () => ({ getIntelligenceModule: vi.fn() }))
-
-import { getIntelligenceModule } from '../intelligenceModule'
 import { handleGetDailyPulse } from './readHandlers'
+
+/** The composition root builds the module once; the handler reads the instance from its deps. */
+let injectedModule: unknown
+const injectModule = (value: unknown) => { injectedModule = value }
+
 
 const asOf = '2026-10-30T00:30:00.000Z'
 
@@ -65,17 +67,19 @@ function moduleWith(overrides: Record<string, unknown> = {}) {
 
 const deps = {
   jobRuntime: {} as JobRuntime,
+    // Read lazily: these deps objects are built once, while each case injects its own module.
+    get intelligenceModule() { return injectedModule as never },
   getAppLanguage: async () => 'zh-CN' as const,
   macroCalendarOps: {} as never,
   crossAssetOps: {} as never
 }
 
-beforeEach(() => vi.mocked(getIntelligenceModule).mockReset())
+beforeEach(() => injectedModule = undefined)
 
 describe('handleGetDailyPulse', () => {
   it('returns the six readings and the 24h news summary without writing anything', async () => {
     const module = moduleWith()
-    vi.mocked(getIntelligenceModule).mockReturnValue(module as never)
+    injectModule(module as never)
 
     const result = (await handleGetDailyPulse({ asOf }, deps)) as Record<string, unknown>
     expect(result).toMatchObject({ state: 'available', asOf, news: { state: 'available', itemCount: 2, counts: { bearish: 1, bullish: 1 } } })
@@ -87,7 +91,7 @@ describe('handleGetDailyPulse', () => {
   })
 
   it('marks a switched-off ETF source instead of inventing a reading', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       sourceProfileStore: { listProfiles: vi.fn(async () => profiles.filter((profile) => profile.sourceId !== '0xrouter-aggregate-provider')) }
     }) as never)
 
@@ -99,7 +103,7 @@ describe('handleGetDailyPulse', () => {
   })
 
   it('keeps a query failure as a stated gap and survives a missing news query', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       publicQueryService: {
         queryFearGreedSnapshot: vi.fn(async () => { throw new Error('down') }),
         queryFundingRateHistory: vi.fn(async () => funding),
@@ -118,7 +122,7 @@ describe('handleGetDailyPulse', () => {
   })
 
   it('treats an unreadable profile store as unknown and an invalid asOf as a rejected request', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       sourceProfileStore: { listProfiles: vi.fn(async () => { throw new Error('no store') }) }
     }) as never)
     const result = (await handleGetDailyPulse({ asOf }, deps)) as Record<string, unknown>

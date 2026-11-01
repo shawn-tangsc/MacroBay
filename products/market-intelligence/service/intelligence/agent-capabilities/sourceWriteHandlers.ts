@@ -1,4 +1,3 @@
-import { getIntelligenceModule } from '../intelligenceModule'
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
 import {
   sourceRequiresCredential,
@@ -49,7 +48,7 @@ export async function handleConfigureIntelligenceSource(
   context: ToolCallContext
 ): Promise<unknown> {
   const value = input as ConfigureSourceInput
-  const sourcesService = getIntelligenceModule(deps.jobRuntime).sourcesService
+  const sourcesService = deps.intelligenceModule.sourcesService
 
   if (value.action === 'save-profile') {
     const sourceId = requireString(value.sourceId, 'sourceId')
@@ -111,7 +110,7 @@ export async function handleOperateIntelligenceSource(
   context: ToolCallContext
 ): Promise<unknown> {
   const value = input as OperateSourceInput
-  const sourcesService = getIntelligenceModule(deps.jobRuntime).sourcesService
+  const sourcesService = deps.intelligenceModule.sourcesService
 
   if (value.action === 'retry-assessment') {
     const itemId = requireString(value.itemId, 'itemId')
@@ -124,7 +123,7 @@ export async function handleOperateIntelligenceSource(
       changesConfiguration: false,
       read: () => readRevisionSnapshot(deps),
       execute: async () => {
-        const result = await getIntelligenceService(deps.jobRuntime).retryItemAssessment({ itemId })
+        const result = await getIntelligenceService(deps.intelligenceModule).retryItemAssessment({ itemId })
         return { itemId, ...result }
       }
     })
@@ -158,7 +157,7 @@ export async function handleRequestSourceCredential(
   deps: WriteHandlerDeps
 ): Promise<unknown> {
   const sourceId = requireString((input as { sourceId?: string }).sourceId, 'sourceId')
-  const sourcesService = getIntelligenceModule(deps.jobRuntime).sourcesService
+  const sourcesService = deps.intelligenceModule.sourcesService
   const definition = sourcesService
     .listDefinitions()
     .find((candidate) => candidate.sourceId === sourceId)

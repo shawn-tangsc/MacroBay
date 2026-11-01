@@ -1,4 +1,6 @@
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../../../contracts/intelligencePublicQueryMethods'
@@ -37,7 +39,6 @@ import {
   type OpenInterestHistoryResult,
   type OpenInterestWindow
 } from '../../../contracts/openInterestHistory'
-import { getIntelligenceModule } from '../intelligenceModule'
 
 const PRODUCT_ID = 'market-intelligence'
 
@@ -62,9 +63,10 @@ function asEvidenceInput(input: unknown): EvidenceExcerptQueryInput {
 
 export function registerIntelligencePublicQueryIpc(
   register: ProductIpcRegistrar,
-  jobRuntime: JobRuntime
+  jobRuntime: JobRuntime,
+  intelligenceModule: IntelligenceModule
 ): void {
-  const publicQueryService = () => getIntelligenceModule(jobRuntime).publicQueryService
+  const publicQueryService = () => intelligenceModule.publicQueryService
 
   register(PRODUCT_ID, INTELLIGENCE_PUBLIC_QUERY_METHODS.querySentimentSnapshot, async (payload) =>
     publicQueryService().querySentimentSnapshot(asTimeBoundInput(payload))

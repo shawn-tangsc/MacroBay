@@ -1,4 +1,3 @@
-import { getIntelligenceModule } from '../intelligenceModule'
 import type { MacroCalendarSettingsProviderId } from '../../../contracts/macro/economicCalendarQueryContracts'
 import type { IntelligenceSourceProfile } from '../schema/intelligenceSource'
 import {
@@ -25,7 +24,7 @@ export type CalendarConfigurationState = {
 export async function readSourceConfiguration(
   deps: WriteHandlerDeps
 ): Promise<SourceConfigurationState> {
-  const sourcesService = getIntelligenceModule(deps.jobRuntime).sourcesService
+  const sourcesService = deps.intelligenceModule.sourcesService
   const [profiles, focusSettings] = await Promise.all([
     sourcesService.listProfiles(),
     sourcesService.getFocusSettings()
@@ -132,7 +131,7 @@ export async function readCalendarRevisionSnapshot(deps: WriteHandlerDeps): Prom
 
 /** Translation settings as the agent may see them; no provider secret lives here. */
 export async function readTranslationSnapshot(deps: WriteHandlerDeps): Promise<WriteSnapshot> {
-  const settings = await getIntelligenceModule(deps.jobRuntime).translationService.getSettings()
+  const settings = await deps.intelligenceModule.translationService.getSettings()
   return {
     revision: computeTranslationRevision(settings),
     value: {

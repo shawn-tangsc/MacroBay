@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type {
   ProductAgentToolHandler,
@@ -51,6 +53,7 @@ const PRODUCT_ID = 'market-intelligence'
 
 export type IntelligenceAgentToolHandlerDeps = {
   jobRuntime: JobRuntime
+  intelligenceModule: IntelligenceModule
   getAppLanguage?: () => Promise<AppLanguage>
   macroCalendarOps: MacroCalendarOps
   crossAssetOps: CrossAssetOps
@@ -61,6 +64,7 @@ export type IntelligenceAgentToolHandlerDeps = {
 
 type HandlerFactoryDeps = {
   jobRuntime: JobRuntime
+  intelligenceModule: IntelligenceModule
   getAppLanguage: () => Promise<AppLanguage>
   adapterHandlers: ReadonlyMap<string, ProductAgentToolHandlerRegistration>
   writeDeps: WriteHandlerDeps
@@ -128,7 +132,8 @@ export function registerIntelligenceAgentToolHandlers(
   const adapterHandlers = new Map<string, ProductAgentToolHandlerRegistration>()
   registerIntelligenceProductTools(
     (registration) => adapterHandlers.set(registration.handlerId, registration),
-    deps.jobRuntime
+    deps.jobRuntime,
+    deps.intelligenceModule
   )
 
   // One audit store per registration, opened on the first write that needs it rather than at boot.
@@ -142,6 +147,7 @@ export function registerIntelligenceAgentToolHandlers(
   }
   const writeDeps: WriteHandlerDeps = {
     jobRuntime: deps.jobRuntime,
+    intelligenceModule: deps.intelligenceModule,
     macroCalendarOps: deps.macroCalendarOps,
     crossAssetOps: deps.crossAssetOps,
     openChangeLog
@@ -159,7 +165,7 @@ export function registerIntelligenceAgentToolHandlers(
     }
     const guarded: GuardedHandler = wrapProductToolHandler({
       capability,
-      handle: factory({ jobRuntime: deps.jobRuntime, getAppLanguage, adapterHandlers, writeDeps, ...(deps.policyPath ? { policyPath: deps.policyPath } : {}) }),
+      handle: factory({ jobRuntime: deps.jobRuntime, intelligenceModule: deps.intelligenceModule, getAppLanguage, adapterHandlers, writeDeps, ...(deps.policyPath ? { policyPath: deps.policyPath } : {}) }),
       actionRules: intelligenceWriteActionRules[capability.id]
     })
     if (!isGuardedHandler(guarded) || guarded.capabilityId !== capability.id) {
@@ -188,6 +194,7 @@ function read(handle: (input: unknown, deps: ReadHandlerDeps) => Promise<unknown
   return (deps) => (input) =>
     handle(input, {
       jobRuntime: deps.jobRuntime,
+      intelligenceModule: deps.intelligenceModule,
       getAppLanguage: deps.getAppLanguage,
       macroCalendarOps: deps.writeDeps.macroCalendarOps,
       crossAssetOps: deps.writeDeps.crossAssetOps,

@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 import { app } from 'electron'
 
@@ -10,7 +12,6 @@ import {
   createMarketEventJsonStorage
 } from '../application/intelligenceService'
 import { createMarketEventStore } from '../application/marketEventStore'
-import { getIntelligenceModule } from '../intelligenceModule'
 import type {
   IntelligenceWorkspaceFilters,
   IntelligenceWorkspaceView
@@ -27,9 +28,9 @@ function getProductDataDir(): string {
   return join(app.getPath('userData'), 'products', PRODUCT_ID)
 }
 
-export function getIntelligenceService(jobRuntime: JobRuntime) {
+export function getIntelligenceService(intelligenceModule: IntelligenceModule) {
   if (!intelligenceService) {
-    const module = getIntelligenceModule(jobRuntime)
+    const module = intelligenceModule
     intelligenceService = createIntelligenceService({
       marketEventStore: createMarketEventStore(
         createMarketEventJsonStorage(join(getProductDataDir(), 'market-events.json'))
@@ -42,14 +43,14 @@ export function getIntelligenceService(jobRuntime: JobRuntime) {
   return intelligenceService
 }
 
-export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime): void {
+export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime, intelligenceModule: IntelligenceModule): void {
   register(PRODUCT_ID, 'intelligence.getTimeline', async (payload) => {
     const query = (payload ?? {}) as { filter?: 'active-exposure' | 'watchlist' | 'both' | 'all'; limit?: number }
-    return getIntelligenceService(jobRuntime).getTimeline(query)
+    return getIntelligenceService(intelligenceModule).getTimeline(query)
   })
 
   register(PRODUCT_ID, 'intelligence.getMonitoringScope', async () =>
-    getIntelligenceService(jobRuntime).getMonitoringScope()
+    getIntelligenceService(intelligenceModule).getMonitoringScope()
   )
 
   register(PRODUCT_ID, 'intelligence.ingestEvent', async (payload) => {
@@ -57,7 +58,7 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     if (!event.id?.trim() || !event.title?.trim() || !event.publishedAt || !event.detectedAt) {
       throw new Error('id, title, publishedAt, and detectedAt are required.')
     }
-    return getIntelligenceService(jobRuntime).ingestNormalizedEvent(event)
+    return getIntelligenceService(intelligenceModule).ingestNormalizedEvent(event)
   })
 
   register(PRODUCT_ID, 'intelligence.getWorkspaceState', async (payload) => {
@@ -69,19 +70,19 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     if (input.view && !['overview', 'timeline', 'sentiment'].includes(input.view)) {
       throw new Error(`Unknown workspace view "${input.view}".`)
     }
-    return getIntelligenceService(jobRuntime).getWorkspaceState(input)
+    return getIntelligenceService(intelligenceModule).getWorkspaceState(input)
   })
 
   register(PRODUCT_ID, 'intelligence.getWorkspaceTimeline', async (payload) => {
-    return getIntelligenceService(jobRuntime).getWorkspaceTimeline((payload ?? {}) as IntelligenceWorkspaceFilters)
+    return getIntelligenceService(intelligenceModule).getWorkspaceTimeline((payload ?? {}) as IntelligenceWorkspaceFilters)
   })
 
   register(PRODUCT_ID, 'intelligence.getSentimentAggregates', async (payload) => {
-    return getIntelligenceService(jobRuntime).getSentimentAggregates((payload ?? {}) as IntelligenceWorkspaceFilters)
+    return getIntelligenceService(intelligenceModule).getSentimentAggregates((payload ?? {}) as IntelligenceWorkspaceFilters)
   })
 
   register(PRODUCT_ID, 'intelligence.getNewsSentiment', async (payload) => {
-    const module = getIntelligenceModule(jobRuntime)
+    const module = intelligenceModule
     if (!module.newsSentiment.query) throw new Error('News sentiment is unavailable.')
     return module.newsSentiment.query.query((payload ?? {}) as NewsSentimentQuery)
   })
@@ -89,27 +90,27 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
   register(PRODUCT_ID, 'intelligence.getNewsSentimentItem', async (payload) => {
     const input = (payload ?? {}) as { itemId?: string; asOf?: string }
     if (!input.itemId?.trim() || !input.asOf?.trim()) throw new Error('itemId and asOf are required.')
-    const module = getIntelligenceModule(jobRuntime)
+    const module = intelligenceModule
     if (!module.newsSentiment.query) throw new Error('News sentiment is unavailable.')
     return module.newsSentiment.query.getItem({ itemId: input.itemId, asOf: input.asOf })
   })
 
   register(PRODUCT_ID, 'intelligence.getNewsSentimentSettings', async () =>
-    getIntelligenceModule(jobRuntime).newsSentiment.settings.get()
+    intelligenceModule.newsSentiment.settings.get()
   )
 
   register(PRODUCT_ID, 'intelligence.translateNewsSentimentBody', async (payload) => {
     const itemId = typeof (payload as { itemId?: unknown })?.itemId === 'string' ? String((payload as { itemId: string }).itemId) : ''
     const force = (payload as { force?: unknown })?.force === true
     if (!itemId) throw new Error('An itemId is required.')
-    const module = getIntelligenceModule(jobRuntime)
+    const module = intelligenceModule
     if (!module.newsSentiment.bodyTranslation) throw new Error('Body translation is unavailable.')
     const result = await module.newsSentiment.bodyTranslation.translate(itemId, { manual: true, force })
     return result
   })
 
   register(PRODUCT_ID, 'intelligence.rebuildNewsSentiment', async () => {
-    const module = getIntelligenceModule(jobRuntime)
+    const module = intelligenceModule
     if (!module.newsSentiment.store) throw new Error('News sentiment storage is unavailable.')
     module.newsSentiment.store.clearAll()
     await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB], { rebuild: true })
@@ -117,7 +118,7 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
   })
 
   register(PRODUCT_ID, 'intelligence.rescoreNewsSentiment', async () => {
-    const module = getIntelligenceModule(jobRuntime)
+    const module = intelligenceModule
     if (!module.newsSentiment.scoring) throw new Error('News sentiment is unavailable.')
     await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {})
     return { queued: true }
@@ -126,7 +127,7 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
   register(PRODUCT_ID, 'intelligence.saveNewsSentimentSettings', async (payload) => {
     const patch = (payload ?? {}) as Record<string, unknown>
     if (typeof patch !== 'object' || Array.isArray(patch)) throw new Error('A settings patch is required.')
-    const result = await getIntelligenceModule(jobRuntime).newsSentiment.settings.save(patch as never)
+    const result = await intelligenceModule.newsSentiment.settings.save(patch as never)
     // A new model or switch only affects items judged after it; rescore the recent ones now so the
     // card does not keep showing rule judgments until the next collection happens to run.
     await enqueueIntelligencePipelineJobs(jobRuntime, [INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB], {}).catch(() => undefined)
@@ -143,11 +144,11 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     if (!input.clusterId && !input.itemId && !input.aggregateId) {
       throw new Error('clusterId, itemId, or aggregateId is required.')
     }
-    return getIntelligenceService(jobRuntime).getDetail(input)
+    return getIntelligenceService(intelligenceModule).getDetail(input)
   })
 
   register(PRODUCT_ID, 'intelligence.getOperationsHealth', async () =>
-    getIntelligenceService(jobRuntime).getOperationsHealth()
+    getIntelligenceService(intelligenceModule).getOperationsHealth()
   )
 
   register(PRODUCT_ID, 'intelligence.retryItemAssessment', async (payload) => {
@@ -155,7 +156,7 @@ export function registerIntelligenceIpc(register: ProductIpcRegistrar, jobRuntim
     if (!input.itemId?.trim()) {
       throw new Error('itemId is required.')
     }
-    return getIntelligenceService(jobRuntime).retryItemAssessment({ itemId: input.itemId })
+    return getIntelligenceService(intelligenceModule).retryItemAssessment({ itemId: input.itemId })
   })
 }
 

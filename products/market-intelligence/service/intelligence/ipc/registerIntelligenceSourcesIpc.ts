@@ -1,11 +1,13 @@
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { getIntelligenceModule, INTELLIGENCE_PRODUCT_ID } from '../intelligenceModule'
 
-export function registerIntelligenceSourcesIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime): void {
+export function registerIntelligenceSourcesIpc(register: ProductIpcRegistrar, jobRuntime: JobRuntime, intelligenceModule: IntelligenceModule): void {
   const invoke = (method: string, payload?: unknown) => {
-    const service = getIntelligenceModule(jobRuntime).sourcesService
+    const service = intelligenceModule.sourcesService
     switch (method) {
       case 'listDefinitions':
         return service.listDefinitions()

@@ -527,11 +527,11 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   // the failure, so no service has to grow a logging dependency for it.
   const auditedRegister = syncAudit ? withSyncAudit(register, syncAudit) : register
 
-  registerIntelligenceIpc(register, deps.jobRuntime)
-  registerIntelligencePublicQueryIpc(register, deps.jobRuntime)
-  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime)
+  registerIntelligenceIpc(register, deps.jobRuntime, intelligenceModule)
+  registerIntelligencePublicQueryIpc(register, deps.jobRuntime, intelligenceModule)
+  registerIntelligenceSourcesIpc(auditedRegister, deps.jobRuntime, intelligenceModule)
   registerDashboardSourceConnectionIpc(register, createDashboardSourceConnectionService())
-  registerIntelligenceTranslationIpc(register, deps.jobRuntime)
+  registerIntelligenceTranslationIpc(register, deps.jobRuntime, intelligenceModule)
   registerMarketAnalysisIpc(register, intelligenceModule.marketAnalysisRuntime.repository, {
     // The same two queries the analysis macro route reads, so an event's context matches it.
     queryMacroEconomicCalendarMonth: macroEconomicCalendarQueryService.queryMonth,
@@ -668,6 +668,7 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   }
   registerIntelligenceAgentToolHandlers(deps.registerProductAgentToolHandler, {
     jobRuntime: deps.jobRuntime,
+    intelligenceModule,
     getAppLanguage: deps.getAppLanguage,
     macroCalendarOps,
     crossAssetOps,

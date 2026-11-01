@@ -2,10 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
-vi.mock('../intelligenceModule', () => ({ getIntelligenceModule: vi.fn() }))
-
-import { getIntelligenceModule } from '../intelligenceModule'
 import { handleGetLatestConclusion } from './readHandlers'
+
+/** The composition root builds the module once; the handler reads the instance from its deps. */
+let injectedModule: unknown
+const injectModule = (value: unknown) => { injectedModule = value }
+
 
 const summary = {
   id: 's1', createdAt: '2026-10-30T00:00:00.000Z', eventAssessment: 'Legacy assessment',
@@ -40,16 +42,18 @@ function repositoryWith(overrides: Record<string, unknown> = {}) {
 
 const deps = {
   jobRuntime: {} as JobRuntime,
+    // Read lazily: these deps objects are built once, while each case injects its own module.
+    get intelligenceModule() { return injectedModule as never },
   getAppLanguage: async () => 'zh-CN' as const,
   macroCalendarOps: {} as never,
   crossAssetOps: {} as never
 }
 
-beforeEach(() => vi.mocked(getIntelligenceModule).mockReset())
+beforeEach(() => injectedModule = undefined)
 
 describe('handleGetLatestConclusion', () => {
   it('returns the newest published conclusion at or before asOf', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue({ marketAnalysisRuntime: { repository: repositoryWith() } } as never)
+    injectModule({ marketAnalysisRuntime: { repository: repositoryWith() } } as never)
     const result = (await handleGetLatestConclusion({ asOf: '2026-10-30T00:30:00.000Z' }, deps)) as Record<string, unknown>
 
     expect(result).toMatchObject({
@@ -64,21 +68,21 @@ describe('handleGetLatestConclusion', () => {
 
   it('does not let a conclusion published after asOf leak backwards', async () => {
     const repository = repositoryWith()
-    vi.mocked(getIntelligenceModule).mockReturnValue({ marketAnalysisRuntime: { repository } } as never)
+    injectModule({ marketAnalysisRuntime: { repository } } as never)
     const result = (await handleGetLatestConclusion({ asOf: '2026-10-29T12:00:00.000Z' }, deps)) as Record<string, unknown>
     expect(result.summaryId).toBe('s2')
     expect(repository.getSummary).toHaveBeenCalledWith('s2')
   })
 
   it('returns empty before the first publication', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue({ marketAnalysisRuntime: { repository: repositoryWith() } } as never)
+    injectModule({ marketAnalysisRuntime: { repository: repositoryWith() } } as never)
     const result = (await handleGetLatestConclusion({ asOf: '2026-10-27T00:00:00.000Z' }, deps)) as Record<string, unknown>
     expect(result).toEqual({ state: 'empty', asOf: '2026-10-27T00:00:00.000Z', caveats: ['no-published-conclusion'] })
   })
 
   it('uses the legacy assessment with a caveat and rejects an invalid asOf', async () => {
     const legacy = { ...(summary as object), conclusion: undefined, eventAssessment: 'Legacy assessment' } as never
-    vi.mocked(getIntelligenceModule).mockReturnValue({
+    injectModule({
       marketAnalysisRuntime: { repository: repositoryWith({ getSummary: vi.fn(() => legacy) }) }
     } as never)
     const result = (await handleGetLatestConclusion({ asOf: '2026-10-30T00:30:00.000Z' }, deps)) as Record<string, unknown>
@@ -87,7 +91,7 @@ describe('handleGetLatestConclusion', () => {
   })
 
   it('states an empty result when the summary row is gone', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue({
+    injectModule({
       marketAnalysisRuntime: { repository: repositoryWith({ getSummary: vi.fn(() => undefined) }) }
     } as never)
     expect(await handleGetLatestConclusion({ asOf: '2026-10-30T00:30:00.000Z' }, deps)).toEqual({

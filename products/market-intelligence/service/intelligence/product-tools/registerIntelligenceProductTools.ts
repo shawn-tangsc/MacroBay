@@ -1,7 +1,8 @@
 import type { JobRuntime } from '@platform/jobs'
+
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { ProductAgentToolHandlerRegistration } from '@platform/ai/agent-platform/productTools/productAgentToolBootstrapContracts'
 
-import { getIntelligenceModule } from '../intelligenceModule'
 import { isProvenanceExplainQuery, parseProvenanceExplanation, type ProvenanceExplanation } from '../../../contracts/provenanceContracts'
 import { provenanceExplainTool } from '../../../tools/provenance-explain'
 import { explainFigure } from '../provenance/traceabilityExplain'
@@ -25,9 +26,10 @@ function asEvidenceInput(input: unknown): EvidenceExcerptQueryInput {
 
 export function registerIntelligenceProductTools(
   register: (registration: ProductAgentToolHandlerRegistration) => void,
-  jobRuntime: JobRuntime
+  jobRuntime: JobRuntime,
+  intelligenceModule: IntelligenceModule
 ): void {
-  const publicQueryService = () => getIntelligenceModule(jobRuntime).publicQueryService
+  const publicQueryService = () => intelligenceModule.publicQueryService
 
   registerMarketAnalysisProductTool(register, publicQueryService)
   registerMacroSnapshotProductTools(register, publicQueryService)

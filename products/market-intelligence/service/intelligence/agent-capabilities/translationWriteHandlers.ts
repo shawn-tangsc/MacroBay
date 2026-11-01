@@ -1,4 +1,3 @@
-import { getIntelligenceModule } from '../intelligenceModule'
 import type {
   IntelligenceTranslationSettings,
   TranslateIntelligenceItemsJobInput
@@ -41,7 +40,7 @@ export async function handleConfigureTranslation(
   context: ToolCallContext
 ): Promise<unknown> {
   const value = input as TranslationInput
-  const translationService = getIntelligenceModule(deps.jobRuntime).translationService
+  const translationService = deps.intelligenceModule.translationService
 
   if (value.action === 'save-settings') {
     const patch = settingsPatch(value)

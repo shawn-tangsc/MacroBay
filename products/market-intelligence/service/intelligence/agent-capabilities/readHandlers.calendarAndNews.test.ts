@@ -2,18 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { JobRuntime } from '@platform/jobs'
 
-vi.mock('../intelligenceModule', () => ({ getIntelligenceModule: vi.fn() }))
-
-import { getIntelligenceModule } from '../intelligenceModule'
 import { guardProductToolOutput } from './sensitiveDataGuard'
 import {
+
   handleGetNewsSentimentItem,
   handleQueryMacroCalendar,
   handleQueryNewsSentiment
 } from './readHandlers'
 
+/** The composition root builds the module once; the handler reads the instance from its deps. */
+let injectedModule: unknown
+const injectModule = (value: unknown) => { injectedModule = value }
+
 const deps = {
   jobRuntime: {} as JobRuntime,
+    // Read lazily: these deps objects are built once, while each case injects its own module.
+    get intelligenceModule() { return injectedModule as never },
   getAppLanguage: async () => 'zh-CN' as const,
   macroCalendarOps: {} as never,
   crossAssetOps: {} as never
@@ -38,12 +42,12 @@ function moduleWith(parts: {
 }
 
 beforeEach(() => {
-  vi.mocked(getIntelligenceModule).mockReset()
+  injectedModule = undefined
 })
 
 describe('handleQueryMacroCalendar', () => {
   it('returns both calendars and a merged, source-tagged timeline', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       official: {
         state: 'available',
         events: [{ eventKey: 'official-cpi', title: 'CPI', scheduledAt: '2026-10-14T12:30:00.000Z', scheduledDate: '2026-10-14' }]
@@ -76,7 +80,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('gives the agent the same surprise verdict and magnitude the surfaces use', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       official: {
         state: 'available',
         events: [{
@@ -114,7 +118,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('keeps the official calendar when the market side is unavailable', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       official: { state: 'available', events: [{ eventKey: 'official-cpi', title: 'CPI', scheduledAt: '2026-10-14T12:30:00.000Z' }] },
       marketThrows: true
     }) as never)
@@ -138,7 +142,7 @@ describe('handleQueryMacroCalendar', () => {
       { state: 'available', events: [{ eventKey: 'market-late', title: 'Late', scheduledAt: '2026-10-28T12:30:00.000Z' }] }
     ]
     const queryMarketCalendarMonth = vi.fn(() => pages.shift())
-    vi.mocked(getIntelligenceModule).mockReturnValue({
+    injectModule({
       publicQueryService: {
         queryMacroEconomicCalendarMonth: vi.fn(async () => ({ state: 'available', events: [] })),
         queryMarketCalendarMonth
@@ -158,7 +162,7 @@ describe('handleQueryMacroCalendar', () => {
 
   it('does not push the caller output cap into the official query', async () => {
     const queryMacroEconomicCalendarMonth = vi.fn(async () => ({ state: 'available', events: [] }))
-    vi.mocked(getIntelligenceModule).mockReturnValue({
+    injectModule({
       publicQueryService: {
         queryMacroEconomicCalendarMonth,
         queryMarketCalendarMonth: vi.fn(() => ({ state: 'available', events: [] }))
@@ -172,7 +176,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('keeps a same-day date-only event inside a western-offset window', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       official: {
         state: 'available',
         events: [{ eventKey: 'official-date-only', title: 'Date only', scheduledDate: '2026-10-28' }]
@@ -190,7 +194,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('keeps the events nearest the query instant when the month overflows the cap', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       official: { state: 'available', events: [] },
       market: {
         state: 'available',
@@ -214,7 +218,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('says unavailable when neither side answered, instead of pretending the month is empty', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue({
+    injectModule({
       publicQueryService: {
         queryMacroEconomicCalendarMonth: vi.fn(async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })),
         queryMarketCalendarMonth: vi.fn(() => ({ state: 'unavailable', failureCode: 'query-unavailable' }))
@@ -238,7 +242,7 @@ describe('handleQueryMacroCalendar', () => {
     const queryMarketCalendarMonth = vi.fn()
       .mockReturnValueOnce({ state: 'available', events: [{ eventKey: 'market-early', title: 'Early', scheduledAt: '2026-10-14T12:00:00.000Z' }], nextCursor: 'page-2' })
       .mockReturnValueOnce({ state: 'unavailable', failureCode: 'query-unavailable' })
-    vi.mocked(getIntelligenceModule).mockReturnValue({
+    injectModule({
       publicQueryService: {
         queryMacroEconomicCalendarMonth: vi.fn(async () => ({ state: 'unavailable', failureCode: 'calendar-query-unavailable' })),
         queryMarketCalendarMonth
@@ -258,7 +262,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('narrows to a date window when the caller asks about one day', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({
+    injectModule(moduleWith({
       official: { state: 'available', events: [] },
       market: {
         state: 'available',
@@ -281,7 +285,7 @@ describe('handleQueryMacroCalendar', () => {
   })
 
   it('says empty rather than unavailable when both sides answer with nothing', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({}) as never)
+    injectModule(moduleWith({}) as never)
 
     const result = await handleQueryMacroCalendar({ month: '2026-10', asOf: '2026-10-28T06:50:04.794Z' }, deps) as never as {
       state: string
@@ -298,7 +302,7 @@ describe('handleQueryMacroCalendar', () => {
 describe('news sentiment handlers', () => {
   it('passes the filters through and returns the view untouched', async () => {
     const query = vi.fn(async () => ({ state: 'available', items: [{ itemId: 'a' }], caveats: [] }))
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({ newsQuery: { query, getItem: vi.fn() } }) as never)
+    injectModule(moduleWith({ newsQuery: { query, getItem: vi.fn() } }) as never)
 
     const input = { asOf: '2026-10-28T06:50:04.794Z', window: '24h', direction: 'bearish', limit: 10 }
     const result = await handleQueryNewsSentiment(input, deps)
@@ -308,7 +312,7 @@ describe('news sentiment handlers', () => {
   })
 
   it('reports unavailable when the sentiment store is not wired', async () => {
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({}) as never)
+    injectModule(moduleWith({}) as never)
 
     const result = await handleQueryNewsSentiment(
       { asOf: '2026-10-28T06:50:04.794Z', window: '24h' },
@@ -322,7 +326,7 @@ describe('news sentiment handlers', () => {
 
   it('returns the item detail and says unavailable when it is missing', async () => {
     const getItem = vi.fn(async () => ({ itemId: 'a', title: 'Headline' }))
-    vi.mocked(getIntelligenceModule).mockReturnValue(moduleWith({ newsQuery: { query: vi.fn(), getItem } }) as never)
+    injectModule(moduleWith({ newsQuery: { query: vi.fn(), getItem } }) as never)
 
     await expect(handleGetNewsSentimentItem({ itemId: 'a', asOf: '2026-10-28T06:50:04.794Z' }, deps)).resolves.toEqual({
       state: 'available',

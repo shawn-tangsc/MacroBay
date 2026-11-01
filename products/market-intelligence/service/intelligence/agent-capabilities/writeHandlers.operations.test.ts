@@ -65,8 +65,8 @@ const fixture = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('../intelligenceModule', () => ({
-  getIntelligenceModule: () => ({
+/** The composition root builds the module once; the handler reads the instance from its deps. */
+const injectedModule = {
     sourcesService: {
       listDefinitions: () => [],
       listProfiles: async () => fixture.profiles.map((profile) => ({ ...profile })),
@@ -95,9 +95,7 @@ vi.mock('../intelligenceModule', () => ({
         return { queuedAt: '2026-10-02T00:00:00.000Z', queuedCount: 1, reason: 'retry-failed' }
       }
     }
-  }),
-  getIntelligenceProductDataDir: () => '/tmp/market-intelligence-test'
-}))
+  } as never
 
 vi.mock('../ipc/registerIntelligenceIpc', () => ({
   getIntelligenceService: () => ({
@@ -287,7 +285,7 @@ function registrations(): Map<string, ProductAgentToolHandlerRegistration> {
   const collected = new Map<string, ProductAgentToolHandlerRegistration>()
   registerIntelligenceAgentToolHandlers(
     (registration) => collected.set(registration.handlerId, registration),
-    { jobRuntime, changeLog, macroCalendarOps, crossAssetOps }
+    { jobRuntime, intelligenceModule: injectedModule, changeLog, macroCalendarOps, crossAssetOps }
   )
   return collected
 }

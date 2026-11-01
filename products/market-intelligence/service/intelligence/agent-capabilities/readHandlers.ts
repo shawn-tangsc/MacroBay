@@ -1,6 +1,6 @@
 import { getIntelligenceService } from '../ipc/registerIntelligenceIpc'
-import { getIntelligenceModule } from '../intelligenceModule'
 import { intelligenceAgentCapabilities } from './capabilityCatalog'
+import type { IntelligenceModule } from '../intelligenceModule'
 import type { CapabilityDomain } from './capabilityTypes'
 import { projectTimelineRow } from './projections'
 import { buildMarketPulseRows } from '../../../contracts/marketPulse'
@@ -34,7 +34,7 @@ export async function handleGetIntelligenceTimeline(
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { view = 'timeline', limit = 50, filters } = (input ?? {}) as TimelineInput
-  const service = getIntelligenceService(deps.jobRuntime)
+  const service = getIntelligenceService(deps.intelligenceModule)
 
   if (view === 'workspace') {
     const rows = await service.getWorkspaceTimeline((filters ?? {}) as never)
@@ -70,7 +70,7 @@ export async function handleGetTranslationStatus(
   _input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
-  const translationService = getIntelligenceModule(deps.jobRuntime).translationService
+  const translationService = deps.intelligenceModule.translationService
   const [module, settings, queue] = await Promise.all([
     translationService.getModuleStatus(),
     translationService.getSettings(),
@@ -136,7 +136,7 @@ export async function handleGetCrossAssetSnapshot(
 ): Promise<unknown> {
   const { range, asOf } = (input ?? {}) as CrossAssetInput
   const interfaceStatus = await readCrossAssetInterface(deps)
-  const snapshot = await getIntelligenceModule(deps.jobRuntime).publicQueryService.queryCrossAssetSnapshot({
+  const snapshot = await deps.intelligenceModule.publicQueryService.queryCrossAssetSnapshot({
     range,
     asOf: asOf ?? new Date().toISOString()
   })
@@ -156,7 +156,7 @@ export async function handleGetDashboardFeedStatus(
   _input: unknown,
   deps: ReadHandlerDeps
 ): Promise<unknown> {
-  const feeds = await getIntelligenceModule(deps.jobRuntime).dashboardFeedStatus.status()
+  const feeds = await deps.intelligenceModule.dashboardFeedStatus.status()
   return { state: feeds.length > 0 ? 'available' : 'empty', feeds }
 }
 
@@ -167,7 +167,7 @@ export async function handleGetLatestConclusion(
 ): Promise<unknown> {
   const asOf = (input as { asOf?: unknown } | null)?.asOf
   if (typeof asOf !== 'string' || !Number.isFinite(Date.parse(asOf))) throw new Error('latest-conclusion-invalid-as-of')
-  const repository = getIntelligenceModule(deps.jobRuntime).marketAnalysisRuntime.repository
+  const repository = deps.intelligenceModule.marketAnalysisRuntime.repository
   const boundary = Date.parse(asOf)
   const page = repository.listTimeline({ limit: 50 })
   const latest = selectLatestPublishedEntry(page.items.filter((entry) => {
@@ -217,7 +217,7 @@ export async function handleGetDailyPulse(
 ): Promise<unknown> {
   const asOf = (input as { asOf?: unknown } | null)?.asOf
   if (typeof asOf !== 'string' || !Number.isFinite(Date.parse(asOf))) throw new Error('daily-pulse-invalid-as-of')
-  const module = getIntelligenceModule(deps.jobRuntime)
+  const module = deps.intelligenceModule
   const [fearGreed, funding, capital, news, profiles] = await Promise.all([
     readOr(() => module.publicQueryService.queryFearGreedSnapshot({ asOf }), {
       state: 'unavailable' as const, failureCode: 'fear-greed-query-unavailable' as const
@@ -265,7 +265,7 @@ export async function handleGetDailyPulse(
   })
 }
 
-async function readDailyPulseProfiles(module: ReturnType<typeof getIntelligenceModule>) {
+async function readDailyPulseProfiles(module: IntelligenceModule) {
   try {
     return await module.sourceProfileStore.listProfiles()
   } catch {
@@ -274,7 +274,7 @@ async function readDailyPulseProfiles(module: ReturnType<typeof getIntelligenceM
 }
 
 async function readDailyPulseNews(
-  module: ReturnType<typeof getIntelligenceModule>,
+  module: IntelligenceModule,
   asOf: string
 ): Promise<Readonly<{ state: 'available' | 'empty' | 'unavailable' | 'source-disabled'; counts?: Readonly<{ bearish: number; bullish: number; mixed: number; neutral: number }>; itemCount?: number }>> {
   const query = module.newsSentiment.query

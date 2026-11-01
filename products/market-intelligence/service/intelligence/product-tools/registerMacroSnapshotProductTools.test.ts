@@ -53,20 +53,18 @@ describe('registerMacroSnapshotProductTools', () => {
 
   it('passes the real manifest schemas through the product agent tool runtime', async () => {
     vi.resetModules()
-    vi.doMock('../intelligenceModule', () => ({
-      getIntelligenceModule: () => ({
-        publicQueryService: {
-          queryMacroMarketSnapshot: () => ({
-            state: 'available' as const, asOf: AS_OF, caveats: ['synthetic-dollar-index'],
-            readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(AS_OF), returns: { '24h': 0.4 }, synthetic: true as const }]
-          }),
-          queryMacroRatesSnapshot: () => ({
-            state: 'available' as const, asOf: AS_OF, caveats: ['official-daily-close'],
-            readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.15, previous: 4.13, period: '2026-10-13' }]
-          })
-        }
-      })
-    }))
+    const injectedModule = {
+      publicQueryService: {
+        queryMacroMarketSnapshot: () => ({
+          state: 'available' as const, asOf: AS_OF, caveats: ['synthetic-dollar-index'],
+          readings: [{ seriesId: 'dxy-synthetic', level: 101.42, atMs: Date.parse(AS_OF), returns: { '24h': 0.4 }, synthetic: true as const }]
+        }),
+        queryMacroRatesSnapshot: () => ({
+          state: 'available' as const, asOf: AS_OF, caveats: ['official-daily-close'],
+          readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.15, previous: 4.13, period: '2026-10-13' }]
+        })
+      }
+    } as never
     const { registerIntelligenceProductTools } = await import('./registerIntelligenceProductTools')
     const { marketIntelligenceProductManifest } = await import('../../../product.manifest')
     const { ProductAgentToolRegistry } = await import('@platform/ai/agent-platform/productTools/ProductAgentToolRegistry')
@@ -78,7 +76,7 @@ describe('registerMacroSnapshotProductTools', () => {
     for (const toolName of ['get_macro_market_snapshot', 'get_macro_rates_snapshot']) {
       registry.registerToolMetadata(marketIntelligenceProductManifest.productAgentTools!.find(tool => tool.toolName === toolName)!)
     }
-    registerIntelligenceProductTools(registration => registry.registerHandler(registration), {} as never)
+    registerIntelligenceProductTools(registration => registry.registerHandler(registration), {} as never, injectedModule)
     const runtime = new ProductAgentToolRuntimeService({
       registry, traceRepository: createInMemoryProductAgentToolTraceRepository(), installedProductIds: () => ['market-intelligence']
     })

@@ -1,5 +1,7 @@
 import type { JobRuntime } from '@platform/jobs'
 
+import type { IntelligenceModule } from '../intelligenceModule'
+
 import type { AgentChangeLog, AgentChangeLogOutcome } from './changeLog'
 import type { IntelligenceAgentCapability, ToolCallContext } from './capabilityTypes'
 import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
@@ -7,6 +9,7 @@ import type { CrossAssetOps, MacroCalendarOps } from './operationFacades'
 /** Everything a write handler may reach; produced once per registration. */
 export type WriteHandlerDeps = {
   jobRuntime: JobRuntime
+  intelligenceModule: IntelligenceModule
   macroCalendarOps: MacroCalendarOps
   crossAssetOps: CrossAssetOps
   /** Lazily opens the product's audit store; a test may hand back its own instance. */

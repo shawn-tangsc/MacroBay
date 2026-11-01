@@ -213,7 +213,7 @@ export type IntelligenceModulePlatformHooks = {
 
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
 
-type IntelligenceModule = {
+export type IntelligenceModule = {
   pipeline: ReturnType<typeof createIntelligencePipeline>
   sourcesService: ReturnType<typeof createIntelligenceSourcesService>
   translationService: ReturnType<typeof createIntelligenceTranslationService>

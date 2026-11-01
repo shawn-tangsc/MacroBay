@@ -1,4 +1,3 @@
-import { getIntelligenceModule } from '../intelligenceModule'
 import type {
   NewsSentimentInput,
   NewsSentimentItemInput,
@@ -10,7 +9,7 @@ export async function handleQueryNewsSentiment(
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const parsed = (input ?? {}) as NewsSentimentInput
-  const query = getIntelligenceModule(deps.jobRuntime).newsSentiment.query
+  const query = deps.intelligenceModule.newsSentiment.query
   if (!query) {
     return {
       state: 'unavailable',
@@ -28,7 +27,7 @@ export async function handleGetNewsSentimentItem(
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { itemId, asOf } = (input ?? {}) as NewsSentimentItemInput
-  const query = getIntelligenceModule(deps.jobRuntime).newsSentiment.query
+  const query = deps.intelligenceModule.newsSentiment.query
   if (!query) return { state: 'unavailable', itemId }
   const item = await query.getItem({ itemId, asOf })
   return item ? { state: 'available', item } : { state: 'unavailable', itemId }

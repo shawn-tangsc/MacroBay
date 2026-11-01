@@ -1,4 +1,4 @@
-import { getIntelligenceModule } from '../intelligenceModule'
+import type { IntelligenceModule } from '../intelligenceModule'
 import { analysisModelVocabulary } from '../analysis/analysisModelVocabulary'
 import {
   assessMarketCalendarSurprise,
@@ -18,7 +18,7 @@ export async function handleQueryMacroCalendar(
   deps: ReadHandlerDeps
 ): Promise<unknown> {
   const { month, asOf, from, to, maxEvents } = (input ?? {}) as MacroCalendarInput
-  const queryService = getIntelligenceModule(deps.jobRuntime).publicQueryService
+  const queryService = deps.intelligenceModule.publicQueryService
   const locale = (await deps.getAppLanguage()) === 'en-US' ? 'en' : 'zh'
   const caveats: string[] = []
 
@@ -81,7 +81,7 @@ const CALENDAR_MAX_COLLECTED = 1_000
  * even when they sit on a later page.
  */
 function readAllMarketCalendarPages(
-  queryService: ReturnType<typeof getIntelligenceModule>['publicQueryService'],
+  queryService: IntelligenceModule['publicQueryService'],
   input: { month: string; asOf: string; locale: 'zh' | 'en' }
 ): { state: 'available' | 'unavailable'; events: Array<Record<string, unknown>>; pages: number; failureCode?: string } {
   const events: Array<Record<string, unknown>> = []

@@ -11,20 +11,11 @@ import { registerIntelligenceTranslationIpc } from './registerIntelligenceTransl
 import { resetIntelligenceModuleForTests } from '../intelligenceModule'
 import { INTELLIGENCE_TRANSLATE_ITEMS_JOB } from '../jobs/intelligenceJobIds'
 
-vi.mock('../intelligenceModule', async () => {
-  const actual = await vi.importActual<typeof import('../intelligenceModule')>('../intelligenceModule')
-  return {
-    ...actual,
-    getIntelligenceModule: vi.fn()
-  }
-})
-
-import { getIntelligenceModule } from '../intelligenceModule'
 
 describe('intelligenceTranslation IPC', () => {
   it('returns safe settings without raw prompt payloads or secrets', async () => {
-    const { service, jobRuntime } = createTranslationModule()
-    const handlers = registerHandlers(jobRuntime, service)
+    const { service, jobRuntime, moduleUnderTest } = createTranslationModule()
+    const handlers = registerHandlers(jobRuntime, moduleUnderTest)
 
     const settings = (await handlers.get('intelligenceTranslation.getSettings')(undefined)) as Record<string, unknown>
     expect(settings.autoTranslateEnabled).toBe(true)
@@ -33,9 +24,9 @@ describe('intelligenceTranslation IPC', () => {
   })
 
   it('queues missing translations through bounded filters', async () => {
-    const { service, jobRuntime } = createTranslationModule()
+    const { service, jobRuntime, moduleUnderTest } = createTranslationModule()
     jobRuntime.registerHandler(INTELLIGENCE_TRANSLATE_ITEMS_JOB, async () => undefined)
-    const handlers = registerHandlers(jobRuntime, service)
+    const handlers = registerHandlers(jobRuntime, moduleUnderTest)
 
     const summary = (await handlers.get('intelligenceTranslation.queueMissing')({
       reason: 'manual-selection',
@@ -46,9 +37,9 @@ describe('intelligenceTranslation IPC', () => {
   })
 
   it('retries failed translations without exposing provider secrets', async () => {
-    const { service, jobRuntime } = createTranslationModule()
+    const { service, jobRuntime, moduleUnderTest } = createTranslationModule()
     jobRuntime.registerHandler(INTELLIGENCE_TRANSLATE_ITEMS_JOB, async () => undefined)
-    const handlers = registerHandlers(jobRuntime, service)
+    const handlers = registerHandlers(jobRuntime, moduleUnderTest)
 
     const summary = (await handlers.get('intelligenceTranslation.retryFailed')({
       reason: 'retry-failed',
@@ -74,20 +65,18 @@ function createTranslationModule() {
     structuredModelInvocation,
     getAppLanguage: async () => 'zh-CN'
   })
-  vi.mocked(getIntelligenceModule).mockReturnValue({
-    translationService: service
-  } as never)
-  return { service, jobRuntime }
+  const moduleUnderTest = { translationService: service } as never
+  return { service, jobRuntime, moduleUnderTest }
 }
 
 function registerHandlers(
   jobRuntime: ReturnType<typeof createJobRuntime>,
-  _service: ReturnType<typeof createIntelligenceTranslationService>
+  moduleUnderTest: never
 ) {
   const handlers = new Map<string, (payload?: unknown) => Promise<unknown>>()
   registerIntelligenceTranslationIpc((productId, method, handler) => {
     handlers.set(`${productId}:${method}`, handler)
-  }, jobRuntime)
+  }, jobRuntime, moduleUnderTest)
   return {
     get(key: string) {
       const handler = handlers.get(`market-intelligence:${key}`)
