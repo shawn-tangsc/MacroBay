@@ -28,6 +28,19 @@ const registeredEventNames = {
  */
 export const productText = {
   'zh-CN': {
+    // 空态迁移用的产品句：键名与平台 `ui.state.*` 同形（`mi.newsSentiment.*`），由
+    // `platform/ui/components/state` 的产品句入口按调用方给的键解析。**迁移落地前无人消费**；
+    // 迁移那笔会删掉 `newsSentiment.emptyStates` 里的同样五句，只留这一份，避免一句话两个出处。
+    // 占位写法暂定 `{time}`；若组件入口最终契约不同，只改格式，不改键名与句子。
+    mi: {
+      newsSentiment: {
+        'sources-disabled': '数据源未开启',
+        'collection-failed': '采集失败',
+        'never-ran': '还没跑过',
+        stale: '数据已过期 · 最后更新 {time}',
+        quiet: '这段时间没有相关消息'
+      }
+    },
     pages: {
       intelligence: {
         title: '情报',
@@ -1874,6 +1887,15 @@ export const productText = {
     }
   },
   'en-US': {
+    mi: {
+      newsSentiment: {
+        'sources-disabled': 'Data sources are off',
+        'collection-failed': 'Collection failed',
+        'never-ran': "Hasn't run yet",
+        stale: 'Data is out of date · last updated {time}',
+        quiet: 'No related news in this period'
+      }
+    },
     pages: {
       intelligence: {
         title: 'Intelligence',
