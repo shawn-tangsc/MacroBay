@@ -60,12 +60,13 @@ describe('formatProxySelfTestLine', () => {
     expect(line).toBe(labels.proxySelfTestProxyNotRunning('127.0.0.1:7890'))
   })
 
-  it('never blames the proxy or the target when a non-loopback endpoint cannot be reached', () => {
-    const line = formatProxySelfTestLine(
+  it('says the local network only when the comparison probe ran and failed', () => {
+    const failedProbe = describeProxySelfTest(
       result({
         endpointReachable: false,
         proxyEndpoint: '10.1.2.3:7890',
         proxyEndpointLoopback: false,
+        directProbeReachable: false,
         ok: false,
         status: null,
         reasonCode: 'network_refused'
@@ -74,10 +75,49 @@ describe('formatProxySelfTestLine', () => {
       customContext
     )
 
-    expect(line).toBe(labels.proxySelfTestProxyServerUnreachable('10.1.2.3:7890'))
-    expect(line).toContain('连不上代理服务器')
-    expect(line).not.toContain('代理坏了')
-    expect(line).not.toContain('目标站')
+    expect(failedProbe.triage).toBe('local-network')
+    expect(failedProbe.line).toBe(labels.proxySelfTestLocalNetwork)
+    expect(failedProbe.hint).toBe(labels.proxySelfTestLocalNetworkHint)
+  })
+
+  it('never slides back to the local network when the probe proved it works', () => {
+    const view = describeProxySelfTest(
+      result({
+        endpointReachable: false,
+        proxyEndpoint: '10.1.2.3:7890',
+        proxyEndpointLoopback: false,
+        directProbeReachable: true,
+        ok: false,
+        status: null,
+        reasonCode: 'network_refused'
+      }),
+      text,
+      customContext
+    )
+
+    expect(view.triage).toBe('network-ok-proxy-suspect')
+    expect(view.line).toBe(labels.proxySelfTestProxyAfterProbe('10.1.2.3:7890'))
+    expect(view.line).not.toContain('本机网络不通')
+  })
+
+  it('treats a probe that never reported as missing evidence, not as a failure', () => {
+    const view = describeProxySelfTest(
+      result({
+        endpointReachable: false,
+        proxyEndpoint: '10.1.2.3:7890',
+        proxyEndpointLoopback: false,
+        directProbeReachable: null,
+        ok: false,
+        status: null,
+        reasonCode: 'network_refused'
+      }),
+      text,
+      customContext
+    )
+
+    expect(view.triage).toBe('insufficient-evidence')
+    expect(view.line).toBe(labels.proxySelfTestUnattributable('10.1.2.3:7890'))
+    expect(view.line).not.toContain('本机网络')
   })
 
   it('blames the proxy itself only when it answers and still reports its own failure', () => {
@@ -97,8 +137,8 @@ describe('formatProxySelfTestLine', () => {
       customContext
     )
 
-    expect(line).toBe(labels.proxySelfTestUnattributable(sentences.connectionCheckReasonTimeout))
-    expect(line).toContain('无法判断')
+    expect(line).toBe(labels.proxySelfTestUnattributable('127.0.0.1:7890'))
+    expect(line).toContain('原因待查')
     expect(line).not.toContain('代理坏了')
   })
 
@@ -155,9 +195,9 @@ describe('formatProxySelfTestLine', () => {
 
     expect(lines).toEqual([
       labels.proxySelfTestProxyAnsweredBadly(sentences.connectionCheckReasonProxy),
-      labels.proxySelfTestUnattributable(sentences.connectionCheckReasonTimeout),
-      labels.proxySelfTestUnattributable(sentences.connectionCheckReasonDns),
-      labels.proxySelfTestUnattributable(sentences.connectionCheckReasonTls)
+      labels.proxySelfTestUnattributable('127.0.0.1:7890'),
+      labels.proxySelfTestUnattributable('127.0.0.1:7890'),
+      labels.proxySelfTestUnattributable('127.0.0.1:7890')
     ])
     for (const line of lines) {
       for (const candidate of codes) expect(line).not.toContain(candidate)

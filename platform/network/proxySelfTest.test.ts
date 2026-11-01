@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:net'
 
 import { afterAll, describe, expect, it } from 'vitest'
 
-import { isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy } from './proxySelfTest'
+import { isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy, probeDirectEgress } from './proxySelfTest'
 
 describe('parseResolvedProxy', () => {
   it('reads the first hop of a chromium resolution', () => {
@@ -58,5 +58,28 @@ describe('isLoopbackProxyEndpoint', () => {
     expect(isLoopbackProxyEndpoint('[::1]:7890')).toBe(true)
     expect(isLoopbackProxyEndpoint('192.168.1.10:7890')).toBe(false)
     expect(isLoopbackProxyEndpoint('proxy.corp.test:7890')).toBe(false)
+  })
+})
+
+describe('probeDirectEgress', () => {
+  it('reports true when any of the independent endpoints answers', async () => {
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+    const address = server.address()
+    if (address === null || typeof address === 'string') throw new Error('expected a tcp address')
+
+    try {
+      // 一条必不通（端口 1）+ 一条本地可达：任一通即 true。
+      await expect(
+        probeDirectEgress([
+          { host: '127.0.0.1', port: 1 },
+          { host: '127.0.0.1', port: address.port }
+        ])
+      ).resolves.toBe(true)
+      // 全部不通才是 false。
+      await expect(probeDirectEgress([{ host: '127.0.0.1', port: 1 }])).resolves.toBe(false)
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
   })
 })

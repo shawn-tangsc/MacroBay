@@ -880,7 +880,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           proxied: typeof result?.proxied === 'boolean' ? result.proxied : undefined,
           endpointReachable: typeof result?.endpointReachable === 'boolean' ? result.endpointReachable : null,
           proxyEndpoint: typeof result?.proxyEndpoint === 'string' ? result.proxyEndpoint : null,
-          proxyEndpointLoopback: typeof result?.proxyEndpointLoopback === 'boolean' ? result.proxyEndpointLoopback : null
+          proxyEndpointLoopback: typeof result?.proxyEndpointLoopback === 'boolean' ? result.proxyEndpointLoopback : null,
+          directProbeReachable: typeof result?.directProbeReachable === 'boolean' ? result.directProbeReachable : null,
+          directProbeEndpoint: typeof result?.directProbeEndpoint === 'string' ? result.directProbeEndpoint : null
         }
       })
     } catch {

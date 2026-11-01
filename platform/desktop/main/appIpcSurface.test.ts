@@ -564,6 +564,11 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("app.getPath('temp')")
   })
 
+  it('runs the comparison probe only inside the on-demand self-test', () => {
+    // 本地优先的应用不该每次启动去握手外部 IP：探针只允许出现在自检 handler 里。
+    expect(appSource.split('probeDirectEgress(').length - 1).toBe(1)
+  })
+
   it('rejects an invalid proxy address before the settings file is written', () => {
     expect(appSource).toContain("import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'")
     const guardIndex = appSource.indexOf('assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)')

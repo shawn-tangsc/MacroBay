@@ -946,9 +946,13 @@ export type PlatformText = {
     proxySelfTestReachable: (status: number, seconds: string) => string
     proxySelfTestNotApplied: (resolvedProxy: string) => string
     proxySelfTestProxyNotRunning: (endpoint: string) => string
-    proxySelfTestProxyServerUnreachable: (endpoint: string) => string
+    proxySelfTestLocalNetwork: string
+    proxySelfTestLocalNetworkHint: string
+    proxySelfTestProxyAfterProbe: (endpoint: string) => string
+    proxySelfTestProxyAfterProbeHint: string
+    proxySelfTestCauseUnknownHint: string
     proxySelfTestProxyAnsweredBadly: (sentence: string) => string
-    proxySelfTestUnattributable: (sentence: string) => string
+    proxySelfTestUnattributable: (endpoint: string) => string
     proxySelfTestTargetRejected: (status: number, host: string) => string
     proxySelfTestAuthenticationHint: string
     proxySelfTestTargetDenied: (status: number, host: string) => string
@@ -1985,11 +1989,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         `代理自检：未生效（设置为代理，但网络栈解析为「${resolvedProxy}」，这次没有走代理）`,
       proxySelfTestProxyNotRunning: (endpoint) =>
         `代理自检：失败（本机代理 ${endpoint} 没有响应：代理没启动，或端口不对）`,
-      proxySelfTestProxyServerUnreachable: (endpoint) =>
-        `连不上代理服务器本身（${endpoint}）；原因待查——先确认这台机器能上网，再确认地址和端口是否写对`,
+      proxySelfTestLocalNetwork: '本机网络不通：不经代理的对照探针也失败了',
+      proxySelfTestLocalNetworkHint: '先确认这台机器能上网（Wi-Fi / 网线 / VPN）；代理地址与端口等网络恢复后再核。',
+      proxySelfTestProxyAfterProbe: (endpoint) => `本机网络是通的，但连不上代理服务器本身（${endpoint}）`,
+      proxySelfTestProxyAfterProbeHint: '对照探针已确认这台机器能上网：请核对代理地址与端口。',
+      proxySelfTestCauseUnknownHint: '这次没拿到对照结果，暂时判断不了原因；可以重试一次。',
       proxySelfTestProxyAnsweredBadly: (sentence) => `经代理请求失败：代理端点连得上，但代理自身返回了错误（${sentence}）`,
-      proxySelfTestUnattributable: (sentence) =>
-        `经代理访问目标站失败（${sentence}）；代理端点连得上、请求已经发出去，但没拿到响应。无法判断问题出在代理出口还是目标站本身，先换一个目标站再试一次`,
+      proxySelfTestUnattributable: (endpoint) => `连不上代理服务器本身（${endpoint}）；原因待查`,
       proxySelfTestTargetRejected: (status, host) => `已连到目标站点，站点要求鉴权（HTTP ${status}）· ${host}`,
       proxySelfTestAuthenticationHint: '这条自检不带 Key，401 属正常；与代理是否生效无关。',
       proxySelfTestTargetDenied: (status, host) => `已连到目标站点，站点拒绝了请求（HTTP ${status}）· ${host}`,
@@ -3034,11 +3040,17 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         `Proxy check: not in effect (a proxy is configured, but the network stack resolved "${resolvedProxy}", so this request went direct)`,
       proxySelfTestProxyNotRunning: (endpoint) =>
         `Proxy check: failed (the local proxy ${endpoint} did not answer: it is not running, or the port is wrong)`,
-      proxySelfTestProxyServerUnreachable: (endpoint) => `Cannot reach the proxy server itself (${endpoint}); cause unknown. First confirm this machine has internet, then check the address and port`,
+      proxySelfTestLocalNetwork: 'This machine has no working network: the probe that bypasses the proxy failed too',
+      proxySelfTestLocalNetworkHint:
+        'First confirm this machine can reach the internet (Wi-Fi / cable / VPN); recheck the proxy address and port once the network is back.',
+      proxySelfTestProxyAfterProbe: (endpoint) =>
+        `This machine's network works, but the proxy server itself cannot be reached (${endpoint})`,
+      proxySelfTestProxyAfterProbeHint:
+        'The comparison probe confirmed this machine can reach the internet: check the proxy address and port.',
+      proxySelfTestCauseUnknownHint: 'No comparison result was obtained this time, so the cause cannot be told yet; try again.',
       proxySelfTestProxyAnsweredBadly: (sentence) =>
         `The request through the proxy failed: the proxy endpoint answers, but the proxy itself returned an error (${sentence})`,
-      proxySelfTestUnattributable: (sentence) =>
-        `The request through the proxy could not complete (${sentence}); the proxy endpoint answers and the request went out, but no response came back. It cannot be told whether the proxy's egress or the target site is at fault — try another target site`,
+      proxySelfTestUnattributable: (endpoint) => `Cannot reach the proxy server itself (${endpoint}); cause unknown`,
       proxySelfTestTargetRejected: (status, host) =>
         `Reached the target site; it asks for authentication (HTTP ${status}) · ${host}`,
       proxySelfTestAuthenticationHint:

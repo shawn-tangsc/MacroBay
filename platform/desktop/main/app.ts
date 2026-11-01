@@ -154,7 +154,7 @@ import { createDefaultAppSettings, supportedLanguages } from '../../settings/sch
 import { createSettingsStore } from '../../settings/store/settingsStore'
 import { applySessionProxySettings } from '../../network/applySessionProxySettings'
 import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'
-import { isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy } from '../../network/proxySelfTest'
+import { DIRECT_PROBE_ENDPOINTS, isLoopbackProxyEndpoint, isProxyEndpointReachable, parseResolvedProxy, probeDirectEgress } from '../../network/proxySelfTest'
 import { createShellTimeZoneProvider } from './shellTimeZone'
 import { createTaskIpcScheduleValidationOptions } from './taskScheduleValidationOptions'
 import { createJsonFileStorage } from '../../storage/jsonFileStorage'
@@ -1681,7 +1681,11 @@ function registerIpcHandlers(
         // 不看用户输入：用户填了代理不代表这次真的走了代理。
         const resolvedProxy = await session.defaultSession.resolveProxy(targetUrl)
         const route = parseResolvedProxy(resolvedProxy)
-        const endpointReachable = route.endpoint ? await isProxyEndpointReachable(route.endpoint) : null
+        // 对照探针与其它两项并行：它只回答「本机能不能出一个 TCP 连接」，不跟随代理。
+        const [endpointReachable, directProbeReachable] = await Promise.all([
+          route.endpoint ? isProxyEndpointReachable(route.endpoint) : Promise.resolve(null),
+          probeDirectEgress()
+        ])
         const probe = await probeProviderProxyTarget(targetUrl, getPlatformFetch())
         return {
           ...probe,
@@ -1689,7 +1693,9 @@ function registerIpcHandlers(
           proxied: !route.direct,
           endpointReachable,
           proxyEndpoint: route.endpoint ? `${route.endpoint.host}:${route.endpoint.port}` : null,
-          proxyEndpointLoopback: route.endpoint ? isLoopbackProxyEndpoint(`${route.endpoint.host}:${route.endpoint.port}`) : null
+          proxyEndpointLoopback: route.endpoint ? isLoopbackProxyEndpoint(`${route.endpoint.host}:${route.endpoint.port}`) : null,
+          directProbeReachable,
+          directProbeEndpoint: DIRECT_PROBE_ENDPOINTS.map((endpoint) => `${endpoint.host}:${endpoint.port}`).join(',')
         }
       }
       // PLAT-63：端点测试只接受已知端点类型 + http(s) 地址；校验先于任何网络请求。

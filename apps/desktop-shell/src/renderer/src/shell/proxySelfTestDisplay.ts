@@ -18,7 +18,24 @@ export type ProxySelfTestResult = {
   proxyEndpoint?: string | null
   /** 代理端点是否在本机回环上；回环连不上只能说明代理没起或端口错。 */
   proxyEndpointLoopback?: boolean | null
+  /** 不经代理的对照探针：true 通、false 探过且失败、null 未探或拿不到结论（证据不足）。 */
+  directProbeReachable?: boolean | null
+  directProbeEndpoint?: string | null
 }
+
+/**
+ * 归因档位。文案由界面设计出，这里只给判定：上层照档位挑句子，不自己猜。
+ * `directProbeReachable === null`（没跑过/未发出）**不是**失败证据，一律走「证据不足」。
+ */
+export type ProxySelfTestTriage =
+  | 'pass'
+  | 'config-not-effective'
+  | 'proxy-not-running'
+  | 'local-network'
+  | 'network-ok-proxy-suspect'
+  | 'insufficient-evidence'
+  | 'proxy-error'
+  | 'target-site'
 
 /**
  * 结果的三档语气：`pass` 真走了代理（或系统模式下直连本来就合法），`partial` 到了站但没走代理
@@ -26,7 +43,7 @@ export type ProxySelfTestResult = {
  */
 export type ProxySelfTestTone = 'pass' | 'partial' | 'fail'
 
-export type ProxySelfTestView = { line: string; tone: ProxySelfTestTone; hint: string | null }
+export type ProxySelfTestView = { line: string; tone: ProxySelfTestTone; hint: string | null; triage: ProxySelfTestTriage }
 
 export type ProxySelfTestContext = {
   /** 只有「自定义代理」模式下，解析成 DIRECT 才算没生效。 */
@@ -62,13 +79,38 @@ export function describeProxySelfTest(
   // VPN、主机不在、防火墙，只说「连不上代理服务器本身」并给两步自查，绝不归到目标站。
   if (result.endpointReachable === false) {
     const endpoint = result.proxyEndpoint?.trim() || result.targetHost
+    const loopback = result.proxyEndpointLoopback === true
+    if (loopback) {
+      // 回环连不上不进三档：只能说明代理没起或端口错。
+      return {
+        line: preferences.proxySelfTestProxyNotRunning(endpoint),
+        tone: 'fail',
+        hint: null,
+        triage: 'proxy-not-running'
+      }
+    }
+    const triage = triageForUnreachableServer(result)
+    if (triage === 'local-network') {
+      return {
+        line: preferences.proxySelfTestLocalNetwork,
+        tone: 'fail',
+        hint: preferences.proxySelfTestLocalNetworkHint,
+        triage
+      }
+    }
+    if (triage === 'network-ok-proxy-suspect') {
+      return {
+        line: preferences.proxySelfTestProxyAfterProbe(endpoint),
+        tone: 'fail',
+        hint: preferences.proxySelfTestProxyAfterProbeHint,
+        triage
+      }
+    }
     return {
-      line:
-        result.proxyEndpointLoopback === true
-          ? preferences.proxySelfTestProxyNotRunning(endpoint)
-          : preferences.proxySelfTestProxyServerUnreachable(endpoint),
+      line: preferences.proxySelfTestUnattributable(endpoint),
       tone: 'fail',
-      hint: null
+      hint: preferences.proxySelfTestCauseUnknownHint,
+      triage: 'insufficient-evidence'
     }
   }
 
@@ -82,7 +124,8 @@ export function describeProxySelfTest(
         ? preferences.proxySelfTestTargetDenied(rejectedStatus, result.targetHost)
         : preferences.proxySelfTestTargetRejected(rejectedStatus, result.targetHost),
       tone: 'partial',
-      hint: denied ? preferences.proxySelfTestDeniedHint : preferences.proxySelfTestAuthenticationHint
+      hint: denied ? preferences.proxySelfTestDeniedHint : preferences.proxySelfTestAuthenticationHint,
+      triage: 'target-site'
     }
   }
 
@@ -97,7 +140,8 @@ export function describeProxySelfTest(
             ? preferences.proxySelfTestNotApplied(result.resolvedProxy?.trim() || 'DIRECT')
             : preferences.proxySelfTestReachable(status, seconds),
         tone: 'partial',
-        hint: null
+        hint: null,
+        triage: 'config-not-effective'
       }
     }
     return {
@@ -106,7 +150,8 @@ export function describeProxySelfTest(
           ? preferences.proxySelfTestPassedViaProxy(status, seconds)
           : preferences.proxySelfTestReachable(status, seconds),
       tone: 'pass',
-      hint: null
+      hint: null,
+      triage: 'pass'
     }
   }
 
@@ -117,21 +162,30 @@ export function describeProxySelfTest(
     return {
       line: preferences.proxySelfTestProxyAnsweredBadly(sentence),
       tone: 'fail',
-      hint: null
+      hint: null,
+      triage: 'proxy-error'
     }
   }
 
   // 有状态码说明请求到了站（4xx/5xx 属「部分」）；没有状态码就绝不许说目标站有问题。
   if (result.status !== null) {
-    return { line: `${sentence} · ${result.targetHost}`, tone: 'partial', hint: null }
+    return { line: `${sentence} · ${result.targetHost}`, tone: 'partial', hint: null, triage: 'target-site' }
   }
 
   // 一次响应都没拿到：说不清是代理出口还是目标站，按「无法归因」的句式说清排除了什么。
   return {
-    line: preferences.proxySelfTestUnattributable(sentence),
+    line: preferences.proxySelfTestUnattributable(result.proxyEndpoint?.trim() || result.targetHost),
     tone: 'fail',
-    hint: null
+    hint: preferences.proxySelfTestCauseUnknownHint,
+    triage: 'insufficient-evidence'
   }
+}
+
+function triageForUnreachableServer(result: ProxySelfTestResult): ProxySelfTestTriage {
+  // null 表示未探/未发出：证据不足，不许当成失败。
+  if (result.directProbeReachable === false) return 'local-network'
+  if (result.directProbeReachable === true) return 'network-ok-proxy-suspect'
+  return 'insufficient-evidence'
 }
 
 export function formatProxySelfTestLine(

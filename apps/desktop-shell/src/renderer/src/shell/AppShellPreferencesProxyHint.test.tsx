@@ -98,9 +98,9 @@ describe('PLAT-61 基础设置代理说明', () => {
     })
 
     await vi.waitFor(() => expect(container.querySelector('[data-proxy-self-test-result]')).not.toBeNull())
-    // 码不进句子；没拿到响应时按「无法归因」说清排除了什么，不指认代理或目标站。
+    // 码不进句子；没拿到对照结果时走「连不上代理服务器本身、原因待查」，并给重试一行。
     expect(container.querySelector('[data-proxy-self-test-result]')?.textContent).toBe(
-      labels.proxySelfTestUnattributable(sentences.connectionCheckReasonTimeout)
+      `${labels.proxySelfTestUnattributable('aihubmix.com')}${labels.proxySelfTestCauseUnknownHint}`
     )
     expect(container.querySelector('[data-proxy-self-test-result]')?.textContent).not.toContain('network_timeout')
   })
