@@ -1,15 +1,12 @@
 import type { NotificationState } from '../contracts/notificationContracts'
+import type { NotificationDailyCounters } from '../store/notificationStore'
 
 /**
- * 熔断计数：**独立持久化，不能从记录反推**。
- *
- * 超过每日上限的原文不落库，所以记录里数不出「今天第几条」；重启后若从零开始，
- * 熔断就永远触发不了。计数因此和记录存在同一份 JSON 里（`dailyCounters`）。
+ * 熔断计数：**独立持久化，不能从记录反推**（类型定义在 store，随记录存同一份 JSON）。
  *
  * 键按**世界标准时间**的日界分桶：这是「计数的一天」，不是读者的一天——
  * 改成读者时区会让换时区重置当天配额。
  */
-export type NotificationDailyCounters = Record<string, number>
 
 export const notificationBreakerPolicy = Object.freeze({
   defaultDailyLimit: 50,

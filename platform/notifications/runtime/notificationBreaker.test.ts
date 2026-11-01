@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { NotificationDailyCounters } from './notificationBreaker'
+import type { NotificationDailyCounters } from '../store/notificationStore'
 import {
   decideNotificationBreaker,
   notificationBreakerPolicy,

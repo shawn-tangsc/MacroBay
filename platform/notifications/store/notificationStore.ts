@@ -11,13 +11,23 @@ import {
   type NotificationState
 } from '../contracts/notificationContracts'
 
+/**
+ * 熔断的每日写入计数：`<ownerId>|<UTC 日>` → 次数。
+ *
+ * 必须与记录存在同一份 JSON 里：被折叠的原文不落库，计数无法从记录反推；
+ * 重启后若从零开始，熔断就永远触发不了。
+ */
+export type NotificationDailyCounters = Record<string, number>
+
 export type NotificationStoreState = {
   records: NotificationRecord[]
+  dailyCounters?: NotificationDailyCounters
 }
 
 export function createDefaultNotificationStoreState(): NotificationStoreState {
   return {
-    records: []
+    records: [],
+    dailyCounters: {}
   }
 }
 
@@ -74,7 +84,22 @@ export function normalizeNotificationStoreState(value: unknown): NotificationSto
   const records = Array.isArray(candidate.records)
     ? candidate.records.map(normalizeNotificationRecord).filter((record): record is NotificationRecord => Boolean(record))
     : []
-  return { records }
+  return { records, dailyCounters: normalizeDailyCounters(candidate.dailyCounters) }
+}
+
+/**
+ * 计数桶的键必须是 `<ownerId>|<YYYY-MM-DD>`、值必须是正整数：坏桶直接丢弃，
+ * 否则一个 `NaN` 会让熔断永远不触发，而界面看不出任何异常。
+ */
+function normalizeDailyCounters(value: unknown): NotificationDailyCounters {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const counters: NotificationDailyCounters = {}
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (!/^.+\|\d{4}-\d{2}-\d{2}$/.test(key)) continue
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 0) continue
+    counters[key] = Math.floor(raw)
+  }
+  return counters
 }
 
 export function createNotificationFromRequest(request: NotificationRequest, now = new Date().toISOString()): NotificationRecord {

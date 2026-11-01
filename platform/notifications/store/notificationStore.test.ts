@@ -9,6 +9,7 @@ import {
   isActiveNotification,
   markNotificationRead,
   mergeDuplicateNotification,
+  normalizeNotificationStoreState,
   reactivateSnoozedNotifications,
   resetNotificationIdCounterForTests,
   snoozeNotification
@@ -86,5 +87,25 @@ describe('notification store', () => {
     const expired = expireDueNotifications([record], '2026-07-05T10:00:00.000Z')[0]
     expect(expired?.state).toBe('expired')
     expect(isActiveNotification(expired!, '2026-07-05T10:00:00.000Z')).toBe(false)
+  })
+
+  it('keeps daily breaker counters across a JSON round-trip and drops malformed buckets', () => {
+    const state = normalizeNotificationStoreState({
+      records: [],
+      dailyCounters: {
+        'product-a|2026-11-01': 7,
+        'broken-key': 3,
+        'product-b|2026-11-02': 'many',
+        'product-c|2026-11-03': -1
+      }
+    })
+
+    expect(state.dailyCounters).toEqual({ 'product-a|2026-11-01': 7 })
+    const restored = normalizeNotificationStoreState(JSON.parse(JSON.stringify(state)))
+    expect(restored.dailyCounters).toEqual({ 'product-a|2026-11-01': 7 })
+  })
+
+  it('defaults to an empty counter map so a fresh file has nothing to fold from', () => {
+    expect(normalizeNotificationStoreState({ records: [] }).dailyCounters).toEqual({})
   })
 })
