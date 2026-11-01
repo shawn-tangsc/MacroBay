@@ -13,11 +13,18 @@ vi.mock('antd', async () => {
   const actual = await vi.importActual<typeof import('antd')>('antd')
   return {
     ...actual,
-    DatePicker: (props: { 'aria-label'?: string; className?: string; format?: string; value?: { format: (format: string) => string } }) =>
+    DatePicker: (props: {
+      'aria-label'?: string; className?: string; format?: string
+      value?: { format: (format: string) => string }
+    }) =>
       <input aria-label={props['aria-label']} className={props.className} data-format={props.format}
         data-value={props.value?.format(props.format ?? '')} readOnly type="text" />
   }
 })
+
+// React 18 warns — and silently skips — `act` work when this flag is missing; the reopened-editor
+// assertion depends on the update actually flushing.
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const asOf = '2026-08-12T00:00:00.000Z'
 const queryAsOf = new Date(asOf).toISOString()
@@ -45,7 +52,7 @@ function event(overrides: Record<string, unknown> = {}) {
   }
 }
 
-async function renderInspector(subject: Record<string, unknown>) {
+async function renderInspector(subject: Record<string, unknown>, timeZone = 'Asia/Shanghai') {
   container = document.createElement('div')
   document.body.append(container)
   const localRoot = createRoot(container)
@@ -61,7 +68,7 @@ async function renderInspector(subject: Record<string, unknown>) {
     refreshFedFomcDecision: vi.fn(async () => ({ state: 'unavailable' as const })),
     syncBlsEmploymentSchedule: vi.fn(async () => ({ state: 'unavailable' as const }))
   }
-  const calendar = <ShellTimeZoneProvider timeZone="Asia/Shanghai"><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
+  const calendar = <ShellTimeZoneProvider timeZone={timeZone}><EconomicCalendar client={input as never} now={() => new Date(asOf)} onBack={() => undefined} openTarget={{ month: '2026-10', eventKey: String(subject.eventKey) }} text={text} /></ShellTimeZoneProvider>
   await act(async () => localRoot.render(calendar))
   for (let attempt = 0; attempt < 12; attempt += 1) await act(async () => { await Promise.resolve() })
   return { host: container, input }
@@ -135,6 +142,28 @@ describe('the release time is edited where it is shown', () => {
     expect(host.textContent).toContain(text.details.editTime.rejected)
     expect(input.getEventDetail.mock.calls.length).toBe(readsBefore)
     expect(host.querySelector('[data-release-time-row]')?.getAttribute('data-release-time-row')).toBe('convention-default')
+  })
+})
+
+describe('the picker shows the wall clock of the display zone, and what was stored', () => {
+  it('shows 03:00 for a spring gap the store resolved forward, never the 02:30 that does not exist', async () => {
+    // The store holds the corrected instant (03:00 EDT = 07:00Z) for a reader who picked 02:30 on the
+    // spring-forward day. Both the row and the picker must read back through the display zone, so
+    // neither can show a time that was not stored.
+    const { host } = await renderInspector(event({
+      // The inspector opens on the event's own month; the stored instant is the corrected gap time.
+      scheduledAt: '2026-03-08T07:00:00.000Z',
+      conventionScheduledAt: '2026-03-08T07:00:00.000Z', releaseTimeSource: 'user-edited'
+    }), 'America/New_York')
+    const row = host.querySelector('[data-release-time-row]')
+    expect(row?.textContent).toContain('03-08 03:00')
+    expect(row?.textContent).not.toContain('02:30')
+
+    await click(host, text.details.time)
+    await flush()
+    // 07:00Z reads as 03:00 in New York; a machine-zone formatting would have said something else.
+    expect(host.querySelector<HTMLInputElement>('.mi-economic-calendar__release-time-picker')?.dataset.value)
+      .toBe('2026-03-08 03:00')
   })
 })
 
