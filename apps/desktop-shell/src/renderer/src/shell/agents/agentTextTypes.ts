@@ -8,6 +8,7 @@ import type { ToolApproval } from '@platform/ai/agent-platform/schemas/toolSchem
 import type { ConfiguredModelUnavailableReason } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { ChatMessageNavigation, ChatMessageStyle } from '@platform/settings/schema/appSettings'
 
+import type { AgentTextFileArtifacts } from './agentTextFileArtifacts'
 import type { AgentTextWorkbench } from './agentTextWorkbenchTypes'
 
 export type AgentText = {
@@ -272,30 +273,9 @@ export type AgentText = {
     questionSkip: string
     questionSubmit: string
     questionRecommended: string
-    fileArtifacts: {
-      editedSummary: (count: number) => string
-      touchedSummary: (count: number) => string
-      changedStats: (added: number, removed: number) => string
-      showMore: (count: number) => string
-      showLess: string
-      documentKind: string
-      codeKind: string
-      fileKind: string
-      openWith: string
-      openWithAria: (fileName: string) => string
-      targets: {
-        vscode: string
-        cursor: string
-        default: string
-        terminal: string
-        iterm2: string
-        xcode: string
-        'android-studio': string
-        'intellij-idea': string
-        pycharm: string
-        finder: string
-      }
-    }
+    questionPrevious: string
+    questionNext: string
+    fileArtifacts: AgentTextFileArtifacts
     allow: string
     allowOriginalInput: string
     allowWithEditedInput: string

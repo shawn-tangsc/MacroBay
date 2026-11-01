@@ -102,6 +102,8 @@ export const agentTextZhRuntime: Pick<AgentText, 'runtimeText' | 'runtimeActivit
     questionSkip: '跳过',
     questionSubmit: '提交',
     questionRecommended: '推荐',
+    questionPrevious: '上一个问题',
+    questionNext: '下一个问题',
     fileArtifacts: {
       editedSummary: (count) => `已编辑 ${count} 个文件`,
       touchedSummary: (count) => `${count} 个文件已关联`,

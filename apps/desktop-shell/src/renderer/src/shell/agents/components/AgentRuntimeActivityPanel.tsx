@@ -74,7 +74,9 @@ export default function AgentRuntimeActivityPanel({
                         freeform: t.runtimeActivity.questionFreeform,
                         skip: t.runtimeActivity.questionSkip,
                         submit: t.runtimeActivity.questionSubmit,
-                        recommended: t.runtimeActivity.questionRecommended
+                        recommended: t.runtimeActivity.questionRecommended,
+                        questionPrevious: t.runtimeActivity.questionPrevious,
+                        questionNext: t.runtimeActivity.questionNext
                       }}
                       onResolve={async (decision: { behavior: 'allow'; updatedInput?: unknown } | { behavior: 'deny'; message: string }) => {
                         let approvalId = card.approvalId

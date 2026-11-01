@@ -13,8 +13,19 @@ import type { ReactNode } from 'react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { Tool } from '@platform/ai/agent-platform/schemas/toolSchemas'
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import AgentBuiltinToolsPopoverContent from './AgentBuiltinToolsPopoverContent'
+
+/** 输入条工具栏那一排的读屏名。句子仍在 `AgentText` 里，这里只留键。 */
+const INPUTBAR_KEYS = {
+  mention: 'agent.inputbar.mention',
+  attachment: 'agent.inputbar.attachment',
+  tools: 'agent.inputbar.tools',
+  commands: 'agent.inputbar.commands',
+  expand: 'agent.inputbar.expand',
+  collapse: 'agent.inputbar.collapse'
+} as const
 
 type AgentSessionInputbarFooterProps = {
   agent: AgentEntity
@@ -69,15 +80,49 @@ export default function AgentSessionInputbarFooter({
   onStop,
   onSend
 }: AgentSessionInputbarFooterProps) {
+  const resolveText = (key: string): string => {
+    switch (key) {
+      case INPUTBAR_KEYS.mention:
+        return labels.mentionModel
+      case INPUTBAR_KEYS.attachment:
+        return labels.attachment
+      case INPUTBAR_KEYS.tools:
+        return labels.tools
+      case INPUTBAR_KEYS.commands:
+        return labels.commands
+      case INPUTBAR_KEYS.expand:
+        return labels.expand
+      case INPUTBAR_KEYS.collapse:
+        return labels.collapse
+      default:
+        return key
+    }
+  }
+
   return (
     <div className="agent-inputbar-footer">
       <div className="agent-inputbar-tools">
-        <button type="button" aria-label={labels.mentionModel} title={labels.mentionModel} onClick={onMentionClick}>
-          <AtSign size={15} />
-        </button>
-        <button type="button" aria-label={labels.attachment} title={labels.attachment} onClick={onAddFiles}>
-          <Paperclip size={15} />
-        </button>
+        <IconButton
+          ariaLabelKey={INPUTBAR_KEYS.mention}
+          icon={AtSign}
+          size="md"
+          tooltipKey={INPUTBAR_KEYS.mention}
+          onSelect={onMentionClick}
+          resolveText={resolveText}
+        />
+        <IconButton
+          ariaLabelKey={INPUTBAR_KEYS.attachment}
+          icon={Paperclip}
+          size="md"
+          tooltipKey={INPUTBAR_KEYS.attachment}
+          onSelect={onAddFiles}
+          resolveText={resolveText}
+        />
+        {/*
+          Popover 会克隆它唯一的子元素并挂上 onClick 与 ref；`IconButton` 只接受自己的 props、
+          不透传外部属性，直接当子元素会既拿不到事件也拿不到 ref。所以触发点包一层 span：
+          点击从按钮冒泡到 span，弹层照常由它打开。
+        */}
         <Popover
           open={toolsOpen}
           trigger="click"
@@ -94,20 +139,33 @@ export default function AgentSessionInputbarFooter({
               onToggle={onToggleTool}
             />
           }>
-          <button type="button" aria-label={labels.tools} title={labels.tools}>
-            <Wrench size={15} />
-          </button>
+          <span>
+            <IconButton
+              ariaLabelKey={INPUTBAR_KEYS.tools}
+              icon={Wrench}
+              size="md"
+              tooltipKey={INPUTBAR_KEYS.tools}
+              onSelect={() => undefined}
+              resolveText={resolveText}
+            />
+          </span>
         </Popover>
-        <button type="button" aria-label={labels.commands} title={labels.commands} onClick={onOpenCommands}>
-          <Slash size={15} />
-        </button>
-        <button
-          type="button"
-          aria-label={expanded ? labels.collapse : labels.expand}
-          title={expanded ? labels.collapse : labels.expand}
-          onClick={onToggleExpanded}>
-          {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-        </button>
+        <IconButton
+          ariaLabelKey={INPUTBAR_KEYS.commands}
+          icon={Slash}
+          size="md"
+          tooltipKey={INPUTBAR_KEYS.commands}
+          onSelect={onOpenCommands}
+          resolveText={resolveText}
+        />
+        <IconButton
+          ariaLabelKey={expanded ? INPUTBAR_KEYS.collapse : INPUTBAR_KEYS.expand}
+          icon={expanded ? Minimize2 : Maximize2}
+          size="md"
+          tooltipKey={expanded ? INPUTBAR_KEYS.collapse : INPUTBAR_KEYS.expand}
+          onSelect={onToggleExpanded}
+          resolveText={resolveText}
+        />
       </div>
       <div className="agent-inputbar-actions">
         {modelPicker ? <div className="agent-inputbar-model">{modelPicker}</div> : null}

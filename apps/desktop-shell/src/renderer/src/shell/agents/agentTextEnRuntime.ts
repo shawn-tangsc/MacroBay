@@ -102,6 +102,8 @@ export const agentTextEnRuntime: Pick<AgentText, 'runtimeText' | 'runtimeActivit
     questionSkip: 'Skip',
     questionSubmit: 'Submit',
     questionRecommended: 'Recommended',
+    questionPrevious: 'Previous question',
+    questionNext: 'Next question',
     fileArtifacts: {
       editedSummary: (count) => `Edited ${count} file${count === 1 ? '' : 's'}`,
       touchedSummary: (count) => `${count} file${count === 1 ? '' : 's'} attached`,
