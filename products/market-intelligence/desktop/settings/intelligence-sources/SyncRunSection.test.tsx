@@ -56,11 +56,14 @@ describe('sync run section', () => {
     expect(dom.textContent).toContain('官方日历排期')
     expect(dom.textContent).toContain('美联储官方日历')
     expect(dom.textContent).toContain(text.allSourcesNote)
-    // The sentence, not `provider-disabled`: the raw code lives only in the title.
+    // The sentence, not `provider-disabled`: the raw code lives only in the popover.
     expect(dom.textContent).toContain(text.failureCodes['provider-disabled'])
     expect(dom.textContent).not.toContain('provider-disabled')
-    // The code and the raw error text are both reachable by hovering, neither is printed.
-    expect(dom.querySelector('[title^="错误码：provider-disabled"]')).not.toBeNull()
+    // The code and the raw error text sit behind a focusable trigger, so tabbing reaches them too.
+    const trigger = dom.querySelector('.mi-sync-run__failure')
+    expect(trigger).not.toBeNull()
+    expect(trigger?.getAttribute('tabindex')).toBe('0')
+    expect(trigger?.getAttribute('title')).toBeNull()
     expect(dom.textContent).toContain(text.outcomes.failed)
     expect(dom.textContent).not.toContain('Macro calendar schedule run failed')
     expect(dom.textContent).toContain('32.0s')

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { Button, Tooltip } from 'antd'
+import { Button, Popover, Tooltip } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -194,7 +194,7 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       </div>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
-        <span className="mi-sync-run__task" role="cell" title={taskLabelOf(row)}>{taskLabelOf(row)}</span>
+        <span className="mi-sync-run__task" role="cell">{taskLabelOf(row)}</span>
         <span className="mi-sync-run__source" role="cell">
           {row.sources.length === 0
             ? <Tooltip title={text.noSourceHint}><span className="mi-sync-run__hint" tabIndex={0}>{text.allSourcesNote}</span></Tooltip>
@@ -207,14 +207,14 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
         <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>
         <span className="mi-sync-run__detail" role="cell">
-          {row.failureCode ? <span
-            className="mi-sync-run__failure"
-            title={[
-              text.failureCodeHint.replace('{code}', row.failureCode),
-              // The raw error text is implementation wording; it belongs with the code, not on the row.
-              ...(row.detail ? [row.detail] : [])
-            ].join(' · ')}
-          >{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span> : null}
+          {row.failureCode ? <Popover
+            content={<span className="mi-sync-run__failure-detail">{
+              [text.failureCodeHint.replace('{code}', row.failureCode),
+                // The raw error text is implementation wording; it belongs with the code, not on the row.
+                ...(row.detail ? [row.detail] : [])].join(' · ')
+            }</span>}
+            trigger={['hover', 'focus']}
+          ><span className="mi-sync-run__failure mi-sync-run__hint" tabIndex={0}>{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span></Popover> : null}
           {!row.failureCode && row.detail ? <span>{row.detail}</span> : null}
         </span>
       </div>)}
