@@ -131,7 +131,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).not.toContain('channelRuntimeService')
     expect(appSource).toContain('if (taskAutomationSmokeProfile.enabled)')
     expect(appSource).toContain('resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled)')
-    expect(appSource).toContain('if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({')
+    expect(appSource).toContain('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.webSearchFetchUrls')
@@ -196,7 +196,7 @@ describe('desktop main IPC surface', () => {
   it('passes the existing generic provider vault through the product service seam', () => {
     expect(appSource).toContain('secretVault: providerSecretVault')
     expect(appSource.indexOf('secretVault: providerSecretVault')).toBeGreaterThan(
-      appSource.indexOf('if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({')
+      appSource.indexOf('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
   })
 
@@ -204,7 +204,7 @@ describe('desktop main IPC surface', () => {
     // 默认翻译模型等默认值只读透出：产品不得自己读写 app settings。
     expect(appSource).toContain('getModelDefaults: async () => (await settingsStore.get()).modelDefaults')
     expect(appSource.indexOf('getModelDefaults: async () => (await settingsStore.get()).modelDefaults')).toBeGreaterThan(
-      appSource.indexOf('if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({')
+      appSource.indexOf('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
     expect(generatedProductServicesSource).toContain('getModelDefaults: () => Promise<ModelDefaultsSettings>')
   })
@@ -249,7 +249,7 @@ describe('desktop main IPC surface', () => {
     const bootWindow = 'mainWindow = await createMainWindow()'
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
-    const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
+    const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
 
@@ -268,7 +268,7 @@ describe('desktop main IPC surface', () => {
   it('recovers stale persistent job runs before product startup can enqueue current-process work', () => {
     const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
     const staleRecovery = 'jobRuntime.recover()'
-    const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
+    const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
 
     expect(bootstrapSource).toContain(staleRecovery)
     expect(bootstrapSource.indexOf(staleRecovery)).toBeLessThan(bootstrapSource.indexOf(productRegistration))
@@ -278,7 +278,7 @@ describe('desktop main IPC surface', () => {
     const bootstrapSource = appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp('))
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
-    const productRegistration = 'if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({'
+    const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
     const proxyApplyIndex = bootstrapSource.indexOf(proxyApply)
     const productRegistrationIndex = bootstrapSource.indexOf(productRegistration)

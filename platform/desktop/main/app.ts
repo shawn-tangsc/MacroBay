@@ -2589,7 +2589,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
 
-  // 产品注册 → 封口 → 验收：失败先写具名日志再降级（这条路径曾是裸 catch，白窗口时日志里一行都没有）。
+  // 产品注册 → 封口 → 验收：失败先写具名日志再降级（这条路径原本什么都不记，白窗口时日志里一行都没有）。
   const productBootstrap = await runProductBootstrap({
       registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({
               register: productIpcRegistry.register,
