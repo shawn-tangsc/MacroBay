@@ -1727,8 +1727,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   }
 
   return (
-    <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()} button={WINDOW_ANTD_BUTTON_CONFIG}
-      wave={WINDOW_ANTD_WAVE_CONFIG}>
+    <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()} button={WINDOW_ANTD_BUTTON_CONFIG} wave={WINDOW_ANTD_WAVE_CONFIG}>
       {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
       <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
       {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
