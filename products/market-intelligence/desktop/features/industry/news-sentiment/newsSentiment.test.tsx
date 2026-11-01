@@ -9,6 +9,7 @@ import { productText } from '../../../shared/i18n/productText'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { NewsSentimentFeature } from './NewsSentimentFeature'
 import { NewsSentimentCard } from './NewsSentimentCard'
+import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 
 const text = productText['zh-CN'].pages.intelligence.portal.newsSentiment
 
@@ -97,6 +98,24 @@ describe('icon triggers', () => {
     await act(async () => {})
     const tooltip = document.body.querySelector('.ant-tooltip')
     expect(tooltip?.textContent).toContain(text.settings)
+  })
+})
+
+describe('icon label keys', () => {
+  // The icon triggers take an open string key, so an unknown key must not be read out loud: reading
+  // "news.sentiment.unknown" to a user is worse than hiding the trigger.
+  it('resolves a known key and never answers with an unknown one', () => {
+    const resolve = createIconTextResolver(text)
+    expect(resolve('news.sentiment.settings')).toBe(text.settings)
+    expect(resolve('news.sentiment.unknown')).toBe('')
+    expect(resolve('news.sentiment.unknown')).not.toBe('news.sentiment.unknown')
+    expect(hasIconText(text, 'news.sentiment.unknown' as never)).toBe(false)
+  })
+
+  it('never puts a key into a rendered screen-reader name', async () => {
+    const container = await mountCard(VIEW)
+    const labels = [...container.querySelectorAll('[aria-label]')].map((node) => node.getAttribute('aria-label') ?? '')
+    expect(labels.some((label) => label.startsWith('news.sentiment.'))).toBe(false)
   })
 })
 

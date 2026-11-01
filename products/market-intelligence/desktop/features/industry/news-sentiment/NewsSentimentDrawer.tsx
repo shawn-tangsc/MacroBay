@@ -10,6 +10,7 @@ import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../ser
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
+import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
@@ -51,9 +52,8 @@ export function NewsSentimentDrawer(props: {
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
   const contextMenuRef = useRef<HTMLDivElement>(null)
-  // IconButton takes keys, not sentences: the row's more trigger keeps its label in this map.
-  const iconLabelText: Record<string, string> = { 'news.sentiment.more': text.drawer.moreActions }
-  const resolveIconText = (key: string): string => iconLabelText[key] ?? key
+  // IconButton takes keys, not sentences; the resolver never falls back to the key itself.
+  const resolveIconText = createIconTextResolver(text)
   const openContextMenu = (itemId: string, x: number, y: number): void => {
     setContextMenu({ itemId, x: Math.min(x, window.innerWidth - 160), y: Math.min(y, window.innerHeight - 80) })
   }
@@ -306,7 +306,7 @@ export function NewsSentimentDrawer(props: {
                 </span>
                 <span className="mi-news-drawer__title">{translatedTitles[row.itemId] ?? row.displayTitle ?? row.title}</span>
               </button>
-              {translationEnabled ? (
+              {translationEnabled && hasIconText(text, 'news.sentiment.more') ? (
                 <IconButton
                   ariaLabelKey="news.sentiment.more"
                   icon={MoreVertical}

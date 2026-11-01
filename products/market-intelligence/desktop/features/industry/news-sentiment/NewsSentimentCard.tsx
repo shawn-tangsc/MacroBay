@@ -12,6 +12,7 @@ import { NEWS_SENTIMENT_WINDOW_MS } from '../../../../service/intelligence/schem
 import { labelText } from './newsSentimentPresentation'
 import { passesNeutralFilter } from './newsSentimentFilters'
 import { resolveNewsSentimentEmptyState } from './newsSentimentEmptyState'
+import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
 import { isNewsSentimentOutOfDate } from './newsSentimentFreshness'
 import { NewsSentimentStrength } from './NewsSentimentStrength'
 
@@ -72,12 +73,8 @@ export function NewsSentimentCard(props: {
     : false
   const emptyAction = emptyState && !causeUnknown ? emptyStateAction(emptyState.kind, props, text) : undefined
   const emptySentence = emptyState && !causeUnknown ? emptyStateText(emptyState, text, formatTime) : undefined
-  // IconButton takes keys, not sentences: the two icon-only triggers own this tiny map.
-  const iconLabelText: Record<string, string> = {
-    'news.sentiment.settings': text.settings,
-    'news.sentiment.refresh': text.refresh
-  }
-  const resolveIconText = (key: string): string => iconLabelText[key] ?? key
+  // IconButton takes keys, not sentences; the resolver never falls back to the key itself.
+  const resolveIconText = createIconTextResolver(text)
 
   return (
     <section className="mi-news-sentiment" data-news-sentiment-card aria-label={text.title}>
@@ -97,22 +94,26 @@ export function NewsSentimentCard(props: {
             value={includeNeutral ? 'all' : 'exclude'}
           />
           <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
-          <IconButton
-            ariaLabelKey="news.sentiment.settings"
-            icon={Settings}
-            onSelect={props.onOpenSettings}
-            resolveText={resolveIconText}
-            size="md"
-            tooltipKey="news.sentiment.settings"
-          />
-          <IconButton
-            ariaLabelKey="news.sentiment.refresh"
-            icon={RefreshCw}
-            onSelect={props.onRefresh}
-            resolveText={resolveIconText}
-            size="md"
-            tooltipKey="news.sentiment.refresh"
-          />
+          {hasIconText(text, 'news.sentiment.settings') ? (
+            <IconButton
+              ariaLabelKey="news.sentiment.settings"
+              icon={Settings}
+              onSelect={props.onOpenSettings}
+              resolveText={resolveIconText}
+              size="md"
+              tooltipKey="news.sentiment.settings"
+            />
+          ) : null}
+          {hasIconText(text, 'news.sentiment.refresh') ? (
+            <IconButton
+              ariaLabelKey="news.sentiment.refresh"
+              icon={RefreshCw}
+              onSelect={props.onRefresh}
+              resolveText={resolveIconText}
+              size="md"
+              tooltipKey="news.sentiment.refresh"
+            />
+          ) : null}
         </div>
       </header>
 
