@@ -23,6 +23,8 @@ const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git',
 type CallSite = {
   file: string
   line: number
+  /** 开标签原文：条件展开这类形状只能从这里判。 */
+  source: string
   state: string
   reasonCode: string
   actionKeys: string[]
@@ -65,6 +67,7 @@ function callSitesIn(file: string): CallSite[] {
     sites.push({
       file: relative(ROOT, file),
       line: text.slice(0, start).split('\n').length,
+      source: window,
       state,
       reasonCode,
       actionKeys,
@@ -89,8 +92,23 @@ const BASELINE_FILE =
 const BASELINE = new Map<string, number>([
   [`${BASELINE_FILE}|empty.filtered-out`, 1],
   [`${BASELINE_FILE}|disabled.target-disabled`, 1],
-  [`${BASELINE_FILE}|empty.nothing-in-window`, 1]
+  [`${BASELINE_FILE}|empty.nothing-in-window`, 1],
+  // 条件展开的既有两处：`filtered-out` / `target-disabled` 在新闻情绪卡里按可选回调给按钮，
+  // 即同一个码有「有按钮/没按钮」两种形态。判据已写进 §16，清理由该线随迁移同笔做。
+  [`${BASELINE_FILE}|empty.filtered-out`, 1],
+  [`${BASELINE_FILE}|disabled.target-disabled`, 1],
+  [
+    'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendarEventDetail.tsx|error.unreadable',
+    1
+  ]
 ])
+
+/** 三种写法都算条件展开：三元展开、`&&` 展开、`action={cond ? … : undefined}`。 */
+const CONDITIONAL_SPREAD = [
+  /\.\.\.\(\s*[^)]*\?[^)]*\{[^}]*action\s*:/,
+  /\.\.\.\(\s*[^)]*&&[^)]*\{[^}]*action\s*:/,
+  /action=\{\s*[^{}]*\?/
+]
 
 function baselineKeyOf(site: CallSite): string {
   return `${site.file}|${site.state}.${site.reasonCode}`
@@ -115,21 +133,55 @@ describe('StateView call sites match the action rules', () => {
     expect(offenders).toEqual([])
   })
 
-  it('keeps none-installed inside its three allowed actions', () => {
-    const offenders = sites
-      .filter((site) => `${site.state}.${site.reasonCode}` === 'empty.none-installed')
-      .flatMap((site) => site.actionKeys.filter((key) => !STATE_VIEW_ACTION_CHOICES['empty.none-installed']!.includes(key)))
-      .map((key) => ({ key }))
+  it('gives every required code a whitelist, so no code is left unprotected', () => {
+    // 一个码落地时忘了加白名单，这条先红——否则「键对不对」这一列对它是没有守卫的。
+    const missing = Object.entries(STATE_VIEW_ACTION_RULES)
+      .filter(([, rule]) => rule === 'required')
+      .map(([code]) => code)
+      .filter((code) => STATE_VIEW_ACTION_CHOICES[code] === undefined)
+
+    expect(missing).toEqual([])
+  })
+
+  it('keeps every call-site action inside its own code whitelist', () => {
+    const offenders = sites.flatMap((site) => {
+      const code = `${site.state}.${site.reasonCode}`
+      const allowed = STATE_VIEW_ACTION_CHOICES[code]
+      if (allowed === undefined) return []
+      return site.actionKeys
+        .filter((key) => !allowed.includes(key))
+        .map((key) => ({ file: site.file, line: site.line, code, key }))
+    })
 
     expect(offenders).toEqual([])
   })
 
+  it('红夹具：`never-created` 配 `focus-form` 必须被报出（这次真出过的组合）', () => {
+    // 用一个合成的调用点跑真实判据：夹具不依赖产品代码，产品代码改了它也不会失效。
+    const fake: CallSite = {
+      file: 'fixture.tsx',
+      line: 1,
+      source: '<StateView state="empty" reasonCode="never-created" action={{ labelKey: \'ui.state.action.focus-form\' }} />',
+      state: 'empty',
+      reasonCode: 'never-created',
+      actionKeys: ['ui.state.action.focus-form'],
+      hasAction: true
+    }
+    const allowed = STATE_VIEW_ACTION_CHOICES['empty.never-created']!
+    const offenders = fake.actionKeys.filter((key) => !allowed.includes(key))
+
+    expect(offenders).toEqual(['ui.state.action.focus-form'])
+  })
+
   it('keeps the baseline shrinking: a fixed entry must be deleted, not left behind', () => {
-    // 基线同时覆盖两类违规：必填却没给动作、禁止却给了动作。
+    // 基线覆盖三类违规：必填却没给动作、禁止却给了动作、动作写成条件展开。
     const live = new Map<string, number>()
     for (const site of sites) {
       const rule = STATE_VIEW_ACTION_RULES[`${site.state}.${site.reasonCode}`]
-      const broken = (rule === 'required' && !site.hasAction) || (rule === 'forbidden' && site.hasAction)
+      const broken =
+        (rule === 'required' && !site.hasAction) ||
+        (rule === 'forbidden' && site.hasAction) ||
+        CONDITIONAL_SPREAD.some((pattern) => pattern.test(site.source))
       if (!broken) continue
       const key = baselineKeyOf(site)
       live.set(key, (live.get(key) ?? 0) + 1)
@@ -137,6 +189,15 @@ describe('StateView call sites match the action rules', () => {
     const stale = [...BASELINE.keys()].filter((entry) => (live.get(entry) ?? 0) === 0)
 
     expect(stale).toEqual([])
+  })
+
+  it('never spreads the action conditionally: a state is either shown or not, its button is not optional', () => {
+    const offenders = sites
+      .filter((site) => CONDITIONAL_SPREAD.some((pattern) => pattern.test(site.source)))
+      .filter((site) => !BASELINE.has(baselineKeyOf(site)))
+      .map((site) => `${site.file}:${site.line}`)
+
+    expect(offenders).toEqual([])
   })
 
   it('cannot pass vacuously: every literal call site was parsed with a known code', () => {

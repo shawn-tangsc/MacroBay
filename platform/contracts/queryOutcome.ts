@@ -76,12 +76,36 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'permission.not-granted': 'required'
 }
 
-/** 允许出现在某个码上的动作键；没列出的码不限制（必填/禁止已由上一张表判）。 */
+/**
+ * 允许出现在某个码上的动作键——**每个码一条白名单，码内允许多键**。
+ *
+ * 为什么不是「一个码锁一个键」：同一个码在不同屏上的恢复方式不同
+ * （`error.unavailable` 可能是 `retry`、`check-source` 或 `refresh`）。
+ * 锁成一键，第一个合法的第二现场就会红，然后守卫会被人放宽——那比没有守卫更糟。
+ *
+ * 内容与 `docs/development/ui-state-components.md` 的「Action」列一一对应；
+ * 改这张表＝契约变更。`stateViewCallSiteGuard` 断言三件事：每个 `required` 的码都在这里有一条、
+ * 站点用的键都在它那条白名单里、以及反向夹具（`never-created` + `focus-form`）必须被报出。
+ */
 export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
-  'empty.never-ran': ['ui.state.action.run-now'],
+  'empty.never-created': ['ui.state.action.create'],
+  'empty.filtered-out': ['ui.state.action.clear-filter'],
+  'empty.no-target-bound': ['ui.state.action.bind-target'],
+  'empty.nothing-enabled': ['ui.state.action.enable'],
   'empty.none-installed': [
     'ui.state.action.install',
     'ui.state.action.bind-target',
     'ui.state.action.open-settings'
-  ]
+  ],
+  'empty.no-target-selected': ['ui.state.action.select-target', 'ui.state.action.focus-form'],
+  'empty.never-ran': ['ui.state.action.run-now'],
+  'empty.older-than-window': ['ui.state.action.widen-time-window'],
+  'empty.nothing-in-window': ['ui.state.action.widen-time-window'],
+  'error.unreadable': ['ui.state.action.retry'],
+  'error.unavailable': ['ui.state.action.check-source', 'ui.state.action.retry', 'ui.state.action.refresh'],
+  'error.operation-failed': ['ui.state.action.retry'],
+  'error.needs-restart': ['ui.state.action.restart-app'],
+  'disabled.target-disabled': ['ui.state.action.enable'],
+  'disabled.precondition-unsaved': ['ui.state.action.save'],
+  'permission.not-granted': ['ui.state.action.open-system-settings']
 }
