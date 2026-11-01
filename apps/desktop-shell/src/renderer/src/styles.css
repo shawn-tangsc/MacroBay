@@ -10025,28 +10025,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   cursor: default;
 }
 
-.model-service-endpoint-test-result {
-  font-size: 11px;
-  line-height: 16px;
-  word-break: break-word;
-}
-
-.model-service-endpoint-test-result.tone-success {
-  color: var(--success, #3d9a6a);
-}
-
-.model-service-endpoint-test-result.tone-warning {
-  color: var(--warning, #c48a2a);
-}
-
-.model-service-endpoint-test-result.tone-error {
-  color: var(--danger, #c44b4b);
-}
-
-.model-service-endpoint-test-result.tone-neutral {
-  color: var(--muted);
-}
-
 .model-service-request-config-icon {
   display: inline-flex;
   flex: none;

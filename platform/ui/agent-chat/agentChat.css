@@ -113,28 +113,6 @@
   font-size: 11px;
 }
 
-/*
- * 警示分层：文字承担「读得清」，红点承担「注意」。
- * 原来整句用 --danger —— 深色下对 surface 3.94、对 surface-soft 3.25，不到正文 4.5:1；
- * 换 --text-strong 后是 17.96 / 14.81。红点是图形，3:1 达标，且灰度下靠「有没有这个点」也能分辨。
- * 伪元素方案不动 JSX、不动行高、不影响与同组其它 p 的对齐；读屏语义已由 role="alert" 承担。
- */
-.agent-chat-composer__notices > p[role='alert'] {
-  color: var(--text-strong);
-  font-weight: 500;
-}
-
-.agent-chat-composer__notices > p[role='alert']::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--danger);
-  vertical-align: 1px;
-}
-
 .agent-chat-composer__toolbar {
   display: flex;
   flex-wrap: wrap;

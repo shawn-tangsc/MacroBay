@@ -478,11 +478,6 @@ button.mi-agent-card__status:focus-visible {
   gap: 12px;
 }
 
-.mi-agent-drawer__footer > span {
-  color: var(--danger, #d95c5c);
-  font-size: 11px;
-}
-
 .mi-agent-drawer__intro {
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
