@@ -20,6 +20,8 @@ const MAX_SCAN_DEPTH = 6
  * Not rewriting is not the same as not looking. Structured string values are still scanned — with
  * invisible characters stripped, so an obfuscated phrase cannot hide there — and a hit adds one
  * warning to the result's text item, leaving the field values character-for-character intact.
+ * Content items that are not `text` (`resource`, `resource_link`) are scanned the same way: they
+ * carry text the model may read, and skipping them would leave a field-sized hole.
  *
  * Applies to the path we own (`McpRuntimeServerHostFactory.invokeTool`). Tool calls the SDK makes
  * through its own connection never reach this function — that path is a known gap, not a covered one.
@@ -36,7 +38,15 @@ export function guardMcpToolInvokeResult(
 
   const structuredPatterns = new Set<string>([
     ...collectStructuredPatterns(result.structuredContent, 0),
-    ...(typeof result.output === 'string' ? [] : collectStructuredPatterns(result.output, 0))
+    ...(typeof result.output === 'string' ? [] : collectStructuredPatterns(result.output, 0)),
+    // Content items that are not `text` carry text too: a `resource` embeds `resource.text` and a
+    // `resource_link` carries a name and description. They are not wrapped (that would change the
+    // result shape), but they are scanned, so injection cannot hide in a field we skip.
+    ...(Array.isArray(result.content)
+      ? result.content.flatMap((item) =>
+          isRecord(item) && item.type === 'text' ? [] : collectStructuredPatterns(item, 0)
+        )
+      : [])
   ])
   const warning = buildStructuredWarning(structuredPatterns)
 
