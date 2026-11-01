@@ -5769,9 +5769,14 @@ h1 {
 .agent-inputbar-error {
   padding: 7px 9px;
   border: 1px solid color-mix(in srgb, #ef4444 34%, var(--border));
+  /* 左侧实色条承担「这是错误」：--danger 对这块浅红底的图形对比度深色 3.63 / 浅色 4.74，过 3:1。
+     9% 底色只能当线索——它与 surface 的对比度只有 1.08，肉眼几乎看不出，不能单独承担语义。 */
+  border-left: 3px solid var(--danger);
   border-radius: 9px;
   background: color-mix(in srgb, #ef4444 9%, var(--surface));
-  color: #dc2626;
+  /* 正文回到正文墨色：白字对这块底 16.56、深字 15.98，原来的 #dc2626 是 3.43 / 4.30。 */
+  color: var(--text-strong);
+  font-weight: 500;
   font-size: 12px;
   line-height: 1.45;
 }
