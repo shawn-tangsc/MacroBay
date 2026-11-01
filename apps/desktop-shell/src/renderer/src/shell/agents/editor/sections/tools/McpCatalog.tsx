@@ -8,6 +8,12 @@ import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
 import { EmptyCatalog } from './EmptyCatalog'
+import {
+  emptyToolsHint,
+  McpStatusTag,
+  switchAccessibleName,
+  UNBINDABLE_STATUSES
+} from './mcpRowStatus'
 
 type McpCatalogProps = {
   text: AgentText
@@ -195,16 +201,7 @@ function McpRow({
           </span>
         ) : null}
       </span>
-      <Tag
-        className={
-          item.status === 'connected'
-            ? 'agent-tool-approval auto'
-            : item.status === 'error'
-              ? 'agent-tool-approval danger'
-              : 'agent-tool-approval'
-        }>
-        {mcpStatusLabel(item.status, text)}
-      </Tag>
+      <McpStatusTag item={item} text={text} />
       {checked && UNBINDABLE_STATUSES.has(item.status) && onUnbind ? (
         <Button
           className="ant-secondary-button"
@@ -305,60 +302,5 @@ async function runCredentialAction(
 
   if (action.id === 'restart' || action.id === 'retry') {
     onRestart?.()
-  }
-}
-
-/**
- * 哪些已绑定行给解绑出口：连不上、被停用、从没启动过。
- * 「正在连接」是过渡态，不给出口——刚打开开关就闪出一个删除按钮，误点就删了刚建的绑定。
- */
-const UNBINDABLE_STATUSES = new Set<AgentMcpCatalogItem['status']>(['error', 'disabled', 'idle'])
-
-/** 读屏名说的是「绑没绑」，把当前状态只作为不可用时的补充。 */
-function switchAccessibleName(item: AgentMcpCatalogItem, checked: boolean, text: AgentText): string {
-  if (checked) return text.editor.tools.mcpSwitchBound(item.name)
-  if (item.status === 'connected') return text.editor.tools.mcpSwitchBind(item.name)
-  return text.editor.tools.mcpSwitchBindUnavailable(item.name)
-}
-
-/** 四句按状态分开说：连不上、正在连、没启动、连上了但这个服务没有工具，是四件事。 */
-function emptyToolsHint(status: AgentMcpCatalogItem['status'], text: AgentText): string {
-  switch (status) {
-    case 'idle':
-      return text.editor.tools.mcpEmptyToolsIdle
-    case 'connecting':
-      return text.editor.tools.mcpEmptyToolsConnecting
-    case 'connected':
-      return text.editor.tools.mcpEmptyToolsConnected
-    case 'error':
-    case 'disabled':
-      return text.editor.tools.mcpEmptyToolsError
-    default: {
-      const unreachable: never = status
-      return unreachable
-    }
-  }
-}
-
-/**
- * 穷举分支，不留静默 `default`：新增一个运行时状态却忘了给它文案时，
- * `never` 检查会让编译失败，而不是让这个值悄悄落进某个兜底说法里（「连接中」那次就是这么来的）。
- */
-function mcpStatusLabel(status: AgentMcpCatalogItem['status'], text: AgentText): string {
-  switch (status) {
-    case 'connected':
-      return text.editor.tools.mcpConnected
-    case 'connecting':
-      return text.editor.tools.mcpConnecting
-    case 'error':
-      return text.editor.tools.mcpError
-    case 'idle':
-      return text.editor.tools.mcpIdle
-    case 'disabled':
-      return text.editor.tools.mcpDisabled
-    default: {
-      const unreachable: never = status
-      return unreachable
-    }
   }
 }
