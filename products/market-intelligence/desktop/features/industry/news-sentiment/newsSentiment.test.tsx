@@ -380,6 +380,25 @@ describe('NewsSentimentFeature', () => {
     expect(toggle?.querySelectorAll('input[type="radio"]:checked')).toHaveLength(1)
   })
 
+  it('re-reads when the reader retries a failed read', async () => {
+    // Chief's caution for the upcoming StateView migration: the retry button must really re-read,
+    // not merely clear the error. The clock advances so the re-read has a new asOf to key on.
+    const query = vi.fn()
+      .mockRejectedValueOnce(new Error('read failed'))
+      .mockResolvedValue(VIEW)
+    let tick = 0
+    const now = () => new Date(Date.UTC(2026, 9, 24, 13, 0, tick++))
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ query })} now={now} />)
+    await act(async () => {})
+    expect(container.querySelector('[data-news-sentiment-state="unavailable"]')).toBeTruthy()
+    // Structural selector: antd puts a space between two CJK characters, so the label reads 重 试.
+    const retry = container.querySelector<HTMLButtonElement>('[data-news-sentiment-state="unavailable"] button')
+    await act(async () => { retry?.click() })
+    await act(async () => {})
+    expect(query).toHaveBeenCalledTimes(2)
+    expect(container.querySelectorAll('.mi-news-sentiment__drivers button').length).toBeGreaterThan(0)
+  })
+
   it('opens the row menu from the more button and translates that row', async () => {
     const translateBody = vi.fn(async () => ({ state: 'translated' as const, body: '译文正文', title: '译文标题' }))
     const container = await mount(<NewsSentimentFeature text={text} client={client({ translateBody })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
