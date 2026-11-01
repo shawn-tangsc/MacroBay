@@ -217,6 +217,8 @@ export type IntelligenceModulePlatformHooks = {
 let briefingPolicyPathQuery: PolicyPathQueryService | undefined
 
 export type IntelligenceModule = {
+  /** Re-anchor the brief schedule after the reader changes their display zone (no settings save). */
+  rescheduleBriefingForDisplayTimeZone: (timeZone: string) => Promise<void>
   pipeline: ReturnType<typeof createIntelligencePipeline>
   sourcesService: ReturnType<typeof createIntelligenceSourcesService>
   translationService: ReturnType<typeof createIntelligenceTranslationService>
@@ -968,7 +970,11 @@ export function getIntelligenceModule(
         timeZone: shellTimeZone
       })
     }
+    const rescheduleBriefingForDisplayTimeZone = async (timeZone: string): Promise<void> => {
+      scheduleDailyBriefingJob(jobRuntime, briefingScheduleFrom(await dailyBriefingGenerationSettings.reanchor(timeZone), timeZone))
+    }
     intelligenceModule = {
+      rescheduleBriefingForDisplayTimeZone,
       pipeline,
       workerRuntime,
       archiveService,
