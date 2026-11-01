@@ -2,7 +2,6 @@
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-chat-trace-failure": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-chat-trace-failure__message": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-gateway-route__state[data-state='error']": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .agent-message-status.error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-question-card__error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-runtime-activity-group-item .agent-runtime-activity-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-runtime-activity-input-error": 1,

@@ -5128,21 +5128,6 @@ h1 {
   color: var(--text-strong);
 }
 
-.agent-message-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-}
-
-.agent-message-status.error {
-  color: var(--danger);
-}
-
-.agent-message-status.paused {
-  color: var(--muted-strong);
-}
-
 .agent-runtime-activity-panel {
   display: grid;
   grid-template-columns: 26px minmax(0, 720px);
