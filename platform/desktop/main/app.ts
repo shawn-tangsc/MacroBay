@@ -25,6 +25,8 @@ import {
   createChannelInboundContentGuard,
   ChannelDeliveryMaintenance,
   ChannelDeliveryRepository,
+  registerChannelMaintenanceJobHandlers,
+  scheduleChannelMaintenanceJobs,
   ChannelDeliveryService,
   ChannelAdapterAcceptanceRegistry,
   ChannelAcceptanceService,
@@ -633,14 +635,7 @@ let productIpcRegistryForDisposal: ReturnType<typeof createProductIpcRegistry> |
 let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null
 let disposeTaskAutomationMaintenance: (() => void) | null = null
 let disposeJobRunRetention: (() => void) | null = null
-let disposeChannelDeliveryMaintenance: (() => void) | null = null
-let disposeChannelInboundRecovery: (() => void) | null = null
-let disposeTelegramRuntimeMaintenance: (() => void) | null = null
-let disposeSlackRuntimeMaintenance: (() => void) | null = null
-let disposeLarkRuntimeMaintenance: (() => void) | null = null
-let disposeQqRuntimeMaintenance: (() => void) | null = null
-let disposeDiscordRuntimeMaintenance: (() => void) | null = null
-let disposeWechatRuntimeMaintenance: (() => void) | null = null
+let disposeChannelMaintenanceJobs: (() => void) | null = null
 /**
  * P1-06m：退出第一件事 —— 把 debounce（250ms）窗口内的待写布局**有界落盘**并记录结果。
  * 放在所有其它清理之前：后续清理可能很慢甚至挂住，绝不让它吃掉退出前最后一次布局变更。
@@ -661,22 +656,8 @@ async function disposePlatformRuntimes(): Promise<void> {
   disposeTaskAutomationMaintenance = null
   disposeJobRunRetention?.()
   disposeJobRunRetention = null
-  disposeChannelDeliveryMaintenance?.()
-  disposeChannelDeliveryMaintenance = null
-  disposeChannelInboundRecovery?.()
-  disposeChannelInboundRecovery = null
-  disposeTelegramRuntimeMaintenance?.()
-  disposeTelegramRuntimeMaintenance = null
-  disposeSlackRuntimeMaintenance?.()
-  disposeSlackRuntimeMaintenance = null
-  disposeLarkRuntimeMaintenance?.()
-  disposeLarkRuntimeMaintenance = null
-  disposeQqRuntimeMaintenance?.()
-  disposeQqRuntimeMaintenance = null
-  disposeDiscordRuntimeMaintenance?.()
-  disposeDiscordRuntimeMaintenance = null
-  disposeWechatRuntimeMaintenance?.()
-  disposeWechatRuntimeMaintenance = null
+  disposeChannelMaintenanceJobs?.()
+  disposeChannelMaintenanceJobs = null
   // Abort every adapter lifetime before the shared SQLite fence closes all owners.
   await telegramRuntimeManager.dispose()
   await slackRuntimeManager.dispose()
@@ -2558,14 +2539,21 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
       return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
     }
   })
-  disposeChannelDeliveryMaintenance = channelDeliveryMaintenance.start()
-  disposeChannelInboundRecovery = channelInboundExecutionRunner.startRecovery()
-  disposeTelegramRuntimeMaintenance = telegramRuntimeMaintenance.start()
-  disposeSlackRuntimeMaintenance = slackRuntimeMaintenance.start()
-  disposeLarkRuntimeMaintenance = larkRuntimeMaintenance.start()
-  disposeQqRuntimeMaintenance = qqRuntimeMaintenance.start()
-  disposeDiscordRuntimeMaintenance = discordRuntimeMaintenance.start()
-  disposeWechatRuntimeMaintenance = wechatRuntimeMaintenance.start()
+  const channelMaintenanceJobDeps = {
+    deliveryCleanup: () => channelDeliveryMaintenance.runSlice(),
+    deliveryRetry: () => channelDeliveryMaintenance.runRetrySlice(),
+    inboundRecovery: () => channelInboundExecutionRunner.recoverOnce(),
+    adapterMaintenance: {
+      telegram: () => telegramRuntimeMaintenance.runOnce(),
+      slack: () => slackRuntimeMaintenance.runOnce(),
+      lark: () => larkRuntimeMaintenance.runOnce(),
+      qq: () => qqRuntimeMaintenance.runOnce(),
+      discord: () => discordRuntimeMaintenance.runOnce(),
+      wechat: () => wechatRuntimeMaintenance.runOnce()
+    }
+  }
+  registerChannelMaintenanceJobHandlers(jobRuntime, channelMaintenanceJobDeps)
+  disposeChannelMaintenanceJobs = scheduleChannelMaintenanceJobs(jobRuntime, channelMaintenanceJobDeps)
   syncProductToolsRuntimeFromState(await agentStore.getState())
   mcpRuntimeService.syncFromState(await agentStore.getState())
   agentTaskSchedulerRuntimeService.syncFromState(await agentStore.getState())

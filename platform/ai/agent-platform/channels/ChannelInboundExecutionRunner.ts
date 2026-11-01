@@ -24,12 +24,4 @@ export class ChannelInboundExecutionRunner {
     }
   }
 
-  startRecovery(intervalMs = 15 * 60_000, timers: {
-    setInterval?: (callback: () => void, interval: number) => ReturnType<typeof setInterval>
-    clearInterval?: (timer: ReturnType<typeof setInterval>) => void
-  } = {}): () => void {
-    void this.recoverOnce()
-    const timer = (timers.setInterval ?? setInterval)(() => { void this.recoverOnce() }, intervalMs)
-    return () => (timers.clearInterval ?? clearInterval)(timer)
-  }
 }

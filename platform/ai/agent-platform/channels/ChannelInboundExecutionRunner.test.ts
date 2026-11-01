@@ -16,41 +16,21 @@ describe('ChannelInboundExecutionRunner', () => {
     expect(coordinator.executeRecovery).toHaveBeenCalledWith([claim])
   })
 
-  it('contains repository failure at startup and tick without entering coordinator recovery', async () => {
-    let tick: (() => void) | undefined
-    let disposed = false
-    const clearInterval = vi.fn()
+  it('contains repository failure without entering coordinator recovery', async () => {
     const repository = { reclaimExpired: vi.fn(() => { throw new Error('sqlite busy') }) }
     const coordinator = { executeRecovery: vi.fn() }
     const runner = new ChannelInboundExecutionRunner({ inbound: repository as never, coordinator: coordinator as never })
-    const dispose = runner.startRecovery(15 * 60_000, {
-      setInterval: (callback, interval) => { expect(interval).toBe(15 * 60_000); tick = () => { if (!disposed) callback() }; return 1 as never },
-      clearInterval: (timer) => { disposed = true; clearInterval(timer) }
-    })
-    await Promise.resolve()
-    expect(() => tick?.()).not.toThrow()
-    await Promise.resolve()
+
+    await expect(runner.recoverOnce()).resolves.toBeUndefined()
     expect(coordinator.executeRecovery).not.toHaveBeenCalled()
-    dispose()
-    expect(clearInterval).toHaveBeenCalledWith(1)
-    const calls = repository.reclaimExpired.mock.calls.length
-    tick?.()
-    await Promise.resolve()
-    expect(repository.reclaimExpired.mock.calls.length).toBe(calls)
   })
 
-  it('contains coordinator rejection at startup and tick without an unhandled recovery promise', async () => {
-    let tick: (() => void) | undefined
+  it('contains coordinator rejection without an unhandled recovery promise', async () => {
     const repository = { reclaimExpired: vi.fn(() => []) }
     const coordinator = { executeRecovery: vi.fn(async () => { throw new Error('admission failed') }) }
     const runner = new ChannelInboundExecutionRunner({ inbound: repository as never, coordinator: coordinator as never })
-    const dispose = runner.startRecovery(15 * 60_000, {
-      setInterval: (callback) => { tick = callback; return 1 as never }, clearInterval: () => {}
-    })
-    await Promise.resolve()
-    expect(() => tick?.()).not.toThrow()
-    await Promise.resolve()
-    expect(coordinator.executeRecovery).toHaveBeenCalledTimes(2)
-    dispose()
+
+    await expect(runner.recoverOnce()).resolves.toBeUndefined()
+    expect(coordinator.executeRecovery).toHaveBeenCalledTimes(1)
   })
 })
