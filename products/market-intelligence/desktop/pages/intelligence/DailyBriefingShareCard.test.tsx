@@ -126,6 +126,25 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toMatch(CJK)
   })
 
+  it('marks a fallback reading as a fallback on the poster', async () => {
+    // The poster is what gets shared: a row that fell back to the curve's last point carried the
+    // same colour and precision as a live reading, so the reader could not tell them apart.
+    const base = briefing()
+    const staleDoc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc' ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const } : row)
+      }
+    }
+    const rendered = await render(staleDoc)
+    const chip = rendered.querySelector('.mi-brief-poster__stale')
+    expect(chip?.textContent).toBe(text.staleMarker)
+
+    const live = await render(briefing())
+    expect(live.querySelector('.mi-brief-poster__stale')).toBeNull()
+  })
+
   it('renders only the data rows the editor kept', async () => {
     const base = briefing()
     const rendered = await render({

@@ -104,7 +104,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           // keeps the level in the caption, so a screenshot and an export cannot disagree.
           const copy = changeLedRowCopy(row, text, locale)
           return <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}</span>
+            <span>{rowLabel(text, row.labelKey)}{staleMarker(row, text)}</span>
             <strong>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</strong>
             <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
           </div>
@@ -120,7 +120,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         {metricRows.map((row) => {
           const copy = changeLedRowCopy(row, text, locale)
           return <div key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}</span>
+            <span>{rowLabel(text, row.labelKey)}{staleMarker(row, text)}</span>
             <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
             {copy ? <small>{copy.secondary}</small> : null}
           </div>
@@ -321,6 +321,18 @@ function citationTime(entry: Readonly<{ refId: string; observedAt?: string }>, f
 
 function rowLabel(text: DailyBriefingText, labelKey: string): string {
   return text.rows[labelKey.split('.').pop() as keyof DailyBriefingText['rows']] ?? labelKey
+}
+
+/**
+ * The marker a fallback reading wears on the poster.
+ *
+ * A 24h reading that could not be read falls back to the last point of the curve, and the row then
+ * carries a number the reader has no way to tell apart from a live one: same colour, same precision.
+ * The chip says which rows those are; the poster is what gets shared, so it has to say it itself.
+ */
+function staleMarker(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
+  if (row.state !== 'stale') return null
+  return <em className="mi-brief-poster__stale" data-state="stale">{text.staleMarker}</em>
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {

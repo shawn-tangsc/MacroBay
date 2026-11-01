@@ -25,6 +25,9 @@
 .mi-brief-poster h1 { margin: 0; color: #161812; font-size: 50px; font-weight: 800; line-height: 1.05; letter-spacing: -.04em; }
 .mi-brief-poster__meta { margin: 12px 0 0; color: #6b695f; font-size: 14px; line-height: 1.5; }
 .mi-brief-poster__readings { flex: none; padding: 7px 11px; border: 1px solid #c9c1af; border-radius: 5px; color: #4f4d43; font-size: 12px; }
+/* A fallback reading must not look like a live one on a poster that gets shared: dashed, not solid,
+   and in the ink colour so it reads at the poster's print size without a second palette. */
+.mi-brief-poster__stale { display: inline-block; margin-left: 7px; padding: 1px 7px; border: 1px dashed currentColor; border-radius: 3px; font-size: 12px; font-style: normal; font-weight: 600; letter-spacing: .04em; line-height: 1.4; opacity: .72; vertical-align: 1px; }
 
 .mi-brief-poster__lede { margin: 24px 0 26px; padding: 4px 0 4px 20px; border-left: 4px solid #c2410c; color: #26271f; font-size: 22px; line-height: 1.62; font-weight: 500; }
 

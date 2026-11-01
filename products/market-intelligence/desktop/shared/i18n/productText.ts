@@ -707,6 +707,8 @@ export const productText = {
               groups: { market: '行情', funds: '资金', sentiment: '情绪' },
               tiers: { must: '重点', support: '补充', reference: '参考' },
               states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
+              // 分享卡上这条读数不是当时精确的 24 小时值，而是回退值；海报不标出来，读者会当成实时读数。
+              staleMarker: '回退值',
               reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面快照不可用', 'etf-unavailable': 'ETF 读数不可用' },
               changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
               // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
@@ -2487,6 +2489,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               groups: { market: 'Market', funds: 'Flows', sentiment: 'Sentiment' },
               tiers: { must: 'Must', support: 'Support', reference: 'Reference' },
               states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
+              // This reading is a fallback, not the exact 24h value; unmarked, the poster reads as live.
+              staleMarker: 'Fallback',
               reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
               changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
               // What each change is measured against: a rolling window, a session close, a release.
