@@ -11,7 +11,7 @@
 /* A handler id is one long token; without a clamp it widens the fixed column and pushes the whole
    table sideways, which reads as a second kind of misalignment. */
 .mi-sync-run__detail { display: flex; gap: 8px; align-items: baseline; }
-.mi-sync-run__detail code { color: #d9a441; background: rgb(217 164 65 / 12%); border-radius: 3px; padding: 0 4px; }
+.mi-sync-run__detail .mi-sync-run__failure { color: #d9a441; background: rgb(217 164 65 / 12%); border-radius: 3px; padding: 0 4px; }
 .mi-sync-run__detail span { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The table owns the scroll: the page must not grow with the run count. */

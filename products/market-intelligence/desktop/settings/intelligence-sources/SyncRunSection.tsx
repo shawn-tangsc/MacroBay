@@ -36,6 +36,11 @@ export type SyncRunText = Readonly<{
   /** `sourceId` → the product's name for that source, the same map the source list uses. */
   sourceNames?: Readonly<Record<string, string>>
   outcomes: Readonly<Record<'succeeded' | 'failed' | 'cancelled' | 'running', string>>
+  /** Failure code → the reader's sentence. The code itself never reaches the visible cell. */
+  failureCodes: Readonly<Record<string, string>>
+  failureUnknown: string
+  /** Title text for the humanised failure, so the code stays available without being on screen. */
+  failureCodeHint: string
 }>
 
 const WINDOWS: readonly SyncRunWindow[] = ['24h', '7d', 'all']
@@ -161,8 +166,15 @@ export function SyncRunSection({ text }: Readonly<{ text: SyncRunText }>): React
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
         <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>
         <span className="mi-sync-run__detail" role="cell">
-          {row.failureCode ? <code>{row.failureCode}</code> : null}
-          {row.detail ? <span>{row.detail}</span> : null}
+          {row.failureCode ? <span
+            className="mi-sync-run__failure"
+            title={[
+              text.failureCodeHint.replace('{code}', row.failureCode),
+              // The raw error text is implementation wording; it belongs with the code, not on the row.
+              ...(row.detail ? [row.detail] : [])
+            ].join(' · ')}
+          >{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span> : null}
+          {!row.failureCode && row.detail ? <span>{row.detail}</span> : null}
         </span>
       </div>)}
     </div> : null}

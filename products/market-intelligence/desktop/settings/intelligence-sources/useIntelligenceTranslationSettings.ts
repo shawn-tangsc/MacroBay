@@ -23,7 +23,8 @@ export function useIntelligenceTranslationSettings(labels: {
   const [saving, setSaving] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
-  const [errorCode, setErrorCode] = useState<string | null>(null)
+  // A sentence from the product text, never a code: the card renders it as-is.
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const [nextSettings, nextStatus, providers] = await Promise.all([
@@ -37,19 +38,19 @@ export function useIntelligenceTranslationSettings(labels: {
   }, [])
 
   useEffect(() => {
-    void load().catch(() => setErrorCode(labels.saveFailed))
+    void load().catch(() => setErrorMessage(labels.saveFailed))
   }, [labels.saveFailed, load])
 
   const updateSettings = useCallback(
     async (patch: Partial<IntelligenceTranslationSettings>) => {
       setSaving(true)
-      setErrorCode(null)
+      setErrorMessage(null)
       try {
         const next = await intelligenceTranslationClient.saveSettings(patch)
         setSettings(next)
         setModuleStatus(await intelligenceTranslationClient.getModuleStatus())
       } catch {
-        setErrorCode(labels.saveFailed)
+        setErrorMessage(labels.saveFailed)
       } finally {
         setSaving(false)
       }
@@ -67,7 +68,7 @@ export function useIntelligenceTranslationSettings(labels: {
   const queueMissing = useCallback(async (sourceIds?: readonly string[]) => {
     setQueuing(true)
     setNotice(null)
-    setErrorCode(null)
+    setErrorMessage(null)
     try {
       await intelligenceTranslationClient.queueMissing({
         reason: 'manual-selection',
@@ -79,7 +80,7 @@ export function useIntelligenceTranslationSettings(labels: {
       setNotice(labels.queueQueued)
       setModuleStatus(await intelligenceTranslationClient.getModuleStatus())
     } catch {
-      setErrorCode(labels.queueFailed)
+      setErrorMessage(labels.queueFailed)
     } finally {
       setQueuing(false)
     }
@@ -92,7 +93,7 @@ export function useIntelligenceTranslationSettings(labels: {
     saving,
     queuing,
     notice,
-    errorCode,
+    errorMessage,
     updateSettings,
     queueMissing
   }

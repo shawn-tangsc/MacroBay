@@ -58,7 +58,8 @@ export function TranslationPreferencesSection(props: {
     targetLocales: Record<string, string>
   }
   notice?: string | null
-  errorCode?: string | null
+  /** Already a sentence from the product text; the card never renders a raw code. */
+  errorMessage?: string | null
   onChange: (patch: Partial<SafeIntelligenceTranslationSettings>) => void
   /** Queues the untranslated items of `sourceIds`; the card passes its own scope. */
   onQueueMissing: (sourceIds?: readonly string[]) => void
@@ -214,10 +215,10 @@ export function TranslationPreferencesSection(props: {
             {props.labels.failedCount} {counts.failedCount}
           </small>
         ) : null}
-        {props.errorCode ? <small data-tone="error">{props.errorCode}</small> : null}
-        {!props.errorCode && props.saving ? <small>{props.labels.saving}</small> : null}
-        {!props.errorCode && !props.saving && props.notice ? <small>{props.notice}</small> : null}
-        {!props.errorCode && !props.saving && !props.notice && settings ? <small>{props.labels.saved}</small> : null}
+        {props.errorMessage ? <small data-tone="error">{props.errorMessage}</small> : null}
+        {!props.errorMessage && props.saving ? <small>{props.labels.saving}</small> : null}
+        {!props.errorMessage && !props.saving && props.notice ? <small>{props.notice}</small> : null}
+        {!props.errorMessage && !props.saving && !props.notice && settings ? <small>{props.labels.saved}</small> : null}
       </div>
     </section>
   )
