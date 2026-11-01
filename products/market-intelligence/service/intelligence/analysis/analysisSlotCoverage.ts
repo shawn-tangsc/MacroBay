@@ -1,11 +1,17 @@
 import { analysisSchedulePolicy, type AnalysisSessionSlot } from './analysisSchedulePolicy'
 
-/** The local calendar day of an instant, as `YYYY-MM-DD`: the unit a slot belongs to. */
-export function localDayToken(value: Date | string): string {
+/**
+ * 去重键的日界：**固定 UTC**（计数语义）。
+ *
+ * 这里的日期只用来回答「同一次开盘是否已经处理过」，不是给人看的日期归属。
+ * 跟机器或设置时区走会让同一次开盘在换时区前后算出两个键，于是重复分析或漏分析。
+ * 读者侧的日期归属不在这里：它要跟设置时区，等有消费方时用 `slotCoverageDay` 那个名字实现，
+ * 不要再用一个函数同时承担两种语义。
+ */
+export function slotDedupeDay(value: Date | string): string {
   const date = typeof value === 'string' ? new Date(value) : value
   if (!Number.isFinite(date.getTime())) return ''
-  const pad = (part: number) => String(part).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  return date.toISOString().slice(0, 10)
 }
 
 /**

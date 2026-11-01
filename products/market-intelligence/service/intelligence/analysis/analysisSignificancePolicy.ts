@@ -2,7 +2,7 @@ import type { AnalysisPhase } from '../../../contracts/marketAnalysisContracts'
 import { hashMarketAnalysisJson } from './analysisHash'
 import { decideBudget, type BudgetDecision } from './analysisBudgetPolicy'
 import { isScheduledSlotTriggerKey, slotForTriggerKey, type AnalysisSessionSlot } from './analysisSchedulePolicy'
-import { localDayToken } from './analysisSlotCoverage'
+import { slotDedupeDay } from './analysisSlotCoverage'
 import { isGateEligible } from './analysisTriggerSourcePolicy'
 import { providerReleaseSurprisePolicy, providerReleaseSurprises, type ProviderReleaseSurprise } from './providerReleaseSurprisePolicy'
 import { diffSignificance, type PreviousFactKey, type SignificanceBaseline, type SignificanceSignal } from './significanceChangeMatcher'
@@ -136,5 +136,5 @@ export function sessionSlotReasonCode(slot: AnalysisSessionSlot): string {
  * day's delivery its own row and its own timestamp.
  */
 export function sessionSlotChangeHash(slot: AnalysisSessionSlot, now: string): string {
-  return `session-slot:${slot}:${localDayToken(now)}`
+  return `session-slot:${slot}:${slotDedupeDay(now)}`
 }
