@@ -232,7 +232,8 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     <div className="mi-calendar-card__body">
       {projection.state === 'unavailable' ? <StateView state="error" reasonCode="unreadable" size="md"
         action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
-      {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
+      {projection.state === 'empty' ? <StateView state="empty" reasonCode="nothing-in-window" size="md"
+        productReason={{ key: 'mi.calendar.empty-card', resolve: () => text.empty }} /> : null}
       {projection.state === 'available' && projection.today.length === 0
         ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
         : null}

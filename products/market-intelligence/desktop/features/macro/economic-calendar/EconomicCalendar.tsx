@@ -18,6 +18,7 @@ import {
   type EconomicCalendarProjection
 } from './economicCalendarModel'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
@@ -399,7 +400,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>
             {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={market.sources} text={text} statusNow={statusNow} selected={item.source === 'market' ? item.event.eventKey === selectedMarket?.eventKey : item.event.eventKey === selectedEventKey} onSelect={value => selectItem(value)} /></div>)}
           </section>)}</div>
-          {coverage === 'complete' && !dayEvents.items.length ? <p>{text.unifiedDay.empty}</p> : null}
+          {coverage === 'complete' && !dayEvents.items.length ? <StateView state="empty" reasonCode="nothing-in-window" size="md"
+            productReason={{ key: 'mi.calendar.empty-day', resolve: () => text.unifiedDay.empty }} /> : null}
         </section>
       </div>
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" title={text.calendarSettings} onClose={() => setCalendarPanelOpen(false)} />
@@ -426,7 +428,8 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))
           setDetailReload((value) => value + 1)
         }} releaseTimeClient={client} refreshState={refreshState} text={text} /> : null}
-        {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error" onRetry={() => setDetailReload((value) => value + 1)} /> : null}
+        {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error"
+          text={text.failures[detailState.failureCode]} onRetry={() => setDetailReload((value) => value + 1)} /> : null}
       </DetailDrawer>
       <ImportBlsIcsDialog
         dialogState={blsIcsImport.dialogState}
