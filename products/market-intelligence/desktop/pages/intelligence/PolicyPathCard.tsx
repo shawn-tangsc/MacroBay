@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Tooltip } from 'antd'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
@@ -220,7 +220,9 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     <dl className="mi-policy-card__facts">
       {facts.map((row) => <div key={row.label}>
         <dt>{row.label}</dt>
-        <dd title={row.hint}>{row.value}</dd>
+        {row.hint
+          ? <Tooltip title={row.hint} trigger={['hover', 'focus']}><dd tabIndex={0}>{row.value}</dd></Tooltip>
+          : <dd>{row.value}</dd>}
       </div>)}
     </dl>
 

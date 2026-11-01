@@ -56,6 +56,15 @@ describe('policy path card', () => {
     expect(rendered.textContent).toContain(text.live)
   })
 
+  it('carries the vote hint on a focusable fact, not on a title attribute', async () => {
+    const rendered = await render(reading)
+    // `title` is not a hint channel: keyboard and screen readers get nothing from it.
+    expect(rendered.querySelector('dd[title]')).toBeNull()
+    const hinted = rendered.querySelector('dd[tabindex="0"]')
+    expect(hinted).not.toBeNull()
+    expect(hinted?.textContent).toContain('10–2')
+  })
+
   it('keeps one skeleton: a missing reading becomes a dash, not a shorter card', async () => {
     const rendered = await render({ ...reading, probability: undefined, targetRange: undefined, lastDecision: undefined, staleness: 'unavailable' })
     const rows = rendered.querySelectorAll('.mi-policy-card__facts > div')
