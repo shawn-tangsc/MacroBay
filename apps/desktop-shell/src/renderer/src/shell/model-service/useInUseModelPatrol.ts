@@ -10,26 +10,23 @@ import type { InUseModelRetiredItem } from '@platform/ai/providers/inUseModelPat
  *
  * 这里只做一次读取，并在窗口重新可见时同步一次；没有 `setInterval`。
  */
-export function useInUseModelPatrol(
-  input: { providerId?: string | null; modelId?: string | null; enabled?: boolean } = {}
-): InUseModelRetiredItem[] {
+export function useInUseModelPatrol(input: { enabled?: boolean } = {}): InUseModelRetiredItem[] {
   const [retired, setRetired] = useState<InUseModelRetiredItem[]>([])
-  const enabled = input.enabled !== false && Boolean(input.providerId)
+  const enabled = input.enabled !== false
 
   useEffect(() => {
     if (!enabled) return
     let cancelled = false
 
     const load = async (): Promise<void> => {
-      // 读的是既有的「模型可用性检查报告」：巡检结论是它的一部分，不为它单开通道。
-      // 测试与旧 preload 可能没有这个方法：没有报告就没有结论，不猜一个出来。
-      const api = window.platform.modelProviders as {
-        getRuntimeCheckReport?: (providerId: string, modelId: string) => Promise<unknown>
+      // 全局读口：不依赖用户先在模型服务页选中某个供应商——模型下线时他往往没开着那一页。
+      // 读不到就当作「读不到」：不清空已有结论，也不假装「没有下线模型」。
+      try {
+        const items = await window.platform.modelProviders.getInUseRetired()
+        if (!cancelled) setRetired(items as InUseModelRetiredItem[])
+      } catch {
+        // 保持上一次已知结果，不把读取失败改写成「没有」。
       }
-      const report = await (api.getRuntimeCheckReport?.(input.providerId as string, input.modelId ?? '') ??
-        Promise.resolve(null)).catch(() => null)
-      const items = (report as { inUseRetired?: InUseModelRetiredItem[] } | null)?.inUseRetired ?? []
-      if (!cancelled) setRetired(items)
     }
 
     void load()
@@ -41,7 +38,7 @@ export function useInUseModelPatrol(
       cancelled = true
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [enabled, input.providerId, input.modelId])
+  }, [enabled])
 
   return retired
 }

@@ -108,7 +108,10 @@ import { ToolRegistry } from '../../ai/agent-platform/tools'
 import type { ModelDefinition, ModelProviderInput, ProviderState, SafeModelProvider } from '../../ai/providers/modelProviderTypes'
 import { probeProviderProxyTarget, testModelProviderConnection } from '../../ai/providers/providerConnection'
 import { createInUseModelPatrolRuntime } from '../../ai/providers/inUseModelPatrolRuntime'
-import { registerInUseModelPatrolJob } from '../../ai/providers/registerInUseModelPatrolJob'
+import {
+  registerInUseModelPatrolHandler,
+  syncInUseModelPatrolSchedule
+} from '../../ai/providers/registerInUseModelPatrolJob'
 import { isEndpointProbeKind, probeProviderEndpoint } from '../../ai/providers/providerEndpointProbe'
 import { generateProviderImages, validateImageGenerationInput } from '../../ai/providers/providerImageGeneration'
 import {
@@ -613,6 +616,18 @@ let quitDisposeSettled = false
 /** 退出清理挂起本轮退出的上界：清理再慢也绝不让进程永远退不出去（有界逃逸）。 */
 const QUIT_DISPOSE_BUDGET_MS = 15_000
 let jobRuntimeForDisposal: JobRuntime | null = null
+
+/** 供应商的启用/凭据/增删都会改变「有没有可探目标」，调度要跟着走。 */
+function syncInUseModelPatrolScheduleFromState(): void {
+  if (!jobRuntimeForDisposal) return
+  const runtime = jobRuntimeForDisposal
+  void syncInUseModelPatrolSchedule(runtime, {
+    isReady: async () => {
+      const providers = (await providerStore.getState()).providers
+      return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))
+    }
+  })
+}
 /**
  * 退出清理开始后 product IPC 只回答结构化 unavailable（见 `productIpcInvoker`）。
  * 这里持有同一实例，保证「清理已开始」先于任何产品 DB 关闭被登记。
@@ -1654,16 +1669,19 @@ function registerIpcHandlers(
     // 保存 Key / 改地址后，旧的逐模型运行证据必须作废，否则会出现
     // "同一供应商有的模型说缺少 API Key、有的正常"（旧快照没失效）。
     await agentRuntimeProbeSnapshotStore.invalidateProvider(provider.id).catch(() => undefined)
+    syncInUseModelPatrolScheduleFromState()
     return result
   })
   ipcMain.handle(IpcChannels.modelProvidersRemove, async (_event: IpcMainInvokeEvent, providerId: string) => {
     const result = await providerStore.remove(providerId)
     invalidateAgentModelCompatibilityCache(providerId)
+    syncInUseModelPatrolScheduleFromState()
     return result
   })
   ipcMain.handle(IpcChannels.modelProvidersSetEnabled, (_event: IpcMainInvokeEvent, providerId: string, enabled: boolean) =>
     providerStore.setEnabled(providerId, enabled).then((result) => {
       invalidateAgentModelCompatibilityCache(providerId)
+      syncInUseModelPatrolScheduleFromState()
       return result
     })
   )
@@ -1867,12 +1885,9 @@ function registerIpcHandlers(
       providerId: string,
       modelId: string,
       runtimeId: 'claude-code' | 'openai-agents' = 'claude-code'
-    ) => ({
-      ...providerRuntimeCheckService.getReport(providerId, modelId, runtimeId),
-      /** 同一份「模型可用性检查报告」里的巡检结论（调度在主进程，界面只读）。 */
-      inUseRetired: inUseModelPatrol.getRetired()
-    })
+    ) => providerRuntimeCheckService.getReport(providerId, modelId, runtimeId)
   )
+  ipcMain.handle(IpcChannels.modelProvidersGetInUseRetired, () => inUseModelPatrol.getRetired())
   /**
    * PLAT-61 诊断可用性：模型同步失败**不再 throw**（原始 IPC Error 会带着
    * `Error invoking remote method '<channel>'` 泄漏到 UI）。改为结构化结果：
@@ -2682,8 +2697,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   taskAutomationMaintenance.recoverAfterRestart()
   disposeTaskAutomationMaintenance = scheduleTaskAutomationMaintenance(taskAutomationMaintenance)
   disposeJobRunRetention = scheduleJobRunRetention(jobRunStore)
-  registerInUseModelPatrolJob(jobRuntime, {
-    patrol: inUseModelPatrol,
+  registerInUseModelPatrolHandler(jobRuntime, { patrol: inUseModelPatrol })
+  await syncInUseModelPatrolSchedule(jobRuntime, {
     isReady: async () => {
       const providers = (await providerStore.getState()).providers
       return providers.some((provider) => provider.enabled && Boolean(provider.apiKeyRef))

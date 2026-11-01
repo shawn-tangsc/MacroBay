@@ -34,14 +34,14 @@ function installPlatform(items: () => Promise<InUseModelRetiredItem[]>): void {
     configurable: true,
     value: {
       modelProviders: {
-        getRuntimeCheckReport: vi.fn(async () => ({ inUseRetired: await items() }))
+        getInUseRetired: vi.fn(items)
       }
     }
   })
 }
 
 function Host({ onChangeModel }: { onChangeModel: () => void }): React.ReactElement {
-  const retired = useInUseModelPatrol({ providerId: 'silicon', modelId: 'chat-a' })
+  const retired = useInUseModelPatrol()
   return createElement(InUseModelRetiredBanner, { labels, items: retired, onChangeModel })
 }
 

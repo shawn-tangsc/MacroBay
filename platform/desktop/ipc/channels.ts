@@ -58,6 +58,8 @@ export const IpcChannels = {
   modelProvidersTestConnection: 'platform:model-providers-test-connection',
   modelProvidersRunRuntimeChecks: 'platform:model-providers-run-runtime-checks',
   modelProvidersGetRuntimeCheckReport: 'platform:model-providers-get-runtime-check-report',
+  /** 全局读口：巡检结论是全局的，不属于任何单个模型的检查报告。 */
+  modelProvidersGetInUseRetired: 'platform:model-providers-get-in-use-retired',
   modelProvidersPreviewModelSync: 'platform:model-providers-preview-model-sync',
   modelProvidersApplyModelSync: 'platform:model-providers-apply-model-sync',
   /**

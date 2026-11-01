@@ -483,6 +483,7 @@ describe('desktop main IPC surface', () => {
       'platform:model-providers-detection-done',
       'platform:model-providers-detection-progress',
       'platform:model-providers-generate-image',
+      'platform:model-providers-get-in-use-retired',
       'platform:model-providers-get-runtime-check-report',
       'platform:model-providers-list',
       'platform:model-providers-preview-model-sync',
