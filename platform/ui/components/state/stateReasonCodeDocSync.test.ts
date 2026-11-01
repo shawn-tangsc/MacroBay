@@ -19,6 +19,9 @@ import { describe, expect, it } from 'vitest'
 
 const ROOT = process.cwd()
 const SOURCE = join(ROOT, 'platform/contracts/queryOutcome.ts')
+
+/** 失败信息里出现的文件名只从 `SOURCE` 派生：手写一次，改路径时它就指错地方。 */
+const SOURCE_LABEL = SOURCE.slice(ROOT.length + 1)
 const DOCS = [
   join(ROOT, 'docs/development/ui-state-components.md'),
   join(ROOT, 'docs/development/ui-state-components.zh-CN.md')
@@ -103,7 +106,7 @@ describe('StateView 码表与公开文档一致', () => {
     const docPairs = pairsFromDoc(text)
 
     expect(duplicates(docPairs), `${path} 里同一个码出现了不止一次`).toEqual([])
-    expect(drift(docPairs, sourcePairs), `${path} 与 StateView.tsx 的码表漂了`).toEqual({
+    expect(drift(docPairs, sourcePairs), `${path} 与 ${SOURCE_LABEL} 的码表漂了`).toEqual({
       extra: [],
       missing: []
     })
