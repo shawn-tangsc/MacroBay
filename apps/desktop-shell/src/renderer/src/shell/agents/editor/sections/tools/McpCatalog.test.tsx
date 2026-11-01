@@ -76,12 +76,12 @@ describe('McpCatalog', () => {
   it('explains an empty tool list instead of leaving a blank row', () => {
     const markup = renderCatalog({ bound: [{ ...baseItem, bound: true, status: 'connecting' }] })
 
-    expect(markup).toContain(agentTextZh.editor.tools.mcpNoToolsHint)
+    expect(markup).toContain(agentTextZh.editor.tools.mcpEmptyToolsConnecting)
   })
 
   it('does not explain an empty tool list on a server that is not bound yet', () => {
     const markup = renderCatalog({ addable: [{ ...baseItem, status: 'idle' }] })
 
-    expect(markup).not.toContain(agentTextZh.editor.tools.mcpNoToolsHint)
+    expect(markup).not.toContain(agentTextZh.editor.tools.mcpEmptyToolsConnecting)
   })
 })

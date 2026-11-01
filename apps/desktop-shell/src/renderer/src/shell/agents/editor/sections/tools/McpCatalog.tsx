@@ -177,7 +177,7 @@ function McpRow({
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
         ) : checked ? (
-          <small className="agent-mcp-empty-hint">{text.editor.tools.mcpNoToolsHint}</small>
+          <small className="agent-mcp-empty-hint">{emptyToolsHint(item.status, text)}</small>
         ) : null}
         {item.actions.length > 0 ? (
           <span className="agent-mcp-credential-actions">
@@ -293,6 +293,25 @@ async function runCredentialAction(
 
   if (action.id === 'restart' || action.id === 'retry') {
     onRestart?.()
+  }
+}
+
+/** 四句按状态分开说：连不上、正在连、没启动、连上了但这个服务没有工具，是四件事。 */
+function emptyToolsHint(status: AgentMcpCatalogItem['status'], text: AgentText): string {
+  switch (status) {
+    case 'idle':
+      return text.editor.tools.mcpEmptyToolsIdle
+    case 'connecting':
+      return text.editor.tools.mcpEmptyToolsConnecting
+    case 'connected':
+      return text.editor.tools.mcpEmptyToolsConnected
+    case 'error':
+    case 'disabled':
+      return text.editor.tools.mcpEmptyToolsError
+    default: {
+      const unreachable: never = status
+      return unreachable
+    }
   }
 }
 
