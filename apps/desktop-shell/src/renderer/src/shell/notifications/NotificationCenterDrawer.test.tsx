@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { NotificationUnreadState, SafeNotificationRecord } from '@platform/notifications/contracts/notificationContracts'
 
@@ -283,5 +283,32 @@ describe('记录里存的是键，句子在展示时解析', () => {
     await mount(source)
     const rowButtons = [...document.body.querySelectorAll<HTMLButtonElement>('.notification-center-row button')]
     expect(rowButtons.some((button) => flat(button.textContent) === flat(labels.centerMarkRead))).toBe(false)
+  })
+
+  it('点击动作同时把这条标已读，角标才有得减', async () => {
+    const markRead = vi.fn(async (id: string) => record({ id, state: 'read' }))
+    const source = fakeSource({
+      markRead,
+      list: async () => ({
+        items: [
+          record({
+            id: 't3',
+            deeplink,
+            actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }]
+          })
+        ]
+      })
+    })
+    await mount(source, () => undefined)
+
+    const action = [...document.body.querySelectorAll<HTMLButtonElement>('.notification-center-row button')]
+      .find((button) => flat(button.textContent) === '打开任务')
+    await act(async () => {
+      action!.click()
+    })
+    await act(async () => { await Promise.resolve() })
+
+    // 一次操作两个效果：既跳转，也标读；只跳不标会留下一条永远不消的未读。
+    expect(markRead).toHaveBeenCalledWith('t3')
   })
 })

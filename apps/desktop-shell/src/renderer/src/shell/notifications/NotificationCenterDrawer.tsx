@@ -286,7 +286,14 @@ function NotificationRow(props: {
           </button>
         ) : null}
       </div>
-      {props.actionable ? <NotificationActionButton item={item} language={language} onOpenDeeplink={props.onOpenDeeplink} /> : null}
+      {props.actionable ? (
+        <NotificationActionButton
+          item={item}
+          language={language}
+          onOpenDeeplink={props.onOpenDeeplink}
+          onRead={props.onRead}
+        />
+      ) : null}
     </li>
   )
 }
@@ -307,13 +314,21 @@ function NotificationActionButton(props: {
   item: SafeNotificationRecord
   language: NotificationCopyLanguage
   onOpenDeeplink: (deeplink: NotificationDeeplink) => void
+  onRead: (id: string) => Promise<void>
 }): React.ReactElement | null {
   const action = props.item.actions[0]
   const deeplink = action?.deeplink ?? props.item.deeplink
   if (action === undefined || deeplink === undefined) return null
   const label = actionLabel(action.labelKey, props.language)
   return (
-    <Button size="small" onClick={() => props.onOpenDeeplink(deeplink)}>
+    <Button
+      size="small"
+      onClick={() => {
+        // 一次操作两个效果：把人送到地方，同时把这条标成已读。
+        // 只送不标的话，回来仍看见同一条未读，角标也不减，等于留了个没人用的钩子。
+        if (props.item.state === 'unread') void props.onRead(props.item.id)
+        props.onOpenDeeplink(deeplink)
+      }}>
       {label}
     </Button>
   )
