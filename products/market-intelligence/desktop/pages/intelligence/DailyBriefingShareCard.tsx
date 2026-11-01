@@ -104,7 +104,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
           // keeps the level in the caption, so a screenshot and an export cannot disagree.
           const copy = changeLedRowCopy(row, text, locale)
           return <div className="mi-brief-poster__number mi-brief-poster__key" key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}{staleMarker(row, text)}</span>
+            <span>{rowLabel(text, row.labelKey)}</span>
             <strong>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</strong>
             <small>{copy ? copy.secondary : keyMeta(row, text, locale, formatTime)}</small>
           </div>
@@ -120,7 +120,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         {metricRows.map((row) => {
           const copy = changeLedRowCopy(row, text, locale)
           return <div key={row.id} data-tone={toneFor(row)} data-lead={copy ? 'change' : 'value'}>
-            <span>{rowLabel(text, row.labelKey)}{staleMarker(row, text)}</span>
+            <span>{rowLabel(text, row.labelKey)}</span>
             <b>{copy ? copy.primary : formatBriefingValue(row.value, text.noValue, locale)}</b>
             {copy ? <small>{copy.secondary}</small> : null}
           </div>
@@ -321,39 +321,6 @@ function citationTime(entry: Readonly<{ refId: string; observedAt?: string }>, f
 
 function rowLabel(text: DailyBriefingText, labelKey: string): string {
   return text.rows[labelKey.split('.').pop() as keyof DailyBriefingText['rows']] ?? labelKey
-}
-
-/**
- * The marker a fallback reading wears on the poster.
- *
- * A 24h reading that could not be read falls back to the last point of the curve, and the row then
- * carries a number the reader has no way to tell apart from a live one: same colour, same precision.
- * The chip says which rows those are; the poster is what gets shared, so it has to say it itself.
- */
-function staleMarker(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
-  if (row.state !== 'stale') return null
-  // A fallback says where it came from: the curve's last point is about 24 hours, not the exact
-  // pair, and a last close is not today's reading. A plain aged reading gets the short chip.
-  const basis = 'valueBasis' in row ? row.valueBasis : undefined
-  // One phrase per source, and the same phrases the exported copy uses: a reader who pastes the
-  // brief elsewhere must not get a different account of where the number came from.
-  const label = basis ? staleBasisText(basis, text) : text.staleMarker
-  return <em className="mi-brief-poster__stale" data-state="stale" data-basis={basis ?? 'none'}>{label}</em>
-}
-
-type StaleBasis = NonNullable<BriefingMarketRow['valueBasis']>
-
-/** Where a stale reading came from, in the same words the export uses. */
-export function staleBasisText(basis: StaleBasis, text: DailyBriefingText): string {
-  const table: Record<StaleBasis, string> = {
-    snapshot: text.staleBasis.snapshot,
-    curve: text.staleBasis.curve,
-    'last-close': text.staleBasis.lastClose,
-    'series-return': text.staleBasis.seriesReturn,
-    'series-level': text.staleBasis.seriesLevel,
-    published: text.staleBasis.published
-  }
-  return table[basis]
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {

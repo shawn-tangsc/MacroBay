@@ -126,69 +126,26 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toMatch(CJK)
   })
 
-  it('marks a fallback reading as a fallback on the poster', async () => {
-    // The poster is what gets shared: a row that fell back to the curve's last point carried the
-    // same colour and precision as a live reading, so the reader could not tell them apart.
-    const base = briefing()
-    const staleDoc: DailyBriefingDocument = {
-      ...base,
-      data: {
-        ...base.data,
-        market: base.data.market.map((row) => row.id === 'btc' ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const } : row)
-      }
-    }
-    const rendered = await render(staleDoc)
-    const chip = rendered.querySelector('.mi-brief-poster__stale')
-    expect(chip?.textContent).toBe(text.staleMarker)
-
-    const live = await render(briefing())
-    expect(live.querySelector('.mi-brief-poster__stale')).toBeNull()
-  })
-
-  it('says where a curve fallback came from, not just that it is stale', async () => {
-    // "Fallback" alone leaves the reader guessing whether it is the exact 24h pair; the chip carries
-    // the window and the source, and the exported copy says the same thing.
-    const base = briefing()
-    const doc: DailyBriefingDocument = {
-      ...base,
-      data: {
-        ...base.data,
-        market: base.data.market.map((row) => row.id === 'btc'
-          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
-          : row)
-      }
-    }
-    const rendered = await render(doc)
-    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.curve)
-    expect(text.staleBasis.curve).toContain('24h')
-  })
-
-  it('names every fallback source, not just the two curve ones', async () => {
-    // The three new bases (snapshot, series return, series level, published) used to fall back to the
-    // generic chip, which told the reader a number was old but not what it was.
-    const base = briefing()
-    const cases: readonly [NonNullable<DailyBriefingDocument['data']['market'][number]['valueBasis']>, string][] = [
-      ['snapshot', text.staleBasis.snapshot],
-      ['series-return', text.staleBasis.seriesReturn],
-      ['series-level', text.staleBasis.seriesLevel],
-      ['published', text.staleBasis.published]
-    ]
-    for (const [basis, phrase] of cases) {
-      const doc: DailyBriefingDocument = {
+  it('prints no source or fallback wording on the card, even for a stale row', () => {
+    // The reader decided the card and its image stay clean: provenance belongs to the trace column,
+    // not to the number a reader posts.
+    return (async () => {
+      const base = briefing()
+      const stale: DailyBriefingDocument = {
         ...base,
         data: {
           ...base.data,
           market: base.data.market.map((row) => row.id === 'btc'
-            ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: basis }
+            ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
             : row)
         }
       }
-      const rendered = await render(doc)
-      expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(phrase)
-      await act(async () => root?.unmount())
-      root = undefined
-      document.body.replaceChildren()
-    }
+      const rendered = await render(stale)
+      const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
+      expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
+      for (const phrase of Object.values(text.staleBasis)) expect(poster).not.toContain(phrase)
+      expect(poster).not.toContain(text.staleMarker)
+    })()
   })
 
   it('renders only the data rows the editor kept', async () => {
