@@ -68,13 +68,17 @@ export async function runProductBootstrap<Sealed>(
     steps.reportAcceptance?.(sealed)
     return { ok: true }
   } catch (error) {
+    // 只读取一次，再同时喂给日志与返回值：两份对象各自调用一次纯函数，今天相等只是因为
+    // 输入相同；而这两条记录正是白窗口时唯一能对上的证据，不允许「碰巧一致」。
+    const productId = productIdOf(error)
+    const message = describeReason(error)
+
     deps.log.log('error', PRODUCT_BOOTSTRAP_FAILED_EVENT, {
       code: PRODUCT_BOOTSTRAP_FAILED_CODE,
       stage,
-      // 产品 id 只在注册处知道（生成文件里每产品包一层），这里取用同一份错误，
-      // 不为日志另拼一条记录；取不到就是 null，不猜。
-      productId: productIdOf(error),
-      reason: describeReason(error)
+      // `message`：原文，日志专用。屏幕上的 `reason` 是它脱敏锚定后的派生，两者必须不同。
+      productId,
+      message
     })
     deps.markUnavailable()
     return {
@@ -82,8 +86,8 @@ export async function runProductBootstrap<Sealed>(
       failure: {
         code: PRODUCT_BOOTSTRAP_FAILED_CODE,
         stage,
-        productId: productIdOf(error),
-        reason: describeReason(error)
+        productId,
+        reason: message
       }
     }
   }

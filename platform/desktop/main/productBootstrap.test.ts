@@ -21,11 +21,12 @@ function expectFailureLogged(
   productId: string | null = null
 ): void {
   expect(log).toHaveBeenCalledTimes(1)
+  // 日志字段叫 `message`（原文）：屏幕上的 `reason` 是它脱敏后的派生，两者不能同名。
   expect(log).toHaveBeenCalledWith('error', PRODUCT_BOOTSTRAP_FAILED_EVENT, {
     code: PRODUCT_BOOTSTRAP_FAILED_CODE,
     stage,
     productId,
-    reason
+    message: reason
   })
 }
 
@@ -128,6 +129,31 @@ describe('product bootstrap failure logging', () => {
       'product "market-intelligence" failed to register: route "mind.intel.dashboard" is not declared',
       'market-intelligence'
     )
+  })
+
+  it('builds one failure record and names the two layers apart', async () => {
+    const { log, deps } = createHarness()
+
+    const result = await runProductBootstrap(
+      {
+        registerProductServices: async () => {
+          throw new Error('route "mind.intel.dashboard" is not declared')
+        },
+        sealIpcSurface: () => undefined
+      },
+      deps
+    )
+
+    expect(result.ok).toBe(false)
+    const logged = log.mock.calls[0][2] as Record<string, unknown>
+    const failure = (result as { ok: false; failure: Record<string, unknown> }).failure
+
+    // 同名两样东西比异名同一样东西更难发现：grep 出来是一个词，含义却不同。
+    expect(Object.keys(logged).sort()).toEqual(['code', 'message', 'productId', 'stage'])
+    expect(Object.keys(failure).sort()).toEqual(['code', 'productId', 'reason', 'stage'])
+    // 但值必须来自同一次读取，不能靠两次调用恰好相等。
+    expect(failure.reason).toBe(logged.message)
+    expect(failure.productId).toBe(logged.productId)
   })
 
   it('stays silent and does not degrade when every step succeeds', async () => {
