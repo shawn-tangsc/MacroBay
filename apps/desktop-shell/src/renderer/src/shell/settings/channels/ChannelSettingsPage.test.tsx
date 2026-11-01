@@ -66,3 +66,23 @@ describe('ChannelSettingsPage read failures and catalog copy', () => {
     expect(container.textContent).toContain('telegram')
   })
 })
+
+describe('empty rail state', () => {
+  it('puts the caret in the first input when the reader takes the action', async () => {
+    installPlatform({})
+    const container = await mount()
+
+    // The empty state names the action; taking it must land the caret in the form,
+    // not merely scroll the reader near it.
+    const action = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '填写表单'
+    )
+    expect(action).toBeDefined()
+
+    await act(async () => action?.click())
+
+    const nameInput = container.querySelector('input[aria-label="名称"]')
+    expect(nameInput).not.toBeNull()
+    expect(document.activeElement).toBe(nameInput)
+  })
+})

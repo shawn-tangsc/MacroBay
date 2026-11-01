@@ -1,8 +1,9 @@
-import { Button, Input, Popconfirm, Select, Switch, Tag } from 'antd'
+import { Button, Input, Popconfirm, Select, Switch, Tag, type InputRef } from 'antd'
 import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { platformText } from '../../../i18n/platformText'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
@@ -56,6 +57,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [error, setError] = useState<string | null>(null)
   /** First read of the rail (channels, catalog, agents); later refreshes keep the list on screen. */
   const [initialLoading, setInitialLoading] = useState(true)
+  /** 空态动作用它把光标送进第一个可输入控件，而不是只把用户滚过去。 */
+  const nameInputRef = useRef<InputRef | null>(null)
+  const focusCreateForm = (): void => {
+    nameInputRef.current?.input?.scrollIntoView({ block: 'nearest' })
+    nameInputRef.current?.focus()
+  }
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
   const currentCatalog = current ? catalog.find((entry) => entry.type === current.type) : undefined
@@ -196,7 +203,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           <StateView state="loading" size="md" />
         ) : (
           <>
-            {channels.length === 0 ? <p>{labels.channelNoInstances}</p> : null}
+            {channels.length === 0 ? (
+              <StateView
+                state="empty"
+                reasonCode="never-created"
+                size="sm"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.focus_form, onSelect: focusCreateForm }}
+              />
+            ) : null}
             {channels.map((channel) => (
               <button
                 key={channel.id}
@@ -217,7 +231,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             options={catalog.filter((entry) => entry.type === 'telegram' || entry.type === 'slack' || entry.type === 'feishu' || entry.type === 'qq' || entry.type === 'discord' || entry.type === 'wechat').map((entry) => ({ value: entry.type, label: entry.type }))}
             onChange={setCreateType}
           />
-          <Input value={name} aria-label={labels.channelName} placeholder={labels.channelName} onChange={(event) => setName(event.target.value)} />
+          <Input ref={nameInputRef} value={name} aria-label={labels.channelName} placeholder={labels.channelName} onChange={(event) => setName(event.target.value)} />
           <Select
             aria-label={labels.channelAgentId}
             placeholder={labels.channelAgentId}
