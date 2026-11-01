@@ -33,7 +33,6 @@ export function AnalysisRequestErrorBanner({ message, detail, meta = [], dismiss
       size="small"
       icon={<X size={14} aria-hidden="true" />}
       aria-label={dismissLabel}
-      title={dismissLabel}
       onClick={onDismiss}
       data-analysis-error-dismiss
     />
