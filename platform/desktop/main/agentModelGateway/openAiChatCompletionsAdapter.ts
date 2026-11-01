@@ -27,6 +27,7 @@ import {
   toSafeGatewayErrorBody
 } from './gatewayErrorClassifier'
 import { createGatewayAbortTimeout } from './gatewayAbortAndTimeout'
+import { createSseDataFrameReader } from './sseDataFrameReader'
 
 export type OpenAiChatCompletionsAdapterInput = {
   upstreamBaseUrl: string
@@ -228,7 +229,7 @@ async function convertOpenAiChatStreamToAnthropicSse(response: Response, model: 
   }
 
   const decoder = new TextDecoder()
-  let buffer = ''
+  const frameReader = createSseDataFrameReader()
   let messageId = `msg_${Date.now().toString(36)}`
   let started = false
   let textStarted = false
@@ -257,16 +258,10 @@ async function convertOpenAiChatStreamToAnthropicSse(response: Response, model: 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const parts = buffer.split('\n')
-      buffer = parts.pop() ?? ''
+      const framesFromChunk = frameReader.push(decoder.decode(value, { stream: true }))
 
-      for (const line of parts) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const data = trimmed.slice(5).trim()
-        if (!data) continue
-        if (data === '[DONE]') {
+      for (const frame of framesFromChunk) {
+        if (frame.kind === 'done') {
           if (textStarted) frames.push(buildAnthropicContentBlockStopFrame(textIndex))
           for (const index of toolIndexes.values()) {
             frames.push(buildAnthropicContentBlockStopFrame(index))
@@ -280,7 +275,7 @@ async function convertOpenAiChatStreamToAnthropicSse(response: Response, model: 
 
         let chunk: OpenAiChatStreamChunk
         try {
-          chunk = JSON.parse(data) as OpenAiChatStreamChunk
+          chunk = JSON.parse(frame.payload) as OpenAiChatStreamChunk
         } catch {
           continue
         }
