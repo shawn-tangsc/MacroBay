@@ -55,7 +55,9 @@ describe('components ownership guard', () => {
     expect(violations).toEqual([])
   })
   it('flags a component commit that carries another line\'s files without an Also line', () => {
-    // 真实样本：`27c8221` 一笔里混进 220 行频道线迁移，附带文件写不出诚实的 `Also:` 理由。
+    // 真实样本：取自真实提交 `27c8221`（220 行频道线业务迁移混进组件提交）。
+    // 那条提交在生效点之前，所以门禁不再判它——**样本退场，但夹具常驻**；
+    // 否则半年后有人看它是「合成样本」就顺手删掉，守卫就只剩自己造的证据。
     const violations = findViolations([
       {
         hash: 'bbb',
@@ -97,6 +99,36 @@ describe('components ownership guard', () => {
     ])
 
     expect(violations).toEqual([])
+  })
+
+  it('does not judge commits older than the Also rule, and never asks for a reason on the component\'s own doc', () => {
+    // 判定顺序：`Also:` 只判生效点之后的提交；组件自己的公开文档本来就在允许集合里。
+    const commits = [
+      {
+        hash: 'old',
+        subject: 'feat(state): before the rule',
+        message: 'feat(state): before the rule\n\nComponent-Owner: 前端组件\n',
+        files: [`${COMPONENTS_DIR}/state/StateView.tsx`, 'platform/contracts/queryOutcome.ts']
+      },
+      {
+        hash: 'new',
+        subject: 'feat(state): doc follows the component',
+        message: 'feat(state): doc follows the component\n\nComponent-Owner: 前端组件\n',
+        files: [
+          `${COMPONENTS_DIR}/state/StateView.tsx`,
+          'docs/development/ui-state-components.md',
+          'docs/development/ui-state-components.zh-CN.md'
+        ]
+      }
+    ]
+
+    expect(findViolations(commits, new Set(['old']))).toEqual([])
+
+    // 反过来：同一笔若带上契约文件却不肯写理由，就必须红（文档豁免不等于全豁免）。
+    const withContract = [
+      { ...commits[1], files: [...commits[1].files, 'platform/contracts/queryOutcome.ts'] }
+    ]
+    expect(findViolations(withContract, new Set())).toHaveLength(1)
   })
 
 })
