@@ -354,7 +354,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           onRetry={() => void regenerate()}
           onOpenAiSettings={() => setSettingsOpen(true)}
           onOpenModelSettings={openModelService}
-          {...(onConfigureSources ? { onConfigureSources } : {})}
+          onConfigureSources={onConfigureSources}
         /> : null}
         {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
         {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <StateView
