@@ -51,13 +51,25 @@ export function createBeaOfficialReleaseRefreshService(deps: Readonly<{
 function releaseWindowRevisions(repository: Pick<import('../macroCalendarRepository').MacroCalendarRepository, 'listEffectiveMonthAsOf'>, asOf: string): MacroCalendarRevision[] {
   const at = Date.parse(asOf)
   if (!Number.isFinite(at)) return []
-  const current = new Date(at)
-  const currentMonth = monthBounds(current)
-  const previous = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - 1, 1))
-  const previousMonth = current.getUTCDate() <= 2 ? monthBounds(previous) : undefined
-  const revisions = [currentMonth, previousMonth].filter((value): value is { monthStart: string; monthEndExclusive: string } => value !== undefined)
+  // The months come from the observation window itself, not from «which day of the month is
+  // today»: a release still being polled may sit in the month before, and this read has to cover
+  // it whichever day the run happens on. A day-of-month guess happens to agree with the current
+  // 48-hour window, but it silently stops covering the release the moment that window changes.
+  const revisions = monthsBetween(at - beaOfficialReleasePollingPolicy.delayedObservationWindowMs, at)
     .flatMap((bounds) => repository.listEffectiveMonthAsOf({ ...bounds, asOf, limit: macroCalendarStoragePolicy.monthQueryMaxEvents }))
   return [...new Map(revisions.map((revision) => [revision.eventKey, revision])).values()]
+}
+/** Every month the given span touches, oldest first; a span inside one month yields that month. */
+function monthsBetween(fromMs: number, toMs: number): Array<{ monthStart: string; monthEndExclusive: string }> {
+  const months: Array<{ monthStart: string; monthEndExclusive: string }> = []
+  for (let cursor = new Date(fromMs); ;) {
+    const bounds = monthBounds(cursor)
+    months.push(bounds)
+    const next = new Date(`${bounds.monthEndExclusive}T00:00:00.000Z`)
+    if (next.getTime() > toMs) break
+    cursor = next
+  }
+  return months
 }
 function monthBounds(date: Date): { monthStart: string; monthEndExclusive: string } {
   const year = date.getUTCFullYear()
