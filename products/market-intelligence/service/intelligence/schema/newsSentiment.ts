@@ -160,6 +160,24 @@ export type NewsSentimentQuery = {
   limit?: number
 }
 
+/**
+ * 四个源背后的状态，读时算好再交给界面。
+ *
+ * 卡片要分得清「四源没开」「开了没跑」「采集失败」这三种空——「窗口内没有消息」是第四种，
+ * 「有数据但过期」是第五种。这五个状态如果让界面自己拼接，同一个判断就会在卡片、抽屉与
+ * 后续消费者里各写一遍。这里只做汇总，逐源状态来自 `buildSourceCoverageAsOf` 的
+ * `productionState`（那一处已经是「这个源现在怎么样」的唯一实现）。
+ */
+export type NewsSentimentSourceReadiness = Readonly<{
+  total: number
+  enabledCount: number
+  failedCount: number
+  neverRanCount: number
+  failedSourceIds: string[]
+  neverRanSourceIds: string[]
+  lastSuccessAt?: string
+}>
+
 export const NEWS_SENTIMENT_CAVEATS = Object.freeze({
   bodyLimited: 'news-body-limited',
   modelUnavailable: 'news-model-unavailable',

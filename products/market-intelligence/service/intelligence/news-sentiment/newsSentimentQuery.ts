@@ -10,6 +10,7 @@ import {
   type NewsSentimentAggregateWindow,
   type NewsSentimentQuery,
   type NewsSentimentRecord,
+  type NewsSentimentSourceReadiness,
   type NewsSentimentSymbol,
   type NewsSentimentWindow
 } from '../schema/newsSentiment'
@@ -66,6 +67,17 @@ export type NewsSentimentView = {
   /** Every source with rows in this window, before direction/source filters or routine filtering. */
   availableSources?: { sourceId: string; sourceName: string }[]
   caveats: string[]
+  /**
+   * What the four sources behind the feed are doing, so the card can name the cause of an empty
+   * window instead of printing "no data" for five different situations. Absent when the reader did
+   * not wire one; the card then falls back to the window-only wording.
+   */
+  readiness?: NewsSentimentSourceReadiness
+  /**
+   * Only on an empty window: the newest judgment there is, whenever it was published. Without it
+   * "this window has no news" and "nothing has arrived for hours" are the same DTO.
+   */
+  latestKnownItemAt?: string
 }
 
 export type NewsSentimentItemDetail = NewsSentimentItemView & {
@@ -86,6 +98,8 @@ export function createNewsSentimentQuery(deps: {
   bodyTranslation?: {
     get: (itemId: string, targetLocale?: string) => NewsBodyTranslationRecord | undefined
   }
+  /** Optional: a source status that cannot be read must not fail the news read itself. */
+  readSourceReadiness?: (asOf: string) => Promise<NewsSentimentSourceReadiness>
   now: () => string
 }) {
   return {
@@ -99,6 +113,7 @@ export function createNewsSentimentQuery(deps: {
 
       try {
         const displayLocale = await deps.getDisplayLocale?.()
+        const readiness = await readReadiness(deps.readSourceReadiness, asOf)
         const from = new Date(Date.parse(asOf) - NEWS_SENTIMENT_WINDOW_MS[window]).toISOString()
         const rows = deps.store.listLatestSentiment({ from, to: asOf, limit: 500 })
         const itemsById = new Map(deps.pipeline.listItems().map((item) => [item.itemId, item]))
@@ -120,7 +135,20 @@ export function createNewsSentimentQuery(deps: {
           .slice(0, Math.max(1, Math.min(input.limit ?? 100, 100)))
 
         if (visible.length === 0) {
-          return { state: 'empty', asOf, generatedAt, window, items: [], availableSources, caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow] }
+          // An empty window still has to say whether anything ever arrived: without this the card
+          // cannot tell "quiet period" from "the feed stopped hours ago".
+          const newest = deps.store.listLatestSentiment({ from: EPOCH_ISO, to: asOf, limit: 1 })[0]
+          return {
+            state: 'empty',
+            asOf,
+            generatedAt,
+            window,
+            items: [],
+            availableSources,
+            caveats: [NEWS_SENTIMENT_CAVEATS.emptyWindow],
+            ...(readiness ? { readiness } : {}),
+            ...(newest ? { latestKnownItemAt: newest.publishedAt } : {})
+          }
         }
         const itemIds = visible.map((row) => row.itemId)
         const translations = await readTranslations(deps.translation, itemIds)
@@ -160,6 +188,7 @@ export function createNewsSentimentQuery(deps: {
           } } : {}),
           items,
           availableSources,
+          ...(readiness ? { readiness } : {}),
           caveats
         }
       } catch {
@@ -262,6 +291,25 @@ function toItemView(
     ...(row.modelRef ? { modelRef: row.modelRef } : {}),
     ...(row.promptVersion ? { promptVersion: row.promptVersion } : {}),
     caveats: row.caveats
+  }
+}
+
+/** Anything stored is newer than this; the empty read only needs "has any judgment ever existed". */
+const EPOCH_ISO = '1970-01-01T00:00:00.000Z'
+
+/**
+ * The source status is context, never a reason to fail the list: a broken status read must leave the
+ * items readable, and the card then says only what the window itself supports.
+ */
+async function readReadiness(
+  reader: ((asOf: string) => Promise<NewsSentimentSourceReadiness>) | undefined,
+  asOf: string
+): Promise<NewsSentimentSourceReadiness | undefined> {
+  if (!reader) return undefined
+  try {
+    return await reader(asOf)
+  } catch {
+    return undefined
   }
 }
 

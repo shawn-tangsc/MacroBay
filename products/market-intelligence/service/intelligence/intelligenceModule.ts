@@ -57,6 +57,7 @@ import { createNewsSentimentSqliteStore, newsSentimentStoragePolicy } from './ne
 import { createNewsSentimentEnrichmentService } from './news-sentiment/newsSentimentEnrichmentService'
 import { createNewsSentimentScoringService } from './news-sentiment/newsSentimentScoringService'
 import { createNewsSentimentQuery } from './news-sentiment/newsSentimentQuery'
+import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentReadiness'
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
@@ -87,6 +88,9 @@ import {
 } from './daily-briefing/dailyBriefingSettingsService'
 import { resolveNewsSentimentModel } from './news-sentiment/newsSentimentSettings'
 import type { NewsSentimentSettings, NewsSentimentSettingsView } from './schema/newsSentiment'
+import { NEWS_SENTIMENT_SOURCE_IDS } from './schema/newsSentiment'
+import { buildSourceCoverageAsOf } from './public-query/sourceCoverageAsOf'
+import { listIntelligenceSourceDefinitions } from './application/sourceCatalog'
 import { intelligenceHttpRequest } from './adapters/intelligenceHttpClient'
 import { INTELLIGENCE_DEFAULT_USER_AGENT } from './adapters/intelligenceHttpFetch'
 import {
@@ -577,6 +581,21 @@ export function getIntelligenceModule(
           translation: translationService,
           getDisplayLocale: getAppLanguage,
           ...(newsSentimentBodyTranslation ? { bodyTranslation: newsSentimentBodyTranslation } : {}),
+          // The four sources' readiness, read from the one projection that already answers "what is
+          // this source doing": the card needs it to name the cause of an empty window.
+          readSourceReadiness: async (asOf) => {
+            const profiles = await profileStore.listProfiles()
+            const enabledSourceIds = new Set(profiles.filter((profile) => profile.enabled).map((profile) => profile.sourceId))
+            return summarizeNewsSentimentReadiness(buildSourceCoverageAsOf({
+              definitions: listIntelligenceSourceDefinitions().filter((definition) =>
+                (NEWS_SENTIMENT_SOURCE_IDS as readonly string[]).includes(definition.sourceId)
+              ),
+              runtimeStates: pipeline.listRuntimeStatesAsOf(asOf),
+              items: pipeline.listItems(),
+              asOf,
+              enabledSourceIds
+            }))
+          },
           now: () => new Date().toISOString()
         })
       : undefined

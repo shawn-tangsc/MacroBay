@@ -107,6 +107,38 @@ describe('newsSentimentQuery', () => {
   })
 })
 
+describe('empty windows carry their cause', () => {
+  const readiness = {
+    total: 4, enabledCount: 4, failedCount: 1, neverRanCount: 0,
+    failedSourceIds: ['sec-rss'], neverRanSourceIds: [],
+    lastSuccessAt: '2026-10-24T12:00:00.000Z'
+  }
+
+  it('reports the newest judgment even when it is outside the window', async () => {
+    // Without this the DTO cannot tell "this hour had no news" from "nothing arrived since yesterday".
+    const view = await createNewsSentimentQuery({
+      store: seed(),
+      pipeline: { listItems: () => ITEMS },
+      readSourceReadiness: async () => readiness,
+      now: () => '2026-10-25T13:00:00.000Z'
+    }).query({ asOf: '2026-10-25T13:00:00.000Z', window: '1h' })
+    expect(view.state).toBe('empty')
+    expect(view.latestKnownItemAt).toBe('2026-10-24T12:00:00.000Z')
+    expect(view.readiness).toEqual(readiness)
+  })
+
+  it('stays readable when the source status itself fails', async () => {
+    const view = await createNewsSentimentQuery({
+      store: seed(),
+      pipeline: { listItems: () => ITEMS },
+      readSourceReadiness: async () => { throw new Error('sources down') },
+      now: () => '2026-10-24T13:00:00.000Z'
+    }).query({ asOf: '2026-10-24T13:00:00.000Z', window: '24h' })
+    expect(view.state).toBe('available')
+    expect(view.readiness).toBeUndefined()
+  })
+})
+
 describe('seven-day window', () => {
   // Regression: '7d' is not a sentiment horizon, so the aggregate filtered every signal out and
   // reported "0 directional / score 0 / neutral" for a window full of directional items. The query
