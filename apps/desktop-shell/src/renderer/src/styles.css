@@ -12903,11 +12903,8 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 }
 
 
-/* One designed light accent: a calm jade. Dark theme keeps lime. */
-:root[data-theme='light'] {
-  --accent: #2f7d6a;
-  --accent-contrast: #11130f;
-}
+/* One designed light accent: a calm jade. Dark theme keeps lime.
+   值只在文件顶部 `:root[data-theme="light"]` 定义一次 —— 这里再写一份会因顺序把它整块盖掉。 */
 
 :root[data-theme='light'] .ant-switch.ant-switch-checked {
   background: var(--accent);
