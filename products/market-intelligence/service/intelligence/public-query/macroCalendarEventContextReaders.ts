@@ -1,5 +1,5 @@
 import type { AgentEvidenceRef, AgentFact } from '../../../contracts/marketAnalysisContracts'
-import { MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_RUN_SOURCE_BUDGET } from '../analysis/analysisRunPolicy'
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
 import { isVisibleAsOf } from './asOfVisibility'
 import { projectMacroCalendar } from './marketAnalysisContextProjection'
@@ -41,7 +41,7 @@ export function macroCalendarEventContextReaders(service: MacroCalendarEventCont
       const observations: Parameters<typeof projectMacroCalendar>[5] = {}
       const official = service.queryMacroEconomicCalendarMonth
         // The product's own query is synchronous and untyped at the boundary; awaiting is safe either way.
-        ? await service.queryMacroEconomicCalendarMonth({ month: query.month, asOf: query.asOf, maxEvents: MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.maxEvents })
+        ? await service.queryMacroEconomicCalendarMonth({ month: query.month, asOf: query.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents })
         : undefined
       const provider = service.queryMarketCalendarMonth
         ? readMarketCalendarObservations(service.queryMarketCalendarMonth, { month: query.month, asOf: query.asOf })

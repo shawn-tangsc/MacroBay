@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_POLICY_PATH_POLICY
+  MARKET_ANALYSIS_POLICY_PATH_CAVEATS,
+  MARKET_ANALYSIS_POLICY_PATH_METRICS
 } from '../../../contracts/marketAnalysisContracts'
 import type { PolicyPathReading } from '../policy-path/policyPathQueryService'
 import { buildMarketAnalysisContext } from './marketAnalysisContextQuery'
@@ -65,25 +66,25 @@ describe('policy path analysis facts', () => {
     const metrics = facts.map(fact => fact.metric)
 
     expect(metrics).toEqual(expect.arrayContaining([
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.nextMeetingDate,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.impliedProbability,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.probabilityChange24h,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.targetRange,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianCurrentYear,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianPath,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.lastDecisionVote
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.nextMeetingDate,
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.impliedProbability,
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.probabilityChange24h,
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.targetRange,
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianCurrentYear,
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianPath,
+      MARKET_ANALYSIS_POLICY_PATH_METRICS.lastDecisionVote
     ]))
-    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.impliedProbability))
+    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.impliedProbability))
       .toMatchObject({ subject: 'hike-25', value: 71, unit: 'percent', observedAt: '2026-09-25T08:20:00.000Z' })
-    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.probabilityChange24h))
+    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.probabilityChange24h))
       .toMatchObject({ unit: 'pp', value: 2, observedAt: '2026-09-25T08:20:00.000Z' })
-    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.targetRange))
+    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.targetRange))
       .toMatchObject({ value: '3.75%-4.00%', observedAt: '2026-09-16T00:00:00.000Z' })
-    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianCurrentYear))
+    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianCurrentYear))
       .toMatchObject({ value: 4.1, unit: 'percent', observedAt: '2026-09-16T00:00:00.000Z' })
-    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianPath)?.value)
+    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianPath)?.value)
       .toContain('2026 年 4.1%')
-    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.lastDecisionVote)?.value)
+    expect(facts.find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.lastDecisionVote)?.value)
       .toBe('10-2（反对：Cook 主张加息）')
 
     for (const fact of facts) {
@@ -92,16 +93,16 @@ describe('policy path analysis facts', () => {
       expect(evidence).toMatchObject({ sourceId: 'policy-path-market', occurredAt: fact.observedAt, sourceUrl: fact.sourceUrl })
     }
     expect(result.caveats).toEqual(expect.arrayContaining([
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.oddsAreMarketPricing,
-      MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.projectionsFromLatestSepMeeting
+      MARKET_ANALYSIS_POLICY_PATH_CAVEATS.oddsAreMarketPricing,
+      MARKET_ANALYSIS_POLICY_PATH_CAVEATS.projectionsFromLatestSepMeeting
     ]))
     expect(result.domainAccess.find(domain => domain.domain === 'macro')?.caveats)
-      .toEqual(expect.arrayContaining([MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.oddsAreMarketPricing]))
+      .toEqual(expect.arrayContaining([MARKET_ANALYSIS_POLICY_PATH_CAVEATS.oddsAreMarketPricing]))
   })
 
   it('falls back to the official SEP table when the stored link is not an admitted URL', async () => {
     const result = await context({ ...reading, sep: { ...reading.sep!, sourceUrl: 'http://insecure.example/sep' } })
-    const sepFact = policyFacts(result).find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianCurrentYear)
+    const sepFact = policyFacts(result).find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianCurrentYear)
 
     expect(sepFact?.sourceUrl).toBe('https://www.federalreserve.gov/monetarypolicy/fomcprojtabl20260916.htm')
     expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathSourceUrlInvalid)
@@ -109,7 +110,7 @@ describe('policy path analysis facts', () => {
 
   it('links a FRED fallback range to FRED even when a decision statement exists', async () => {
     const result = await context({ ...reading, targetRange: { ...reading.targetRange!, source: 'fred' } })
-    const range = policyFacts(result).find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.targetRange)
+    const range = policyFacts(result).find(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.targetRange)
 
     expect(range?.sourceUrl).toBe('https://fred.stlouisfed.org/series/DFEDTARU')
   })
@@ -122,8 +123,8 @@ describe('policy path analysis facts', () => {
     })
     const facts = policyFacts(result)
 
-    expect(facts.some(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.impliedProbability)).toBe(true)
-    expect(facts.some(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.probabilityChange24h)).toBe(false)
+    expect(facts.some(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.impliedProbability)).toBe(true)
+    expect(facts.some(fact => fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.probabilityChange24h)).toBe(false)
     expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathChange24hUnavailable)
   })
 
@@ -143,8 +144,8 @@ describe('policy path analysis facts', () => {
     const result = await context(withoutSep)
     const metrics = policyFacts(result).map(fact => fact.metric)
 
-    expect(metrics).not.toContain(MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianCurrentYear)
-    expect(metrics).not.toContain(MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.sepMedianPath)
+    expect(metrics).not.toContain(MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianCurrentYear)
+    expect(metrics).not.toContain(MARKET_ANALYSIS_POLICY_PATH_METRICS.sepMedianPath)
     expect(result.caveats).toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathSepUnavailable)
   })
 
@@ -153,7 +154,7 @@ describe('policy path analysis facts', () => {
 
     expect(policyFacts(result)).toEqual([])
     expect(result.caveats).not.toContain(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathUnavailable)
-    expect(result.caveats).not.toContain(MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.oddsAreMarketPricing)
+    expect(result.caveats).not.toContain(MARKET_ANALYSIS_POLICY_PATH_CAVEATS.oddsAreMarketPricing)
   })
 
   it('names an enabled-but-empty source as a gap instead of inventing a neutral policy', async () => {

@@ -1,6 +1,6 @@
 import {
   MARKET_ANALYSIS_ERROR_CODES,
-  MARKET_ANALYSIS_POLICY_PATH_POLICY,
+  MARKET_ANALYSIS_POLICY_PATH_METRICS,
   isMarketAnalysisFiniteNumber,
   type AnalysisDirectionHorizon,
   type AnalysisScenarioHorizon,
@@ -314,7 +314,7 @@ function isCatalysts(value: unknown): value is Catalyst[] {
  */
 function hasTraceablePolicyProbability(conclusion: AnalysisConclusion, snapshot: FrozenAnalysisEvidence): boolean {
   const probabilities = snapshot.facts.filter(fact =>
-    fact.metric === MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics.impliedProbability &&
+    fact.metric === MARKET_ANALYSIS_POLICY_PATH_METRICS.impliedProbability &&
     typeof fact.value === 'number' && Number.isFinite(fact.value) && typeof fact.observedAt === 'string')
   if (probabilities.length === 0) return true
   const prose = [

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { EventBusRuntime } from '@platform/message-bus'
 import type { JobContext, JobRuntime } from '@platform/jobs'
 
-import { MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
 import { marketIntelligenceProductManifest } from '../../../product.manifest'
 import { crossAssetAnalysisRanges } from '../cross-asset/crossAssetAnalysisWindows'
 import { crossAssetAnalysisWindowPolicy, type CrossAssetPriceHorizon } from '../cross-asset/crossAssetAnalysisWindows'
@@ -507,7 +507,7 @@ export function registerMarketAnalysisRuntime(input: Readonly<{
     console.log(formatMarketAnalysisContextDiagnostic({
       asOf: context.asOf,
       macroQueryState: macro?.queryState ?? 'missing',
-      macroEventCount: context.facts.filter(fact => fact.domain === 'macro' && fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.eventName).length,
+      macroEventCount: context.facts.filter(fact => fact.domain === 'macro' && fact.metric === MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.eventName).length,
       macroFactCount: context.facts.filter(fact => fact.domain === 'macro').length,
       macroEvidenceCount: context.evidenceRefs.filter(ref => ref.sourceId.startsWith('macro-calendar-')).length,
       macroCaveats: macro?.caveats ?? ['macro-domain-missing']

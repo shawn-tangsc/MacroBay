@@ -1,5 +1,5 @@
 import type { AgentFact } from '../../../contracts/marketAnalysisContracts'
-import { MARKET_ANALYSIS_POLICY_PATH_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID } from '../../../contracts/marketAnalysisContracts'
 
 /**
  * The macro ceiling, applied with the policy path's fixed share protected.
@@ -15,8 +15,8 @@ export function applyMacroFactCap(
 ): Readonly<{ facts: readonly AgentFact[]; truncated: boolean }> {
   const macro = sorted.filter(fact => fact.domain === 'macro')
   if (macro.length <= maximum) return { facts: [...sorted], truncated: false }
-  const policy = macro.filter(fact => fact.sourceId === MARKET_ANALYSIS_POLICY_PATH_POLICY.sourceId)
-  const others = macro.filter(fact => fact.sourceId !== MARKET_ANALYSIS_POLICY_PATH_POLICY.sourceId)
+  const policy = macro.filter(fact => fact.sourceId === MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID)
+  const others = macro.filter(fact => fact.sourceId !== MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID)
   const keptPolicy = policy.slice(0, maximum)
   const kept = new Set([
     ...keptPolicy.map(fact => fact.factId),

@@ -8,7 +8,7 @@ import {
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENT,
   MARKET_ANALYSIS_CROSS_ASSET_REAL_INSTRUMENT,
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
+  MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS,
   isMarketAnalysisCanonicalUtc,
   type AgentFact,
   type AnalysisDomain,
@@ -371,17 +371,17 @@ export function projectMacroCalendar(
       facts[facts.length - 1] = { ...facts[facts.length - 1]!, evidenceRefId }
       factCount += 1
     }
-    add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.eventName, event.titleKey)
-    add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.lifecycleState, event.lifecycleState)
-    add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.scheduledDate, event.scheduledDate, 'date')
-    if (event.scheduledAt) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.scheduledAt, event.scheduledAt, 'UTC')
-    if (event.officialReleaseDate) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.officialReleaseDate, event.officialReleaseDate, 'date')
-    if (event.actual) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.actual, event.actual.displayValue, event.actual.unit ?? null)
-    if (event.previous) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.previous, event.previous.displayValue, event.previous.unit ?? null)
-    if (event.consensus) add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.consensus, event.consensus.displayValue, event.consensus.unit ?? null)
+    add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.eventName, event.titleKey)
+    add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.lifecycleState, event.lifecycleState)
+    add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.scheduledDate, event.scheduledDate, 'date')
+    if (event.scheduledAt) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.scheduledAt, event.scheduledAt, 'UTC')
+    if (event.officialReleaseDate) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.officialReleaseDate, event.officialReleaseDate, 'date')
+    if (event.actual) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.actual, event.actual.displayValue, event.actual.unit ?? null)
+    if (event.previous) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.previous, event.previous.displayValue, event.previous.unit ?? null)
+    if (event.consensus) add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.consensus, event.consensus.displayValue, event.consensus.unit ?? null)
     const surprise = assessMarketCalendarSurprise(event.actual, event.consensus)
     if (surprise.presentation) {
-      add(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics.surprise, surprise.presentation.value, surprise.presentation.unit)
+      add(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS.surprise, surprise.presentation.value, surprise.presentation.unit)
     } else if (event.actual && event.consensus) {
       // Both sides exist but no displayable difference can be computed (unit form or a zero
       // denominator). A scheduled event with an expectation is not this case: it has no actual yet.

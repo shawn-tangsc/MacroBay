@@ -1,4 +1,4 @@
-import { MARKET_ANALYSIS_CONTEXT_CAVEATS, MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_CONTEXT_CAVEATS, MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS } from '../../../contracts/marketAnalysisContracts'
 import type { MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
 
 /**
@@ -156,7 +156,7 @@ export const analysisModelVocabulary: MarketAnalysisReadableNames = Object.freez
 /** Identifiers whose missing name would leave a reader with a machine encoding. */
 export const analysisVocabularyRequiredIds = Object.freeze({
   metric: Object.freeze([
-    ...Object.values(MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.factMetrics),
+    ...Object.values(MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS),
     'current-usd', 'change-1d-usd', 'change-7d-usd', 'change-30d-usd', 'etf-net-flow-usd', 'etf-net-flow-5d-usd', 'etf-net-flow-20d-usd',
     'funding-rate-percent', 'open-interest-notional-usd', 'open-interest-change-24h-pct', 'positioning-state', 'fear-greed-index', 'price-return-15m', 'price-return-2h', 'price-return-24h', 'price-return-3d', 'relative-return-2h',
     // 重点舆情：每条新闻作为一条事实进入快照，模型必须认得它的名字。

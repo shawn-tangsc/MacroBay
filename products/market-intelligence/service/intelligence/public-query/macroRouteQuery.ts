@@ -2,7 +2,7 @@ import type { MarketCalendarPage } from '../../../contracts/macro/marketCalendar
 import type { MacroCalendarProviderObservationSet } from '../macro-calendar/marketCalendarObservationNormalization'
 import { readMarketCalendarObservations } from '../macro-calendar/marketCalendarObservationNormalization'
 import type { MacroEconomicCalendarMonthResult } from '../macro-calendar/macroEconomicCalendarQueryService'
-import { MARKET_ANALYSIS_MACRO_CALENDAR_POLICY } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_RUN_SOURCE_BUDGET } from '../analysis/analysisRunPolicy'
 
 /**
  * One place that reads the raw macro route.
@@ -52,7 +52,7 @@ export async function queryMacroRoute(queries: MacroRouteQuery, input: Readonly<
   for (const month of input.months.slice(0, macroRouteQueryPolicy.maximumMonths)) {
     if (queries.queryMacroEconomicCalendarMonth) {
       try {
-        const page = await queries.queryMacroEconomicCalendarMonth({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.maxEvents })
+        const page = await queries.queryMacroEconomicCalendarMonth({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents })
         if (page.state === 'available') official.push(...page.events)
       } catch { /* a month that cannot be read contributes nothing, never an exception */ }
     }

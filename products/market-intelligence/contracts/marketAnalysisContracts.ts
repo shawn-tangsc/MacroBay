@@ -71,46 +71,44 @@ export const MARKET_ANALYSIS_CONTEXT_CAVEATS = Object.freeze({
   policyPathSourceUrlInvalid: 'policy-path-source-url-invalid'
 } as const)
 
+/** The source whose facts the analysis reads as a *fixed share* of the context, not an open feed. */
+export const MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID = 'policy-path-market'
+
 /**
- * The policy-path facts the analysis may read.
- *
- * They are a *fixed share* of the context, not an open-ended feed: the odds and the projections are
- * slow-moving facts with a meeting-level cadence, and the analysis budget belongs mostly to the
- * domains that explain an intraday move. The cap is deliberately below 10% of the macro ceiling and
- * well below a thousandth of the output byte limit; a read that exceeds it is truncated and says so.
+ * The metric names one policy-path fact may carry: the closed set the projection writes and the
+ * model vocabulary, validator and prompt read. How many of them a run may take, and how many prompt
+ * characters they may cost, are budgets and live in `analysis/analysisRunPolicy.ts`.
  */
-export const MARKET_ANALYSIS_POLICY_PATH_POLICY = Object.freeze({
-  sourceId: 'policy-path-market',
-  maximumFacts: 8,
-  maximumPromptCharacters: 900,
-  metrics: Object.freeze({
-    nextMeetingDate: 'policy-next-meeting-date',
-    impliedProbability: 'policy-implied-probability',
-    probabilityChange24h: 'policy-implied-probability-change-24h',
-    targetRange: 'policy-target-range',
-    sepMedianCurrentYear: 'policy-sep-median-current-year',
-    sepMedianPath: 'policy-sep-median-path',
-    lastDecisionVote: 'policy-last-decision-vote'
-  }),
-  caveats: Object.freeze({
-    oddsAreMarketPricing: 'odds-are-market-pricing',
-    projectionsFromLatestSepMeeting: 'projections-from-latest-sep-meeting'
-  })
+export const MARKET_ANALYSIS_POLICY_PATH_METRICS = Object.freeze({
+  nextMeetingDate: 'policy-next-meeting-date',
+  impliedProbability: 'policy-implied-probability',
+  probabilityChange24h: 'policy-implied-probability-change-24h',
+  targetRange: 'policy-target-range',
+  sepMedianCurrentYear: 'policy-sep-median-current-year',
+  sepMedianPath: 'policy-sep-median-path',
+  lastDecisionVote: 'policy-last-decision-vote'
 } as const)
 
-export const MARKET_ANALYSIS_MACRO_CALENDAR_POLICY = Object.freeze({
-  maxEvents: 200,
-  factMetrics: Object.freeze({
-    eventName: 'event-name', lifecycleState: 'lifecycle-state', scheduledDate: 'scheduled-date',
-    scheduledAt: 'scheduled-at', officialReleaseDate: 'official-release-date', actual: 'actual', previous: 'previous',
-    // Market expectation. The official route has no consensus source; the 0xRouter route does,
-    // and a change in expectation moves a conclusion without any released value changing.
-    consensus: 'consensus',
-    // Derived: actual − market expectation. The unit of this fact is the presentation unit
-    // (`pp` or `relative-percent`), so a conclusion can cite the surprise instead of subtracting
-    // two display strings it cannot compare.
-    surprise: 'surprise'
-  })
+export const MARKET_ANALYSIS_POLICY_PATH_CAVEATS = Object.freeze({
+  oddsAreMarketPricing: 'odds-are-market-pricing',
+  projectionsFromLatestSepMeeting: 'projections-from-latest-sep-meeting'
+} as const)
+
+/**
+ * The metric names one macro-calendar fact may carry. This is the identity set a stored fact and its
+ * reader must agree on, so it stays in the contract; how many calendar events a read may page
+ * through is a budget and lives in `analysis/analysisRunPolicy.ts`.
+ */
+export const MARKET_ANALYSIS_MACRO_CALENDAR_FACT_METRICS = Object.freeze({
+  eventName: 'event-name', lifecycleState: 'lifecycle-state', scheduledDate: 'scheduled-date',
+  scheduledAt: 'scheduled-at', officialReleaseDate: 'official-release-date', actual: 'actual', previous: 'previous',
+  // Market expectation. The official route has no consensus source; the 0xRouter route does,
+  // and a change in expectation moves a conclusion without any released value changing.
+  consensus: 'consensus',
+  // Derived: actual − market expectation. The unit of this fact is the presentation unit
+  // (`pp` or `relative-percent`), so a conclusion can cite the surprise instead of subtracting
+  // two display strings it cannot compare.
+  surprise: 'surprise'
 } as const)
 
 export const MARKET_ANALYSIS_ID_PREFIXES = Object.freeze({

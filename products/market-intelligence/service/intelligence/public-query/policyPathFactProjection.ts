@@ -1,14 +1,17 @@
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
-  MARKET_ANALYSIS_POLICY_PATH_POLICY,
+  MARKET_ANALYSIS_POLICY_PATH_CAVEATS,
+  MARKET_ANALYSIS_POLICY_PATH_METRICS,
+  MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID,
   type AgentFact
 } from '../../../contracts/marketAnalysisContracts'
+import { MARKET_ANALYSIS_RUN_SOURCE_BUDGET } from '../analysis/analysisRunPolicy'
 import type { PolicyPathContextRead, PolicyPathReading } from '../policy-path/policyPathQueryService'
 import { mergeDomainObservation, observation, type MarketAnalysisDomainObservation } from './domainObservationMerge'
 import { fact } from './marketAnalysisContextProjection'
 
-const METRICS = MARKET_ANALYSIS_POLICY_PATH_POLICY.metrics
-const SOURCE_ID = MARKET_ANALYSIS_POLICY_PATH_POLICY.sourceId
+const METRICS = MARKET_ANALYSIS_POLICY_PATH_METRICS
+const SOURCE_ID = MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID
 
 /** The public pages a reader can open to check each class of policy fact. */
 export const POLICY_PATH_SOURCE_URLS = Object.freeze({
@@ -71,7 +74,7 @@ export function projectPolicyPath(
   const probability = reading.probability
   const probabilityUrl = probability?.venue === 'polymarket' ? safeUrl(POLICY_PATH_SOURCE_URLS.polymarket, caveats) : undefined
   if (probability) {
-    caveats.add(MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.oddsAreMarketPricing)
+    caveats.add(MARKET_ANALYSIS_POLICY_PATH_CAVEATS.oddsAreMarketPricing)
     const value = percent(probability.value)
     add({
       metric: METRICS.impliedProbability, subject: probability.outcome, value, unit: 'percent',
@@ -110,7 +113,7 @@ export function projectPolicyPath(
     caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathRangeUnavailable)
   }
   if (reading.sep) {
-    caveats.add(MARKET_ANALYSIS_POLICY_PATH_POLICY.caveats.projectionsFromLatestSepMeeting)
+    caveats.add(MARKET_ANALYSIS_POLICY_PATH_CAVEATS.projectionsFromLatestSepMeeting)
     const sep = reading.sep
     const sepDate = `${sep.asOf.slice(0, 10)}T00:00:00.000Z`
     const sepUrl = safeUrl(sep.sourceUrl, caveats) ?? safeUrl(sepTableUrl(sep.asOf), caveats) ?? POLICY_PATH_SOURCE_URLS.calendar
@@ -165,12 +168,12 @@ export function projectPolicyPath(
 
 /** The fixed share: at most eight facts and 900 characters of prompt text. */
 function withinBudget(drafts: readonly PolicyFactDraft[], caveats: Set<string>): readonly PolicyFactDraft[] {
-  const byCount = drafts.slice(0, MARKET_ANALYSIS_POLICY_PATH_POLICY.maximumFacts)
+  const byCount = drafts.slice(0, MARKET_ANALYSIS_RUN_SOURCE_BUDGET.policyPath.maximumFacts)
   const kept: PolicyFactDraft[] = []
   let characters = 0
   for (const draft of byCount) {
     const cost = JSON.stringify({ metric: draft.metric, value: draft.value, unit: draft.unit, observedAt: draft.observedAt }).length
-    if (kept.length > 0 && characters + cost > MARKET_ANALYSIS_POLICY_PATH_POLICY.maximumPromptCharacters) break
+    if (kept.length > 0 && characters + cost > MARKET_ANALYSIS_RUN_SOURCE_BUDGET.policyPath.maximumPromptCharacters) break
     kept.push(draft)
     characters += cost
   }

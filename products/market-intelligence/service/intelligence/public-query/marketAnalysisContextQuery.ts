@@ -1,11 +1,11 @@
 import { applyReservedFacts } from '../analysis/analysisImpactDisclosurePolicy'
 import { MARKET_ANALYSIS_CONTEXT_FACT_BUDGET } from '../analysis/analysisContextPolicy'
+import { MARKET_ANALYSIS_RUN_SOURCE_BUDGET } from '../analysis/analysisRunPolicy'
 import {
   MARKET_ANALYSIS_CONTEXT_CAVEATS,
   MARKET_ANALYSIS_CONTEXT_SCHEMA_VERSION,
   MARKET_ANALYSIS_CONTRACT_POLICY,
-  MARKET_ANALYSIS_POLICY_PATH_POLICY,
-  MARKET_ANALYSIS_MACRO_CALENDAR_POLICY,
+  MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID,
   MARKET_ANALYSIS_CROSS_ASSET_INSTRUMENTS,
   type MarketAnalysisCrossAssetInstrument,
   MARKET_ANALYSIS_ERROR_CODES,
@@ -289,7 +289,7 @@ export async function buildMarketAnalysisContext(
     } else {
       const month = input.asOf.slice(0, 7)
       const official = officialQuery
-        ? await safeQuery(() => officialQuery({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_MACRO_CALENDAR_POLICY.maxEvents }))
+        ? await safeQuery(() => officialQuery({ month, asOf: input.asOf, maxEvents: MARKET_ANALYSIS_RUN_SOURCE_BUDGET.macroCalendarMaximumEvents }))
         : undefined
       safeProject(() => projectMacroCalendar({
         official,
@@ -386,7 +386,7 @@ export async function buildMarketAnalysisContext(
   if (keptFacts.length < macroCapped.facts.length) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.maxItemsTruncated)
   // A caller may ask for fewer facts than the macro share; say the policy set was cut rather than
   // letting the generic truncation caveat hide which evidence went missing.
-  const policySourceId = MARKET_ANALYSIS_POLICY_PATH_POLICY.sourceId
+  const policySourceId = MARKET_ANALYSIS_POLICY_PATH_SOURCE_ID
   const policyAvailable = macroCapped.facts.filter(fact => fact.sourceId === policySourceId).length
   const policyKept = keptFacts.filter(fact => fact.sourceId === policySourceId).length
   if (policyAvailable > 0 && policyKept < policyAvailable) caveats.add(MARKET_ANALYSIS_CONTEXT_CAVEATS.policyPathTruncated)
