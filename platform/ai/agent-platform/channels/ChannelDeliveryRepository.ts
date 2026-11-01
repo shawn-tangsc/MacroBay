@@ -30,6 +30,16 @@ export type ChannelDeliverySendOwner = {
 export class ChannelDeliveryRepository {
   constructor(private readonly database: AgentPlatformDatabase) {}
 
+  /**
+   * 幂等的记忆就是投递记录本身，保留 30 天；超过 30 天同一条消息可能重发一次。
+   *
+   * There is no separate dedup-key table: this lookup on the attempt row IS the idempotency memory,
+   * and `cleanupPage` deletes attempts older than 30 days for one channel. So the window and the
+   * retention period are the same number, and they must be read together — changing one without the
+   * other silently changes how long we remember a delivery. The only path that can still re-send a
+   * very old message is re-delivering an old task result on purpose; a redelivery entry must
+   * therefore never list a source older than the retention window.
+   */
   claim(input: ClaimInput): DeliveryAttempt | null {
     return this.database.transact(() => {
       if (!this.isAuthorized(input)) return null
@@ -282,6 +292,10 @@ export class ChannelDeliveryRepository {
     return row ? mapAttempt(row) : null
   }
 
+  /**
+   * 30 天：与 `claim` 的幂等记忆同一个窗口（见那里的说明）。到期清理之后，同一条消息会被当成
+   * 全新投递再发一次——这是能力边界，不是 bug。
+   */
   cleanupPage(channelId: string, now = new Date(), limit = 500): { attempts: number; audits: number } {
     const batch = Math.max(1, Math.min(limit, 500)); const cutoff = new Date(now.getTime() - 30 * 86_400_000).toISOString()
     const attempts = this.database.connection.prepare(`delete from channel_delivery_attempts where id in (select id from channel_delivery_attempts where channel_id = ? and status in ('delivered','failed','unknown-after-send','skipped') and (completed_at < ? or id in (select id from channel_delivery_attempts where channel_id = ? and status in ('delivered','failed','unknown-after-send','skipped') order by completed_at desc, id desc limit -1 offset 10000)) order by completed_at asc, id asc limit ?)`).run(channelId, cutoff, channelId, batch).changes as number
