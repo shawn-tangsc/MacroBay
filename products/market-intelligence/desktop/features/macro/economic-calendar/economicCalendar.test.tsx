@@ -1171,7 +1171,8 @@ describe('macro economic calendar', () => {
 
     const empty = await renderCalendar({ queryMonth: async () => ({ state: 'available' as const, asOf, events: [] }), getEventDetail: async () => unavailableDetail() })
     await flush()
-    expect(empty.container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.status.empty)
+    // The shared state surface prints its own title; the product sentence rides the reason slot.
+    expect(empty.container.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.calendar.emptyState.title)
     expect(empty.container.querySelector('.mi-economic-calendar__empty-state')).not.toBeNull()
 
     expect(loading.container.querySelector('.mi-economic-calendar__empty-state')).toBeNull()
@@ -1344,7 +1345,7 @@ describe('macro economic calendar', () => {
     })
 
     await flush()
-    await act(async () => button(container.querySelector<HTMLElement>('.mi-economic-calendar__empty-state')!, productText['zh-CN'].pages.intelligence.portal.calendar.emptyState.manageAction).click())
+    await act(async () => container.querySelector<HTMLElement>('.mi-economic-calendar__empty-state button')!.click())
 
     expect(navigation).toHaveBeenCalledTimes(1)
     expect(navigation.mock.calls[0]?.[0].detail).toEqual({
@@ -1366,7 +1367,9 @@ describe('macro economic calendar', () => {
     })
 
     await flush()
-    await act(async () => button(container.querySelector<HTMLElement>('.mi-economic-calendar__empty-state')!, productText['zh-CN'].pages.intelligence.portal.calendar.manualImport.action).click())
+    // The manual import is a page-level tool now: it lives in the header toolbar, not in the
+    // empty state's single action slot.
+    await act(async () => container.querySelector<HTMLElement>('.mi-economic-calendar__import')!.click())
     await flush()
 
     expect(selectFiles).toHaveBeenCalledTimes(1)

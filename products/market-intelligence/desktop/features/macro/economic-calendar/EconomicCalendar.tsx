@@ -18,6 +18,7 @@ import {
   type EconomicCalendarProjection
 } from './economicCalendarModel'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
@@ -334,12 +335,12 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
         <div className="mi-economic-calendar__heading">
           <h1>{text.title}</h1>
           {blsScheduleFeedback?.year === selectedMonth.slice(0, 4) ? <p className="mi-economic-calendar__comparison-rule" role="status">{`${text.blsScheduleSync.schedule[blsScheduleFeedback.schedule]} · ${text.blsScheduleSync.cpi[blsScheduleFeedback.cpi]} · ${text.blsScheduleSync.employment[blsScheduleFeedback.employment]}`}</p> : null}
-          <Button aria-label={text.manualImport.action} className="mi-economic-calendar__import" icon={<Upload aria-hidden="true" size={15} />} onClick={() => void blsIcsImport.selectFile()} size="small">
-            {text.manualImport.action}
-          </Button>
         </div>
         <div className="mi-economic-calendar__tools">
           <span data-calendar-time-zone={timeZone}>{timeZoneLabel}</span>
+          <Button aria-label={text.manualImport.action} className="mi-economic-calendar__import" icon={<Upload aria-hidden="true" size={15} />} onClick={() => void blsIcsImport.selectFile()} size="small">
+            {text.manualImport.action}
+          </Button>
           <button aria-label={text.monthNavigation.previous} onClick={() => selectMonth(shiftEconomicCalendarMonth(selectedMonth, -1))} type="button"><ChevronLeft aria-hidden="true" size={15} />{text.monthNavigation.previous}</button>
           <DatePicker
             allowClear={economicCalendarMonthPickerPolicy.allowClear}
@@ -381,7 +382,6 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           asOf={asOf}
           today={today}
           month={selectedMonth}
-          onImportBlsIcs={() => void blsIcsImport.selectFile()}
           onOpenDay={day => showDay(day)}
           onSelectItem={item => selectItem(item)}
           coverage={coverage}
@@ -438,7 +438,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
   )
 }
 
-function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage }: {
+function CalendarMonthState({ month, asOf, today, statusNow, onOpenDay, onSelectItem, selectedEventKey, state, text, events, marketEvents, marketSources, coverage }: {
   statusNow: string
   today: string
   asOf: string
@@ -448,7 +448,6 @@ function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onO
   onSelectItem: (item: CalendarDayItem) => void
   coverage: CalendarDayCoverage
   month: string
-  onImportBlsIcs: () => void
   onOpenDay: (day: string) => void
   selectedEventKey: string | undefined
   state: EconomicCalendarMonthState
@@ -457,7 +456,7 @@ function CalendarMonthState({ month, asOf, today, statusNow, onImportBlsIcs, onO
   const status = state.state === 'loading' ? text.status.loading : state.state === 'unavailable' ? text.failures[state.failureCode] : undefined
   if (state.state !== 'available' && !marketEvents.length) return <CalendarState month={month} text={status!} loading={state.state === 'loading'} />
   const projection = state.state === 'available' ? state.projection : createEconomicCalendarProjection({ month, asOf, events: [] })
-  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} onImportBlsIcs={onImportBlsIcs} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
+  return <div className="mi-calendar-month-scroll">{status ? (state.state === 'loading' ? <LoadingState layout="inline" size="sm" label={status} /> : <p role="status">{status}</p>) : null}<CalendarMonth statusNow={statusNow} today={today} events={events} marketEvents={marketEvents} marketSources={marketSources} onSelectItem={onSelectItem} coverage={coverage} month={month} projection={projection} selectedEventKey={selectedEventKey} onOpenDay={onOpenDay} text={text} /></div>
 }
 
 function CalendarState({ month, text, loading }: { month: string; text: string; loading: boolean }): ReactElement {
@@ -466,7 +465,7 @@ function CalendarState({ month, text, loading }: { month: string; text: string; 
   </section>
 }
 
-function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
+function CalendarMonth({ month, today, statusNow, projection, events, selectedEventKey, onOpenDay, onSelectItem, text, marketEvents, marketSources, coverage }: {
   statusNow: string
   today: string
   events: readonly EconomicCalendarEventView[]
@@ -475,7 +474,6 @@ function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, ev
   onSelectItem: (item: CalendarDayItem) => void
   coverage: CalendarDayCoverage
   month: string
-  onImportBlsIcs: () => void
   projection: EconomicCalendarProjection
   selectedEventKey: string | undefined
   onOpenDay: (day: string) => void
@@ -497,21 +495,24 @@ function CalendarMonth({ month, today, statusNow, onImportBlsIcs, projection, ev
         </article>
       })}
     </div>
-    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState onImportBlsIcs={onImportBlsIcs} text={text} /> : null}
+    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState text={text} /> : null}
   </section>
 }
 
-function CalendarEmptyState({ onImportBlsIcs, text }: { onImportBlsIcs: () => void; text: EconomicCalendarText }): ReactElement {
-  return <section className="mi-economic-calendar__empty-state" aria-live="polite">
-    <div>
-      <p className="mi-economic-calendar__empty-state-title">{text.emptyState.title}</p>
-      <p className="mi-economic-calendar__more">{text.status.empty}</p>
-    </div>
-    <div className="mi-economic-calendar__empty-state-actions">
-      <Button onClick={openIntelligenceSourcesSettings} size="small" type="primary">{text.emptyState.manageAction}</Button>
-      <Button icon={<Upload aria-hidden="true" size={15} />} onClick={onImportBlsIcs} size="small">{text.manualImport.action}</Button>
-    </div>
-  </section>
+/**
+ * A month with nothing in it. One action: the state's slot is "what the reader does next",
+ * and only one thing can occupy it — the manual ICS import is a page-level tool and lives in
+ * the header toolbar instead of competing for the empty state's single action.
+ */
+function CalendarEmptyState({ text }: { text: EconomicCalendarText }): ReactElement {
+  return <StateView
+    className="mi-economic-calendar__empty-state"
+    state="empty"
+    reasonCode="nothing-in-window"
+    size="lg"
+    action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: openIntelligenceSourcesSettings }}
+    productReason={{ key: 'mi.calendar.empty-month', resolve: () => text.emptyState.title }}
+  />
 }
 
 function toCanonicalUtcMillis(date: Date): string {
