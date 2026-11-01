@@ -53,7 +53,14 @@ export type QueryOutcomeState = Exclude<QueryOutcome<unknown>['state'], 'ok'>
  *
  * `none-installed` 的动作是**三选一**，不是一个固定键：三个站点各自是一种恢复方式。
  */
-export type StateActionRule = 'required' | 'forbidden'
+/**
+ * 一个码对动作的要求。
+ *
+ * `optional` 是 2026-11-02 补的：**有没有动作是场景属性**，同一个码在两处可能一处给按钮、一处不给
+ * （整月无事件给「打开设置」，确实没有消息就不给）。`required` 只该留给「不给动作就是缺陷」的码，
+ * 它同时也是审核判据——类型层不替它决定，`action` 在所有码上都是可选的。
+ */
+export type StateActionRule = 'required' | 'forbidden' | 'optional'
 
 export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'empty.never-created': 'required',
@@ -65,7 +72,7 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'empty.not-yet': 'forbidden',
   'empty.never-ran': 'required',
   'empty.older-than-window': 'required',
-  'empty.nothing-in-window': 'required',
+  'empty.nothing-in-window': 'optional',
   'error.unreadable': 'required',
   'error.unavailable': 'required',
   'error.operation-failed': 'required',
@@ -103,7 +110,8 @@ export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
   'empty.no-target-selected': ['ui.state.action.select-target', 'ui.state.action.focus-form'],
   'empty.never-ran': ['ui.state.action.run-now'],
   'empty.older-than-window': ['ui.state.action.widen-time-window'],
-  'empty.nothing-in-window': ['ui.state.action.widen-time-window'],
+  // 场景不同，出口也不同：整月无事件是「去设置看范围」，确实没有消息就不给动作。
+  'empty.nothing-in-window': ['ui.state.action.widen-time-window', 'ui.state.action.open-settings'],
   'error.unreadable': ['ui.state.action.retry'],
   'error.unavailable': ['ui.state.action.check-source', 'ui.state.action.retry', 'ui.state.action.refresh'],
   'error.operation-failed': ['ui.state.action.retry'],

@@ -98,15 +98,10 @@ const BASELINE_FILE =
 
 /** 按「文件 + 码」记，不按行号：那一行随时会被别的线往上挪，行号基线第二天就变成假红。 */
 const BASELINE = new Map<string, number>([
+  // 情报线 · 情绪盘：上游 `useDashboardFearGreed` 无重查通路（缺口 MI-1-E1）。
+  // 判据：只有上游确实没通路时 `error` 无动作才成立；补了通路就必须给动作，并同笔删掉这一行。
   [
-    'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx|empty.nothing-in-window',
-    1
-  ],
-  ['products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx|empty.nothing-in-window', 1],
-  // 情报线在途：舆情卡的「安静窗口」与跨资产面板的「来源不可用」这两处，目前只给文案没有动作。
-  // 两处都在他们线里；修掉后必须同笔删掉对应行（「只减不增」那条会红）。
-  [
-    'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentCard.tsx|empty.nothing-in-window',
+    'products/market-intelligence/desktop/pages/intelligence/CryptoIntelligenceDashboard.tsx|error.unavailable',
     1
   ],
   [
@@ -129,11 +124,6 @@ const CONDITIONAL_SPREAD = [
  * 与上面那份基线分开：那一份记「有没有动作」，这一份记「键对不对」。
  */
 const KEY_BASELINE = new Map<string, number>([
-  // 情报线：`nothing-in-window` 的动作是「看全部」，站点给的是「打开设置」。
-  [
-    'products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEmptyMonthState.tsx|empty.nothing-in-window',
-    1
-  ],
   // 情报线：`filtered-out` 的动作是「清除筛选」，站点给的是「看全部」。
   [
     'products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx|empty.filtered-out',
@@ -164,10 +154,11 @@ describe('StateView call sites match the action rules', () => {
     expect(offenders).toEqual([])
   })
 
-  it('gives every required code a whitelist, so no code is left unprotected', () => {
+  it('gives every code that can carry an action a whitelist, so none is left unprotected', () => {
     // 一个码落地时忘了加白名单，这条先红——否则「键对不对」这一列对它是没有守卫的。
+    // `optional` 也要白名单：它由调用方决定给不给动作，给了就必须是允许的那几个。
     const missing = Object.entries(STATE_VIEW_ACTION_RULES)
-      .filter(([, rule]) => rule === 'required')
+      .filter(([, rule]) => rule === 'required' || rule === 'optional')
       .map(([code]) => code)
       .filter((code) => STATE_VIEW_ACTION_CHOICES[code] === undefined)
 

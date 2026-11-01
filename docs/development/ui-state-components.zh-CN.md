@@ -63,7 +63,7 @@ import { StateView } from '@platform/ui/components/state'
 `disabled` 与 `permission` 刻意共用中性色。灰度下仍可分辨，靠的是轮廓不同（圈加斜杠 vs 锁）
 和动作位不同。**不许用颜色把它们分开。**
 
-原因码是闭集；下表的动作列由类型强制，不靠评审盯：
+原因码是闭集；下表的动作列是**审核判据，不是类型约束**：`action` 在所有码上都是可选的，给不给由场景决定。`required` 标的是「不给动作就是缺陷」的码，`optional` 标的是两种都对、看具体站点的码。
 
 | `state` | `reasonCode` | 动作 | 含义 |
 | --- | --- | --- | --- |
@@ -76,7 +76,7 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现；在这里给按钮就是假动作。 |
 | `empty` | `never-ran` | 必填：现在跑一次 —— `run-now` | 一次都还没跑过，读者能自己启动。与 `not-yet`（事实、无事可做）分开，是一个码装两种处境时拆出来的。 |
 | `empty` | `older-than-window` | 必填：查看全部 —— `widen-time-window` | 有数据，但都在这段窗口之外——这是「查过了，有」，不是「还没到」。 |
-| `empty` | `nothing-in-window` | 必填：查看全部 —— `widen-time-window` | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。 |
+| `empty` | `nothing-in-window` | 可选 —— 有出口时用 `widen-time-window` 或 `open-settings` | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。整月没有事件可以给「打开设置」，确实没有消息就不给动作。 |
 | `error` | `unreadable` | 必填：重试 —— `retry` | 没读出来，不是「没有」。 |
 | `error` | `unavailable` | 必填：检查来源 —— `check-source` / `retry` / `refresh` | 数据源本身不可用，盲目重试没有意义。 |
 | `error` | `operation-failed` | 必填：重试 —— `retry` | 写操作（创建、保存、更新、删除）没成功——不是读失败。 |

@@ -80,7 +80,7 @@ needs one gets the code and the key in the same change, never the key on its own
 | `empty` | `not-yet` | forbidden | It only appears once something has happened; a button here would be a fake action. |
 | `empty` | `never-ran` | required: run it now — `run-now` | Nothing has run yet; the reader can start it. Kept apart from `not-yet`, which is a fact with nothing to do. |
 | `empty` | `older-than-window` | required: view all — `widen-time-window` | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
-| `empty` | `nothing-in-window` | required: view all — `widen-time-window` | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
+| `empty` | `nothing-in-window` | optional — `widen-time-window` or `open-settings` when the site has one | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. A month with no events can offer "open settings"; genuinely no news offers nothing. |
 | `error` | `unreadable` | required: retry — `retry` | The data could not be read — this is not "there is none". |
 | `error` | `unavailable` | required: check the source — `check-source` / `retry` / `refresh` | The source itself is unavailable; retrying blindly achieves nothing. |
 | `error` | `operation-failed` | required: retry — `retry` | A write (create, save, update, delete) did not go through — this is not a read failure. |

@@ -26,7 +26,7 @@ function docRows(file: string): DocRow[] {
   const text = readFileSync(join(ROOT, file), 'utf8')
   const rows: DocRow[] = []
   for (const line of text.split('\n')) {
-    const match = /^\|\s*`(empty|error|disabled|permission)`\s*\|\s*`([a-z-]+)`\s*\|\s*(required|forbidden)\b/.exec(
+    const match = /^\|\s*`(empty|error|disabled|permission)`\s*\|\s*`([a-z-]+)`\s*\|\s*(required|forbidden|optional)\b/.exec(
       line
     )
     if (match) rows.push({ code: `${match[1]}.${match[2]}`, action: match[3]! })
