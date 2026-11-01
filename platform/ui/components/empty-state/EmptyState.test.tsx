@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { EmptyState } from './EmptyState'
+import { EmptyState, type EmptyStateProps } from './EmptyState'
 
 const here = __dirname
 const source = readFileSync(join(here, 'EmptyState.tsx'), 'utf8')
@@ -59,3 +59,20 @@ describe('EmptyState', () => {
     expect(css).not.toMatch(/var\([^)]*,\s*#/)
   })
 })
+
+/**
+ * 编译期契约：缺必填字段、或把 `size` 写成 `page`，必须编译不过。
+ * 运行时什么都不做——这两行的价值是让 tsc 校验 `@ts-expect-error`：
+ * 一旦谁把 `title`/`reason` 改成可选，或把 size 放开，这里会先红。
+ */
+export function emptyStateTypeContract(): void {
+  // @ts-expect-error title 必填
+  const missingTitle: EmptyStateProps = { reason: 'why' }
+  // @ts-expect-error reason 必填
+  const missingReason: EmptyStateProps = { title: 'what' }
+  // @ts-expect-error size 只允许 sm | md | lg
+  const notASize: EmptyStateProps = { title: 't', reason: 'r', size: 'page' }
+  void missingTitle
+  void missingReason
+  void notASize
+}
