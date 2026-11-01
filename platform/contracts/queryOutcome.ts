@@ -92,10 +92,13 @@ export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
   'empty.filtered-out': ['ui.state.action.clear-filter'],
   'empty.no-target-bound': ['ui.state.action.bind-target'],
   'empty.nothing-enabled': ['ui.state.action.enable'],
+  // 四选一，各对应一种恢复方式（架构师 2026-11-02 批准加 focus-form）：
+  // 同屏有可填表单 → focus-form；有可选列表 → install；已有目标可绑 → bind-target；本屏给不了入口 → open-settings。
   'empty.none-installed': [
     'ui.state.action.install',
     'ui.state.action.bind-target',
-    'ui.state.action.open-settings'
+    'ui.state.action.open-settings',
+    'ui.state.action.focus-form'
   ],
   'empty.no-target-selected': ['ui.state.action.select-target', 'ui.state.action.focus-form'],
   'empty.never-ran': ['ui.state.action.run-now'],

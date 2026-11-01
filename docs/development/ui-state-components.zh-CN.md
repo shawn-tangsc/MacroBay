@@ -71,7 +71,7 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `filtered-out` | 必填：清除筛选 | 有数据，被当前筛选挡住。 |
 | `empty` | `no-target-bound` | 必填：去绑定 | 目标还没绑。 |
 | `empty` | `nothing-enabled` | 必填：去启用 | 一个都没启用。 |
-| `empty` | `none-installed` | 必填：安装 / 绑定 / 打开设置，按站点选一种恢复方式 | 这里从来没有装过或绑定过；读者自己能解决。 |
+| `empty` | `none-installed` | 必填：按站点选一种恢复方式——`install`（有列表可挑）/ `focus-form`（同屏有表单）/ `bind-target`（已有目标可绑）/ `open-settings`（本屏给不了入口） | 这里从来没有装过或绑定过；读者自己能解决。 |
 | `empty` | `no-target-selected` | 必填：聚焦选择区 | 目标可以挑，但还没选。 |
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现；在这里给按钮就是假动作。 |
 | `empty` | `never-ran` | 必填：现在跑一次 | 一次都还没跑过，读者能自己启动。与 `not-yet`（事实、无事可做）分开，是一个码装两种处境时拆出来的。 |

@@ -75,7 +75,7 @@ needs one gets the code and the key in the same change, never the key on its own
 | `empty` | `filtered-out` | required: clear the filter | There is data; the filter hides it. |
 | `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
 | `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
-| `empty` | `none-installed` | required: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
+| `empty` | `none-installed` | required: one recovery per site — `install` (a list to pick from) / `focus-form` (a form on screen) / `bind-target` (a target to bind) / `open-settings` (no entry here) | Nothing has ever been installed or bound here; the reader can fix it. |
 | `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | forbidden | It only appears once something has happened; a button here would be a fake action. |
 | `empty` | `never-ran` | required: run it now | Nothing has run yet; the reader can start it. Kept apart from `not-yet`, which is a fact with nothing to do. |

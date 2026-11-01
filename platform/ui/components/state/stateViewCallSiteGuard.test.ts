@@ -98,14 +98,21 @@ const BASELINE_FILE =
 
 /** 按「文件 + 码」记，不按行号：那一行随时会被别的线往上挪，行号基线第二天就变成假红。 */
 const BASELINE = new Map<string, number>([
-  [`${BASELINE_FILE}|empty.nothing-in-window`, 1],
-  // 情报线迁移中：`nothing-in-window` 目前只有 `productReason`，没有动作（文档要求「看全部」）。
-  // 已在群里报给他们；修掉后这两行必须同笔删掉，否则「只减不增」那条会红。
   [
     'products/market-intelligence/desktop/features/macro/economic-calendar/EconomicCalendar.tsx|empty.nothing-in-window',
     1
   ],
   ['products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx|empty.nothing-in-window', 1],
+  // 情报线在途：舆情卡的「安静窗口」与跨资产面板的「来源不可用」这两处，目前只给文案没有动作。
+  // 两处都在他们线里；修掉后必须同笔删掉对应行（「只减不增」那条会红）。
+  [
+    'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentCard.tsx|empty.nothing-in-window',
+    1
+  ],
+  [
+    'products/market-intelligence/desktop/features/industry/capital-conditions/CapitalConditionsPanel.tsx|error.unavailable',
+    1
+  ],
 ])
 
 /** 三种写法都算条件展开：三元展开、`&&` 展开、`action={cond ? … : undefined}`。 */

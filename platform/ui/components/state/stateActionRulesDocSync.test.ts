@@ -55,12 +55,18 @@ describe('action rules match the documented table', () => {
     expect(chinese.length === ruleCount || chinese.length === 0).toBe(true)
   })
 
-  it('names the three allowed actions for none-installed instead of one fixed key', () => {
-    expect(STATE_VIEW_ACTION_CHOICES['empty.none-installed']).toEqual([
-      'ui.state.action.install',
-      'ui.state.action.bind-target',
-      'ui.state.action.open-settings'
-    ])
+  it('names several allowed actions per code, and the doc lists the same ones', () => {
+    // 规则来源是代码（`STATE_VIEW_ACTION_CHOICES`），文档是被同步的那一份：这里只做逐条比对。
+    // 不断言「固定几个键」——那样下一次按裁定加键时，又要手改一条旧账。
+    const lines = readFileSync(join(ROOT, 'docs/development/ui-state-components.md'), 'utf8').split('\n')
+    const row = lines.find((line) => line.includes('`none-installed`')) ?? ''
+    const documented = [...row.matchAll(/`([a-z-]+)`/g)].map((match) => `ui.state.action.${match[1]}`)
+    // 行首的 `empty`、`none-installed` 不是动作键，只有出现在白名单里的才算。
+    const allowed = [...STATE_VIEW_ACTION_CHOICES['empty.none-installed']!]
+    const documentedActions = documented.filter((key) => allowed.includes(key))
+
+    expect([...documentedActions].sort()).toEqual([...allowed].sort())
+    expect(allowed.length).toBeGreaterThan(1)
   })
 
   it('cannot pass vacuously: an empty table is not a green table', () => {
