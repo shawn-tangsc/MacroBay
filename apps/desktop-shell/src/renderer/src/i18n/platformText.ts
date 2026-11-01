@@ -365,7 +365,6 @@ export type PlatformText = {
     mcpModeUnavailableHint: string
     enableWebSearch: string
     webSearchHint: string
-    contextSourcesPlaceholder: string
     comingSoon: string
     mentionedModels: string
     webSearchCardTitle: string
@@ -1430,7 +1429,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       mcpModeUnavailableHint: '助手的 MCP 执行尚未接入，此处设置暂不生效；需要 MCP 请使用智能体。',
       enableWebSearch: '启用网页搜索',
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
-      contextSourcesPlaceholder: '知识库与上下文源将在后续平台能力中接入。',
       comingSoon: '即将推出',
       mentionedModels: '提及模型',
       webSearchCardTitle: '网页搜索',
@@ -2454,7 +2452,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Assistant-side MCP execution is not connected yet, so this setting has no effect. Use an agent when you need MCP.',
       enableWebSearch: 'Enable web search',
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
-      contextSourcesPlaceholder: 'Knowledge and context sources will connect through later platform capabilities.',
       comingSoon: 'Coming soon',
       mentionedModels: 'Mentioned models',
       webSearchCardTitle: 'Web Search',

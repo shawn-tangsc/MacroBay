@@ -168,7 +168,6 @@ export function AssistantSettingsForm({
         />
       </div>
       <p className="status-line">{labels.webSearchHint}</p>
-      <p className="status-line">{labels.contextSourcesPlaceholder}</p>
     </div>
   )
 }
