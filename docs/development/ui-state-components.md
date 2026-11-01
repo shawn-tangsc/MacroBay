@@ -73,9 +73,9 @@ The reason codes are a closed set. The action column is enforced by the type, no
 | `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | never | It only appears once something has happened. |
 | `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
-| `error` | `operation-failed` | required: retry | The write failed; nothing was saved. |
-| `error` | `needs-restart` | required: restart the app | The running app cannot pick this up; a restart is the fix. |
 | `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
+| `error` | `operation-failed` | required: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
+| `error` | `needs-restart` | required: restart the app | A local interface is missing; only a restart loads it. |
 | `disabled` | `capability-not-wired` | never | The platform side is not connected; nothing is wrong on the reader's side. |
 | `disabled` | `target-disabled` | required: enable | The target was switched off. |
 | `disabled` | `precondition-unsaved` | required: save | The form has unsaved changes; saving unlocks it. |

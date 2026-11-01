@@ -71,9 +71,9 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `no-target-selected` | 必填：聚焦选择区 | 目标可以挑，但还没选。 |
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现。 |
 | `error` | `unreadable` | 必填：重试 | 没读出来，不是「没有」。 |
-| `error` | `operation-failed` | 必填：重试 | 写失败，什么都没存进去。 |
-| `error` | `needs-restart` | 必填：重启应用 | 当前运行的进程接不到它，重启才生效。 |
 | `error` | `unavailable` | 必填：检查来源 | 数据源本身不可用，盲目重试没有意义。 |
+| `error` | `operation-failed` | 必填：重试 | 写操作（创建、保存、更新、删除）没成功——不是读失败。 |
+| `error` | `needs-restart` | 必填：重启应用 | 本地接口缺失，只有重启才加载。 |
 | `disabled` | `capability-not-wired` | 不许有 | 平台侧没接通，读者没做错。 |
 | `disabled` | `target-disabled` | 必填：去启用 | 目标被停用了。 |
 | `disabled` | `precondition-unsaved` | 必填：保存 | 表单还没保存，保存之后才能继续。 |

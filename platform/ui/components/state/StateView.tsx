@@ -46,12 +46,9 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.empty.reason.none-installed',
   'ui.state.empty.reason.no-target-selected',
   'ui.state.empty.reason.not-yet',
-  'ui.state.empty.reason.no-target-selected',
   'ui.state.error',
   'ui.state.error.reason.unreadable',
   'ui.state.error.reason.unavailable',
-  'ui.state.error.reason.operation-failed',
-  'ui.state.error.reason.needs-restart',
   'ui.state.error.reason.operation-failed',
   'ui.state.error.reason.needs-restart',
   'ui.state.error.details',
@@ -100,7 +97,7 @@ export type EmptyReasonCode =
   | 'no-target-selected'
   | 'not-yet'
 
-export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart' | 'operation-failed' | 'needs-restart'
+export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart'
 export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
 export type PermissionReasonCode = 'not-granted'
 
