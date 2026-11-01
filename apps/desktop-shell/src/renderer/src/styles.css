@@ -283,6 +283,20 @@ button {
   display: none;
 }
 
+/*
+ * 键盘焦点环：**只在这里定义一次**。
+ *
+ * 七条线各自给控件补过焦点环（全仓曾有几十处各写一份，形状还不一样），换一批控件就少一处。
+ * `:where()` 是零特异性：组件自己的规则仍然覆盖得了它（贴边的行内控件用负 offset），
+ * 但「键盘focus 看不见」这种情况不再需要每处单独补。
+ *
+ * 2px accent + offset 2 是界面规范给的值；不要把尺寸写进各线样式里。
+ */
+:where(a[href], button, [role='button'], [role='tab'], [role='switch'], [tabindex]:not([tabindex='-1'])):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
