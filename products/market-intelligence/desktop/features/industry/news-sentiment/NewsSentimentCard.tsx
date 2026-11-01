@@ -29,14 +29,15 @@ export function NewsSentimentCard(props: {
   onOpenSettings: () => void
   onRefresh: () => void
   onSelectItem: (item: NewsSentimentItemView) => void
-  /** Opens the product's source settings; the "sources are off" state has no other way forward. */
-  onOpenSources?: () => void
+  /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
+  onEnableSources: () => void
   /** Collects the named sources now: "run once" after a first enable, "try again" after a failure. */
-  onRunSources?: (sourceIds: readonly string[]) => void
-  /** Moves to the next wider window: the action the `older-than-window` state advertises. */
-  onWidenWindow?: () => void
+  onRunSources: (sourceIds: readonly string[]) => void
+  /** Moves to the next wider window: the actions `older-than-window` and `nothing-in-window` advertise. */
+  onWidenWindow: () => void
   includeNeutral?: boolean
-  onIncludeNeutralChange?: (includeNeutral: boolean) => void
+  /** Clears the neutral filter: the action `filtered-out` advertises. Always provided. */
+  onIncludeNeutralChange: (includeNeutral: boolean) => void
 }): React.ReactElement {
   const { text, view, loading, failed } = props
   const formatTime = useShellTimeFormat()
@@ -99,7 +100,7 @@ export function NewsSentimentCard(props: {
           <Segmented
             aria-label={text.neutralFilter.label}
             className="mi-news-sentiment__neutral-filter"
-            onChange={(value) => props.onIncludeNeutralChange?.(value === 'all')}
+            onChange={(value) => props.onIncludeNeutralChange(value === 'all')}
             options={[
               { label: text.neutralFilter.all, value: 'all' },
               { label: text.neutralFilter.exclude, value: 'exclude' }
@@ -150,12 +151,11 @@ export function NewsSentimentCard(props: {
       ) : emptyState && !causeUnknown ? (
         <EmptyCause
           neverRanSourceIds={view?.readiness?.neverRanSourceIds ?? []}
-          onOpenSources={props.onOpenSources}
+          onEnableSources={props.onEnableSources}
           onRefresh={props.onRefresh}
           onRunSources={props.onRunSources}
           onWidenWindow={props.onWidenWindow}
           resolve={resolveStateReason}
-          resolveStateText={resolveStateText}
           state={emptyState}
           timeText={emptyState.lastKnownItemAt ? formatTime(emptyState.lastKnownItemAt, 'minute') : ''}
         />
@@ -168,9 +168,7 @@ export function NewsSentimentCard(props: {
         // of the two it is, or the reader cannot tell a quiet day from a broken card.
         <div className="mi-news-sentiment__state" data-news-sentiment-state="filtered-empty">
           <StateView
-            {...(props.onIncludeNeutralChange
-              ? { action: { labelKey: 'ui.state.action.clear-filter' as const, onSelect: () => props.onIncludeNeutralChange?.(true) } }
-              : {})}
+            action={{ labelKey: 'ui.state.action.clear-filter', onSelect: () => props.onIncludeNeutralChange(true) }}
             reasonCode="filtered-out"
             resolveText={resolveStateText}
             size="md"
@@ -230,10 +228,11 @@ export function NewsSentimentCard(props: {
 function EmptyCause(props: {
   state: import('./newsSentimentEmptyState').NewsSentimentEmptyState
   resolve: (key: string, params?: Record<string, string>) => string
-  onOpenSources?: () => void
-  onRunSources?: (sourceIds: readonly string[]) => void
+  /** Enables the four sources: the action `target-disabled` advertises. Always provided. */
+  onEnableSources: () => void
+  onRunSources: (sourceIds: readonly string[]) => void
   onRefresh: () => void
-  onWidenWindow?: () => void
+  onWidenWindow: () => void
   neverRanSourceIds: readonly string[]
   timeText: string
 }): React.ReactElement {
@@ -247,9 +246,7 @@ function EmptyCause(props: {
     case 'sources-disabled':
       return wrap(
         <StateView
-          {...(props.onOpenSources
-            ? { action: { labelKey: 'ui.state.action.open-settings' as const, onSelect: props.onOpenSources } }
-            : {})}
+          action={{ labelKey: 'ui.state.action.enable', onSelect: props.onEnableSources }}
           productReason={{ key: 'mi.newsSentiment.sources-disabled', resolve: (key, params) => props.resolve(key, params) }}
           reasonCode="target-disabled"
           resolveText={resolveStateText}
@@ -271,7 +268,7 @@ function EmptyCause(props: {
     case 'never-ran':
       return wrap(
         <StateView
-          action={{ labelKey: 'ui.state.action.run-now', onSelect: () => props.onRunSources?.(props.neverRanSourceIds) }}
+          action={{ labelKey: 'ui.state.action.run-now', onSelect: () => props.onRunSources(props.neverRanSourceIds) }}
           productReason={{ key: 'mi.newsSentiment.never-ran', resolve: (key, params) => props.resolve(key, params) }}
           reasonCode="never-ran"
           resolveText={resolveStateText}
@@ -282,7 +279,7 @@ function EmptyCause(props: {
     case 'stale':
       return wrap(
         <StateView
-          action={{ labelKey: 'ui.state.action.widen-time-window', onSelect: () => props.onWidenWindow?.() }}
+          action={{ labelKey: 'ui.state.action.widen-time-window', onSelect: props.onWidenWindow }}
           productReason={{
             key: 'mi.newsSentiment.stale',
             // Already formatted by the shell formatter; the entry takes strings, never a Date.
@@ -296,6 +293,7 @@ function EmptyCause(props: {
         />
       )
     case 'quiet':
+      // A quiet window is a fact, not a fault: no next step (the product rule, D2).
       return wrap(
         <StateView
           productReason={{ key: 'mi.newsSentiment.quiet', resolve: (key, params) => props.resolve(key, params) }}

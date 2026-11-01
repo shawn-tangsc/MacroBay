@@ -5,10 +5,13 @@ import { useStateViewText } from '@platform/ui/components/state/stateViewText'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { newsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
+import { NEWS_SENTIMENT_SOURCE_IDS } from '../../../../service/intelligence/schema/newsSentiment'
+import type { NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { NewsSentimentCard } from './NewsSentimentCard'
 import { NewsSentimentDrawer } from './NewsSentimentDrawer'
 import { NewsSentimentSettingsModal } from './NewsSentimentSettingsModal'
+import { openIntelligenceSourcesSettings } from '../../../shared/navigation/productShellNavigation'
 import { useNewsSentiment } from './useNewsSentiment'
 
 import './newsSentiment.css'
@@ -25,7 +28,10 @@ export function NewsSentimentFeature(props: {
   /** Opens the product's source settings: the "sources are off" empty state has nowhere else to go. */
   onOpenSources?: () => void
   /** Injected in tests; production reads the product's own source client. */
-  sourcesClient?: { runNow: (sourceId: string) => Promise<unknown> }
+  sourcesClient?: {
+    runNow: (sourceId: string) => Promise<unknown>
+    setEnabled?: (sourceId: string, enabled: boolean) => Promise<unknown>
+  }
   /** Publish the clicked item so the agent can start from that story. */
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
 }): React.ReactElement {
@@ -34,10 +40,25 @@ export function NewsSentimentFeature(props: {
   const now = props.now ?? (() => new Date())
   const state = useNewsSentiment({ client, now })
   const refresh = state.refresh
+  // The `older-than-window` state advertises "widen the time window"; this is that action, and it must
+  // really change the window (a plain re-read would leave the same emptiness on screen).
+  const WINDOW_ORDER: NewsSentimentWindow[] = ['1h', '4h', '24h', '7d', 'all']
+  const widenWindow = (): void => {
+    const next = WINDOW_ORDER[Math.min(WINDOW_ORDER.indexOf(state.window) + 1, WINDOW_ORDER.length - 1)]
+    if (next && next !== state.window) state.setWindow(next)
+  }
   // One click collects the named sources and re-reads. A collection that fails on one source must
   // not swallow the others, so the promises are settled independently.
   const runSources = (sourceIds: readonly string[]): void => {
     void Promise.allSettled(sourceIds.map((sourceId) => sourcesClient.runNow(sourceId))).then(() => refresh())
+  }
+  // "Enable" must enable: turn the four sources on, collect once so the card has something to show,
+  // then re-read. A button that only opened settings would be a different label, not this one.
+  const enableSources = (): void => {
+    if (typeof sourcesClient.setEnabled !== 'function') return
+    void Promise.allSettled(NEWS_SENTIMENT_SOURCE_IDS.map((sourceId) => sourcesClient.setEnabled!(sourceId, true)))
+      .then(() => Promise.allSettled(NEWS_SENTIMENT_SOURCE_IDS.map((sourceId) => sourcesClient.runNow(sourceId))))
+      .then(() => refresh())
   }
   // English is the source language for the feed, so the English UI has no translation surface.
   // Any future non-English UI language reuses the same controls and translates into that language.
@@ -57,9 +78,10 @@ export function NewsSentimentFeature(props: {
         loading={state.loading}
         onOpenAll={() => setDrawerOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenSources={props.onOpenSources}
+        onEnableSources={enableSources}
         onRefresh={state.refresh}
         onRunSources={runSources}
+        onWidenWindow={widenWindow}
         includeNeutral={state.filters.includeNeutral}
         onIncludeNeutralChange={(includeNeutral) => state.setFilters({ includeNeutral })}
         onSelectItem={(item) => { setFocusItemId(item.itemId); setDrawerOpen(true); props.onSelectContext?.(item) }}
