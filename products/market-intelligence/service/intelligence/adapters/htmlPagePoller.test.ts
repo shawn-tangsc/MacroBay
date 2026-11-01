@@ -13,6 +13,13 @@ import {
 } from './binanceAnnouncementsParser'
 import { htmlPagePollerAdapter } from './htmlPagePoller'
 
+// The application injects the platform's proxy-aware fetch at startup. Tests never reach the
+// network, so a stub stands in for it — the point is that the module boundary stays real and no
+// silent fallback to the global fetch can creep back in.
+vi.mock('@platform/network/platformFetch', () => ({
+  getPlatformFetch: () => (async () => new Response('', { status: 200 })) as unknown as typeof fetch
+}))
+
 vi.mock('@platform/jobs', async () => {
   const actual = await vi.importActual<typeof import('@platform/jobs')>('@platform/jobs')
   return {
