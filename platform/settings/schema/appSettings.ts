@@ -311,7 +311,6 @@ export function normalizeNotificationSettings(
   if (!value || typeof value !== 'object') return defaults
   const candidate = value as Partial<NotificationSettings>
   return {
-    centerEnabled: typeof candidate.centerEnabled === 'boolean' ? candidate.centerEnabled : defaults.centerEnabled,
     desktopEnabled: typeof candidate.desktopEnabled === 'boolean' ? candidate.desktopEnabled : defaults.desktopEnabled,
     toastEnabled: typeof candidate.toastEnabled === 'boolean' ? candidate.toastEnabled : defaults.toastEnabled,
     popupEnabled: typeof candidate.popupEnabled === 'boolean' ? candidate.popupEnabled : defaults.popupEnabled,

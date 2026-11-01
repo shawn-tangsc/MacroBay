@@ -98,7 +98,6 @@ export type NotificationUnreadState = {
 export type DesktopNotificationPermission = 'granted' | 'denied' | 'unknown'
 
 export type NotificationRuntimeSettings = {
-  centerEnabled: boolean
   desktopEnabled: boolean
   toastEnabled: boolean
   popupEnabled: boolean
@@ -128,7 +127,6 @@ export type NotificationRuntimeSettings = {
 
 export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeSettings {
   return {
-    centerEnabled: true,
     desktopEnabled: true,
     toastEnabled: true,
     popupEnabled: true,

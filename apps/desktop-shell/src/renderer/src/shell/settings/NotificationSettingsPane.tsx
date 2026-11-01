@@ -8,15 +8,14 @@ import type { PlatformText } from '../../i18n/platformText'
 
 type NotificationToggleKey = keyof Pick<
   NotificationSettings,
-  'centerEnabled' | 'desktopEnabled' | 'toastEnabled' | 'popupEnabled'
+  'desktopEnabled' | 'toastEnabled' | 'popupEnabled'
 >
 
 const notificationToggleRows: Array<{
   key: NotificationToggleKey
-  titleKey: 'centerEnabled' | 'desktopEnabled' | 'toastEnabled' | 'popupEnabled'
-  descriptionKey: 'centerDescription' | 'desktopDescription' | 'toastDescription' | 'popupDescription'
+  titleKey: 'desktopEnabled' | 'toastEnabled' | 'popupEnabled'
+  descriptionKey: 'desktopDescription' | 'toastDescription' | 'popupDescription'
 }> = [
-  { key: 'centerEnabled', titleKey: 'centerEnabled', descriptionKey: 'centerDescription' },
   { key: 'toastEnabled', titleKey: 'toastEnabled', descriptionKey: 'toastDescription' },
   { key: 'desktopEnabled', titleKey: 'desktopEnabled', descriptionKey: 'desktopDescription' },
   { key: 'popupEnabled', titleKey: 'popupEnabled', descriptionKey: 'popupDescription' }

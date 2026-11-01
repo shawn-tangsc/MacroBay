@@ -41,7 +41,6 @@ export function getNotificationRuntime() {
       getSettings: () =>
         getNotificationSettings?.() ??
         Promise.resolve({
-          centerEnabled: true,
           desktopEnabled: true,
           toastEnabled: true,
           popupEnabled: true,

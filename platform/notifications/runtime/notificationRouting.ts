@@ -102,7 +102,9 @@ export function normalizeRequestedChannels(
     : ['center', ...request.requestedChannels]
 
   const filtered = requested.filter((channel): channel is NotificationChannel => {
-    if (channel === 'center') return settings.centerEnabled
+    // 通知中心常开：它不是用户能关的开关。能关就等于「发不出去也不留一条」（4a 的唯一用途）。
+    // 用户不想看，用标已读/清空处理——那是「现在没空看」，不是「别给我存」。
+    if (channel === 'center') return true
     if (!isProductNotificationAllowed(request, settings)) return channel === 'center'
     if (channel === 'toast') return settings.toastEnabled && hasProductChannelPermission(request, settings, 'toast')
     if (channel === 'popup') return settings.popupEnabled && hasProductChannelPermission(request, settings, 'popup')

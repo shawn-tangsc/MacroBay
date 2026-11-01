@@ -4,7 +4,6 @@ import type { NotificationRuntimeSettings, NotificationRequest } from '../contra
 import { createNotificationRuntime, type NotificationStorage } from './notificationRuntime'
 
 const settings: NotificationRuntimeSettings = {
-  centerEnabled: true,
   desktopEnabled: true,
   toastEnabled: true,
   popupEnabled: true,

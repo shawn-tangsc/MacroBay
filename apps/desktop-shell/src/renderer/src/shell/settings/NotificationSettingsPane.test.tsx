@@ -49,7 +49,8 @@ describe('notification settings availability', () => {
     const switches = [...container.querySelectorAll('.notification-channel-switch')]
 
     expect(container.textContent).toContain(labels.unavailableNotice)
-    expect(switches).toHaveLength(4)
+    // 通知中心常开、已从设置页移除：只剩三个投递开关。
+    expect(switches).toHaveLength(3)
     expect(switches.every((control) => (control as HTMLButtonElement).disabled)).toBe(true)
   })
 
@@ -62,7 +63,7 @@ describe('notification settings availability', () => {
     const badgeCount = [...container.querySelectorAll('.ant-tag')].filter(
       (tag) => tag.textContent === labels.unavailableBadge
     ).length
-    expect(badgeCount).toBe(notificationProducerWired ? 0 : 4)
+    expect(badgeCount).toBe(notificationProducerWired ? 0 : 3)
   })
 })
 

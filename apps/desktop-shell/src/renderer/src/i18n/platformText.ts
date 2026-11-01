@@ -997,8 +997,6 @@ export type PlatformText = {
     scopeNote: string
     unavailableNotice: string
     unavailableBadge: string
-    centerEnabled: string
-    centerDescription: string
     desktopEnabled: string
     desktopDescription: string
     toastEnabled: string
@@ -2059,8 +2057,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
       unavailableNotice: '通知暂未启用：平台目前还没有产生通知的来源，这些开关不会有任何效果。接到第一个真实来源后重新启用。',
       unavailableBadge: '未启用',
-      centerEnabled: '通知中心',
-      centerDescription: '保留所有通知记录，便于回看系统消息与任务结果。',
       desktopEnabled: '桌面通知',
       desktopDescription: '通过系统桌面通知提醒你，不要求应用当前保持在前台。',
       toastEnabled: '应用内提示',
@@ -3139,8 +3135,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       unavailableNotice:
         'Notifications are not available yet: nothing in the platform produces one right now, so these switches have no effect. They turn on with the first real source.',
       unavailableBadge: 'Not available',
-      centerEnabled: 'Notification center',
-      centerDescription: 'Keep an in-app record of notifications so results and system messages can be reviewed later.',
       desktopEnabled: 'Desktop notifications',
       desktopDescription: 'Use system notifications even when the app is not the active window.',
       toastEnabled: 'In-app toasts',
