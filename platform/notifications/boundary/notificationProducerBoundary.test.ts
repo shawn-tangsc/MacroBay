@@ -59,6 +59,9 @@ describe('notification producer boundary', () => {
     // notification, bypassing dedupe, quiet hours and product permissions.
     expect(exposed).toEqual([
       'acknowledge',
+      // 删除已读是**数据操作**，不是生产者：它只能删掉已存在的记录，不能凭空造一条；
+      // 「渲染层不许成为通知来源」这条判据没有被它放宽。
+      'deleteRead',
       'dismiss',
       'getUnreadState',
       'list',
