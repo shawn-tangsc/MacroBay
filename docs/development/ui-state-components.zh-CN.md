@@ -70,6 +70,8 @@ import { StateView } from '@platform/ui/components/state'
 | `empty` | `none-installed` | 必填：安装 / 绑定 / 打开设置，按站点选一种恢复方式 | 这里从来没有装过或绑定过；读者自己能解决。 |
 | `empty` | `no-target-selected` | 必填：聚焦选择区 | 目标可以挑，但还没选。 |
 | `empty` | `not-yet` | 不许有 | 等事情发生之后才会出现。 |
+| `empty` | `older-than-window` | 必填：查看全部 | 有数据，但都在这段窗口之外——这是「查过了，有」，不是「还没到」。 |
+| `empty` | `nothing-in-window` | 必填：查看全部 | 这段窗口里确实什么都没有——这是「查过了，没有」，不许用 `not-yet` 顶替。 |
 | `error` | `unreadable` | 必填：重试 | 没读出来，不是「没有」。 |
 | `error` | `unavailable` | 必填：检查来源 | 数据源本身不可用，盲目重试没有意义。 |
 | `error` | `operation-failed` | 必填：重试 | 写操作（创建、保存、更新、删除）没成功——不是读失败。 |

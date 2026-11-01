@@ -1289,6 +1289,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.empty.reason.none-installed': '你还没有添加过任何一项',
       'ui.state.empty.reason.no-target-selected': '还没有选中一个目标，先选一个',
       'ui.state.empty.reason.not-yet': '还没有发生过；等有数据进来后这里就会出现',
+      'ui.state.empty.reason.older-than-window': '有数据，但都在这段时间之外；可以查看全部',
+      'ui.state.empty.reason.nothing-in-window': '这段时间里确实没有记录；可以查看全部',
       'ui.state.error': '读取失败',
       'ui.state.error.reason.unreadable': '数据没有读出来，可以重试',
       'ui.state.error.reason.unavailable': '数据源本身不可用，先检查来源设置',
@@ -1313,6 +1315,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.select-target': '选择目标',
       'ui.state.action.restart-app': '重启应用',
       'ui.state.action.open-system-settings': '去系统设置',
+      'ui.state.action.widen-window': '查看全部',
     },
     windowChrome: {
       controls: '窗口控制',
@@ -2384,6 +2387,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.empty.reason.none-installed': 'You have not added any yet',
       'ui.state.empty.reason.no-target-selected': 'No target is selected yet — pick one',
       'ui.state.empty.reason.not-yet': 'This has not happened yet; it appears here once data arrives',
+      'ui.state.empty.reason.older-than-window': 'There is data, but all of it is outside this window; view all to see it',
+      'ui.state.empty.reason.nothing-in-window': 'There really are no records in this window; view all to check',
       'ui.state.error': 'Could not read',
       'ui.state.error.reason.unreadable': 'The data could not be read — you can retry',
       'ui.state.error.reason.unavailable': 'The data source itself is unavailable — check the source settings',
@@ -2408,6 +2413,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.select-target': 'Choose a target',
       'ui.state.action.restart-app': 'Restart the app',
       'ui.state.action.open-system-settings': 'Open system settings',
+      'ui.state.action.widen-window': 'View all',
     },
     windowChrome: {
       controls: 'Window controls',

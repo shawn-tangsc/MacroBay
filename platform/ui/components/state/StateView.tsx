@@ -46,6 +46,8 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.empty.reason.none-installed',
   'ui.state.empty.reason.no-target-selected',
   'ui.state.empty.reason.not-yet',
+  'ui.state.empty.reason.older-than-window',
+  'ui.state.empty.reason.nothing-in-window',
   'ui.state.error',
   'ui.state.error.reason.unreadable',
   'ui.state.error.reason.unavailable',
@@ -69,7 +71,8 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.open-settings',
   'ui.state.action.select-target',
   'ui.state.action.restart-app',
-  'ui.state.action.open-system-settings'
+  'ui.state.action.open-system-settings',
+  'ui.state.action.widen-window'
 ] as const
 
 export type StateViewTextKey = (typeof STATE_VIEW_TEXT_KEYS)[number]
@@ -96,6 +99,9 @@ export type EmptyReasonCode =
   | 'none-installed'
   | 'no-target-selected'
   | 'not-yet'
+  // 「有数据，但都在窗口之外」与「这段确实没有」是两句话：都不能用 `not-yet`（那是「还没到」）顶替。
+  | 'older-than-window'
+  | 'nothing-in-window'
 
 export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart'
 export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
@@ -117,6 +123,8 @@ export type StateViewProps =
   | (StateViewBase & { state: 'empty'; reasonCode: 'none-installed'; action: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-selected'; action: StateViewAction })
   | (StateViewBase & { state: 'empty'; reasonCode: 'not-yet'; action?: never })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'older-than-window'; action: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-in-window'; action: StateViewAction })
   | (StateViewBase & { state: 'error'; reasonCode: 'unreadable'; action: StateViewAction; details?: StateDetails })
   | (StateViewBase & { state: 'error'; reasonCode: 'unavailable'; action: StateViewAction; details?: StateDetails })
   | (StateViewBase & {

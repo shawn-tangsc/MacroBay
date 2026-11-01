@@ -72,6 +72,8 @@ The reason codes are a closed set. The action column is enforced by the type, no
 | `empty` | `none-installed` | required: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
 | `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | never | It only appears once something has happened. |
+| `empty` | `older-than-window` | required: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
+| `empty` | `nothing-in-window` | required: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
 | `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
 | `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
 | `error` | `operation-failed` | required: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
