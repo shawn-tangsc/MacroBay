@@ -18,7 +18,7 @@
   "platform/ai/assistant-platform/repositories/messageRepository.ts": 532,
   "platform/ai/assistant-platform/runtime/AssistantChatRuntimeService.ts": 614,
   "platform/ai/providers/providerStore.ts": 1341,
-  "platform/desktop/main/app.ts": 2785,
+  "platform/desktop/main/app.ts": 2627,
   "platform/desktop/main/claudeCodeRuntimeDependencies.ts": 2265,
   "platform/desktop/main/workspace/panelDetachedWindowHost.ts": 602,
   "platform/desktop/main/workspace/panelWorkspaceTransferOrchestrator.ts": 559,

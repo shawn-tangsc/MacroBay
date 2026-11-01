@@ -15,6 +15,8 @@ function readSource(relativePath: string): string {
 }
 
 const appSource = readSource('app.ts')
+// 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
+const windowIpcSource = readSource('ipc/windowIpc.ts')
 
 /**
  * 顺序断言用的比较：先把两端空白折叠成单空格再比。
@@ -573,8 +575,8 @@ describe('desktop main IPC surface', () => {
       'modelProvidersGenerateImage'
     ])
     // Clipboard pixels are an attachment write path, not a generated-image read path.
-    expect(appSource).toContain('IpcChannels.appSaveClipboardImage')
-    expect(appSource).toContain("app.getPath('temp')")
+    expect(windowIpcSource).toContain('IpcChannels.appSaveClipboardImage')
+    expect(windowIpcSource).toContain("app.getPath('temp')")
   })
 
   it('runs the comparison probe only inside the on-demand self-test', () => {
@@ -592,10 +594,10 @@ describe('desktop main IPC surface', () => {
 
   it('keeps the attachment text preview on its existing channel but reads it from platform/files', () => {
     // 附件读取归位后只剩这一条接缝：通道不变，preload 不变，实现改由 platform/files/attachments 提供。
-    expect(appSource).toContain(
-      "import { readTextFilePreview } from '../../files/attachments/textFilePreview'"
+    expect(windowIpcSource).toContain(
+      "import { readTextFilePreview } from '../../../files/attachments/textFilePreview'"
     )
-    expect(appSource).toContain(
+    expect(windowIpcSource).toContain(
       'ipcMain.handle(IpcChannels.appReadTextFile, async (_event: IpcMainInvokeEvent, path: string) => readTextFilePreview(path))'
     )
     expect(preloadSource).toContain(
@@ -604,6 +606,8 @@ describe('desktop main IPC surface', () => {
     // 实现只留一份：启动文件里不允许再长出第二个读取实现或第二个 128 KiB 上限。
     expect(appSource).not.toContain('TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024')
     expect(appSource).not.toContain('function isLikelyBinary')
+    expect(windowIpcSource).not.toContain('TEXT_FILE_READ_LIMIT_BYTES = 128 * 1024')
+    expect(windowIpcSource).not.toContain('function isLikelyBinary')
   })
 
   it('wires the PLAT-82 detection channels end to end (memory-only, no writes)', () => {
