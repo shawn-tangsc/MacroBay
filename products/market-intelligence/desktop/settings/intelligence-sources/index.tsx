@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Segmented } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 
@@ -82,8 +83,14 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
   return (
     <section className="settings-workspace intelligence-sources-workspace">
       <div className="intelligence-sources-view-switch">
-        <button aria-pressed={view === 'sources'} className={view === 'sources' ? 'is-active' : undefined} onClick={() => setView('sources')} type="button">{t.viewSources}</button>
-        <button aria-pressed={view === 'runs'} className={view === 'runs' ? 'is-active' : undefined} onClick={() => setView('runs')} type="button">{t.viewRuns}</button>
+        {/* One radio group: Tab enters it once, the arrow keys move between the two views. */}
+        <Segmented
+          aria-label={t.title}
+          onChange={(value) => setView(value as 'sources' | 'runs')}
+          options={[{ label: t.viewSources, value: 'sources' }, { label: t.viewRuns, value: 'runs' }]}
+          size="small"
+          value={view}
+        />
       </div>
       {view === 'runs' ? <div className="intelligence-sources-view-body"><SyncRunSection
         knownSources={knownSources}

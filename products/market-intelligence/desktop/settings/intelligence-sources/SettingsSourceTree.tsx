@@ -1,3 +1,4 @@
+import { Segmented } from 'antd'
 import { ChevronRight } from 'lucide-react'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
@@ -33,15 +34,14 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
   view?: SettingsView
 }): React.ReactElement {
   return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
-    <div className="intelligence-catalog-filters" role="tablist">
-      {filterOrder.map((item) => <button
-        aria-selected={item === filter}
-        className={`intelligence-catalog-filter${item === filter ? ' selected' : ''}`}
-        key={item}
-        role="tab"
-        type="button"
-        onClick={() => onFilterChange(item)}
-      >{labels.filters[item]}</button>)}
+    <div className="intelligence-catalog-filters">
+      {/* One radio group for the five filters: one Tab stop, arrow keys inside, no hand-rolled tabs. */}
+      <Segmented
+        onChange={(value) => onFilterChange(value as SourceFilter)}
+        options={filterOrder.map((item) => ({ label: labels.filters[item], value: item }))}
+        size="small"
+        value={filter}
+      />
     </div>
     <div className="intelligence-catalog-list">
       {(view?.groups ?? []).map((group) => {
