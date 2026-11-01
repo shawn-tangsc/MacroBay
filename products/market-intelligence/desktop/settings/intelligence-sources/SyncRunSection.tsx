@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { Button } from 'antd'
+import { Button, Tooltip } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -195,8 +195,12 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
         <span className="mi-sync-run__task" role="cell" title={taskLabelOf(row)}>{taskLabelOf(row)}</span>
-        <span className="mi-sync-run__source" role="cell" title={row.sources.map(sourceLabelOf).join(text.joiner)}>
-          {row.sources.length === 0 ? <span title={text.noSourceHint}>{text.allSourcesNote}</span> : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
+        <span className="mi-sync-run__source" role="cell">
+          {row.sources.length === 0
+            ? <Tooltip title={text.noSourceHint}><span className="mi-sync-run__hint" tabIndex={0}>{text.allSourcesNote}</span></Tooltip>
+            : <Tooltip title={row.sources.map(sourceLabelOf).join(text.joiner)}>
+              <span className="mi-sync-run__hint" tabIndex={0}>{row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}</span>
+            </Tooltip>}
           {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
