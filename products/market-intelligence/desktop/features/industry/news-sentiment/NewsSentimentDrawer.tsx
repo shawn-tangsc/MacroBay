@@ -5,6 +5,7 @@ import { MoreVertical } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
+import type { StateViewTextKey } from '@platform/ui/components/state/StateView'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
@@ -44,7 +45,7 @@ export function NewsSentimentDrawer(props: {
   translationEnabled?: boolean
   onSelectContext?: (item: import('../../../../service/intelligence/news-sentiment/newsSentimentQuery').NewsSentimentItemView) => void
   /** Resolves the platform `ui.state.*` keys StateView prints; supplied by the feature. */
-  resolveStateText: (key: string) => string
+  resolveStateText: (key: StateViewTextKey) => string
 }): React.ReactElement {
   const { text, view } = props
   const translationEnabled = props.translationEnabled !== false
@@ -65,7 +66,12 @@ export function NewsSentimentDrawer(props: {
 
   // "No rows" is two different facts: the reader's own filters cut everything, or the window is
   // simply quiet. The first one has an action, the second one does not.
-  const filtered = props.filters.direction !== 'all' || props.filters.sourceId !== 'all' || props.filters.scope !== 'market'
+  // All four filter dimensions count: dropping neutral rows is still the reader's own filter, and
+  // calling that "nothing here yet" both misreads the day and hides the way back.
+  const filtered = props.filters.direction !== 'all'
+    || props.filters.sourceId !== 'all'
+    || props.filters.scope !== 'market'
+    || props.filters.includeNeutral === false
 
   const rows = useMemo(() => filterNewsSentimentRows(view, props.filters), [view, props.filters])
   const activeId = selectedId && rows.some((row) => row.itemId === selectedId) ? selectedId : rows[0]?.itemId
@@ -276,7 +282,7 @@ export function NewsSentimentDrawer(props: {
             {props.failed ? (
               <StateView
                 action={{ labelKey: 'ui.state.action.retry', onSelect: props.onRefresh }}
-                reasonCode="unavailable"
+                reasonCode="unreadable"
                 resolveText={props.resolveStateText}
                 size="md"
                 state="error"
@@ -422,9 +428,7 @@ export function NewsSentimentDrawer(props: {
               </>
             ) : props.loading ? (
               <LoadingState label={text.loading} minHeight={160} />
-            ) : (
-              <StateView reasonCode="not-yet" resolveText={props.resolveStateText} size="md" state="empty" />
-            )}
+            ) : null}
           </aside>
         </div>
         {translationEnabled && contextMenu ? (

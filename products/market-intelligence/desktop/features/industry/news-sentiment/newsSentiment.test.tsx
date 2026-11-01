@@ -209,6 +209,28 @@ describe('NewsSentimentFeature', () => {
   // item" and never says the row opens anything. The list item is the wrapper; the button is inside.
   // The drawer used to print its own two sentences for "read failed" and "nothing here". Both are
   // state, not copy: the platform sentence and its action come from StateView.
+  // Dropping neutral rows is the reader's own filter. Saying "nothing here yet" both misreads the
+  // day and hides the way back; and the list must be the only empty surface on that screen.
+  it('treats a neutral-only window filtered out as a filter, with one empty state on screen', async () => {
+    const neutralOnly = { ...VIEW, items: [{ ...VIEW.items[0]!, itemId: 'item-neutral', polarity: 'neutral' as const }] }
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => neutralOnly) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const exclude = [...container.querySelectorAll<HTMLElement>('.mi-news-sentiment__neutral-filter label')]
+      .find((label) => label.textContent?.includes(text.neutralFilter.exclude))
+    await act(async () => { exclude?.click() })
+    await act(async () => {})
+
+    const states = document.body.querySelectorAll('.state-view')
+    expect(states).toHaveLength(1)
+    const state = document.body.querySelector('.state-view--empty')
+    expect(state).not.toBeNull()
+    expect(state?.querySelector('button')).not.toBeNull()
+  })
+
   it('renders the drawer failure as an error state with a retry action', async () => {
     const container = await mount(
       <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => { throw new Error('boom') }) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
