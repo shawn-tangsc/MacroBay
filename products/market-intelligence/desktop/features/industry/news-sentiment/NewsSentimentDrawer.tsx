@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Drawer, Segmented, Select } from 'antd'
+import { MoreVertical } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -49,6 +51,12 @@ export function NewsSentimentDrawer(props: {
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
   const contextMenuRef = useRef<HTMLDivElement>(null)
+  // IconButton takes keys, not sentences: the row's more trigger keeps its label in this map.
+  const iconLabelText: Record<string, string> = { 'news.sentiment.more': text.drawer.moreActions }
+  const resolveIconText = (key: string): string => iconLabelText[key] ?? key
+  const openContextMenu = (itemId: string, x: number, y: number): void => {
+    setContextMenu({ itemId, x: Math.min(x, window.innerWidth - 160), y: Math.min(y, window.innerHeight - 80) })
+  }
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
 
@@ -263,15 +271,17 @@ export function NewsSentimentDrawer(props: {
             {rows.map((row) => {
               const rowState = translationStates[row.itemId] ?? row.bodyTranslationState ?? 'missing'
               return (
-              <button
-                aria-current={row.itemId === activeId}
+              <div
                 className={`mi-news-drawer__row${row.itemId === activeId ? ' is-selected' : ''}`}
                 key={row.itemId}
-                onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
-                onContextMenu={translationEnabled ? (event) => { event.preventDefault(); setContextMenu({ itemId: row.itemId, x: Math.min(event.clientX, window.innerWidth - 160), y: Math.min(event.clientY, window.innerHeight - 80) }) } : undefined}
                 role="listitem"
+              >
+              <button
+                aria-current={row.itemId === activeId}
+                className="mi-news-drawer__row-open"
+                onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
+                onContextMenu={translationEnabled ? (event) => { event.preventDefault(); openContextMenu(row.itemId, event.clientX, event.clientY) } : undefined}
                 type="button"
-                title={translationEnabled ? text.drawer.translationStatus?.contextMenu : undefined}
               >
                 <span className="mi-news-drawer__row-top">
                   <time>{formatTime(row.publishedAt, 'minute')}</time>
@@ -296,6 +306,20 @@ export function NewsSentimentDrawer(props: {
                 </span>
                 <span className="mi-news-drawer__title">{translatedTitles[row.itemId] ?? row.displayTitle ?? row.title}</span>
               </button>
+              {translationEnabled ? (
+                <IconButton
+                  ariaLabelKey="news.sentiment.more"
+                  icon={MoreVertical}
+                  onSelect={() => {
+                    const rect = (document.activeElement as HTMLElement | null)?.getBoundingClientRect()
+                    openContextMenu(row.itemId, rect?.left ?? 0, (rect?.bottom ?? 0) + 4)
+                  }}
+                  resolveText={resolveIconText}
+                  size="sm"
+                  tooltipKey="news.sentiment.more"
+                />
+              ) : null}
+              </div>
               )
             })}
 

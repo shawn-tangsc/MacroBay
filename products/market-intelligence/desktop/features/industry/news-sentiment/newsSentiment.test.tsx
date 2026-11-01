@@ -182,9 +182,30 @@ describe('NewsSentimentFeature', () => {
     await act(async () => { open?.click() })
     await act(async () => {})
     expect(document.body.textContent).toContain('Binance Will Delist XYZ Perpetual')
-    expect(document.body.querySelectorAll('.mi-news-drawer__row')).toHaveLength(2)
+    expect(document.body.querySelectorAll('.mi-news-drawer__row-open')).toHaveLength(2)
   })
 
+
+  // A button carrying role="listitem" loses its button semantics: a screen reader announces "list
+  // item" and never says the row opens anything. The list item is the wrapper; the button is inside.
+  it('keeps the row a list item and the button inside it, with a more trigger', async () => {
+    const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const items = [...document.body.querySelectorAll('[role="listitem"]')]
+    expect(items).toHaveLength(2)
+    for (const item of items) {
+      expect(item.tagName).not.toBe('BUTTON')
+      expect(item.querySelector('button.mi-news-drawer__row-open')).not.toBeNull()
+    }
+
+    const more = document.body.querySelector<HTMLButtonElement>(`button[aria-label="${text.drawer.moreActions}"]`)
+    expect(more).not.toBeNull()
+    await act(async () => { more?.click() })
+    await act(async () => {})
+    expect(document.body.querySelector('[role="menu"]')).not.toBeNull()
+  })
 
   it('switches the detail when another row is clicked', async () => {
     const getItem = vi.fn(async (input: { itemId: string }) => {
@@ -195,7 +216,7 @@ describe('NewsSentimentFeature', () => {
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
     await act(async () => { open?.click() })
     await act(async () => {})
-    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row')]
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
     await act(async () => { rows[1]?.click() })
     await act(async () => {})
     expect(document.body.querySelector('.mi-news-drawer__detail h3')?.textContent).toContain('Binance Will Delist XYZ Perpetual')
@@ -212,7 +233,7 @@ describe('NewsSentimentFeature', () => {
     const cardItems = [...container.querySelectorAll<HTMLButtonElement>('.mi-news-sentiment__drivers button')]
     await act(async () => { cardItems[1]?.click() })
     await act(async () => {})
-    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row')]
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
     await act(async () => { rows[0]?.click() })
     await act(async () => {})
     expect(document.body.querySelector('.mi-news-drawer__detail h3')?.textContent).toContain('SEC Approves Spot Ethereum ETF Options')
@@ -232,7 +253,7 @@ describe('NewsSentimentFeature', () => {
     await act(async () => { open?.click() })
     await act(async () => {})
     expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent).toContain('body:item-a')
-    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row')]
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
     await act(async () => { rows[1]?.click() })
     await act(async () => {})
     const body = document.body.querySelector('.mi-news-drawer__bodytext')?.textContent ?? ''
