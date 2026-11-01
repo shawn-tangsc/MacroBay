@@ -73,8 +73,6 @@ import { McpRuntimeService } from '../../ai/agent-platform/mcp'
 import { mergeAgentRuntimeSessionState, reconcileStalePendingMessages, type AgentStoreState } from '../../ai/agent-platform/store/agentStore'
 import { createAgentPlatformDatabase } from '../../ai/agent-platform/db/createAgentPlatformDatabase'
 import { createAssistantPlatformDatabase } from '../../ai/assistant-platform/db/createAssistantPlatformDatabase'
-import { registerAssistantSessionRetentionJob } from '../../ai/assistant-platform/retention/registerAssistantSessionRetentionJob'
-import { createRetentionRepository } from '../../ai/assistant-platform/repositories/retentionRepository'
 import { createAssistantPlatformRepositories } from '../../ai/assistant-platform/repositories/createAssistantPlatformRepositories'
 import { createAssistantChatRuntimeService } from '../../ai/assistant-platform/runtime/AssistantChatRuntimeService'
 import { createWebSearchCredentialStore } from '../../ai/web-search/runtime/WebSearchCredentialStore'
@@ -167,13 +165,13 @@ import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
+import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
 import { configureNotificationRuntime, getNotificationRuntime } from '../../notifications/ipc/registerNotificationIpc'
-import { registerNotificationRetentionJob } from '../../notifications/jobs/notificationRetentionJob'
 import { registerEventBusIpcHandlers } from '../../message-bus/ipc/eventBusIpcHandlers'
 import { getEventBusRuntime } from '../../message-bus/ipc/registerEventBusIpc'
 import { buildAppMenu } from '../menu/appMenu'
@@ -2447,12 +2445,6 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   const jobRuntime = createJobRuntime({ store: jobRunStore })
   jobRuntimeForDisposal = jobRuntime
   jobRuntime.recover()
-  registerAssistantSessionRetentionJob(jobRuntime, { repo: createRetentionRepository(assistantDatabase) })
-  // 保留期清理挂在同一个任务运行时上；owner 是 platform，用户在任务表里能认出它是平台项。
-  registerNotificationRetentionJob(jobRuntime, {
-    runtime: () => getNotificationRuntime(),
-    timeZone: () => shellTimeZone.get()
-  })
   const jobRunQueryService = createJobRunQueryService({ runtime: jobRuntime })
   const jobScheduleQueryService = createJobScheduleQueryService({ runtime: jobRuntime })
   agentTaskJobBridge = createAgentTaskJobBridge({ jobRuntime })
@@ -2496,6 +2488,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     jobScheduleQueryService,
     refreshBuiltinSeedCopy
   )
+  registerPlatformRetentionJobs({ jobRuntime, assistantDatabase, notificationRuntime: getNotificationRuntime(), timeZone: () => shellTimeZone.get() })
 
   if (!productAcceptanceProfile.enabled) app.on('second-instance', () => {
     const window = getMainWindow()
