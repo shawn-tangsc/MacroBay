@@ -167,6 +167,7 @@ import { IpcChannels } from '../ipc/channels'
 import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagementContracts'
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
+import { runProductBootstrap } from './productBootstrap'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
 import { createJobRunQueryService, createJobRunSqliteStore, createJobRuntime, createJobScheduleQueryService, scheduleJobRunRetention, type JobRuntime } from '../../jobs'
 import { registerNotificationIpcHandlers } from '../../notifications/ipc/notificationIpcHandlers'
@@ -2586,51 +2587,61 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onRejectedProxyConfig: (reason) => appLog.log('warn', 'app.proxy.invalid-config', { reason })
   })
 
-  try {
-    if (!taskAutomationSmokeProfile.enabled) await options.registerProductServices?.({
-      register: productIpcRegistry.register,
-      jobRuntime,
-      eventBusRuntime: getEventBusRuntime(),
-      getProviderState: providerStore.getState,
-      getAppLanguage: async () => {
-        const settings = await settingsStore.get()
-        return settings.language
-      },
-      getModelDefaults: async () => (await settingsStore.get()).modelDefaults,
-      getNetworkSettings: async () => {
-        const settings = await settingsStore.get()
-        return settings.network
-      },
-      // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
-      getTimeZone: () => shellTimeZone.get(),
-      platformFetch: getPlatformFetch(),
-      secretVault: providerSecretVault,
-      registerProductAgentToolHandler,
-      registerProductCache,
-      registerProductDisposer: productServiceDisposerRegistry.register,
-      getAgentState: () => agentStore.getState(),
-      createAgentSession: (input) => agentServices.sessions.create(input),
-      sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
-      cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
-      appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
-      updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
-      deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
-      updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
-      isWebSearchProviderReady: isAgentWebSearchProviderReady,
-      invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
-      invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
-    })
-    const productIpcMethods = productIpcRegistry.seal(expectedProductIpcMethods(productManifests))
-    if (productAcceptanceProfile.enabled) {
-      reportProductAcceptanceRegistration({
-        productIds: productManifests.map((manifest) => manifest.id),
-        productIpcMethodCount: productIpcMethods.length
-      })
-    }
-  } catch {
-    productIpcRegistry.markUnavailable()
-    return
-  }
+  // 产品注册 → 封口 IPC 面 → 验收报告。失败必须先留下具名日志再降级：这条路径以前是裸 `catch {}`，
+  // 一次「产品清单少声明一条路由」就让窗口停在空白页，日志里一个字都没有，用户只能从白屏反推。
+  const productBootstrap = await runProductBootstrap(
+    {
+      registerProductServices: taskAutomationSmokeProfile.enabled
+        ? undefined
+        : async () => {
+            await options.registerProductServices?.({
+              register: productIpcRegistry.register,
+              jobRuntime,
+              eventBusRuntime: getEventBusRuntime(),
+              getProviderState: providerStore.getState,
+              getAppLanguage: async () => {
+                const settings = await settingsStore.get()
+                return settings.language
+              },
+              getModelDefaults: async () => (await settingsStore.get()).modelDefaults,
+              getNetworkSettings: async () => {
+                const settings = await settingsStore.get()
+                return settings.network
+              },
+              // 产品侧的「读者时区」也取自同一个提供者：日报的今天、日历月份都跟设置走。
+              getTimeZone: () => shellTimeZone.get(),
+              platformFetch: getPlatformFetch(),
+              secretVault: providerSecretVault,
+              registerProductAgentToolHandler,
+              registerProductCache,
+              registerProductDisposer: productServiceDisposerRegistry.register,
+              getAgentState: () => agentStore.getState(),
+              createAgentSession: (input) => agentServices.sessions.create(input),
+              sendAgentMessage: (request) => agentRuntimeService.sendMessage(request),
+              cancelAgentSession: (sessionId) => { agentRuntimeService.cancelSession(sessionId, { kind: 'runtime-stop', message: 'daily-brief-deadline' }) },
+              appendAgentSessionMessages: (input) => agentServices.messages.saveMessages(input),
+              updateAgentSession: (sessionId, patch) => agentServices.sessions.update(sessionId, patch),
+              deleteAgentSessions: (sessionIds: string[]) => agentServices.sessions.deleteByIds(sessionIds),
+              updateAgent: (agentId: string, patch) => agentServices.agents.update(agentId, patch),
+              isWebSearchProviderReady: isAgentWebSearchProviderReady,
+              invokeProductAgentTool: (state, input) => productAgentToolRuntimeService.invokeTool(state, input),
+              invokeProductIpc: (productId, method, payload) => productIpcRegistry.invoke(productId, method, payload),
+            })
+          },
+      sealIpcSurface: () => productIpcRegistry.seal(expectedProductIpcMethods(productManifests)),
+      reportAcceptance: productAcceptanceProfile.enabled
+        ? (productIpcMethods) => {
+            reportProductAcceptanceRegistration({
+              productIds: productManifests.map((manifest) => manifest.id),
+              productIpcMethodCount: productIpcMethods.length
+            })
+          }
+        : undefined
+    },
+    { log: appLog, markUnavailable: () => productIpcRegistry.markUnavailable() }
+  )
+  // 日志里已经有 `product-bootstrap-failed` + 阶段 + 原因；这里只负责停止启动。
+  if (productBootstrap === 'failed') return
 
   reportPanelWorkspaceStart({ report: await panelWorkspace.start() }) // P1-06h N4：恢复/降级原因必须运行期可观测，启动顺序与 fail-closed 语义不变
   panelWorkspaceForDisposal = panelWorkspace
