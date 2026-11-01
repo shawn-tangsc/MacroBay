@@ -407,8 +407,8 @@ describe('daily briefing document', () => {
       }),
       date: '2026-10-30'
     })
-    expect(document.data.market.find((row) => row.id === 'btc')).toMatchObject({ state: 'stale', reason: 'stale-fallback', value: { number: -0.43, format: 'percent' } })
-    expect(document.data.market.find((row) => row.id === 'eth')).toMatchObject({ state: 'stale', value: { number: -1.21, format: 'percent' } })
+    expect(document.data.market.find((row) => row.id === 'btc')).toMatchObject({ state: 'stale', reason: 'stale-fallback', value: { number: -0.43, format: 'percent' }, valueBasis: 'curve' })
+    expect(document.data.market.find((row) => row.id === 'eth')).toMatchObject({ state: 'stale', value: { number: -1.21, format: 'percent' }, valueBasis: 'curve' })
   })
 
   it('keeps all same-release candidates for the agent to choose', () => {

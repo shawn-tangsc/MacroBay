@@ -11,6 +11,8 @@ export type DailyBriefingMarkdownLabels = Readonly<{
   sections: Readonly<{ news: string; data: string; conclusion: string; basis: string; next: string }>
   tiers: Readonly<{ must: string; support: string; reference: string }>
   states: Readonly<Record<string, string>>
+  /** Where a fallback reading came from; the copy says it so the exported text matches the screen. */
+  staleBasis?: Readonly<{ curve: string; lastClose: string }>
   reasons: Readonly<Record<string, string>>
   changeReasons: Readonly<Record<string, string>>
   /**
@@ -208,19 +210,33 @@ function macroLine(item: BriefingMacroItem, options: DailyBriefingMarkdownOption
   return `- **${title}** — ${options.formatTime(item.scheduledAt)} · ${options.labels.macro.actual} ${item.actual ?? '—'} · ${options.labels.macro.consensus} ${item.consensus ?? options.labels.macro.noConsensus} · ${options.labels.macro.previous} ${item.previous ?? '—'} · ${surprise}`
 }
 
+/**
+ * How a fallback reading says where it came from in the copy.
+ *
+ * The screen marks it; the exported text has to say the same thing, or a reader pasting the brief
+ * elsewhere loses the fact that the number is not the exact reading.
+ */
+function staleNote(row: BriefingMarketRow | BriefingPulseRow, labels: DailyBriefingMarkdownOptions['labels']): string {
+  if (row.state !== 'stale') return ''
+  const basis = 'valueBasis' in row ? row.valueBasis : undefined
+  if (basis === 'curve') return labels.staleBasis?.curve ?? labels.states.stale ?? ''
+  if (basis === 'last-close') return labels.staleBasis?.lastClose ?? labels.states.stale ?? ''
+  return labels.states.stale ?? ''
+}
+
 function dataLine(row: BriefingMarketRow | BriefingPulseRow, options: DailyBriefingMarkdownOptions): string {
   const label = rowLabel(row.labelKey, options.labels)
   if (row.state === 'available' || row.state === 'stale') {
     const copy = changeLedRowCopy(row, options.labels, options.locale)
     if (copy) {
-      const meta = [copy.secondary, row.state === 'stale' ? options.labels.states.stale ?? '' : '']
+      const meta = [copy.secondary, staleNote(row, options.labels)]
         .filter(Boolean).join(' · ')
       return `- ${label}: ${copy.primary}${meta ? ` (${meta})` : ''}`
     }
     const value = formatBriefingValue(row.value, options.labels.noValue, options.locale)
     const change = row.change ? rowChangeText(row.change, options.labels, options.locale, row) : ''
     const reason = row.changeReason ? options.labels.changeReasons[row.changeReason] ?? '' : ''
-    const suffix = [change, reason, row.state === 'stale' ? options.labels.states.stale ?? '' : ''].filter(Boolean).join(' · ')
+    const suffix = [change, reason, staleNote(row, options.labels)].filter(Boolean).join(' · ')
     return `- ${label}: ${value}${suffix ? ` (${suffix})` : ''}`
   }
   const state = row.state === 'source-disabled' ? options.labels.states['source-disabled'] : options.labels.states.unavailable

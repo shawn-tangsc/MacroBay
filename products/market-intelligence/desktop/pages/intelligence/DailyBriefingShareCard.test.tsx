@@ -145,6 +145,24 @@ describe('daily brief share card in English', () => {
     expect(live.querySelector('.mi-brief-poster__stale')).toBeNull()
   })
 
+  it('says where a curve fallback came from, not just that it is stale', async () => {
+    // "Fallback" alone leaves the reader guessing whether it is the exact 24h pair; the chip carries
+    // the window and the source, and the exported copy says the same thing.
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc'
+          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
+          : row)
+      }
+    }
+    const rendered = await render(doc)
+    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.curve)
+    expect(text.staleBasis.curve).toContain('24h')
+  })
+
   it('renders only the data rows the editor kept', async () => {
     const base = briefing()
     const rendered = await render({

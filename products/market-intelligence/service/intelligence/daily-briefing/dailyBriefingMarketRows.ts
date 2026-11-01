@@ -255,11 +255,11 @@ function crossRow(
     // missing. Keep that persisted reading instead of turning the whole row into "unavailable".
     const curve = [...(snapshot.curves[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
     if (curve) {
-      return gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd)
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const }
     }
     const last = snapshot.lastClosed?.[id]
     if (last) {
-      return gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at)
+      return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(Number(last.close)), format: 'level' }, 'latest', last.at), valueBasis: 'last-close' as const }
     }
     return gapRow(id, labelKey, 'query-failed', 'unavailable', null, '24h', null)
   }

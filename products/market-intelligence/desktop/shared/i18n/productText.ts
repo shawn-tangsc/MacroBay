@@ -709,6 +709,8 @@ export const productText = {
               states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
               // 分享卡上这条读数不是当时精确的 24 小时值，而是回退值；海报不标出来，读者会当成实时读数。
               staleMarker: '回退值',
+              // 回退值的来源：曲线最后一点不是精确的 24 小时配对，最近收盘也不是当日读数。
+              staleBasis: { curve: '回退值 · 约 24 小时（取自曲线）', lastClose: '回退值 · 最近收盘' },
               reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面快照不可用', 'etf-unavailable': 'ETF 读数不可用' },
               changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
               // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
@@ -2491,6 +2493,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               states: { available: '', stale: 'Stale', unavailable: 'Unavailable', 'source-disabled': 'Disabled' },
               // This reading is a fallback, not the exact 24h value; unmarked, the poster reads as live.
               staleMarker: 'Fallback',
+              // Where the fallback came from: the curve's last point is not the exact 24h pair, and the
+              // last close is not today's reading.
+              staleBasis: { curve: 'Fallback · about 24h (from curve)', lastClose: 'Fallback · last close' },
               reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
               changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
               // What each change is measured against: a rolling window, a session close, a release.

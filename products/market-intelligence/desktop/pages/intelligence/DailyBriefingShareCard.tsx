@@ -332,7 +332,11 @@ function rowLabel(text: DailyBriefingText, labelKey: string): string {
  */
 function staleMarker(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
   if (row.state !== 'stale') return null
-  return <em className="mi-brief-poster__stale" data-state="stale">{text.staleMarker}</em>
+  // A fallback says where it came from: the curve's last point is about 24 hours, not the exact
+  // pair, and a last close is not today's reading. A plain aged reading gets the short chip.
+  const basis = 'valueBasis' in row ? row.valueBasis : undefined
+  const label = basis === 'curve' ? text.staleBasis.curve : basis === 'last-close' ? text.staleBasis.lastClose : text.staleMarker
+  return <em className="mi-brief-poster__stale" data-state="stale" data-basis={basis ?? 'none'}>{label}</em>
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {

@@ -76,6 +76,21 @@ const options = {
 }
 
 describe('daily briefing markdown', () => {
+  it('says in the copy where a fallback reading came from', () => {
+    // The screen marks it; a pasted edition must carry the same fact, or the exported number reads
+    // as the exact 24h pair.
+    const base = document()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: [{ ...base.data.market[0]!, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }]
+      }
+    }
+    const markdown = dailyBriefingToMarkdown(doc, options)
+    expect(markdown).toContain(labels.staleBasis.curve)
+  })
+
   it('exports a text edition with rows, conclusion and citations', () => {
     const markdown = dailyBriefingToMarkdown(document(), options)
     expect(markdown).toContain('# 每日简报 — 2026-10-30')

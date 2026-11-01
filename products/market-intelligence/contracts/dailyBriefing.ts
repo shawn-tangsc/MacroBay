@@ -207,6 +207,12 @@ export type BriefingMarketRow = Readonly<{
   baselineAt?: string
   observedAt: string | null
   reason?: 'not-collected' | 'query-failed' | 'stale-fallback' | 'coverage-incomplete'
+  /**
+   * Which reading a fallback row actually carries, so the card and the export can say it: `curve` is
+   * the last point of the 24h curve (about 24 hours, not the exact pair), `last-close` the newest
+   * closed bar. Absent on exact readings and on editions built before this field existed.
+   */
+  valueBasis?: 'curve' | 'last-close'
 }>
 
 export type BriefingPulseRow = Readonly<{
