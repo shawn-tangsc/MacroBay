@@ -126,6 +126,23 @@ const migrations: AssistantPlatformMigration[] = [
       create index if not exists idx_assistant_template_installs_source
         on assistant_template_installs(source_kind, source_product_id, source_template_id);
     `
+  },
+  {
+    id: '0003_assistant_retention_audits',
+    up: `
+      create table if not exists assistant_retention_audits (
+        id text primary key,
+        ran_at text not null,
+        cutoff_at text not null,
+        reason text not null,
+        limit_value integer not null,
+        deleted_topics integer not null,
+        deleted_messages integer not null
+      );
+
+      create index if not exists idx_assistant_retention_audits_ran_at
+        on assistant_retention_audits(ran_at desc);
+    `
   }
 ]
 
