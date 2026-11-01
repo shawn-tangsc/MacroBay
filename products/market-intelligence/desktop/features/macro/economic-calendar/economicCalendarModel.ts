@@ -1,3 +1,5 @@
+import { instantForWallClock, wallClockAt } from '@platform/time/timeZoneClock'
+
 import type { MacroEconomicCalendarEventView } from '../../../../contracts/macro/economicCalendarQueryContracts'
 import { macroEconomicCalendarCaveatPolicy } from '../../../shared/macroEconomicCalendarCaveatPolicy'
 
@@ -255,87 +257,76 @@ function isDate(value: string): boolean {
 /**
  * Wall-clock text in a zone ⇄ the instant it names.
  *
- * `toWallClock` is what a `<input type="datetime-local">` must be given, and `fromWallClock` is what
- * it hands back. The conversion cannot use `Date.UTC` with the parsed parts: UTC is itself just
- * another zone here, and only the Intl database knows what the zone was on that date — which is the
- * whole point, since a release time in New York moves by an hour twice a year.
+ * One conversion, and it lives in `platform/time/timeZoneClock`. This file used to carry its own
+ * `Intl` arithmetic, which is how the editor ended up with two sources for the same wall clock: the
+ * picker formatted the instant on the reader's machine and the save path read it back in the
+ * display zone. `wallClockAt` fills the picker, `instantForWallClock` reads it back — both speaking
+ * the display zone, so the reader's machine never enters the result.
  *
- * `fromWallClock` returns `undefined` rather than a guessed instant when the text names no real
- * moment or does not survive the round trip (a time inside a daylight-saving gap, for instance).
- * Refusing is correct: an hour that does not exist must not be silently moved to one that does.
+ * The picker itself only ever holds `YYYY-MM-DDTHH:mm` text and interprets no zone.
  */
 export function toWallClock(instant: string, timeZone: string): string | undefined {
   const at = Date.parse(instant)
   if (!Number.isFinite(at)) return undefined
-  const parts = zoneParts(at, timeZone)
-  return parts === undefined ? undefined : `${parts.date}T${parts.time}`
+  const wall = wallClockAt(at, timeZone)
+  return wall === null ? undefined : `${pad(wall.year, 4)}-${pad(wall.month, 2)}-${pad(wall.day, 2)}T${pad(wall.hour, 2)}:${pad(wall.minute, 2)}`
 }
 
+/**
+ * The instant a wall clock names in that zone, or `undefined` when the zone is unknown to the
+ * runtime. A spring gap is resolved forward by the platform conversion — the caller must write the
+ * corrected wall clock back into the picker, or the reader keeps seeing a time that was not stored.
+ */
 export function fromWallClock(text: string, timeZone: string): string | undefined {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(text)
-  if (!match) return undefined
-  const [, year, month, day, hour, minute] = match
-  const naive = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
-  if (!Number.isFinite(naive)) return undefined
-  // The first guess is off by the zone's offset; correcting once lands on the instant unless the
-  // guess crossed a transition, in which case the second correction settles it.
-  let instant = naive
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const parts = zoneParts(instant, timeZone)
-    if (parts === undefined) return undefined
-    const shown = Date.UTC(Number(parts.date.slice(0, 4)), Number(parts.date.slice(5, 7)) - 1, Number(parts.date.slice(8, 10)), Number(parts.time.slice(0, 2)), Number(parts.time.slice(3, 5)))
-    instant += naive - shown
-  }
-  const settled = zoneParts(instant, timeZone)
-  return settled !== undefined && settled.date === `${year}-${month}-${day}` && settled.time === `${hour}:${minute}`
-    ? new Date(instant).toISOString()
-    : undefined
+  const parsed = parseWallClock(text)
+  if (parsed === undefined) return undefined
+  const instant = instantForWallClock({ timeZone, ...parsed })
+  return instant === null ? undefined : instant.toISOString()
 }
 
 /**
  * Whether the text a reader typed names exactly one instant in that zone.
  *
  * Twice a year a wall clock is not a function: on the autumn change-over `01:00` in New York happens
- * twice, once at each offset. A time that happens twice is not an error to hide — the reader is
- * asked to disambiguate rather than being given whichever hour we happened to pick.
+ * twice. The check is built from the platform conversion rather than its own arithmetic — one
+ * conversion, one multiplicity check on top of it.
  */
 export function wallClockIsAmbiguous(text: string, timeZone: string): boolean {
+  const parsed = parseWallClock(text)
+  if (parsed === undefined) return false
+  const base = instantForWallClock({ timeZone, ...parsed })
+  if (base === null) return false
+  const baseMs = base.getTime()
+  const matches = new Set<number>()
+  // Offsets in force around this wall clock differ by at most a couple of hours; a quarter-hour
+  // step finds both candidates without re-deriving the zone's rules here.
+  for (let minutes = -120; minutes <= 120; minutes += 15) {
+    const at = baseMs + minutes * 60_000
+    const wall = wallClockAt(at, timeZone)
+    if (wall === null) continue
+    if (wall.year === parsed.year && wall.month === parsed.month && wall.day === parsed.day &&
+      wall.hour === parsed.hour && wall.minute === parsed.minute) {
+      matches.add(at)
+    }
+  }
+  return matches.size > 1
+}
+
+function parseWallClock(text: string): { year: number; month: number; day: number; hour: number; minute: number } | undefined {
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(text)
-  if (!match) return false
-  const naive = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), Number(match[4]), Number(match[5]))
-  // A repeated wall clock has one instant in each of the two offsets that were in force around it,
-  // and **both** of them must still render back to the text the reader wrote.
-  const offsets = new Set<number>()
-  for (const probe of [naive - 36 * 3_600_000, naive, naive + 36 * 3_600_000]) {
-    const parts = zoneParts(probe, timeZone)
-    if (parts !== undefined) offsets.add(offsetBetweenWallClockAndInstant(parts, probe))
-  }
-  // Each offset that was in force near this wall clock yields its own candidate instant.
-  const candidates = new Set<number>()
-  for (const offset of offsets) candidates.add(naive - offset)
-  return new Set([...candidates].filter((at) => {
-    const parts = zoneParts(at, timeZone)
-    return parts !== undefined && parts.date === `${match[1]}-${match[2]}-${match[3]}` && parts.time === `${match[4]}:${match[5]}`
-  })).size > 1
+  if (!match) return undefined
+  const [, year, month, day, hour, minute] = match
+  const parts = { year: Number(year), month: Number(month), day: Number(day), hour: Number(hour), minute: Number(minute) }
+  // The platform conversion normalises out-of-range parts (month 13 becomes January), so the text
+  // has to be a real date before it is asked about — otherwise "the 13th month" would be answered
+  // as if it meant something.
+  if (parts.month < 1 || parts.month > 12 || parts.day < 1 || parts.day > 31) return undefined
+  if (parts.hour > 23 || parts.minute > 59) return undefined
+  const asUtc = new Date(Date.UTC(parts.year, parts.month - 1, parts.day))
+  if (asUtc.getUTCMonth() !== parts.month - 1 || asUtc.getUTCDate() !== parts.day) return undefined
+  return parts
 }
 
-function offsetBetweenWallClockAndInstant(parts: { date: string; time: string }, at: number): number {
-  const shown = Date.UTC(Number(parts.date.slice(0, 4)), Number(parts.date.slice(5, 7)) - 1, Number(parts.date.slice(8, 10)), Number(parts.time.slice(0, 2)), Number(parts.time.slice(3, 5)))
-  return shown - at
-}
-
-const zoneFormatters = new Map<string, Intl.DateTimeFormat>()
-
-function zoneParts(at: number, timeZone: string): { date: string; time: string } | undefined {
-  let formatter = zoneFormatters.get(timeZone)
-  if (formatter === undefined) {
-    formatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-    zoneFormatters.set(timeZone, formatter)
-  }
-  const parts = formatter.formatToParts(new Date(at))
-  const read = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value
-  const year = read('year'); const month = read('month'); const day = read('day'); const hour = read('hour'); const minute = read('minute')
-  return year === undefined || month === undefined || day === undefined || hour === undefined || minute === undefined
-    ? undefined
-    : { date: `${year}-${month}-${day}`, time: `${hour}:${minute}` }
+function pad(value: number, width: number): string {
+  return String(value).padStart(width, '0')
 }

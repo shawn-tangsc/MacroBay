@@ -16,6 +16,7 @@ import {
   economicCalendarCaveats,
   formatEconomicCalendarTime,
   fromWallClock,
+  toWallClock,
   wallClockIsAmbiguous
 } from './economicCalendarModel'
 
@@ -138,7 +139,8 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
   timeZone: string; timeZoneLabel: string
 }): ReactElement {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState<Dayjs | null>(null)
+  /** Wall-clock text in the display zone; the picker is naive and interprets no zone. */
+  const [draft, setDraft] = useState<string | null>(null)
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'rejected' | 'ambiguous'>('idle')
   const edited = event.releaseTimeSource === 'user-edited'
   const shown = releaseTimeText(event, text, timeZone, timeZoneLabel)
@@ -150,23 +152,26 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
 
   const open = (): void => {
     const instant = event.scheduledAt
-    // The picker shows the instant in the browser's own zone; the value that is saved is
-    // re-derived from the wall-clock text through the checked conversion below, so the two
-    // never disagree about what the reader picked.
-    setDraft(instant === undefined ? null : dayjs(instant))
+    // Filled from the display zone, the same zone the save path reads back. Formatting the instant
+    // on the reader's machine here is what made the editor and the store disagree by an offset.
+    setDraft(instant === undefined ? null : toWallClock(instant, timeZone) ?? null)
     setState('idle')
     setEditing(true)
   }
 
   async function save(): Promise<void> {
     if (draft === null) return
-    const wallClock = draft.format('YYYY-MM-DDTHH:mm')
+    const wallClock = draft
     if (wallClockIsAmbiguous(wallClock, timeZone)) { setState('ambiguous'); return }
     const instant = fromWallClock(wallClock, timeZone)
     if (instant === undefined) { setState('rejected'); return }
     setState('saving')
     const result = await client.setReleaseTime({ eventKey: event.eventKey, scheduledAt: instant, scheduledDate: wallClock.slice(0, 10) })
     if (result.state !== 'saved') { setState('rejected'); return }
+    // A spring gap resolves forward: the stored instant is not the text the reader typed, so the
+    // picker has to show what was stored instead of leaving them looking at a time that never was.
+    const stored = toWallClock(instant, timeZone)
+    if (stored !== undefined && stored !== wallClock) setDraft(stored)
     setState('saved')
     setEditing(false)
     await onChanged()
@@ -191,9 +196,9 @@ function ReleaseTimeRow({ client, event, onChanged, text, timeZone, timeZoneLabe
             className="mi-economic-calendar__release-time-picker"
             format="YYYY-MM-DD HH:mm"
             minuteStep={1}
-            onChange={(value) => { setDraft(value); setState('idle') }}
+            onChange={(value) => { setDraft(value === null ? null : value.format('YYYY-MM-DDTHH:mm')); setState('idle') }}
             showTime={{ format: 'HH:mm' }}
-            value={draft}
+            value={draft === null ? null : dayjs(draft)}
           />
         : canEdit
           ? <button aria-label={text.details.time} className="mi-economic-calendar__release-time-value" onClick={open} type="button">{shown}</button>

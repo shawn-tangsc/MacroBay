@@ -49,7 +49,24 @@ describe('wall clock text in a zone and the instant it names', () => {
     for (const bad of ['', '2026-10-14', '2026-10-14 08:30', '14/10/2026T08:30', '2026-13-01T08:30', '2026-10-14T25:00', 'nonsense']) {
       expect(fromWallClock(bad, 'America/New_York'), bad).toBeUndefined()
     }
-    // 02:30 on the spring-forward day does not exist in New York; it must not be moved to 03:30.
-    expect(fromWallClock('2026-03-08T02:30', 'America/New_York')).toBeUndefined()
+    // An unknown zone is refused too: no guessing UTC, no guessing the machine.
+    expect(fromWallClock('2026-10-14T08:30', 'Mars/Olympus_Mons')).toBeUndefined()
+  })
+
+  it('resolves a spring gap forward, and hands back the text that will be shown', () => {
+    // 02:30 on the spring-forward day does not exist in New York. The platform conversion lands on
+    // the first instant after the gap; the editor must then show 03:00 rather than the 02:30 the
+    // reader typed, or the screen and the store disagree.
+    expect(fromWallClock('2026-03-08T02:30', 'America/New_York')).toBe('2026-03-08T07:00:00.000Z')
+    expect(toWallClock('2026-03-08T07:00:00.000Z', 'America/New_York')).toBe('2026-03-08T03:00')
+  })
+
+  it('reads a display-zone wall clock without consulting the machine zone', () => {
+    // The old editor formatted the instant on the reader's machine. These are the exact pairs that
+    // were off by the machine's offset: UTC display on a Shanghai machine, and the reverse.
+    expect(toWallClock('2026-11-01T00:05:00.000Z', 'UTC')).toBe('2026-11-01T00:05')
+    expect(fromWallClock('2026-11-01T00:05', 'UTC')).toBe('2026-11-01T00:05:00.000Z')
+    expect(toWallClock('2026-11-01T00:05:00.000Z', 'Asia/Shanghai')).toBe('2026-11-01T08:05')
+    expect(fromWallClock('2026-11-01T08:05', 'Asia/Shanghai')).toBe('2026-11-01T00:05:00.000Z')
   })
 })
