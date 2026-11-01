@@ -91,7 +91,12 @@ export function McpCatalog({
 
       <div className="agent-tool-list-heading">{text.editor.tools.mcpRegistryHeading}</div>
       {catalog.addable.length === 0 ? (
-        <StateView state="empty" reasonCode="not-yet" size="md" />
+        <StateView
+          state="empty"
+          reasonCode="none-installed"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.bind_target, onSelect: focusManualInput }}
+        />
       ) : (
         <div className="agent-tool-catalog compact">
           {catalog.addable.map((mcp) => (
