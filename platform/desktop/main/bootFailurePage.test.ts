@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { formatBootFailureLogPath, renderBootFailurePage, resolveBootFailureAction } from './bootFailurePage'
 import type { ScreenFailure } from './failurePresentation'
 
@@ -78,6 +81,30 @@ describe('boot failure page', () => {
     expect(resolveBootFailureAction('macrobay-boot:quit')).toBe('quit')
     expect(resolveBootFailureAction('macrobay-boot:delete-everything')).toBeNull()
     expect(resolveBootFailureAction('https://example.com')).toBeNull()
+  })
+
+  it('breaks the log path at spaces before splitting the file name', () => {
+    const html = renderBootFailurePage(failure, options)
+    const style = html.slice(html.indexOf('<style>'), html.indexOf('</style>'))
+    const logRule = style.slice(style.indexOf('.log {'), style.indexOf('}', style.indexOf('.log {')))
+
+    // `break-all` 会在 `app.log` 中间断行，文件名被劈开；`anywhere` 优先在空格处断。
+    expect(logRule).toContain('overflow-wrap:anywhere')
+    expect(logRule).not.toContain('break-all')
+  })
+
+  it('lets only this module turn failure text into markup', () => {
+    // 脱敏发生在 failurePresentation，页面是它唯一的消费者。这条知识不能只存在人脑里：
+    // 任何别的文件开始自己拼 HTML，就意味着它可能把 failure.reason（原文）直接插进去。
+    const directory = __dirname
+    const offenders = readdirSync(directory)
+      .filter((name) => name.endsWith('.ts') && !name.includes('.test.') && name !== 'bootFailurePage.ts')
+      .filter((name) => {
+        const source = readFileSync(join(directory, name), 'utf8')
+        return source.includes('escapeHtml(') || source.includes('<!doctype html>') || source.includes('<div ')
+      })
+
+    expect(offenders).toEqual([])
   })
 
   it('formats the log path with a home placeholder on every platform', () => {
