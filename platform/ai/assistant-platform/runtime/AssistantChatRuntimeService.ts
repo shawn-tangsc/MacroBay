@@ -26,6 +26,7 @@ import {
   createAssistantWebSearchToolService
 } from '../../web-search/assistant/assistantWebSearchTools'
 import { createAssistantWebSearchMessagePart } from '../../web-search/assistant/assistantWebSearchMessageParts'
+import { guardWebSearchSourcesForModel } from '../../web-search/assistant/assistantWebSearchGuard'
 import type { AssistantEntity } from '../schemas/assistantSchemas'
 import type {
   AssistantStreamOpenRequest,
@@ -464,7 +465,14 @@ export function createAssistantChatRuntimeService(
         }
         return {
           ok: true,
-          content: JSON.stringify(result.output),
+          // Retrieved pages are untrusted: the model gets a guarded copy, while `result.output`
+          // keeps the raw text for the source cards below.
+          content: JSON.stringify(
+            guardWebSearchSourcesForModel(result.output, {
+              origin: result.response?.capability === 'fetchUrls' ? 'fetch' : 'search',
+              ...(result.response?.providerId ? { providerId: result.response.providerId } : {})
+            })
+          ),
           messagePart: createAssistantWebSearchMessagePart({
             toolName: result.name,
             status: 'success',

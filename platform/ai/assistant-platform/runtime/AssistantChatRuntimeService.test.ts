@@ -717,6 +717,18 @@ describe('createAssistantChatRuntimeService', () => {
       expect(webSearchPart).toBeDefined()
       expect(JSON.stringify(webSearchPart)).not.toContain(longContent)
     })
+
+    // What the model received is guarded; what the interface renders is not. Both directions are
+    // asserted here because guarding the shared source object would fix one and break the other.
+    const modelRequest = JSON.stringify(fetch.mock.calls[1]?.[1]?.body ?? '')
+    const storedPart = JSON.stringify(
+      repos.messages.listByTopic(topic.id).find((item) => item.role === 'assistant')?.data.parts
+    )
+    expect(modelRequest).toContain('retrieved from the web by a search')
+    expect(modelRequest).toContain('<<<EXTERNAL_UNTRUSTED_CONTENT boundary=')
+    expect(modelRequest).toContain('Long source body')
+    expect(storedPart).not.toContain('EXTERNAL_UNTRUSTED_CONTENT')
+    expect(storedPart).not.toContain('SECURITY NOTICE')
   })
 
   it('reconciles stale pending messages on startup', () => {
