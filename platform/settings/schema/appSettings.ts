@@ -109,6 +109,12 @@ export type PlatformWebSearchSettings = WebSearchSettings
 export type AppSettings = {
   language: AppLanguage
   themeMode: ThemeMode
+  /**
+   * 强调色：**保留、暂无机读方，也没有设置界面入口**（2026-11-01 用户裁决「先隐藏入口、存储保留不迁移」）。
+   * 现状：主窗把它写进根属性 `data-accent`，但样式表没有任何 `[data-accent]` 选择器、组件库主题也硬编码
+   * `lime`——也就是说改它的值，界面不会有任何变化。**在消费方接上之前，不许给它加回设置入口**：一个
+   * 改了没反应的开关比没有更糟。真正接通（令牌派生 accent 系列 + 组件库主色跟随）作为独立需求立项。
+   */
   accentColor: AccentColor
   /** 显示时区；存储与 IPC 上的时间始终是 UTC 瞬时。 */
   timeZone: TimeZoneSetting

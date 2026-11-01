@@ -472,6 +472,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   useLayoutEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     // P1-06i（A）：主窗属性组逐字不变（仍由 toThemeAttributes 决定），只是写入动作与面板窗共用同一函数。
+    // 如实说明：这里写出的 `data-accent` 目前**没有任何样式消费者**（样式表零命中、组件库主题硬编码 lime），
+    // 改值不会改变外观；按 2026-11-01 用户裁决先保留写入与存储、不给设置入口，等真正接通再露出来。
     const applyTheme = (): void => {
       try {
         applyRootThemeAttributes(toThemeAttributes(settings.themeMode, settings.accentColor, media.matches))

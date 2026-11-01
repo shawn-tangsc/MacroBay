@@ -84,6 +84,11 @@ export type NotificationRuntimeSettings = {
   desktopEnabled: boolean
   toastEnabled: boolean
   popupEnabled: boolean
+  /**
+   * 保留天数：**当前存着但没有任何消费者**——运行时没有剪枝任务，设置页也没暴露这一项
+   * （2026-11-01 用户裁决保留字段、暂不实现）。它与「有策略无执行者」那族同源，接通知生产者时
+   * 必须同时给出真的清理任务，否则这个值永远只是数字。不许在没接清理的情况下把它摆到界面上。
+   */
   retentionDays: number
   defaultSnoozeMinutes: number
   quietHours?: {
