@@ -194,8 +194,8 @@ export const productText = {
             // 卡片左栏只有 84px：这里用比日历页更短的分类标签，长标签会溢出到卡片外被裁掉。
             categories: { 'economic-indicator': '经济指标', 'financial-event': '金融事件', 'central-bank-activity': '央行活动' },
             openCalendar: '打开经济日历', switchToAgent: '切换到市场解读 Agent', switchToCalendar: '切换到日历卡片',
-            openEventInCalendar: '在日历中打开该事件',
-            collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定',
+            openEventInCalendar: '在日历中打开该事件：{name}',
+            collapseAgent: '收起 Agent', expandAgent: '打开市场解读 Agent', closeAgent: '关闭', agentTitle: '市场解读 Agent', clearConversation: '清空', copyEvent: '复制 {name}', eventContext: { heading: '选中事件', state: '状态', released: '已公布', upcoming: '待公布', cancelled: '已取消', missing: '未公布', related: '同期事件', factsHeading: '系统当前事实', factsUnavailable: '系统当前没有这条事件的数据，请勿据此推断', factsPartial: '以下事实不完整，缺失处请直说缺失', factsEvidence: '证据引用' }, importanceHigh: '高重要性', timePending: '时间待定',
             surprise: { beat: '超预期', miss: '低于预期', inline: '符合预期', unavailable: '无一致预期', notComparable: '预期差不可比' }
           },
           analysisTimeline: {
@@ -574,8 +574,6 @@ export const productText = {
               sepPath: 'SEP 中位数路径', decision: '上次决议', basis: '盘口与口径', close: '关闭',
               odds: '加息 25bp', change24h: '24h', range30d: '近 30 日', quote: '买卖',
               openSource: '原文', median: '中位', sepRange: '区间', previous: '上一季', vote: '票型', dissents: '反对票', venue: '场所', asOf: '截至', empty: '官方日历已同步会议日期；决议与盘口还没有采到。',
-              sepMissing: '还没采到 SEP。最近一次 SEP 会议是 12-09，会后当天抓取。',
-              decisionMissing: '还没采到上次决议的票型。点一次「刷新决议」即可入库。',
               unchanged: '维持',
               voteHint: '{for} 票赞成、{against} 票反对；反对票在抽屉里列名',
               preferred: { raise: '主张加息', lower: '主张降息', maintain: '主张维持' },
@@ -2042,8 +2040,8 @@ export const productText = {
             // tag's first letters off in English.
             categories: { 'economic-indicator': 'Indicator', 'financial-event': 'Financial event', 'central-bank-activity': 'Central bank' },
             openCalendar: 'Open the economic calendar', switchToAgent: 'Switch to the market agent', switchToCalendar: 'Switch to the calendar card',
-            openEventInCalendar: 'Open this event in the calendar',
-            collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD',
+            openEventInCalendar: 'Open {name} in the calendar',
+            collapseAgent: 'Collapse the agent', expandAgent: 'Open the market agent', closeAgent: 'Close', agentTitle: 'Market agent', clearConversation: 'Clear', copyEvent: 'Copy {name}', eventContext: { heading: 'Selected event', state: 'State', released: 'Released', upcoming: 'Not yet released', cancelled: 'Cancelled', missing: 'not published', related: 'Same hour', factsHeading: 'Facts held now', factsUnavailable: 'Nothing is held for this event; do not infer from that', factsPartial: 'These facts are incomplete; name what is missing', factsEvidence: 'Evidence' }, importanceHigh: 'High importance', timePending: 'Time TBD',
             surprise: { beat: 'Above expectation', miss: 'Below expectation', inline: 'In line', unavailable: 'No consensus', notComparable: 'Surprise not comparable' }
           },
           analysisTimeline: {
@@ -2407,8 +2405,6 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               sepPath: 'SEP median path', decision: 'Last decision', basis: 'Quotes and basis', close: 'Close',
               odds: 'Hike 25bp', change24h: '24h', range30d: 'Last 30 days', quote: 'Bid / ask',
               openSource: 'Source', median: 'Median', sepRange: 'Range', previous: 'Previous', vote: 'Vote', dissents: 'Dissents', venue: 'Venue', asOf: 'As of', empty: 'Meeting dates are synced; the decision and the odds are not collected yet.',
-              sepMissing: 'No SEP collected yet. The next projections meeting is 12-09; it is read after that day.',
-              decisionMissing: 'No vote collected yet. One decision refresh stores it.',
               unchanged: 'Hold',
               voteHint: '{for} in favour, {against} against; the drawer names the dissenters',
               preferred: { raise: 'preferred a hike', lower: 'preferred a cut', maintain: 'preferred no change' },

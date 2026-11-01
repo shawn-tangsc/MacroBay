@@ -51,7 +51,11 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
   projection: CalendarCardProjection
   text: MarketCalendarCardText
   onOpenCalendar: (month: string) => void
-  onRefresh?: () => void
+  /**
+   * Re-reading the card's months. Required, not optional: the failure state carries a retry action, and a
+   * retry that does nothing is worse than no retry. The dashboard always passes its reload.
+   */
+  onRefresh: () => void
   /** Selecting a row is what feeds the agent: the label is the row's own readable line. */
   onSelectEvent?: (eventKey: string, label: string, month: string) => void
   /**
@@ -170,25 +174,33 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
         <span className="mi-calendar-card__row-tools">
           {/* The row's own click selects this event for the agent, so opening it in the calendar
               needs its own control. Like copying, it must not reach the row's handler. */}
-          {onOpenEventInCalendar ? <button aria-label={`${text.openEventInCalendar} ${readableAnalysisName(text.readableNames, 'eventName', entry.titleKey)}`}
-            className="mi-calendar-card__open-event" type="button"
-            onClick={event => {
-              event.stopPropagation()
-              onOpenEventInCalendar(entry.eventKey, entry.month)
-            }}
+          {onOpenEventInCalendar ? <span
+            className="mi-calendar-card__row-tool" data-calendar-row-action="open-event"
+            onClick={event => { event.stopPropagation() }}
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() }}>
-            <CalendarDays aria-hidden="true" size={12} />
-          </button> : null}
-          <button aria-label={`${text.copyEvent} ${readableAnalysisName(text.readableNames, 'eventName', entry.titleKey)}`}
-            className="mi-calendar-card__copy" type="button"
-            onClick={event => {
-              // Copying is not selecting: the click must not reach the row's own handler.
-              event.stopPropagation()
-              void navigator.clipboard?.writeText(rowText(entry)).catch(() => undefined)
-            }}
+            <IconButton
+              ariaLabelKey="pages.intelligence.portal.calendarCard.openEventInCalendar"
+              ariaLabelParams={{ name: readableAnalysisName(text.readableNames, 'eventName', entry.titleKey) ?? '' }}
+              icon={CalendarDays}
+              onSelect={() => onOpenEventInCalendar(entry.eventKey, entry.month)}
+              resolveText={resolveKey}
+              size="sm"
+            />
+          </span> : null}
+          <span
+            className="mi-calendar-card__row-tool" data-calendar-row-action="copy"
+            onClick={event => { event.stopPropagation() }}
             onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation() }}>
-            <Copy aria-hidden="true" size={12} />
-          </button>
+            {/* Copying is not selecting: the click must not reach the row's own handler. */}
+            <IconButton
+              ariaLabelKey="pages.intelligence.portal.calendarCard.copyEvent"
+              ariaLabelParams={{ name: readableAnalysisName(text.readableNames, 'eventName', entry.titleKey) ?? '' }}
+              icon={Copy}
+              onSelect={() => { void navigator.clipboard?.writeText(rowText(entry)).catch(() => undefined) }}
+              resolveText={resolveKey}
+              size="sm"
+            />
+          </span>
           {/* Only the top tier gets a marker; medium rows stay quiet rather than being badged. */}
           <em aria-hidden={entry.importance !== 'high'} aria-label={entry.importance === 'high' ? text.importanceHigh : undefined}
             className="mi-calendar-card__importance" data-importance={entry.importance} />
@@ -219,7 +231,7 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
         scroll region instead of travelling with the rows. */}
     <div className="mi-calendar-card__body">
       {projection.state === 'unavailable' ? <StateView state="error" reasonCode="unreadable" size="md"
-        {...(onRefresh ? { action: { labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh } } : {})} /> : null}
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
       {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
       {projection.state === 'available' && projection.today.length === 0
         ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>

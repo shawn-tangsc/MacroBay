@@ -44,13 +44,13 @@ async function render(node: React.ReactElement, language: 'zh-CN' | 'en-US' = 'z
 
 it('puts the provider country next to the kind chip, so two same-named events stay apart', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: '9月未季调消费者物价指数(年率)', countryName: '美国' }), row({ eventKey: 'other', titleKey: '9月未季调消费者物价指数(年率)', countryName: '日本' })], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect([...host.querySelectorAll('[data-country]')].map(node => node.textContent)).toEqual(['美国', '日本'])
 })
 
 it('never shows the raw event key, and shows a date when there is no clock time', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: 'core-cpi', at: null, date: '2026-10-14' })], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).not.toContain('core-cpi')
   expect(host.textContent).toContain('核心 CPI')
   expect(host.textContent).toContain('10-14')
@@ -59,7 +59,7 @@ it('never shows the raw event key, and shows a date when there is no clock time'
 
 it('shows both sections with the event name, time and importance', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '0.3%', previous: '0.1%' })], upcoming: [row()], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).toContain(text.title)
   expect(host.textContent).toContain(text.todaySection)
   expect(host.textContent).toContain(text.upcomingSection)
@@ -83,7 +83,7 @@ it('shows both sections with the event name, time and importance', async () => {
 it('replaces the three readings with the verdict when the surprise is statable', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', at: '2026-10-11T06:00:00.000Z', actual: '3.4%', previous: '3.4%', consensus: '3.1%',
     surprise: { direction: 'beat', value: 0.2999999999999998, unit: 'pp', reason: null } })], upcoming: [], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   const firstRow = host.querySelector('.mi-calendar-card__row')!
   expect(firstRow.querySelector('.mi-calendar-card__row-value')).toBeNull()
@@ -97,7 +97,7 @@ it('replaces the three readings with the verdict when the surprise is statable',
 it('names the event and its values in the reader language, not the conclusion language', async () => {
   const english = calendarText('en-US')
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ titleKey: 'cpi', actual: '1.2%', previous: '-0.7%', consensus: '0.9%', kind: 'released-changed' })], state: 'available' }}
-    onOpenCalendar={() => undefined} text={english} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={english} />)
   expect(host.textContent).toContain(english.title)
   expect(host.textContent).toContain('CPI')
   expect(host.textContent).toContain('Actual 1.2%')
@@ -110,7 +110,7 @@ it('names the event and its values in the reader language, not the conclusion la
 
 it('reports an empty window instead of rendering nothing', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [], state: 'empty' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(host.textContent).toContain(text.empty)
 })
 
@@ -131,9 +131,9 @@ it('copies a row instead of navigating, and keeps the calendar action for the mo
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { written.push(value) } } })
   const onOpenCalendar = vi.fn()
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
-    onOpenCalendar={onOpenCalendar} text={text} />)
+    onOpenCalendar={onOpenCalendar} onRefresh={() => undefined} text={text} />)
   // Rows are text to copy, not links: there is no row callback any more.
-  await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__copy')!.click())
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="copy"] button')!.click())
   expect(written).toEqual(['10-13 12:30 经济指标 消费者物价指数（CPI）'])
   expect(onOpenCalendar).not.toHaveBeenCalled()
   // The header action is the shared icon button now; its accessible name is the product key's sentence.
@@ -154,7 +154,7 @@ it('hands a selected row to the caller as the agent context, and a copy click do
   await act(async () => line.click())
   expect(onSelectEvent).toHaveBeenCalledWith('US.CPI.RELEASE.2026-M10', '10-13 12:30 经济指标 消费者物价指数（CPI）', '2026-10')
   // Copying a row must not disturb the selection it is sitting in.
-  await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__copy')!.click())
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="copy"] button')!.click())
   expect(written).toHaveLength(1)
   expect(onSelectEvent).toHaveBeenCalledTimes(1)
 })
@@ -166,15 +166,15 @@ it('opens the whole calendar at one row without disturbing the selection', async
     onOpenCalendar={() => undefined} onOpenEventInCalendar={onOpenEventInCalendar} onSelectEvent={onSelectEvent} text={text} />)
 
   // A row click selects the event as the agent's context; the calendar jump is a separate control.
-  await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__open-event')!.click())
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="open-event"] button')!.click())
   expect(onOpenEventInCalendar).toHaveBeenCalledWith('US.CPI.RELEASE.2026-M10', '2026-10')
   expect(onSelectEvent).not.toHaveBeenCalled()
 })
 
 it('offers no calendar jump when the card has no such action to hand over', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row()], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
-  expect(host.querySelector('.mi-calendar-card__open-event')).toBeNull()
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
+  expect(host.querySelector('[data-calendar-row-action="open-event"]')).toBeNull()
 })
 
 it('is keyboard selectable, because a row that selects must be reachable without a mouse', async () => {
@@ -192,7 +192,7 @@ it('says which row is waiting for its value, and only that row', async () => {
     row({ titleKey: 'core-cpi', awaitingData: true }),
     row({ eventKey: 'other', titleKey: 'cpi' })
   ] }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const markers = [...host.querySelectorAll('[data-calendar-card-waiting]')]
   expect(markers).toHaveLength(1)
   expect(markers[0]!.textContent).toBe(text.awaitingData)
@@ -211,7 +211,7 @@ it('says which row is waiting for its value, and only that row', async () => {
  */
 it('shows the ±30 minute reaction of the four lines on a released row', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', actual: '0.3%', previous: '0.1%', reaction: { index: -0.12, btc: -0.18, eth: -0.21, dxy: 0.14 } })], upcoming: [], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const line = host.querySelector('[data-calendar-card-reaction]')
   // The reaction starts on the content column and may run to the card's right edge.
   expect(line?.closest('.mi-calendar-card__row')).not.toBeNull()
@@ -236,7 +236,7 @@ it('shows the ±30 minute reaction of the four lines on a released row', async (
 
 it('prints only the lines that answered, and nothing at all when none did', async () => {
   const partial = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed', reaction: { index: 0.31, btc: null, eth: 0.28, dxy: 0 } })], upcoming: [], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   const line = partial.querySelector('[data-calendar-card-reaction]')
   expect(line?.textContent).toContain('+0.31%')
   expect(line?.textContent).toContain('+0.28%')
@@ -245,11 +245,11 @@ it('prints only the lines that answered, and nothing at all when none did', asyn
   expect(line?.textContent).not.toContain('BTC')
 
   const none = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(none.querySelector('[data-calendar-card-reaction]')).toBeNull()
   // 还没发布的行没有反应可看。
   const upcoming = await render(<MarketCalendarCard projection={{ today: [], upcoming: [row({ reaction: { index: 0.31, btc: 0.22, eth: 0.28, dxy: 0.05 } })], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
   expect(upcoming.querySelector('[data-calendar-card-reaction]')).toBeNull()
 })
 
@@ -274,7 +274,7 @@ it('does not repeat "no consensus" as a badge; the readings already say it', asy
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '3.4%', consensus: null,
     surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'missing-consensus' }
-  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   expect(host.querySelector('[data-calendar-surprise]')).toBeNull()
   expect(host.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 3.4%')
@@ -285,7 +285,7 @@ it('says the difference is not comparable when both values exist but cannot be c
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '250K', consensus: '240K',
     surprise: { direction: 'consensus-unavailable', value: null, unit: null, reason: 'non-numeric' }
-  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   // Here the readings exist but no difference can be stated, so the badge explains why.
   expect(host.querySelector('.mi-calendar-card__row-value')?.textContent).toContain('实际值 250K')
@@ -298,7 +298,7 @@ it('calls an in-line release in line without adding a zero difference', async ()
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '3.1%', consensus: '3.1%',
     surprise: { direction: 'inline', value: 0, unit: 'pp', reason: null }
-  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+  })], upcoming: [], state: 'available' }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   const chip = host.querySelector('[data-calendar-surprise="inline"]')
   expect(chip?.textContent).toBe(text.surprise.inline)
@@ -311,9 +311,9 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
   const host = await render(<MarketCalendarCard projection={{ today: [row({
     kind: 'released-changed', actual: '165', consensus: '150',
     surprise: { direction: 'beat', value: 10.000000000000002, unit: 'relative-percent', reason: null }
-  })], upcoming: [row({ eventKey: 'upcoming' })], state: 'available' }} onOpenCalendar={() => undefined} text={text} />)
+  })], upcoming: [row({ eventKey: 'upcoming' })], state: 'available' }} onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
-  await act(async () => host.querySelector<HTMLButtonElement>('.mi-calendar-card__copy')!.click())
+  await act(async () => host.querySelector<HTMLButtonElement>('[data-calendar-row-action="copy"] button')!.click())
   expect(written[0]).toContain('超预期 +10%')
   // The clipboard mirrors the row: no readings when the verdict replaced them.
   expect(written[0]).not.toContain('实际值 165')
@@ -324,7 +324,7 @@ it('copies the surprise with the row, and gives an upcoming row no surprise at a
 
 it('scrolls only the rows: the header stays outside the scroll region', async () => {
   const host = await render(<MarketCalendarCard projection={{ today: [row({ kind: 'released-changed' })], upcoming: [row({ eventKey: 'later' })], state: 'available' }}
-    onOpenCalendar={() => undefined} text={text} />)
+    onOpenCalendar={() => undefined} onRefresh={() => undefined} text={text} />)
 
   const body = host.querySelector('.mi-calendar-card__body')
   expect(body).not.toBeNull()

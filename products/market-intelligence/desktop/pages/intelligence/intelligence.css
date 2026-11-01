@@ -1489,13 +1489,10 @@ button.mi-agent-card__status:focus-visible {
 .mi-calendar-card__row-surprise[data-calendar-surprise='unavailable'] { color: var(--muted); }
 .mi-calendar-card__row time { padding-top: 1px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mi-calendar-card__row-tools { display: flex; align-items: center; gap: 6px; }
-.mi-calendar-card__copy { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }
-.mi-calendar-card__row:hover .mi-calendar-card__copy, .mi-calendar-card__copy:focus-visible { opacity: 1; }
-.mi-calendar-card__copy:hover { border-color: var(--accent); color: var(--accent); }
-/* Same quiet-until-hover treatment as the copy control it sits beside. */
-.mi-calendar-card__open-event { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }
-.mi-calendar-card__row:hover .mi-calendar-card__open-event, .mi-calendar-card__open-event:focus-visible { opacity: 1; }
-.mi-calendar-card__open-event:hover { border-color: var(--accent); color: var(--accent); }
+/* The row's two icon actions keep the quiet-until-hover treatment; the look inside the
+   wrapper is the shared IconButton's, so only the reveal lives here. */
+.mi-calendar-card__row-tool { display: inline-flex; opacity: 0; }
+.mi-calendar-card__row:hover .mi-calendar-card__row-tool, .mi-calendar-card__row-tool:focus-within { opacity: 1; }
 .mi-calendar-card__importance { margin-top: 6px; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
 .mi-calendar-card__importance[data-importance='high'] { background: var(--accent); }
 .mi-calendar-card__state { display: flex; align-items: center; gap: 6px; margin: 12px 10px; color: var(--muted); font-size: 11px; }
