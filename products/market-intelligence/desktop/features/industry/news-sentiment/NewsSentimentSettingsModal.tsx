@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Select, Switch } from 'antd'
+import { Button, Modal, Select, Switch } from 'antd'
 
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 
@@ -120,9 +120,9 @@ export function NewsSentimentSettingsModal(props: {
                   ? '—'
                   : translationEnabled ? text.settingsModal.translation.on : text.settingsModal.translation.off}
               </span>
-              <button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} type="button">
+              <Button className="mi-news-settings__link" onClick={() => openIntelligenceSourcesSettings()} size="small" type="link">
                 {text.settingsModal.translation.open}
-              </button>
+              </Button>
             </div>
             <p className="mi-news-settings__hint">
               {text.settingsModal.translation.modelLabel}: {translationModelLabel ?? text.settingsModal.translation.followDefault}

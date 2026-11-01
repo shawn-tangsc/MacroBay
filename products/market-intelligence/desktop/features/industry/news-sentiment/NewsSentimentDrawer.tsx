@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Drawer, Select } from 'antd'
+import { Button, Drawer, Select } from 'antd'
 
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
@@ -142,9 +142,9 @@ export function NewsSentimentDrawer(props: {
             size="small"
             value={props.window}
           />
-          <button className="mi-news-drawer__action" onClick={props.onRefresh} type="button">{text.refresh}</button>
-          <button className="mi-news-drawer__action" onClick={props.onOpenSettings} type="button">{text.drawer.settings}</button>
-          <button
+          <Button className="mi-news-drawer__action" onClick={props.onRefresh} size="small">{text.refresh}</Button>
+          <Button className="mi-news-drawer__action" onClick={props.onOpenSettings} size="small">{text.drawer.settings}</Button>
+          <Button
             className="mi-news-drawer__action"
             disabled={Boolean(actionBusy)}
             onClick={() => {
@@ -155,22 +155,22 @@ export function NewsSentimentDrawer(props: {
                 .catch(() => setActionNotice(text.settingsModal.rescoreFailed))
                 .finally(() => setActionBusy(undefined))
             }}
-            type="button"
+            size="small"
           >
             {actionBusy === 'rescore' ? text.settingsModal.rescoring : text.settingsModal.rescore}
-          </button>
+          </Button>
           {translationEnabled ? (
-            <button
+            <Button
               className="mi-news-drawer__action"
               onClick={() => { if (translatingAll) cancelTranslation(); else void translateAll(rows) }}
-              type="button"
+              size="small"
             >
               {translatingAll
                 ? text.settingsModal.cancelTranslate
                 : text.settingsModal.translateAll}
-            </button>
+            </Button>
           ) : null}
-          <button
+          <Button
             className="mi-news-drawer__action"
             disabled={Boolean(actionBusy)}
             onClick={() => {
@@ -186,10 +186,10 @@ export function NewsSentimentDrawer(props: {
                 .catch(() => setActionNotice(text.settingsModal.rebuildFailed))
                 .finally(() => setActionBusy(undefined))
             }}
-            type="button"
+            size="small"
           >
             {actionBusy === 'rebuild' ? text.settingsModal.rebuilding : text.settingsModal.rebuild}
-          </button>
+          </Button>
         </header>
         {actionNotice ? <p className="mi-news-drawer__notice" role="status">{actionNotice}</p> : null}
 
@@ -250,9 +250,9 @@ export function NewsSentimentDrawer(props: {
             />
           </label>
           {props.filters.direction !== 'all' || props.filters.sourceId !== 'all' || props.filters.scope !== 'market' ? (
-            <button className="mi-news-drawer__action" onClick={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true })} type="button">
+            <Button className="mi-news-drawer__action" onClick={() => props.onFilters({ direction: 'all', sourceId: 'all', scope: 'market', includeNeutral: true })} size="small">
               {text.drawer.clearFilters}
-            </button>
+            </Button>
           ) : null}
         </div>
 
@@ -330,9 +330,9 @@ export function NewsSentimentDrawer(props: {
                   </blockquote>
                 ) : null}
                 {translationEnabled && activeTranslationState !== 'translated' && activeTranslationState !== 'translating' && detail?.bodyExcerpt ? (
-                  <button className="mi-news-drawer__translate-body" onClick={() => void translateItem(activeId!)} type="button">
+                  <Button className="mi-news-drawer__translate-body" onClick={() => void translateItem(activeId!)} size="small">
                     {text.drawer.detail.translateBody}
-                  </button>
+                  </Button>
                 ) : null}
                 {translationEnabled && hasTranslatedBody && activeTranslationState !== 'translating' ? (
                   <div className="mi-news-drawer__body-toggle" role="group">

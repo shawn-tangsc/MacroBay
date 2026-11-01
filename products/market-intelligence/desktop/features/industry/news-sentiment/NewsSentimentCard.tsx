@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Button } from 'antd'
 import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
 import { LoadingState } from '@platform/ui/components/loading'
@@ -81,20 +82,30 @@ export function NewsSentimentCard(props: {
             <button aria-pressed={includeNeutral} className={includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(true)} type="button">{text.neutralFilter.all}</button>
             <button aria-pressed={!includeNeutral} className={!includeNeutral ? 'is-on' : undefined} onClick={() => props.onIncludeNeutralChange?.(false)} type="button">{text.neutralFilter.exclude}</button>
           </span>
-          <button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} type="button">{text.openAll} →</button>
-          <button aria-label={text.settings} className="mi-news-sentiment__icon" onClick={props.onOpenSettings} type="button">
-            <Settings aria-hidden="true" size={13} />
-          </button>
-          <button aria-label={text.refresh} className="mi-news-sentiment__icon" onClick={props.onRefresh} type="button">
-            <RefreshCw aria-hidden="true" size={13} />
-          </button>
+          <Button className="mi-news-sentiment__open-all" onClick={props.onOpenAll} size="small" type="link">{text.openAll} →</Button>
+          <Button
+            aria-label={text.settings}
+            className="ant-shell-icon-button mi-news-sentiment__icon"
+            icon={<Settings aria-hidden="true" size={13} />}
+            onClick={props.onOpenSettings}
+            size="small"
+            type="text"
+          />
+          <Button
+            aria-label={text.refresh}
+            className="ant-shell-icon-button mi-news-sentiment__icon"
+            icon={<RefreshCw aria-hidden="true" size={13} />}
+            onClick={props.onRefresh}
+            size="small"
+            type="text"
+          />
         </div>
       </header>
 
       {failed || causeUnknown ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="unavailable">
           <p>{text.unavailable}</p>
-          <button onClick={props.onRefresh} type="button">{text.retry}</button>
+          <Button onClick={props.onRefresh} size="small">{text.retry}</Button>
         </div>
       ) : loading && !view ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="loading"><LoadingState label={text.loading} minHeight={140} /></div>
@@ -103,7 +114,7 @@ export function NewsSentimentCard(props: {
         // except the one that is a fact rather than a fault. Nothing here relies on colour.
         <div className="mi-news-sentiment__state" data-news-sentiment-state={emptyState.kind}>
           <p>{emptySentence}</p>
-          {emptyAction ? <button onClick={emptyAction.run} type="button">{emptyAction.label}</button> : null}
+          {emptyAction ? <Button onClick={emptyAction.run} size="small" type="primary">{emptyAction.label}</Button> : null}
         </div>
       ) : !available ? (
         <div className="mi-news-sentiment__state" data-news-sentiment-state="empty">
