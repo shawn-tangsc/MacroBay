@@ -1556,9 +1556,9 @@ export const productText = {
           csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明'],
           aggregates: {
             title: '每日汇总',
-            note: '明细只留 30 天，更早的日子只剩当天的次数与失败数（日期按 UTC 日界）。最多显示最近 60 条「日 × 任务」记录，任务多时能翻到的天数会更短。',
+            note: '每日汇总只记一天一个任务的运行次数与失败次数（按 UTC 日界），不记原因与耗时；最多显示最近 60 条（日 × 任务）。',
             columns: { day: '日期（UTC）', task: '任务', runs: '次数', failures: '失败' },
-            empty: '这一年里还没有汇总数据。',
+            empty: '还没有可显示的汇总——明细保留 30 天，更早的日期才会折成每日汇总。',
             unavailable: {
               'memory-store-has-no-aggregates': '这台机器现在不保存每日汇总，所以更早的日子看不到。',
               'aggregates-unavailable': '每日汇总暂时读不到，稍后再看。'
@@ -3367,9 +3367,9 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail'],
           aggregates: {
             title: 'Daily totals',
-            note: 'Detail is kept for 30 days; older days keep only their run and failure counts (UTC day boundaries). At most the newest 60 day-and-task rows are shown, so a busy day makes the reach shorter.',
+            note: 'A daily total keeps one day of one task: how many times it ran and how many failed (UTC day boundaries). No reasons, no durations; at most the newest 60 day-and-task rows are shown.',
             columns: { day: 'Day (UTC)', task: 'Task', runs: 'Runs', failures: 'Failures' },
-            empty: 'No daily totals in the past year.',
+            empty: 'Nothing to show yet — detail is kept for 30 days, and only older dates fold into daily totals.',
             unavailable: {
               'memory-store-has-no-aggregates': 'This machine does not save daily totals, so older days cannot be shown.',
               'aggregates-unavailable': 'The daily totals cannot be read right now; try again later.'
