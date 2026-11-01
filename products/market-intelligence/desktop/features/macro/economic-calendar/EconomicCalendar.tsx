@@ -18,10 +18,10 @@ import {
   type EconomicCalendarProjection
 } from './economicCalendarModel'
 import { LoadingState } from '@platform/ui/components/loading'
-import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
+import { CalendarEmptyMonthState } from './CalendarEmptyMonthState'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { CalendarInspector as DetailDrawer } from './CalendarInspector'
 import { EconomicCalendarEventDetail as EventDetail, EconomicCalendarEventDetailState as EventDetailState, type EconomicCalendarRefreshState } from './EconomicCalendarEventDetail'
@@ -495,25 +495,10 @@ function CalendarMonth({ month, today, statusNow, projection, events, selectedEv
         </article>
       })}
     </div>
-    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyState text={text} /> : null}
+    {events.length === economicCalendarEmptyStateActionPolicy.emptyEventCount && !marketEvents.length ? <CalendarEmptyMonthState text={text} /> : null}
   </section>
 }
 
-/**
- * A month with nothing in it. One action: the state's slot is "what the reader does next",
- * and only one thing can occupy it — the manual ICS import is a page-level tool and lives in
- * the header toolbar instead of competing for the empty state's single action.
- */
-function CalendarEmptyState({ text }: { text: EconomicCalendarText }): ReactElement {
-  return <StateView
-    className="mi-economic-calendar__empty-state"
-    state="empty"
-    reasonCode="nothing-in-window"
-    size="lg"
-    action={{ labelKey: STATE_VIEW_ACTION_KEYS.open_settings, onSelect: openIntelligenceSourcesSettings }}
-    productReason={{ key: 'mi.calendar.empty-month', resolve: () => text.emptyState.title }}
-  />
-}
 
 function toCanonicalUtcMillis(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}T${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}:${String(date.getUTCSeconds()).padStart(2, '0')}.${String(date.getUTCMilliseconds()).padStart(3, '0')}Z`
