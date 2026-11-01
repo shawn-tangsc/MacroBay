@@ -2,6 +2,12 @@ import { useState } from 'react'
 import { Input } from 'antd'
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
+/** 翻页箭头的读屏名：原先写死英文，中文界面读屏照念英文，等于没迁。 */
+const PREVIOUS_QUESTION_KEY = 'agent.askUserQuestion.previous'
+const NEXT_QUESTION_KEY = 'agent.askUserQuestion.next'
+
 type AskOption = {
   label: string
   description?: string
@@ -26,6 +32,8 @@ type AgentAskUserQuestionCardProps = {
     skip: string
     submit: string
     recommended: string
+    questionPrevious: string
+    questionNext: string
   }
   onResolve: (decision: ApprovalDecision) => Promise<void> | void
 }
@@ -83,6 +91,13 @@ export default function AgentAskUserQuestionCard({
     void resolve({ behavior: 'allow', updatedInput: { ...rawInput, answers: nextAnswers } })
   }
 
+  // 按键返回句子：`IconButton` 传进来的是键，不是已经解析好的文案。
+  const resolveAriaLabel = (key: string): string => {
+    if (key === PREVIOUS_QUESTION_KEY) return labels.questionPrevious
+    if (key === NEXT_QUESTION_KEY) return labels.questionNext
+    return key
+  }
+
   return (
     <section className="agent-question-card" aria-label={labels.title}>
       <header className="agent-question-card__header">
@@ -125,12 +140,22 @@ export default function AgentAskUserQuestionCard({
       {error ? <p className="agent-question-card__error" role="alert">{error}</p> : null}
       <footer className="agent-question-card__footer">
         <div className="agent-question-card__pager">
-          <button type="button" disabled={index === 0} onClick={() => setIndex((current) => Math.max(0, current - 1))} aria-label="Previous question">
-            <ChevronLeft size={13} />
-          </button>
-          <button type="button" disabled={isLast} onClick={() => setIndex((current) => Math.min(questions.length - 1, current + 1))} aria-label="Next question">
-            <ChevronRight size={13} />
-          </button>
+          <IconButton
+            ariaLabelKey={PREVIOUS_QUESTION_KEY}
+            icon={ChevronLeft}
+            size="sm"
+            disabled={index === 0}
+            onSelect={() => setIndex((current) => Math.max(0, current - 1))}
+            resolveText={resolveAriaLabel}
+          />
+          <IconButton
+            ariaLabelKey={NEXT_QUESTION_KEY}
+            icon={ChevronRight}
+            size="sm"
+            disabled={isLast}
+            onSelect={() => setIndex((current) => Math.min(questions.length - 1, current + 1))}
+            resolveText={resolveAriaLabel}
+          />
         </div>
         <button type="button" className="agent-question-card__skip" disabled={busy} onClick={() => void resolve({ behavior: 'deny', message: 'User skipped the question.' })}>
           {labels.skip}
