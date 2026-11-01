@@ -3,6 +3,8 @@ import { Button, Input, Modal, Tag } from 'antd'
 import { Check, Download, ExternalLink, Search, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillSearchResult } from '@platform/ai/agent-platform/schemas/skillSchemas'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import type { useAgentText } from '../agentTextProvider'
 import { buildSkillMarketplaceRows } from './skillMarketplaceViewModel'
@@ -84,11 +86,22 @@ export default function SkillMarketplaceModal({
 
         <div className="agent-skill-marketplace-list">
           {rows.length === 0 ? (
-            <div className="agent-empty-catalog compact">
-              <Sparkles size={17} />
-              <strong>{text.editor.tools.marketplaceEmptyTitle}</strong>
-              <span>{text.editor.tools.marketplaceEmptyDescription}</span>
-            </div>
+            query.trim() ? (
+              <StateView
+                state="empty"
+                reasonCode="filtered-out"
+                size="md"
+                action={{
+                  labelKey: STATE_VIEW_ACTION_KEYS.clear_filter,
+                  onSelect: () => {
+                    setQuery('')
+                    setResults([])
+                  }
+                }}
+              />
+            ) : (
+              <StateView state="empty" reasonCode="not-yet" size="md" />
+            )
           ) : (
             rows.map((row) => (
               <div key={`${row.sourceRegistry}:${row.slug}`} className="agent-marketplace-skill-row">

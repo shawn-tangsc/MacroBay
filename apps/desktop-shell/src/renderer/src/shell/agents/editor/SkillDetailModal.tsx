@@ -5,6 +5,8 @@ import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import type { AgentSkillRuntimeCatalogEntry } from '@platform/ai/agent-platform/skills/skillRuntimeSchemas'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import type { useAgentText } from '../agentTextProvider'
 import { buildAgentSkillRuntimeViewModel } from './agentSkillRuntimeViewModel'
@@ -205,11 +207,23 @@ export default function SkillDetailModal({
                   <pre className="agent-skill-code-preview">{fileContent}</pre>
                 )
               ) : (
-                <div className="agent-empty-catalog compact">
-                  <FileText size={17} />
-                  <strong>{text.editor.tools.selectSkillFile}</strong>
-                  <span>{text.editor.tools.selectSkillFileDescription}</span>
-                </div>
+                flatFiles.length === 0 ? (
+                  // 这个技能包里确实没有可预览的文件：不是「没选中」，读者也没有可点的东西。
+                  <StateView state="empty" reasonCode="not-yet" size="md" />
+                ) : (
+                  <StateView
+                    state="empty"
+                    reasonCode="no-target-selected"
+                    size="md"
+                    action={{
+                      labelKey: STATE_VIEW_ACTION_KEYS.select_target,
+                      onSelect: () => {
+                        const first = findFirstSkillPreviewFile(fileTree)
+                        if (first !== null) setSelectedFile(first)
+                      }
+                    }}
+                  />
+                )
               )}
             </section>
           </div>
