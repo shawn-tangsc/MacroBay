@@ -26,7 +26,7 @@ describe('channel maintenance jobs', () => {
   it('注册的每条定义都是 internal，并且每类维护各有一条', () => {
     const definitions = channelMaintenanceJobDefinitions(dependencies())
 
-    expect(definitions.every((definition) => definition.visibility === 'internal')).toBe(true)
+    expect(definitions.every((definition) => definition.audience === 'internal')).toBe(true)
     expect(definitions.map((definition) => definition.id).sort()).toEqual(
       [
         channelMaintenanceJobIds.deliveryCleanup,

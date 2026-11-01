@@ -6,7 +6,7 @@ import type { JobRuntime, ScheduledJobDefinition } from '@platform/jobs'
  * Two reasons: a private interval is invisible (nobody can see whether it ran, how often, or why it
  * stopped), and scheduling rules live in one place — `@platform/jobs` — instead of once per class.
  * These are maintenance, not resources: none of them is something the user configures, so every
- * definition is `visibility: 'internal'` and the settings table must not list them.
+ * definition is `audience: 'internal'` and the settings table must not list them.
  *
  * Timers deliberately NOT here are the ones tied to a live owner and must stop with it: the
  * Telegram long-poll loop, the Slack and Lark reconnect backoff, and the inbound execution's lease
@@ -69,7 +69,7 @@ export function channelMaintenanceJobDefinitions(
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.deliveryCleanup,
       title: 'Channel delivery cleanup',
-      visibility: 'internal',
+      audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelMaintenanceIntervalMs, anchor: 'lastComplete' },
       payload: {}
     },
@@ -78,7 +78,7 @@ export function channelMaintenanceJobDefinitions(
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.deliveryRetry,
       title: 'Channel delivery retry',
-      visibility: 'internal',
+      audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelDeliveryRetryIntervalMs, anchor: 'lastComplete' },
       payload: {}
     },
@@ -87,7 +87,7 @@ export function channelMaintenanceJobDefinitions(
       owner: 'platform',
       handlerId: channelMaintenanceJobIds.inboundRecovery,
       title: 'Channel inbound recovery',
-      visibility: 'internal',
+      audience: 'internal',
       trigger: { kind: 'interval', intervalMs: channelMaintenanceIntervalMs, anchor: 'lastComplete' },
       payload: {}
     },
@@ -96,7 +96,7 @@ export function channelMaintenanceJobDefinitions(
       owner: 'platform' as const,
       handlerId: channelMaintenanceJobIds.adapterMaintenance(type),
       title: `${type} runtime maintenance`,
-      visibility: 'internal' as const,
+      audience: 'internal' as const,
       trigger: {
         kind: 'interval' as const,
         intervalMs: channelMaintenanceIntervalMs,
