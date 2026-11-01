@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -16,6 +16,7 @@ import { createEventBusRuntime } from '@platform/message-bus'
 import { createProductIpcRegistry } from '@platform/desktop/ipc/productIpcRegistry'
 
 import { getBlsApiCompatibilityProbe, registerServices } from './bootstrap'
+import { resetIntelligenceModuleForTests } from './intelligence/intelligenceModule'
 import { marketIntelligenceProductManifest } from '../product.manifest'
 import { MACRO_ECONOMIC_CALENDAR_IPC_METHODS } from '../contracts/macro/economicCalendarQueryContracts'
 import { INTELLIGENCE_PUBLIC_QUERY_METHODS } from '../contracts/intelligencePublicQueryMethods'
@@ -23,6 +24,13 @@ import { DASHBOARD_SOURCE_CONNECTION_IPC_METHOD } from './intelligence/schema/in
 import { marketCalendarPublicPolicy } from '../contracts/macro/marketCalendarQueryContracts'
 import { crossAssetMethods } from '../contracts/crossAssetObservationContracts'
 import * as crossAssetStorage from './intelligence/cross-asset/crossAssetStore'
+
+beforeEach(() => {
+  // Each test bootstraps the product once, with its own platform fetch. The module is a process
+  // singleton that binds its hooks on the first build, so a test that reuses the previous test's
+  // module would be testing hooks it never injected.
+  resetIntelligenceModuleForTests()
+})
 
 beforeAll(() => {
   // Bootstrap intentionally logs diagnostic markers. A late marker can race the worker

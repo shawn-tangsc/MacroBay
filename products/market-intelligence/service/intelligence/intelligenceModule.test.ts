@@ -21,12 +21,16 @@ vi.mock('electron', () => ({
 }))
 
 import { createJobRuntime } from '@platform/jobs'
+import { net } from 'electron'
 
 import { getIntelligenceModule, resetIntelligenceModuleForTests } from './intelligenceModule'
 import { intelligenceCollectJobId } from './application/sourceRuntimeOrchestrator'
 import { INTELLIGENCE_NORMALIZE_RAW_RECORDS_JOB } from './jobs/intelligenceJobIds'
 import { RECOVER_MARKET_ANALYSIS_RUNS_JOB, GROUP_MARKET_ANALYSIS_CHANGE_JOB, FREEZE_MARKET_ANALYSIS_SNAPSHOT_JOB, RUN_MARKET_ANALYSIS_JOB, VERIFY_MARKET_ANALYSIS_PREDICTIONS_JOB } from './jobs/marketAnalysisJobIds'
 import { access } from 'node:fs/promises'
+
+/** The module now requires its platform hooks on the first call; the mocked net.fetch stands in. */
+const platformHooks = () => ({ platformFetch: net.fetch as unknown as typeof fetch })
 
 beforeEach(async () => {
   resetIntelligenceModuleForTests()
@@ -45,7 +49,7 @@ describe('intelligence module calendar evidence composition', () => {
   // 单独跑却是毫秒级；给足时间，避免把 CI 变成随机红。
   it('arms the market-analysis runtime and its startup work only once the capability is enabled', { timeout: 20_000 }, async () => {
     const jobRuntime = createJobRuntime()
-    const module = getIntelligenceModule(jobRuntime)
+    const module = getIntelligenceModule(jobRuntime, platformHooks())
 
     // Off by default: nothing is scheduled and no startup job is queued, so an install that never
     // turned the capability on cannot spend a model call.
@@ -69,7 +73,7 @@ describe('intelligence module calendar evidence composition', () => {
 
   it('exposes the main-process-only 0xRouter calendar evidence admission service without registering a calendar job', () => {
     const jobRuntime = createJobRuntime()
-    const module = getIntelligenceModule(jobRuntime)
+    const module = getIntelligenceModule(jobRuntime, platformHooks())
 
     expect(module.zeroXRouterCalendarEvidenceAdmission.listDescriptors().map((item) => item.descriptorId)).toEqual([
       'macro-calendar-0xrouter-economic-data',
@@ -88,7 +92,7 @@ describe('intelligence module calendar evidence composition', () => {
       scopePolicy: 'all', rawArchiveEnabled: false, retentionMode: 'balanced', autoReplayAfterParserUpgrade: false,
       updatedAt: '2026-08-31T00:00:00.000Z'
     }]), 'utf8')
-    const module = getIntelligenceModule(createJobRuntime())
+    const module = getIntelligenceModule(createJobRuntime(), platformHooks())
     expect(module).toBeDefined()
     await expect(access(join(dataDir, 'etf-current-state.sqlite'))).resolves.toBeUndefined()
   })
@@ -99,7 +103,7 @@ describe('intelligence module calendar evidence composition', () => {
       items: [], clusters: [], revisions: [], assessments: [], sentimentSignals: [], sentimentAggregates: [], metricEvents: [], impacts: [], updatedAt: '2026-08-19T00:00:00.000Z'
     }), 'utf8')
     const jobRuntime = createJobRuntime()
-    const module = getIntelligenceModule(jobRuntime)
+    const module = getIntelligenceModule(jobRuntime, platformHooks())
 
     expect(module.pipeline.listMetricEvents()).toHaveLength(0)
     await vi.waitFor(() => {
@@ -123,7 +127,7 @@ describe('intelligence module calendar evidence composition', () => {
       persistedFearGreedRawRecord('raw-1', 'parsed'),
       persistedFearGreedRawRecord('raw-2', 'normalized')
     ])
-    const module = getIntelligenceModule(createJobRuntime())
+    const module = getIntelligenceModule(createJobRuntime(), platformHooks())
 
     await vi.waitFor(() => {
       expect(module.rawRecordStore.getRawRecord('raw-1')?.processingState).toBe('normalized')
@@ -154,7 +158,7 @@ describe('intelligence module calendar evidence composition', () => {
         : handler)
     })
 
-    const module = getIntelligenceModule(jobRuntime)
+    const module = getIntelligenceModule(jobRuntime, platformHooks())
 
     await normalizeEntered.promise
     expect(jobRuntime.listRuns({ definitionId: intelligenceCollectJobId('alternative-fear-greed') })).toHaveLength(0)
@@ -192,7 +196,7 @@ describe('intelligence module calendar evidence composition', () => {
           : handler)
       })
 
-      const module = getIntelligenceModule(jobRuntime)
+      const module = getIntelligenceModule(jobRuntime, platformHooks())
 
       await normalizeEntered.promise
       await vi.advanceTimersByTimeAsync(60_000)
@@ -225,7 +229,7 @@ describe('intelligence module calendar evidence composition', () => {
         : handler)
     })
 
-    const module = getIntelligenceModule(jobRuntime)
+    const module = getIntelligenceModule(jobRuntime, platformHooks())
 
     await vi.waitFor(() => {
       expect(jobRuntime.listRuns({ definitionId: intelligenceCollectJobId('alternative-fear-greed') })).toHaveLength(1)
@@ -246,7 +250,7 @@ describe('intelligence module calendar evidence composition', () => {
     const enqueueDefinition = vi.spyOn(jobRuntime, 'enqueueDefinition')
     enqueueDefinition.mockRejectedValueOnce(new Error('startup enqueue failed'))
 
-    getIntelligenceModule(jobRuntime)
+    getIntelligenceModule(jobRuntime, platformHooks())
 
     await vi.waitFor(() => {
       expect(jobRuntime.listRuns({ definitionId: intelligenceCollectJobId('alternative-fear-greed') })).toHaveLength(1)
@@ -316,7 +320,7 @@ describe('intelligence module calendar evidence composition', () => {
       }]
     }), 'utf8')
 
-    const module = getIntelligenceModule(createJobRuntime())
+    const module = getIntelligenceModule(createJobRuntime(), platformHooks())
     const record = module.rawRecordStore.getRawRecord('raw-1')!
 
     expect(module.macroCalendarEvidenceReady).toBe(true)
@@ -341,7 +345,7 @@ describe('intelligence module calendar evidence composition', () => {
       }]
     }), 'utf8')
 
-    const module = getIntelligenceModule(createJobRuntime())
+    const module = getIntelligenceModule(createJobRuntime(), platformHooks())
 
     expect(module.macroCalendarEvidenceReady).toBe(false)
     expect(module.rawRecordStore.getRawRecord('raw-1')?.payloadBody).toBe(body)
@@ -349,7 +353,7 @@ describe('intelligence module calendar evidence composition', () => {
   })
 
   it('exposes the deterministic daily-brief core-fact ensure service', () => {
-    const module = getIntelligenceModule(createJobRuntime())
+    const module = getIntelligenceModule(createJobRuntime(), platformHooks())
 
     expect(typeof module.dailyBriefFactEnsure.ensure).toBe('function')
   })

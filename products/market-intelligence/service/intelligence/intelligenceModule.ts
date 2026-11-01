@@ -334,11 +334,21 @@ export function getIntelligenceModule(
   jobRuntime: JobRuntime,
   platformHooks?: IntelligenceModulePlatformHooks
 ): IntelligenceModule {
-  if (platformHooks) {
-    modulePlatformHooks = platformHooks
+  // The module is a singleton and captures its dependencies when it is built. A second set of hooks
+  // therefore has no effect on what was already wired — for months that looked like a
+  // reconfiguration and silently did nothing. Repeat calls may omit hooks or repeat the same
+  // platform fetch; anything else is a wiring bug and fails here instead of turning into an
+  // occasional crash at startup.
+  if (intelligenceModule) {
+    if (platformHooks && platformHooks.platformFetch !== modulePlatformHooks?.platformFetch) {
+      throw new Error('intelligence-module-hooks-already-bound')
+    }
+    return intelligenceModule
   }
+  if (!platformHooks) throw new Error('intelligence-module-hooks-required')
+  modulePlatformHooks = platformHooks
 
-  if (!intelligenceModule) {
+  {
     const hooks = modulePlatformHooks
     const dataDir = getProductDataDir()
     const getAppLanguage = hooks?.getAppLanguage ?? (async () => 'zh-CN' as const)
