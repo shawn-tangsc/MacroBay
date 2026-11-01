@@ -56,6 +56,39 @@ describe('the market history retention pass', () => {
     expect(String(onError.mock.calls[0]?.[1])).toBe('macro')
   })
 
+  it('absorbs the news store into the same pass without a second registration', async () => {
+    // The news store joins this job instead of owning a timer: one schedule, one startup look, and its
+    // own two windows are reported in the same summary as the bar stores.
+    const news = storeFor({ thinned: 0, deleted: 12, oldestKeptAtMs: null, capped: true })
+    const summary = await createMarketHistoryRetention({
+      stores: {
+        macro: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        crossAsset: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        news
+      },
+      now: () => atMs
+    }).run()
+    expect(Object.keys(summary.results)).toEqual(['macro', 'crossAsset', 'analysis', 'news'])
+    expect(summary.results.news).toMatchObject({ deleted: 12, capped: true })
+    expect(news.notes.get('news-sentiment.retention.lastDeleted')).toBe('12')
+    // A capped pass is a fact the ledger must carry: otherwise it reads like a finished pass.
+    expect(news.notes.get('news-sentiment.retention.lastCapped')).toBe('true')
+  })
+
+  it('treats a store whose database never opened as absent, not as failed', async () => {
+    const summary = await createMarketHistoryRetention({
+      stores: {
+        macro: storeFor({ thinned: 0, deleted: 1, oldestKeptAtMs: null }),
+        crossAsset: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null }),
+        analysis: storeFor({ thinned: 0, deleted: 0, oldestKeptAtMs: null })
+      },
+      now: () => atMs
+    }).run()
+    expect(Object.keys(summary.results)).not.toContain('news')
+    expect(Object.values(summary.results).every((entry) => entry !== undefined && !('state' in entry))).toBe(true)
+  })
+
   it('registers one daily job and looks at startup as well', () => {
     const registered = new Map<string, unknown>()
     const schedules: unknown[] = []

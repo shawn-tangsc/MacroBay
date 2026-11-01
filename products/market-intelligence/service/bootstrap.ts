@@ -16,6 +16,7 @@ import { createCrossAssetStore, crossAssetStoragePolicy } from './intelligence/c
 import { analysisConclusionCutoffIso } from './intelligence/retention/analysisConclusionRetention'
 import { predictionLedgerCutoffIso } from './intelligence/retention/predictionLedgerRetention'
 import { createMarketHistoryRetention, registerMarketHistoryRetentionJob } from './intelligence/retention/marketHistoryRetentionJob'
+import { createNewsSentimentRetentionTarget } from './intelligence/news-sentiment/newsSentimentRetention'
 import { createCrossAssetRuntime } from './intelligence/cross-asset/crossAssetRuntime'
 import { createBinanceCrossAssetClient } from './intelligence/cross-asset/binanceCrossAssetClient'
 import { createBinanceCrossAssetStream } from './intelligence/cross-asset/binanceCrossAssetStream'
@@ -282,7 +283,13 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
         analysis: {
           retention: ({ atMs }) => ({ thinned: 0, ...analysisRepository.retention({ conclusionCutoffIso: analysisConclusionCutoffIso(atMs), ledgerCutoffIso: predictionLedgerCutoffIso(atMs) }) }),
           note: (key, value) => analysisRepository.note(key, value)
-        }
+        },
+        // The news store keeps its own two windows (30 days of bodies, 365 of judgments) on this same
+        // clock. It joins this job rather than owning a timer of its own: one daily pass, one startup
+        // look, and a store whose database failed to open is simply absent from the pass.
+        ...(intelligenceModule.newsSentiment.store
+          ? { news: createNewsSentimentRetentionTarget(intelligenceModule.newsSentiment.store) }
+          : {})
       }
     }).run)
   }

@@ -195,21 +195,56 @@ export function createNewsSentimentSqliteStore(filePath: string) {
       return rows.map(toSentiment)
     },
 
-    purgeBefore(input: { documentsBefore: string; sentimentsBefore: string }): {
+    /**
+     * The retention pass, bounded per call.
+     *
+     * `maxRows` is one budget for the whole pass, spent on documents first: a store that has been kept
+     * for a year has months of bodies to drop, and an unbounded delete would hold the write lock for
+     * as long as that takes. Whatever does not fit waits for the next run — `capped` says so, rather
+     * than letting the caller assume the pass finished.
+     */
+    purgeBefore(input: { documentsBefore: string; sentimentsBefore: string; maxRows?: number }): {
       documents: number
       sentiments: number
+      capped: boolean
     } {
       assertIso(input.documentsBefore)
       assertIso(input.sentimentsBefore)
-      const documents = Number(
-        db.prepare('delete from news_document where fetched_at < ?').run(input.documentsBefore).changes
-      )
-      const sentiments = Number(
-        db.prepare('delete from news_sentiment where scored_at < ?').run(input.sentimentsBefore).changes
-      )
-      return { documents, sentiments }
+      const budget = Math.max(0, Math.floor(input.maxRows ?? Number.MAX_SAFE_INTEGER))
+      const documents = deleteBefore(db, 'news_document', 'fetched_at', input.documentsBefore, budget)
+      const sentiments = deleteBefore(db, 'news_sentiment', 'scored_at', input.sentimentsBefore, budget - documents)
+      return { documents, sentiments, capped: documents + sentiments >= budget }
     }
   }
+}
+
+/**
+ * `delete … limit` needs a SQLite build flag this runtime does not guarantee, so the keys are chosen
+ * first and removed by primary rowid inside one transaction: a crash mid-pass leaves the rows, not a
+ * half-deleted window.
+ */
+function deleteBefore(
+  db: DatabaseSync,
+  table: 'news_document' | 'news_sentiment',
+  column: 'fetched_at' | 'scored_at',
+  cutoff: string,
+  limit: number
+): number {
+  if (limit <= 0) return 0
+  const keys = db
+    .prepare(`select rowid as row_id from ${table} where ${column} < ? limit ?`)
+    .all(cutoff, limit) as Array<{ row_id: number }>
+  if (keys.length === 0) return 0
+  const remove = db.prepare(`delete from ${table} where rowid = ?`)
+  db.exec('begin')
+  try {
+    for (const key of keys) remove.run(key.row_id)
+    db.exec('commit')
+  } catch (error) {
+    db.exec('rollback')
+    throw error
+  }
+  return keys.length
 }
 
 /** No migration path: a file that cannot be opened is discarded and rebuilt. */
