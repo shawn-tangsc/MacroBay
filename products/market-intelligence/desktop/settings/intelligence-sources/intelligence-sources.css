@@ -1114,8 +1114,10 @@
 .source-provider-detail__main {
   display: flex;
   flex: 1;
-  flex-direction: column;
-  gap: 4px;
+  /* Name and tags on one line so the row's entrance arrow sits at the end of the content. */
+  align-items: center;
+  flex-direction: row;
+  gap: 8px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -1126,7 +1128,22 @@
 }
 
 .source-provider-detail__main strong {
+  flex: 1;
   font-size: 13px;
+  min-width: 0;
+}
+
+.source-provider-detail__main .intelligence-source-tags {
+  min-width: 0;
+}
+
+.source-provider-detail__main:hover {
+  background: var(--surface-soft);
+}
+
+.source-provider-detail__chevron {
+  color: var(--muted);
+  flex: none;
 }
 
 .intelligence-provider-row.selected {

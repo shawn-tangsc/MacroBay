@@ -1,5 +1,5 @@
 import { Alert, Button, Input, Switch } from 'antd'
-import { Eye, EyeOff } from 'lucide-react'
+import { ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
@@ -23,6 +23,7 @@ export type ProviderDetailLabels = {
   badges: { pending: string; advanced: string; calendar: string; proxy: string }
   status: { enabled: string; disabled: string }
   capabilities: string
+  toggleSource: Readonly<{ enable: string; disable: string }>
   credentials: string
   website: string
   signup: string
@@ -275,9 +276,14 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
                 return status ? <em className={`source-provider-detail__health is-${status}`}>{sourceDetailLabels?.health.statuses[status] ?? status}</em> : null
               })()}
             </span>
+            {/* The one visible sign this row opens something: it is an entrance, not an action,
+                so it stays a row with an arrow rather than becoming a button. */}
+            <ChevronRight aria-hidden="true" className="source-provider-detail__chevron" size={13} />
           </button>
           <Switch
-            aria-label={name}
+            /* The row's label is the source name; the switch has to say what it does, or a screen
+               reader reads the same name twice and cannot tell the two controls apart. */
+            aria-label={(source.enabled ? labels.toggleSource.disable : labels.toggleSource.enable).replace('{name}', name)}
             checked={source.enabled}
             disabled={source.visibility === 'pending'}
             onChange={(enabled) => void toggle(source, enabled)}
