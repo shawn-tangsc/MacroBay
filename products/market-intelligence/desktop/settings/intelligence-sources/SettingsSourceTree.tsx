@@ -1,6 +1,8 @@
 import { Segmented } from 'antd'
 import { ChevronRight } from 'lucide-react'
 
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import type { SourceCategory } from '../../../service/intelligence/application/providerRegistry'
 
@@ -44,6 +46,15 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
       />
     </div>
     <div className="intelligence-catalog-list">
+      {/* A filter that hides every provider must say so and offer the way back, not render blank. */}
+      {(view?.groups ?? []).every((group) => group.providers.every((provider) => provider.sources.filter((source) => matchesFilter(source, filter)).length === 0))
+        ? <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: () => onFilterChange('all') }}
+          reasonCode="filtered-out"
+          size="md"
+          state="empty"
+        />
+        : null}
       {(view?.groups ?? []).map((group) => {
         const providers = group.providers
           .map((provider) => ({ ...provider, sources: provider.sources.filter((source) => matchesFilter(source, filter)) }))
