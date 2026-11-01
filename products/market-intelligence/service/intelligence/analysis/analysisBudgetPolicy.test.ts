@@ -18,9 +18,10 @@ it('states every quota in one frozen policy, one line at a time', () => {
   expect(analysisBudgetPolicy.lineQuotas.event).toEqual({ daily: 48, hourly: 12, coalesce: false })
   expect(analysisBudgetPolicy.lineQuotas.calendar).toEqual({ daily: 9, hourly: 3, coalesce: true })
   expect(analysisBudgetPolicy.reservedScheduledRunsPerDay).toBe(3)
-  // The global number is the sum of the two lines, not a third budget they compete for.
-  expect(analysisBudgetPolicy.maximumDailyRuns)
-    .toBe(analysisBudgetPolicy.lineQuotas.event.daily + analysisBudgetPolicy.lineQuotas.calendar.daily)
+  // The global gate is the approved ceiling (higher than the two lines' sum), not a third budget
+  // the lines compete for: it only refuses once the whole day or hour has been spent.
+  expect(analysisBudgetPolicy.maximumDailyRuns).toBe(60)
+  expect(analysisBudgetPolicy.maximumHourlyRuns).toBe(15)
   expect(analysisBudgetPolicy.dayWindow).toBe('utc-calendar-day')
   expect(Object.isFrozen(analysisBudgetPolicy)).toBe(true)
   expect(Object.isFrozen(analysisBudgetPolicy.lineQuotas.event)).toBe(true)
@@ -42,8 +43,10 @@ it('gives each line its own hourly quota', () => {
   expect(event({ eventRunsThisHour: 12 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
   expect(calendar({ calendarRunsThisHour: 2 })).toEqual({ decision: 'queued', reasonCode: null })
   expect(calendar({ calendarRunsThisHour: 3 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
-  // The hourly gate reads the line's own hour, never the total hour (which includes the slots).
-  expect(event({ hourRuns: 15, eventRunsThisHour: 4 })).toEqual({ decision: 'queued', reasonCode: null })
+  // A line inside its own hourly quota is still refused once the whole hour is spent — that is the
+  // global gate, and it is what lets the combined guard be deleted without losing a ceiling.
+  expect(event({ hourRuns: 14, eventRunsThisHour: 4 })).toEqual({ decision: 'queued', reasonCode: null })
+  expect(event({ hourRuns: 15, eventRunsThisHour: 4 })).toEqual({ decision: 'skipped', reasonCode: 'hour-budget-exhausted' })
 })
 
 it('declares the coalescing window per line: calendar obeys it, the item line does not', () => {

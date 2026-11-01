@@ -30,7 +30,16 @@ export const analysisBudgetPolicy = Object.freeze({
    * Backstop for the whole data-driven day: the sum of the two lines' daily quotas (48 + 9). It is
    * deliberately not smaller than any line, or a busy line would be charged the other's spend.
    */
-  maximumDailyRuns: 57,
+  maximumDailyRuns: 60,
+  /**
+   * Global hourly gate, counted across every line including the reserved session slots.
+   *
+   * Per-line quotas decide who may spend; this decides whether the day may spend any more at all.
+   * Without it, removing `analysisTriggerPolicy`'s combined guard would leave no ceiling above the
+   * individual lines. The numbers are the ones approved with the per-line split (60 a day, 15 an
+   * hour), not the old gate's 48/12.
+   */
+  maximumHourlyRuns: 15,
   /**
    * Reserved for the three session slots — one per open. The other lines may not touch it.
    *
@@ -108,10 +117,11 @@ export function decideBudget(input: AnalysisBudgetInput): BudgetDecision {
   if (quota.coalesce && input.lastAutoRunAt !== null && Date.parse(input.now) - Date.parse(input.lastAutoRunAt) < analysisBudgetPolicy.minimumIntervalMs) {
     return skip(analysisBudgetPolicy.reasonCodes.interval)
   }
-  // Backstop only: with both lines inside their own quotas this can only fire if a future line is
-  // given a larger allowance without raising the total.
-  if (input.eventRunsToday + input.calendarRunsToday >= analysisBudgetPolicy.maximumDailyRuns) {
-    return skip(analysisBudgetPolicy.reasonCodes.daily)
-  }
+  // Global gates last: a data-driven line inside its own quota is still refused once the whole day
+  // or hour is spent. `dayRuns`/`hourRuns` count every delivered run including the reserved slots,
+  // which is what the combined guard these replace used to count. The slots themselves are exempt:
+  // they are already capped at three a day, and 48 + 9 + 3 is exactly the 60 this gate enforces.
+  if (input.hourRuns >= analysisBudgetPolicy.maximumHourlyRuns) return skip(analysisBudgetPolicy.reasonCodes.hourly)
+  if (input.dayRuns >= analysisBudgetPolicy.maximumDailyRuns) return skip(analysisBudgetPolicy.reasonCodes.daily)
   return queued
 }
