@@ -40,30 +40,60 @@ export function buildProxyProbeUrl(baseUrl: string | null | undefined): string {
 
 export function formatProxySelfTestLine(
   result: ProxySelfTestResult,
-  labels: PlatformText['preferences'],
+  labels: PlatformText,
   context: ProxySelfTestContext
 ): string {
+  const preferences = labels.preferences
   // 想走代理、网络栈却解析成直连：这次没走代理，不管请求是否成功都不许显示「通过」。
   if (context.expectsProxy && result.proxied === false) {
-    return labels.proxySelfTestNotApplied(result.resolvedProxy?.trim() || 'DIRECT')
+    return preferences.proxySelfTestNotApplied(result.resolvedProxy?.trim() || 'DIRECT')
   }
   // 代理端点连不上是「代理坏了」，与目标站无关。
   if (result.endpointReachable === false) {
-    return labels.proxySelfTestProxyUnreachable(result.proxyEndpoint?.trim() || result.targetHost)
+    return preferences.proxySelfTestProxyUnreachable(result.proxyEndpoint?.trim() || result.targetHost)
   }
   // 目标站点自己拒绝（401/403）：先说人话，别让用户以为代理坏了，也别把内部码当句子。
   const rejectedStatus = targetRejectedStatus(result)
   if (rejectedStatus !== null) {
-    return labels.proxySelfTestTargetRejected(rejectedStatus, result.targetHost)
+    return preferences.proxySelfTestTargetRejected(rejectedStatus, result.targetHost)
   }
   if (result.ok) {
-    return labels.proxySelfTestPassed(
-      result.status ?? 0,
-      (result.durationMs / 1000).toFixed(1),
-      result.resolvedProxy?.trim() || context.fallbackProxyLabel
-    )
+    const status = result.status ?? 0
+    const seconds = (result.durationMs / 1000).toFixed(1)
+    // 绿档分两支：只有网络栈确认走了代理才说「通过代理」；模式判断只来自 context，不在这里另算。
+    return result.proxied === true
+      ? preferences.proxySelfTestPassedViaProxy(status, seconds)
+      : preferences.proxySelfTestReachable(status, seconds)
   }
-  return labels.proxySelfTestFailed(result.reasonCode ?? 'unknown', result.targetHost)
+  // 兜底分支同样不许把内部码当句子：按码映射到连接检查那套人话，码只留在主进程返回值与日志里。
+  return `${proxyFailureSentence(result, labels)} · ${result.targetHost}`
+}
+
+function proxyFailureSentence(result: ProxySelfTestResult, labels: PlatformText): string {
+  const sentences = labels.models
+  switch (result.reasonCode) {
+    case 'proxy_error':
+      return sentences.connectionCheckReasonProxy
+    case 'network_timeout':
+    case 'timeout':
+      return sentences.connectionCheckReasonTimeout
+    case 'network_dns':
+    case 'dns_error':
+      return sentences.connectionCheckReasonDns
+    case 'tls_error':
+      return sentences.connectionCheckReasonTls
+    case 'network_refused':
+    case 'connection_refused':
+      return sentences.connectionCheckReasonRefused
+    case 'rate_limited':
+      return sentences.connectionCheckReasonRateLimited
+    case 'invalid_response':
+      return sentences.connectionCheckReasonInvalidResponse
+    default:
+      return result.status === null
+        ? sentences.connectionCheckReasonUnknown
+        : sentences.connectionCheckReasonHttp(result.status)
+  }
 }
 
 function targetRejectedStatus(result: ProxySelfTestResult): number | null {

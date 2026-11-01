@@ -942,11 +942,12 @@ export type PlatformText = {
     proxyRequestHint: string
     proxySelfTest: string
     proxySelfTestRunning: string
-    proxySelfTestPassed: (status: number, seconds: string, proxy: string) => string
-    proxySelfTestFailed: (code: string, host: string) => string
+    proxySelfTestPassedViaProxy: (status: number, seconds: string) => string
+    proxySelfTestReachable: (status: number, seconds: string) => string
     proxySelfTestNotApplied: (resolvedProxy: string) => string
     proxySelfTestProxyUnreachable: (endpoint: string) => string
     proxySelfTestTargetRejected: (status: number, host: string) => string
+    proxySelfTestAuthenticationHint: string
     proxyRejectedEmpty: string
     proxyRejectedUnsupportedProtocol: string
     proxyRejectedUnparsable: string
@@ -1973,12 +1974,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxyRequestHint: '应用请求走这里的代理设置；浏览器能打开不代表应用能连。',
       proxySelfTest: '测试代理',
       proxySelfTestRunning: '测试中…',
-      proxySelfTestPassed: (status, seconds, proxy) => `代理自检：通过（HTTP ${status}，${seconds}s，经 ${proxy}）`,
-      proxySelfTestFailed: (code, host) => `代理自检：失败（${code}）· 目标 ${host}`,
+      proxySelfTestPassedViaProxy: (status, seconds) => `已通过代理到达目标站点（HTTP ${status} · ${seconds}s）`,
+      proxySelfTestReachable: (status, seconds) => `能连到目标站点（HTTP ${status} · ${seconds}s）`,
       proxySelfTestNotApplied: (resolvedProxy) =>
         `代理自检：未生效（设置为代理，但网络栈解析为「${resolvedProxy}」，这次没有走代理）`,
       proxySelfTestProxyUnreachable: (endpoint) => `代理自检：失败（代理端点 ${endpoint} 连不上，与目标站无关）`,
-      proxySelfTestTargetRejected: (status, host) => `目标站点拒绝了请求（HTTP ${status}）· ${host}`,
+      proxySelfTestTargetRejected: (status, host) => `已连到目标站点，站点要求鉴权（HTTP ${status}）· ${host}`,
+      proxySelfTestAuthenticationHint: '这条自检不带 Key，401 属正常；与代理是否生效无关。',
       proxyRejectedEmpty: '请先填写代理地址。',
       proxyRejectedUnsupportedProtocol: '代理地址只支持 http、https、socks5 三种协议，请写成 `http://主机:端口`。',
       proxyRejectedUnparsable: '代理地址格式不对，请写成 `http://主机:端口` 或 `socks5://主机:端口`。',
@@ -3012,14 +3014,16 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       proxyRequestHint: 'App requests use the proxy settings here; the browser reaching a site does not mean the app can.',
       proxySelfTest: 'Test proxy',
       proxySelfTestRunning: 'Testing…',
-      proxySelfTestPassed: (status, seconds, proxy) => `Proxy check: passed (HTTP ${status}, ${seconds}s, via ${proxy})`,
-      proxySelfTestFailed: (code, host) => `Proxy check: failed (${code}) · target ${host}`,
+      proxySelfTestPassedViaProxy: (status, seconds) => `Reached the target site through the proxy (HTTP ${status} · ${seconds}s)`,
+      proxySelfTestReachable: (status, seconds) => `Reached the target site (HTTP ${status} · ${seconds}s)`,
       proxySelfTestNotApplied: (resolvedProxy) =>
         `Proxy check: not in effect (a proxy is configured, but the network stack resolved "${resolvedProxy}", so this request went direct)`,
       proxySelfTestProxyUnreachable: (endpoint) =>
         `Proxy check: failed (the proxy endpoint ${endpoint} is unreachable, which has nothing to do with the target site)`,
       proxySelfTestTargetRejected: (status, host) =>
-        `The target site rejected the request (HTTP ${status}) · ${host}`,
+        `Reached the target site; it asks for authentication (HTTP ${status}) · ${host}`,
+      proxySelfTestAuthenticationHint:
+        'This check sends no key, so a 401 is expected; it says nothing about whether the proxy is in effect.',
       proxyRejectedEmpty: 'Enter a proxy address first.',
       proxyRejectedUnsupportedProtocol: 'Only http, https and socks5 addresses are supported; write it as `http://host:port`.',
       proxyRejectedUnparsable: 'That proxy address cannot be parsed; write it as `http://host:port` or `socks5://host:port`.',

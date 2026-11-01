@@ -1420,7 +1420,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
               <p
                 className={proxySelfTest.result.ok ? 'preference-proxy-probe-result ok' : 'preference-proxy-probe-result failed'}
                 data-proxy-self-test-result>
-                {formatProxySelfTestLine(proxySelfTest.result, t.preferences, {
+                {formatProxySelfTestLine(proxySelfTest.result, t, {
                   expectsProxy: settings.network.proxyMode === 'custom',
                   fallbackProxyLabel: resolveProxyDisplayLabel()
                 })}
