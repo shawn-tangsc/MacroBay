@@ -5,7 +5,7 @@ import zhCN from 'antd/locale/zh_CN'
 
 import type { AccentColor, AppLanguage, ThemeMode } from '@platform/settings/schema/appSettings'
 import { resolveThemeMode, toThemeAttributes, type ResolvedThemeMode } from '@platform/ui/theme/themeModel'
-import { buildWindowAntdTheme } from '@platform/ui/theme/windowAntdTheme'
+import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 /**
  * Owner: apps/desktop-shell renderer / workspace（**PLAT-39 ②**：分离窗与应用主窗**颜色风格一致**）。
@@ -156,6 +156,7 @@ export function DetachedWindowThemeShell({ language, contextTheme, appearance, c
     <ConfigProvider
       locale={resolveWorkspaceWindowAntdLocale(language)}
       theme={buildWindowAntdTheme(resolvedTheme, accentColor)}
+      button={WINDOW_ANTD_BUTTON_CONFIG}
     >{children}</ConfigProvider>
   )
 }

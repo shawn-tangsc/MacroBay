@@ -89,7 +89,6 @@ export function WebSearchSettingsPage({ language }: WebSearchSettingsPageProps):
             </span>
             <Button
               className="ant-primary-button"
-              autoInsertSpace={false}
               loading={saving}
               disabled={!dirty || saving}
               onClick={() => void savePolicy()}>

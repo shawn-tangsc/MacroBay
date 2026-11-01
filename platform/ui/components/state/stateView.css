@@ -1,0 +1,113 @@
+/*
+ * 六态状态视图的基座。只有一个布局：图标在上、标题一句、原因一句、至多一个动作。
+ *
+ * 颜色不做语义：`disabled` 与 `permission` 都走中性色（两者同色），区别由图标轮廓与文案承担，
+ * 灰度下仍须可分辨（契约 §13）。高度（220 / 80）由组件的尺寸表写进 `style.minHeight`，
+ * 这里不重复一份——同一事实两处写，改一处就会不一致。
+ */
+.state-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 16px;
+  text-align: center;
+  color: var(--text);
+}
+
+.state-view--loading {
+  /* 等待组件自带内边距与间距；再叠一层就是两层。 */
+  padding: 0;
+  gap: 0;
+}
+
+.state-view__icon {
+  display: block;
+  flex: none;
+  color: var(--muted-strong);
+  line-height: 1;
+}
+
+.state-view__icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+/*
+ * 只有图标拿 --danger：图形门槛是 3:1，深色下 --danger 对 surface 是 3.94，够；
+ * 正文一律走 --text-strong / --muted。混一点正文色让它同时越过 4.5，于是这条声明不必
+ * 进 `--danger` 前景色基线（基线只减不增）。
+ */
+.state-view--error .state-view__icon {
+  color: color-mix(in srgb, var(--danger) 85%, var(--text-strong));
+}
+
+.state-view__live {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.state-view__title {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.state-view__reason {
+  max-width: 30ch;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.state-view__details {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.state-view__details summary {
+  cursor: pointer;
+}
+
+.state-view__details p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.state-view__action {
+  margin-top: 2px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* 出错态的恢复动作是这一屏唯一能做的事，用主按钮；其余态的动作是可选旁路。 */
+.state-view--error .state-view__action {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.state-view__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

@@ -4,12 +4,14 @@ import { resolve } from 'node:path'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ConfigProvider } from 'antd'
 
 import type {
   SafeWebSearchProviderView,
   WebSearchSettings
 } from '@platform/ai/web-search/contracts/webSearchContracts'
 import { createDefaultWebSearchSettings } from '@platform/ai/web-search/contracts/webSearchSettings'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import { platformText } from '../../../i18n/platformText'
 import { WebSearchSettingsPage } from './WebSearchSettingsPage'
@@ -83,7 +85,10 @@ async function mountPage(): Promise<{ container: HTMLElement; updateSettings: Re
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => root?.render(createElement(WebSearchSettingsPage, { language: 'zh-CN' })))
+  // 页面在真机上永远在 AppShell 的 ConfigProvider 之下；这里补上同一份按钮配置，
+  // 否则测试按 antd 默认在汉字之间插空格，看到的文案与真机不是一回事。
+  await act(async () => root?.render(createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+    createElement(WebSearchSettingsPage, { language: 'zh-CN' }))))
   await settle()
   return { container, updateSettings }
 }

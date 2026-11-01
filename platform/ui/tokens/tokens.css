@@ -17,18 +17,40 @@
   --border-subtle: #1c1f26;
   /* Status colours. Used for text and icons, never as the only carrier of meaning. */
   --success: #3fbf6f;
-  --warning: #c48a2a;
+  /*
+   * `--caution`: stale data, degraded behaviour, something to look at. It is not
+   * an error, so it is not `--danger`. One value for the whole app — the three
+   * older fallbacks (`#c48a1a` / `#c48a2a` / `#c28b2a`) collapse here, and the
+   * `#c48a2a` spelling was a typo.
+   */
+  --caution: #c48a1a;
+
+  /*
+   * Metric type scale: readings only (a single number or a very short label),
+   * never a sentence. One size more and every dashboard invents its own 26/28/30.
+   */
+  --font-metric-sm: 24px;
+  --font-metric-md: 30px;
+  --font-metric-lg: 42px;
 
   /* Legacy aliases kept so existing rules resolve; they add no new colour. */
   --text-primary: var(--text-strong);
   --panel: var(--surface);
   --surface-2: var(--surface-soft);
   --surface-raised: var(--surface-strong);
+  /* `--warning` is the pre-2026-11 name of `--caution`; kept as an alias, not a second yellow. */
+  --warning: var(--caution);
 }
 
 :root[data-theme="light"] {
   --text-secondary: #555f6d;
   --border-subtle: #eef0f3;
   --success: #2f7d4f;
-  --warning: #a2691a;
+  --caution: #a2691a;
+
+  --font-metric-sm: 24px;
+  --font-metric-md: 30px;
+  --font-metric-lg: 42px;
+
+  --warning: var(--caution);
 }

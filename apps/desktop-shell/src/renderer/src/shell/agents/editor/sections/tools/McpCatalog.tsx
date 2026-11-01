@@ -209,7 +209,6 @@ function McpRow({
           className="ant-secondary-button"
           size="small"
           aria-label={text.editor.tools.mcpUnbind}
-          autoInsertSpace={false}
           onClick={onUnbind}>
           {text.editor.tools.mcpUnbind}
         </Button>

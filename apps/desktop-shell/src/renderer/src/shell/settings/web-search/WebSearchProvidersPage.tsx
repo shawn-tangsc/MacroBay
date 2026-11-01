@@ -105,7 +105,6 @@ export function WebSearchProvidersPage({
                   <Button
                     className="ant-secondary-button"
                     size="small"
-                    autoInsertSpace={false}
                     data-web-search-configure={provider.id}
                     onClick={() => onOpenProvider(provider.id)}>
                     {labels.configureProvider}

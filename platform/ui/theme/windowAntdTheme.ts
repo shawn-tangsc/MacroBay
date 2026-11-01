@@ -52,3 +52,12 @@ export function buildWindowAntdTheme(variant: WindowThemeVariant, accentColor: A
     }
   }
 }
+
+/**
+ * antd 的「两个汉字之间自动加空格」在全局关掉，只关这一次。
+ *
+ * 开着的话，「收起」会渲染成「收 起」，中文按钮里到处是这种空格。逐按钮写 `autoInsertSpace={false}`
+ * 只能按到写过的那几个：换到基座的按钮会一个一个再冒出来，七条线就是七份覆盖，而且没人记得删。
+ * 主窗与分离窗两个 `ConfigProvider` 都读这一份，产品侧一个都不许写。
+ */
+export const WINDOW_ANTD_BUTTON_CONFIG = Object.freeze({ autoInsertSpace: false })
