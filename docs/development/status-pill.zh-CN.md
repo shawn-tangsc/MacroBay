@@ -57,6 +57,11 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 - **是 `<span>`，不是按钮。** 药丸是状态不是动作：「点击刷新」这种动词属于按钮。把药丸做成可点，
   只会让那个错误看起来像是有意设计。
 - **`warn` 与 `bad` 互不借 token**——偏旧不是失败。
+- **`labelKey` 必须是键。** 它是开区间（每个站点的状态词不同，平台枚举不出来），
+  这条线由 `statusPillKeyGuard.test.ts` 守：`<StatusPill …>` 调用点如果传了句子、中文标签
+  或已解析好的字符串，守卫报红。变量与常量按它们的定义判，守卫不替它们作证。
+- **这个名字只属于平台组件。** `platform/` 之外再声明一个 `StatusPill` 就是撞名，同一个守卫
+  会红。翻译设置页那个是 label+value 的计数徽标、不是状态，已经叫 `CountBadge`。
 
 ## 调用点的规则
 

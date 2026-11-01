@@ -191,10 +191,10 @@ export function TranslationPreferencesSection(props: {
         <div className="intelligence-translation-status">
           {props.moduleStatus ? (
             <>
-              <StatusPill label={props.labels.pendingCount} value={String(counts.pendingCount)} />
-              <StatusPill label={props.labels.failedCount} value={String(counts.failedCount)} />
-              <StatusPill label={props.labels.translatedCount} value={String(counts.translatedCount)} />
-              <StatusPill
+              <CountBadge label={props.labels.pendingCount} value={String(counts.pendingCount)} />
+              <CountBadge label={props.labels.failedCount} value={String(counts.failedCount)} />
+              <CountBadge label={props.labels.translatedCount} value={String(counts.translatedCount)} />
+              <CountBadge
                 label={props.labels.lastJobAt}
                 // No job has run yet is not "saved": the pill used to claim a job that never happened.
                 value={props.moduleStatus.lastJobAt ? formatTime(props.moduleStatus.lastJobAt, 'minute') : '—'}
@@ -232,7 +232,7 @@ function SettingRow(props: { label: string; children: React.ReactNode; wide?: bo
   )
 }
 
-function StatusPill(props: { label: string; value: string; wide?: boolean }): React.ReactElement {
+function CountBadge(props: { label: string; value: string; wide?: boolean }): React.ReactElement {
   return (
     <div className={`intelligence-translation-pill${props.wide ? ' intelligence-translation-pill-wide' : ''}`}>
       <span className="intelligence-translation-pill-label">{props.label}</span>

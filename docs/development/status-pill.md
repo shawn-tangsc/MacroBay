@@ -61,6 +61,13 @@ the dot and the border only reinforce it.
   refresh" belongs in a button. Making the pill clickable would only make that mistake look
   intended.
 - **`warn` and `bad` never borrow each other's token** — a stale value is not a failure.
+- **`labelKey` must be a key.** It stays an open string because every call site names its own state
+  word, so `statusPillKeyGuard.test.ts` holds the line: a `<StatusPill …>` call site that passes a
+  sentence, a CJK label or an already-resolved string turns that guard red. Variables and constants
+  are judged by their definition, not by the guard.
+- **The name belongs to this component.** A second `StatusPill` declared outside `platform/` is a
+  collision — the same guard fails on it. The count chip on the translation settings page is a
+  label+value badge, not a state, and is named `CountBadge`.
 
 ## Rules for call sites
 
