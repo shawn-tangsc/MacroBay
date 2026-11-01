@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
 import { createElement } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act } from 'react-dom/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -44,7 +47,9 @@ describe('divergence panel', () => {
     expect(markup).toContain('+3.40%')
     expect(markup).toContain(row.mechanism)
     // The invalidation is one hover away, not another paragraph.
-    expect(markup).toContain(`title="${text.invalidationLabel}：${row.invalidation}"`)
+    // The invalidation is one hover or one Tab away, not a `title` the keyboard cannot reach.
+    expect(markup).not.toContain(`title="${text.invalidationLabel}：${row.invalidation}"`)
+    expect(markup).toContain('tabindex="0"')
     expect(markup).not.toContain('mi-divergence__judge')
   })
 
@@ -151,5 +156,27 @@ describe('states that must not be confused', () => {
     const markup = render({ state: 'empty', withheld: [] })
     expect(markup).toContain(text.empty)
     expect(markup).not.toContain('data-tone="error"')
+  })
+})
+
+describe('invalidation on focus', () => {
+  it('opens the same sentence for a keyboard reader as for a pointer', async () => {
+    // A `title` was invisible to both the keyboard and the screen reader; the sentence now comes
+    // from the shared tooltip, and focusing the row must be enough to get it.
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: { state: 'available', rows: [{ pairId: 'liquidity-leverage', direction: 'bearish', legs: row.legs }], withheld: [] }, text
+      })))
+    })
+    const line = container.querySelector('[data-pair="liquidity-leverage"]') as HTMLElement
+    expect(line.tabIndex).toBe(0)
+    await act(async () => { line.focus() })
+    const described = line.getAttribute('aria-describedby')
+    expect(described).toBeTruthy()
+    expect(document.getElementById(described!)?.textContent).toContain(row.invalidation)
+    await act(async () => { root.unmount() })
   })
 })

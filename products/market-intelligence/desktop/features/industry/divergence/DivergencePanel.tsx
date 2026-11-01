@@ -70,14 +70,18 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
           <div className="mi-divergence__conclusion" data-tone="conclusion">
             <ul className="mi-divergence__rows">
               {state.rows.map(row => (
-                <li key={row.pairId} className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction}
+                // Focusable, not titled: a `title` is invisible to the keyboard and the reader, so the
+                // invalidation sentence opens on focus as well as on hover (single line, so Tooltip).
+                <Tooltip key={row.pairId} trigger={['hover', 'focus']}
                   title={`${text.invalidationLabel}${text.labelSep}${text.pairs[row.pairId as keyof DivergencePanelText['pairs']].invalidation}`}>
+                <li className="mi-divergence__row" data-pair={row.pairId} data-direction={row.direction} tabIndex={0}>
                   <div className="mi-divergence__line">
                     <b className="mi-divergence__direction" data-direction={row.direction}>{text.directions[row.direction]}</b>
                     {row.legs.map(leg => <span key={leg.id} className="mi-divergence__leg"><i>{text.legs[leg.id]}</i>{leg.text}</span>)}
                   </div>
                   <p className="mi-divergence__mechanism">{text.pairs[row.pairId as keyof DivergencePanelText['pairs']].mechanism}</p>
                 </li>
+                </Tooltip>
               ))}
             </ul>
           </div>
