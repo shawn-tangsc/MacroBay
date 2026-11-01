@@ -201,6 +201,8 @@ export const IpcChannels = {
   notificationsList: 'platform:notifications-list',
   notificationsGetUnreadState: 'platform:notifications-get-unread-state',
   notificationsMarkRead: 'platform:notifications-mark-read',
+  /** 清空 = 全部未读标为已读（不是删除）。一次落盘，返回新的未读数与版本。 */
+  notificationsMarkAllRead: 'platform:notifications-mark-all-read',
   notificationsAcknowledge: 'platform:notifications-acknowledge',
   notificationsDismiss: 'platform:notifications-dismiss',
   notificationsSnooze: 'platform:notifications-snooze',

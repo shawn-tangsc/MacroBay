@@ -195,13 +195,31 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     async getUnreadState(productId?: string): Promise<NotificationUnreadState> {
       const state = await load()
       const now = new Date().toISOString()
-      const unread = state.records.filter(
-        (record: NotificationRecord) =>
-          record.state === 'unread' &&
-          isActiveNotification(record, now) &&
-          (!productId || record.productId === productId)
-      ).length
-      return { unread, version }
+      return unreadStateOf(state.records, now, productId, version)
+    },
+
+    /**
+     * 「清空」= 全部未读标为已读，**不是删除**（用户 11-01 定的口径）。
+     *
+     * 一次落盘、一次广播：前端绝不能拿列表逐条 `markRead` —— 翻到第 120 条就是 120 次 IPC，
+     * 中间失败会留下「标了一半」的状态。范围是**全部未读**，不是「当前页」：
+     * 只清当前页会让角标残留，用户会以为没生效。幂等：没有未读时返回 0，不报错。
+     */
+    async markAllRead(productId?: string): Promise<NotificationUnreadState> {
+      const state = await load()
+      const now = new Date().toISOString()
+      let changed = false
+      const records = state.records.map((record: NotificationRecord) => {
+        if (record.state !== 'unread') return record
+        if (productId && record.productId !== productId) return record
+        changed = true
+        return markNotificationRead(record, now)
+      })
+      if (changed) {
+        await persist({ ...state, records })
+        notifyChanged()
+      }
+      return unreadStateOf(records, now, productId, version)
     },
 
     async markRead(id: string): Promise<SafeNotificationRecord> {
@@ -328,6 +346,22 @@ function foldIntoAggregate(
     updatedAt: now
   }
   return { records: [aggregate, ...records], aggregate }
+}
+
+/** 未读数与版本的唯一算法：角标、清空、事件三处读同一个结果。 */
+function unreadStateOf(
+  records: readonly NotificationRecord[],
+  now: string,
+  productId: string | undefined,
+  version: number
+): NotificationUnreadState {
+  const unread = records.filter(
+    (record) =>
+      record.state === 'unread' &&
+      isActiveNotification(record, now) &&
+      (!productId || record.productId === productId)
+  ).length
+  return { unread, version }
 }
 
 function isMissingFileError(error: unknown): boolean {

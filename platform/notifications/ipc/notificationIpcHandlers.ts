@@ -8,6 +8,9 @@ export function registerNotificationIpcHandlers(): void {
   ipcMain.handle(IpcChannels.notificationsGetUnreadState, (_event, input) =>
     getNotificationRuntime().getUnreadState((input as { productId?: string } | undefined)?.productId)
   )
+  ipcMain.handle(IpcChannels.notificationsMarkAllRead, (_event, input) =>
+    getNotificationRuntime().markAllRead((input as { productId?: string } | undefined)?.productId)
+  )
   ipcMain.handle(IpcChannels.notificationsMarkRead, (_event, input) =>
     getNotificationRuntime().markRead(String((input as { id?: string })?.id ?? ''))
   )

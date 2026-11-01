@@ -122,3 +122,34 @@ describe('desktop permission', () => {
     expect(await runtime.readDesktopPermission()).toBe('unknown')
   })
 })
+
+describe('mark all read (clear)', () => {
+  it('marks every unread record in one commit and returns the new badge state', async () => {
+    const changes: number[] = []
+    const runtime = createRuntime({ onChanged: (change) => changes.push(change.version) })
+    for (let index = 0; index < 3; index += 1) {
+      await runtime.submit(request({ sourceId: `bulk-${index}` }))
+    }
+    expect((await runtime.getUnreadState()).unread).toBe(3)
+
+    const afterClear = await runtime.markAllRead()
+    expect(afterClear.unread).toBe(0)
+    // 版本继续递增：清空本身也是一次变更，订阅方据此重取。
+    expect(afterClear.version).toBeGreaterThan(3)
+    expect((await runtime.list()).items.every((item) => item.state !== 'unread')).toBe(true)
+    // 一次落盘只广播一次，不是逐条 markRead。
+    expect(changes).toHaveLength(4)
+    expect(changes.at(-1)).toBe(afterClear.version)
+  })
+
+  it('is idempotent: clearing with nothing unread succeeds and does not bump the version', async () => {
+    const changes: number[] = []
+    const runtime = createRuntime({ onChanged: (change) => changes.push(change.version) })
+    const record = await runtime.submit(request())
+    await runtime.markRead(record.id)
+    const before = await runtime.getUnreadState()
+
+    await expect(runtime.markAllRead()).resolves.toEqual({ unread: 0, version: before.version })
+    expect(changes).toHaveLength(2)
+  })
+})
