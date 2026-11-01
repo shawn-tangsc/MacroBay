@@ -407,7 +407,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
         {selectedMarket && selectedMarketSourceAdvanced ? <p className="mi-economic-calendar__comparison-rule" data-source-advanced>{text.market.sourceAdvanced}</p> : null}
         {selectedMarket ? <MarketCalendarInspector event={selectedMarket} source={market.sources.find(source => source.eventType === selectedMarket.eventType)} text={text} /> : null}
         {selectedLinkedMarket ? <MarketCalendarInspector event={selectedLinkedMarket} source={market.sources.find(source => source.eventType === selectedLinkedMarket.eventType)} text={text} /> : null}
-        {!selectedMarket && detailState.state === 'loading' ? <EventDetailState text={text.status.loading} /> : null}
+        {!selectedMarket && detailState.state === 'loading' ? <EventDetailState state="loading" text={text.status.loading} /> : null}
         {!selectedMarket && detailState.state === 'available' ? <EventDetail event={detailState.event} now={now} onRefresh={async (operation, eventKey) => {
           if (refreshState?.pending) return
           setRefreshState({ eventKey, operation, pending: true })
@@ -426,7 +426,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           loadMonth(selectedMonthRef.current, true, toCanonicalUtcMillis(now()))
           setDetailReload((value) => value + 1)
         }} releaseTimeClient={client} refreshState={refreshState} text={text} /> : null}
-        {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState text={text.failures[detailState.failureCode]} /> : null}
+        {!selectedMarket && detailState.state === 'unavailable' ? <EventDetailState state="error" onRetry={() => setDetailReload((value) => value + 1)} /> : null}
       </DetailDrawer>
       <ImportBlsIcsDialog
         dialogState={blsIcsImport.dialogState}

@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react'
 
 import type { MacroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
@@ -271,9 +272,25 @@ function confirmRefresh(message: string): boolean {
   try { return typeof window.confirm === 'function' && window.confirm(message) } catch { return false }
 }
 
-/** The detail surface with nothing to show: its state, never a blank pane. */
-export function EconomicCalendarEventDetailState({ text }: { text: string }): ReactElement {
-  return <aside className="mi-economic-calendar__inspector" aria-live="polite"><LoadingState label={text} minHeight={220} /></aside>
+/**
+ * The detail surface with nothing to show: its state, never a blank pane.
+ *
+ * A wait and a failed read are two different answers. This used to render the spinner for both,
+ * so a read that had already failed span forever with the failure sentence underneath — the reader
+ * waits for a result that is never coming. A wait stays `LoadingState`; a failure is
+ * `error · unreadable` with a retry that asks again.
+ */
+export function EconomicCalendarEventDetailState({ state, text, onRetry }: {
+  state: 'loading' | 'error'
+  text: string
+  onRetry?: () => void
+}): ReactElement {
+  return <aside className="mi-economic-calendar__inspector" aria-live="polite">
+    {state === 'loading'
+      ? <LoadingState label={text} minHeight={220} />
+      : <StateView state="error" reasonCode="unreadable" size="md"
+          action={onRetry ? { labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry } : undefined} />}
+  </aside>
 }
 
 function Meta({ label, value }: { label: string; value: string }): ReactElement {
