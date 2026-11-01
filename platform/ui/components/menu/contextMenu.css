@@ -22,8 +22,12 @@
   background: transparent;
 }
 
-/* 危险项与默认项的工具色都只从中性 / 危险 token 取；不给调用方留传颜色的口子。 */
+/*
+ * 危险项的正文色。菜单项是正文大小，纯 `--danger` 在深色下只有 3.25–3.94：够图形的 3:1，
+ * 不够正文的 4.5。混一点 `--text-strong` 抬过基线，于是这条不必进 `--danger` 前景色基线
+ * （基线只减不增），危险语义也不靠颜色单独承担——同一行还有文案与位置。
+ */
 .context-menu .ant-menu-item-danger,
 .context-menu .ant-menu-item-danger:hover {
-  color: var(--danger);
+  color: color-mix(in srgb, var(--danger) 82%, var(--text-strong));
 }

@@ -132,7 +132,8 @@ describe('ContextMenu', () => {
     await mount()
 
     expect(items()[2].className).toContain('ant-menu-item-danger')
-    expect(rules).toMatch(/\.context-menu \.ant-menu-item-danger[\s\S]*?color: var\(--danger\)/)
+    // 正文色要过 4.5 对比度，所以是混过 `--text-strong` 的 `--danger`，不是纯 token 直出。
+    expect(rules).toMatch(/\.context-menu \.ant-menu-item-danger[\s\S]*?color: color-mix\(in srgb, var\(--danger\)/)
     // 危险项不许由调用方传颜色：组件只认闭集里的 'danger'。
     expect(MENU_TONES).toEqual(['default', 'danger'])
     expect(itemSource).not.toMatch(/\bcolor\s*[:?]/)
