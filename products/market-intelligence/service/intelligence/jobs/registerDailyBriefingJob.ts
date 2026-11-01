@@ -22,7 +22,7 @@ export function dailyBriefingScheduleDefinition(
     productId: dailyBriefingJobPolicy.productId,
     handlerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
     title: dailyBriefingJobPolicy.title,
-    visibility: 'resource' as const,
+    audience: 'user' as const,
     trigger: {
       kind: 'cron',
       expression: dailyBriefingGenerationCronExpression({ generationTime: input.generationTime }),

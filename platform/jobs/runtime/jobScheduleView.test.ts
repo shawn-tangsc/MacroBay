@@ -6,7 +6,7 @@ import { projectJobSchedules } from './jobScheduleView'
 const now = new Date('2026-07-17T09:30:00.000Z')
 
   it('leaves an internal definition registered but out of the user-facing table', () => {
-    const internal = definition({ id: 'job-internal', title: 'Notification retention', visibility: 'internal' })
+    const internal = definition({ id: 'job-internal', title: 'Notification retention', audience: 'internal' })
     const resource = definition({ id: 'job-resource', title: 'Collect the dollar index' })
     const source = { listSchedules: () => [internal, resource], listRuns: () => [] }
 
@@ -150,9 +150,9 @@ describe('projectJobSchedules', () => {
   it('never shows an internal maintenance definition in the table the reader sees', () => {
     const views = projectJobSchedules({
       listSchedules: () => [
-        definition({ id: 'resource-job', title: 'Collect a source', visibility: 'resource' }),
-        definition({ id: 'internal-job', title: 'Retention sweep', visibility: 'internal' }),
-        definition({ id: 'another-resource', title: 'Refresh a calendar', visibility: 'resource' })
+        definition({ id: 'resource-job', title: 'Collect a source', audience: 'user' }),
+        definition({ id: 'internal-job', title: 'Retention sweep', audience: 'internal' }),
+        definition({ id: 'another-resource', title: 'Refresh a calendar', audience: 'user' })
       ],
       listRuns: () => []
     }, { now })
@@ -170,7 +170,7 @@ function definition(overrides: Partial<ScheduledJobDefinition> = {}): ScheduledJ
     title: 'Job',
     trigger: { kind: 'manual' },
     payload: {},
-    visibility: 'resource',
+    audience: 'user',
     ...overrides
   }
 }

@@ -160,7 +160,7 @@ function definition(
     productId: 'market-intelligence',
     handlerId: macroCalendarScheduleJobPolicy.handlerId,
     title: 'Refresh macro calendar schedules',
-    visibility: 'resource' as const,
+    audience: 'user' as const,
     trigger,
     payload,
     concurrencyKey: macroCalendarScheduleJobPolicy.handlerId,

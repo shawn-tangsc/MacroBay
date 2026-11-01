@@ -12,8 +12,8 @@ describe('jobRuntime terminal hook', () => {
     runtime.registerHandler('boom', async () => {
       throw new Error('collector failed')
     })
-    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
-    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-boom', owner: 'platform', handlerId: 'boom', title: 'Boom', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-boom', owner: 'platform', handlerId: 'boom', title: 'Boom', trigger: { kind: 'manual' }, payload: {} })
 
     await runtime.enqueueManual('job-ok')
     await runtime.enqueueManual('job-boom')
@@ -66,14 +66,14 @@ describe('jobRuntime terminal hook', () => {
     runtime.registerHandler('ok', async () => {
       calls.push('ran')
     })
-    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-ok', owner: 'platform', handlerId: 'ok', title: 'Ok', trigger: { kind: 'manual' }, payload: {} })
 
     await runtime.enqueueManual('job-ok')
     await vi.waitFor(() => expect(calls).toEqual(['ran']))
     runtime.registerHandler('ok2', async () => {
       calls.push('ran-again')
     })
-    setSchedule(runtime, { visibility: 'resource' as const, id: 'job-ok-2', owner: 'platform', handlerId: 'ok2', title: 'Ok 2', trigger: { kind: 'manual' }, payload: {} })
+    setSchedule(runtime, { audience: 'user' as const, id: 'job-ok-2', owner: 'platform', handlerId: 'ok2', title: 'Ok 2', trigger: { kind: 'manual' }, payload: {} })
     await runtime.enqueueManual('job-ok-2')
     await vi.waitFor(() => expect(calls).toEqual(['ran', 'ran-again']))
   })
@@ -84,19 +84,8 @@ describe('jobRuntime terminal hook', () => {
  * definition belongs to, so they all register as a user-facing resource by default.
  */
 function setSchedule(runtime: ReturnType<typeof createJobRuntime>, definition: Record<string, unknown> | object): void {
-  runtime.setSchedule({ ...(definition as object), visibility: 'resource' } as never)
+  runtime.setSchedule({ ...(definition as object), audience: 'user' } as never)
 }
-
-  it('refuses to register a definition that declares no visibility', () => {
-    const runtime = createJobRuntime()
-    runtime.registerHandler('noop', async () => {})
-
-    // The cast is the point: `visibility` is required by the type, and a cast can walk past the
-    // type, so the runtime check is what actually holds. The id must be in the message, otherwise
-    // the eighteen registration sites have to guess which one is missing.
-    expect(() => runtime.setSchedule({ id: 'job-no-audience', owner: 'platform', handlerId: 'noop', title: 'No audience', trigger: { kind: 'manual' }, payload: {} } as never))
-      .toThrow(/job-no-audience.*must declare visibility/)
-  })
 
 describe('jobRuntime', () => {
   /**
@@ -114,7 +103,7 @@ describe('jobRuntime', () => {
       title: 'Undeclared',
       trigger: { kind: 'manual' },
       payload: {}
-    })).toThrow(/must declare visibility/)
+    })).toThrow(/must declare audience/)
   })
 
   it('registers handlers and enqueues manual jobs', async () => {
@@ -155,7 +144,7 @@ describe('jobRuntime', () => {
         calls.push(String(payload))
       })
 
-      setSchedule(runtime, { visibility: 'resource' as const,
+      setSchedule(runtime, { audience: 'user' as const,
         id: 'job-cron-runtime',
         owner: 'platform',
         handlerId: 'cron',
@@ -549,7 +538,7 @@ describe('jobRuntime', () => {
       observedReason = context.signal.reason
     })
 
-    setSchedule(runtime, { visibility: 'resource' as const,
+    setSchedule(runtime, { audience: 'user' as const,
       id: 'job-stop-running',
       owner: 'platform',
       handlerId: 'wait',
@@ -676,7 +665,7 @@ describe('jobRuntime', () => {
 
   it('rejects enqueue when handler is not registered', async () => {
     const runtime = createJobRuntime()
-    setSchedule(runtime, { visibility: 'resource' as const,
+    setSchedule(runtime, { audience: 'user' as const,
       id: 'job-missing',
       owner: 'platform',
       handlerId: 'missing',

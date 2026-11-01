@@ -12,7 +12,7 @@ export const zeroXRouterCalendarSchedulerPolicy = Object.freeze({
   definitionId: 'market-intelligence.refreshMarketCalendar.automatic',
   handlerId: 'market-intelligence.refreshMarketCalendar',
   title: 'Refresh 0xRouter market calendar',
-  visibility: 'resource' as const,
+  audience: 'user' as const,
   intervalMs: 30 * 60 * 1_000,
   /** One automatic batch is six serial transport requests; this must outlast them. */
   jobTimeoutMs: 4 * 60 * 1_000,
@@ -48,7 +48,7 @@ function definitionFor(feed: CalendarFeed): ScheduledJobDefinition {
     productId: 'market-intelligence',
     handlerId: `${policy.handlerId}.${feed.key}`,
     title: `${policy.title}: ${feed.key}`,
-    visibility: 'resource' as const,
+    audience: 'user' as const,
     trigger: { kind: 'interval', intervalMs: policy.intervalMs, anchor: 'lastStart' },
     payload: { sourceId: feed.sourceId },
     concurrencyKey: `${policy.handlerId}.${feed.key}`,

@@ -1,7 +1,7 @@
 import type {
   JobCancelReason,
   JobDefinition,
-  JobVisibility,
+  JobAudience,
   JobHandler,
   JobRunAggregateQuery,
   JobRunAggregateResult,
@@ -83,10 +83,10 @@ export type JobRuntimeOptions = {
 }
 
 /** 运行时校验：类型能被 `as never` 之类绕开，注册这一步挡得住才是真的挡得住。 */
-function assertVisibility(definition: JobDefinition & { visibility?: JobVisibility }): void {
-  if (definition.visibility === 'resource' || definition.visibility === 'internal') return
+function assertAudience(definition: JobDefinition & { audience?: JobAudience }): void {
+  if (definition.audience === 'user' || definition.audience === 'internal') return
   throw new Error(
-    `Job definition "${definition.id}" must declare visibility ('resource' or 'internal').`
+    `Job definition "${definition.id}" must declare audience ('user' or 'internal').`
   )
 }
 
@@ -126,7 +126,7 @@ export function createJobRuntime(options: JobRuntimeOptions = {}): JobRuntime {
       registry.register(handlerId, handler)
     },
     setSchedule(definition) {
-      assertVisibility(definition)
+      assertAudience(definition)
       definitions.set(definition.id, definition)
       scheduler.setSchedule(definition)
     },

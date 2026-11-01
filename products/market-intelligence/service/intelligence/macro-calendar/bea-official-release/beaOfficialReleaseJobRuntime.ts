@@ -37,7 +37,7 @@ export function createBeaOfficialReleaseJobRuntime(deps: Readonly<{
       try { profiles = await deps.profiles.list() } catch { return }
       const enabled = profiles.filter((profile) => profile.providerId === beaOfficialReleaseJobPolicy.providerId && profile.enabled === true).length === 1
       if (!enabled) { deps.jobRuntime.removeSchedule(beaOfficialReleaseJobPolicy.definitionId); return }
-      const definition: ScheduledJobDefinition = { id: beaOfficialReleaseJobPolicy.definitionId, owner: 'product', productId: 'market-intelligence', handlerId: beaOfficialReleaseJobPolicy.handlerId, title: 'Refresh BEA official release values', visibility: 'resource' as const, trigger: { kind: 'interval', intervalMs: beaOfficialReleaseJobPolicy.schedulerIntervalMs, anchor: 'lastComplete' }, payload: {}, concurrencyKey: beaOfficialReleaseJobPolicy.handlerId, timeoutMs: beaOfficialReleaseJobPolicy.jobTimeoutMs, retryPolicy: beaOfficialReleaseJobPolicy.retryPolicy }
+      const definition: ScheduledJobDefinition = { id: beaOfficialReleaseJobPolicy.definitionId, owner: 'product', productId: 'market-intelligence', handlerId: beaOfficialReleaseJobPolicy.handlerId, title: 'Refresh BEA official release values', audience: 'user' as const, trigger: { kind: 'interval', intervalMs: beaOfficialReleaseJobPolicy.schedulerIntervalMs, anchor: 'lastComplete' }, payload: {}, concurrencyKey: beaOfficialReleaseJobPolicy.handlerId, timeoutMs: beaOfficialReleaseJobPolicy.jobTimeoutMs, retryPolicy: beaOfficialReleaseJobPolicy.retryPolicy }
       deps.jobRuntime.setSchedule(definition)
       try {
         await deps.jobRuntime.enqueueDefinition({ ...definition, trigger: { kind: 'startup' as const } })

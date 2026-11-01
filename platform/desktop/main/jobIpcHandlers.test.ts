@@ -45,7 +45,7 @@ describe('jobIpcHandlers', () => {
       runtime: {
         listSchedules: () => [{
           id: 'market-intelligence.source.crypto-news',
-          visibility: 'resource',
+          audience: 'user',
           owner: 'product',
           productId: 'market-intelligence',
           handlerId: 'intelligence-source',
