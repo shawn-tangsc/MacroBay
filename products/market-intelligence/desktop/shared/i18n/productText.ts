@@ -2029,7 +2029,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               quiet: 'No related news in this period',
               collectionFailed: 'Collection failed',
               stale: 'Data is out of date · last updated {time}',
-              actions: { openSettings: 'Open settings', runNow: 'Run now', retry: 'Try again', refresh: 'Refresh now' }
+              actions: { openSettings: 'Enable in settings', runNow: 'Run now', retry: 'Try again', refresh: 'Refresh now' }
             },
             drawer: {
               title: 'News sentiment',
