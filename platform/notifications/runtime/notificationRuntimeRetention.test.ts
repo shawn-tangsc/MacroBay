@@ -29,7 +29,8 @@ function request(index: number): NotificationRequest {
     owner: 'product',
     productId: 'sample-product',
     sourceId: `source-${index}`,
-    title: `Event ${index}`,
+    titleKey: 'notification.taskFailed.title',
+    titleParams: { taskName: `Event ${index}` },
     severity: 'info',
     priority: 'normal',
     requestedChannels: ['center']
@@ -49,8 +50,8 @@ describe('notification runtime retention and breaker', () => {
     expect(originals).toHaveLength(50)
     expect(aggregate.collapsedCount).toBe(1)
     expect(afterFirstRun.dailyCounters['sample-product|2026-11-01']).toBe(51)
-    // 折叠掉的是原文：聚合记录不保留标题/正文内容。
-    expect(aggregate.body).toBeUndefined()
+    // 折叠掉的是原文：聚合记录不保留正文键。
+    expect(aggregate.bodyKey).toBeUndefined()
 
     // 重启：新的运行时读回同一份 JSON，计数仍在，第 52 条继续折叠。
     const second = createNotificationRuntime({ storage, getSettings: async () => settings, clock })
@@ -69,7 +70,7 @@ describe('notification runtime retention and breaker', () => {
           id: 'old',
           owner: 'platform',
           sourceId: 's',
-          title: 'Old',
+          titleKey: 'notification.taskFailed.title',
           severity: 'info',
           priority: 'normal',
           channels: ['center'],

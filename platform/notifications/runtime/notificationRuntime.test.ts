@@ -10,7 +10,8 @@ function request(overrides: Partial<NotificationRequest> = {}): NotificationRequ
   return {
     owner: 'platform',
     sourceId: 'job-runtime',
-    title: 'Scheduled run failed',
+    titleKey: 'notification.taskFailed.title',
+    titleParams: { taskName: 'Scheduled run failed' },
     severity: 'warning',
     priority: 'normal',
     requestedChannels: ['center'],
@@ -34,9 +35,9 @@ function createRuntime(overrides: { onChanged?: (change: { version: number }) =>
 describe('notification list ordering and cursors', () => {
   it('T4: unreadFirst puts unread above read and keeps time order inside each group', async () => {
     const runtime = createRuntime()
-    const first = await runtime.submit(request({ title: 'one', sourceId: 'a' }))
-    await runtime.submit(request({ title: 'two', sourceId: 'b' }))
-    const third = await runtime.submit(request({ title: 'three', sourceId: 'c' }))
+    const first = await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'one' }, sourceId: 'a' }))
+    await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'two' }, sourceId: 'b' }))
+    const third = await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'three' }, sourceId: 'c' }))
     await runtime.markRead(first.id)
 
     const page = await runtime.list({ unreadFirst: true })
@@ -53,7 +54,7 @@ describe('notification list ordering and cursors', () => {
     const runtime = createRuntime()
     const seeded = []
     for (let index = 0; index < 5; index += 1) {
-      seeded.push(await runtime.submit(request({ title: `n${index}`, sourceId: `source-${index}` })))
+      seeded.push(await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: `n${index}` }, sourceId: `source-${index}` })))
     }
 
     const page1 = await runtime.list({ limit: 2 })
@@ -61,7 +62,7 @@ describe('notification list ordering and cursors', () => {
     expect(page1.nextCursor).toBeTypeOf('string')
 
     // 翻页途中来了新通知：下标游标会让第 2 页重复第 1 页末条，键游标不会。
-    await runtime.submit(request({ title: 'arrived-late', sourceId: 'late' }))
+    await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'arrived-late' }, sourceId: 'late' }))
     const page2 = await runtime.list({ limit: 2, cursor: page1.nextCursor })
 
     const page1Ids = page1.items.map((item) => item.id)
@@ -73,8 +74,8 @@ describe('notification list ordering and cursors', () => {
 
   it('keeps both records when two notifications share the same millisecond', async () => {
     const runtime = createRuntime()
-    const a = await runtime.submit(request({ title: 'same-instant-a', sourceId: 'x' }))
-    const b = await runtime.submit(request({ title: 'same-instant-b', sourceId: 'y' }))
+    const a = await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'same-instant-a' }, sourceId: 'x' }))
+    const b = await runtime.submit(request({ titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'same-instant-b' }, sourceId: 'y' }))
 
     const page1 = await runtime.list({ limit: 1 })
     const page2 = await runtime.list({ limit: 1, cursor: page1.nextCursor })

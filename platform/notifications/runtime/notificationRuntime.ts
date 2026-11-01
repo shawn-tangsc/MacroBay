@@ -301,6 +301,8 @@ function withCenterForDisruptiveChannels(
  * 标题只是一个稳定标识，界面从 `collapsedCount` 出文案，**不要直接显示这个字符串**。
  */
 const NOTIFICATION_AGGREGATE_TITLE = 'notification-aggregate'
+/** 聚合记录的稳定标识键；界面从 `collapsedCount` 出文案，不直接显示这一句。 */
+const NOTIFICATION_AGGREGATE_TITLE_KEY = 'notification.aggregate.title' as const
 
 function aggregateDedupeKey(ownerId: string, now: string): string {
   return `${NOTIFICATION_AGGREGATE_TITLE}|${ownerId}|${utcDayOf(now)}`
@@ -332,7 +334,7 @@ function foldIntoAggregate(
     owner: request.owner,
     productId: request.productId,
     sourceId: NOTIFICATION_AGGREGATE_TITLE,
-    title: NOTIFICATION_AGGREGATE_TITLE,
+    titleKey: NOTIFICATION_AGGREGATE_TITLE_KEY,
     severity: 'warning',
     priority: 'low',
     channels: ['center'],

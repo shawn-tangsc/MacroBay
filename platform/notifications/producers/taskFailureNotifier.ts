@@ -17,21 +17,12 @@ import type { NotificationRequest } from '../contracts/notificationContracts'
  * 这个模块不认识 Electron，也不读设置：语言、任务名解析、时区日界都由装配点注入，
  * 所以它可以被直接测，且平台模块之间不必互相 import。
  */
-export type TaskFailureNotificationCopy = {
-  /** `任务名` → 标题，例如「央行利率决议采集 运行失败」。 */
-  title: (taskName: string) => string
-  /** 失败原因（已截断、已去敏）→ 正文。 */
-  body: (reason: string) => string
-  actionLabel: string
-}
-
 export type TaskFailureNotifierDeps = {
   submit: (request: NotificationRequest) => Promise<unknown>
   /** 把 definition 解析成给人看的任务名；解析不出返回 `null`（调用方据此不发）。 */
   resolveTaskName: (input: { definitionId: string; productId?: string }) => string | null
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
   dayToken: (instant: string) => string
-  copy: TaskFailureNotificationCopy
   /** 单条失败原因的截断长度；默认 160，避免把堆栈整段塞进通知。 */
   maxReasonLength?: number
 }
@@ -60,12 +51,14 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
       owner: run.owner,
       ...(run.productId === undefined ? {} : { productId: run.productId }),
       sourceId: `job-run-failed:${run.definitionId}`,
-      title: deps.copy.title(taskName),
-      ...(reason === '' ? {} : { body: deps.copy.body(reason) }),
+      // 记录里**只存键与参数**：句子由解析器按读者语言产出，切语言时历史通知跟着变。
+      titleKey: 'notification.taskFailed.title',
+      titleParams: { taskName },
+      ...(reason === '' ? {} : { bodyKey: 'notification.taskFailed.body' }),
       severity: 'warning',
       priority: 'normal',
       requestedChannels: ['center', 'desktop'],
-      actions: [{ id: 'open-task', label: deps.copy.actionLabel, kind: 'open', deeplink }],
+      actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
       deeplink,
       dedupeKey: `task-failed:${run.definitionId}:${deps.dayToken(completedAt)}`,
       correlationId: run.id

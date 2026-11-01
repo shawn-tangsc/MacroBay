@@ -4,12 +4,6 @@ import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
 import type { NotificationRequest } from '../contracts/notificationContracts'
 import { createTaskFailureNotifier } from './taskFailureNotifier'
 
-const copy = {
-  title: (taskName: string) => `${taskName} failed`,
-  body: (reason: string) => reason,
-  actionLabel: 'Open the task'
-}
-
 function run(overrides: Partial<JobRunRecord> = {}): JobRunRecord {
   return {
     id: 'run-1',
@@ -39,8 +33,7 @@ function notifier(overrides: {
   const notify = createTaskFailureNotifier({
     submit,
     resolveTaskName: overrides.resolveTaskName ?? (() => '央行利率决议采集'),
-    dayToken: (instant) => instant.slice(0, 10),
-    copy
+    dayToken: (instant) => instant.slice(0, 10)
   })
   return { submit, notify }
 }
@@ -52,7 +45,9 @@ describe('task failure notifier', () => {
 
     expect(submit).toHaveBeenCalledTimes(1)
     const request = submit.mock.calls[0]?.[0] as NotificationRequest
-    expect(request.title).toBe('央行利率决议采集 failed')
+    // 记录里存的是键 + 参数，不是句子：句子由解析器按读者语言产出。
+    expect(request.titleKey).toBe('notification.taskFailed.title')
+    expect(request.titleParams).toEqual({ taskName: '央行利率决议采集' })
     // 不是 run.title：那是任务标识（`Collect 央行`），不是给人看的标题。
     expect(JSON.stringify(request)).not.toContain('Collect 央行')
     expect(request.dedupeKey).toBe('task-failed:definition-1:2026-11-02')
@@ -83,7 +78,9 @@ describe('task failure notifier', () => {
     const { submit, notify } = notifier()
     await notify({ run: run({ lastError: 'x'.repeat(500) }), cause: 'executed' })
     const request = submit.mock.calls[0]?.[0] as NotificationRequest
-    expect(request.body?.length).toBe(160)
-    expect(request.body?.endsWith('…')).toBe(true)
+    // 长错误不进记录：正文只留键，原因细节留给运行记录。
+    expect(request.bodyKey).toBe('notification.taskFailed.body')
+    expect(request.titleParams?.taskName).toBe('央行利率决议采集')
+    expect(JSON.stringify(request)).not.toContain('xxxxxxxx')
   })
 })

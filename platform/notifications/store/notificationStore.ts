@@ -1,3 +1,4 @@
+import type { NotificationCopyKey } from '../../i18n/notificationCopy'
 import {
   createDefaultNotificationRuntimeSettings,
   PRIORITY_RANK,
@@ -45,15 +46,19 @@ export function resetNotificationIdCounterForTests(): void {
 export function normalizeNotificationRecord(value: unknown): NotificationRecord | null {
   if (!value || typeof value !== 'object') return null
   const candidate = value as Partial<NotificationRecord>
-  if (!candidate.id || !candidate.sourceId || !candidate.title) return null
+  if (!candidate.id || !candidate.sourceId || !candidate.titleKey) return null
 
   return {
     id: String(candidate.id),
     owner: candidate.owner === 'platform' ? 'platform' : 'product',
     productId: candidate.productId ? String(candidate.productId) : undefined,
     sourceId: String(candidate.sourceId),
-    title: String(candidate.title),
-    body: candidate.body ? String(candidate.body) : undefined,
+    // 存储里读回来的键不做闭集校验（旧记录可能带已删除的键）；解析器解析不到会保留占位，
+    // 而不是把键名当句子显示。
+    titleKey: String(candidate.titleKey) as NotificationCopyKey,
+    titleParams: normalizeTextParams(candidate.titleParams),
+    bodyKey: candidate.bodyKey ? String(candidate.bodyKey) as NotificationCopyKey : undefined,
+    bodyParams: normalizeTextParams(candidate.bodyParams),
     severity: normalizeSeverity(candidate.severity),
     priority: normalizePriority(candidate.priority),
     channels: normalizeChannels(candidate.channels),
@@ -106,14 +111,27 @@ function normalizeDailyCounters(value: unknown): NotificationDailyCounters {
   return counters
 }
 
+/** 文案参数只收短字符串：这里进的是任务名之类的实体名，不是日志正文。 */
+function normalizeTextParams(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const params: Record<string, string> = {}
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw !== 'string' || raw.length > 200) continue
+    params[key] = raw
+  }
+  return Object.keys(params).length > 0 ? params : undefined
+}
+
 export function createNotificationFromRequest(request: NotificationRequest, now = new Date().toISOString()): NotificationRecord {
   return {
     id: createNotificationId(),
     owner: request.owner,
     productId: request.productId,
     sourceId: request.sourceId,
-    title: request.title,
-    body: request.body,
+    titleKey: request.titleKey,
+    titleParams: request.titleParams,
+    bodyKey: request.bodyKey,
+    bodyParams: request.bodyParams,
     severity: request.severity,
     priority: request.priority,
     channels: request.requestedChannels.includes('center') ? request.requestedChannels : ['center', ...request.requestedChannels],
@@ -133,8 +151,10 @@ export function createNotificationFromRequest(request: NotificationRequest, now 
 export function mergeDuplicateNotification(existing: NotificationRecord, incoming: NotificationRequest, now: string): NotificationRecord {
   return {
     ...existing,
-    title: incoming.title,
-    body: incoming.body ?? existing.body,
+    titleKey: incoming.titleKey,
+    titleParams: incoming.titleParams ?? existing.titleParams,
+    bodyKey: incoming.bodyKey ?? existing.bodyKey,
+    bodyParams: incoming.bodyParams ?? existing.bodyParams,
     severity: strongerSeverity(existing.severity, incoming.severity),
     priority: strongerPriority(existing.priority, incoming.priority),
     channels: uniqueChannels([...existing.channels, ...incoming.requestedChannels]),

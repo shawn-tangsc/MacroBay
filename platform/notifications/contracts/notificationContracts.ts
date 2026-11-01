@@ -1,3 +1,5 @@
+import type { NotificationCopyKey } from '../../i18n/notificationCopy'
+
 export type NotificationSeverity = 'info' | 'success' | 'warning' | 'critical'
 export type NotificationPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type NotificationChannel = 'center' | 'toast' | 'popup' | 'desktop'
@@ -15,7 +17,8 @@ export type NotificationDeeplink = {
 
 export type NotificationAction = {
   id: string
-  label: string
+  /** 动作标签的键；调用点不写句子，句子在文案表里。 */
+  labelKey: NotificationCopyKey
   kind: 'open' | 'acknowledge' | 'dismiss' | 'snooze' | 'custom'
   deeplink?: NotificationDeeplink
 }
@@ -25,8 +28,11 @@ export type NotificationRecord = {
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string
-  title: string
-  body?: string
+  /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
+  titleKey: NotificationCopyKey
+  titleParams?: Record<string, string>
+  bodyKey?: NotificationCopyKey
+  bodyParams?: Record<string, string>
   severity: NotificationSeverity
   priority: NotificationPriority
   channels: NotificationChannel[]
@@ -56,8 +62,11 @@ export type NotificationRequest = {
   owner: 'platform' | 'product'
   productId?: string
   sourceId: string
-  title: string
-  body?: string
+  /** 标题文案键；句子由 `platform/i18n/notificationCopy.ts` 解析（切语言时历史通知跟着变）。 */
+  titleKey: NotificationCopyKey
+  titleParams?: Record<string, string>
+  bodyKey?: NotificationCopyKey
+  bodyParams?: Record<string, string>
   severity: NotificationSeverity
   priority: NotificationPriority
   requestedChannels: NotificationChannel[]

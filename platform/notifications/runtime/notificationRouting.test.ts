@@ -14,7 +14,8 @@ describe('notification routing settings boundary', () => {
       owner: 'product',
       productId: 'sample-product',
       sourceId: 'alert-engine',
-      title: 'Position risk',
+      titleKey: 'notification.taskFailed.title',
+      titleParams: { taskName: 'Position risk' },
       severity: 'warning',
       priority: 'normal',
       requestedChannels: ['center', 'toast', 'desktop']
@@ -41,7 +42,8 @@ describe('notification routing settings boundary', () => {
       owner: 'product',
       productId: 'sample-product',
       sourceId: 'alert-engine',
-      title: 'Liquidation risk',
+      titleKey: 'notification.taskFailed.title',
+      titleParams: { taskName: 'Liquidation risk' },
       severity: 'critical',
       priority: 'urgent',
       requestedChannels: ['center', 'popup']
@@ -64,7 +66,8 @@ describe('notification quiet hours follow the reader time zone', () => {
   const request: NotificationRequest = {
     owner: 'platform',
     sourceId: 'job-runtime',
-    title: 'Scheduled run',
+    titleKey: 'notification.taskFailed.title',
+    titleParams: { taskName: 'Scheduled run' },
     severity: 'info',
     priority: 'normal',
     requestedChannels: ['center', 'toast']
@@ -101,7 +104,8 @@ describe('notification transient delivery wiring', () => {
   const record = createNotificationFromRequest({
     owner: 'platform',
     sourceId: 'job-runtime',
-    title: 'Resource job failed',
+    titleKey: 'notification.taskFailed.title',
+    titleParams: { taskName: 'Resource job failed' },
     severity: 'warning',
     priority: 'high',
     requestedChannels: ['center', 'toast', 'popup', 'desktop']
@@ -121,12 +125,12 @@ describe('notification transient delivery wiring', () => {
   it('reports sent only after the wired hook actually ran', async () => {
     const shown: string[] = []
     const attempts = await routeTransientDelivery(record, settings, {
-      toast: (item) => shown.push(`toast:${item.title}`),
-      popup: (item) => shown.push(`popup:${item.title}`),
+      toast: (item) => shown.push(`toast:${item.titleKey}`),
+      popup: (item) => shown.push(`popup:${item.titleKey}`),
       desktop: async () => ({ ok: true })
     }, utcClock)
 
-    expect(shown).toEqual(['toast:Resource job failed', 'popup:Resource job failed'])
+    expect(shown).toEqual(['toast:notification.taskFailed.title', 'popup:notification.taskFailed.title'])
     expect(attempts.map((attempt) => [attempt.channel, attempt.result])).toEqual([
       ['toast', 'sent'],
       ['popup', 'sent'],
@@ -169,7 +173,8 @@ describe('the reader clock has no UTC default', () => {
     const request: NotificationRequest = {
       owner: 'platform',
       sourceId: 'job-runtime',
-      title: 'Scheduled run',
+      titleKey: 'notification.taskFailed.title',
+      titleParams: { taskName: 'Scheduled run' },
       severity: 'info',
       priority: 'normal',
       requestedChannels: ['center', 'toast']

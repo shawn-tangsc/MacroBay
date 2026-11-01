@@ -23,7 +23,7 @@ describe('notification store', () => {
       owner: 'product',
       productId: 'sample-product',
       sourceId: 'source-a',
-      title: 'Important event',
+      titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'Important event' },
       severity: 'warning',
       priority: 'high',
       requestedChannels: ['center', 'toast'],
@@ -49,7 +49,7 @@ describe('notification store', () => {
     const record = createNotificationFromRequest({
       owner: 'platform',
       sourceId: 'jobs',
-      title: 'Sync failed',
+      titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'Sync failed' },
       severity: 'warning',
       priority: 'normal',
       requestedChannels: ['center']
@@ -77,7 +77,7 @@ describe('notification store', () => {
       owner: 'product',
       productId: 'sample-product',
       sourceId: 'source-b',
-      title: 'Expired notice',
+      titleKey: 'notification.taskFailed.title', titleParams: { taskName: 'Expired notice' },
       severity: 'info',
       priority: 'low',
       requestedChannels: ['center'],
