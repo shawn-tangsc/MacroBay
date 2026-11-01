@@ -142,24 +142,34 @@ function applyQuietHoursAndPriority(
   return channels.filter((channel) => {
     if (!disruptive.has(channel)) return true
     if (minimumPriority && priorityRank[priority] < priorityRank[minimumPriority]) return false
-    if (settings.quietHours?.enabled && isWithinQuietHours(settings.quietHours, clock)) {
+    if (settings.quietHours?.enabled && quietHoursVerdict(settings.quietHours, clock) === 'inside') {
       return priority === 'urgent'
     }
     return true
   })
 }
 
-function isWithinQuietHours(
+/**
+ * 免打扰窗口的判定结果。`unknown` 与 `outside` 是两件事：前者是「拿不到现在几点」，
+ * 后者是「拿得到，且不在窗口内」。混成一个布尔值，就等于把「不知道」当成「不在」。
+ */
+type QuietHoursVerdict = 'inside' | 'outside' | 'unknown'
+
+function quietHoursVerdict(
   quietHours: NonNullable<NotificationRuntimeSettings['quietHours']>,
   clock: NotificationClock
-): boolean {
+): QuietHoursVerdict {
   // 免打扰窗口按设置的读者时区判断，不按运行这台机器的本地时间。
   const currentMinutes = minutesOfDayInTimeZone(clock.now(), clock.timeZone())
+  // 时区用不了时不做判定：宁可多响一次，也不在错的钟点把提醒静音掉。
+  if (currentMinutes === null) return 'unknown'
   const start = parseLocalMinutes(quietHours.startLocalTime)
   const end = parseLocalMinutes(quietHours.endLocalTime)
-  if (start === end) return false
-  if (start < end) return currentMinutes >= start && currentMinutes < end
-  return currentMinutes >= start || currentMinutes < end
+  if (start === end) return 'outside'
+  const inside = start < end
+    ? currentMinutes >= start && currentMinutes < end
+    : currentMinutes >= start || currentMinutes < end
+  return inside ? 'inside' : 'outside'
 }
 
 function parseLocalMinutes(value: string): number {

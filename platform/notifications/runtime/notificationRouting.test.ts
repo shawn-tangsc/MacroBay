@@ -79,6 +79,18 @@ describe('notification quiet hours follow the reader time zone', () => {
 
     expect(normalizeRequestedChannels(request, settings, clock)).toEqual(['center', 'toast'])
   })
+
+  it('does not treat an unusable zone as UTC when deciding quiet hours', () => {
+    // 窗口设成 UTC 下必然命中（00:00–23:59）：只要还拿 UTC 兜底，这条就会被静音。
+    // 修好后「现在几点」算不出来 ⇒ 判定为未知 ⇒ 不做静音，而不是当成某个具体时刻。
+    const allDayWindow = {
+      ...createDefaultNotificationRuntimeSettings(),
+      quietHours: { enabled: true, startLocalTime: '00:00', endLocalTime: '23:59' }
+    }
+    const clock = { now: () => new Date('2026-11-01T23:30:00.000Z'), timeZone: () => 'Mars/Olympus_Mons' }
+
+    expect(normalizeRequestedChannels(request, allDayWindow, clock)).toEqual(['center', 'toast'])
+  })
 })
 
 describe('notification transient delivery wiring', () => {

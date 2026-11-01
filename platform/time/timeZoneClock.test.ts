@@ -12,8 +12,10 @@ describe('minutesOfDayInTimeZone', () => {
     expect(minutesOfDayInTimeZone(instant, 'America/New_York')).toBe(18 * 60 + 30)
   })
 
-  it('falls back to UTC for an unusable zone instead of throwing', () => {
-    expect(minutesOfDayInTimeZone(new Date('2026-11-01T23:30:00.000Z'), 'Mars/Olympus_Mons')).toBe(23 * 60 + 30)
+  it('returns null for an unusable zone instead of pretending it is UTC', () => {
+    // 「时区用不了」和「用户就在 UTC」必须可区分：混成同一个数，调用方会在错的钟点判定。
+    expect(minutesOfDayInTimeZone(new Date('2026-11-01T23:30:00.000Z'), 'Mars/Olympus_Mons')).toBeNull()
+    expect(minutesOfDayInTimeZone(new Date('2026-11-01T23:30:00.000Z'), '')).toBeNull()
   })
 })
 
