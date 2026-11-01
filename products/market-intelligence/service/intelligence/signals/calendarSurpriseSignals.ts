@@ -69,3 +69,35 @@ export function calendarSurpriseSignals(input: Readonly<{
   }
   return Object.freeze(signals)
 }
+
+/**
+ * The calendar could not be read at all.
+ *
+ * Silence here would read as "no release surprised the market" — the one thing a failed read
+ * cannot know. The chip says the leg is unavailable instead, exactly like the open-interest leg.
+ */
+export function calendarUnavailableSignals(asOf: string): readonly ModuleSignal[] {
+  const cadence = Object.freeze({ kind: 'trading-day' as const })
+  const dedupeKey = buildSignalDedupeKey({
+    moduleId: calendarSignalRule.moduleId,
+    ruleId: calendarSignalRule.ruleId,
+    asset: null,
+    observedAt: asOf,
+    cadence
+  })
+  if (!dedupeKey) return Object.freeze([])
+  const signal: ModuleSignal = Object.freeze({
+    version: moduleSignalPolicy.version,
+    moduleId: calendarSignalRule.moduleId,
+    ruleId: calendarSignalRule.ruleId,
+    asset: null,
+    severity: calendarSignalRule.severity,
+    observedAt: asOf,
+    cadence,
+    values: Object.freeze({}),
+    dedupeKey,
+    readiness: 'unavailable' as const,
+    triggerOwner: calendarSignalRule.triggerOwner
+  })
+  return Object.freeze(isModuleSignal(signal) ? [signal] : [])
+}

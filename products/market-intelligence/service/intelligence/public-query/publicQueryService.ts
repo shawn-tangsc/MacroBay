@@ -54,7 +54,8 @@ import { queryOpenInterestHistoryAsync } from './openInterestHistoryQuery'
 import { openInterestUnavailable, type OpenInterestHistoryResult } from '../../../contracts/openInterestHistory'
 import { divergenceUnavailable, type MarketDivergenceResult } from '../../../contracts/marketDivergence'
 import { queryMarketDivergenceAsync, readSentimentLeg, type DivergenceLegReader } from '../divergence/marketDivergenceQuery'
-import { createOpenInterestSignalQuery, type ModuleSignalProducer } from '../signals/moduleSignalQuery'
+import { createCalendarSignalQuery, createOpenInterestSignalQuery, type ModuleSignalProducer } from '../signals/moduleSignalQuery'
+import { normalizeMacroRouteMonths, queryMacroRoute } from './macroRouteQuery'
 import { isCanonicalSignalTime, type ModuleSignal } from '../../../contracts/moduleSignal'
 import { createPriceLegReader } from '../divergence/priceLegReading'
 import type { NewsSentimentView } from '../news-sentiment/newsSentimentQuery'
@@ -401,7 +402,13 @@ export function createMarketIntelligencePublicQueryService(
   // The legs that can answer a signal today. The ETF leg joins this list when its own wiring lands —
   // as a producer that answers, never as a placeholder that returns nothing.
   const moduleSignalProducers: ModuleSignalProducer[] = [
-    createOpenInterestSignalQuery({ readHistory: input => service.queryOpenInterestHistory(input) })
+    createOpenInterestSignalQuery({ readHistory: input => service.queryOpenInterestHistory(input) }),
+    // The calendar's own trigger key stays the only one that spends a call; this leg exists so the
+    // chip and the analysis name the same release the same way.
+    createCalendarSignalQuery({
+      readObservations: async ({ asOf }) =>
+        (await queryMacroRoute(service, { asOf, months: normalizeMacroRouteMonths(asOf, null) })).provider
+    })
   ]
   service.addModuleSignalProducer = (producer) => { moduleSignalProducers.push(producer) }
   service.queryModuleSignals = async (queryInput) => {
