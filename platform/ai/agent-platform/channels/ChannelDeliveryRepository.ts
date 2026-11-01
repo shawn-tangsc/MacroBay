@@ -4,6 +4,7 @@ import type { AgentPlatformDatabase } from '../db/createAgentPlatformDatabase'
 import { supportedChannelSql } from './ChannelManagementPredicates'
 import type { ChannelDeliveryAttemptView, ChannelDeliverySource, ChannelDeliveryStatus, ChannelDeliveryAuditView } from './ChannelDeliveryContracts'
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
+import { taskResultOutcomes, taskResultSourceId } from './taskResultSourceId'
 
 const SUPPORTED_CHANNEL_C_SQL = supportedChannelSql('c')
 
@@ -317,6 +318,6 @@ function deliveryBackoffMs(attemptCount: number): number {
   return [5_000, 30_000, 120_000, 600_000, 1_800_000][Math.max(0, Math.min(attemptCount - 1, 4))] ?? 1_800_000
 }
 function hash(value: string): string { return createHash('sha256').update(value).digest('base64url') }
-function taskHashes(runLogId: string): [string, string, string] { return ['completed', 'failed', 'cancelled'].map((status) => hash(`${runLogId}:${status}`)) as [string, string, string] }
+function taskHashes(runLogId: string): [string, string, string] { return taskResultOutcomes.map((outcome) => hash(taskResultSourceId(runLogId, outcome))) as [string, string, string] }
 function mapAttempt(row: AttemptRow): DeliveryAttempt { return { id: row.id, channelId: row.channel_id, agentId: row.agent_id, conversationId: row.conversation_id, source: row.source_type, sourceHash: row.source_hash, idempotencyKey: row.idempotency_key, status: row.status } }
 function mapView(row: AttemptViewRow): ChannelDeliveryAttemptView { return { id: row.id, channelId: row.channel_id, agentId: row.agent_id, conversationId: row.conversation_id, source: row.source_type, status: row.status, errorCode: row.stable_error_code, createdAt: row.created_at, updatedAt: row.updated_at, completedAt: row.completed_at } }
