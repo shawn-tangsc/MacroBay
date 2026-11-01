@@ -102,6 +102,29 @@ describe('IconButton', () => {
     expect(html).toContain('aria-label="More actions"')
   })
 
+  it('shows the platform spinner and stops firing while loading', () => {
+    const onSelect = vi.fn()
+    const button = mountElement({ loading: true, onSelect })
+
+    expect(button.disabled).toBe(true)
+    expect(button.querySelector('.loading-spinner')).not.toBeNull()
+    act(() => button.click())
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('keeps its name and its measured size while loading', () => {
+    const button = mountElement({
+      loading: true,
+      ariaLabelKey: 'ui.test.save',
+      resolveText: (value) => (value === 'ui.test.save' ? 'Save' : value)
+    })
+
+    // 读屏仍要知道「哪个按钮在忙」；尺寸不变，说明 loading 不是第三个档位。
+    expect(button.getAttribute('aria-label')).toBe('Save')
+    expect(button.style.width).toBe('24px')
+    expect(button.style.height).toBe('24px')
+  })
+
   it('is a plain button, so it can never submit a surrounding form', () => {
     expect(markup()).toContain('type="button"')
   })
@@ -226,7 +249,9 @@ describe('IconButton', () => {
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
     expect(code).not.toMatch(/[\u4e00-\u9fff]/)
-    expect(code).not.toMatch(/spinner/i)
+    // 不许自己造转圈（旋转关键帧、`.spin`、lucide loader）；用平台那一个是可以的，而且应该用。
+    expect(code).not.toMatch(/@keyframes|animation:|\bspin\b|Loader/i)
+    expect(code).toMatch(/from '\.\.\/loading'/)
     expect(rules).not.toMatch(/@keyframes|animation/)
   })
 })

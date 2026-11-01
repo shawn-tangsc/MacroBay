@@ -40,6 +40,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `onSelect` | `() => void` | 是 | 点击回调。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析入口；组件内零文案、不 import i18n。 |
 | `disabled` | `boolean` | 否 | 原生 `disabled`：不进 Tab 序列、点了不触发。与 `tooltipKey` 不能并存，一起传编译不过。 |
+| `loading` | `boolean` | 否 | 这次点击还在等结果：按钮 disabled、图形换成平台唯一的转圈（`LoadingSpinner`，`sm` 档）、不再触发 `onSelect`。**读屏名与 22/24 尺寸不变**——用户要知道是哪个按钮在忙。它不是第三个尺寸，也不是新变体。 |
 | `tooltipKey` | `string` | 否 | 悬停**和聚焦**都出现的解释，同样只收键。不用原生 `title`；禁用时不许传。 |
 | `variant` | `'plain' \| 'solid'` | 否，默认 `plain` | `solid` 给工具栏一排加边框与底色。 |
 

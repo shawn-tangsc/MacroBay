@@ -42,6 +42,7 @@ window) — never per button.
 | `onSelect` | `() => void` | yes | Click handler. |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver; the component holds no copy and imports no i18n. |
 | `disabled` | `boolean` | no | Native `disabled`: it leaves the tab order and stops firing. Cannot be combined with `tooltipKey` — that combination does not compile. |
+| `loading` | `boolean` | no | The click is in flight: the button is disabled, the glyph becomes the platform spinner (`LoadingSpinner`, `sm`), and `onSelect` stops firing. The name and the 22/24 size stay, so a screen reader still knows which button is busy. Not a third size and not a variant. |
 | `tooltipKey` | `string` | no | Explanation on hover **and focus**, key only. There is no native `title`. Never together with `disabled`. |
 | `variant` | `'plain' \| 'solid'` | no, default `plain` | `solid` adds a border and a surface tint for toolbar rows. |
 

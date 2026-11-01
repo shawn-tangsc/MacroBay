@@ -2,6 +2,8 @@ import { Button, Tooltip } from 'antd'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactElement } from 'react'
 
+import { LoadingSpinner } from '../loading'
+
 import './iconButton.css'
 
 /**
@@ -66,6 +68,13 @@ type IconButtonCommon = {
   /** `sm` = 行内（22），`md` = 卡片头与工具栏（24）。 */
   size: IconButtonSize
   onSelect: () => void
+  /**
+   * 正在等待这次点击的结果。为真时按钮 `disabled`、图形换成平台唯一的转圈，并且**不再触发 `onSelect`**。
+   *
+   * 它不是第三个尺寸，也不是新变体：尺寸仍是 `sm`/`md`，读屏名仍在——用户要知道「哪个按钮在忙」。
+   * 产品不要自己再包一层转圈，那会在同一个位置上出现两个 spinner。
+   */
+  loading?: boolean
   /** 默认无边框透明底；工具栏用 `solid`。 */
   variant?: IconButtonVariant
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
@@ -97,6 +106,7 @@ export function IconButton({
   size,
   onSelect,
   disabled,
+  loading,
   tooltipKey,
   variant = 'plain',
   resolveText
@@ -118,8 +128,14 @@ export function IconButton({
       ]
         .filter(Boolean)
         .join(' ')}
-      disabled={disabled}
-      icon={<Glyph className="icon-button__glyph" size={GLYPH_PX[size]} aria-hidden="true" />}
+      disabled={disabled === true || loading === true}
+      icon={
+        loading === true ? (
+          <LoadingSpinner className="icon-button__glyph" size="sm" />
+        ) : (
+          <Glyph className="icon-button__glyph" size={GLYPH_PX[size]} aria-hidden="true" />
+        )
+      }
       onClick={onSelect}
       style={{ width: pixels, height: pixels }}
       type={variant === 'solid' ? 'default' : 'text'}
