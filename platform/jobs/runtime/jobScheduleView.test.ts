@@ -162,7 +162,7 @@ describe('projectJobSchedules', () => {
   })
 })
 
-function definition(overrides: Partial<JobDefinition> = {}): ScheduledJobDefinition {
+function definition(overrides: Partial<ScheduledJobDefinition> = {}): ScheduledJobDefinition {
   return {
     id: 'job-1',
     owner: 'platform',

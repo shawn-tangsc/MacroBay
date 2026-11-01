@@ -61,6 +61,10 @@ export function projectJobSchedules(
   //
   // 只投影 `resource`：`internal` 是平台自己维护的活（保留期清理、投递重试、状态巡检），用户
   // 既配置不了也停不了。它们仍在运行，运行记录也照旧可查，只是不进这张"用户能理解的任务"表。
+  //
+  // 投影保持两档，不加第三档诊断、也不在界面上说「还有 N 条内部任务」：`visibility` 在注册口必填，
+  // `assertVisibility` 再兜一层，到达这里的定义非 `resource` 即 `internal`，第三种状态不可达。
+  // 给不可达状态写分支只会写死代码并留下一条假防线。
   return source
     .listSchedules()
     .filter((definition) => definition.visibility === 'resource')
