@@ -2759,6 +2759,8 @@ h1 {
 
 .channel-settings { grid-template-columns: 230px minmax(0, 1fr); }
 .channel-settings-rail { border-right: 1px solid var(--border); padding: 12px; display: grid; align-content: start; gap: 8px; }
+/* 侧栏首屏高度归容器：状态组件只表达它能表达的档（md=80），120 是布局要求。 */
+.channel-settings-rail { min-height: 120px; }
 .channel-settings-rail header { display: flex; justify-content: space-between; align-items: center; }
 .channel-settings-rail section { display: grid; gap: 8px; padding-top: 12px; }
 .channel-settings-rail button.active { background: color-mix(in srgb, var(--accent) 16%, transparent); }

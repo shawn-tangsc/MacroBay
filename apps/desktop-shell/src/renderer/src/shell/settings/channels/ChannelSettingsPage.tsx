@@ -2,7 +2,7 @@ import { Button, Input, Popconfirm, Select, Switch, Tag } from 'antd'
 import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
-import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { platformText } from '../../../i18n/platformText'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
 
@@ -193,7 +193,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           </Button>
         </header>
         {initialLoading ? (
-          <LoadingState label={platformText[language].status.loading} minHeight={120} />
+          <StateView state="loading" size="md" />
         ) : (
           <>
             {channels.length === 0 ? <p>{labels.channelNoInstances}</p> : null}
@@ -239,7 +239,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       </aside>
       <main className="channel-settings-detail">
         {error ? <p role="alert">{error}</p> : null}
-        {initialLoading ? <LoadingState label={platformText[language].status.loading} fill /> : current ? (
+        {initialLoading ? <StateView state="loading" size="lg" /> : current ? (
           <>
             <header>
               <strong>{current.name}</strong>
@@ -268,7 +268,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
             <p>{labels.channelRuntimeGeneration}: {runtimeStatus?.generation ?? 0} · {labels.channelRuntimeLifecycle}: {runtimeStatus?.lifecycle ?? labels.channelRuntimeMissing}</p>
             <section>
               <strong>{labels.channelCandidates}</strong>
-              {candidates.length === 0 ? <p>{labels.channelCandidatesEmpty}</p> : candidates.map((candidate) => (
+              {candidates.length === 0 ? <StateView state="empty" reasonCode="not-yet" size="sm" /> : candidates.map((candidate) => (
                 <div key={candidate.id} className="channel-target-row">
                   <span>{candidate.displayLabel ?? labels.channelCandidateUnknown} · {labels.channelConversationKind[candidate.kind]}</span>
                   <Switch
