@@ -4,6 +4,7 @@ import { ArrowLeft, Settings2 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
 import { LoadingState } from '@platform/ui/components/loading'
+import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -11,7 +12,7 @@ import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../.
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
-import type { DailyBriefingText } from './dailyBriefingText'
+import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
 import { DailyBriefingAiSettingsModal } from './DailyBriefingAiSettingsModal'
 import { DailyBriefingGenerationSettingsModal } from './DailyBriefingGenerationSettingsModal'
@@ -49,7 +50,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   text: DailyBriefingText
   eventTitles?: Record<string, string>
   onBack: () => void
-  onConfigureSources?: () => void
+  onConfigureSources: () => void
   onConfigureWebSearch?: () => void
   /** Overrides the built-in platform model-service navigation. */
   onOpenModelSettings?: () => void
@@ -268,6 +269,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     ? readGenerationTrace((view.document.provenance as unknown as Readonly<{ generationTrace?: unknown }>).generationTrace)
     : undefined
   const showAppendix = view.status === 'ready' && !contentBlocked
+  // The newest edition the list still holds is the last one that actually generated: an unreadable
+  // state may quote it, so "unreadable" is not mistaken for "nothing was ever made".
+  const lastGeneratedAt = editions.find((edition) => edition.generatedAt && edition.state !== 'missing')?.generatedAt
+  const generateNow = (): void => {
+    emptyGenerateRef.current = true
+    setRegenerateFailure(null)
+    setRegenerating(true)
+    setReloadKey((key) => key + 1)
+  }
   const openModelService = onOpenModelSettings ?? openModelSettings
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
@@ -303,19 +313,39 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           <Button onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</Button>
         </div> : null}
         {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.generating} minHeight={220} /><p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p></div> : null}
-        {view.status === 'unavailable' && !failure ? <div className="mi-daily-briefing-page__empty" role="alert">
-          {editions.every((edition) => edition.state === 'missing') ? <>
-            <h2>{text.noBriefTitle}</h2>
-            <p>{text.noBriefBody}</p>
-          </> : <>
-            <h2>{text.unavailable}</h2>
-            <p>{text.unavailableHint}</p>
-          </>}
-          <div className="mi-daily-briefing-page__empty-actions">
-            {onConfigureSources ? <Button type="primary" className="mi-daily-briefing-page__primary" onClick={onConfigureSources}>{text.configureSources}</Button> : null}
-            <Button disabled={regenerating} onClick={() => { emptyGenerateRef.current = true; setRegenerateFailure(null); setRegenerating(true); setReloadKey((key) => key + 1) }}>{regenerating ? text.regenerating : text.generateNow}</Button>
-          </div>
-        </div> : null}
+        {view.status === 'unavailable' && !failure ? (editions.every((edition) => edition.state === 'missing')
+          ? <StateView
+              state="empty"
+              reasonCode="never-created"
+              size="lg"
+              productReason={{
+                key: 'mi.dailyBriefing.noBrief',
+                resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+              }}
+              action={{ labelKey: 'ui.state.action.create', onSelect: generateNow }}
+            />
+          : lastGeneratedAt
+            ? <StateView
+                state="error"
+                reasonCode="unreadable"
+                size="lg"
+                productReason={{
+                  key: 'mi.dailyBriefing.unreadableSince',
+                  params: { moment: formatTime(lastGeneratedAt, 'minute') },
+                  resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+                }}
+                action={{ labelKey: 'ui.state.action.retry', onSelect: generateNow }}
+              />
+            : <StateView
+                state="error"
+                reasonCode="unreadable"
+                size="lg"
+                productReason={{
+                  key: 'mi.dailyBriefing.unreadable',
+                  resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+                }}
+                action={{ labelKey: 'ui.state.action.retry', onSelect: generateNow }}
+              />) : null}
         {failure ? <DailyBriefingFailurePanel
           failure={failure}
           text={text}
@@ -327,10 +357,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
           {...(onConfigureSources ? { onConfigureSources } : {})}
         /> : null}
         {view.status === 'ready' && view.document.provenance.editorialFailure === 'editorial-disabled' ? <p className="mi-daily-briefing-page__ai-failure" role="status">{text.aiSettings.notApplied} · {editorialFailureText('editorial-disabled', text)}</p> : null}
-        {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <div className="mi-daily-briefing__guide">
-          <p>{text.emptyGuide}</p>
-          {onConfigureSources ? <Button onClick={onConfigureSources}>{text.configureSources}</Button> : null}
-        </div> : null}
+        {view.status === 'ready' && !contentBlocked && view.document.status.readingsAvailable === 0 ? <StateView
+          state="empty"
+          reasonCode="nothing-enabled"
+          productReason={{
+            key: 'mi.dailyBriefing.nothingEnabled',
+            resolve: (key, params) => resolveBriefingStateReason(text, key, params)
+          }}
+          action={{ labelKey: 'ui.state.action.open-settings', onSelect: onConfigureSources }}
+        /> : null}
         {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-page__paper">
           <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
         </div> : null}

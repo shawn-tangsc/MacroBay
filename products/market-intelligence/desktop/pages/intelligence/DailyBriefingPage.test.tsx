@@ -221,18 +221,19 @@ async function renderPage(client: ReturnType<typeof fakeClient>, options: Readon
   onConfigureSources?: () => void
   onOpenModelSettings?: () => void
   locale?: 'zh-CN' | 'en-US'
+  text?: typeof text
 }> = {}): Promise<HTMLDivElement> {
-  const { onBack = vi.fn(), onConfigureSources, onOpenModelSettings, locale = 'zh-CN' } = options
+  const { onBack = vi.fn(), onConfigureSources = vi.fn(), onOpenModelSettings, locale = 'zh-CN', text: textOverride } = options
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
     root!.render(<ConfigProvider button={WINDOW_ANTD_BUTTON_CONFIG}><DailyBriefingPage
       locale={locale}
-      text={locale === 'zh-CN' ? text : englishText}
+      text={textOverride ?? (locale === 'zh-CN' ? text : englishText)}
       eventTitles={{ cpi: 'CPI', fomc: 'FOMC' }}
       onBack={onBack}
-      {...(onConfigureSources ? { onConfigureSources } : {})}
+      onConfigureSources={onConfigureSources}
       {...(onOpenModelSettings ? { onOpenModelSettings } : {})}
       client={client}
     /></ConfigProvider>)
@@ -300,16 +301,19 @@ describe('daily briefing page', () => {
     expect(writeText.mock.calls[0]?.[0]).toContain('历史版次')
   })
 
-  it('guides a clean install to the sources when every reading is missing', async () => {
+  it('guides a clean install through the platform state with the product sentence', async () => {
     const onConfigureSources = vi.fn()
     const dom = await renderPage(fakeClient({
       getToday: vi.fn(async () => ({ state: 'available' as const, document: emptyDocument() }))
     }), { onConfigureSources })
-    expect(dom.textContent).toContain(text.emptyGuide)
+    const state = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"]')!
+    expect(state).not.toBeNull()
+    // Only the reason slot is ours; the reason says the product sentence, not a hand-written block.
+    expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.nothingEnabled)
     for (const section of [text.sections.news, text.sections.data, text.sections.conclusion, text.sections.next]) {
       expect(dom.querySelector(`[aria-label="${section}"]`)).toBeNull()
     }
-    const configure = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.configureSources)!
+    const configure = state.querySelector<HTMLButtonElement>('.state-view__action')!
     act(() => configure.click())
     expect(onConfigureSources).toHaveBeenCalledTimes(1)
   })
@@ -355,17 +359,61 @@ describe('daily briefing page', () => {
     expect(dom.querySelector('.mi-daily-briefing__export')).not.toBeNull()
   })
 
-  it('shows an unavailable state and retries without crashing', async () => {
+  it('renders an unreadable read as an error, not as "nothing was made", and retries', async () => {
     const getToday = vi.fn()
       .mockRejectedValueOnce(new Error('down'))
       .mockResolvedValueOnce({ state: 'available' as const, document: briefingDocument() })
     const client = fakeClient({ getToday })
     const dom = await renderPage(client)
-    expect(dom.textContent).toContain(text.unavailable)
-    const retry = [...dom.querySelectorAll('button')].find((button) => button.textContent === text.generateNow)!
+    // A read that did not finish is `error`; calling it `empty` is the lie this migration removes.
+    const state = dom.querySelector('.state-view[data-state="error"]')!
+    expect(state).not.toBeNull()
+    expect(dom.querySelector('.state-view[data-state="empty"]')).toBeNull()
+    const reason = state.querySelector('[data-reason-source="product"]')?.textContent ?? ''
+    expect(reason).toContain(text.stateReasons.unreadableSince.split('{moment}')[0]!)
+    expect(reason).not.toContain('{moment}')
+    const retry = state.querySelector<HTMLButtonElement>('.state-view__action')!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve() })
     expect(getToday).toHaveBeenCalledTimes(2)
     expect(dom.textContent).toContain('每日简报')
+  })
+
+  it('tells a first run apart from an unreadable read', async () => {
+    const getToday = vi.fn(async () => ({ state: 'unavailable' as const }))
+    const client = fakeClient({
+      getToday,
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
+    })
+    const dom = await renderPage(client)
+    const state = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"]')!
+    expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.noBrief)
+    expect(state.querySelector('.state-view__action')?.textContent).toBe('创建')
+    await act(async () => {
+      state.querySelector<HTMLButtonElement>('.state-view__action')!.click()
+      await Promise.resolve(); await Promise.resolve()
+    })
+    expect(getToday).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to the platform sentence when the product sentence is blank', async () => {
+    const blank = { ...text, stateReasons: { ...text.stateReasons, noBrief: '' } }
+    const dom = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
+    }), { text: blank })
+    const reason = dom.querySelector('.mi-daily-briefing-page__content .state-view[data-state="empty"] [data-reason-source]')!
+    expect(reason.getAttribute('data-reason-source')).toBe('platform')
+  })
+
+  it('renders an empty history rail through the platform state', async () => {
+    const dom = await renderPage(fakeClient({
+      getToday: vi.fn(async () => ({ state: 'unavailable' as const })),
+      list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } }))
+    }))
+    const rail = dom.querySelector('.mi-daily-briefing__rail')!
+    const state = rail.querySelector('.state-view[data-state="empty"]')!
+    expect(state.querySelector('[data-reason-source="product"]')?.textContent).toBe(text.stateReasons.noEditions)
+    expect(state.querySelector('.state-view__action')).toBeNull()
   })
 
   it('explains an editorial timeout and offers retry, AI settings and model service actions', async () => {
