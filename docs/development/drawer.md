@@ -59,6 +59,18 @@ same drawer grew a twelfth width.
 | `wide` | 860 | Agent configuration, dashboard panels |
 | `full` | 1040 | The widest immersive panel |
 
+### Pass-through list
+
+Only properties that change **when the content exists** are passed through; anything that changes
+what it looks like belongs in the spec instead of being threaded through per call site.
+
+| Prop | Why it exists |
+| --- | --- |
+| `destroyOnHidden` | Some drawers hold detail and filter state that must not survive closing. Undefined by default, so antd's own default applies and nothing implicit is added. |
+
+`afterOpenChange` is deliberately **not** offered: no consumer needs it, and it does not answer the
+lifecycle question — whether the content exists is unaffected by it.
+
 ## Rules the component enforces
 
 - **The close control is the component's.** It renders `IconButton` with `ui.drawer.close`, resolved

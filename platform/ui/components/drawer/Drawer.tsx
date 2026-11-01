@@ -47,6 +47,12 @@ type DrawerBase = {
   children: ReactNode
   className?: string
   resolveText: (key: string) => string
+  /**
+   * **生命周期开关**：关闭后是否卸载内容。原样透传给 antd，**不传即 antd 默认**（不加隐式行为）。
+   *
+   * 判据：改变「内容何时存在」→ 透传；改变「长什么样」→ 进规格。清单见 `drawer.md`。
+   */
+  destroyOnHidden?: boolean
 }
 
 /**
@@ -84,7 +90,7 @@ type DrawerHeaderShape =
 export type DrawerProps = DrawerBase & DrawerModeShape & DrawerHeaderShape
 
 export function Drawer(props: DrawerProps): ReactElement {
-  const { open, onClose, size, footer, children, className, resolveText } = props
+  const { open, onClose, size, footer, children, className, resolveText, destroyOnHidden } = props
   const inline = props.mode === 'inline'
   const headless = props.header === 'none'
   const width = `min(${SIZE_PX[size]}px, ${VIEWPORT_CAP})`
@@ -122,6 +128,7 @@ export function Drawer(props: DrawerProps): ReactElement {
         />
       }
       footer={footer}
+      {...(destroyOnHidden === undefined ? {} : { destroyOnHidden })}
       mask={!inline}
       maskClosable={!inline}
       keyboard={!inline}

@@ -68,6 +68,63 @@ function wrapper(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.ant-drawer-content-wrapper')
 }
 
+describe('Drawer 的 destroyOnHidden 透传', () => {
+  it('不传就不发：我们没有偷偷改 antd 的默认行为', async () => {
+    passedProps.length = 0
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+
+    act(() => {
+      root!.render(
+        <Drawer open onClose={() => undefined} size="narrow" titleKey="ui.test.title" resolveText={key}>
+          <span data-probe="content">content</span>
+        </Drawer>
+      )
+    })
+
+    // antd 的面板走 portal、且首帧后才挂载，flush 一次再断言「开着的时候内容在」。
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(passedProps.every((props) => !('destroyOnHidden' in props))).toBe(true)
+    // 面板挂在 body 的 portal 里，不在我们自己的 host 下。
+    expect(document.body.querySelector('[data-probe="content"]')).not.toBeNull()
+  })
+
+  it('传 true 时原样交给 antd，关闭后子树被卸载', () => {
+    passedProps.length = 0
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+
+    const render = (open: boolean): void => {
+      act(() => {
+        root!.render(
+          <Drawer
+            open={open}
+            onClose={() => undefined}
+            size="narrow"
+            titleKey="ui.test.title"
+            resolveText={key}
+            destroyOnHidden>
+            <span data-probe="content">content</span>
+          </Drawer>
+        )
+      })
+    }
+
+    render(true)
+    expect(passedProps.at(-1)?.destroyOnHidden).toBe(true)
+    expect(document.body.querySelector('[data-probe="content"]')).not.toBeNull()
+
+    render(false)
+    // 断言子节点是否存在，不断言 antd 内部类名——后者等于把实现细节写进我们的测试。
+    expect(document.body.querySelector('[data-probe="content"]')).toBeNull()
+  })
+})
+
 describe('Drawer', () => {
   it('offers four sizes and no fifth', () => {
     expect(DRAWER_SIZES).toEqual(['narrow', 'large', 'wide', 'full'])
