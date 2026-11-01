@@ -292,16 +292,16 @@ describe('StateView', () => {
     const freeText: StateViewProps = { state: 'empty', reason: 'x', resolveText: key }
     // @ts-expect-error 每码一支：empty 不能配 error 的码。
     const wrongPair: StateViewProps = { state: 'empty', reasonCode: 'unreadable', resolveText: key }
-    // @ts-expect-error never-created 必须给动作。
-    const missingAction: StateViewProps = { state: 'empty', reasonCode: 'never-created', resolveText: key }
-    // @ts-expect-error not-yet 不许有动作。
+    // 动作已是场景判断，不再由类型强制：这一条现在应当能编译（留作对照，不再期望报错）。
+    const withoutAction: StateViewProps = { state: 'empty', reasonCode: 'never-created', resolveText: key }
+    // not-yet 也可以有动作（场景判断）：留作对照，不再期望报错。
     const actionOnNotYet: StateViewProps = {
       state: 'empty',
       reasonCode: 'not-yet',
       resolveText: key,
       action: { labelKey: 'ui.state.action.create', onSelect: () => undefined }
     }
-    // @ts-expect-error capability-not-wired 不许有动作。
+    // capability-not-wired 同上：类型不拦，交给文档判据。
     const actionOnWired: StateViewProps = {
       state: 'disabled',
       reasonCode: 'capability-not-wired',
@@ -318,16 +318,16 @@ describe('StateView', () => {
     }
     // @ts-expect-error 动作文案是码表里的键，自由字符串编译不过。
     const freeLabel: StateViewProps = { state: 'permission', reasonCode: 'not-granted', resolveText: key, action: { labelKey: 'ui.state.action.whatever', onSelect: () => undefined } }
-    // @ts-expect-error 缺权限必须带「去系统设置」，不许留成没人填的空动作位。
+    // 权限态的动作也改成按场景判断。
     const missingGrant: StateViewProps = { state: 'permission', reasonCode: 'not-granted', resolveText: key }
-    // @ts-expect-error 出错态也必须带恢复动作，不许指着调用方自己想起来补。
+    // 出错态的动作同样按场景判断。
     const missingRetry: StateViewProps = { state: 'error', reasonCode: 'unreadable', resolveText: key }
     // @ts-expect-error 不收 spinner 这类语义开关。
     const spinner: StateViewProps = { state: 'loading', resolveText: key, spinner: true }
     // @ts-expect-error size 是位置词，不收数字。
     const numericSize: StateViewProps = { state: 'loading', resolveText: key, size: 220 }
 
-    for (const value of [freeText, wrongPair, missingAction, actionOnNotYet, actionOnWired, detailsOnEmpty, freeLabel, missingGrant, missingRetry, spinner, numericSize]) {
+    for (const value of [freeText, wrongPair, withoutAction, actionOnNotYet, actionOnWired, detailsOnEmpty, freeLabel, missingGrant, missingRetry, spinner, numericSize]) {
       expect(value).toBeDefined()
     }
   })

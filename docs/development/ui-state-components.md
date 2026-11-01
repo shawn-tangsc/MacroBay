@@ -29,7 +29,8 @@ The contract is `docs-private/05-desktop/ui-state-components-contract.md` §13; 
 
 ### Props
 
-`StateViewProps` is a discriminated union on `state`, so a missing required field fails the build
+`StateViewProps` is a discriminated union on `state`, so a reason code that belongs to another
+state fails the build
 instead of falling back to a generic sentence.
 
 | Prop | Type | Required for | Meaning |
@@ -37,7 +38,7 @@ instead of falling back to a generic sentence.
 | `state` | `StateViewState` | always | Which of the six states this region is in. |
 | `resolveText` | `(key: StateViewTextKey) => string` | optional | Test-only override. Production resolves through `useStateViewText()`, whose copy lives once in `platform/ui/components/state/stateViewText.ts`. |
 | `reasonCode` | a closed set, one per state | `empty` / `error` / `disabled` / `permission` | A **code**, never a sentence. The key is `ui.state.<state>.reason.<code>`. A code that belongs to another state does not compile. |
-| `action` | `{ labelKey, onSelect }` | `empty` except `not-yet`; `error`; `disabled` / `target-disabled`; `permission`; never for `not-yet`, `capability-not-wired` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
+| `action` | `{ labelKey, onSelect }` | optional for every state; whether a state has one is a scenario decision, not a type rule. `empty` except `not-yet`; `error`; `disabled` / `target-disabled`; `permission`; never for `not-yet`, `capability-not-wired` | At most one action. The label is a key, not text. Where the reader has nothing to do, passing one does not compile. |
 | `details` | `{ summaryKey, bodyKey }` | `error` only | Troubleshooting detail, folded by default. |
 | `size` | `'sm' \| 'md' \| 'lg'` | optional, default `md` | `lg` = full page (220), `md` = inside a card (80). `sm` is reserved and must not be used yet. |
 | `children` | `ReactNode` | `normal` only | The region's own content. |
@@ -61,27 +62,32 @@ Icons come from one table inside the component and are chosen by `state` alone.
 grayscale because the outline differs (circle-slash vs lock) and the action slot differs. Do not
 separate them by colour.
 
-The reason codes are a closed set. The action column is enforced by the type, not by review:
+The reason codes are a closed set. The action column is **a review criterion, not a type rule**
+(2026-11-02): whether a state has an action depends on the situation, not on `state × reason`.
+`error` and a recoverable `empty` must carry one; `empty · not-yet` and
+`disabled · capability-not-wired` may carry none. Use `run-now` for "run it once now", `refresh`
+for "get a newer copy", `retry` only when the previous attempt failed — using `retry` for a refresh
+tells the reader a stale value failed.
 
 | `state` | `reasonCode` | Action | Meaning |
 | --- | --- | --- | --- |
-| `empty` | `never-created` | required: create | Nothing has ever been created. |
-| `empty` | `filtered-out` | required: clear the filter | There is data; the filter hides it. |
-| `empty` | `no-target-bound` | required: bind a target | No target is bound yet. |
-| `empty` | `nothing-enabled` | required: enable | Nothing is enabled. |
-| `empty` | `none-installed` | required: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
-| `empty` | `no-target-selected` | required: focus the selector | A target exists to pick, but none is selected yet. |
+| `empty` | `never-created` | expected: create | Nothing has ever been created. |
+| `empty` | `filtered-out` | expected: clear the filter | There is data; the filter hides it. |
+| `empty` | `no-target-bound` | expected: bind a target | No target is bound yet. |
+| `empty` | `nothing-enabled` | expected: enable | Nothing is enabled. |
+| `empty` | `none-installed` | expected: install / bind / open settings, one recovery per site | Nothing has ever been installed or bound here; the reader can fix it. |
+| `empty` | `no-target-selected` | expected: focus the selector | A target exists to pick, but none is selected yet. |
 | `empty` | `not-yet` | never | It only appears once something has happened. |
-| `empty` | `older-than-window` | required: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
-| `empty` | `nothing-in-window` | required: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
-| `error` | `unreadable` | required: retry | The data could not be read — this is not "there is none". |
-| `error` | `unavailable` | required: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
-| `error` | `operation-failed` | required: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
-| `error` | `needs-restart` | required: restart the app | A local interface is missing; only a restart loads it. |
+| `empty` | `older-than-window` | expected: view all | There is data, but all of it falls outside this window — this is "looked, and it exists", not "nothing yet". |
+| `empty` | `nothing-in-window` | expected: view all | The window really has nothing in it — this is "looked, and there is none", which `not-yet` must never be used for. |
+| `error` | `unreadable` | expected: retry | The data could not be read — this is not "there is none". |
+| `error` | `unavailable` | expected: check the source | The source itself is unavailable; retrying blindly achieves nothing. |
+| `error` | `operation-failed` | expected: retry | A write (create, save, update, delete) did not go through — this is not a read failure. |
+| `error` | `needs-restart` | expected: restart the app | A local interface is missing; only a restart loads it. |
 | `disabled` | `capability-not-wired` | never | The platform side is not connected; nothing is wrong on the reader's side. |
-| `disabled` | `target-disabled` | required: enable | The target was switched off. |
-| `disabled` | `precondition-unsaved` | required: save | The form has unsaved changes; saving unlocks it. |
-| `permission` | `not-granted` | required: open system settings | Only for capabilities where the system can answer whether permission was granted. |
+| `disabled` | `target-disabled` | expected: enable | The target was switched off. |
+| `disabled` | `precondition-unsaved` | expected: save | The form has unsaved changes; saving unlocks it. |
+| `permission` | `not-granted` | expected: open system settings | Only for capabilities where the system can answer whether permission was granted. |
 
 ### Sizes
 

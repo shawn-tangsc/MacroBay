@@ -32,11 +32,13 @@ export type {
  * `state` 是判别联合不是平铺对象，`reasonCode` 是按状态分家的闭集：`<StateView state="empty" />`
  * 与「empty 配 error 的码」都编译不过，否则就会落回一句兜底文案——而那正是「暂无数据」的撒谎方式。
  *
- * 动作位按「读者能不能自己解决」定，不是按状态定：
- * - `empty · not-yet`、`disabled · capability-not-wired`：读者没有可做的动作，**不许传入动作**；
- * - `empty` 其余码、`disabled · target-disabled`、`error`：必须给一个点了就能解决的动作；
- * - `permission · not-granted`：必须给「去系统设置」——码表把它限死在系统能回答授没授权的
- *   能力上，能开启它的是系统设置，按钮真能把人送过去。`contact-admin` 那类假动作仍然禁止。
+ * 动作位是**场景属性**，不是 `state × reason` 的必然属性，所以 `action` 一律可选：
+ * - 「还没跑过」的正解是「现在跑一次」，但「这段时间确实没有消息」是事实、没有可做的事；
+ * - 有没有动作由调用方按场景判，类型不替人判（§13 2026-11-02 裁定）。
+ *
+ * 文档判据（验收用，不是类型）：`error` 与可恢复的 `empty` 必须给动作；`empty · not-yet`、
+ * `disabled · capability-not-wired` 可以没有；`permission · not-granted` 给的是「去系统设置」，
+ * `contact-admin` 那类假动作仍然禁止。
  *
  * 播报：**只有 `error` 进 live region**，且只包标题与原因。`role="alert"` 是 assertive，会打断
  * 正在朗读的内容并把按钮一起念出来，所以用 `status` + `polite`。`empty` / `disabled` /
@@ -87,6 +89,8 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.select-target',
   'ui.state.action.restart-app',
   'ui.state.action.open-system-settings',
+  'ui.state.action.run-now',
+  'ui.state.action.refresh',
   'ui.state.action.widen-time-window',
   'ui.state.action.focus-form',
   'ui.state.action.open-assistant'
@@ -120,28 +124,28 @@ type StateDetails = { summaryKey: StateViewTextKey; bodyKey: StateViewTextKey }
 export type StateViewProps =
   | (StateViewBase & { state: 'normal'; children: ReactNode })
   | (StateViewBase & { state: 'loading' })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'never-created'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'filtered-out'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-bound'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-enabled'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'none-installed'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-selected'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'not-yet'; action?: never })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'older-than-window'; action: StateViewAction })
-  | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-in-window'; action: StateViewAction })
-  | (StateViewBase & { state: 'error'; reasonCode: 'unreadable'; action: StateViewAction; details?: StateDetails })
-  | (StateViewBase & { state: 'error'; reasonCode: 'unavailable'; action: StateViewAction; details?: StateDetails })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'never-created'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'filtered-out'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-bound'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-enabled'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'none-installed'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'no-target-selected'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'not-yet'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'older-than-window'; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'nothing-in-window'; action?: StateViewAction })
+  | (StateViewBase & { state: 'error'; reasonCode: 'unreadable'; action?: StateViewAction; details?: StateDetails })
+  | (StateViewBase & { state: 'error'; reasonCode: 'unavailable'; action?: StateViewAction; details?: StateDetails })
   | (StateViewBase & {
       state: 'error'
       reasonCode: 'operation-failed'
-      action: StateViewAction
+      action?: StateViewAction
       details?: StateDetails
     })
-  | (StateViewBase & { state: 'error'; reasonCode: 'needs-restart'; action: StateViewAction; details?: StateDetails })
-  | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: never })
-  | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action: StateViewAction })
-  | (StateViewBase & { state: 'disabled'; reasonCode: 'precondition-unsaved'; action: StateViewAction })
-  | (StateViewBase & { state: 'permission'; reasonCode: 'not-granted'; action: StateViewAction })
+  | (StateViewBase & { state: 'error'; reasonCode: 'needs-restart'; action?: StateViewAction; details?: StateDetails })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: StateViewAction })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action?: StateViewAction })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'precondition-unsaved'; action?: StateViewAction })
+  | (StateViewBase & { state: 'permission'; reasonCode: 'not-granted'; action?: StateViewAction })
 
 /** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，本批不给固定高度。 */
 const MIN_HEIGHT: Record<StateSize, number | undefined> = { sm: undefined, md: 80, lg: 220 }

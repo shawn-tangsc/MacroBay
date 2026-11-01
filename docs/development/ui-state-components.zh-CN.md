@@ -33,7 +33,7 @@ import { StateView } from '@platform/ui/components/state'
 
 ### props
 
-`StateViewProps` 是按 `state` 判别的联合，缺必填字段**编译不过**，而不是落回一句兜底文案。
+`StateViewProps` 是按 `state` 判别的联合，用错态的码**编译不过**，而不是落回一句兜底文案。
 
 | 字段 | 类型 | 必填于 | 含义 |
 | --- | --- | --- | --- |
