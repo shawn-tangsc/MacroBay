@@ -12141,8 +12141,8 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 }
 
 .preference-proxy-probe-result.pass {
-  border-left: 2px solid color-mix(in srgb, var(--success, #3d9a6a) 78%, var(--text));
-  color: color-mix(in srgb, var(--success, #3d9a6a) 78%, var(--text));
+  border-left: 2px solid color-mix(in srgb, var(--success) 78%, var(--text));
+  color: color-mix(in srgb, var(--success) 78%, var(--text));
 }
 
 .preference-proxy-probe-result.pass::before {
@@ -12151,8 +12151,8 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
 
 /* 到了站但没走代理、或站点没给 2xx：琥珀，别跟「没到站」的红混为一谈。 */
 .preference-proxy-probe-result.partial {
-  border-left: 2px dashed var(--warning, #b7791f);
-  color: var(--warning, #b7791f);
+  border-left: 2px dashed var(--warning);
+  color: var(--warning);
 }
 
 .preference-proxy-probe-result.partial::before {
