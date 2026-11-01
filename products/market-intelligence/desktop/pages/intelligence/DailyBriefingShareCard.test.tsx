@@ -83,13 +83,14 @@ afterEach(async () => {
 const renderWith = async (
   doc: DailyBriefingDocument,
   copy: typeof text,
-  locale: 'zh-CN' | 'en-US'
+  locale: 'zh-CN' | 'en-US',
+  omitFallbackReadings = false
 ): Promise<HTMLDivElement> => {
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
   const formatTime = (value: string): string => value.slice(0, 16).replace('T', ' ')
-  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime })))
+  await act(async () => root!.render(createElement(DailyBriefingShareCard, { document: doc, text: copy, locale, formatTime, omitFallbackReadings })))
   return host
 }
 
@@ -126,26 +127,35 @@ describe('daily brief share card in English', () => {
     expect(poster).not.toMatch(CJK)
   })
 
-  it('prints no source or fallback wording on the card, even for a stale row', () => {
-    // The reader decided the card and its image stay clean: provenance belongs to the trace column,
-    // not to the number a reader posts.
-    return (async () => {
-      const base = briefing()
-      const stale: DailyBriefingDocument = {
-        ...base,
-        data: {
-          ...base.data,
-          market: base.data.market.map((row) => row.id === 'btc'
-            ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
-            : row)
-        }
+  it('keeps the fallback row on the page, labelled with where the number came from', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc'
+          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
+          : row)
       }
-      const rendered = await render(stale)
-      const poster = rendered.querySelector('.mi-brief-poster')!.textContent ?? ''
-      expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
-      for (const phrase of Object.values(text.staleBasis)) expect(poster).not.toContain(phrase)
-      expect(poster).not.toContain(text.staleMarker)
-    })()
+    }
+    const rendered = await render(doc)
+    expect(rendered.querySelector('.mi-brief-poster__stale')?.textContent).toBe(text.staleBasis.curve)
+  })
+
+  it('leaves that row out of the exported image', async () => {
+    const base = briefing()
+    const doc: DailyBriefingDocument = {
+      ...base,
+      data: {
+        ...base.data,
+        market: base.data.market.map((row) => row.id === 'btc'
+          ? { ...row, state: 'stale' as const, reason: 'stale-fallback' as const, valueBasis: 'curve' as const }
+          : row)
+      }
+    }
+    const rendered = await renderWith(doc, text, 'en-US', true)
+    expect(rendered.querySelector('.mi-brief-poster__stale')).toBeNull()
+    expect(rendered.textContent).not.toContain('BTC')
   })
 
   it('renders only the data rows the editor kept', async () => {

@@ -407,7 +407,8 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     <DailyBriefingGenerationSettingsModal open={generationSettingsOpen} text={text} client={client} onClose={() => setGenerationSettingsOpen(false)} />
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
-        <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+        {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
+        <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
       </div>
     </div> : null}
   </main>
