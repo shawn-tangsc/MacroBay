@@ -11,6 +11,7 @@ import type {
 import type { ProviderStateAccessor } from '../../providers/modelProviderTypes'
 import type { WebSearchService } from '../../web-search/runtime/WebSearchService'
 import type { AssistantInvocationFailureEvidence } from './assistantInvocationFailureEvidence'
+import type { AssistantContextPlanSummary } from './assistantContextPlan'
 
 export type AssistantChatRuntimeEventSink = {
   onChunk?: (payload: AssistantStreamChunkPayload) => void
@@ -34,6 +35,11 @@ export type AssistantChatRuntimeDependencies = {
    */
   getDefaultAssistantModelId?: () => Promise<string | null> | string | null
   webSearchService?: WebSearchService
+  /**
+   * 每次发请求前把「这次发出去多少、窗口是哪来的」交给调用方记一行。
+   * 存在的理由：`budgetSource: 'fallback'` 必须有一个真实出口，否则它就是一个没人读的预留字段。
+   */
+  logContextPlan?: (summary: AssistantContextPlanSummary) => void
 }
 
 export type AssistantChatRuntimeService = {

@@ -54,6 +54,32 @@ export function planAssistantContext(input: AssistantContextPlanInput): SessionC
   })
 }
 
+/** 一次会话发出去多少、丢了多少：这是 `budgetSource` 的真实出口，不许只活在字段里。 */
+export type AssistantContextPlanSummary = {
+  keptTurns: number
+  droppedTurns: number
+  droppedMessages: number
+  truncatedMessages: number
+  estimatedPromptTokens: number
+  budgetSource: 'model' | 'fallback'
+  contextWindow?: number
+}
+
+export function summarizeAssistantContext(
+  plan: SessionContextPlan,
+  contextWindow?: number
+): AssistantContextPlanSummary {
+  return {
+    keptTurns: plan.keptTurns,
+    droppedTurns: plan.droppedTurns,
+    droppedMessages: plan.droppedMessages,
+    truncatedMessages: plan.truncatedMessages,
+    estimatedPromptTokens: plan.estimatedPromptTokens,
+    budgetSource: plan.budgetSource,
+    ...(contextWindow ? { contextWindow } : {})
+  }
+}
+
 export function toChatCompletionMessages(plan: SessionContextPlan): ChatCompletionMessage[] {
   return plan.messages.map((message) => ({ role: message.role, content: message.content }))
 }

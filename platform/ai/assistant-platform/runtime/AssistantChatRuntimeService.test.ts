@@ -1138,6 +1138,41 @@ describe('createAssistantChatRuntimeService', () => {
     expect(repos.messages.listByTopic(topic.id)).toEqual([])
   })
 
+  it('reports the context budget once per turn so `fallback` is not a dead field', async () => {
+    const db = createAssistantPlatformDatabase(':memory:')
+    const repos = createAssistantPlatformRepositories(db)
+    const assistant = repos.assistants.create({ ...createDefaultAssistantSeed(), modelId: 'openai:gpt-test' })
+    const topic = repos.topics.create({ assistantId: assistant.id, name: 'Context budget' })
+    const logContextPlan = vi.fn()
+    const fetch = vi.fn(async () =>
+      new Response('data: {"choices":[{"delta":{"content":"ok"}}]}\n\ndata: [DONE]\n\n', {
+        headers: { 'content-type': 'text/event-stream' }
+      })
+    )
+    const runtime = createAssistantChatRuntimeService({
+      repos,
+      fetch,
+      logContextPlan,
+      getProviderState: async () => providerState()
+    })
+
+    await runtime.open({
+      topicId: topic.id,
+      trigger: 'submit-message',
+      userMessageParts: [{ type: 'text', text: 'hi' }]
+    })
+    await vi.waitFor(() => {
+      expect(repos.messages.listByTopic(topic.id).some((item) => item.role === 'assistant' && item.status === 'success')).toBe(true)
+    })
+
+    expect(logContextPlan).toHaveBeenCalledTimes(1)
+    expect(logContextPlan).toHaveBeenCalledWith(expect.objectContaining({
+      budgetSource: 'fallback',
+      keptTurns: 1,
+      droppedTurns: 0
+    }))
+  })
+
   it('sends a short conversation exactly as before the budget existed', async () => {
     const db = createAssistantPlatformDatabase(':memory:')
     const repos = createAssistantPlatformRepositories(db)

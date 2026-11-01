@@ -26,7 +26,11 @@ import {
   createAssistantWebSearchToolService
 } from '../../web-search/assistant/assistantWebSearchTools'
 import { createAssistantWebSearchMessagePart } from '../../web-search/assistant/assistantWebSearchMessageParts'
-import { planAssistantContext, toChatCompletionMessages } from './assistantContextPlan'
+import {
+  planAssistantContext,
+  summarizeAssistantContext,
+  toChatCompletionMessages
+} from './assistantContextPlan'
 import { guardWebSearchSourcesForModel } from '../../web-search/assistant/assistantWebSearchGuard'
 import type { AssistantEntity } from '../schemas/assistantSchemas'
 import type {
@@ -346,6 +350,7 @@ export function createAssistantChatRuntimeService(
         ...(runtimeModel?.contextLength ? { contextWindow: runtimeModel.contextLength } : {})
       })
       const promptMessages = toChatCompletionMessages(contextPlan)
+      deps.logContextPlan?.(summarizeAssistantContext(contextPlan, runtimeModel?.contextLength))
       const result = await requestAssistantChatCompletion({
         // 运行时只读模型自己的协议（同步/新增时已把供应商默认快照进去）。
         protocol: normalizeModelChatProtocol(runtimeModel?.chatProtocol),
