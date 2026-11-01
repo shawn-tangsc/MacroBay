@@ -393,6 +393,39 @@ describe('daily briefing document', () => {
     expect(document.next.focus).toMatchObject({ eventKey: 'US.NONFARM_PAYROLLS.RELEASE.2026-M10', countryCode: 'US', countryName: 'United States', consensus: '29' })
   })
 
+  it('says where each stale row came from: snapshot, series return, series level, published', () => {
+    // Every row that is not today's exact reading has to be able to say which reading it is; a row
+    // that says nothing is the one a reader trusts as live.
+    const stalePacket = packet({
+      market: {
+        crossAsset: {
+          analysisEnd: '2026-10-27T00:00:00.000Z',
+          closedReturns: { btc: { '24h': { state: 'available', value: -1.1 } } }
+        } as unknown as CrossAssetSnapshot,
+        macroMarket: {
+          state: 'available',
+          readings: [
+            // Old enough to be stale, with a computed 24h move.
+            { seriesId: 'dxy-real', level: 102.2, atMs: Date.parse('2026-10-20T00:25:00.000Z'), returns: { '24h': 0.43 } },
+            // Old and no move at all: only the level survives.
+            { seriesId: 'xau-usd', level: 3996, atMs: Date.parse('2026-10-20T00:25:00.000Z') }
+          ]
+        } as unknown as MacroMarketSnapshotView,
+        macroRates: {
+          state: 'available',
+          readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 5, period: '2026-10-14' }]
+        } as unknown as MacroRatesSnapshotView
+      },
+    })
+    const document = buildDailyBriefingDocument({ packet: stalePacket, date: '2026-10-30' })
+    const row = (id: string) => document.data.market.find((entry) => entry.id === id)
+
+    expect(row('btc')).toMatchObject({ state: 'stale', valueBasis: 'snapshot' })
+    expect(row('dxy')).toMatchObject({ state: 'stale', valueBasis: 'series-return' })
+    expect(row('gold')).toMatchObject({ state: 'stale', valueBasis: 'series-level' })
+    expect(row('us10y')).toMatchObject({ state: 'stale', valueBasis: 'published' })
+  })
+
   it('uses a persisted curve or last close when the exact 24h pair is missing', () => {
     const document = buildDailyBriefingDocument({
       packet: packet({

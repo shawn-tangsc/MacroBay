@@ -242,6 +242,7 @@ function crossRow(
     return Object.freeze({
       id, labelKey, importance: stale ? gap : importance, materiality, ...baselineVisibility(materiality, rule.must || stale),
       state: stale ? 'stale' as const : 'available' as const,
+      ...(stale ? { valueBasis: 'snapshot' as const } : {}),
       value: Object.freeze({ number: normalize(metric.value), format: 'percent' as const }),
       change: null, window: '24h' as const, cadence: '24h' as const, observedAt: snapshot.analysisEnd
     })
@@ -253,7 +254,9 @@ function crossRow(
   {
     // The panel may have a readable curve or a last closed bar even when the exact 24h pair is
     // missing. Keep that persisted reading instead of turning the whole row into "unavailable".
-    const curve = [...(snapshot.curves[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
+    // `curves` is absent on a snapshot frozen before that field existed, and on one whose reader
+    // returned nothing; a missing curve is a gap, not a crash on the way to the row.
+    const curve = [...(snapshot.curves?.[id] ?? [])].reverse().find((point) => typeof point.returnPercent === 'number')
     if (curve) {
       return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(curve.returnPercent!), format: 'percent' }, '24h', snapshot.analysisEnd), valueBasis: 'curve' as const }
     }
@@ -306,11 +309,14 @@ function macroRow(
   const stale = tradingRowIsStale(observedAt, asOf)
   const value = reading.returns?.['24h']
   if (stale) {
-    return gapRow(id, labelKey, 'stale-fallback', 'stale',
-      typeof value === 'number' && Number.isFinite(value)
-        ? { number: normalize(value), format: 'percent' }
-        : { number: normalize(reading.level), format: 'level' },
-      typeof value === 'number' ? 'trading-day' : 'latest', observedAt)
+    return {
+      ...gapRow(id, labelKey, 'stale-fallback', 'stale',
+        typeof value === 'number' && Number.isFinite(value)
+          ? { number: normalize(value), format: 'percent' }
+          : { number: normalize(reading.level), format: 'level' },
+        typeof value === 'number' ? 'trading-day' : 'latest', observedAt),
+      valueBasis: typeof value === 'number' && Number.isFinite(value) ? 'series-return' as const : 'series-level' as const
+    }
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
     const materiality = marketMoveMateriality(normalize(value), briefingDataMaterialityPolicy.marketPercent, code)
@@ -352,7 +358,7 @@ function ratesRow(
   }
   const observedAt = `${reading.period}T00:00:00.000Z`
   if (tradingRowIsStale(observedAt, asOf)) {
-    return gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(reading.actual), format: 'yield' }, 'trading-day', observedAt)
+    return { ...gapRow(id, labelKey, 'stale-fallback', 'stale', { number: normalize(reading.actual), format: 'yield' }, 'trading-day', observedAt), valueBasis: 'published' as const }
   }
   const changeBp = reading.previous === undefined
     ? undefined

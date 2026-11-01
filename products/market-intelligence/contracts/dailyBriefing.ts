@@ -208,11 +208,11 @@ export type BriefingMarketRow = Readonly<{
   observedAt: string | null
   reason?: 'not-collected' | 'query-failed' | 'stale-fallback' | 'coverage-incomplete'
   /**
-   * Which reading a fallback row actually carries, so the card and the export can say it: `curve` is
-   * the last point of the 24h curve (about 24 hours, not the exact pair), `last-close` the newest
-   * closed bar. Absent on exact readings and on editions built before this field existed.
+   * Which reading a stale row carries, never presented as today's: `snapshot` a frozen metric older
+   * than the floor, `curve` the 24h curve's last point, `last-close` the newest bar, `series-return`
+   * /`series-level` a daily series' move or level, `published` the official stamp for the session.
    */
-  valueBasis?: 'curve' | 'last-close'
+  valueBasis?: 'snapshot' | 'curve' | 'last-close' | 'series-return' | 'series-level' | 'published'
 }>
 
 export type BriefingPulseRow = Readonly<{

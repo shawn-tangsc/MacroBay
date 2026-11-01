@@ -158,7 +158,8 @@ describe('daily briefing observation cadence', () => {
         ]
       } as unknown as MacroRatesSnapshotView
     }))
-    expect(rows.market.find((row) => row.id === 'us10y')).toMatchObject({ state: 'stale', reason: 'stale-fallback' })
+    // A stale row still says where its number came from: FRED stamped it for that session.
+    expect(rows.market.find((row) => row.id === 'us10y')).toMatchObject({ state: 'stale', reason: 'stale-fallback', valueBasis: 'published' })
   })
 
   it('trusts the session calendar over the ETF wall-clock stale flag', () => {
