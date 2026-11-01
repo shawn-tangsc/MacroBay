@@ -207,6 +207,30 @@ describe('NewsSentimentFeature', () => {
 
   // A button carrying role="listitem" loses its button semantics: a screen reader announces "list
   // item" and never says the row opens anything. The list item is the wrapper; the button is inside.
+  // The drawer used to print its own two sentences for "read failed" and "nothing here". Both are
+  // state, not copy: the platform sentence and its action come from StateView.
+  it('renders the drawer failure as an error state with a retry action', async () => {
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => { throw new Error('boom') }) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const state = document.body.querySelector('.state-view--error')
+    expect(state).not.toBeNull()
+    expect(state?.querySelector('button')).not.toBeNull()
+  })
+
+  it('offers to clear filters when the reader filters every row out', async () => {
+    const container = await mount(
+      <NewsSentimentFeature text={text} client={client({ query: vi.fn(async () => ({ ...VIEW, items: [] })) })} now={() => new Date('2026-10-24T13:00:00.000Z')} />
+    )
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    expect(document.body.querySelector('.state-view--empty')).not.toBeNull()
+  })
+
   it('keeps the row a list item and the button inside it, with a more trigger', async () => {
     const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
     const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))

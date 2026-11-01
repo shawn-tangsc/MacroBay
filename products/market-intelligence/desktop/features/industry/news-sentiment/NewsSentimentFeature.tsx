@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { resolvePlatformTextKey } from '@renderer/i18n/platformText'
+
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { newsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import { intelligenceSourcesClient } from '../../../shared/ipc/intelligenceSourcesClient'
@@ -39,7 +41,10 @@ export function NewsSentimentFeature(props: {
   }
   // English is the source language for the feed, so the English UI has no translation surface.
   // Any future non-English UI language reuses the same controls and translates into that language.
-  const translationEnabled = (props.language ?? 'zh-CN') !== 'en-US'
+  const language = props.language ?? 'zh-CN'
+  const translationEnabled = language !== 'en-US'
+  // StateView prints platform state sentences; the product only chooses the state and its code.
+  const resolveStateText = (key: string): string => resolvePlatformTextKey(language, key)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [focusItemId, setFocusItemId] = useState<string>()
@@ -76,6 +81,7 @@ export function NewsSentimentFeature(props: {
         text={props.text}
         view={state.view}
         window={state.window}
+        resolveStateText={resolveStateText}
       />
       <NewsSentimentSettingsModal
           showTranslation={translationEnabled}
