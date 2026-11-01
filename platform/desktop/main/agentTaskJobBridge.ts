@@ -31,7 +31,9 @@ export function createAgentTaskJobBridge(deps: AgentTaskJobBridgeDependencies): 
         id: `platform.agent.task.${input.runLogId}`,
         owner: 'platform',
         handlerId: agentTaskJobHandlerId,
-        title: `Agent task: ${input.taskName}`,
+        // The run record carries the task's own name: a prefixed English label here would be the
+        // string a notification shows, and it would leak into every non-English locale.
+        title: input.taskName,
         trigger: { kind: 'manual' },
         payload: {
           ...input.payload,
