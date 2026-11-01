@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  classifyMcpToolFailure,
   createExternalMcpPostToolUseFailureGuard,
   createExternalMcpPostToolUseGuard,
   resolveGuardedMcpTool
@@ -197,5 +198,34 @@ describe('createExternalMcpPostToolUseFailureGuard', () => {
     const result = await guard(event)
 
     expect(notice(result)).toContain('came from an external MCP server')
+  })
+
+  // Attaching an origin you do not have is a false fact: the model then treats its own timeout as
+  // something the server said.
+  it('does not claim server provenance for a transport failure', async () => {
+    const result = await guard({ tool_name: 'mcp__probe__fetch', error: 'request timed out after 30000ms' })
+    const text = notice(result)
+
+    expect(text).toContain('before the server returned a result')
+    expect(text).not.toContain('came from an external MCP server')
+    expect(text).not.toContain('Suspicious patterns')
+  })
+
+  it('says nothing at all when the user interrupted the turn', async () => {
+    // An interruption carries no external text, so any notice would be noise about nothing.
+    expect(await guard({ tool_name: 'mcp__probe__fail', error: 'interrupted by user', is_interrupt: true })).toEqual({})
+  })
+
+  it('keeps the provenance warning for an error the server actually returned', async () => {
+    const text = notice(await guard({ tool_name: 'mcp__probe__fail', error: 'invalid arguments for tool' }))
+
+    expect(text).toContain('came from an external MCP server')
+  })
+
+  it('classifies the origin from the fields the SDK provides', async () => {
+    expect(classifyMcpToolFailure({ tool_name: 'mcp__probe__x', error: 'x', is_interrupt: true })).toBe('interrupt')
+    expect(classifyMcpToolFailure({ tool_name: 'mcp__probe__x', error: 'ECONNREFUSED 127.0.0.1:1' })).toBe('transport')
+    expect(classifyMcpToolFailure({ tool_name: 'mcp__probe__x', error: 'MCP server "probe" connection closed' })).toBe('transport')
+    expect(classifyMcpToolFailure({ tool_name: 'mcp__probe__x', error: 'tool rejected the input' })).toBe('server')
   })
 })
