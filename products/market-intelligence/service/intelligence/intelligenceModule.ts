@@ -337,6 +337,29 @@ function articleFetchHeaders(url: string): Record<string, string> {
   }
 }
 
+/**
+ * Hooks whose value is a runtime instance rather than a per-call closure. A second call that supplies
+ * a different reference is a wiring bug, not a reconfiguration, so it fails here.
+ *
+ * Compared by identity on purpose. The remaining hooks are callbacks the caller rebuilds on every
+ * call — identity comparison there would reject legitimate repeat calls, which is why they are not
+ * in this list.
+ */
+const singletonHookFields = ['platformFetch', 'eventBusRuntime', 'createPlatformWebSocket'] as const
+
+/** The first singleton hook a repeat call tries to rebind, or `null` when nothing conflicts. */
+function firstReboundSingletonHook(
+  next: IntelligenceModulePlatformHooks | undefined,
+  bound: IntelligenceModulePlatformHooks | undefined
+): (typeof singletonHookFields)[number] | null {
+  if (!next) return null
+  for (const field of singletonHookFields) {
+    const supplied = next[field]
+    if (supplied !== undefined && bound?.[field] !== undefined && supplied !== bound[field]) return field
+  }
+  return null
+}
+
 export function getIntelligenceModule(
   jobRuntime: JobRuntime,
   platformHooks?: IntelligenceModulePlatformHooks
@@ -345,11 +368,11 @@ export function getIntelligenceModule(
   // therefore has no effect on what was already wired — for months that looked like a
   // reconfiguration and silently did nothing. Repeat calls may omit hooks or repeat the same
   // platform fetch; anything else is a wiring bug and fails here instead of turning into an
-  // occasional crash at startup.
+  // occasional crash at startup. The message names the field: without it the report says only
+  // "hooks are already bound" and the reader still has to diff eighteen fields by hand.
   if (intelligenceModule) {
-    if (platformHooks && platformHooks.platformFetch !== modulePlatformHooks?.platformFetch) {
-      throw new Error('intelligence-module-hooks-already-bound')
-    }
+    const rebound = firstReboundSingletonHook(platformHooks, modulePlatformHooks)
+    if (rebound) throw new Error(`intelligence-module-hooks-already-bound: ${rebound}`)
     return intelligenceModule
   }
   if (!platformHooks) throw new Error('intelligence-module-hooks-required')

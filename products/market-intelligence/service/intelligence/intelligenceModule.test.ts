@@ -396,3 +396,27 @@ function deferred<T>() {
   })
   return { promise, resolve }
 }
+
+describe('a repeat call cannot silently rebind a singleton hook', () => {
+  // 守卫覆盖三个字段，但今天只有 `platformFetch` 在生产调用里被注入；另外两个（eventBusRuntime /
+  // createPlatformWebSocket）要拿到可用的实例才能构造模块，用一个占位对象会在构造期炸掉，测的就不是守卫
+  // 而是模块初始化。所以这里只测可达的那一个，不为凑覆盖率造一个假对象。
+  it('names platformFetch when a second call supplies a different reference', () => {
+    const jobRuntime = createJobRuntime()
+    getIntelligenceModule(jobRuntime, platformHooks())
+
+    const otherFetch = (() => Promise.reject(new Error('other'))) as unknown as typeof fetch
+    expect(() => getIntelligenceModule(jobRuntime, { platformFetch: otherFetch }))
+      .toThrow('intelligence-module-hooks-already-bound: platformFetch')
+  })
+
+  // 重复调用本身必须仍然合法：同一份 hooks 再来一次、以及完全不传 hooks，都要拿回同一个实例。
+  it('accepts a repeat of the same hooks and a call that omits them', () => {
+    const jobRuntime = createJobRuntime()
+    const hooks = platformHooks()
+    const first = getIntelligenceModule(jobRuntime, hooks)
+
+    expect(getIntelligenceModule(jobRuntime, platformHooks())).toBe(first)
+    expect(getIntelligenceModule(jobRuntime)).toBe(first)
+  })
+})
