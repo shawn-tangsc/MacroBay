@@ -125,6 +125,20 @@ import { StateView } from '@platform/ui/components/state'
 <StateView state="empty" title="暂无数据" spinner size={120} icon={<Empty />} />
 ```
 
+## 状态判定可以决定什么
+
+一次状态判定只产出一个 `(state, reasonCode)` 元组，别的都不产。下面三件事由数据决定，不由状态决定：
+
+| 由数据决定 | 不许由状态决定 |
+| --- | --- |
+| 内容渲不渲染——`rows.length > 0` | 拿 `state === 'empty'` 当分支去藏一张表 |
+| 控件出不出——「加载更多」看 `hasMore`、「重试」看有没有 `error`、「清除筛选」看有没有筛选词 | 用一个状态位开关分页 |
+| 动作去往哪里——看数据上下文 | 一个原因码隐含一个目的地 |
+
+判定错了，用户最多少看到一句不该说的话。一旦判定还能藏掉表格、藏掉分页、藏掉整页，同一个错误就升级成**数据不可见**，而且**不会有任何人来报这个 bug**——列表看起来只是到底了。
+
+所以正确的写法是 `rows.length > 0 ? <内容> : <StateView …>`，**不是**把 `<StateView>` 放在三元的一个分支、另一个分支放内容。
+
 ## 用了它之后怎么验
 
 1. **高度**：在 DevTools 里看 `.state-view` 的 `min-height`，`lg` 必须是 `220px`、`md` 必须是

@@ -127,6 +127,22 @@ a pixel value from a call site, and do not write a second `min-height` in page C
 <StateView state="empty" title="No data" spinner size={120} icon={<Empty />} />
 ```
 
+## What a state decision may decide
+
+A state decision produces one `(state, reasonCode)` tuple, and nothing else. These three are
+decided by data, never by the state:
+
+| Decided by | Not by the state |
+| --- | --- |
+| Whether the content renders — `rows.length > 0` | `state === 'empty'` used as the branch that hides a table |
+| Whether a control appears — “load more” from `hasMore`, “retry” from the error, “clear filter” from whether a filter is set | a state flag switching a pager on or off |
+| Where an action points — from the data context | a reason code implying a destination |
+
+A wrong state costs the reader one sentence they should not have seen. A state that can hide a
+table, a pager or a whole page makes the data invisible, and **nobody reports that as a bug** — the
+list simply looks finished. So the shape to write is `rows.length > 0 ? <content> : <StateView …>`,
+never `<StateView>` on one branch of a ternary whose other branch is the content.
+
 ## How to verify a page that uses it
 
 1. **Height**: in DevTools the `.state-view` element must report `min-height: 220px` for `lg` and
