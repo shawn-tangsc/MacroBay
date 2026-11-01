@@ -409,6 +409,8 @@ const api = {
     /** 返回 `{ unread, version }`：角标只需一次调用；版本号随每次记录变化递增。 */
     getUnreadState: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsGetUnreadState, input),
     markRead: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsMarkRead, { id }),
+    /** 发送一条测试通知：走真实 `submit()`，验证链路与系统放行；每次点击都是一条新记录。 */
+    sendTest: () => ipcRenderer.invoke(IpcChannels.notificationsSendTest),
     /** 清空 = 全部未读标为已读；返回 `{ unread, version }`，角标不必再查一次。 */
     markAllRead: (input?: { productId?: string }) => ipcRenderer.invoke(IpcChannels.notificationsMarkAllRead, input),
     acknowledge: (id: string) => ipcRenderer.invoke(IpcChannels.notificationsAcknowledge, { id }),

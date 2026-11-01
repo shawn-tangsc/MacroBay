@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 
 import { IpcChannels } from '../../desktop/ipc/channels'
+import { buildTestNotificationRequest } from '../producers/testNotification'
 import { getNotificationRuntime } from './registerNotificationIpc'
 
 export function registerNotificationIpcHandlers(): void {
@@ -25,5 +26,8 @@ export function registerNotificationIpcHandlers(): void {
     if (!payload.id || !payload.until) throw new Error('id and until are required.')
     return getNotificationRuntime().snooze(payload.id, payload.until)
   })
+  ipcMain.handle(IpcChannels.notificationsSendTest, () =>
+    getNotificationRuntime().submit(buildTestNotificationRequest())
+  )
   ipcMain.handle(IpcChannels.notificationsRequestDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
 }

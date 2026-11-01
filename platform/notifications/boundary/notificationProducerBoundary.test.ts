@@ -67,6 +67,7 @@ describe('notification producer boundary', () => {
       // 订阅「记录有变化」是只读的：事件由 Main 推，渲染层不能借此写入任何东西。
       'onChanged',
       'requestDesktopPermission',
+      'sendTest',
       'snooze'
     ])
   })

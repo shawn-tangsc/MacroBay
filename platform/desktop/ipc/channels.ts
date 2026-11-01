@@ -203,6 +203,8 @@ export const IpcChannels = {
   notificationsMarkRead: 'platform:notifications-mark-read',
   /** 清空 = 全部未读标为已读（不是删除）。一次落盘，返回新的未读数与版本。 */
   notificationsMarkAllRead: 'platform:notifications-mark-all-read',
+  /** 发送一条测试通知：走真实 submit()，用来验证「链路通不通、系统放没放行」。 */
+  notificationsSendTest: 'platform:notifications-send-test',
   notificationsAcknowledge: 'platform:notifications-acknowledge',
   notificationsDismiss: 'platform:notifications-dismiss',
   notificationsSnooze: 'platform:notifications-snooze',
