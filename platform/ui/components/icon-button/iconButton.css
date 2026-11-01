@@ -2,6 +2,10 @@
  * 图标触发器的外观。尺寸（sm 22 / md 24）由组件写进行内 `style`，这里不再重复一份——
  * 同一事实两处写，改一处就会不一致。
  *
+ * 底层已经换成 antd `Button`（C1 收编）：键盘、禁用、`type="button"` 由它提供。
+ * 外观仍是我们的规格，所以下面既要写我们自己的样式，也要压掉 antd 自带的圆角、内边距、
+ * 背景与 active 位移——「换底层不换长相」这句话在这里就是这几行覆盖。
+ *
  * 默认无边框透明底；颜色只从中性 token 取，图标按钮不承载语义色（红了是危险动作的按钮，
  * 不是图标按钮）。
  */
@@ -13,20 +17,43 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
+  box-shadow: none;
   color: var(--muted);
   cursor: pointer;
 }
 
+/* antd 的按钮圆角是 6、内边距与行高也自带一份；叠上 `ant-btn-icon-only` 后必须按回我们的规格。 */
+.icon-button.ant-btn {
+  padding: 0;
+  border-radius: 5px;
+  box-shadow: none;
+  line-height: 1;
+}
+
 /* 工具栏那一排需要一点底色，否则会被当成正文。边框走 border，`box-sizing: border-box`
  * 已经把 22 / 24 算进去了，加了边框实际尺寸不变。 */
-.icon-button--solid {
+.icon-button--solid,
+.icon-button--solid.ant-btn:not(:disabled):hover {
   border: 1px solid var(--border);
   background: var(--surface-soft);
 }
 
-.icon-button:hover:not(:disabled) {
+/* 工具栏那一档用 antd 的 `default` 类型；它的 hover/active 底色同样归我们。 */
+.icon-button--solid.ant-btn:not(:disabled) {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.icon-button:hover:not(:disabled),
+.icon-button.ant-btn:not(:disabled):hover {
   background: var(--surface-soft);
   color: var(--text-strong);
+}
+
+/* antd 的 text 按钮在 active 时会再压一层底色并轻微位移；这里压掉位移，底色也归我们。 */
+.icon-button.ant-btn:not(:disabled):active {
+  background: var(--surface-soft);
+  transform: none;
 }
 
 /* 焦点环是全仓统一的一处：2px accent、offset 2。不许 outline:none 而无替代。 */

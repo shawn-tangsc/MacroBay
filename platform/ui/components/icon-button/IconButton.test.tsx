@@ -78,6 +78,14 @@ describe('IconButton', () => {
     expect(markup()).toContain('type="button"')
   })
 
+  it('sits on antd Button, so keyboard and disabled behaviour are not ours to re-implement', () => {
+    const html = markup()
+    expect(html).toContain('ant-btn')
+    // 外观仍由我们覆盖：圆角 5、无内边距、焦点环 2px offset 2 都写在本组件的 CSS 里。
+    expect(rules).toContain('border-radius: 5px')
+    expect(rules).toContain('.icon-button.ant-btn')
+  })
+
   it('measures exactly the requested size, in pixels, on the element itself', () => {
     expect(markup({ size: 'sm' })).toContain('style="width:22px;height:22px"')
     expect(markup({ size: 'md' })).toContain('style="width:24px;height:24px"')

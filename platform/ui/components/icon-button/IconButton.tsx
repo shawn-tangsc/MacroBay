@@ -1,4 +1,4 @@
-import { Tooltip } from 'antd'
+import { Button, Tooltip } from 'antd'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactElement } from 'react'
 
@@ -88,18 +88,25 @@ export function IconButton({
   const pixels = SIZE_PX[size]
   const tooltipText = tooltipKey === undefined ? undefined : resolveText(tooltipKey)
 
+  // 底子是 antd `Button`：键盘、禁用、`type="button"` 这些行为不该由我们重写一遍。
+  // 尺寸、圆角、焦点环仍是我们的规格，写在行内与本地 CSS 里；外观覆盖清单见文档。
   const button = (
-    <button
-      type="button"
-      className={['icon-button', `icon-button--${size}`, variant === 'solid' ? 'icon-button--solid' : '']
+    <Button
+      aria-label={ariaLabel}
+      className={[
+        'icon-button',
+        `icon-button--${size}`,
+        variant === 'solid' ? 'icon-button--solid' : 'icon-button--plain',
+        'ant-btn-icon-only'
+      ]
         .filter(Boolean)
         .join(' ')}
-      aria-label={ariaLabel}
-      style={{ width: pixels, height: pixels }}
+      disabled={disabled}
+      icon={<Glyph className="icon-button__glyph" size={GLYPH_PX[size]} aria-hidden="true" />}
       onClick={onSelect}
-      disabled={disabled}>
-      <Glyph className="icon-button__glyph" size={GLYPH_PX[size]} aria-hidden="true" />
-    </button>
+      style={{ width: pixels, height: pixels }}
+      type={variant === 'solid' ? 'default' : 'text'}
+    />
   )
 
   if (tooltipText === undefined) return button

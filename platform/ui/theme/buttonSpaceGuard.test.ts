@@ -53,6 +53,7 @@ describe('antd 中文按钮不加空格，只关一次', () => {
     ]) {
       const source = readFileSync(resolve(ROOT, provider), 'utf8')
       expect(source, `${provider} 必须读同一份按钮配置`).toContain('WINDOW_ANTD_BUTTON_CONFIG')
+      expect(source, `${provider} 必须读同一份波纹配置`).toContain('WINDOW_ANTD_WAVE_CONFIG')
     }
   })
 })

@@ -61,3 +61,16 @@ export function buildWindowAntdTheme(variant: WindowThemeVariant, accentColor: A
  * 主窗与分离窗两个 `ConfigProvider` 都读这一份，产品侧一个都不许写。
  */
 export const WINDOW_ANTD_BUTTON_CONFIG = Object.freeze({ autoInsertSpace: false })
+
+/**
+ * antd 按钮的点击波纹在全局关掉，只关这一次。
+ *
+ * 波纹是装饰性动效（动效规范：只解释「东西从哪来、到哪去」，不做装饰），而且它会在每次点击时
+ * 给按钮压一层水波——图标按钮尤其明显。逐按钮关不掉它，只能从 `ConfigProvider` 关；
+ * 主窗与分离窗共用这一份，产品侧一个都不许写。
+ *
+ * 注意证据口径：`ConfigProvider` 里写了**不等于**真的关了。happy-dom 里连不配任何东西的
+ * `Button` 都不产生 `.ant-wave`，所以在测试里断言「没有波纹」永远通过，是假绿。
+ * 这一项只认真机慢放截图。
+ */
+export const WINDOW_ANTD_WAVE_CONFIG = Object.freeze({ disabled: true })
