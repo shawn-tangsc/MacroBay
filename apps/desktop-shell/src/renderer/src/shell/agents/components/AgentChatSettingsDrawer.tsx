@@ -1,4 +1,6 @@
-import { Drawer, Input, InputNumber, Select, Switch } from 'antd'
+import { Input, InputNumber, Select, Switch } from 'antd'
+
+import { Drawer } from '@platform/ui/components/drawer'
 import { useEffect, useState } from 'react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
@@ -22,6 +24,9 @@ import {
   updateSessionViaApi
 } from '../agentSessionDataApi'
 import { useAgentText } from '../agentTextProvider'
+
+/** 标题的键：句子由组件自己的文案 hook 解析，调用方不传句子。 */
+export const AGENT_CHAT_SETTINGS_TITLE_KEY = 'agent.chat.settings.title'
 
 type AgentChatSettingsDrawerProps = {
   open: boolean
@@ -76,7 +81,15 @@ export default function AgentChatSettingsDrawer({
   }
 
   return (
-    <Drawer open={open} width={420} title={t.settingsDrawer.title} onClose={onClose} className="agent-chat-settings-drawer">
+    <Drawer
+      mode="modal"
+      size="narrow"
+      titleKey={AGENT_CHAT_SETTINGS_TITLE_KEY}
+      // 未知键返回空串、不回退键名：宁可标题空着，也不能把键名念给读者。
+      resolveText={(key) => (key === AGENT_CHAT_SETTINGS_TITLE_KEY ? t.settingsDrawer.title : '')}
+      open={open}
+      onClose={onClose}
+      className="agent-chat-settings-drawer">
       <div className="agent-settings-form">
         <label>
           <span>{t.settingsDrawer.sessionName}</span>
