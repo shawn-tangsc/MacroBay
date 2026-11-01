@@ -1,4 +1,3 @@
-import { getPlatformFetch } from '@platform/network/platformFetch'
 
 import { openInterestHistoryPolicy } from '../../../contracts/openInterestHistory'
 
@@ -16,7 +15,7 @@ export type OpenInterestClient = ReturnType<typeof createBinanceOpenInterestClie
  * closed one, and must be dropped. Treating the two "newest rows" the same way is how a
  * liquidation read ends up comparing a partial bucket with a complete one.
  */
-export function createBinanceOpenInterestClient(deps: { platformFetch?: typeof fetch } = {}) {
+export function createBinanceOpenInterestClient(deps: { platformFetch: typeof fetch }) {
   return {
     async requestOpenInterest(input: Readonly<{ asset: 'btc' | 'eth'; symbol: string; limit: number; endTime?: number }>): Promise<readonly OpenInterestBarRow[] | undefined> {
       const url = `${openInterestHistoryPolicy.endpoint}?symbol=${input.symbol}&period=${openInterestHistoryPolicy.storedPeriod}&limit=${input.limit}${input.endTime === undefined ? '' : `&endTime=${input.endTime}`}`
@@ -34,8 +33,8 @@ export function createBinanceOpenInterestClient(deps: { platformFetch?: typeof f
   }
 }
 
-async function requestJson(url: string, platformFetch?: typeof fetch): Promise<unknown> {
-  const fetchImpl = platformFetch ?? getPlatformFetch()
+async function requestJson(url: string, platformFetch: typeof fetch): Promise<unknown> {
+  const fetchImpl = platformFetch
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), openInterestHistoryPolicy.timeoutMs)
   try {

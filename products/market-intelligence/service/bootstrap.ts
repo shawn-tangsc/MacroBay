@@ -155,12 +155,16 @@ export function registerServices(deps: ProductBootstrapDependencies): void {
   let syncMarketCalendarSchedule: (() => Promise<void>) | undefined
   // A product-owned job arms its own schedule from the switch; the module only forwards the event.
   const sourceEnableListeners = new Map<string, () => void>()
+  // The module can no longer fall back to the global fetch, so the composition root must hand the
+  // platform adapter over here rather than letting the module work without one.
+  if (!deps.platformFetch) throw new Error('market-intelligence-platform-fetch-required')
+  const platformFetch = deps.platformFetch
   const intelligenceModule = getIntelligenceModule(deps.jobRuntime, {
     getProviderState: deps.getProviderState,
     getAppLanguage: deps.getAppLanguage,
     getModelDefaults: deps.getModelDefaults,
     eventBusRuntime: deps.eventBusRuntime,
-    platformFetch: deps.platformFetch,
+    platformFetch,
     createAgentSession: deps.createAgentSession,
     sendAgentMessage: deps.sendAgentMessage,
     cancelAgentSession: deps.cancelAgentSession,

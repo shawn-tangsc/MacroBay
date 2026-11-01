@@ -121,6 +121,8 @@ describe('market-intelligence product bootstrap', () => {
     const registerProductCache = vi.fn()
 
     registerServices({
+      // The module no longer falls back to the global fetch: the composition root must inject one.
+      platformFetch: vi.fn(),
       register,
       jobRuntime: createJobRuntime(),
       eventBusRuntime: createEventBusRuntime(),
@@ -143,6 +145,8 @@ describe('market-intelligence product bootstrap', () => {
     const registry = createProductIpcRegistry()
 
     registerServices({
+      // The module no longer falls back to the global fetch: the composition root must inject one.
+      platformFetch: vi.fn(),
       register: registry.register,
       jobRuntime: createJobRuntime(),
       eventBusRuntime: createEventBusRuntime(),
@@ -161,6 +165,8 @@ describe('market-intelligence product bootstrap', () => {
   it('declares the funding history query without retaining the superseded single-point funding route', () => {
     const registeredMethods: string[] = []
     registerServices({
+      // The module no longer falls back to the global fetch: the composition root must inject one.
+      platformFetch: vi.fn(),
       register: (_productId, method) => registeredMethods.push(method),
       jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(),
       registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), secretVault: vault()
@@ -201,6 +207,8 @@ describe('market-intelligence product bootstrap', () => {
     const registerProductDisposer = vi.fn(() => () => undefined)
 
     registerServices({
+      // The module no longer falls back to the global fetch: the composition root must inject one.
+      platformFetch: vi.fn(),
       register: vi.fn(),
       jobRuntime: createJobRuntime(),
       eventBusRuntime: createEventBusRuntime(),
@@ -218,6 +226,8 @@ describe('market-intelligence product bootstrap', () => {
     const registeredMethods: string[] = []
 
     registerServices({
+      // The module no longer falls back to the global fetch: the composition root must inject one.
+      platformFetch: vi.fn(),
       register: (_productId, method) => registeredMethods.push(method),
       jobRuntime: createJobRuntime(),
       eventBusRuntime: createEventBusRuntime(),
@@ -268,7 +278,7 @@ describe('market-intelligence product bootstrap', () => {
 
   it('declares and registers the fixed Fed and BEA provider settings IPC methods', () => {
     const registeredMethods: string[] = []
-    registerServices({ register: (_productId, method) => registeredMethods.push(method), jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), secretVault: vault() })
+    registerServices({ register: (_productId, method) => registeredMethods.push(method), jobRuntime: createJobRuntime(), eventBusRuntime: createEventBusRuntime(), registerProductAgentToolHandler: vi.fn(), registerProductCache: vi.fn(), secretVault: vault(), platformFetch: vi.fn() })
 
     expect(registeredMethods).toEqual(expect.arrayContaining([
       MACRO_ECONOMIC_CALENDAR_IPC_METHODS.getProviderPageState,

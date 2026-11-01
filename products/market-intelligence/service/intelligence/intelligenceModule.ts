@@ -107,7 +107,6 @@ import { enqueueIntelligencePipelineJobs } from './jobs/enqueueIntelligencePipel
 import { INTELLIGENCE_ENRICH_NEWS_DOCUMENTS_JOB, INTELLIGENCE_SCORE_NEWS_SENTIMENT_JOB } from './jobs/intelligenceJobIds'
 import { registerMarketAnalysisRuntime, type MarketAnalysisRuntime } from './jobs/registerMarketAnalysisRuntime'
 import { statSync } from 'node:fs'
-import { getPlatformFetch } from '@platform/network/platformFetch'
 import { resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { createMacroCalendarEvidenceArchive } from './macro-calendar/macroCalendarEvidenceArchive'
 import { createMacroCalendarEvidenceStore } from './macro-calendar/macroCalendarEvidenceStore'
@@ -190,7 +189,8 @@ export type IntelligenceModulePlatformHooks = {
   /** 模型服务页「默认模型」只读投影；翻译偏好跟随其中的默认翻译模型。 */
   getModelDefaults?: () => Promise<ModelDefaultsSettings>
   eventBusRuntime?: EventBusRuntime
-  platformFetch?: CapitalConditionsPlatformFetch
+  /** Required: the first call must inject it, and every consumer reads this one. */
+  platformFetch: CapitalConditionsPlatformFetch
   /**
    * The platform's proxy-aware socket constructor, injected lazily. It is a thunk rather than a
    * constructor because the desktop shell can only build it once network settings are readable —
@@ -414,7 +414,7 @@ export function getIntelligenceModule(
     })
     const requestGovernanceQueue = createSourceRequestGovernanceQueue({ now: () => Date.now() })
     const fundingRateHistoryStore = createFundingRateHistorySqliteStore(join(dataDir, 'funding-rate-history.sqlite'))
-    const fundingRateHistoryClient = createBinanceFundingRateHistoryClient({ platformFetch: (hooks?.platformFetch ?? getPlatformFetch()) as typeof fetch })
+    const fundingRateHistoryClient = createBinanceFundingRateHistoryClient({ platformFetch: hooks.platformFetch as typeof fetch })
     const fundingRateHistoryRefresh = createFundingRateHistoryRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
       requestHistory: fundingRateHistoryClient.requestHistory,
@@ -424,7 +424,7 @@ export function getIntelligenceModule(
     // The positioning series is the second half of the same source: a funding rate without the
     // open interest behind it cannot tell deleveraging from crowding.
     const perpetualPositioningStore = createPerpetualPositioningSqliteStore(join(dataDir, 'perpetual-positioning.sqlite'))
-    const openInterestClient = createBinanceOpenInterestClient({ platformFetch: (hooks?.platformFetch ?? getPlatformFetch()) as typeof fetch })
+    const openInterestClient = createBinanceOpenInterestClient({ platformFetch: hooks.platformFetch as typeof fetch })
     const openInterestRefresh = createOpenInterestRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('binance-futures-positioning')).enabled,
       client: openInterestClient,
@@ -450,7 +450,7 @@ export function getIntelligenceModule(
         resolveProfile: sourceId => profileStore.resolveProfile(sourceId),
         getCredential: credentialRef => credentialStore.getByRef(credentialRef as never)
       },
-      ...(hooks?.createPlatformWebSocket ? { createWebSocket: hooks.createPlatformWebSocket } : {}),
+      ...(hooks.createPlatformWebSocket ? { createWebSocket: hooks.createPlatformWebSocket } : {}),
       onError: error => { console.log(JSON.stringify({ marker: 'MI_MACRO_MARKET_LIVE_ERROR', sourceId: macroMarketPolicy.sourceId, message: String(error).slice(0, 200) })) }
     })
     const zeroXRouterCredential = async () => {
@@ -483,7 +483,7 @@ export function getIntelligenceModule(
     })
     const capitalConditionsRefresh = createCapitalConditionsRefreshService({
       isEnabled: async () => (await profileStore.resolveProfile('defillama-stablecoins')).enabled,
-      http: createCapitalConditionsHttpClient({ platformFetch: hooks?.platformFetch }),
+      http: createCapitalConditionsHttpClient({ platformFetch: hooks.platformFetch }),
       store: capitalConditionsStore,
       now: () => new Date().toISOString()
     })
@@ -491,7 +491,7 @@ export function getIntelligenceModule(
     // but reads each core asset's own endpoint; the aggregate `stablecoincharts/all` series is never
     // used to answer the core metric. The client streams and caps each per-asset response (~22-24 MB).
     const capitalConditionsAssetHistoryHttp = createCapitalConditionsHttpClient({
-      platformFetch: hooks?.platformFetch ?? getPlatformFetch()
+      platformFetch: hooks.platformFetch
     })
     const capitalConditions = createCapitalConditionsSourceIntegration({
       refreshService: capitalConditionsRefresh,
@@ -516,7 +516,7 @@ export function getIntelligenceModule(
         (async () => {
           throw new Error('Model service is unavailable.')
         }),
-      fetch: getPlatformFetch()
+      fetch: hooks.platformFetch as unknown as typeof fetch
     })
     let newsSentimentStore: ReturnType<typeof createNewsSentimentSqliteStore> | undefined
     const translationService = createIntelligenceTranslationService({
