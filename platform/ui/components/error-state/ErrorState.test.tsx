@@ -53,8 +53,32 @@ describe('ErrorState', () => {
     expect(markup).toContain('data-variant="unknown"')
     expect(markup).toContain('data-error-state-unclear')
     expect(markup).toContain('The transport closed before the reply arrived.')
-    // 未知不用危险色：data-variant 决定配色，灰度下靠图标 + 文字区分。
+    // 形状不同才是「不靠颜色也能分辨」的证据：这里断言真实渲染出的图标，不读 CSS。
+    expect(markup).toContain('lucide-circle-question-mark')
+  })
+
+  it('draws a different glyph for a known error than for an unknown one', () => {
+    const known = renderToStaticMarkup(
+      <ErrorState title="Failed" recovery={{ kind: 'retry', label: 'Retry', onRetry: () => undefined }} />
+    )
+    const unknown = renderToStaticMarkup(
+      <ErrorState
+        variant="unknown"
+        title="Unreadable"
+        unclearReason="No reason available."
+        recovery={{ kind: 'retry', label: 'Retry', onRetry: () => undefined }}
+      />
+    )
+
+    expect(known).toContain('lucide-triangle-alert')
+    expect(unknown).toContain('lucide-circle-question-mark')
+    expect(unknown).not.toContain('lucide-triangle-alert')
+  })
+
+  it('declares a non-danger palette for the unknown variant (rule exists in CSS)', () => {
+    // 这条只证明「样式里有这条规则」，不证明渲染结果；渲染由上面两条用真实图标断言。
     expect(css).toContain("[data-variant='unknown']")
+    expect(css).toContain('--muted-strong')
   })
 
   it('keeps details collapsed until the reader opens them', () => {
