@@ -64,6 +64,21 @@ function pairsFromDoc(text: string): string[] {
   return pairs
 }
 
+/**
+ * 同一个码出现两次，`Set` 会把它静默吃掉：集合相等照旧为真。
+ * 所以「两侧集合相同」之外还必须各问一句「有没有重复」——否则一份抄了两行的文档表，
+ * 会被判成「和类型一致」，而读者拿到的是两句可能互相矛盾的指令。
+ */
+function duplicates(pairs: string[]): string[] {
+  const seen = new Set<string>()
+  const repeated = new Set<string>()
+  for (const pair of pairs) {
+    if (seen.has(pair)) repeated.add(pair)
+    seen.add(pair)
+  }
+  return [...repeated].sort()
+}
+
 /** 双向差集：返回「多出来」与「缺掉的」两栏，空两栏才算相等。 */
 function drift(actual: string[], expected: string[]): { extra: string[]; missing: string[] } {
   const a = new Set(actual)
@@ -79,14 +94,15 @@ const docTexts = DOCS.map((path) => ({ path, text: readFileSync(path, 'utf8') })
 const sourcePairs = pairsFromSource(source)
 
 describe('StateView 码表与公开文档一致', () => {
-  it('源码里四个联合都能解析到码', () => {
+  it('源码里四个联合都能解析到码，且一个码只出现一次', () => {
     expect(sourcePairs.length).toBeGreaterThan(0)
-    expect(new Set(sourcePairs).size).toBe(sourcePairs.length)
+    expect(duplicates(sourcePairs)).toEqual([])
   })
 
   it.each(docTexts)('$path 的码表与类型集合相等', ({ path, text }) => {
     const docPairs = pairsFromDoc(text)
 
+    expect(duplicates(docPairs), `${path} 里同一个码出现了不止一次`).toEqual([])
     expect(drift(docPairs, sourcePairs), `${path} 与 StateView.tsx 的码表漂了`).toEqual({
       extra: [],
       missing: []
@@ -103,6 +119,27 @@ describe('StateView 码表与公开文档一致', () => {
       extra: ['empty/invented-code'],
       missing: []
     })
+  })
+
+  it('红夹具：文档表把一行抄了两遍 → 集合相等仍为真，但重复守卫生效', () => {
+    const row = '| `empty` | `not-yet` |'
+    const doctored = docTexts[0].text.replace(row, `${row}\n${row}`)
+
+    const docPairs = pairsFromDoc(doctored)
+    // 这正是缺陷当时的样子：集合相等看不出来，重复看得出。
+    expect(drift(docPairs, sourcePairs)).toEqual({ extra: [], missing: [] })
+    expect(duplicates(docPairs)).toEqual(['empty/not-yet'])
+  })
+
+  it('红夹具：联合类型里同一个成员写两遍 → 必须报出来', () => {
+    const doctored = source.replace(
+      'export type ErrorReasonCode =',
+      "export type ErrorReasonCode =\n  | 'unreadable'"
+    )
+
+    const pairs = pairsFromSource(doctored)
+    expect(drift(pairs, pairsFromDoc(docTexts[0].text))).toEqual({ extra: [], missing: [] })
+    expect(duplicates(pairs)).toEqual(['error/unreadable'])
   })
 
   it('红夹具：类型多一个码、文档没有 → 必须报出来', () => {
