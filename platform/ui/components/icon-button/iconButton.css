@@ -1,0 +1,46 @@
+/*
+ * 图标触发器的外观。尺寸（sm 22 / md 24）由组件写进行内 `style`，这里不再重复一份——
+ * 同一事实两处写，改一处就会不一致。
+ *
+ * 默认无边框透明底；颜色只从中性 token 取，图标按钮不承载语义色（红了是危险动作的按钮，
+ * 不是图标按钮）。
+ */
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* 工具栏那一排需要一点底色，否则会被当成正文。边框走 border，`box-sizing: border-box`
+ * 已经把 22 / 24 算进去了，加了边框实际尺寸不变。 */
+.icon-button--solid {
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--surface-soft);
+  color: var(--text-strong);
+}
+
+/* 焦点环是全仓统一的一处：2px accent、offset 2。不许 outline:none 而无替代。 */
+.icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.icon-button__glyph {
+  display: block;
+  flex: none;
+}

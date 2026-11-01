@@ -1,0 +1,91 @@
+import { Tooltip } from 'antd'
+import type { LucideIcon } from 'lucide-react'
+import type { ReactElement } from 'react'
+
+import './iconButton.css'
+
+/**
+ * 图标触发器（规格：`docs-private/05-desktop/ui-audit/prototypes/2026-11-01-1b-stateview-iconbutton-statuspill.html` ②）。
+ *
+ * 只做「一个图标 + 一个读屏名」的按钮：问号、关闭、更多、刷新。样式、尺寸、焦点环在这里收口，
+ * 各处不再手写 `<button class="...">`——这正是尺寸 18/20/26 与「outline:none 无替代」的来源。
+ *
+ * 三条写进类型、不靠评审：
+ * - `size` 只有 `sm`（22）/ `md`（24）两档；`18 | 20 | 26` 编译不过，不是「约定不要用」；
+ * - 读屏名必填且**只收键**（`ariaLabelKey`），句子由调用方注入的 `resolveText` 解析——
+ *   组件内零文案零 i18n，`aria-label` 里永远不可能出现 `ui.icon.close` 这种键；
+ * - 图标按 lucide 组件传入，组件内包一层 `aria-hidden`：装饰图形不进可访问树，
+ *   也挡掉「拿一句中文当图标」这种既不是图标又绕过 i18n 的写法。
+ *
+ * 尺寸写进行内 `style` 而不是 CSS class：验收要量出「正好 22 / 24」，而测试环境下读不到
+ * 外部样式表（`getComputedStyle` 返回空串），行内值才是可断言的确定值。尺寸词与
+ * `StateView` 的 `sm` / `md` 是同一套词，像素值只在这张表里出现一次。
+ */
+
+/** 两档，仅此两档。名字与 `StateSize` 共用一套词。 */
+export const ICON_BUTTON_SIZES = ['sm', 'md'] as const
+
+export type IconButtonSize = (typeof ICON_BUTTON_SIZES)[number]
+
+/** 档位到像素：行内 22、卡片头与工具栏 24（规格 ②）。 */
+const SIZE_PX: Record<IconButtonSize, number> = { sm: 22, md: 24 }
+
+/** 图形按档位缩放：行内档 14、工具栏档 16。 */
+const GLYPH_PX: Record<IconButtonSize, number> = { sm: 14, md: 16 }
+
+/** 工具栏那一排需要一点底色才不被当成正文，规格里叫 `solid`。 */
+export type IconButtonVariant = 'plain' | 'solid'
+
+export type IconButtonProps = {
+  /** 读屏名的 i18n 键；不收字面量，也不收已解析好的句子。 */
+  ariaLabelKey: string
+  /** 图标组件（lucide）。装饰图形，本组件负责 `aria-hidden`。 */
+  icon: LucideIcon
+  /** `sm` = 行内（22），`md` = 卡片头与工具栏（24）。 */
+  size: IconButtonSize
+  onSelect: () => void
+  disabled?: boolean
+  /** 需要解释时配可聚焦 Tooltip（不用原生 `title`），文案同样只收键。 */
+  tooltipKey?: string
+  /** 默认无边框透明底；工具栏用 `solid`。 */
+  variant?: IconButtonVariant
+  /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
+  resolveText: (key: string) => string
+}
+
+export function IconButton({
+  ariaLabelKey,
+  icon: Glyph,
+  size,
+  onSelect,
+  disabled,
+  tooltipKey,
+  variant = 'plain',
+  resolveText
+}: IconButtonProps): ReactElement {
+  const ariaLabel = resolveText(ariaLabelKey)
+  const pixels = SIZE_PX[size]
+
+  const button = (
+    <button
+      type="button"
+      className={['icon-button', `icon-button--${size}`, variant === 'solid' ? 'icon-button--solid' : '']
+        .filter(Boolean)
+        .join(' ')}
+      aria-label={ariaLabel}
+      style={{ width: pixels, height: pixels }}
+      onClick={onSelect}
+      disabled={disabled}
+    >
+      <Glyph className="icon-button__glyph" size={GLYPH_PX[size]} aria-hidden="true" />
+    </button>
+  )
+
+  if (!tooltipKey) return button
+
+  return (
+    <Tooltip title={resolveText(tooltipKey)} trigger={['hover', 'focus']}>
+      {button}
+    </Tooltip>
+  )
+}
