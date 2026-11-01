@@ -1311,7 +1311,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.save': '保存 agent',
       'ui.state.action.open-settings': '打开设置',
       'ui.state.action.select-target': '选择目标',
-      'ui.state.action.restart': '重启应用',
+      'ui.state.action.restart-app': '重启应用',
       'ui.state.action.open-system-settings': '去系统设置',
     },
     windowChrome: {
@@ -2406,7 +2406,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       'ui.state.action.save': 'Save the agent',
       'ui.state.action.open-settings': 'Open settings',
       'ui.state.action.select-target': 'Choose a target',
-      'ui.state.action.restart': 'Restart the app',
+      'ui.state.action.restart-app': 'Restart the app',
       'ui.state.action.open-system-settings': 'Open system settings',
     },
     windowChrome: {
