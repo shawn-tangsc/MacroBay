@@ -103,6 +103,14 @@ export type CacheOperationResult = {
   operation: CacheOperationType
   dryRun: boolean
   status: CacheOperationStatus
+  /**
+   * 只入审计留证、无界面消费：审计列表与详情确实在读记录，但不渲染这一列。
+   *
+   * 它是**记录 JSON 的体积差**，不是「文件将缩小 X 字节」——SQLite 删行不缩文件，两个数不相等。
+   *
+   * 将来若要展示，只能写「记录体积将减少 X」；「可释放 / 回收空间」这类措辞一律禁止，
+   * 除非同批伴随 `VACUUM`（当前不做）。
+   */
   removedBytes?: number
   removedRecords?: number
   normalizedErrorCode?: CacheErrorCode
@@ -129,6 +137,14 @@ export type CacheOperationAuditRecord = {
   requestedAt: string
   completedAt?: string
   status: CacheOperationStatus
+  /**
+   * 只入审计留证、无界面消费：审计列表与详情确实在读记录，但不渲染这一列。
+   *
+   * 它是**记录 JSON 的体积差**，不是「文件将缩小 X 字节」——SQLite 删行不缩文件，两个数不相等。
+   *
+   * 将来若要展示，只能写「记录体积将减少 X」；「可释放 / 回收空间」这类措辞一律禁止，
+   * 除非同批伴随 `VACUUM`（当前不做）。
+   */
   removedBytes?: number
   removedRecords?: number
   normalizedErrorCode?: CacheErrorCode
