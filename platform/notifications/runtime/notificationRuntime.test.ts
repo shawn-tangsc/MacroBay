@@ -154,3 +154,17 @@ describe('mark all read (clear)', () => {
     expect(changes).toHaveLength(2)
   })
 })
+
+describe('test notifications do not spend the daily cap', () => {
+  it('leaves the real source room after many test clicks', async () => {
+    const runtime = createRuntime()
+    // 60 次手动自检：带 skipDailyCap，不进熔断计数。
+    for (let index = 0; index < 60; index += 1) {
+      await runtime.submit({ ...request({ sourceId: 'platform.test' }), dedupeKey: `test-${index}`, skipDailyCap: true })
+    }
+    // 真实任务失败仍然是「原文落库」，没有被折叠成「今日另有 N 条」。
+    const real = await runtime.submit(request({ sourceId: 'job-run-failed:definition-1' }))
+    expect(real.collapsedCount).toBeUndefined()
+    expect(real.titleKey).toBe('notification.taskFailed.title')
+  })
+})

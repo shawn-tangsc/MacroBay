@@ -114,6 +114,19 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       }
 
       const ownerId = request.productId ?? 'platform'
+      // 用户手动触发的自检不占当日额度：否则频繁测试会把真实通知折叠掉。
+      if (request.skipDailyCap === true) {
+        const record = createNotificationFromRequest(
+          {
+            ...request,
+            requestedChannels: withCenterForDisruptiveChannels(request, normalizeRequestedChannels(request, settings, deps.clock))
+          },
+          now
+        )
+        await persist({ ...state, records: [record, ...state.records] })
+        notifyChanged()
+        return toSafeNotificationRecord(record)
+      }
       const breaker = decideNotificationBreaker({
         counters: state.dailyCounters ?? {},
         ownerId,
