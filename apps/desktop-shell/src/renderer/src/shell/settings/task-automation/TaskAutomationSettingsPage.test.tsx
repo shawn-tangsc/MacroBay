@@ -34,6 +34,30 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).not.toContain('没有匹配的任务。')
   })
 
+  it('renders the table whenever there are rows, even if the empty-state verdict disagrees', () => {
+    const task = { id: 'task-1', name: '行情任务', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
+    // Deliberately inconsistent: a wrong verdict must degrade to a wrong sentence, never to an
+    // invisible table. This is the structure rule: rendering follows rows, not the verdict.
+    hooks.settings.mockReturnValue(settings({ tasks: [task], emptyState: 'filter-empty' }))
+    hooks.schedules.mockReturnValue(schedules({ items: [] }))
+
+    const markup = renderPage()
+
+    expect(markup).toContain('行情任务')
+    expect(markup).toContain('task-automation-table')
+  })
+
+  it('shows load more when more rows exist, even if the empty-state verdict says otherwise', () => {
+    const task = { id: 'task-1', name: '行情任务', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
+    hooks.settings.mockReturnValue(settings({ tasks: [task], emptyState: 'never-created', hasMore: true }))
+    hooks.schedules.mockReturnValue(schedules({ items: [] }))
+
+    const markup = renderPage()
+
+    // The control follows `hasMore`; a wrong verdict must not be able to hide the way to more rows.
+    expect(markup).toContain('加载更多')
+  })
+
   it('keeps a task whose latest run could not be read and says so instead of never', () => {
     const task = { id: 'task-1', name: '读取失败的任务', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
     hooks.settings.mockReturnValue(settings({
@@ -114,6 +138,8 @@ describe('TaskAutomationSettingsPage', () => {
 
     hooks.settings.mockReturnValue(settings({
       tasks: [{ id: 'task-1', name: '每日行情总结', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }],
+      // Source has rows; the filter leaves none visible.
+      rows: [],
       emptyState: 'filter-empty',
       nameQuery: 'zzz'
     }))
@@ -349,7 +375,7 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
     clearFilters: vi.fn(),
     reload: vi.fn(),
     loadMore: vi.fn(),
-    hasMore: false,
+    hasMore: overrides.hasMore ?? false,
     toggleTaskExpanded: vi.fn(),
     expandedTaskId: overrides.expandedTaskId ?? null,
     audits: overrides.audits ?? [],
@@ -369,8 +395,9 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
         }
       : overrides.policy,
     state: {
-      filteredTasks: overrides.emptyState === 'never-created' ? [] : tasks,
-      rows: (overrides.emptyState === 'never-created' ? [] : tasks).map((item) => {
+      // Source rows and visible rows are independent: `emptyState` is a verdict, not a row filter.
+      filteredTasks: (overrides.rows as unknown[] | undefined) ?? tasks,
+      rows: ((overrides.rows as Array<Record<string, unknown>> | undefined) ?? tasks).map((item) => {
         const run = (overrides.taskRuns as Record<string, any> | undefined)?.[String(item.id)]
         return {
           task: item,

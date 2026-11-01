@@ -69,15 +69,9 @@ export function TaskAutomationTasksSection(props: {
         <div className="task-automation-block-body">
           <BlockError label={labels.tasksLoadFailed} retryLabel={labels.retry} onRetry={() => void controller.reload()} />
         </div>
-      ) : state.emptyState === 'never-created' ? (
-        <BlockEmpty title={labels.emptyTasksTitle} body={labels.emptyTasksBody} />
-      ) : state.emptyState === 'filter-empty' ? (
-        <BlockEmpty
-          body={labels.filterEmpty}
-          actionLabel={labels.clearFilters}
-          onAction={controller.clearFilters}
-        />
-      ) : (
+      ) : state.rows.length > 0 ? (
+        // Rendering is decided by "are there rows to render", never by the empty-state verdict:
+        // a wrong verdict must degrade to a wrong sentence, not to an invisible table.
         <table className="task-automation-table">
           <thead>
             <tr>
@@ -161,8 +155,16 @@ export function TaskAutomationTasksSection(props: {
             })}
           </tbody>
         </table>
+      ) : state.emptyState === 'filter-empty' ? (
+        <BlockEmpty
+          body={labels.filterEmpty}
+          actionLabel={labels.clearFilters}
+          onAction={controller.clearFilters}
+        />
+      ) : (
+        <BlockEmpty title={labels.emptyTasksTitle} body={labels.emptyTasksBody} />
       )}
-      {!controller.loading && !controller.error && state.emptyState === 'none' && controller.hasMore ? (
+      {!controller.loading && !controller.error && state.rows.length > 0 && controller.hasMore ? (
         <div className="task-automation-block-footer">
           <Button size="small" onClick={() => void controller.loadMore()}>
             {labels.loadMore}

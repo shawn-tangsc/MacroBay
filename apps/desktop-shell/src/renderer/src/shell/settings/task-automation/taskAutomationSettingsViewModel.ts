@@ -115,15 +115,20 @@ export function collectDeliverySkipReasons(
   return { skipReasons: [...reasons].sort(), unexplainedSkips }
 }
 
+/**
+ * 空态只看两个数：源里有几条（`loadedCount`）、当前可见几条（`visibleCount`）。
+ *
+ * 不用「筛选是否开启」判断：零任务时计数必然是零，带不带筛选都该说「还没有任务」——让人去清除
+ * 一个清除后依然为空的筛选，是把真相藏起来。反过来，`filter-empty` 也不等于「筛选开着」：筛选
+ * 开着但仍有匹配行时它是 `none`，否则表格会被一句「没有任务」整块盖掉。
+ */
 export function resolveTaskEmptyState(input: {
   loadedCount: number
-  status: TaskAutomationStatusFilter
-  nameQuery: string
+  visibleCount: number
 }): TaskAutomationEmptyState {
-  const hasFilters = input.status !== 'all' || input.nameQuery.trim() !== ''
-  if (input.loadedCount > 0 && !hasFilters) return 'none'
-  if (!hasFilters) return 'never-created'
-  return 'filter-empty'
+  if (input.loadedCount === 0) return 'never-created'
+  if (input.visibleCount === 0) return 'filter-empty'
+  return 'none'
 }
 
 export function buildTaskAutomationSettingsState(input: {
@@ -180,8 +185,7 @@ export function buildTaskAutomationSettingsState(input: {
     latestRunAt,
     emptyState: resolveTaskEmptyState({
       loadedCount: input.tasks.length,
-      status: input.status,
-      nameQuery: input.nameQuery
+      visibleCount: filteredTasks.length
     }),
     hasFilters: input.status !== 'all' || input.nameQuery.trim() !== ''
   }

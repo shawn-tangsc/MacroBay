@@ -48,13 +48,41 @@ describe('taskAutomationSettingsViewModel', () => {
     }).filteredTasks).toEqual([first])
   })
 
-  it('distinguishes a never-created list from a filter without matches', () => {
-    expect(resolveTaskEmptyState({ loadedCount: 0, status: 'all', nameQuery: '' })).toBe('never-created')
-    expect(resolveTaskEmptyState({ loadedCount: 0, status: 'active', nameQuery: '' })).toBe('filter-empty')
-    expect(resolveTaskEmptyState({ loadedCount: 0, status: 'all', nameQuery: 'zzz' })).toBe('filter-empty')
-    expect(resolveTaskEmptyState({ loadedCount: 3, status: 'all', nameQuery: 'zzz' })).toBe('filter-empty')
-    expect(resolveTaskEmptyState({ loadedCount: 3, status: 'all', nameQuery: '' })).toBe('none')
-    expect(resolveTaskEmptyState({ loadedCount: 0, status: 'all', nameQuery: '' })).not.toBe('none')
+  it('decides the empty state from the source and the visible rows, never from the filter alone', () => {
+    // Existence comes from the source only. Zero tasks is "nothing created yet" even with a filter
+    // active: telling the reader to clear a filter that reveals nothing hides the truth.
+    expect(resolveTaskEmptyState({ loadedCount: 0, visibleCount: 0 })).toBe('never-created')
+    // Only "the source has rows, none of them visible" is a filter without matches.
+    expect(resolveTaskEmptyState({ loadedCount: 3, visibleCount: 0 })).toBe('filter-empty')
+    expect(resolveTaskEmptyState({ loadedCount: 3, visibleCount: 2 })).toBe('none')
+    expect(resolveTaskEmptyState({ loadedCount: 0, visibleCount: 0 })).not.toBe('none')
+  })
+
+  it('keeps the table visible when a status filter still matches rows', () => {
+    const active = task({ id: 'task-active', status: 'active' })
+    const paused = task({ id: 'task-paused', status: 'paused' })
+
+    // Regression: an active filter used to mean "filter-empty" even when rows matched, which hid
+    // the whole table behind a "no tasks match" block.
+    const state = buildTaskAutomationSettingsState({
+      tasks: [active, paused], selectedTaskId: null, status: 'active', nameQuery: '', audits: [], taskRuns: {}
+    })
+
+    expect(state.filteredTasks).toEqual([active])
+    expect(state.emptyState).toBe('none')
+  })
+
+  it('reports a filtered-out list when the source has rows but the filter matches none', () => {
+    const state = buildTaskAutomationSettingsState({
+      tasks: [task({ id: 'task-1', name: 'First' })],
+      selectedTaskId: null,
+      status: 'all',
+      nameQuery: 'zzz',
+      audits: [],
+      taskRuns: {}
+    })
+
+    expect(state.emptyState).toBe('filter-empty')
   })
 
   it('counts unknown delivery statuses as unknown instead of skipped and reports the latest run time', () => {
