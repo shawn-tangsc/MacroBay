@@ -127,6 +127,30 @@ describe('crypto intelligence dashboard', () => {
   
   
 
+  it.each([
+    ['empty', { state: 'empty' as const, asOf }, 'empty'],
+    ['unavailable', { state: 'unavailable' as const }, 'error']
+  ] as const)('renders the %s sentiment read as its own state, not as the other one', async (_name, result, expected) => {
+    // The gauge is the one place the reader sees risk appetite. "We could not read it" and "there
+    // is no index yet" are different facts, and only one of them is the reader's fault to fix.
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(CryptoIntelligenceDashboard, {
+      client: dashboardClient(), fearGreedClient: fearGreedClient(result), fundingRateClient: fundingRateClient(),
+      openInterestClient: openInterestClient(), now: () => new Date(asOf),
+      onBack: () => undefined, onConfigureSources: () => undefined, onManageSource: () => undefined, onOpenCalendar: () => undefined,
+      text: text.dashboard
+    })))
+    await flush()
+
+    const gauge = container.querySelector('[data-sentiment-gauge]')!
+    expect(gauge.querySelector(`[data-state="${expected}"]`)).not.toBeNull()
+    expect(gauge.querySelector('[data-state="available"]')).toBeNull()
+    // Neither state may fall back to a sentence the panel writes itself.
+    expect(gauge.textContent).not.toContain(text.dashboard.fearGreed.empty)
+  })
+
   it('renders a textual half-gauge and independent BTC/ETH funding-history values', async () => {
     const container = document.createElement('div')
     document.body.append(container)

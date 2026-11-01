@@ -54,7 +54,7 @@ type CryptoDashboardText = {
     sourceStates: Record<DashboardEconomicCalendarState['state'], string>
     manageSettings: string
   }
-  fearGreed: { title: string; loading: string; empty: string; unavailable: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
+  fearGreed: { title: string; loading: string; empty: string; score: string; observedAt: string; sourceName: string; sourceStates: Record<DashboardFearGreedState['state'], string>; manageSettings: string; buckets: Record<'extreme-fear' | 'fear' | 'neutral' | 'greed' | 'extreme-greed', string> }
   positioning: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['positioning']
   divergence: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['divergence']
   capitalConditions: typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['capitalConditions']
@@ -227,7 +227,7 @@ function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFea
         ? <LoadingState label={text.fearGreed.loading} minHeight={120} />
         : fearGreedState.state === 'empty'
           ? <StateView state="empty" reasonCode="not-yet" />
-          : <span>{text.fearGreed.unavailable}</span>}
+          : <StateView state="error" reasonCode="unavailable" />}
       </div>
     </section>
   </>
