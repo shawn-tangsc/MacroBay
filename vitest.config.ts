@@ -13,7 +13,11 @@ import { configDefaults } from 'vitest/config'
 const MEASUREMENT_TESTS = [
   'products/market-intelligence/service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarEventRepository.test.ts',
   'products/market-intelligence/service/intelligence/macro-calendar/0xrouter-calendar/marketCalendarStorageReclaim.test.ts',
-  'products/market-intelligence/service/intelligence/macro-calendar/bls-ics-manual/blsManualIcsImportService.test.ts'
+  'products/market-intelligence/service/intelligence/macro-calendar/bls-ics-manual/blsManualIcsImportService.test.ts',
+  // 这条测的是「有界」本身：往 512 条的账本里灌 513 条、每条带 60 个事件键和一段超长摘要，
+  // 量的就是上限处的裁剪代价，不是功能对错。单跑三次 4.92s / 7.05s（超时）/ 2.63s，
+  // 2.6–7 秒的抖动随机器而定，5 秒默认值下必然偶发红。
+  'products/market-intelligence/service/intelligence/macro-calendar/macroCalendarProviderRuntime.test.ts'
 ]
 
 export default {
