@@ -12,48 +12,60 @@ import './stateView.css'
  * 只收键，句子由调用方经 `resolveText` 解析；图标由本文件一张表按 `state` 决定，**不收 `icon`**
  * （收图标等于允许同一状态两种图标，`disabled` 与 `permission` 的轮廓判据当场作废）。
  *
- * `state` 是判别联合不是平铺对象：`empty` / `error` / `disabled` / `permission` 缺 `reasonCode`
- * 编译不过，否则 `<StateView state="empty" />` 会落回一句兜底文案，而那正是「暂无数据」的撒谎方式。
- * `disabled` 必须带 `action`；`permission` 的 `action` 可缺省且本批一律缺省——本地单用户版没有
- * 「管理员」这个人，缺省时**不渲染动作行、不留空位**。
+ * `state` 是判别联合不是平铺对象，`reasonCode` 是按状态分家的闭集：`<StateView state="empty" />`
+ * 与「empty 配 error 的码」都编译不过，否则就会落回一句兜底文案——而那正是「暂无数据」的撒谎方式。
+ *
+ * 动作位按「读者能不能自己解决」定，不是按状态定：
+ * - `empty · not-yet`、`disabled · capability-not-wired`：读者没有可做的动作，**不许传入动作**；
+ * - `empty` 其余码、`disabled · target-disabled`：必须给一个点了就能解决的动作；
+ * - `permission`：本批一律不给动作——本地单用户版没有「管理员」这个人，点了就是死路；
+ * - `error`：动作可选（能重试就给，不能就别给假按钮）。
  *
  * 播报：**只有 `error` 进 live region**，且只包标题与原因。`role="alert"` 是 assertive，会打断
  * 正在朗读的内容并把按钮一起念出来，所以用 `status` + `polite`。`empty` / `disabled` /
  * `permission` 不播报；`loading` 由 `LoadingState` 自己播报，这里不再包一层，否则读屏念两遍。
  */
 
-export type StateViewState = 'normal' | 'loading' | 'empty' | 'error' | 'disabled' | 'permission'
+export const STATE_VIEW_STATES = ['normal', 'loading', 'empty', 'error', 'disabled', 'permission'] as const
+
+export type StateViewState = (typeof STATE_VIEW_STATES)[number]
 
 /**
  * `ui.state.*` 的键是闭集：句子在全仓唯一一份文案表（`platformText.ts` 的 `uiState`），
  * 组件与产品都不造句。新增一个键＝契约变更：先经架构师批准，再同笔补两语言。
  */
-export type StateViewTextKey =
-  | 'ui.state.loading'
-  | 'ui.state.empty'
-  | 'ui.state.empty.reason.never-created'
-  | 'ui.state.empty.reason.filtered-out'
-  | 'ui.state.empty.reason.no-target-bound'
-  | 'ui.state.empty.reason.nothing-enabled'
-  | 'ui.state.empty.reason.not-yet'
-  | 'ui.state.error'
-  | 'ui.state.error.reason.unreadable'
-  | 'ui.state.error.reason.unavailable'
-  | 'ui.state.error.details'
-  | 'ui.state.disabled'
-  | 'ui.state.disabled.reason.capability-not-wired'
-  | 'ui.state.disabled.reason.target-disabled'
-  | 'ui.state.permission'
-  | 'ui.state.permission.reason.not-granted'
-  | 'ui.state.action.create'
-  | 'ui.state.action.clear-filter'
-  | 'ui.state.action.bind-target'
-  | 'ui.state.action.enable'
-  | 'ui.state.action.retry'
-  | 'ui.state.action.check-source'
-  | 'ui.state.action.grant'
-  | 'ui.state.action.open-settings'
-  | 'ui.state.action.contact-admin'
+export const STATE_VIEW_TEXT_KEYS = [
+  'ui.state.loading',
+  'ui.state.empty',
+  'ui.state.empty.reason.never-created',
+  'ui.state.empty.reason.filtered-out',
+  'ui.state.empty.reason.no-target-bound',
+  'ui.state.empty.reason.nothing-enabled',
+  'ui.state.empty.reason.not-yet',
+  'ui.state.error',
+  'ui.state.error.reason.unreadable',
+  'ui.state.error.reason.unavailable',
+  'ui.state.error.details',
+  'ui.state.disabled',
+  'ui.state.disabled.reason.capability-not-wired',
+  'ui.state.disabled.reason.target-disabled',
+  'ui.state.permission',
+  'ui.state.permission.reason.not-granted',
+  'ui.state.action.create',
+  'ui.state.action.clear-filter',
+  'ui.state.action.bind-target',
+  'ui.state.action.enable',
+  'ui.state.action.retry',
+  'ui.state.action.check-source',
+  'ui.state.action.grant',
+  'ui.state.action.open-settings',
+  'ui.state.action.contact-admin'
+] as const
+
+export type StateViewTextKey = (typeof STATE_VIEW_TEXT_KEYS)[number]
+
+/** 尺寸词只有一个来源：`StateSize`（§3）。这里只给并行的旧名字一个落点，语义不变。 */
+export type StateViewSize = StateSize
 
 export type StateViewAction = {
   /** 动作文案的 i18n 键；不收字面量。 */
@@ -69,19 +81,36 @@ type StateViewBase = {
   className?: string
 }
 
+export type EmptyReasonCode =
+  | 'never-created'
+  | 'filtered-out'
+  | 'no-target-bound'
+  | 'nothing-enabled'
+  | 'not-yet'
+
+export type ErrorReasonCode = 'unreadable' | 'unavailable'
+export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled'
+export type PermissionReasonCode = 'not-granted'
+
 export type StateViewProps =
   | (StateViewBase & { state: 'normal'; children: ReactNode })
   | (StateViewBase & { state: 'loading' })
-  | (StateViewBase & { state: 'empty'; reasonCode: string; action?: StateViewAction })
+  | (StateViewBase & { state: 'empty'; reasonCode: 'not-yet'; action?: never })
+  | (StateViewBase & {
+      state: 'empty'
+      reasonCode: Exclude<EmptyReasonCode, 'not-yet'>
+      action: StateViewAction
+    })
   | (StateViewBase & {
       state: 'error'
-      reasonCode: string
+      reasonCode: ErrorReasonCode
       action?: StateViewAction
       /** 排障详情，默认折叠，不进 live region。 */
       details?: { summaryKey: string; bodyKey: string }
     })
-  | (StateViewBase & { state: 'disabled'; reasonCode: string; action: StateViewAction })
-  | (StateViewBase & { state: 'permission'; reasonCode: string; action?: StateViewAction })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: never })
+  | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action: StateViewAction })
+  | (StateViewBase & { state: 'permission'; reasonCode: PermissionReasonCode; action?: never })
 
 /** 量出来的两个高度：整页 220、卡内 80（§13）。`sm` 是行内档，本批不给固定高度。 */
 const MIN_HEIGHT: Record<StateSize, number | undefined> = { sm: undefined, md: 80, lg: 220 }
@@ -129,6 +158,17 @@ function StateIcon({ state }: { state: IconState }): ReactElement {
   )
 }
 
+/** 文案键的拼法只在这一处：产品选码，不拼键；测试与文案表都按它取键。 */
+export function stateViewTextKeys(
+  state: Exclude<StateViewState, 'normal' | 'loading'>,
+  reasonCode: string
+): { title: StateViewTextKey; reason: StateViewTextKey } {
+  return {
+    title: `ui.state.${state}` as StateViewTextKey,
+    reason: `ui.state.${state}.reason.${reasonCode}` as StateViewTextKey
+  }
+}
+
 function rootClassName(state: StateViewState, className?: string): string {
   return ['state-view', `state-view--${state}`, className].filter(Boolean).join(' ')
 }
@@ -155,9 +195,9 @@ export function StateView(props: StateViewProps): ReactElement {
   }
 
   const { state, reasonCode, resolveText } = props
+  const keys = stateViewTextKeys(state, reasonCode)
   // `details` 只挂在 error 上（判别联合已挡住别的态传它），收成局部量给 JSX 收窄。
   const details = state === 'error' ? props.details : undefined
-  const announced = state === 'error'
 
   return (
     <div
@@ -169,9 +209,9 @@ export function StateView(props: StateViewProps): ReactElement {
       {/* live region 只包标题与原因：详情与动作按钮在它外面，出现时不抢焦点、也不被一起念出来。 */}
       <span
         className="state-view__live"
-        {...(announced ? { role: 'status', 'aria-live': 'polite' } : {})}>
-        <strong className="state-view__title">{resolveText(`ui.state.${state}`)}</strong>
-        <span className="state-view__reason">{resolveText(`ui.state.${state}.reason.${reasonCode}`)}</span>
+        {...(state === 'error' ? { role: 'status', 'aria-live': 'polite' } : {})}>
+        <strong className="state-view__title">{resolveText(keys.title)}</strong>
+        <span className="state-view__reason">{resolveText(keys.reason)}</span>
       </span>
       {details === undefined ? null : (
         <details className="state-view__details">

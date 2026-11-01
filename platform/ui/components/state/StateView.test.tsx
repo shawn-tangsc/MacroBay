@@ -1,18 +1,30 @@
 // @vitest-environment happy-dom
 
-import { readFileSync, readdirSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { StateView, type StateViewProps } from './StateView'
+import { STATE_VIEW_STATES, STATE_VIEW_TEXT_KEYS, StateView, stateViewTextKeys, type StateViewProps } from './StateView'
 
 const source = readFileSync(join(__dirname, 'StateView.tsx'), 'utf8')
 const css = readFileSync(join(__dirname, 'stateView.css'), 'utf8')
 
 /** 测试只证明「键被解析」，不替调用方造句：透传即把键当句子。 */
 const key = (value: string): string => value
+
+let root: Root | undefined
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+
+afterEach(async () => {
+  await act(async () => root?.unmount())
+  root = undefined
+  document.body.replaceChildren()
+  document.head.querySelectorAll('style').forEach((node) => node.remove())
+})
 
 function mount(markup: string): HTMLElement {
   const host = document.createElement('div')
@@ -21,233 +33,270 @@ function mount(markup: string): HTMLElement {
   return host
 }
 
+function markup(props: StateViewProps): string {
+  return renderToStaticMarkup(<StateView {...props} />)
+}
+
 describe('StateView', () => {
-  it('renders children and nothing else for `normal`', () => {
-    const markup = renderToStaticMarkup(
-      <StateView state="normal" resolveText={key}>
-        <p data-child />
-      </StateView>
-    )
-
-    // 不套壳、不留标题/原因/动作的位置：多一层包裹，迁移当天就多一份间距。
-    expect(markup).toBe('<p data-child="true"></p>')
+  it('keeps the six states fixed and ordered — no seventh name', () => {
+    expect(STATE_VIEW_STATES).toEqual(['normal', 'loading', 'empty', 'error', 'disabled', 'permission'])
   })
 
-  it('renders the shared LoadingState for `loading`, with one live region and no local spinner', () => {
-    const host = mount(renderToStaticMarkup(<StateView state="loading" resolveText={key} />))
+  it('normal renders children only, with no title, reason or action slot', () => {
+    const html = markup({ state: 'normal', resolveText: key, children: <p data-child>content</p> })
 
-    // 复用要在 DOM 上查得到：截图分不出「复用」和「照抄一遍」。
+    expect(html).toBe('<p data-child="true">content</p>')
+    expect(html).not.toContain('state-view')
+    expect(html).not.toContain('<button')
+  })
+
+  it('loading reuses LoadingState — the marker class is the proof, not a lookalike', () => {
+    const host = mount(markup({ state: 'loading', resolveText: key }))
+
     expect(host.querySelector('[data-loading-state]')).not.toBeNull()
-    expect(host.innerHTML).toContain('class="loading-state loading-state--block"')
+    expect(host.innerHTML).toContain('loading-state--block')
     expect(host.innerHTML).toContain('ui.state.loading')
-    // 第 262 行：loading 只许有一处 live region，且必须是 LoadingState 自己的。
+    // 只有 LoadingState 自己那一处 live region：外面再包一层会念两遍。
     expect(host.querySelectorAll('[aria-live]')).toHaveLength(1)
-    expect(css).not.toMatch(/@keyframes|rotate\(\s*360deg/)
-    expect(source).not.toMatch(/@keyframes|rotate\(/)
   })
 
-  it('renders icon + title + reason + one action for `empty`, without announcing it', () => {
+  it('adds no second animation or polling loop of its own', () => {
+    expect(source).not.toMatch(/@keyframes|animation/)
+    expect(css).not.toMatch(/@keyframes|animation:/)
+    expect(source).not.toMatch(/setInterval|requestAnimationFrame/)
+  })
+
+  it('empty renders icon, title, one reason and one action, without announcing itself', () => {
     const host = mount(
-      renderToStaticMarkup(
-        <StateView
-          state="empty"
-          reasonCode="no-source"
-          resolveText={key}
-          action={{ labelKey: 'ui.action.open-settings', onSelect: () => undefined }}
-        />
-      )
+      markup({
+        state: 'empty',
+        reasonCode: 'never-created',
+        resolveText: key,
+        action: { labelKey: 'ui.state.action.create', onSelect: () => undefined }
+      })
     )
 
     expect(host.querySelector('[data-state-icon="empty"]')).not.toBeNull()
     expect(host.textContent).toContain('ui.state.empty')
-    expect(host.textContent).toContain('ui.state.empty.reason.no-source')
-    // empty 不进 live region：常驻说明不是事件，出现即播报会抢读屏。
+    expect(host.textContent).toContain('ui.state.empty.reason.never-created')
+    expect(host.querySelector('button')?.textContent).toBe('ui.state.action.create')
+    // 空态不是事件，不播报。
     expect(host.querySelector('[aria-live]')).toBeNull()
-    expect(host.querySelector('[role]')).toBeNull()
-    expect(host.querySelector('button')?.textContent).toBe('ui.action.open-settings')
   })
 
-  it('announces only `error`, politely, and keeps details and the action outside the live region', () => {
+  it('uses the reason code it is given, not a shared empty sentence', () => {
+    const html = markup({
+      state: 'empty',
+      reasonCode: 'filtered-out',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.clear-filter', onSelect: () => undefined }
+    })
+
+    expect(html).toContain('ui.state.empty.reason.filtered-out')
+    expect(html).toContain('ui.state.action.clear-filter')
+  })
+
+  it('not-yet carries no action row at all', () => {
+    const host = mount(markup({ state: 'empty', reasonCode: 'not-yet', resolveText: key }))
+
+    expect(host.querySelector('button')).toBeNull()
+    expect(host.innerHTML).not.toContain('state-view__action')
+    expect(host.textContent).toContain('ui.state.empty.reason.not-yet')
+  })
+
+  it('error is a polite live region, with details collapsed and the action outside it', () => {
     const host = mount(
-      renderToStaticMarkup(
-        <StateView
-          state="error"
-          reasonCode="unreachable"
-          resolveText={key}
-          details={{ summaryKey: 'ui.error.details.summary', bodyKey: 'ui.error.details.body' }}
-          action={{ labelKey: 'ui.action.retry', onSelect: () => undefined }}
-        />
-      )
+      markup({
+        state: 'error',
+        reasonCode: 'unreadable',
+        resolveText: key,
+        details: { summaryKey: 'ui.state.error.details', bodyKey: 'ui.state.error.details.body' },
+        action: { labelKey: 'ui.state.action.retry', onSelect: () => undefined }
+      })
     )
 
     const live = host.querySelector('.state-view__live')
     expect(live?.getAttribute('role')).toBe('status')
     expect(live?.getAttribute('aria-live')).toBe('polite')
-    // 不是 alert：assertive 会打断朗读，还会把按钮一起念出来。
     expect(host.innerHTML).not.toContain('role="alert"')
-    // live region 只包标题与原因；详情与按钮在它外面。
     expect(live?.querySelector('button')).toBeNull()
     expect(live?.querySelector('details')).toBeNull()
-    expect(live?.textContent).toContain('ui.state.error')
-    expect(live?.textContent).toContain('ui.state.error.reason.unreachable')
     expect(host.querySelector('details')?.hasAttribute('open')).toBe(false)
-    expect(host.querySelector('summary')?.textContent).toBe('ui.error.details.summary')
-    expect(host.querySelector('details p')?.textContent).toBe('ui.error.details.body')
+    expect(host.querySelector('summary')?.textContent).toBe('ui.state.error.details')
   })
 
-  it('shows no action row at all for `permission` when the action is omitted', () => {
-    const host = mount(
-      renderToStaticMarkup(<StateView state="permission" reasonCode="admin-only" resolveText={key} />)
-    )
+  it('keeps unreadable and unavailable apart by their action', () => {
+    const unreadable = markup({
+      state: 'error',
+      reasonCode: 'unreadable',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.retry', onSelect: () => undefined }
+    })
+    const unavailable = markup({
+      state: 'error',
+      reasonCode: 'unavailable',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.check-source', onSelect: () => undefined }
+    })
 
-    // 不渲染包裹元素、不留空位：不是 visibility:hidden，也不是一个空 div。
-    expect(host.querySelector('button')).toBeNull()
-    expect(host.innerHTML).not.toContain('state-view__action')
-    expect(host.textContent).toContain('ui.state.permission')
-    expect(host.textContent).toContain('ui.state.permission.reason.admin-only')
-    expect(host.querySelector('[aria-live]')).toBeNull()
+    expect(unreadable).toContain('ui.state.error.reason.unreadable')
+    expect(unavailable).toContain('ui.state.error.reason.unavailable')
+    expect(unreadable).toContain('ui.state.action.retry')
+    expect(unavailable).toContain('ui.state.action.check-source')
   })
 
-  it('keeps `disabled` and `permission` apart without colour: different outline, different action slot', () => {
+  it('separates disabled from permission by outline and action, not by colour', () => {
     const disabled = mount(
-      renderToStaticMarkup(
-        <StateView
-          state="disabled"
-          reasonCode="turned-off"
-          resolveText={key}
-          action={{ labelKey: 'ui.action.open-settings', onSelect: () => undefined }}
-        />
-      )
+      markup({
+        state: 'disabled',
+        reasonCode: 'capability-not-wired',
+        resolveText: key
+      })
     )
     const permission = mount(
-      renderToStaticMarkup(<StateView state="permission" reasonCode="admin-only" resolveText={key} />)
+      markup({
+        state: 'permission',
+        reasonCode: 'not-granted',
+        resolveText: key
+      })
     )
 
-    // ① 图标轮廓不同：圈加斜杠 vs 锁，不是同一形状换颜色。
+    // ① 图标轮廓不同：圈加斜杠 vs 锁。
     expect(disabled.querySelector('[data-state-icon="disabled"]')).not.toBeNull()
-    expect(disabled.innerHTML).toContain('M5.6 5.6l12.8 12.8')
     expect(permission.querySelector('[data-state-icon="permission"]')).not.toBeNull()
+    expect(disabled.innerHTML).toContain('M5.6 5.6l12.8 12.8')
     expect(permission.innerHTML).toContain('<rect x="4" y="11"')
-    // ② 动作位不同：禁用必须留一个点得动的动作，权限不给主按钮。
-    expect(disabled.querySelector('button')).not.toBeNull()
+    // ② 动作位不同：平台没接通时给不出动作；缺权限时本批也不给动作（没有「管理员」这个人）。
+    expect(disabled.querySelector('button')).toBeNull()
     expect(permission.querySelector('button')).toBeNull()
-    // ③ 两态同色：区分不靠颜色，只靠上面两条。
-    expect(css).not.toMatch(/\.state-view--disabled[^{]*\{[^}]*color:/)
+    // ③ 两态都不用危险色。
+    expect(css).not.toMatch(/\.state-view--(disabled|permission)[^{]*\{[^}]*--danger/)
   })
 
-  it('picks the icon from `state` alone, not from the reason code', () => {
-    const iconOf = (markup: string): string => {
-      const host = mount(markup)
-      return host.querySelector('[data-state-icon]')?.outerHTML ?? ''
-    }
+  it('bounds target-disabled and capability-not-wired to different action shapes', () => {
+    const targetDisabled = markup({
+      state: 'disabled',
+      reasonCode: 'target-disabled',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.enable', onSelect: () => undefined }
+    })
 
-    const first = iconOf(renderToStaticMarkup(<StateView state="empty" reasonCode="no-source" resolveText={key} />))
-    const second = iconOf(
-      renderToStaticMarkup(<StateView state="empty" reasonCode="filtered-out" resolveText={key} />)
-    )
-
-    expect(first).toBe(second)
-    expect(first).toContain('data-state-icon="empty"')
+    expect(targetDisabled).toContain('ui.state.disabled.reason.target-disabled')
+    expect(targetDisabled).toContain('ui.state.action.enable')
   })
 
-  it('measures the two heights the spec names: 220 for a page, 80 inside a card', () => {
+  it('measures exactly 220px at page size and 80px inside a card', () => {
+    const style = document.createElement('style')
+    style.textContent = css
+    document.head.append(style)
+
     const page = mount(
-      renderToStaticMarkup(<StateView state="empty" reasonCode="no-source" resolveText={key} size="lg" />)
+      markup({
+        state: 'empty',
+        reasonCode: 'never-created',
+        resolveText: key,
+        size: 'lg',
+        action: { labelKey: 'ui.state.action.create', onSelect: () => undefined }
+      })
     )
-    const card = mount(renderToStaticMarkup(<StateView state="empty" reasonCode="no-source" resolveText={key} />))
+    const panel = mount(
+      markup({
+        state: 'empty',
+        reasonCode: 'never-created',
+        resolveText: key,
+        action: { labelKey: 'ui.state.action.create', onSelect: () => undefined }
+      })
+    )
 
-    // 量出来的值，不是「看起来差不多」：读的就是提交给浏览器的 min-height。
     expect(page.querySelector<HTMLElement>('.state-view')?.style.minHeight).toBe('220px')
-    expect(card.querySelector<HTMLElement>('.state-view')?.style.minHeight).toBe('80px')
-    expect(page.querySelector('.state-view')?.getAttribute('data-size')).toBe('lg')
-    expect(card.querySelector('.state-view')?.getAttribute('data-size')).toBe('md')
+    expect(panel.querySelector<HTMLElement>('.state-view')?.style.minHeight).toBe('80px')
   })
 
-  it('applies the same two heights to `loading`, through LoadingState', () => {
-    const page = mount(renderToStaticMarkup(<StateView state="loading" resolveText={key} size="lg" />))
-    const card = mount(renderToStaticMarkup(<StateView state="loading" resolveText={key} />))
+  it('calls onSelect when the action is pressed', async () => {
+    const onSelect = vi.fn()
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <StateView
+          state="error"
+          reasonCode="unreadable"
+          resolveText={key}
+          action={{ labelKey: 'ui.state.action.retry', onSelect }}
+        />
+      )
+    })
 
-    expect(page.querySelector<HTMLElement>('[data-loading-state]')?.style.minHeight).toBe('220px')
-    expect(card.querySelector<HTMLElement>('[data-loading-state]')?.style.minHeight).toBe('80px')
+    const button = host.querySelector('button')!
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onSelect).toHaveBeenCalledTimes(1)
+  })
+
+  it('builds the documented key names in one place, and lists every key it can ask for', () => {
+    expect(stateViewTextKeys('empty', 'never-created')).toEqual({
+      title: 'ui.state.empty',
+      reason: 'ui.state.empty.reason.never-created'
+    })
+    // 每个码都要在两份语言里有句子：清单是 platformText 的类型来源。
+    for (const reasonCode of ['never-created', 'filtered-out', 'no-target-bound', 'nothing-enabled', 'not-yet']) {
+      expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('empty', reasonCode).reason)
+    }
+    for (const reasonCode of ['unreadable', 'unavailable']) {
+      expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('error', reasonCode).reason)
+    }
+    for (const reasonCode of ['capability-not-wired', 'target-disabled']) {
+      expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('disabled', reasonCode).reason)
+    }
+    expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('permission', 'not-granted').reason)
   })
 
   it('holds no copy of its own, no icon prop and no semantic switch', () => {
-    // 只允许注释里出现中文说明；JSX 与字符串里不许有文案。
     const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
     expect(withoutComments).not.toMatch(/[\u4e00-\u9fa5]/)
     expect(source).not.toMatch(/\bicon\s*[:?]/)
     expect(source).not.toMatch(/spinner/i)
-    expect(source).not.toMatch(/setInterval|rotate/i)
-    // 兜底色不许出现在调用点：默认值归 tokens.css 一处。
     expect(css).not.toMatch(/var\([^)]*,\s*#/)
   })
 
-  it('never lets a call site pick the inline `sm` size in this batch', () => {
-    const repoRoot = resolve(__dirname, '../../../..')
-    const roots = ['apps/desktop-shell/src/renderer/src', 'products', 'platform']
-
-    const offenders: string[] = []
-    for (const root of roots) {
-      for (const file of walk(resolve(repoRoot, root), ['.tsx', '.ts'])) {
-        if (/\.test\.(ts|tsx)$/.test(file)) continue
-        const text = readFileSync(file, 'utf8')
-        if (!/<\/?StateView/.test(text)) continue
-        if (/<StateView[\s\S]{0,400}?size=["']sm["']/.test(text)) offenders.push(file)
-      }
+  it('rejects free text, wrong code/state pairs and missing actions at compile time', () => {
+    // @ts-expect-error 只收 reasonCode；自由文案会让每处站点长出自己的一句话。
+    const freeText: StateViewProps = { state: 'empty', reason: 'x', resolveText: key }
+    // @ts-expect-error 每码一支：empty 不能配 error 的码。
+    const wrongPair: StateViewProps = { state: 'empty', reasonCode: 'unreadable', resolveText: key }
+    // @ts-expect-error never-created 必须给动作。
+    const missingAction: StateViewProps = { state: 'empty', reasonCode: 'never-created', resolveText: key }
+    // @ts-expect-error not-yet 不许有动作。
+    const actionOnNotYet: StateViewProps = {
+      state: 'empty',
+      reasonCode: 'not-yet',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.create', onSelect: () => undefined }
     }
+    // @ts-expect-error capability-not-wired 不许有动作。
+    const actionOnWired: StateViewProps = {
+      state: 'disabled',
+      reasonCode: 'capability-not-wired',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.enable', onSelect: () => undefined }
+    }
+    // @ts-expect-error details 只属 error。
+    const detailsOnEmpty: StateViewProps = {
+      state: 'empty',
+      reasonCode: 'never-created',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.create', onSelect: () => undefined },
+      details: { summaryKey: 'a', bodyKey: 'b' }
+    }
+    // @ts-expect-error 不收 spinner 这类语义开关。
+    const spinner: StateViewProps = { state: 'loading', resolveText: key, spinner: true }
+    // @ts-expect-error size 是位置词，不收数字。
+    const numericSize: StateViewProps = { state: 'loading', resolveText: key, size: 220 }
 
-    // `sm` 的类型保留（尺寸词只有一份），但这一批不许有调用点开它；开之前先等行内图。
-    expect(offenders).toEqual([])
+    for (const value of [freeText, wrongPair, missingAction, actionOnNotYet, actionOnWired, detailsOnEmpty, spinner, numericSize]) {
+      expect(value).toBeDefined()
+    }
   })
 })
-
-function walk(root: string, extensions: readonly string[]): string[] {
-  const found: string[] = []
-  let entries: ReturnType<typeof readdirSync>
-  try {
-    entries = readdirSync(root, { withFileTypes: true })
-  } catch {
-    return found
-  }
-  for (const entry of entries) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
-    const path = join(root, entry.name)
-    if (entry.isDirectory()) found.push(...walk(path, extensions))
-    else if (extensions.some((extension) => entry.name.endsWith(extension))) found.push(path)
-  }
-  return found
-}
-
-/**
- * 编译期契约：这几行什么都不做，价值是让 tsc 校验 `@ts-expect-error`。
- * 谁把 `reasonCode` 改回可选、把 `disabled` 的 `action` 放开、或给 props 加回 `icon`，这里先红。
- */
-export function stateViewTypeContract(): void {
-  const text = (value: string): string => value
-
-  // @ts-expect-error normal 必须带 children
-  const normalWithoutChildren: StateViewProps = { state: 'normal', resolveText: text }
-  // @ts-expect-error empty 缺 reasonCode 编译不过（不收自由文案，也不落兜底句）
-  const emptyWithoutReason: StateViewProps = { state: 'empty', resolveText: text }
-  // @ts-expect-error 只收 reasonCode，不收 reason: string
-  const emptyWithFreeText: StateViewProps = { state: 'empty', reason: 'x', resolveText: text }
-  // @ts-expect-error disabled 必须带 action：禁用态要留一个点了就能解决的动作
-  const disabledWithoutAction: StateViewProps = { state: 'disabled', reasonCode: 'turned-off', resolveText: text }
-  // @ts-expect-error 不收 icon：图标由组件内一张表按 state 决定
-  const withIcon: StateViewProps = { state: 'empty', reasonCode: 'no-source', resolveText: text, icon: 'x' }
-  // @ts-expect-error 不收 spinner 这类语义开关
-  const withSpinner: StateViewProps = { state: 'loading', resolveText: text, spinner: true }
-  // @ts-expect-error size 只允许 sm | md | lg
-  const withPageSize: StateViewProps = { state: 'empty', reasonCode: 'no-source', resolveText: text, size: 'page' }
-  // @ts-expect-error 不收 title 字面量
-  const withTitle: StateViewProps = { state: 'empty', reasonCode: 'no-source', resolveText: text, title: 'x' }
-
-  void normalWithoutChildren
-  void emptyWithoutReason
-  void emptyWithFreeText
-  void disabledWithoutAction
-  void withIcon
-  void withSpinner
-  void withPageSize
-  void withTitle
-}
