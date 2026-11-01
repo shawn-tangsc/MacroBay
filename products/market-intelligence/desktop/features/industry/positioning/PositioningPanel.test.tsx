@@ -33,9 +33,7 @@ const positioning: DashboardPositioningViewState = {
   eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
   changeBtc: { h1Pct: -0.4, h24Pct: -6.5 },
   changeEth: { h1Pct: 0.2, h24Pct: 2.7 },
-  hints: [],
-  hintsTruncated: false,
-  hintsState: 'available'
+  signal: { state: 'hidden' }
 }
 
 const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
@@ -80,25 +78,23 @@ describe('positioning panel', () => {
     act(() => root.unmount())
   })
 
-  it('marks a suspected liquidation row and always carries the inferred-not-exchange note', () => {
+  it('marks the bucket the rule reported and names it once, on the chip', () => {
     const markup = render({
-      positioning: { ...positioning, hints: [{ observedAt: at(30), asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, notionalUsd: 8.8e9 }] }
+      positioning: {
+        ...positioning,
+        signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(0) }
+      }
     })
-    // The mark names itself on the chart: asset and size, no timestamp (the axis already says
-    // when) and no single header badge (it could only ever name one of several marks).
-    expect(markup).toContain('data-hint="btc"')
+    // One mark, pinned to the signal's own bucket, and one chip naming it.
+    expect(markup).toContain('data-signal-mark')
     expect(markup).toContain('疑似强平 BTC -1.9% · 量 3.4×')
-    expect(markup).not.toContain('mi-positioning-panel__badge')
-    // The caveat is no longer a permanent line: it lives in the help popover, which also says
-    // what the two series mean together — the part a reader cannot infer from the numbers.
-    expect(markup).toContain('data-help')
-    expect(markup).toContain(text.helpLines[0])
-    expect(markup).toContain(text.helpLines[1])
+    // The query's own hint list is no longer drawn: one reading, one mark, one sentence.
+    expect(markup).not.toContain('data-hint-list')
   })
 
-  it('says the marks are unavailable instead of implying there were none', () => {
-    const markup = render({ positioning: { ...positioning, hintsState: 'unavailable' } })
-    expect(markup).toContain(text.liquidationUnavailable)
+  it('says the data is insufficient instead of implying nothing happened', () => {
+    const markup = render({ positioning: { ...positioning, signal: { state: 'insufficient' } } })
+    expect(markup).toContain(text.signalInsufficient)
   })
 
   it('keeps the funding half when the positioning half is missing, and marks which half failed', () => {
@@ -263,7 +259,6 @@ describe('the module rule chip', () => {
     window: '7d' as const,
     btc: positioning.state === 'available' ? positioning.btc : [],
     eth: positioning.state === 'available' ? positioning.eth : [],
-    hints: [], hintsTruncated: false, hintsState: 'available' as const,
     signal: { state: 'alert' as const, asset: 'btc' as const, dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(15) },
     ...overrides
   })
@@ -297,5 +292,43 @@ describe('the module rule chip', () => {
     expect(markup).toContain('oi-liquidation-proxy')
     expect(markup).toContain('15 分钟')
     expect(markup).toContain('推断值')
+  })
+})
+
+describe('opening the reading', () => {
+  const alerting: DashboardPositioningViewState = {
+    state: 'available', window: '7d',
+    btc: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 8.9e9 - index * 1e7 })),
+    eth: [at(180), at(120), at(60), at(0)].map((observedAt, index) => ({ observedAt, notionalUsd: 2.4e9 + index * 1e7 })),
+    signal: { state: 'alert', asset: 'btc', dropPct: -1.9, volumeMultiple: 3.4, ruleId: 'oi-liquidation-proxy', observedAt: at(0) }
+  }
+
+  async function mount() {
+    const invoke = vi.fn(async () => { throw new Error('the panel must not reach the bridge') })
+    vi.stubGlobal('window', { platform: { products: { invoke } } })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+        funding, positioning: alerting, window: '7d', onWindowChange: () => undefined, text
+      })))
+    })
+    return { container, root, invoke }
+  }
+
+  it('opens the numbers behind the chip, and the chip is a keyboard-reachable button', async () => {
+    const { container, root, invoke } = await mount()
+    const chip = container.querySelector('button.mi-positioning-panel__signal')!
+    expect(chip.getAttribute('aria-expanded')).toBe('false')
+    // A native button: Tab reaches it and Enter/Space activate it, no key handler to invent.
+    await act(async () => { chip.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+    const detail = container.querySelector('#mi-positioning-signal-detail')!
+    expect(detail.textContent).toContain('oi-liquidation-proxy')
+    expect(detail.textContent).toContain('-1.9%')
+    expect(detail.textContent).toContain('3.4×')
+    // Opening the numbers is free: nothing reaches the bridge, so no analysis or budget is spent.
+    expect(invoke).not.toHaveBeenCalled()
+    await act(async () => { root.unmount() })
   })
 })

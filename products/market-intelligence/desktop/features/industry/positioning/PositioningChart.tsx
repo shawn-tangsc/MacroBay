@@ -5,7 +5,6 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { DashboardFundingRateHistoryState } from '../../../pages/intelligence/dashboardFundingRateHistoryModel'
 import {
   dashboardPositioningPresentationPolicy,
-  formatDashboardChange,
   formatDashboardNotional,
   type DashboardPositioningPoint,
   type DashboardPositioningViewState
@@ -107,6 +106,22 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
     })
   }
 
+  // The chart marks the one reading the card's rule reported, pinned to its own bucket. The mark
+  // is a dot and a rule only: the words live on the chip, once, in the header.
+  const signalMark = positioning.signal
+  const marker = signalMark.state === 'alert'
+    ? (() => {
+        const markMs = Date.parse(signalMark.observedAt)
+        if (!(markMs >= startMs && markMs <= endMs)) return undefined
+        const point = positioning[signalMark.asset].find(entry => entry.observedAt === signalMark.observedAt)
+        return {
+          x: x(markMs),
+          y: point ? upperY(point.notionalUsd, signalMark.asset === 'btc' ? btcScale : ethScale) : VIEW.upperBottom,
+          asset: signalMark.asset
+        }
+      })()
+    : undefined
+
   return (
     <div className="mi-positioning-panel__chart">
       <svg ref={ref} viewBox={`0 0 ${VIEW.width} ${VIEW.height}`} role="img" aria-label={text.pairTitle}
@@ -146,37 +161,14 @@ export function PositioningChart({ positioning, funding, text }: Readonly<{
               textAnchor={flip ? 'end' : 'start'}>{formatDashboardNotional(last.notionalUsd)}</text>
           )
         })}
-        {positioning.hints.map((hint, index) => {
-          // Pinned to the bucket's own value. The hourly line takes the hour's last reading, so a
-          // dip that recovered inside that hour is invisible on the line — without this dot the
-          // mark would sit beside a flat stretch with nothing to explain it.
-          const cx = x(Date.parse(hint.observedAt))
-          const cy = upperY(hint.notionalUsd, hint.asset === 'btc' ? btcScale : ethScale)
-          // Each mark says who and how much, on its own line: a header badge could only name the
-          // newest one, and the instant is already readable from where the line sits.
-          const crowded = index > 0 && cx - x(Date.parse(positioning.hints[index - 1]!.observedAt)) < 58
-          // The chip says what it is, not only who: a bare "ETH −1.9%" floating over a chart reads
-          // as an unexplained number, and the reader had to guess it was the liquidation mark.
-          // The drop alone says how far it fell; the multiple says whether anyone was forced to
-          // sell. Both are what the mark was detected on, so both belong on it.
-          const label = text.liquidationChip
-            .replace('{asset}', text.assets[hint.asset])
-            .replace('{pct}', formatDashboardChange(hint.dropPct))
-            .replace('{multiple}', hint.volumeMultiple.toFixed(1))
-          // The chip lives in the strip above the plot, never on top of it; only the rule and the
-          // dot enter the chart. Nearby marks take the second row of the strip.
-          const chipWidth = chipWidthFor(label)
-          const chipY = VIEW.markerTop + (crowded ? VIEW.markerRow : 0)
-          const chipX = Math.min(Math.max(cx - chipWidth / 2, VIEW.left), VIEW.right - chipWidth)
-          return (
-            <g key={`${hint.asset}-${hint.observedAt}`} data-hint={hint.asset} className="mi-positioning-panel__hint">
-              <line x1={cx} x2={cx} y1={chipY + 13} y2={VIEW.height - 10} />
-              <circle cx={cx} cy={cy} r="3" />
-              <rect className="mi-positioning-panel__hint-chip" x={chipX} y={chipY} width={chipWidth} height={14} rx="3" />
-              <text x={chipX + chipWidth / 2} y={chipY + 10.5} textAnchor="middle">{label}</text>
-            </g>
-          )
-        })}
+        {/* One mark per card, from the module rule's chip: the chart no longer draws the query's
+            hint list, because a chip and a dot describing the same reading must not disagree. */}
+        {marker ? (
+          <g className="mi-positioning-panel__hint" data-hint={marker.asset} data-signal-mark>
+            <line x1={marker.x} x2={marker.x} y1={VIEW.markerTop} y2={VIEW.height - 10} />
+            <circle cx={marker.x} cy={marker.y} r="3" />
+          </g>
+        ) : null}
         {hovered && hover ? <line className="mi-positioning-panel__crosshair" x1={xAt(hover.index)} x2={xAt(hover.index)} y1={VIEW.upperTop} y2={VIEW.height - 10} /> : null}
         {axisTicks(startMs, span, count).map(tick => (
           <text key={tick.at} x={x(tick.at)} y={VIEW.height - 1}

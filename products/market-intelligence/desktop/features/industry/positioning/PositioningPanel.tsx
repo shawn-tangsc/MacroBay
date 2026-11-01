@@ -38,6 +38,9 @@ export type PositioningPanelProps = Readonly<{
 // nominal size and the drawing is 186 units tall instead of being blown up with the container.
 export function PositioningPanel({ funding, positioning, window, onWindowChange, text }: PositioningPanelProps): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  // Opening the numbers spends nothing: no analysis call, no budget, no request. The paid action
+  // is one level deeper and is not this button.
+  const [detailsOpen, setDetailsOpen] = useState(false)
   // The chip the module's rule produced, if any. A hidden chip renders nothing at all — no empty
   // container, no grey "normal": an always-present badge becomes background noise within a fortnight.
   const signal = positioning.state === 'available' ? positioning.signal : undefined
@@ -45,22 +48,27 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
   const header = (extra?: React.ReactNode) => (
     <header className="mi-positioning-panel__head">
       <h2>{text.pairTitle}</h2>
-      {chip ? (
-        <span className="mi-positioning-panel__signal" data-state={chip.state}
-          title={chip.state === 'alert'
-            ? text.signalHover
-              .replace('{rule}', 'oi-liquidation-proxy')
-              .replace('{window}', text.window15m)
-              .replace('{kind}', text.signalKindInferred)
-            : text.signalInsufficient}>
-          {chip.state === 'alert'
-            ? text.liquidationChip
-              .replace('{asset}', text.assets[chip.asset])
-              .replace('{pct}', formatDashboardChange(chip.dropPct))
-              .replace('{multiple}', chip.volumeMultiple.toFixed(1))
-            : text.signalInsufficient}
-        </span>
-      ) : null}
+      {chip ? (chip.state === 'alert' ? (
+        <button type="button" className="mi-positioning-panel__signal" data-state="alert"
+          aria-expanded={detailsOpen} aria-controls="mi-positioning-signal-detail"
+          aria-label={`${text.liquidationChip
+            .replace('{asset}', text.assets[chip.asset])
+            .replace('{pct}', formatDashboardChange(chip.dropPct))
+            .replace('{multiple}', chip.volumeMultiple.toFixed(1))} · ${text.signalDetailsOpen}`}
+          title={text.signalHover
+            .replace('{rule}', chip.ruleId)
+            .replace('{window}', text.window15m)
+            .replace('{kind}', text.signalKindInferred)}
+          onClick={() => setDetailsOpen(open => !open)}>
+          {text.liquidationChip
+            .replace('{asset}', text.assets[chip.asset])
+            .replace('{pct}', formatDashboardChange(chip.dropPct))
+            .replace('{multiple}', chip.volumeMultiple.toFixed(1))}
+        </button>
+      ) : (
+        // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
+        <span className="mi-positioning-panel__signal" data-state="insufficient">{text.signalInsufficient}</span>
+      )) : null}
       <span className="mi-positioning-panel__help" tabIndex={0} role="note" aria-label={text.helpLabel} data-help>
         <i aria-hidden="true">?</i>
         <span className="mi-positioning-panel__help-pop" role="tooltip">
@@ -90,6 +98,16 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
             : null}
         </>
       )}
+      {chip?.state === 'alert' && detailsOpen ? (
+        <dl id="mi-positioning-signal-detail" className="mi-positioning-panel__signal-detail" role="region" aria-label={text.signalDetailsTitle}>
+          <div><dt>{text.signalDetailsRule}</dt><dd>{chip.ruleId}</dd></div>
+          <div><dt>{text.signalDetailsWindow}</dt><dd>{text.window15m}</dd></div>
+          <div><dt>{text.signalDetailsDrop}</dt><dd>{formatDashboardChange(chip.dropPct)}</dd></div>
+          <div><dt>{text.signalDetailsVolume}</dt><dd>{chip.volumeMultiple.toFixed(1)}×</dd></div>
+          <div><dt>{text.signalDetailsObservedAt}</dt><dd>{formatTime(chip.observedAt)}</dd></div>
+          <p>{text.signalDetailsNote}</p>
+        </dl>
+      ) : null}
       <div className="mi-positioning-panel__body">
         <div className="mi-positioning-panel__summary">
           <Asset asset="btc" text={text} rate={btcRate.at(-1)} rateAgo={btcRate.at(-4)} change={available ? positioning.changeBtc : undefined}
@@ -101,11 +119,6 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           {available
             ? <>
                 <PositioningChart positioning={positioning} funding={funding} text={text} />
-                {positioning.hintsState === 'available' && !positioning.hintsTruncated ? null : (
-                  <p className="mi-positioning-panel__foot" data-hints-state={positioning.hintsState}>
-                    {positioning.hintsState === 'unavailable' ? text.liquidationUnavailable : text.liquidationMore}
-                  </p>
-                )}
               </>
             : status}
         </div>

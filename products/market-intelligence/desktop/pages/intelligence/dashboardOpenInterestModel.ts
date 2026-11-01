@@ -6,7 +6,6 @@ import {
 } from '../../../contracts/openInterestHistory'
 import {
   resolvePositioningState,
-  type LiquidationHint,
   type PositioningState
 } from '../../../contracts/openInterestPositioning'
 import type { ModuleSignal, SignalSeverity } from '../../../contracts/moduleSignal'
@@ -30,13 +29,10 @@ export type DashboardPositioningViewState =
       eth: readonly DashboardPositioningPoint[]
       changeBtc?: Readonly<{ h1Pct?: number; h24Pct?: number }>
       changeEth?: Readonly<{ h1Pct?: number; h24Pct?: number }>
-      hints: readonly LiquidationHint[]
-      hintsTruncated: boolean
-      hintsState: 'available' | 'unavailable'
       /** Set when the newest reading is older than the staleness bound. */
       staleSince?: string
-      /** What the module's rule says right now. Absent means "nothing to say" — no chip at all. */
-      signal?: DashboardSignalChip
+      /** What the module's rule says right now. Hidden means "nothing to say" — no chip at all. */
+      signal: DashboardSignalChip
     }>
 
 /**
@@ -81,9 +77,9 @@ export function projectDashboardPositioning(value: unknown, asOf: string, window
       eth: value.eth.map(toPoint),
       ...(value.change?.btc ? { changeBtc: value.change.btc } : {}),
       ...(value.change?.eth ? { changeEth: value.change.eth } : {}),
-      hints: value.liquidationHints ?? [],
-      hintsTruncated: value.liquidationHintsTruncated === true,
-      hintsState: value.liquidationHintsState,
+      // The card no longer carries the query's hint marks: the chip and the chart mark both come
+      // from the module rule, so one reading cannot be drawn as two different things.
+      signal: { state: 'hidden' },
       ...(staleSince ? { staleSince } : {})
     }
   } catch {

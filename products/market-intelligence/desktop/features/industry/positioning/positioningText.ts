@@ -25,7 +25,6 @@ export type PositioningPanelText = Readonly<{
   window24h: string
   states: Readonly<Record<PositioningState, string>>
   stateWhy: string
-  liquidationMore: string
   liquidationChip: string
   /** The module rule's chip: what it says, and what its own hover line is made of. */
   signalInsufficient: string
@@ -33,8 +32,16 @@ export type PositioningPanelText = Readonly<{
   signalKindInferred: string
   /** The chip's hover line names the window it judges; the rule reads one closed 15-minute bucket. */
   window15m: string
+  /** Opening the chip's numbers: the entry, and every label behind it. Opening costs nothing. */
+  signalDetailsOpen: string
+  signalDetailsTitle: string
+  signalDetailsRule: string
+  signalDetailsWindow: string
+  signalDetailsDrop: string
+  signalDetailsVolume: string
+  signalDetailsObservedAt: string
+  signalDetailsNote: string
   helpLabel: string
   helpLines: readonly string[]
-  liquidationUnavailable: string
   noRate: string
 }>

@@ -136,11 +136,26 @@
   display: inline-flex; align-items: center; gap: 4px;
   padding: 1px 6px; border-radius: 3px;
   border: 1px solid var(--mi-dashboard-line);
-  color: var(--mi-dashboard-text); font-size: 10px; font-weight: 600;
-  line-height: 16px; white-space: nowrap; cursor: help;
+  background: none; color: var(--mi-dashboard-text); font: inherit;
+  font-size: 10px; font-weight: 600;
+  line-height: 16px; white-space: nowrap; cursor: pointer;
 }
+.mi-positioning-panel__signal:hover,
+.mi-positioning-panel__signal:focus-visible { border-color: var(--mi-dashboard-text); }
+.mi-positioning-panel__signal[data-state='insufficient'] { cursor: default; }
 /* "Insufficient data" must not lean on colour: it carries no digit and reads differently by shape. */
 .mi-positioning-panel__signal[data-state='insufficient'] {
   border-style: dashed; border-color: var(--mi-dashboard-muted);
   color: var(--mi-dashboard-muted); font-weight: 400;
 }
+
+/* Opening the chip's numbers: what the rule read, when, and that it is an inference. */
+.mi-positioning-panel__signal-detail {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0;
+  padding: 6px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
+  color: var(--mi-dashboard-muted); font-size: 10px; line-height: 1.5;
+}
+.mi-positioning-panel__signal-detail div { display: flex; gap: 4px; }
+.mi-positioning-panel__signal-detail dt { margin: 0; }
+.mi-positioning-panel__signal-detail dd { margin: 0; color: var(--mi-dashboard-text); }
+.mi-positioning-panel__signal-detail p { flex-basis: 100%; margin: 0; }
