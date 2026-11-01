@@ -59,7 +59,11 @@ directory that is not listed here makes the table wrong the moment it lands.
 - `workspace/registry`: workspace panel and page registration.
 - `files/attachments`: the text file preview reader and its size cap.
 - `observability/logging`: the single application log writer (rotation and redaction live inside it).
-- `time`: time zone arithmetic used by server-side decisions, not display formatting (`ui/time` owns display).
+- `time`: **the only place that does time zone arithmetic** for server-side decisions (a day boundary, a minute of day).
+- `ui/time`: display formatting only. It turns an instant into what the user reads; it does not decide what a day is.
+- `desktop/main/shellTimeZone`: reads the configured zone from settings and passes it on. It does no arithmetic of its own.
+  If a second place starts computing a day boundary or a minute of day, that is a regression: three modules here are
+  complementary by role, not three alternative implementations.
 - `workspace/runtime`, `workspace/persistence`: workspace runtime and its storage.
 - `ai/providers`: model provider adapters and provider store.
 - `ai/chat`: reusable chat runtime.
