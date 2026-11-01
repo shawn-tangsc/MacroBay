@@ -111,4 +111,25 @@ describe('structured JSON blocks in chat markdown (PLAT-64)', () => {
     expect(html).toContain('<pre class="chat-markdown-code"><code>{&quot;a&quot;:1}</code></pre>')
     expect(html).not.toContain('chat-markdown-json-card')
   })
+
+  it('makes the JSON viewport a focusable, labelled scroll region so the keyboard can scroll it', () => {
+    const html = renderZh(structuredPayload)
+
+    // 折叠按钮删掉之后，Tab 进入可视区是键盘用户唯一的滚动入口。
+    // 没有 tabIndex，`max-height + overflow` 的容器只能靠鼠标滚 —— 这条断言就是那道闸。
+    expect(html).toContain('tabindex="0"')
+    expect(html).toContain('role="region"')
+    expect(html).toContain('aria-label="JSON 内容，可用方向键滚动查看"')
+  })
+
+  it("labels the JSON region in the reader's language instead of hard-coding one", () => {
+    const english = renderToStaticMarkup(
+      <ShellLanguageProvider language="en-US">
+        <ChatMarkdownText text={structuredPayload} />
+      </ShellLanguageProvider>
+    )
+
+    expect(english).toContain('aria-label="JSON content; use the arrow keys to scroll"')
+    expect(english).not.toContain('JSON 内容')
+  })
 })

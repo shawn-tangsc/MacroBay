@@ -9663,6 +9663,13 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   /* 固定的可视高度：内容再长也不撑开消息，双向滚动保证每一行都还能看到。 */
   max-height: 360px;
   overflow: auto;
+  /* 滚到边界时不要把滚动接力给整个消息区：用户在 JSON 里往上滚到底，不该顺带把聊天记录抽走。 */
+  overscroll-behavior: contain;
+}
+.chat-markdown-json > pre:focus-visible {
+  /* 可视区可聚焦（Tab 进入后方向键滚动），焦点必须看得见，否则键盘用户不知道自己在哪。 */
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
 }
 .chat-markdown-json-card {
   margin: 6px 0;
