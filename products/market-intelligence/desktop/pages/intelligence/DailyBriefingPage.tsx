@@ -20,7 +20,7 @@ import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
 import { posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
-import { readableFailureDetail } from './dailyBriefingFailureDetail'
+import { briefFailureCodeLabel, failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
@@ -39,41 +39,6 @@ type BriefFailure = Readonly<{
   detail?: string
   generationTrace?: GenerationTrace
 }>
-
-type BriefFailureAdvice = 'model' | 'retryOrModel' | 'retryOrSettings' | 'data' | 'system'
-
-/**
- * The reason a generation stopped is a machine code from the service; the panel shows a readable
- * label and a next step instead. Model/provider failures send the reader to model settings, output
- * failures to a retry, and collection failures to the sources.
- */
-function failureAdvice(code: string | undefined): BriefFailureAdvice {
-  switch (code) {
-    case 'model-unavailable':
-    case 'model-not-ready':
-    case 'provider-disabled':
-    case 'missing-api-key':
-      return 'model'
-    case 'editorial-timeout':
-    case 'agent-turn-output-truncated':
-    case 'timeout':
-      return 'retryOrModel'
-    case 'source-failed':
-    case 'candidate-overflow':
-    case 'build-failed':
-      return 'data'
-    case 'store-failed':
-    case 'time-invalid':
-      return 'system'
-    default:
-      return 'retryOrSettings'
-  }
-}
-
-function briefFailureCodeLabel(code: string | undefined, text: DailyBriefingText): string {
-  if (!code) return text.failurePanel.unknownCode
-  return (text.aiSettings.failure as Readonly<Record<string, string>>)[code] ?? text.failurePanel.unknownCode
-}
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -425,7 +390,7 @@ function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, on
   onConfigureSources?: () => void
 }>): React.ReactElement {
   const advice = failureAdvice(failure.code)
-  const codeLabel = briefFailureCodeLabel(failure.code, text)
+  const codeLabel = briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })
   const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
   const separator = text.labelSeparator
   return <div className="mi-daily-briefing-page__empty mi-daily-briefing-page__failure" role="alert"
