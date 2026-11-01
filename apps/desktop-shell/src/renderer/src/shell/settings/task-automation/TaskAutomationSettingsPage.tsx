@@ -43,6 +43,9 @@ export function TaskAutomationSettingsPage({ language }: { language: AppLanguage
         latestRunAt={settings.state.latestRunAt}
         resourceRuns={resourceRuns}
         resourceLoading={jobs.loading}
+        // Existence signal from the source (`tasks`), not from the filtered rows: a filter must not
+        // be able to make the health block claim there is nothing to deliver.
+        hasTasks={settings.tasks.length > 0}
         onRetry={() => void settings.reload()}
       />
 

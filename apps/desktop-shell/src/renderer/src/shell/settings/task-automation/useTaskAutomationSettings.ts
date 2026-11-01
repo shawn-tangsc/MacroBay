@@ -31,6 +31,8 @@ const taskAuditLimit = 5
 export type TaskAutomationSettingsController = {
   loading: boolean
   error: boolean
+  /** 源数据（未过滤）：依赖「有没有任务」的区块只能看它，不能看渲染用的数组。 */
+  tasks: ScheduledTaskEntity[]
   status: TaskAutomationStatusFilter
   setStatus: (status: TaskAutomationStatusFilter) => void
   nameQuery: string
@@ -206,6 +208,8 @@ export function useTaskAutomationSettings(): TaskAutomationSettingsController {
   return {
     loading,
     error,
+    /** Source rows (unfiltered): the existence signal for the blocks that depend on there being tasks. */
+    tasks,
     status,
     setStatus,
     nameQuery,

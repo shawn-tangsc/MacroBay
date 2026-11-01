@@ -24,7 +24,9 @@ describe('TaskAutomationSettingsPage', () => {
     const markup = renderPage()
 
     expect(markup).toContain('投递健康')
-    expect(markup).toContain('暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。')
+    // With zero tasks the counters are zero by construction, so this block does not explain it:
+    // 「还没有定时任务」 below already said the one true thing.
+    expect(markup).not.toContain('暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。')
     expect(markup).toContain('我的定时任务')
     expect(markup).toContain('还没有定时任务')
     expect(markup).toContain('平台与产品资源任务')
@@ -112,6 +114,17 @@ describe('TaskAutomationSettingsPage', () => {
     expect(markup).not.toContain('delivery-no-target-bound')
     // A skipped row with no recorded reason is a defect and must be visible as one.
     expect(markup).toContain('没有记录原因')
+  })
+
+  it('explains an empty delivery health only when there are tasks to deliver', () => {
+    const task = { id: 'task-1', name: '行情任务', status: 'active', trigger: { kind: 'cron', expr: '0 9 * * *' } }
+    hooks.settings.mockReturnValue(settings({ tasks: [task] }))
+    hooks.schedules.mockReturnValue(schedules({ items: [] }))
+
+    const markup = renderPage()
+
+    // Tasks exist, nothing has been delivered yet: now the explanation is the reader's fact.
+    expect(markup).toContain('暂无投递记录。任务开始运行后，这里会显示成功、失败与跳过计数。')
   })
 
   it('keeps the delivery health block visible with zeros instead of collapsing it when there is no task', () => {
@@ -367,6 +380,7 @@ function settings(overrides: Record<string, unknown> = {}): Record<string, unkno
   return {
     language: 'zh-CN',
     loading: false,
+    tasks,
     error: null,
     status: 'all',
     setStatus: vi.fn(),

@@ -16,6 +16,8 @@ export function TaskAutomationHealthSection(props: {
   /** 资源任务（`@platform/jobs`）最近一次运行，另一套口径，单独统计、不合并。 */
   resourceRuns: ResourceJobRunSummary
   resourceLoading: boolean
+  /** Source rows, not the filtered ones: with no tasks at all, the task section already says so. */
+  hasTasks: boolean
   onRetry: () => void
 }): React.ReactElement {
   const { health, labels, language } = props
@@ -46,7 +48,11 @@ export function TaskAutomationHealthSection(props: {
                 <HealthItem label={labels.unknown} value={health.unknown} />
               </dl>
               {props.loading ? <LoadingState layout="inline" size="sm" label={labels.tasksLoading} /> : null}
-              {!props.loading && isEmpty ? <p className="task-automation-note">{labels.healthEmpty}</p> : null}
+              {/* Dependents stay silent while the thing they depend on is empty: with zero tasks the
+                  counters are zero by construction, and 「还没有定时任务」 already said it once. */}
+              {!props.loading && isEmpty && props.hasTasks ? (
+                <p className="task-automation-note">{labels.healthEmpty}</p>
+              ) : null}
             </>
           )}
         </div>
