@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Drawer, Segmented, Select } from 'antd'
+import { Button, Segmented, Select } from 'antd'
 import { MoreVertical } from 'lucide-react'
 
+import { Drawer } from '@platform/ui/components/drawer'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
@@ -10,6 +11,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 import type { NewsSentimentItemDetail, NewsSentimentView } from '../../../../service/intelligence/news-sentiment/newsSentimentQuery'
 import { NEWS_SENTIMENT_WINDOWS, type NewsSentimentWindow } from '../../../../service/intelligence/schema/newsSentiment'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import type { NewsSentimentClient } from '../../../shared/ipc/newsSentimentClient'
 import type { NewsSentimentText } from './NewsSentimentCard'
 import { createIconTextResolver, hasIconText } from './newsSentimentIconText'
@@ -63,6 +65,23 @@ export function NewsSentimentDrawer(props: {
   }
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
+  const resolveProductText = useProductTextKey()
+  // The platform drawer keeps its content mounted, so the reset has to happen on close. Without it a
+  // reopened drawer shows the article the reader read last time, under a new row's selection.
+  const resetTransientState = useCallback(() => {
+    setDetail(undefined)
+    setDetailFailed(false)
+    setSelectedId(undefined)
+    setBodyView('translated')
+    setContextMenu(undefined)
+  }, [])
+  const handleClose = useCallback(() => {
+    resetTransientState()
+    props.onClose()
+  }, [props.onClose, resetTransientState])
+  useEffect(() => {
+    if (!props.open) resetTransientState()
+  }, [props.open, resetTransientState])
 
   // "No rows" is two different facts: the reader's own filters cut everything, or the window is
   // simply quiet. The first one has an action, the second one does not.
@@ -140,14 +159,18 @@ export function NewsSentimentDrawer(props: {
 
   return (
     <Drawer
-      destroyOnHidden
-      onClose={props.onClose}
+      header="titled"
+      mode="modal"
+      onClose={handleClose}
       open={props.open}
-      rootClassName="mi-news-drawer-root"
-      title={text.drawer.title}
-      width={1040}
+      resolveText={resolveProductText}
+      size="full"
+      titleKey="pages.intelligence.portal.newsSentiment.drawer.title"
     >
       <div className="mi-news-drawer">
+        {translationEnabled ? (
+          <p className="mi-news-drawer__hint">{text.drawer.translationStatus?.waitingHint}</p>
+        ) : null}
         <header className="mi-news-drawer__toolbar">
           <Select
             aria-label={text.drawer.filters.direction}
@@ -320,7 +343,7 @@ export function NewsSentimentDrawer(props: {
                     {sentimentIcon(row.polarity)}{labelText(text, row.polarity)}
                   </span>
                   {translationEnabled && rowState === 'waiting' ? (
-                    <span className="mi-news-drawer__row-waiting" title={text.drawer.translationStatus?.waitingHint}>
+                    <span className="mi-news-drawer__row-waiting">
                       {text.drawer.translationStatus?.waiting}
                     </span>
                   ) : null}

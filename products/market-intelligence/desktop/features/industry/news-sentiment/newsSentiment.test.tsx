@@ -211,6 +211,32 @@ describe('NewsSentimentFeature', () => {
   // state, not copy: the platform sentence and its action come from StateView.
   // Dropping neutral rows is the reader's own filter. Saying "nothing here yet" both misreads the
   // day and hides the way back; and the list must be the only empty surface on that screen.
+  // The platform drawer keeps its content mounted between opens. Without a reset on close, opening
+  // it again shows the article the reader read last time under a different row's heading.
+  it('does not keep the last article after the drawer is closed and reopened', async () => {
+    const getItem = vi.fn(async (input: { itemId: string }) => {
+      const item = VIEW.items.find((entry) => entry.itemId === input.itemId)!
+      return { ...item, bodyExcerpt: `body:${item.itemId}` }
+    })
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ getItem })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const rows = [...document.body.querySelectorAll<HTMLButtonElement>('.mi-news-drawer__row-open')]
+    await act(async () => { rows[1]?.click() })
+    await act(async () => {})
+    expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent).toContain('body:item-b')
+
+    const close = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.getAttribute('aria-label') === '关闭抽屉')
+    expect(close).not.toBeUndefined()
+    await act(async () => { close?.click() })
+    await act(async () => {})
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    expect(document.body.querySelector('.mi-news-drawer__bodytext')?.textContent ?? '').not.toContain('body:item-b')
+  })
+
   it('treats a neutral-only window filtered out as a filter, with one empty state on screen', async () => {
     const neutralOnly = { ...VIEW, items: [{ ...VIEW.items[0]!, itemId: 'item-neutral', polarity: 'neutral' as const }] }
     const container = await mount(
