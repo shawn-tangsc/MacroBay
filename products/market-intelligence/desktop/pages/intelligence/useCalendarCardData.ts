@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { macroEconomicCalendarClient } from '../../shared/ipc/macroEconomicCalendarClient'
 import { marketCalendarClient } from '../../shared/ipc/marketCalendarClient'
+import { calendarUpcomingPolicy } from './calendarUpcomingPolicy'
 import { readMarketCalendarMonth } from './readMarketCalendarMonth'
 import { toCardEventFromOfficial, toCardEventFromProvider } from './calendarCardEventProjection'
 import { attachReactions, reactionAnchors, type CalendarCardReaction } from './calendarCardReaction'
@@ -24,12 +25,30 @@ export type CalendarCardDataState = Readonly<{ projection: CalendarCardProjectio
 /** 「±30 分」反应的读取器，由页面注入（它才拥有跨资产那条查询与它的客户端）。 */
 export type CalendarCardReactionReader = (instant: string) => Promise<CalendarCardReaction | undefined>
 
-/** The single month the card needs: its window can only cross into the next month. */
+/**
+ * The months the card's own window reaches, not a pair around the current month.
+ *
+ * The window is `releasedWindowDays` back and `upcomingWindowDays` ahead, so on the first days of
+ * a month it reaches into the month before: on 11-02 the releases of 10-30 and 10-31 are three
+ * days old and still news. Reading only the current month (plus the next one) made those
+ * releases unreachable and the «最近已公布» section empty exactly when a month turned over —
+ * the reader saw an empty section instead of a value that exists.
+ *
+ * Bounded by the window itself, so at most three months even across a February boundary.
+ */
 export function calendarCardMonths(asOf: string): readonly string[] {
-  const month = asOf.slice(0, 7)
-  const [year, index] = month.split('-').map(Number) as [number, number]
-  const next = index === 12 ? `${year + 1}-01` : `${year}-${String(index + 1).padStart(2, '0')}`
-  return [month, next]
+  const dayMs = 24 * 60 * 60 * 1_000
+  const from = new Date(Date.parse(asOf) - calendarUpcomingPolicy.releasedWindowDays * dayMs).toISOString().slice(0, 7)
+  const to = new Date(Date.parse(asOf) + calendarUpcomingPolicy.upcomingWindowDays * dayMs).toISOString().slice(0, 7)
+  const months: string[] = []
+  let [year, index] = from.split('-').map(Number) as [number, number]
+  for (;;) {
+    const month = `${year}-${String(index).padStart(2, '0')}`
+    months.push(month)
+    if (month >= to) break
+    if (index === 12) { year += 1; index = 1 } else index += 1
+  }
+  return months
 }
 
 export function useCalendarCardData({ asOf, locale = 'zh', reloadKey = 0, readReaction }: Readonly<{
