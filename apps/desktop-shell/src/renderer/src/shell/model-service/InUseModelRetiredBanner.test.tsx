@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -16,8 +17,15 @@ import { useInUseModelPatrol } from './useInUseModelPatrol'
  */
 const labels = platformText['en-US'].models
 
-function retiredItem(modelName: string): InUseModelRetiredItem {
-  return { providerId: 'silicon', modelId: modelName, modelName, reason: 'retired' }
+function retiredItem(modelName: string, lastObservedAt = '2026-11-01T08:00:00.000Z'): InUseModelRetiredItem {
+  return {
+    providerId: 'silicon',
+    modelId: modelName,
+    modelName,
+    reason: 'retired',
+    firstObservedAt: '2026-10-31T08:00:00.000Z',
+    lastObservedAt
+  }
 }
 
 let root: Root | undefined
@@ -98,5 +106,33 @@ describe('in-use model retired banner', () => {
     const container = await mount()
 
     expect(container.querySelector('[data-in-use-model-retired]')).toBeNull()
+  })
+
+  it('shows how old the confirmation is for a fresh conclusion', () => {
+    const markup = renderToStaticMarkup(
+      createElement(InUseModelRetiredBanner, {
+        labels,
+        items: [retiredItem('chat-a', '2026-10-31T08:00:00.000Z')],
+        onChangeModel: () => undefined,
+        now: new Date('2026-11-01T08:00:00Z')
+      })
+    )
+
+    expect(markup).toContain(labels.inUseModelRetired('chat-a'))
+    expect(markup).toContain(labels.inUseModelRetiredCheckedAt(1))
+  })
+
+  it('downgrades a conclusion nobody could confirm for days', () => {
+    const markup = renderToStaticMarkup(
+      createElement(InUseModelRetiredBanner, {
+        labels,
+        items: [retiredItem('chat-a', '2026-10-20T08:00:00.000Z')],
+        onChangeModel: () => undefined,
+        now: new Date('2026-11-01T08:00:00Z')
+      })
+    )
+
+    expect(markup).toContain(labels.inUseModelRetiredStale('chat-a', 12))
+    expect(markup).not.toContain(labels.inUseModelRetired('chat-a'))
   })
 })

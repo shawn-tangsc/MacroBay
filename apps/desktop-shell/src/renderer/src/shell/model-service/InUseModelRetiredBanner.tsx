@@ -1,6 +1,6 @@
 import { TriangleAlert } from 'lucide-react'
 
-import type { InUseModelRetiredItem } from '@platform/ai/providers/inUseModelPatrol'
+import { inUseModelRetiredStaleness, type InUseModelRetiredItem } from '@platform/ai/providers/inUseModelPatrol'
 
 import type { PlatformText } from '../../i18n/platformText'
 
@@ -9,6 +9,8 @@ type InUseModelRetiredBannerProps = {
   items: readonly InUseModelRetiredItem[]
   /** 「更换模型」只负责把用户带到模型服务页；**绝不自动切换**模型。 */
   onChangeModel: () => void
+  /** 判定「结论有多旧」的时间点；测试可注入。 */
+  now?: Date
 }
 
 /**
@@ -18,15 +20,28 @@ type InUseModelRetiredBannerProps = {
 export function InUseModelRetiredBanner({
   labels,
   items,
-  onChangeModel
+  onChangeModel,
+  now = new Date()
 }: InUseModelRetiredBannerProps): React.ReactElement | null {
   if (items.length === 0) return null
-  const names = items.map((item) => item.modelName).join('、')
+  const names = items.map((item) => item.modelName).join(labels.modelNameListSeparator)
+
+  // 旧结论不能当现在时说：超过阈值就降级措辞，并给出天数。
+  const staleness = items.map((item) => inUseModelRetiredStaleness(item, now))
+  const days = Math.max(...staleness.map((entry) => entry.days))
+  const stale = staleness.some((entry) => entry.stale)
 
   return (
     <div className="in-use-model-retired-banner" data-in-use-model-retired role="alert">
       <TriangleAlert size={14} aria-hidden="true" />
-      <span data-in-use-model-retired-text>{labels.inUseModelRetired(names)}</span>
+      <span data-in-use-model-retired-text>
+        {stale ? labels.inUseModelRetiredStale(names, days) : labels.inUseModelRetired(names)}
+      </span>
+      {stale ? null : (
+        <span className="in-use-model-retired-age" data-in-use-model-retired-age>
+          {labels.inUseModelRetiredCheckedAt(days)}
+        </span>
+      )}
       <button type="button" className="model-service-link" data-in-use-model-retired-change onClick={onChangeModel}>
         {labels.changeModel}
       </button>

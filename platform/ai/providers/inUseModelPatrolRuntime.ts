@@ -1,8 +1,11 @@
 import type { ProviderConnectionFailureCode } from './providerFailureMapping'
 import {
+  advanceInUseModelPatrol,
   collectInUseModelTargets,
-  mergeInUseModelRetiredItems,
+  createInUseModelPatrolState,
   toInUseModelRetiredReason,
+  type InUseModelPatrolObservation,
+  type InUseModelPatrolState,
   type InUseModelRetiredItem
 } from './inUseModelPatrol'
 
@@ -33,16 +36,16 @@ export type InUseModelPatrolRuntimeDeps = {
 }
 
 export type InUseModelPatrolRuntime = {
-  runOnce: () => Promise<InUseModelRetiredItem[]>
+  runOnce: () => Promise<readonly InUseModelRetiredItem[]>
   getRetired: () => readonly InUseModelRetiredItem[]
 }
 
 export function createInUseModelPatrolRuntime(deps: InUseModelPatrolRuntimeDeps): InUseModelPatrolRuntime {
-  let retired: InUseModelRetiredItem[] = []
+  let state: InUseModelPatrolState = createInUseModelPatrolState()
   let running = false
 
-  async function runOnce(): Promise<InUseModelRetiredItem[]> {
-    if (running) return retired
+  async function runOnce(): Promise<readonly InUseModelRetiredItem[]> {
+    if (running) return state.retired
     running = true
     try {
       const agentModelIds = await deps.loadAgentModelIds().catch(() => [])
@@ -53,18 +56,16 @@ export function createInUseModelPatrolRuntime(deps: InUseModelPatrolRuntimeDeps)
         agentModelIds,
         configuredDefaultModelIds
       })
-      if (targets.length === 0) return retired
+      if (targets.length === 0) return state.retired
 
-      const checked: Array<{
-        target: (typeof targets)[number]
-        reason: ReturnType<typeof toInUseModelRetiredReason>
-      }> = []
+      const checked: InUseModelPatrolObservation[] = []
       for (const target of targets) {
         const result = await deps.testConnection(target.providerId, target.modelId).catch(() => null)
         checked.push({ target, reason: toInUseModelRetiredReason(result?.failureCode ?? null) })
       }
-      retired = mergeInUseModelRetiredItems(retired, checked)
-      return retired
+      // 一次观测不足以判下线：判据在纯函数里，这里只负责传时间与累积状态。
+      state = advanceInUseModelPatrol(state, checked, (deps.now ?? (() => new Date()))())
+      return state.retired
     } finally {
       running = false
     }
@@ -72,6 +73,6 @@ export function createInUseModelPatrolRuntime(deps: InUseModelPatrolRuntimeDeps)
 
   return {
     runOnce,
-    getRetired: () => retired
+    getRetired: () => state.retired
   }
 }

@@ -541,6 +541,12 @@ export type PlatformText = {
     clearModelsConfirmBody: (count: number) => string
     /** PLAT-75：顶部「在用模型已下线」提示与「更换模型」入口。 */
     inUseModelRetired: (model: string) => string
+    /** 模型名之间的分隔符：中英不同，不许在组件里写死顿号。 */
+    modelNameListSeparator: string
+    /** 「今天确认 / N 天前确认」：结论是旧的时候，用户要知道它有多旧。 */
+    inUseModelRetiredCheckedAt: (days: number) => string
+    /** 超过 3 天没有再确认：措辞从「已下线」降级成「上次检查时不可用」。 */
+    inUseModelRetiredStale: (model: string, days: number) => string
     changeModel: string
     modelSearch: string
     /** PLAT-62 追加：模型区「智能体（Anthropic messages）」徽标与筛选。 */
@@ -1633,6 +1639,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clearModelsConfirmBody: (count) =>
         `将删除 ${count} 个模型（含预设模型）。删除后不会被预设自动加回；可用「获取模型列表」重新同步。`,
       inUseModelRetired: (model) => `你正在使用的 ${model} 已下线，请更换模型。`,
+      modelNameListSeparator: '、',
+      inUseModelRetiredCheckedAt: (days) => (days <= 0 ? '今天确认' : `${days} 天前确认`),
+      inUseModelRetiredStale: (model, days) =>
+        `上次检查（${days} 天前）时不可用：${model}。请重新检查后再决定是否更换。`,
       changeModel: '更换模型',
       modelSearch: '搜索模型',
       modelFilterAll: '全部',
@@ -2689,6 +2699,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clearModelsConfirmBody: (count) =>
         `This deletes ${count} model(s), including preset models. Presets will not add them back; use "Fetch model list" to sync again.`,
       inUseModelRetired: (model) => `The model you are using (${model}) has been retired. Switch to another model.`,
+      modelNameListSeparator: ', ',
+      inUseModelRetiredCheckedAt: (days) =>
+        days <= 0 ? 'confirmed today' : `confirmed ${days} day${days === 1 ? '' : 's'} ago`,
+      inUseModelRetiredStale: (model, days) =>
+        `Last checked ${days} days ago: ${model} was unavailable. Re-check before switching.`,
       changeModel: 'Change model',
       modelSearch: 'Search models',
       modelFilterAll: 'All',

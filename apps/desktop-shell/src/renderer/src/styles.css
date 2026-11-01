@@ -10563,6 +10563,12 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   font-size: 12px;
 }
 
+/* 结论有多旧：次级色，别和「已下线」这句话抢注意力。 */
+.in-use-model-retired-age {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* PLAT-80 / 原型 v2：「默认模型」条 —— 左对齐、不做卡片。 */
 /* PLAT-81：默认模型条占满整行（不再有 720px 上限）；左右内边距与下方左栏/右栏同起点（各 24px）。
    栏内分两行：第一行固定 4 个文本默认模型；第二行（绘画模型）默认收起，
