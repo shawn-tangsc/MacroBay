@@ -1,0 +1,55 @@
+/*
+ * 状态药丸的外观。五档只换颜色，不换字号、不换形状——同一行里出现两个档位时，
+ * 读者该读到的是「两个状态」，不是「两种大小」。
+ *
+ * 字号只有 11px 一档：9px 属于徽标与脚注，药丸再小就读不清档位，而读音只能靠字。
+ * 颜色全部来自 token；边框用 color-mix 把档位色压到 45% 再混中性边框，
+ * 这样深浅两个主题下边框都不会跳成另一种颜色。
+ */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  padding: 1px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-strong);
+  background: transparent;
+  white-space: nowrap;
+}
+
+/* 圆点只是辅助：颜色关掉之后，读的是旁边的字。 */
+.status-pill__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.status-pill--ok {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+}
+
+.status-pill--warn {
+  color: var(--caution);
+  border-color: color-mix(in srgb, var(--caution) 45%, var(--border));
+}
+
+.status-pill--bad {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+
+.status-pill--info {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.status-pill--muted {
+  color: var(--muted);
+}
