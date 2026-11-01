@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 
+import { Segmented } from 'antd'
+
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -128,13 +130,16 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
 }
 
 function WindowTabs({ window, onWindowChange, text }: Readonly<{ window: OpenInterestWindow; onWindowChange: (window: OpenInterestWindow) => void; text: PositioningPanelText }>): React.ReactElement {
+  // One Tab reaches the group and the arrow keys move between the two windows; the shared control
+  // owns the focus ring and the selected state, so the card keeps placement only.
   return (
-    <span className="mi-positioning-panel__tabs">
-      {(['7d', '24h'] as const).map(option => (
-        <button key={option} type="button" aria-pressed={window === option} data-window={option}
-          onClick={() => onWindowChange(option)}>{option === '7d' ? text.window7d : text.window24h}</button>
-      ))}
-    </span>
+    <Segmented className="mi-positioning-panel__tabs" size="small"
+      value={window}
+      options={[
+        { label: text.window7d, value: '7d' },
+        { label: text.window24h, value: '24h' }
+      ]}
+      onChange={value => onWindowChange(value as OpenInterestWindow)} />
   )
 }
 
