@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url))
 const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePath}`, 'utf8')
 
 const VERIFY_SCRIPT =
-  'pnpm docs:check && pnpm check:file-size && pnpm typecheck && pnpm test && pnpm build'
+  'pnpm docs:check && pnpm check:file-size && pnpm check:danger-color && pnpm typecheck && pnpm test && pnpm build'
 
 /** `ci.yml` 里所有单行 `run:` 的值。安装步不算检查，单独排掉。 */
 function ciRunSteps(): string[] {
