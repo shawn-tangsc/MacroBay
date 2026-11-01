@@ -39,6 +39,9 @@ jobs:
       - name: Check documentation
         run: pnpm docs:check
 
+      - name: Check file size (only shrinks)
+        run: pnpm check:file-size
+
       - name: Typecheck
         run: pnpm typecheck
 
