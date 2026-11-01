@@ -78,8 +78,10 @@ export function isLoopbackProxyEndpoint(hostOrEndpoint: string): boolean {
  */
 /** 两个不同归属的裸 IP：任一通即说明本机能出网，全部不通才算探针失败。 */
 export const DIRECT_PROBE_ENDPOINTS: readonly ResolvedProxyEndpoint[] = Object.freeze([
-  { host: '1.1.1.1', port: 443 },
-  { host: '8.8.8.8', port: 443 }
+  // 实测（2026-11-01，本机）：1.1.1.1:443 与 8.8.8.8:443 均超时；223.5.5.5:443 握手 95ms、:53 14ms。
+  // 8.8.8.8 换成可达的 223.5.5.5，另一条保留 1.1.1.1 作为不同归属的对照。
+  { host: '223.5.5.5', port: 443 },
+  { host: '1.1.1.1', port: 443 }
 ])
 export const DIRECT_PROBE_TIMEOUT_MS = 1000
 

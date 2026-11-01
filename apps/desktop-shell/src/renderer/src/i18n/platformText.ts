@@ -936,6 +936,7 @@ export type PlatformText = {
     timeZoneFollowSystem: string
     timeZoneSearch: string
     timeZoneUnavailable: string
+    timeZoneOpenTimesHint: string
     proxyMode: string
     proxyAddress: string
     proxyBypassRules: string
@@ -1977,6 +1978,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       timeZoneFollowSystem: '跟随系统',
       timeZoneSearch: '搜索时区',
       timeZoneUnavailable: '无法读取系统时区，暂时按 UTC 显示。',
+      timeZoneOpenTimesHint: '开盘时刻按这里选择的时区计算',
       proxyMode: '代理模式',
       proxyAddress: '代理地址',
       proxyBypassRules: '代理绕过规则',
@@ -3028,6 +3030,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       timeZoneFollowSystem: 'Follow system',
       timeZoneSearch: 'Search time zones',
       timeZoneUnavailable: 'The system time zone is unavailable; times are shown in UTC.',
+      timeZoneOpenTimesHint: 'Open times are calculated in the time zone selected here.',
       proxyMode: 'Proxy Mode',
       proxyAddress: 'Proxy Address',
       proxyBypassRules: 'Proxy Bypass Rules',
