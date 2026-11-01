@@ -144,9 +144,9 @@ describe('product bootstrap failure logging', () => {
       deps
     )
 
-    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected the registration to fail')
     const logged = log.mock.calls[0][2] as Record<string, unknown>
-    const failure = (result as { ok: false; failure: Record<string, unknown> }).failure
+    const failure: Record<string, unknown> = { ...result.failure }
 
     // 同名两样东西比异名同一样东西更难发现：grep 出来是一个词，含义却不同。
     expect(Object.keys(logged).sort()).toEqual(['code', 'message', 'productId', 'stage'])
