@@ -77,7 +77,7 @@ describe('failure presentation', () => {
     expect(screen.reason).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz0123456789')
     expect(screen.reason).not.toContain('/Users/alice')
     expect(screen.reason).toContain('products/x.ts')
-    // 日志侧由 productBootstrap 写 `detail.reason` 原文（那条由它自己的用例守着）；
+    // 日志侧由 productBootstrap 写 `message` 原文（那条由它自己的用例守着）；
     // 屏幕侧不承载原文，避免同一事实两份记录。
     expect(screen.reasonFull).not.toContain('/Users/alice')
   })

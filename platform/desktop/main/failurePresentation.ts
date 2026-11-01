@@ -99,9 +99,8 @@ export interface ScreenFailure {
 }
 
 /**
- * 一份结构、两个视图：日志侧写 `detail.reason` 原文（一个字不改），屏幕侧用这里返回的
- * `reason`（裁断）与 `reasonFull`（技术详情）。屏幕侧的字段不承载原文——多存一份没人读的原文，
- * 就是这个仓库重复清除过的「预留字段」。
+ * 一份结构、两个视图：日志侧写 `message` 原文（一个字不改），屏幕侧用这里返回的
+ * `reason`（裁断）与 `reasonFull`（技术详情），两者都由同一个 `anchored` 派生。
  */
 export function presentBootFailure(detail: BootFailureDetail): ScreenFailure {
   // 顺序即泄漏防线的顺序：先凭据（redactText，平台唯一模式表），再路径（anchorPaths），最后裁断。
