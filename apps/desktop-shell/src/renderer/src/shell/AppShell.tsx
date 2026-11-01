@@ -16,8 +16,6 @@ import {
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, ConfigProvider, Input, Segmented, Select } from 'antd'
-import enUS from 'antd/locale/en_US'
-import zhCN from 'antd/locale/zh_CN'
 
 import type { ModelDefinition, ModelProviderInput, ProviderChatEndpoint, ProviderImageEndpoints, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { isProviderDraftConnectionTestable } from '@platform/ai/providers/providerConfigDraft'
@@ -74,6 +72,9 @@ import {
 } from './workspace/workspaceClient'
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
+import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
+
+export { resolveAntDesignLocale } from './shellOptionTables'
 import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import {
   createModelServiceSettingsDraftOwner,
@@ -156,32 +157,6 @@ type AppShellNavigateDetail = {
 }
 
 type PlatformModelText = typeof platformText['zh-CN']['models']
-
-const languageOptions: Array<{ value: AppLanguage; labelKey: 'chinese' | 'english' }> = [
-  { value: 'zh-CN', labelKey: 'chinese' },
-  { value: 'en-US', labelKey: 'english' }
-]
-
-const themeOptions: Array<{ value: ThemeMode; labelKey: 'system' | 'light' | 'dark'; icon: typeof Sun }> = [
-  { value: 'system', labelKey: 'system', icon: Palette },
-  { value: 'light', labelKey: 'light', icon: Sun },
-  { value: 'dark', labelKey: 'dark', icon: Moon }
-]
-
-const proxyModeOptions: Array<{ value: ProxyMode; labelKey: 'proxySystem' | 'proxyCustom' | 'proxyNone' }> = [
-  { value: 'system', labelKey: 'proxySystem' },
-  { value: 'custom', labelKey: 'proxyCustom' },
-  { value: 'none', labelKey: 'proxyNone' }
-]
-
-const antDesignLocalePolicy = {
-  'zh-CN': zhCN,
-  'en-US': enUS
-} as const
-
-export function resolveAntDesignLocale(language: AppLanguage) {
-  return antDesignLocalePolicy[language]
-}
 
 function createEmptyProviderDraft(): ProviderDraft {
   return {
