@@ -72,6 +72,57 @@ afterEach(async () => {
   document.body.replaceChildren()
 })
 
+describe('TranslationPreferencesSection saved hint', () => {
+  it('does not claim anything was saved before this session saved it', () => {
+    const markup = renderToStaticMarkup(section())
+    expect(markup).not.toContain(labels.savedThisSession)
+  })
+
+  it('reports a real save beside the section title', () => {
+    const markup = renderToStaticMarkup(
+      <ShellLanguageProvider language="zh-CN">
+        <TranslationPreferencesSection
+          settings={settings()}
+          savedThisSession
+          modelProviders={[silicon]}
+          saving={false}
+          queuing={false}
+          labels={labels}
+          onChange={() => undefined}
+          onQueueMissing={() => undefined}
+        />
+      </ShellLanguageProvider>
+    )
+    const container = document.createElement('div')
+    container.innerHTML = markup
+    // The hint sits on the title row, not in the footer where it used to drift out of sight.
+    expect(container.querySelector('.intelligence-section-title')?.textContent).toContain(labels.savedThisSession)
+    expect(container.querySelector('.intelligence-translation-meta')?.textContent ?? '').not.toContain(labels.savedThisSession)
+  })
+
+  it('no longer repeats the task counts that the pills above already show', () => {
+    const markup = renderToStaticMarkup(
+      <ShellLanguageProvider language="zh-CN">
+        <TranslationPreferencesSection
+          settings={settings()}
+          moduleStatus={{ pendingCount: 4, failedCount: 1, translatedCount: 9 }}
+          modelProviders={[silicon]}
+          saving={false}
+          queuing={false}
+          labels={labels}
+          onChange={() => undefined}
+          onQueueMissing={() => undefined}
+        />
+      </ShellLanguageProvider>
+    )
+    const container = document.createElement('div')
+    container.innerHTML = markup
+    const meta = container.querySelector('.intelligence-translation-meta')?.textContent ?? ''
+    expect(meta).not.toContain(labels.moduleStatus)
+    expect(meta.trim()).toBe('')
+  })
+})
+
 describe('TranslationPreferencesSection model picker', () => {
   it('shows the model-service default translation model when no explicit model is bound', () => {
     const markup = renderToStaticMarkup(section({ defaultModelId: 'silicon:deepseek-v3' }))

@@ -21,6 +21,8 @@ export function useIntelligenceTranslationSettings(labels: {
   const [moduleStatus, setModuleStatus] = useState<SafeTranslationModuleStatus>()
   const [modelProviders, setModelProviders] = useState<SafeModelProvider[]>([])
   const [saving, setSaving] = useState(false)
+  /** True only after a save succeeded in this session; loading a saved file is not a save. */
+  const [savedThisSession, setSavedThisSession] = useState(false)
   const [queuing, setQueuing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   // A sentence from the product text, never a code: the card renders it as-is.
@@ -48,8 +50,10 @@ export function useIntelligenceTranslationSettings(labels: {
       try {
         const next = await intelligenceTranslationClient.saveSettings(patch)
         setSettings(next)
+        setSavedThisSession(true)
         setModuleStatus(await intelligenceTranslationClient.getModuleStatus())
       } catch {
+        setSavedThisSession(false)
         setErrorMessage(labels.saveFailed)
       } finally {
         setSaving(false)
@@ -91,6 +95,7 @@ export function useIntelligenceTranslationSettings(labels: {
     moduleStatus,
     modelProviders,
     saving,
+    savedThisSession,
     queuing,
     notice,
     errorMessage,

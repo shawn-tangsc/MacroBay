@@ -29,6 +29,8 @@ export function TranslationPreferencesSection(props: {
   sourceIds?: readonly string[]
   modelProviders: SafeModelProvider[]
   saving: boolean
+  /** Set only when this card saved during this session; a loaded file never sets it. */
+  savedThisSession?: boolean
   queuing: boolean
   labels: {
     title: string
@@ -41,6 +43,7 @@ export function TranslationPreferencesSection(props: {
     queueMissing: string
     saving: string
     saved: string
+    savedThisSession: string
     moduleStatus: string
     pendingCount: string
     failedCount: string
@@ -113,7 +116,10 @@ export function TranslationPreferencesSection(props: {
 
   return (
     <section className="intelligence-section intelligence-translation-preferences">
-      <div className="intelligence-section-title">{props.labels.title}</div>
+      <div className="intelligence-section-title">
+        <span>{props.labels.title}</span>
+        {props.savedThisSession ? <small className="intelligence-section-saved">{props.labels.savedThisSession}</small> : null}
+      </div>
       {settings ? (
         <div className="intelligence-setting-grid">
           <SettingRow label={props.labels.autoTranslateEnabled}>
@@ -209,16 +215,9 @@ export function TranslationPreferencesSection(props: {
         </div>
       </div>
       <div className="intelligence-translation-meta">
-        {props.moduleStatus ? (
-          <small>
-            {props.labels.moduleStatus}{props.labels.labelSep}{props.labels.pendingCount} {counts.pendingCount}{props.labels.joiner}
-            {props.labels.failedCount} {counts.failedCount}
-          </small>
-        ) : null}
         {props.errorMessage ? <small data-tone="error">{props.errorMessage}</small> : null}
         {!props.errorMessage && props.saving ? <small>{props.labels.saving}</small> : null}
         {!props.errorMessage && !props.saving && props.notice ? <small>{props.notice}</small> : null}
-        {!props.errorMessage && !props.saving && !props.notice && settings ? <small>{props.labels.saved}</small> : null}
       </div>
     </section>
   )
