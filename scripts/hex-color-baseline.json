@@ -21,7 +21,6 @@
   "platform/ui/agent-chat/agentChat.css :: :root[data-theme='light'] .agent-chat-bubble[data-role='user']": 1,
   "products/market-intelligence/desktop/features/industry/news-sentiment/newsSentiment.css :: .mi-news-sentiment__pill.is-mixed": 1,
   "products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css :: .mi-crypto-dashboard h1": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-daily-briefing__rail-empty": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-daily-briefing__rail-line small": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-daily-briefing__rail-meta": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-daily-briefing__rail-missing": 1,
