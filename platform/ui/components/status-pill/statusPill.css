@@ -2,9 +2,12 @@
  * 状态药丸的外观。五档只换颜色，不换字号、不换形状——同一行里出现两个档位时，
  * 读者该读到的是「两个状态」，不是「两种大小」。
  *
- * 字号只有 11px 一档：9px 属于徽标与脚注，药丸再小就读不清档位，而读音只能靠字。
- * 颜色全部来自 token；边框用 color-mix 把档位色压到 45% 再混中性边框，
- * 这样深浅两个主题下边框都不会跳成另一种颜色。
+ * 字号只有 11px 一档：9px 属于徽标与脚注，药丸再小就读不清档位。
+ *
+ * 颜色分两层：**档位色只出现在圆点与描边上，字永远用正文色**。原因是硬门禁——
+ * `color: var(--danger)` 这类「状态色当正文前景」在深色下只有 3.25–3.94，正文门槛 4.5，
+ * 而 11px 的状态字就是正文（`scripts/danger-color-baseline.json` 只减不增）。规格写
+ * 「颜色取 token」，圆点与描边正是那份颜色的落点，字因此始终读得清。
  */
 .status-pill {
   display: inline-flex;
@@ -16,7 +19,7 @@
   border-radius: 999px;
   font-size: 11px;
   line-height: 1.5;
-  color: var(--muted-strong);
+  color: var(--text-strong);
   background: transparent;
   white-space: nowrap;
 }
@@ -26,30 +29,31 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: currentColor;
+  background: var(--pill-tone);
   flex: none;
 }
 
+/* 五档各给一个档位色，描边由它混中性边框求出，深浅两个主题下都不会跳成另一种颜色。 */
 .status-pill--ok {
-  color: var(--success);
+  --pill-tone: var(--success);
   border-color: color-mix(in srgb, var(--success) 45%, var(--border));
 }
 
 .status-pill--warn {
-  color: var(--caution);
+  --pill-tone: var(--caution);
   border-color: color-mix(in srgb, var(--caution) 45%, var(--border));
 }
 
 .status-pill--bad {
-  color: var(--danger);
+  --pill-tone: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
 }
 
 .status-pill--info {
-  color: var(--accent);
+  --pill-tone: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 .status-pill--muted {
-  color: var(--muted);
+  --pill-tone: var(--muted);
 }

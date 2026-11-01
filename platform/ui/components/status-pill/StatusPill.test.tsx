@@ -98,6 +98,13 @@ describe('StatusPill', () => {
     expect(rules).not.toContain('--warning')
   })
 
+  it('never paints the status word in a status colour: the tone rides on the dot and the border', () => {
+    // 硬门禁 `check:danger-color` 只减不增：`color: var(--danger)` 这类前景在深色下
+    // 是 3.25–3.94，而 11px 的药丸字就是正文（门槛 4.5）。所以字用正文色。
+    expect(block('.status-pill')).toContain('color: var(--text-strong)')
+    expect(rules).not.toMatch(/color:\s*var\(--(danger|success|caution|accent)\)/)
+  })
+
   it('does not paint warn as an error: warn and bad read different tokens', () => {
     expect(block('.status-pill--warn')).not.toContain('--danger')
     expect(block('.status-pill--bad')).not.toContain('--caution')
