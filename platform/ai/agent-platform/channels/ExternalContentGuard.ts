@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto'
-
 /**
  * Formatting characters that carry no meaning and are used to obfuscate text.
  * U+200C (ZWNJ) and U+200D (ZWJ) are deliberately excluded: they are orthographic in Persian and
@@ -124,7 +122,7 @@ export function guardExternalContent(
     }
   }
 
-  const boundaryId = randomBytes(8).toString('hex')
+  const boundaryId = randomBoundaryId()
   const guardedText = [
     buildGuardNotice(metadata),
     ...(warning ? [warning] : []),
@@ -155,4 +153,17 @@ function normalizeAngleBrackets(text: string): string {
     .replace(/\uFF1E/g, '>')
     .replace(/\u3008/g, '<')
     .replace(/\u3009/g, '>')
+}
+
+/**
+ * 边界标记里那串随机 id。
+ *
+ * 这里刻意不用 `node:crypto`：这个消息守卫既要在主进程跑，也会经由共享的工具/搜索链被渲染层打包，
+ * 引用 Node 内建模块会让渲染层构建直接失败（`randomBytes` 没有浏览器实现）。`globalThis.crypto` 在
+ * 主进程（Node 19+）和渲染层里都在，随机源同样是密码学强度。
+ */
+function randomBoundaryId(): string {
+  const bytes = new Uint8Array(8)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
