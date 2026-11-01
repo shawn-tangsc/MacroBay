@@ -56,19 +56,20 @@ export function registerDailyBriefingJob(
   deps: Readonly<{
     service: Pick<DailyBriefingService, 'getToday'>
     getLocale: () => Promise<DailyBriefingLocale>
-    timeZone?: () => string
+    /** 主进程唯一的读者时区来源；每次生成都重新取，注册时的值只用于排期。 */
+    timeZone: () => string
     /** Read once at registration; a save re-registers through `scheduleDailyBriefingJob`. */
     getGenerationTime?: () => Promise<string>
   }>
 ): void {
   jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async () => {
     const locale = await deps.getLocale()
-    const timeZone = deps.timeZone?.() ?? systemTimeZone()
+    const timeZone = deps.timeZone()
     const result = await deps.service.getToday({ locale, timeZone })
     if (result.state !== 'available') throw new Error(`daily-briefing-generation-${result.failureCode}`)
   })
   if (typeof jobRuntime.setSchedule !== 'function') return
-  const timeZone = deps.timeZone?.() ?? systemTimeZone()
+  const timeZone = deps.timeZone()
   if (!deps.getGenerationTime) {
     scheduleDailyBriefingJob(jobRuntime, { timeZone, generationTime: dailyBriefingJobPolicy.generationTime })
     return
@@ -78,12 +79,4 @@ export function registerDailyBriefingJob(
   void deps.getGenerationTime()
     .then((generationTime) => scheduleDailyBriefingJob(jobRuntime, { timeZone, generationTime }))
     .catch(() => scheduleDailyBriefingJob(jobRuntime, { timeZone, generationTime: dailyBriefingJobPolicy.generationTime }))
-}
-
-function systemTimeZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  } catch {
-    return 'UTC'
-  }
 }

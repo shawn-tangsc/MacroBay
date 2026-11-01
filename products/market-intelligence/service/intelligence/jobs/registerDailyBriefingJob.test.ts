@@ -32,6 +32,22 @@ describe('daily briefing job', () => {
     expect(getToday).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
   })
 
+  it('generates with the zone the reader reports at each run, not the one captured at registration', async () => {
+    const { runtime: jobRuntime, run } = runtime()
+    let zone = 'Asia/Shanghai'
+    const getToday = vi.fn(async () => ({ state: 'available' as const, document: { edition: { date: '2026-10-30' } } }))
+
+    registerDailyBriefingJob(jobRuntime, { service: { getToday }, getLocale: async () => 'zh-CN', timeZone: () => zone })
+
+    await run()
+    // 用户改了时区：下一次生成必须按新时区问「今天」，不必等重新排期。
+    zone = 'America/New_York'
+    await run()
+
+    expect(getToday).toHaveBeenNthCalledWith(1, { locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(getToday).toHaveBeenNthCalledWith(2, { locale: 'zh-CN', timeZone: 'America/New_York' })
+  })
+
   it('follows the saved generation time and re-registers the same job when it changes', async () => {
     const { runtime: jobRuntime, schedules } = runtime()
     registerDailyBriefingJob(jobRuntime, {
@@ -60,13 +76,14 @@ describe('daily briefing job', () => {
     const { runtime: jobRuntime, run } = runtime()
     registerDailyBriefingJob(jobRuntime, {
       service: { getToday: async () => ({ state: 'unavailable' as const, failureCode: 'source-failed' as const }) },
-      getLocale: async () => 'en-US'
+      getLocale: async () => 'en-US',
+      timeZone: () => 'UTC'
     })
     await expect(run()).rejects.toThrow('daily-briefing-generation-source-failed')
 
     const noScheduler = { registerHandler: vi.fn() } as unknown as JobRuntime
     expect(() => registerDailyBriefingJob(noScheduler, {
-      service: { getToday: vi.fn() }, getLocale: async () => 'zh-CN'
+      service: { getToday: vi.fn() }, getLocale: async () => 'zh-CN', timeZone: () => 'UTC'
     })).not.toThrow()
   })
 })
