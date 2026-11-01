@@ -1,3 +1,4 @@
+import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
@@ -229,6 +230,9 @@ export type PlatformText = {
     pending: string
     skipped: string
     unknown: string
+    /** 跳过原因必须解释成人话：每个码对应一个不同的用户动作。 */
+    deliverySkipReason: Record<ChannelDeliverySkipReason, string>
+    deliverySkipReasonUnrecorded: (count: number) => string
     auditAccepted: string
     auditRejected: string
     auditAction: Record<'create' | 'update' | 'pause' | 'resume' | 'delete' | 'run-now' | 'cancel-run' | 'runtime-transition' | 'channel-delete-cleanup', string>
@@ -1337,6 +1341,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       outcome: { success: '成功', failed: '失败', skipped: '已跳过', never: '从未运行' },
       details: '详情', collapse: '收起', taskDeliveryHealth: '本任务投递健康', recentChanges: '最近变更', noChanges: '暂无变更记录。',
       delivered: '已投递', failed: '失败', pending: '待投递', skipped: '已跳过', unknown: '未知',
+      deliverySkipReason: {
+        'delivery-no-target-bound': '这条任务还没绑定通道，去「通道」里绑定一个就会开始投递',
+        'delivery-target-disabled': '绑定的通道已停用，重新启用后才会投递',
+        'delivery-empty-output': '这次运行没有可投递的内容',
+        'delivery-not-authorized': '投递身份校验未通过，已按安全策略跳过',
+        'delivery-retry-not-permitted': '这次投递不满足重试条件，不再重试',
+        'delivery-owner-invalid': '投递由另一次运行持有，本次跳过'
+      },
+      deliverySkipReasonUnrecorded: (count) => `${count} 次跳过没有记录原因（属于缺陷，已按异常记录）`,
       auditAccepted: '已接受', auditRejected: '已拒绝',
       auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
@@ -2383,6 +2396,15 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       outcome: { success: 'Succeeded', failed: 'Failed', skipped: 'Skipped', never: 'Never' },
       details: 'Details', collapse: 'Collapse', taskDeliveryHealth: 'Delivery health for this task', recentChanges: 'Recent changes', noChanges: 'No changes yet.',
       delivered: 'Delivered', failed: 'Failed', pending: 'Pending', skipped: 'Skipped', unknown: 'Unknown',
+      deliverySkipReason: {
+        'delivery-no-target-bound': 'This task has no channel bound yet — bind one under Channels to start delivering',
+        'delivery-target-disabled': 'The bound channel is disabled — re-enable it to deliver again',
+        'delivery-empty-output': 'This run produced nothing to deliver',
+        'delivery-not-authorized': 'The delivery identity check failed, so it was skipped as a safety measure',
+        'delivery-retry-not-permitted': 'This delivery is not eligible for a retry',
+        'delivery-owner-invalid': 'Another run owns this delivery, so it was skipped'
+      },
+      deliverySkipReasonUnrecorded: (count) => `${count} skipped ${count === 1 ? 'delivery has' : 'deliveries have'} no recorded reason (a defect, logged as an anomaly)`,
       auditAccepted: 'Accepted', auditRejected: 'Rejected',
       auditAction: { create: 'Created', update: 'Updated', pause: 'Paused', resume: 'Resumed', delete: 'Deleted', 'run-now': 'Run now', 'cancel-run': 'Cancelled run', 'runtime-transition': 'Runtime transition', 'channel-delete-cleanup': 'Channel cleanup' },
       resourceJobs: 'Platform & product jobs', resourceLoading: 'Loading platform jobs…', resourceLoadFailed: 'Failed to load platform jobs.',

@@ -23,6 +23,23 @@ export type ChannelDeliverySkipReason =
   | 'delivery-retry-not-permitted'
   | 'delivery-owner-invalid'
 
+/**
+ * Runtime list of the closed reason set. The UI needs it to tell a reason it can explain from a
+ * code it has never heard of, so the union above and this list must not drift.
+ */
+export const channelDeliverySkipReasons = [
+  'delivery-no-target-bound',
+  'delivery-target-disabled',
+  'delivery-empty-output',
+  'delivery-not-authorized',
+  'delivery-retry-not-permitted',
+  'delivery-owner-invalid'
+] as const satisfies readonly ChannelDeliverySkipReason[]
+
+export function isChannelDeliverySkipReason(value: string | null | undefined): value is ChannelDeliverySkipReason {
+  return value != null && (channelDeliverySkipReasons as readonly string[]).includes(value)
+}
+
 export type ChannelDeliveryTransportResult =
   | { kind: 'delivered' }
   | { kind: 'failed'; code: ChannelDeliveryFailureCode }
