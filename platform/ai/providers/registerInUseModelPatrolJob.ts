@@ -16,7 +16,8 @@ export function registerInUseModelPatrolHandler(
   deps: Readonly<{ patrol: Pick<InUseModelPatrolRuntime, 'runOnce'> }>
 ): void {
   jobRuntime.registerHandler(inUseModelPatrolJobId, async (_payload, context) => {
-    // 第二道闸：调度本来只在有可探目标时存在，这里再确认一次，防止排期与状态短暂错位。
+    // 这里不重复检查能不能跑：闸在目标过滤里（未启用的供应商不进目标集，目标为空就不发请求）。
+    // 同一件事只留一个判断点——两处判断早晚会改一处漏一处。
     const retired = await deps.patrol.runOnce()
     await context.log({
       level: 'info',
