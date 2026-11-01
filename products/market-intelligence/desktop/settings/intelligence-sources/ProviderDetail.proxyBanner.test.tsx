@@ -28,6 +28,7 @@ function labels(): ProviderDetailLabels {
     badges: settingsText.sourceBadges,
     status: settingsText.status,
     capabilities: settingsText.providerSummary,
+    toggleSource: settingsText.toggleSource,
     credentials: settingsText.credentialsRequired,
     website: settingsText.website,
     signup: settingsText.signup,
