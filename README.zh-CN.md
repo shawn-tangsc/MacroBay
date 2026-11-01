@@ -68,10 +68,6 @@ MacroBay 观潮 是一张给加密市场的桌面情报台。一屏之内，是�
 
 ### ⭐ 如果它对你有用，一个 star 能让它继续做下去
 
-<a href="https://github.com/shawn-tangsc/MacroBay/stargazers">
-  <img alt="给 MacroBay 点 star" src="https://img.shields.io/github/stars/shawn-tangsc/MacroBay?style=for-the-badge&label=%E2%AD%90%20Star&color=ffd33d&labelColor=1f2328">
-</a>
-
 </div>
 
 > 观潮是我一个人在做，全部开源。
