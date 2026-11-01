@@ -108,7 +108,12 @@ describe('the selected calendar event, as a drawer over the dashboard', () => {
     expect(host.querySelector('.mi-economic-calendar__values')).toBeNull()
 
     const rejected = await render(clientWith(undefined, { getEventDetail: vi.fn(async () => { throw new Error('ipc down') }) } as never))
-    expect(rejected.querySelector('[data-calendar-detail-container]')?.textContent).toContain(text.failures['calendar-query-unavailable'])
+    // A read failure is the shared state now: the sentence and the retry both come from the platform,
+    // because the product's own line promised nothing the reader could act on.
+    const failed = rejected.querySelector('[data-calendar-detail-container]')
+    expect(failed?.querySelector('.state-view')).not.toBeNull()
+    expect(failed?.querySelector('.state-view__action')).not.toBeNull()
+    expect(failed?.textContent).not.toContain(text.failures['calendar-query-unavailable'])
   })
 
   it('opens a provider release the official route does not hold, in the provider\'s own body', async () => {

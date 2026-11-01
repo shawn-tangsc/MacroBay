@@ -121,6 +121,15 @@ export function SelectedCalendarEventDrawer({ client, selection, now, text, onCl
         : null}
       <MarketCalendarInspector event={detail.event} source={detail.source} text={text} />
     </> : null}
-    {detail.state === 'unavailable' ? <EconomicCalendarEventDetailState text={text.failures[detail.failureCode]} /> : null}
+    {detail.state === 'unavailable' && detail.failureCode === 'event-not-found'
+      // The event is gone from the calendar, not unreadable: asking again cannot find it, so the
+      // reader gets the sentence and no retry. It moves to `empty · target-missing` once that code
+      // lands; until then it stays a line rather than borrowing a state that promises a way out.
+      ? <p className="mi-economic-calendar__comparison-rule">{text.failures[detail.failureCode]}</p>
+      : null}
+    {detail.state === 'unavailable' && detail.failureCode !== 'event-not-found'
+      ? <EconomicCalendarEventDetailState state="error" text={text.failures[detail.failureCode]}
+          onRetry={() => setReload(value => value + 1)} />
+      : null}
   </CalendarInspector>
 }
