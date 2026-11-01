@@ -20,6 +20,11 @@ const SKIP_DIRS = new Set(['node_modules', 'dist', 'out', 'build', 'coverage'])
 /** 零参箭头当解析器：`resolveText={() => …}`、`resolveText={ () => … }`、`resolveText={()=>…}` 全算。 */
 const EMPTY_RESOLVER = /resolveText=\{\s*\(\s*\)\s*=>/
 
+/** 只查代码，不查注释：注释里出现 `resolveText={() => …}` 是在解释这条规则，不是违规。 */
+function codeOnly(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+}
+
 function collectSourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     if (SKIP_DIRS.has(name)) continue
@@ -40,7 +45,7 @@ describe('解析器不许吃掉键', () => {
   it('产品与外壳源码里没有零参 resolveText', () => {
     const offenders = SOURCE_ROOTS
       .flatMap((root) => collectSourceFiles(resolve(ROOT, root)))
-      .filter((file) => EMPTY_RESOLVER.test(readFileSync(resolve(ROOT, file), 'utf8')))
+      .filter((file) => EMPTY_RESOLVER.test(codeOnly(readFileSync(resolve(ROOT, file), 'utf8'))))
 
     // 要固定文案就加键；把句子直接喂给解析器，等于让「键 → 句子」这条约定失效。
     expect(offenders).toEqual([])
