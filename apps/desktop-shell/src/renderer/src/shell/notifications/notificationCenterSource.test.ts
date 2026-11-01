@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 
-import { createNotificationCenterSource } from './notificationCenterSource'
+import { createNotificationCenterSource, NOTIFICATION_BRIDGE_MISSING } from './notificationCenterSource'
 
 /** 桥的形状由 preload 决定；这里只验「渲染层经它读、且读法是约定那一种」。 */
 function fakeBridge() {
@@ -45,6 +45,19 @@ describe('通知中心唯一的数据入口', () => {
     const unsubscribe = source.onChanged(callback)
 
     expect(bridge.onChanged).toHaveBeenCalledWith(callback)
+    expect(typeof unsubscribe).toBe('function')
+  })
+})
+
+describe('桥缺失时', () => {
+  it('读操作如实失败，订阅退化成空——不假装「没有通知」，也不把外壳拖崩', async () => {
+    const source = createNotificationCenterSource(null)
+
+    // 失败，而不是返回空列表：抽屉会据错误的这半给「拿不到」的错误态。
+    await expect(source.list()).rejects.toThrow(NOTIFICATION_BRIDGE_MISSING)
+    await expect(source.unread()).rejects.toThrow(NOTIFICATION_BRIDGE_MISSING)
+    // 订阅这一手必须不抛：它是同步的，抛一次就让整个 AppShell 挂载失败。
+    const unsubscribe = source.onChanged(() => undefined)
     expect(typeof unsubscribe).toBe('function')
   })
 })

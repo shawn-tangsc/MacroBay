@@ -30,10 +30,35 @@ type NotificationsBridge = {
   onChanged: (callback: (change: { version: number }) => void) => () => void
 }
 
-/** 默认走 preload 桥；测试注入替身，不在实现里留测试分支。 */
+/** 桥缺失时的错误码：不是「没有通知」，是「这次构建读不到通知」。 */
+export const NOTIFICATION_BRIDGE_MISSING = 'notification-bridge-missing'
+
+function defaultBridge(): NotificationsBridge | null {
+  return (window.platform?.notifications as NotificationsBridge | undefined) ?? null
+}
+
+/**
+ * 默认走 preload 桥；测试注入替身，不在实现里留测试分支。
+ *
+ * **桥缺失不能把外壳拖崩**：没有 preload 桥的环境里（渲染层单测、旧构建），`onChanged` 曾经
+ * 是同步抛错——一个订阅就让整个 `AppShell` 挂载失败，十一个既有用例一起红。这里的判法分两半：
+ * 订阅退化成空（没人会来事件，也没人该因此崩），读操作**如实失败**（抽屉据此给错误态，
+ * 说明「拿不到」）——清零或空列表会把它伪装成「没有通知」，那是在撒谎。
+ */
 export function createNotificationCenterSource(
-  bridge: NotificationsBridge = window.platform.notifications as NotificationsBridge
+  bridge: NotificationsBridge | null = defaultBridge()
 ): NotificationCenterSource {
+  if (bridge === null) {
+    const unavailable = (): Promise<never> => Promise.reject(new Error(NOTIFICATION_BRIDGE_MISSING))
+    return {
+      list: unavailable,
+      unread: unavailable,
+      markAllRead: unavailable,
+      deleteRead: unavailable,
+      markRead: unavailable,
+      onChanged: () => () => undefined
+    }
+  }
   return {
     // 排序在查询里做（`unreadFirst`），渲染层不许拼两次查询再自己排。
     list: async () => (await bridge.list({ unreadFirst: true, limit: 100 })) as NotificationListPage,
