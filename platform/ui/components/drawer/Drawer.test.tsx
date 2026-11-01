@@ -145,6 +145,18 @@ describe('Drawer', () => {
     expect(document.querySelector('.drawer__sr-only')?.textContent).toBe('ui.test.aria')
   })
 
+  it('rejects a side on a modal and a titleExtra on a headless drawer', () => {
+    // 这两条只是留档：`@ts-expect-error` 在 platform 的测试里不参与 `tsc`（§15），
+    // 真正的证据是消费方调用点的 typecheck 变红。留在这里是为了说明「为什么这么分」。
+    // @ts-expect-error 浮层一律右置，`side` 只活在 inline 分支。
+    const sideOnModal: DrawerProps = { open: true, onClose: () => undefined, size: 'narrow', mode: 'modal', titleKey: 'k', side: 'left', resolveText: key, children: null }
+    // @ts-expect-error 无头抽屉没有标题行，`titleExtra` 无处可放。
+    const extraOnHeadless: DrawerProps = { open: true, onClose: () => undefined, size: 'narrow', mode: 'modal', header: 'none', ariaLabelKey: 'ui.test.aria', titleExtra: null, resolveText: key, children: null }
+
+    expect(sideOnModal).toBeDefined()
+    expect(extraOnHeadless).toBeDefined()
+  })
+
   it('takes no width, style, styles, mask, placement or closable escape hatch', () => {
     // 契约 §3：这些口子扫到即红，不靠 `@ts-expect-error`（那在测试文件里不跑）。
     for (const escape of ['width', 'style', 'styles', 'mask', 'closable', 'placement', 'getContainer']) {

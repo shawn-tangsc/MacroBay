@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import type { ReactElement, ReactNode } from 'react'
 
 import { IconButton } from '../icon-button'
-import { useDrawerText } from './drawerText'
+import { DRAWER_CLOSE_KEY, useDrawerText } from './drawerText'
 
 import './drawer.css'
 
@@ -40,14 +40,8 @@ type DrawerBase = {
   onClose: () => void
   /** 每次调用回答一次「这只抽屉要多宽」。不给默认值。 */
   size: DrawerSize
-  /** `modal` 有遮罩、锁焦点、Esc 关；`inline` 无遮罩、不锁焦点、`getContainer={false}`。 */
-  mode?: DrawerMode
-  /** 只对 `mode="inline"` 有意义：浮层 13 处全部右置，左置只出现在流内面板。 */
-  side?: DrawerSide
   /** 全出血内容（预览、编辑器这类自带 chrome 的正文）用 `flush`。 */
   contentPadding?: 'default' | 'flush'
-  /** 标题旁的徽标或动作槽，不是自定义整个标题栏的入口。 */
-  titleExtra?: ReactNode
   /** 底部动作区；**不传即不渲染**，不是 `footer={null}` 那种开关。 */
   footer?: ReactNode
   children: ReactNode
@@ -55,24 +49,43 @@ type DrawerBase = {
   resolveText: (key: string) => string
 }
 
-/** 头部两档：有标题，或整块不要但必须给读屏名。 */
-export type DrawerProps = DrawerBase &
-  (
-    | {
-        header?: 'titled'
-        /** 标题的 i18n 键；不收句子。 */
-        titleKey: string
-      }
-    | {
-        header: 'none'
-        /** 无头抽屉的读屏名；缺了它读屏只会念「对话框」。 */
-        ariaLabelKey: string
-      }
-  )
+/**
+ * 模式必须每次显式回答，`side` 只活在 `inline` 分支里。
+ *
+ * 原先 `mode` 有默认值、`side` 放在基础类型里，于是 `<Drawer mode="modal" side="left" />` 能编译，
+ * 运行时 `placement` 却被固定成 `right`——传了却被**静默丢掉**。静默不生效比编译不过贵得多。
+ */
+type DrawerModeShape =
+  | { mode: 'modal' }
+  | {
+      mode: 'inline'
+      /** 左置只出现在流内面板；浮层一律右置。 */
+      side?: DrawerSide
+    }
+
+/**
+ * 头部两档：有标题，或整块不要但必须给读屏名。
+ * `titleExtra` 只挂有标题那一档——无头抽屉没有标题行，传了也画不出来。
+ */
+type DrawerHeaderShape =
+  | {
+      header?: 'titled'
+      /** 标题的 i18n 键；不收句子。 */
+      titleKey: string
+      /** 标题旁的徽标或动作槽，不是自定义整个标题栏的入口。 */
+      titleExtra?: ReactNode
+    }
+  | {
+      header: 'none'
+      /** 无头抽屉的读屏名；缺了它读屏只会念「对话框」。 */
+      ariaLabelKey: string
+    }
+
+export type DrawerProps = DrawerBase & DrawerModeShape & DrawerHeaderShape
 
 export function Drawer(props: DrawerProps): ReactElement {
-  const { open, onClose, size, mode = 'modal', titleExtra, footer, children, className, resolveText } = props
-  const inline = mode === 'inline'
+  const { open, onClose, size, footer, children, className, resolveText } = props
+  const inline = props.mode === 'inline'
   const headless = props.header === 'none'
   const width = `min(${SIZE_PX[size]}px, ${VIEWPORT_CAP})`
   // 关闭键的读屏名由组件自己的文案表给：调用方的 `resolveText` 可以把未知键解析成空串，
@@ -85,7 +98,7 @@ export function Drawer(props: DrawerProps): ReactElement {
     ) : (
       <span className="drawer__title-row">
         <span className="drawer__title">{resolveText(props.titleKey)}</span>
-        {titleExtra === undefined ? null : <span className="drawer__title-extra">{titleExtra}</span>}
+        {props.titleExtra === undefined ? null : <span className="drawer__title-extra">{props.titleExtra}</span>}
       </span>
     )
 
@@ -94,15 +107,16 @@ export function Drawer(props: DrawerProps): ReactElement {
       open={open}
       onClose={onClose}
       width={width}
-      placement={inline ? (props.side ?? 'right') : 'right'}
+      placement={props.mode === 'inline' ? (props.side ?? 'right') : 'right'}
       closable={false}
       title={title}
       extra={
         <IconButton
-          ariaLabelKey={closeLabel}
+          ariaLabelKey={DRAWER_CLOSE_KEY}
           icon={X}
           onSelect={onClose}
-          resolveText={(value) => value}
+          // 组件之间也只传键：IconButton 拿键、我们的 resolver 把这一条映射成句子。
+          resolveText={(value) => (value === DRAWER_CLOSE_KEY ? closeLabel : value)}
           size="sm"
           variant="plain"
         />
@@ -113,7 +127,7 @@ export function Drawer(props: DrawerProps): ReactElement {
       keyboard={!inline}
       {...(inline ? { getContainer: false as const } : {})}
       {...(headless ? { styles: { header: { display: 'none' } } } : {})}
-      rootClassName={['drawer', `drawer--${size}`, `drawer--${mode}`, inline ? `drawer--${props.side ?? 'right'}` : '']
+      rootClassName={['drawer', `drawer--${size}`, `drawer--${props.mode}`, inline ? `drawer--${props.side ?? 'right'}` : '']
         .filter(Boolean)
         .join(' ')}
       className={['drawer__panel', `drawer__panel--${props.contentPadding ?? 'default'}`, className]
