@@ -67,6 +67,7 @@ export type DailyBriefingValidationFailure =
   | 'duplicate-statement'
   | 'forbidden-forecast'
   | 'invalid-number-format'
+  | 'asset-equality-claim'
 
 export type DailyBriefingValidation =
   | Readonly<{ ok: true; value: DailyBriefingEditorialOutput }>

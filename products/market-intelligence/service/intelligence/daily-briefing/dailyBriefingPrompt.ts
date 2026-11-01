@@ -95,6 +95,7 @@ export function buildDailyBriefingPrompt(input: Readonly<{
         'Do not add facts or numbers, and never write a price target, a trade instruction, or an invented probability. Directional forecasts and conditional statements are required.',
         'Every number you write must be copied character-for-character from a FACTS `display` field (or `changeDisplay`/`probabilityDisplay`). Never format, scale, round or convert a raw value yourself.',
         'The FACTS `value`/`change.value` numbers are stored raw values for reasoning only; they are not prose spellings and must never appear in the output. A 9-digit raw amount, a percentage with more than two decimals, or a Chinese 亿 next to an English billion is rejected.',
+        'Two assets that display the same are not equal: BTC and ETH can both print +0.50% while their `value` numbers differ. Never claim they are the same, matched, in line, or that one leads, from the two-decimal display; compare the raw `value` numbers and say which is stronger.',
         'The reader is a professional: short, concrete, no filler, no "the market is complex".',
         'Every string must be plain prose; no HTML and no bullet lists inside a string.'
       ].join('\n')

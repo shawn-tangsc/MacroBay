@@ -175,6 +175,34 @@ describe('daily briefing conclusion synthesis', () => {
     expect(unknown.ok ? '' : unknown.detail ?? '').toContain('prior:analysis:mi-as-1')
   })
 
+  it('refuses an equality claim that only the two-decimal display supports', () => {
+    // The reported defect: BTC +0.5043% and ETH +0.4992% both printed +0.50%, and the reply published
+    // "ETH matches BTC". The raw numbers differ, so the comparison has to name the stronger asset.
+    const base = document()
+    const btcRow = base.data.market[0]!
+    const ethRow = {
+      ...btcRow,
+      id: 'eth',
+      labelKey: 'dailyBriefing.row.eth',
+      value: { number: -1.0992, format: 'percent' as const }
+    }
+    const doc: DailyBriefingDocument = { ...base, data: { ...base.data, market: [{ ...btcRow, value: { number: -1.1, format: 'percent' as const } }, ethRow] } }
+    const claim = validateConclusionSynthesis(
+      synthesis({ summary: 'ETH 与 BTC 相同，均为 -1.10%，因此没有相对强弱可谈，资金面主导方向。' }),
+      doc, [bearishPrior()]
+    )
+    expect(claim).toMatchObject({ ok: false, failureCode: 'asset-equality-claim' })
+    expect(claim.ok ? '' : claim.detail ?? '').toContain('-1.0992')
+
+    // Same rule, other side: when the raw values really are identical the comparison is allowed.
+    const equalDoc: DailyBriefingDocument = { ...base, data: { ...base.data, market: [{ ...btcRow, value: { number: -1.1, format: 'percent' as const } }, { ...ethRow, value: { number: -1.1, format: 'percent' as const } }] } }
+    const allowed = validateConclusionSynthesis(
+      synthesis({ summary: 'ETH 与 BTC 相同，均为 -1.10%，资金面主导方向，因此两者的相对强弱没有可交易差异。' }),
+      equalDoc, [bearishPrior()]
+    )
+    expect(allowed.ok ? '' : allowed.failureCode).not.toBe('asset-equality-claim')
+  })
+
   it('names the citation cap instead of refusing silently when a reply cites too many facts', () => {
     // The reported defect: two nights in a row a reply cited 9 and 10 facts against a cap of 8, was
     // rejected with a bare code, cited the same facts again, and the run failed after its repairs.

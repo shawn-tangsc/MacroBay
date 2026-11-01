@@ -28,6 +28,7 @@ export type ConclusionSynthesisFailure =
   | 'forbidden-forecast'
   | 'invalid-number-format'
   | 'unknown-number'
+  | 'asset-equality-claim'
 
 export type ConclusionSynthesisValidation =
   | Readonly<{ ok: true; value: BriefingConclusionSynthesis }>
@@ -189,6 +190,8 @@ export function validateConclusionSynthesis(
   if (numberFormat) return fail('invalid-number-format', numberFormat)
   const unknownNumber = unknownNumberIn(prose, document)
   if (unknownNumber) return fail('unknown-number', unknownNumber)
+  const equality = assetEqualityClaim(prose, document)
+  if (equality) return fail('asset-equality-claim', equality)
   // The direction is already rendered as a tag before the summary; opening with it repeats chrome.
   if (startsWithDirectionLabel(summary)) return fail('repeated-direction', 'summary')
   // Each point is rendered once: the summary states the mechanism, and the forecast fields below it
@@ -444,6 +447,24 @@ function splitSentences(text: string): readonly string[] {
  * deliberately not in this space: their assertions are claims, and citing a claim as evidence is
  * exactly the laundering the synthesis exists to stop.
  */
+/**
+ * Two assets that print the same are not the same asset.
+ *
+ * BTC +0.5043% and ETH +0.4992% both read +0.50%, and a reply that turned that rounding into "ETH
+ * matches BTC" published a coincidence as an analytical fact. The claim is refused whenever the raw
+ * values differ: the reply has to say which is stronger, or drop the comparison.
+ */
+const assetEqualityPattern = /(?:(?:BTC|比特币)[^。；;.!?]{0,40}(?:与|和|跟|同|and|vs\.?|versus)[^。；;.!?]{0,40}(?:ETH|以太坊)|(?:ETH|以太坊)[^。；;.!?]{0,40}(?:与|和|跟|同|and|vs\.?|versus)[^。；;.!?]{0,40}(?:BTC|比特币))[^。；;.!?]{0,24}(?:相同|一致|持平|相等|一样|同步|matched|matches|matching|equal|equals|in line|the same)/i
+
+function assetEqualityClaim(prose: string, document: DailyBriefingDocument): string | undefined {
+  if (!assetEqualityPattern.test(prose)) return undefined
+  const raw = (id: string): number | undefined => document.data.market.find((row) => row.id === id)?.value?.number ?? undefined
+  const btc = raw('btc')
+  const eth = raw('eth')
+  if (typeof btc !== 'number' || typeof eth !== 'number' || btc === eth) return undefined
+  return `BTC and ETH are not the same: their raw 24h values differ (${btc} vs ${eth}); the two-decimal display only rounds them together. Say which is stronger, or drop the comparison.`
+}
+
 function knownEvidenceIds(document: DailyBriefingDocument): ReadonlySet<string> {
   return new Set<string>([
     ...document.news.items.map((item) => `news:${item.itemId}`),
