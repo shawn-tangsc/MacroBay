@@ -57,6 +57,8 @@ function client(overrides: Partial<NewsSentimentClient> = {}): NewsSentimentClie
     getSettings: vi.fn(async () => SETTINGS),
     saveSettings: vi.fn(async () => SETTINGS),
     rescore: vi.fn(async () => ({ queued: true })),
+    rebuild: vi.fn(async () => ({ queued: true })),
+    translateBody: vi.fn(async () => ({ state: 'translated' as const, body: '译文正文', title: '译文标题' })),
     ...overrides
   }
 }
@@ -376,6 +378,39 @@ describe('NewsSentimentFeature', () => {
     expect(toggle?.getAttribute('role')).toBe('radiogroup')
     expect(toggle?.querySelectorAll('input[type="radio"]')).toHaveLength(2)
     expect(toggle?.querySelectorAll('input[type="radio"]:checked')).toHaveLength(1)
+  })
+
+  it('opens the row menu from the more button and translates that row', async () => {
+    const translateBody = vi.fn(async () => ({ state: 'translated' as const, body: '译文正文', title: '译文标题' }))
+    const container = await mount(<NewsSentimentFeature text={text} client={client({ translateBody })} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const more = [...document.body.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.getAttribute('aria-label') === text.drawer.moreActions)
+    expect(more).toBeTruthy()
+    await act(async () => { more?.click() })
+    await act(async () => {})
+    const menu = document.body.querySelector('[role="menu"]')
+    expect(menu).toBeTruthy()
+    const item = [...document.body.querySelectorAll<HTMLElement>('.ant-menu-item')]
+      .find((entry) => entry.textContent?.includes(text.drawer.translationStatus.translateOne))
+    expect(item).toBeTruthy()
+    await act(async () => { item?.click() })
+    await act(async () => {})
+    expect(translateBody).toHaveBeenCalledWith('item-a', false)
+  })
+
+  it('opens the row menu from the keyboard, not only by right-click', async () => {
+    const container = await mount(<NewsSentimentFeature text={text} client={client()} now={() => new Date('2026-10-24T13:00:00.000Z')} />)
+    const open = [...container.querySelectorAll('button')].find((button) => button.textContent?.includes(text.openAll))
+    await act(async () => { open?.click() })
+    await act(async () => {})
+    const row = document.body.querySelector<HTMLButtonElement>('.mi-news-drawer__row-open')
+    expect(row).toBeTruthy()
+    await act(async () => { row?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'F10', shiftKey: true })) })
+    await act(async () => {})
+    expect(document.body.querySelector('[role="menu"]')).toBeTruthy()
   })
 
   it('changes the window from the drawer controls', async () => {

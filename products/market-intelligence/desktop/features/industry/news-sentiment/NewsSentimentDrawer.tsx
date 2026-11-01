@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Segmented, Select } from 'antd'
 import { MoreVertical } from 'lucide-react'
 
 import { Drawer } from '@platform/ui/components/drawer'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { ContextMenu, type MenuItem } from '@platform/ui/components/menu'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import type { StateViewTextKey } from '@platform/ui/components/state/StateView'
@@ -57,11 +58,10 @@ export function NewsSentimentDrawer(props: {
   const [detailFailed, setDetailFailed] = useState(false)
   const [bodyView, setBodyView] = useState<'original' | 'translated'>('translated')
   const [contextMenu, setContextMenu] = useState<{ itemId: string; x: number; y: number }>()
-  const contextMenuRef = useRef<HTMLDivElement>(null)
   // IconButton takes keys, not sentences; the resolver never falls back to the key itself.
   const resolveIconText = createIconTextResolver(text)
   const openContextMenu = (itemId: string, x: number, y: number): void => {
-    setContextMenu({ itemId, x: Math.min(x, window.innerWidth - 160), y: Math.min(y, window.innerHeight - 80) })
+    setContextMenu({ itemId, x, y })
   }
   const [actionBusy, setActionBusy] = useState<'rescore' | 'rebuild'>()
   const [actionNotice, setActionNotice] = useState<string>()
@@ -119,20 +119,6 @@ export function NewsSentimentDrawer(props: {
   }, [activeId])
 
   useEffect(() => {
-    if (!contextMenu) return
-    const dismiss = (event: PointerEvent) => {
-      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(undefined)
-    }
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setContextMenu(undefined) }
-    document.addEventListener('pointerdown', dismiss, true)
-    document.addEventListener('keydown', escape)
-    return () => {
-      document.removeEventListener('pointerdown', dismiss, true)
-      document.removeEventListener('keydown', escape)
-    }
-  }, [contextMenu])
-
-  useEffect(() => {
     if (!props.open || !activeId || !view?.asOf) return
     let cancelled = false
     // Drop the previous article before the next read: a stale body under a new heading reads as
@@ -149,6 +135,15 @@ export function NewsSentimentDrawer(props: {
       })
     return () => { cancelled = true }
   }, [props.open, activeId, view?.asOf, props.client])
+
+  // One item, named by whether this row already has a translation. Platform `MenuItem` takes a key,
+  // so the sentence still comes from this feature's text resolver.
+  const menuItems: MenuItem[] = useMemo(() => [{
+    key: 'translate',
+    labelKey: contextMenu && (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
+      ? 'news.sentiment.retranslate'
+      : 'news.sentiment.translate'
+  }], [contextMenu, rows, translationStates])
 
   const sourceOptions = useMemo(() => {
     const seen = new Map<string, string>()
@@ -335,6 +330,13 @@ export function NewsSentimentDrawer(props: {
                 className="mi-news-drawer__row-open"
                 onClick={() => { setSelectedId(row.itemId); props.onSelectContext?.(row) }}
                 onContextMenu={translationEnabled ? (event) => { event.preventDefault(); openContextMenu(row.itemId, event.clientX, event.clientY) } : undefined}
+                onKeyDown={translationEnabled ? (event) => {
+                  // A context menu reachable only by right-click is unreachable from the keyboard.
+                  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+                  event.preventDefault()
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  openContextMenu(row.itemId, rect.left + 8, rect.top + 8)
+                } : undefined}
                 type="button"
               >
                 <span className="mi-news-drawer__row-top">
@@ -454,26 +456,22 @@ export function NewsSentimentDrawer(props: {
             ) : null}
           </aside>
         </div>
-        {translationEnabled && contextMenu ? (
-          <>
-            <div className="mi-news-drawer__context" ref={contextMenuRef} style={{ left: contextMenu.x, top: contextMenu.y }} role="menu">
-              {(() => {
-                const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
-                return (
-                  <button
-                    onClick={() => { const itemId = contextMenu.itemId; setContextMenu(undefined); void translateItem(itemId, translated) }}
-                    role="menuitem"
-                    type="button"
-                  >
-                    {translated
-                      ? text.drawer.translationStatus?.retranslateOne ?? text.drawer.detail.translateBody
-                      : text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody}
-                  </button>
-                )
-              })()}
-            </div>
-          </>
-        ) : null}
+        {/* The row menu is the platform ContextMenu: point anchoring, viewport clamping, Esc and
+            outside-click, and the arrow/Home/End keyboard model all come from it. This file only
+            says which row and which item. */}
+        <ContextMenu
+          anchor={contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null}
+          ariaLabelKey="news.sentiment.more"
+          items={translationEnabled && contextMenu ? menuItems : []}
+          onClose={() => setContextMenu(undefined)}
+          onSelect={(key) => {
+            if (key !== 'translate' || !contextMenu) return
+            const translated = (translationStates[contextMenu.itemId] ?? rows.find((row) => row.itemId === contextMenu.itemId)?.bodyTranslationState) === 'translated'
+            void translateItem(contextMenu.itemId, translated)
+          }}
+          open={translationEnabled && contextMenu !== undefined}
+          resolveText={resolveIconText}
+        />
       </div>
     </Drawer>
   )

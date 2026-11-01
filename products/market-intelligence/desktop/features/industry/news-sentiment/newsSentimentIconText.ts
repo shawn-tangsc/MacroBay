@@ -1,14 +1,17 @@
 import type { NewsSentimentText } from './NewsSentimentCard'
 
 /**
- * The only keys the icon triggers may ask for. `IconButton` keeps `ariaLabelKey` as an open string
- * because each call site names a different control, so the closed set lives here: a key with no
- * entry in the table is a compile error, not a runtime surprise.
+ * The only keys the platform components may ask this feature for. `IconButton` keeps
+ * `ariaLabelKey` and `ContextMenu` keeps `labelKey` as open strings because each call site names a
+ * different control, so the closed set lives here: a key with no entry in the table is a compile
+ * error, not a runtime surprise.
  */
 export const NEWS_SENTIMENT_ICON_KEYS = [
   'news.sentiment.settings',
   'news.sentiment.refresh',
-  'news.sentiment.more'
+  'news.sentiment.more',
+  'news.sentiment.translate',
+  'news.sentiment.retranslate'
 ] as const
 
 export type NewsSentimentIconKey = (typeof NEWS_SENTIMENT_ICON_KEYS)[number]
@@ -23,7 +26,9 @@ export function createIconTextResolver(text: NewsSentimentText): (key: string) =
   const labels: Record<NewsSentimentIconKey, string> = {
     'news.sentiment.settings': text.settings,
     'news.sentiment.refresh': text.refresh,
-    'news.sentiment.more': text.drawer.moreActions
+    'news.sentiment.more': text.drawer.moreActions,
+    'news.sentiment.translate': text.drawer.translationStatus?.translateOne ?? text.drawer.detail.translateBody,
+    'news.sentiment.retranslate': text.drawer.translationStatus?.retranslateOne ?? text.drawer.detail.translateBody
   }
   return (key: string): string => (labels as Record<string, string | undefined>)[key] ?? ''
 }
