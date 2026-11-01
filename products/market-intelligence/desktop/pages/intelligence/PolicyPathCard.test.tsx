@@ -37,6 +37,13 @@ const render = async (candidate: PolicyPathReading, cardText: typeof text = text
   return host
 }
 
+it('explains the odds in the drawer instead of a hand-drawn bubble on the card', async () => {
+  const rendered = await render(reading)
+  // The card keeps the number; the explanation lives where the numbers' basis lives.
+  expect(rendered.querySelector('[role="tooltip"]')).toBeNull()
+  expect(rendered.querySelector('[role="note"]')).toBeNull()
+})
+
 describe('policy path card', () => {
   it('names the month and the bucket through one localized template, with no Chinese left in English', async () => {
     const rendered = await render(reading, productText['en-US'].pages.intelligence.portal.dashboard.policyPath)
@@ -71,15 +78,6 @@ describe('policy path card', () => {
     expect(rows).toHaveLength(4)
     expect(rendered.textContent?.match(/—/g)?.length).toBeGreaterThanOrEqual(3)
     expect(rendered.textContent).toContain(text.unavailable)
-  })
-
-  it('explains where the odds come from, since no official page shows that number', async () => {
-    const rendered = await render(reading)
-    const help = rendered.querySelector('.mi-policy-card__help')
-    expect(help).not.toBeNull()
-    expect(help?.getAttribute('aria-label')).toBe(text.helpLabel)
-    // Every line the popover shows comes from the copy, so the wording is reviewable in one place.
-    for (const line of text.helpLines) expect(help?.textContent).toContain(line)
   })
 
   it('marks a stale quote with its own colour state', async () => {

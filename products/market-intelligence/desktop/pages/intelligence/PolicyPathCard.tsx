@@ -24,7 +24,6 @@ export type PolicyPathCardText = Readonly<{
   title: string; range: string; meeting: string; daysAway: string; projection: string
   lastVote: string; unchanged: string
   detail: string; sepMedian: string; live: string; delayed: string; stale: string; unavailable: string
-  helpLabel: string; helpLines: readonly string[]
   /** `{month} 月{outcome}` in Chinese; the month and the bucket are separate so English can order them its way. */
   outcomeLead: string
   /** Explains the for-against pair on hover: "10–2" alone is not self-evident. */
@@ -164,14 +163,6 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   return <section className="mi-policy-card" aria-label={text.title} data-staleness={reading.staleness} data-phase={phase.kind}>
     <header className="mi-policy-card__head">
       <h2>{text.title}</h2>
-      {/* The odds are the one number on this card a reader cannot derive from anything else here. */}
-      <span className="mi-policy-card__help" tabIndex={0} aria-label={text.helpLabel} role="note">
-        ?
-        <span className="mi-policy-card__help-pop" role="tooltip">
-          <b>{text.helpLabel}</b>
-          {text.helpLines.map((line) => <span key={line}>{line}</span>)}
-        </span>
-      </span>
       {markerChip}
       {phaseChip}
       {phase.kind === 'normal' || phase.kind === 'verdict'

@@ -27,6 +27,8 @@ export type PolicyPathDrawerText = Readonly<{
   longerRun: string
   /** The two FRED series behind the range, labelled so the series ids do not have to be memorised. */
   rangeLower: string; rangeUpper: string
+  /** Where the odds come from and what they are not: one sentence, visible under the basis table. */
+  basisNote: string
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
   change24hPending: string
@@ -192,6 +194,9 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         <div><dt>{text.range}</dt><dd>{reading.targetRange ? `${reading.targetRange.lowerPercent.toFixed(2)}–${reading.targetRange.upperPercent.toFixed(2)}%` : '—'}</dd></div>
         {probability?.asOf ? <div><dt>{text.asOf}</dt><dd>{probability.asOf.replace('T', ' ').slice(0, 19)}</dd></div> : null}
       </dl>
+      {/* The card used to hide this behind a hand-drawn "?" bubble; the basis is where a reader looks
+          for it, and a sentence that says what the number is not should not need a hover. */}
+      <p className="mi-policy-drawer__note">{text.basisNote}</p>
     </section>
   </MiSideDrawer>
 }

@@ -102,6 +102,8 @@ describe('policy drawer distribution', () => {
         distribution: { 'no-change': 0.285, 'hike-25': 0.69, 'hike-50-plus': 0.0155, 'cut-25': 0.008, 'cut-50-plus': 0.004 }
       }
     })
+    // The odds' basis is a visible sentence here, not a hover.
+    expect(rendered.textContent).toContain(text.basisNote)
     const rows = rendered.querySelectorAll('.mi-policy-drawer__distribution tbody tr')
     expect(rows).toHaveLength(5)
     expect(rendered.textContent).toContain('维持')

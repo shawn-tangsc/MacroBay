@@ -565,12 +565,7 @@ export const productText = {
               outcomeLead: '{month} 月{outcome}',
               longerRun: '长期',
               outcomes: { 'no-change': '维持利率', 'hike-25': '加息 25bp', 'hike-50-plus': '加息 50bp 以上', 'cut-25': '降息 25bp', 'cut-50-plus': '降息 50bp 以上' },
-              helpLabel: '这个概率怎么来的',
-              helpLines: [
-                '取自预测市场 Polymarket 对该场 FOMC 会议的盘口，读的是当前主档（上面写着的那一档）的买一/卖一中间价。',
-                '五档价格合计通常略高于 1（庄家抽水），已按合计归一化；24h 是同一档前后的百分点差。',
-                '这是交易者当下愿意成交的价格，不是模型预测，也不代表实际结果。'
-              ],
+              basisNote: '盘口取 Polymarket 当前主档（上面写着的那一档）的买卖中间价；五档按合计归一化（合计通常略高于 1，多出的是场所抽水）。24h 是同一档前后的百分点差。这是交易者当下愿意成交的价格，不是模型预测，也不代表实际结果。',
               probabilityLabel: '加息概率',
               lastVote: '上次',
               sepMedian: 'SEP 中位',
@@ -2406,12 +2401,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               outcomeLead: '{month} · {outcome}',
               longerRun: 'longer run',
               outcomes: { 'no-change': 'Hold', 'hike-25': 'hike 25bp', 'hike-50-plus': 'hike 50bp+', 'cut-25': 'cut 25bp', 'cut-50-plus': 'cut 50bp+' },
-              helpLabel: 'Where this odds comes from',
-              helpLines: [
-                'Read from the Polymarket pool for that FOMC meeting: the mid of the bucket named above, its bid and ask.',
-                'The five buckets usually sum to slightly more than 1 (the venue margin); the price is normalised by that sum. The 24h figure is the same bucket before and after.',
-                'It is what traders will transact at now, not a model forecast, and not the outcome.'
-              ],
+              basisNote: 'The odds are the mid of the bucket named above on Polymarket; the five buckets are normalised by their sum (usually slightly above 1, the venue margin), and 24h is that bucket before and after. It is what traders will transact at now, not a model forecast, and not the outcome.',
               probabilityLabel: 'Hike odds',
               lastVote: 'Last',
               sepMedian: 'SEP median',
