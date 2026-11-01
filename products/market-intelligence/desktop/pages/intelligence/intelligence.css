@@ -89,6 +89,13 @@
 .mi-analysis-timeline__list h2, .mi-analysis-timeline__detail h2 { margin-bottom: 12px; color: var(--text-strong); font-size: 13px; }
 .mi-analysis-timeline__entry { display: grid; width: 100%; gap: 5px; padding: 11px 12px; border: 1px solid transparent; border-bottom-color: var(--border); background: transparent; color: var(--text); cursor: pointer; text-align: left; }
 .mi-analysis-timeline__entry:hover, .mi-analysis-timeline__entry.is-selected { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
+/* A registered clickable row: the chevron says the row opens something, the focus ring wraps the
+   whole row without changing its height, and the selected border stays (aria-current carries it for
+   assistive tech, this is only the visual half). */
+.mi-analysis-timeline__entry { position: relative; }
+.mi-analysis-timeline__entry:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mi-analysis-timeline__chevron { position: absolute; top: 50%; right: 10px; color: var(--muted); transform: translateY(-50%); pointer-events: none; }
+.mi-analysis-timeline__entry:hover .mi-analysis-timeline__chevron, .mi-analysis-timeline__entry.is-selected .mi-analysis-timeline__chevron { color: var(--accent); }
 /* A failed request is an error, not a status: red against the otherwise muted list, announced to
    assistive technology, and dismissible so it does not sit on the panel after it was read. */
 .mi-analysis-error { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 10px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border)); border-radius: 5px; background: color-mix(in srgb, var(--danger) 10%, var(--surface)); }

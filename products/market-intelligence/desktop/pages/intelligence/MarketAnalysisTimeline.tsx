@@ -1,5 +1,5 @@
 import { Button } from 'antd'
-import { ArrowLeft, RefreshCw, Settings2 } from 'lucide-react'
+import { ArrowLeft, ChevronRight, RefreshCw, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
@@ -199,7 +199,10 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
             dismissLabel={text.dismissError}
             onDismiss={refreshError.dismiss}
           /> : null}
-          {state.entries.slice(0, shown.visible).map((entry) => { const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? ''); const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null; return <button className={`mi-analysis-timeline__entry${state.selected?.id === entry.id ? ' is-selected' : ''}`} key={entry.id} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button">
+          {state.entries.slice(0, shown.visible).map((entry) => { const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? ''); const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null; // A row, not a button: the whole line is one action (select and open this conclusion), and
+        // it is registered as a clickable row in the exception list. Selection is announced with
+        // `aria-current`, never by background colour alone, and the chevron shows the row is openable.
+        return <button className={`mi-analysis-timeline__entry${state.selected?.id === entry.id ? ' is-selected' : ''}`} key={entry.id} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button" aria-current={state.selected?.id === entry.id ? 'true' : undefined}>
             <span><time>{formatTime(entry.occurredAt, 'second')}</time><em>{text.status[entry.status]}</em></span>
             {/* Which event this row is about. Two conclusions published seconds apart are two
                 different events; without the name they read as one conclusion posted twice. */}
@@ -212,6 +215,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
               </span> : null}
               {entry.safeExcerpt ? <span className="mi-analysis-timeline__conclusion-line">{toReadableConclusionText(conclusionWithoutDirection(entry.safeExcerpt), conclusionReadableNames, language)}</span> : null}
             </span> : null}
+            <ChevronRight className="mi-analysis-timeline__chevron" size={14} aria-hidden="true" />
             {entry.triggerStatus ? <small className="mi-analysis-timeline__trigger-status" data-trigger-status={entry.triggerStatus.reasonCode}>
               {/* "since" fits a condition the gate keeps re-observing; a reader's own click is a
                   one-off moment, so it reads as a time instead. The token list is the service

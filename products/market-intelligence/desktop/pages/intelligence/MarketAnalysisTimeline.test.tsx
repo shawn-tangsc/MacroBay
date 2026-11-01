@@ -875,6 +875,40 @@ describe('market analysis timeline event captions', () => {
   })
 })
 
+describe('market analysis timeline clickable row', () => {
+  const entry = (id: string, eventGroupId: string) => ({
+    id, eventGroupId, analysisRunId: null, kind: 'analysis', status: 'published',
+    occurredAt: '2026-10-31T13:36:23.000Z', summaryRef: null, safeTitle: '市场分析已生成',
+    safeExcerpt: '偏空。', version: 1, triggerStatus: null, groupType: null, groupSubject: null
+  })
+
+  async function renderRows(entries: unknown[]): Promise<HTMLElement> {
+    const invoke = vi.fn(async (_product: string, method: string) => {
+      if (method === 'marketAnalysis.listTimeline') return { schemaVersion: 1, items: entries, nextCursor: null }
+      return undefined
+    })
+    vi.stubGlobal('platform', { products: { invoke } })
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(Timeline, { text })))
+    return container
+  }
+
+  it('shows it opens something, and announces the selected row to assistive tech', async () => {
+    // Registered clickable row, not a button: the chevron is the visible affordance, and selection is
+    // carried by aria-current rather than by background colour alone.
+    const container = await renderRows([entry('mi-tl-1', 'mi-eg-1')])
+    const row = container.querySelector<HTMLButtonElement>('.mi-analysis-timeline__entry')!
+    expect(row.querySelector('.mi-analysis-timeline__chevron')).not.toBeNull()
+    expect(row.getAttribute('aria-current')).toBeNull()
+
+    await act(async () => row.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    const selected = container.querySelector('.mi-analysis-timeline__entry.is-selected')!
+    expect(selected.getAttribute('aria-current')).toBe('true')
+  })
+})
+
 describe('market analysis timeline client refusals', () => {
   it('normalizes the already-available refusal instead of reporting a failed publish', async () => {
     // The client is where the refusal used to be collapsed into 'failed'; the hook never saw the
