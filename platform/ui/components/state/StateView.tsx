@@ -73,7 +73,9 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.action.select-target',
   'ui.state.action.restart-app',
   'ui.state.action.open-system-settings',
-  'ui.state.action.widen-window'
+  'ui.state.action.widen-window',
+  'ui.state.action.focus-form',
+  'ui.state.action.open-assistant'
 ] as const
 
 export type StateViewTextKey = (typeof STATE_VIEW_TEXT_KEYS)[number]

@@ -102,6 +102,12 @@ a pixel value from a call site, and do not write a second `min-height` in page C
 - A new reason code is a contract change: get it approved, add the sentence in **both** languages in
   the same commit, then use it. Product pages must not invent a code or a sentence of their own.
 
+- Action labels are **picked from the closed set of action keys**, not written at the call site: a
+  reason code fixes the *reason*, the type fixes whether an action is *allowed*, and the call site
+  chooses *which* label. When the set has no label for a real next step, add a key in the same
+  commit (union + both languages); never widen `labelKey` to `string`, or a typo becomes a sentence
+  the reader sees.
+
 ```tsx
 // Correct: state + code, text resolved by the shell.
 <StateView

@@ -19,6 +19,10 @@
 | `StateViewAction` | 至多一个动作：`{ labelKey, onSelect }`。 |
 | `StateViewProps` | 按 `state` 判别的 props 联合。 |
 
+- 动作标签是**从动作键闭集里挑**，不是调用点自己写：码定**原因**，类型定动作**允不允许**，调用点选**挑哪一个**。
+  闭集里没有能表达这一步的标签时，同一笔加键（键表 + 中英各一句）；**不许把 `labelKey` 放宽成 `string`**，
+  否则一个拼错的键就会原样显示给读者。
+
 ```tsx
 import { StateView } from '@platform/ui/components/state'
 ```

@@ -32,7 +32,9 @@ export const STATE_VIEW_ACTION_KEYS = {
   select_target: 'ui.state.action.select-target',
   restart_app: 'ui.state.action.restart-app',
   open_system_settings: 'ui.state.action.open-system-settings',
-  widen_window: 'ui.state.action.widen-window'
+  widen_window: 'ui.state.action.widen-window',
+  focus_form: 'ui.state.action.focus-form',
+  open_assistant: 'ui.state.action.open-assistant'
 } as const
 
 type StateViewCopy = Record<StateViewTextKey, string>
@@ -74,6 +76,8 @@ const ZH_CN: StateViewCopy = {
       'ui.state.action.restart-app': '重启应用',
       'ui.state.action.open-system-settings': '去系统设置',
       'ui.state.action.widen-window': '查看全部',
+      'ui.state.action.focus-form': '填写表单',
+      'ui.state.action.open-assistant': '打开助手',
 }
 
 const EN_US: StateViewCopy = {
@@ -113,6 +117,8 @@ const EN_US: StateViewCopy = {
       'ui.state.action.restart-app': 'Restart the app',
       'ui.state.action.open-system-settings': 'Open system settings',
       'ui.state.action.widen-window': 'View all',
+      'ui.state.action.focus-form': 'Fill in the form',
+      'ui.state.action.open-assistant': 'Open the assistant',
 }
 
 const COPY: Record<AppLanguage, StateViewCopy> = { 'zh-CN': ZH_CN, 'en-US': EN_US }
