@@ -46,7 +46,9 @@ export function ConfirmProvider({ children }: { children: ReactNode }): ReactEle
 
   const confirm = useCallback(
     (props: ConfirmProps) => {
-      modal.confirm(confirmOptions(props))
+      // 触发它的那颗按钮：关闭后焦点要还回去（丢失焦点 = 键盘读者丢了自己刚才在哪一行）。
+      const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      modal.confirm(confirmOptions(props, trigger))
     },
     [modal]
   )

@@ -19,7 +19,21 @@ export type ConfirmOptionsWithSilent = Parameters<ModalInstance['confirm']>[0] &
  * 两套实现各写一份选项，是这类组件最常见的漂移点——今天已经因为「静态方法 vs 树内实例」
  * 漂出过深浅色不一致，没必要再让文案与危险档分叉一次。
  */
-export function confirmOptions(props: ConfirmProps): ConfirmOptionsWithSilent {
+export function confirmOptions(props: ConfirmProps, trigger: HTMLElement | null = null): ConfirmOptionsWithSilent {
+  /**
+   * 把焦点还给**按下确认/取消之后该回到的地方**：那颗触发按钮。
+   *
+   * 为什么不放在 `afterClose`：antd 要等关闭动画结束才调它，而动画在无布局的测试环境里不会推进，
+   * 于是「焦点归还」永远等不到。放在动作之后一个宏任务里，两个环境都成立，而且语义更直白——
+   * 读者做完了这件事，焦点回到他出发的地方。
+   */
+  const restoreFocus = (): void => {
+    if (trigger?.isConnected !== true) return
+    window.setTimeout(() => {
+      if (trigger.isConnected) trigger.focus()
+    }, 0)
+  }
+
   return {
     isSilent: () => true,
     title: props.title,
@@ -42,7 +56,13 @@ export function confirmOptions(props: ConfirmProps): ConfirmOptionsWithSilent {
      * 在行内展示失败原因（`ModelServiceClearModelsControl` 的注释就是这么写的），所以关掉弹窗
      * 不会让错误消失。`isSilent` 仍然传：静态路径认它，将来 hook 路径修好也自动受益。
      */
-    onOk: () => Promise.resolve(props.onConfirm()).catch(() => undefined),
-    onCancel: () => props.onCancel?.()
+    onOk: () => Promise.resolve(props.onConfirm())
+      .catch(() => undefined)
+      // 成功也归还焦点：删掉的那一行可能已经不在了，`isConnected` 会替我们判断。
+      .then(() => restoreFocus()),
+    onCancel: () => {
+      props.onCancel?.()
+      restoreFocus()
+    }
   }
 }

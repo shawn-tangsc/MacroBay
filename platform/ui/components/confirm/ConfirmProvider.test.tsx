@@ -194,6 +194,44 @@ describe('ConfirmProvider', () => {
     expect(calls).toBe(1)
   })
 
+  it('returns the focus to the triggering button when the dialog closes', async () => {
+    // 关闭后焦点掉到 `body`，键盘读者就丢了自己刚才在哪一行。这条钉的是「还回去」。
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    let open: (() => void) | null = null
+    function Trigger(): ReactElement {
+      const confirm = useConfirm()
+      open = () => confirm(danger)
+      return <button type="button" data-trigger>delete row</button>
+    }
+    await act(async () => {
+      root!.render(
+        <ConfirmProvider>
+          <Trigger />
+        </ConfirmProvider>
+      )
+    })
+    const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')
+    if (trigger === null) throw new Error('no trigger')
+    await act(async () => {
+      trigger.focus()
+      open?.()
+    })
+    const cancel = await waitFor(() => buttonByLabel('取消') ?? null)
+    expect(cancel).not.toBeNull()
+    await act(async () => {
+      cancel?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    // antd 在关闭动画结束后才调 `afterClose`，所以等「焦点回到触发器」这个条件成立，不等固定时长。
+    for (let attempt = 0; attempt < 120 && document.activeElement !== trigger; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      })
+    }
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('forgets the registered instance on unmount, so a later call cannot reach a dead modal', async () => {
     await mount(
       <ConfirmProvider>

@@ -46,5 +46,6 @@ export function confirmAction(props: ConfirmProps): void {
       'confirmAction() needs <ConfirmProvider> above it: the static Modal.confirm renders outside the React tree and ignores the current theme'
     )
   }
-  modal.confirm(confirmOptions(props))
+  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  modal.confirm(confirmOptions(props, trigger))
 }
