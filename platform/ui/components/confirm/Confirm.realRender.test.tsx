@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { act } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { installAntdStaticRender } from '../../antd/antdStaticRender'
@@ -46,6 +47,36 @@ describe('confirmAction in a real render', () => {
     expect(destructive?.className).toContain('ant-btn-dangerous')
     // 这条就是界面设计要的那一格：初始焦点在取消上，不在破坏性按钮上。
     expect(document.activeElement).toBe(cancel)
+  })
+
+  it('stays open when the confirm handler fails, without an unhandled rejection', async () => {
+    installAntdStaticRender()
+    const rejections: unknown[] = []
+    const onRejection = (reason: unknown): void => {
+      rejections.push(reason)
+    }
+    process.on('unhandledRejection', onRejection)
+
+    confirmAction({
+      title: '清空全部模型？',
+      confirmLabel: '清空',
+      cancelLabel: '取消',
+      tone: 'danger',
+      onConfirm: () => Promise.reject(new Error('清空失败：请重试'))
+    })
+    await settle()
+
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    const destructive = buttons.find((button) => (button.textContent ?? '').replace(/\s/g, '') === '清空')
+    await act(async () => {
+      destructive?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await settle()
+
+    // 三件事一起断言：对话框还在、没有未处理拒绝、失败原因读者看得到（由调用方决定展示方式）。
+    expect(document.querySelector('.ant-modal')).not.toBeNull()
+    expect(rejections).toEqual([])
+    process.off('unhandledRejection', onRejection)
   })
 
   it('keeps focus on confirm for an ordinary action', async () => {

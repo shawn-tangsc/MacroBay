@@ -36,6 +36,10 @@ export function confirmAction(props: ConfirmProps): void {
     // 危险档焦点落在取消上：按住回车连击时，落在确认上就是连续执行破坏性操作。
     autoFocusButton: props.tone === 'danger' ? 'cancel' : 'ok',
     centered: true,
+    // 失败时对话框要留在屏幕上（读者得能改完再提交）。antd 的 ActionButton 在 `onOk` 拒绝后
+    // 会再抛一次，于是出现未处理拒绝；`isSilent` 让 antd 吞掉那一次重抛，**关闭时机仍由我们自己
+    // 的 `onOk` 决定**——这是一处平台缺口的一行补丁，不是「让测试变绿」的开关。
+    isSilent: () => true,
     onOk: () => props.onConfirm(),
     onCancel: () => props.onCancel?.()
   })
