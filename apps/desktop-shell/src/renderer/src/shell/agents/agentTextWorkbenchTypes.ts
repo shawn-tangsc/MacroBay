@@ -83,7 +83,8 @@ export type AgentTextWorkbench = {
     retryDeliveryFailed: string
     deliveryAttempt: (channelId: string, attemptNumber: number) => string
     deliveryStatus: Record<'pending' | 'delivered' | 'failed' | 'skipped-no-active-target' | 'skipped-channel-inactive' | 'unknown-after-restart' | 'unknown-after-send', string>
-    loadFailed: string
+    /** 有旧数据、这次刷新没读到时挂在数据上方的那一句：说的是「屏上是旧读数」，不是「这里没有」。 */
+    staleDataNotice: string
     saveFailed: string
     deleteFailed: string
     runFailed: string

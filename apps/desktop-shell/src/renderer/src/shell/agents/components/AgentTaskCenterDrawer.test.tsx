@@ -8,6 +8,8 @@ import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchem
 import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-platform/schemas/taskSchemas'
 import { createAgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 
+import { resolveStateViewText, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+
 import { agentTextEnWorkbench } from '../agentTextEnWorkbench'
 
 const api = vi.hoisted(() => ({
@@ -20,7 +22,9 @@ const api = vi.hoisted(() => ({
 vi.mock('antd', () => ({
   Button: ({ children, onClick, ...props }: { children: ReactNode; onClick?: () => void }) =>
     createElement('button', { ...props, onClick }, children),
-  Drawer: ({ children }: { children: ReactNode }) => createElement('div', null, children),
+  // 平台抽屉把标题与右侧动作放在 antd 的 `title` / `extra` 上，只渲染 children 会让标题行整条消失。
+  Drawer: ({ children, title, extra }: { children: ReactNode; title?: ReactNode; extra?: ReactNode }) =>
+    createElement('div', null, title ?? null, extra ?? null, children),
   Tag: ({ children }: { children: ReactNode }) => createElement('span', null, children),
   // 平台抽屉的关闭键是一个 IconButton，IconButton 从 antd 取 Tooltip；缺了它渲染直接抛。
   Tooltip: ({ children }: { children: ReactNode }) => children
@@ -179,6 +183,130 @@ describe('AgentTaskCenterDrawer', () => {
     expect(container.querySelector('[data-selected-run]')?.getAttribute('data-selected-run')).toBe(selected.id)
     expect(container.textContent).toContain(`${selected.id}:1/1`)
     expect(container.textContent).toContain('run-latest:0/0')
+
+    await act(async () => root.unmount())
+  })
+
+  it('shows only the loading surface before the first page arrives', async () => {
+    // 首帧判据：数据还没回来时，屏幕上不许出现「这里还没有任务」，也不许出现「读取失败」。
+    // 把它写成用例而不是靠眼睛看，是因为 `useEffect` 在首帧之后才跑——初值写 `false` 的每一次
+    // 都会先画一遍空态，而人眼只看到「闪了一下」。
+    const task = taskFixture()
+    let resolveTasks: (page: { tasks: ScheduledTaskEntity[]; total: number }) => void = () => {}
+    api.listTasks.mockReturnValue(
+      new Promise((resolve) => {
+        resolveTasks = resolve
+      })
+    )
+    api.getLogs.mockResolvedValue({ logs: [], total: 0 })
+    api.listJobs.mockResolvedValue({ runs: [] })
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(AgentTaskCenterDrawer, {
+        open: true,
+        state: createAgentStoreState({ workspaces: [] }),
+        agent: agentFixture(),
+        workspace: { type: 'system' },
+        onClose: vi.fn(),
+        onStateChange: vi.fn()
+      }))
+    })
+
+    expect(container.querySelector('.loading-state')).not.toBeNull()
+    expect(container.querySelector('[data-state="empty"]')).toBeNull()
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+
+    await act(async () => {
+      resolveTasks({ tasks: [task], total: 1 })
+    })
+    await vi.waitFor(() => {
+      expect([...container.querySelectorAll('button')].some((button) => button.textContent?.includes(task.name))).toBe(true)
+    })
+    expect(container.querySelector('.loading-state')).toBeNull()
+    expect(container.querySelector('[data-state="empty"]')).toBeNull()
+
+    await act(async () => root.unmount())
+  })
+
+  it('replaces the first load failure with an error and a retry that refetches', async () => {
+    // 失败分两种：手里没有读数才是错误（给重试），手里有旧读数只是「上一次的结果」。
+    // 这条钉的是第一种：错误 + 动作，且动作真的再读一次。
+    const task = taskFixture()
+    api.listTasks.mockRejectedValueOnce(new Error('offline'))
+    api.listTasks.mockResolvedValueOnce({ tasks: [task], total: 1 })
+    api.getLogs.mockResolvedValue({ logs: [], total: 0 })
+    api.listJobs.mockResolvedValue({ runs: [] })
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(AgentTaskCenterDrawer, {
+        open: true,
+        state: createAgentStoreState({ workspaces: [] }),
+        agent: agentFixture(),
+        workspace: { type: 'system' },
+        onClose: vi.fn(),
+        onStateChange: vi.fn()
+      }))
+    })
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-state="error"]')).not.toBeNull()
+    })
+    expect(container.querySelector('[data-state="empty"]')).toBeNull()
+
+    const retryLabel = resolveStateViewText('zh-CN', STATE_VIEW_ACTION_KEYS.retry)
+    expect(container.textContent).toContain(retryLabel)
+    await act(async () => {
+      clickButton(container, retryLabel)
+    })
+    await vi.waitFor(() => {
+      expect([...container.querySelectorAll('button')].some((button) => button.textContent?.includes(task.name))).toBe(true)
+    })
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+    expect(api.listTasks).toHaveBeenCalledTimes(2)
+
+    await act(async () => root.unmount())
+  })
+
+  it('keeps the last reading on screen when a refresh fails, and says it is stale', async () => {
+    // 有旧读数时刷新失败，不许把列表换成错误视图：那等于用一次刷新失败惩罚用户已经读到的东西。
+    const task = taskFixture()
+    api.listTasks.mockResolvedValueOnce({ tasks: [task], total: 1 })
+    api.getLogs.mockResolvedValue({ logs: [], total: 0 })
+    api.listJobs.mockResolvedValue({ runs: [] })
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(AgentTaskCenterDrawer, {
+        open: true,
+        state: createAgentStoreState({ workspaces: [] }),
+        agent: agentFixture(),
+        workspace: { type: 'system' },
+        onClose: vi.fn(),
+        onStateChange: vi.fn()
+      }))
+    })
+    await vi.waitFor(() => {
+      expect([...container.querySelectorAll('button')].some((button) => button.textContent?.includes(task.name))).toBe(true)
+    })
+
+    api.listTasks.mockRejectedValueOnce(new Error('offline'))
+    await act(async () => {
+      clickButton(container, agentTextEnWorkbench.taskCenter.refresh)
+    })
+
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain(agentTextEnWorkbench.taskCenter.staleDataNotice)
+    })
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+    expect([...container.querySelectorAll('button')].some((button) => button.textContent?.includes(task.name))).toBe(true)
 
     await act(async () => root.unmount())
   })

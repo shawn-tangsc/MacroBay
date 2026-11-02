@@ -88,7 +88,7 @@ export const agentTextEnWorkbench: AgentTextWorkbench = {
       'unknown-after-restart': 'Unknown after restart',
       'unknown-after-send': 'Unknown after send'
     },
-    loadFailed: 'Failed to load tasks.',
+    staleDataNotice: 'This is the last reading; the latest could not be loaded.',
     saveFailed: 'Failed to save task.',
     deleteFailed: 'Failed to delete task.',
     runFailed: 'Failed to start task.',

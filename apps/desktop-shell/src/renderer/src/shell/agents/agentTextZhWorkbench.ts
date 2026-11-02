@@ -88,7 +88,7 @@ export const agentTextZhWorkbench: AgentTextWorkbench = {
       'unknown-after-restart': '重启后状态未知',
       'unknown-after-send': '发送后状态未知'
     },
-    loadFailed: '加载任务失败。',
+    staleDataNotice: '这是上一次的读数，最新的没读出来。',
     saveFailed: '保存任务失败。',
     deleteFailed: '删除任务失败。',
     runFailed: '启动任务失败。',

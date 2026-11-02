@@ -423,7 +423,7 @@ const taskCenterLabels: AgentText['taskCenter'] = {
     'unknown-after-restart': 'Unknown',
     'unknown-after-send': 'Unknown after send'
   },
-  loadFailed: 'Failed to load tasks.',
+  staleDataNotice: 'This is the last reading; the latest could not be loaded.',
   saveFailed: 'Failed to save task.',
   deleteFailed: 'Failed to delete task.',
   runFailed: 'Failed to start task.',

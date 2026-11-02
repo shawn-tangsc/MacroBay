@@ -21,6 +21,11 @@ type AgentTaskCenterListProps = {
   items: readonly AgentTaskCenterItem[]
   selectedTaskId: string | null
   loading: boolean
+  /**
+   * 首屏就读失败。没有它，「读不到」会被列表画成「从来没有创建过」——两种都空着，但一句话
+   * 把责任推给了用户（是你不建），而事实是这一屏没读出来。
+   */
+  loadFailed: boolean
   labels: AgentText['taskCenter']
   /** 状态文案的解析入口：`StatusPill` 只收键，句子由调用方给。 */
   resolveText: (key: string) => string
@@ -38,6 +43,7 @@ export default function AgentTaskCenterList({
   items,
   selectedTaskId,
   loading,
+  loadFailed,
   labels,
   resolveText,
   onSelect,
@@ -50,7 +56,7 @@ export default function AgentTaskCenterList({
         <small>{labels.taskCount(items.length)}</small>
       </header>
       {loading && items.length === 0 ? <LoadingState label={labels.loading} minHeight={120} /> : null}
-      {!loading && items.length === 0 ? (
+      {!loading && !loadFailed && items.length === 0 ? (
         <StateView
           state="empty"
           reasonCode="never-created"
