@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { act } from 'react'
+import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -34,7 +34,14 @@ async function mount(value = 'a'): Promise<{ host: HTMLElement; onChange: Return
   root = createRoot(host)
   await act(async () => {
     root!.render(
-      <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p data-panel>panel</p>} resolveText={key} value={value} />
+      <Tabs
+        ariaLabelKey="ui.test.tabs"
+        items={items}
+        onChange={onChange}
+        panels={{ a: <p data-panel-a>panel a</p>, b: <p data-panel-b>panel b</p>, c: null }}
+        resolveText={key}
+        value={value}
+      />
     )
   })
   return { host, onChange }
@@ -44,7 +51,7 @@ describe('Tabs', () => {
   it('wires the tablist and the panel both ways, with ids it generates itself', async () => {
     const { host } = await mount()
     const list = host.querySelector('[role="tablist"]')
-    const panel = host.querySelector('[role="tabpanel"]')
+    const panel = host.querySelector('[role="tabpanel"]:not([hidden])')
     const selected = host.querySelector('[role="tab"][aria-selected="true"]')
 
     expect(list?.getAttribute('aria-label')).toBe('ui.test.tabs')
@@ -112,7 +119,7 @@ describe('Tabs', () => {
     // `ghost` 不在 items 里：items 增删后旧的选中值失效是常态。
     await act(async () => {
       root!.render(
-        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p>panel</p>} resolveText={key} value="ghost" />
+        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panels={{ a: <p>panel</p> }} resolveText={key} value="ghost" />
       )
     })
 
@@ -134,7 +141,7 @@ describe('Tabs', () => {
     // 父级把合法值传回来之后，不许二次触发。
     await act(async () => {
       root!.render(
-        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p>panel</p>} resolveText={key} value="a" />
+        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panels={{ a: <p>panel</p> }} resolveText={key} value="a" />
       )
     })
     expect(onChange).toHaveBeenCalledTimes(1)
@@ -147,7 +154,7 @@ describe('Tabs', () => {
     root = createRoot(host)
     await act(async () => {
       root!.render(
-        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p>panel</p>} resolveText={key} value="c" />
+        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panels={{ c: <p>panel</p> }} resolveText={key} value="c" />
       )
     })
 
@@ -176,7 +183,7 @@ describe('Tabs', () => {
             { value: 'dark', labelKey: 'ui.test.dark' }
           ]}
           onChange={vi.fn()}
-          panel={null}
+          panels={{ a: null, b: null }}
           resolveText={key}
           value="light"
         />
@@ -193,5 +200,120 @@ describe('Tabs', () => {
     // 不给图标就不占位：没有包裹元素，文字直接是标签的第一个子节点。
     expect(withoutIcon?.querySelector('svg')).toBeNull()
     expect(withoutIcon?.firstChild?.nodeType).toBe(Node.TEXT_NODE)
+  })
+
+  it('keeps the other panel mounted and its state intact across a switch and back', async () => {
+    // 主用例（架构师 2026-11-02）：切走再切回，另一半里的东西都还在。
+    // 这正是「只渲染选中那块」的界面做不到的事——键盘对了、状态没了，比不做更糟。
+    const host = document.createElement('div')
+    document.body.append(host)
+    let current = 'a'
+    const onChange = vi.fn((next: string) => {
+      current = next
+      render()
+    })
+    const root_ = createRoot(host)
+    root = root_
+
+    function render(): void {
+      act(() => {
+        root_.render(
+          <Tabs
+            ariaLabelKey="ui.test.tabs"
+            items={items}
+            onChange={onChange}
+            panels={{
+              a: <p data-panel-a>panel a</p>,
+              b: <input data-panel-b defaultValue="" />
+            }}
+            resolveText={key}
+            value={current}
+          />
+        )
+      })
+    }
+
+    render()
+    const input = host.querySelector<HTMLInputElement>('[data-panel-b]')
+    if (!input) throw new Error('inactive panel is not mounted')
+    input.value = 'typed in the hidden half'
+
+    // 先切到 b，再切回 a：b 的输入必须还在。
+    await act(async () => {
+      host.querySelectorAll<HTMLElement>('[role="tab"]')[1]!.click()
+    })
+    await act(async () => {
+      host.querySelectorAll<HTMLElement>('[role="tab"]')[0]!.click()
+    })
+
+    expect(host.querySelector<HTMLInputElement>('[data-panel-b]')?.value).toBe('typed in the hidden half')
+  })
+
+  it('removes an inactive panel from the accessibility tree with the hidden attribute', async () => {
+    const { host } = await mount('a')
+    const panels = [...host.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
+
+    // 三块都在 DOM 里（保持挂载），但只有活动那块可达。
+    expect(panels).toHaveLength(3)
+    expect(panels.filter((panel) => !panel.hasAttribute('hidden'))).toHaveLength(1)
+    // 用原生 `hidden`，不是 `aria-hidden` 冒充：`aria-hidden` 只是把辅助技术挡在外面，
+    // 布局和无障碍树都不动，而这里要的正是「退出布局与无障碍树」。
+    expect(panels.filter((panel) => panel.hasAttribute('hidden'))).toHaveLength(2)
+    for (const panel of panels) expect(panel.hasAttribute('aria-hidden')).toBe(false)
+  })
+
+  it('points every tab at its own panel and every panel back at its own tab', async () => {
+    const { host } = await mount('a')
+    const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')]
+    const panels = [...host.querySelectorAll<HTMLElement>('[role="tabpanel"]')]
+
+    expect(tabs).toHaveLength(panels.length)
+    tabs.forEach((tab, index) => {
+      expect(tab.getAttribute('aria-controls')).toBe(panels[index]?.id)
+      expect(panels[index]?.getAttribute('aria-labelledby')).toBe(tab.id)
+    })
+  })
+
+  it('does not re-run a hidden panel\'s effects when the reader switches tabs', async () => {
+    // 「保持挂载」不等于「继续运行」：组件只负责挂载与可达性，暂停由调用方判断。
+    // 能钉住的是这一条——切换不会让面板重挂载，所以它自己的 effect 不会因为切换而多跑一轮。
+    const host = document.createElement('div')
+    document.body.append(host)
+    const effectRuns = vi.fn()
+    function PollingPanel(): React.ReactElement {
+      React.useEffect(() => {
+        effectRuns()
+      }, [])
+      return <p data-polling>polling</p>
+    }
+    let current = 'a'
+    const root_ = createRoot(host)
+    root = root_
+    const rerender = (): void => {
+      act(() => {
+        root_.render(
+          <Tabs
+            ariaLabelKey="ui.test.tabs"
+            items={items}
+            onChange={(next) => {
+              current = next
+              rerender()
+            }}
+            panels={{ a: <p>panel a</p>, b: <PollingPanel /> }}
+            resolveText={key}
+            value={current}
+          />
+        )
+      })
+    }
+
+    rerender()
+    const before = effectRuns.mock.calls.length
+    for (const index of [1, 0, 1, 0]) {
+      await act(async () => {
+        host.querySelectorAll<HTMLElement>('[role="tab"]')[index]!.click()
+      })
+    }
+    expect(effectRuns.mock.calls.length).toBe(before)
   })
 })

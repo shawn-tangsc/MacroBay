@@ -29,15 +29,23 @@ export type TabsProps = {
   /** tablist 可访问名（键），必填：读屏要靠它知道这是哪一组标签。 */
   ariaLabelKey: string
   resolveText: (key: string) => string
-  /** 选中项的面板。**必填**：没有面板就不该用 `Tabs`（那样该用 `Segmented` 或不要页签）。 */
-  panel: ReactNode
+  /**
+   * 每个页签的面板，按 `value` 取。**全部渲染**，非活动的只加原生 `hidden`。
+   *
+   * 为什么不是「只渲染选中那块」：切走再切回时，另一半里的会话、选中项、拖拽宽度都会丢。
+   * 键盘对了、状态没了，比不做更糟。所以这里换成「每个 key 一块、全部挂载」。
+   *
+   * 划清职责：**保持挂载 ≠ 继续运行**。组件不替调用方暂停计时器、轮询或订阅，也不提供可见性回调——
+   * 调用方手里已经有 `value`，自己判断就够了。组件一旦「猜哪个面板该停」，就会有人以为不需要自己判断。
+   */
+  panels: Readonly<Record<string, ReactNode>>
 }
 
-export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel }: TabsProps): ReactElement {
+export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panels }: TabsProps): ReactElement {
   const baseId = useId()
   const listRef = useRef<HTMLDivElement>(null)
   const tabId = (index: number): string => `${baseId}-tab-${index}`
-  const panelId = `${baseId}-panel`
+  const panelId = (index: number): string => `${baseId}-panel-${index}`
 
   const enabled = items.map((item, index) => ({ item, index })).filter(({ item }) => item.disabled !== true)
   // 选中值失效时兜底首个可用项：只兜显示不回调，就会「看着是 A、动起来是 B」。
@@ -94,7 +102,7 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
           const selected = item.value === activeValue
           return (
             <button
-              aria-controls={panelId}
+              aria-controls={panelId(index)}
               aria-selected={selected}
               className={['tabs__tab', selected ? 'tabs__tab--selected' : ''].filter(Boolean).join(' ')}
               disabled={item.disabled === true}
@@ -113,13 +121,17 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
           )
         })}
       </div>
-      <div
-        aria-labelledby={activeIndex >= 0 ? tabId(activeIndex) : undefined}
-        className="tabs__panel"
-        id={panelId}
-        role="tabpanel">
-        {panel}
-      </div>
+      {items.map((item, index) => (
+        <div
+          aria-labelledby={tabId(index)}
+          className="tabs__panel"
+          hidden={item.value !== activeValue}
+          id={panelId(index)}
+          key={item.value}
+          role="tabpanel">
+          {panels[item.value]}
+        </div>
+      ))}
     </div>
   )
 }

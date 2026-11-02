@@ -16,7 +16,7 @@ change — a page that silently describes the old shape is worse than a missing 
 
 | Export | Use it for |
 | --- | --- |
-| `Tabs` | One tablist plus its panel. |
+| `Tabs` | One tablist plus one mounted panel per tab. |
 | `TabsProps` | The props type. |
 | `ChoiceItem` | `{ value, labelKey, disabled? }` — shared with `Segmented`. **Its authoritative definition is here**, in this page. |
 
@@ -30,7 +30,7 @@ change — a page that silently describes the old shape is worse than a missing 
   onChange={setTab}
   ariaLabelKey="settings.tabs.group"
   resolveText={t}
-  panel={tab === 'sources' ? <Sources /> : <Storage />}
+  panels={{ sources: <Sources />, storage: <Storage /> }}
 />
 ```
 
@@ -43,7 +43,7 @@ change — a page that silently describes the old shape is worse than a missing 
 | `onChange` | `(value: string) => void` | yes | Emits the new `value`. |
 | `ariaLabelKey` | `string` | yes | The tablist's accessible name, **as a key**. |
 | `resolveText` | `(key: string) => string` | yes | The caller's resolver. |
-| `panel` | `ReactNode` | yes | The selected panel. Loading, empty and error live inside it. Without a panel this is not a `Tabs` — use `Segmented` or drop the tabs. |
+| `panels` | `Readonly<Record<string, ReactNode>>` | yes | One panel per tab, keyed by `value`. **Every panel is mounted**; the inactive ones get the native `hidden` attribute. Loading, empty and error live inside their panel. Without panels this is not a `Tabs` — use `Segmented` or drop the tabs. |
 
 ## Rules the component enforces
 

@@ -27,7 +27,7 @@
   onChange={setTab}
   ariaLabelKey="settings.tabs.group"
   resolveText={t}
-  panel={tab === 'sources' ? <Sources /> : <Storage />}
+  panels={{ sources: <Sources />, storage: <Storage /> }}
 />
 ```
 
@@ -40,7 +40,7 @@
 | `onChange` | `(value: string) => void` | 是 | 回传新的 `value`。 |
 | `ariaLabelKey` | `string` | 是 | tablist 的可访问名，**收键**。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的解析入口。 |
-| `panel` | `ReactNode` | 是 | 选中项的面板；加载、空、出错都在它里面。没有面板就不该用 `Tabs`——那该用 `Segmented` 或不要页签。 |
+| `panels` | `Readonly<Record<string, ReactNode>>` | 是 | 每个页签一块，按 `value` 取。**全部挂载**，非活动块加原生 `hidden`。加载、空、出错都在各自面板里。没有面板就不该用 `Tabs`——那该用 `Segmented` 或不要页签。 |
 
 ## 组件自己保证的几条
 
