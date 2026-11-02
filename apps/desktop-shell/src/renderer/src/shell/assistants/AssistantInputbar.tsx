@@ -1,4 +1,4 @@
-import { Button, Input, Tooltip } from 'antd'
+import { Button, Input, Tooltip as AntTooltip } from 'antd'
 import {
   Database,
   Eraser,
@@ -13,6 +13,7 @@ import {
   Wrench
 } from 'lucide-react'
 
+import { Tooltip } from '@platform/ui/components/tooltip'
 import type { PlatformText } from '../../i18n/platformText'
 import {
   createAssistantInputbarTools,
@@ -50,6 +51,8 @@ type AssistantInputbarProps = {
   onToggleMentionedModel: (value: string) => void
   onClearMentionedModels: () => void
 }
+
+const SETTINGS_TOOLTIP_KEY = 'assistants.assistantSettings'
 
 const TOOL_ICONS: Record<AssistantInputbarToolId, LucideIcon> = {
   attachment: Paperclip,
@@ -111,7 +114,7 @@ export function AssistantInputbar({
             const Icon = TOOL_ICONS[tool.id]
             const label = labels.inputbarTools[tool.labelKey]
             return (
-              <Tooltip key={tool.id} title={label}>
+              <AntTooltip key={tool.id} title={label}>
                 <Button
                   type="text"
                   size="small"
@@ -121,22 +124,18 @@ export function AssistantInputbar({
                   aria-label={label}
                   onClick={() => onToolAction(tool.id)}
                 />
-              </Tooltip>
+              </AntTooltip>
             )
           })}
-          <Tooltip title={labels.mentionedModels}>
-            <span>
-              <AssistantMentionedModelsPicker
-                labels={labels}
-                modelOptions={modelOptions}
-                mentionedModels={mentionedModels}
-                disabled={!canCompose}
-                onToggleMentionedModel={onToggleMentionedModel}
-                onClearMentionedModels={onClearMentionedModels}
-              />
-            </span>
-          </Tooltip>
-          <Tooltip title={labels.assistantSettings}>
+          <AssistantMentionedModelsPicker
+            labels={labels}
+            modelOptions={modelOptions}
+            mentionedModels={mentionedModels}
+            disabled={!canCompose}
+            onToggleMentionedModel={onToggleMentionedModel}
+            onClearMentionedModels={onClearMentionedModels}
+          />
+          <Tooltip labelKey={SETTINGS_TOOLTIP_KEY} resolveText={(key) => (key === SETTINGS_TOOLTIP_KEY ? labels.assistantSettings : '')}>
             <Button
               type="text"
               size="small"
