@@ -521,6 +521,10 @@ button {
 .topbar-actions {
   display: flex;
   height: 100%;
+  /* 右侧光学留白由容器给，不由按钮给：原来最后一颗是 38px 按钮（15px 图标居中，天然留 11.5px），
+     换成 24px 的铃铛后自身只留 4px，若不再补这一笔，图标会贴到窗口边。
+     差值按「图标右缘到窗口右缘与改前相等」算：11.5 − 4 ≈ 7.5px，取 7px 让光学重量与相邻按钮一致。 */
+  padding-right: 7px;
   -webkit-app-region: no-drag;
 }
 
@@ -2341,29 +2345,6 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
-.storage-cache-tabs {
-  display: flex;
-  gap: 2px;
-}
-
-.storage-cache-tab {
-  padding: 8px 16px;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13.5px;
-  cursor: pointer;
-}
-
-.storage-cache-tab:hover {
-  color: var(--text-strong);
-}
-
-.storage-cache-tab.active {
-  border-bottom-color: var(--accent);
-  color: var(--text-strong);
-  font-weight: 600;
-}
 
 .storage-cache-panel {
   min-width: 0;
