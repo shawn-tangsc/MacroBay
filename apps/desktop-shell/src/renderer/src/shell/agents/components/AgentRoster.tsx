@@ -1,10 +1,13 @@
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { MoreHorizontal } from 'lucide-react'
 
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
 
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { getAgentAvatar } from '../agentUiTypes'
 import { useAgentText } from '../agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 
 type AgentRosterProps = {
   agents: AgentEntity[]
@@ -22,6 +25,8 @@ export default function AgentRoster({
   onEditAgent
 }: AgentRosterProps): React.ReactElement {
   const t = useAgentText()
+  const tooltipKeys = { agentSettings: 'navbar.agentSettings' } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
 
   return (
     <section className="agent-roster">
@@ -39,7 +44,7 @@ export default function AgentRoster({
                 <small>{t.sidePanel.agentSessionCount(sessionCountByAgentId[agent.id] ?? 0)}</small>
               </span>
             </button>
-            <Tooltip title={t.navbar.agentSettings}>
+            <Tooltip labelKey={tooltipKeys.agentSettings} resolveText={resolveText}>
               <Button
                 className="agent-roster-more"
                 type="text"

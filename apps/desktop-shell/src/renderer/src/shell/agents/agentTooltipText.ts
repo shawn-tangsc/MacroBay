@@ -18,6 +18,7 @@ export type AgentTooltipKey =
   | 'navbar.search'
   | 'messageNavigation.none'
   | 'settingsDrawer.narrowMode'
+  | 'navbar.agentSettings'
   | 'chatNavbar.agentConfig'
   | 'chatNavbar.openWorkspace'
   | 'chatNavbar.clearMessages'
