@@ -4,14 +4,19 @@ import { Check, Download, ExternalLink, Search, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillSearchResult } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import { Modal } from '@platform/ui/components/modal'
+import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
+import { StatusPill } from '@platform/ui/components/status-pill'
 
 import type { useAgentText } from '../agentTextProvider'
 import { resolveAgentTextKey } from '../agentTooltipText'
 import { buildSkillMarketplaceRows } from './skillMarketplaceViewModel'
 
 const MARKETPLACE_TITLE_KEY = 'editor.tools.marketplaceTitle'
+
+/** 来源注册表名是分类名词。 */
+const REGISTRY_KEY = 'agent.skills.registry'
 
 type SkillMarketplaceModalProps = {
   open: boolean
@@ -116,7 +121,7 @@ export default function SkillMarketplaceModal({
                   <strong>{row.name}</strong>
                   <small>{row.description ?? text.common.noDescription}</small>
                   <span className="agent-marketplace-meta">
-                    <Tag className="agent-tool-approval">{row.sourceRegistry}</Tag>
+                    <MetaChip labelKey={REGISTRY_KEY} resolveText={() => row.sourceRegistry} />
                     <span>{row.statsText}</span>
                     {row.author ? <span>{row.author}</span> : null}
                   </span>
@@ -132,10 +137,11 @@ export default function SkillMarketplaceModal({
                   />
                 ) : null}
                 {row.isInstalled ? (
-                  <Tag className="agent-tool-approval auto">
-                    <Check size={12} />
-                    {text.editor.tools.skillInstalled}
-                  </Tag>
+                  <StatusPill
+                    tone="ok"
+                    labelKey="editor.tools.skillInstalled"
+                    resolveText={(key) => resolveAgentTextKey(text, key)}
+                  />
                 ) : (
                   <Button
                     className="ant-secondary-button"
