@@ -6,10 +6,17 @@ import type { ScheduledTaskEntity, TaskRunLogEntity } from '@platform/ai/agent-p
 import type { TaskMutationAuditEntity } from '@platform/ai/agent-platform/runtime/tasks/taskAutomationContracts'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { formatTaskSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockEmpty, BlockLoading } from './TaskAutomationBlockParts'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
+import {
+  AUDIT_OUTCOME_PILL,
+  RUN_OUTCOME_PILL,
+  TASK_STATUS_PILL,
+  pillTextResolver
+} from './taskAutomationStatusPills'
 import type {
   DeliveryHealthCounts,
   TaskAutomationStatusFilter,
@@ -26,6 +33,7 @@ export function TaskAutomationTasksSection(props: {
 }): React.ReactElement {
   const { labels, language, controller } = props
   const { state } = controller
+  const pillText = pillTextResolver(labels)
 
   return (
     <section className="task-automation-block" aria-busy={controller.loading}>
@@ -102,9 +110,11 @@ export function TaskAutomationTasksSection(props: {
                       <span className="task-automation-name">{row.task.name}</span>
                     </td>
                     <td>
-                      <span className={`task-automation-tag ${statusTone(row.task.status)}`}>
-                        {labels.status[row.task.status]}
-                      </span>
+                      <StatusPill
+                        tone={TASK_STATUS_PILL[row.task.status].tone}
+                        labelKey={TASK_STATUS_PILL[row.task.status].labelKey}
+                        resolveText={pillText}
+                      />
                     </td>
                     <td className="task-automation-mono">
                       {formatTaskSchedule(row.task.trigger, labels, language)}
@@ -194,6 +204,7 @@ function LastRun(props: {
   language: AppLanguage
 }): React.ReactElement {
   const { labels, language, snapshot, unreadable } = props
+  const pillText = pillTextResolver(labels)
   if (unreadable) return <span className="task-automation-muted">{labels.runUnreadable}</span>
   if (!snapshot) return <span className="task-automation-muted">{labels.outcome.never}</span>
   const at = formatTimestamp(snapshot.at, language)
@@ -201,7 +212,11 @@ function LastRun(props: {
   if (!outcome) return <span className="task-automation-muted">{at ?? labels.emptyValue}</span>
   return (
     <>
-      <span className={`task-automation-tag ${outcomeTone(outcome)}`}>{labels.outcome[outcome]}</span>
+      <StatusPill
+        tone={RUN_OUTCOME_PILL[outcome].tone}
+        labelKey={RUN_OUTCOME_PILL[outcome].labelKey}
+        resolveText={pillText}
+      />
       {at ? <span className="task-automation-mono task-automation-muted"> {at}</span> : null}
       {snapshot.skipReasons.length > 0 ? (
         // Why it was skipped, in words: each reason leads to a different action, so a bare "skipped"
@@ -266,14 +281,17 @@ function AuditList(props: {
   audits: TaskMutationAuditEntity[]
 }): React.ReactElement {
   const { audits, labels, language } = props
+  const pillText = pillTextResolver(labels)
   if (audits.length === 0) return <p className="task-automation-note">{labels.noChanges}</p>
   return (
     <ul className="task-automation-audit">
       {audits.slice(0, 5).map((audit) => (
         <li key={audit.id}>
-          <span className={`task-automation-tag ${audit.outcome === 'accepted' ? 'task-automation-tag-ok' : 'task-automation-tag-off'}`}>
-            {audit.outcome === 'accepted' ? labels.auditAccepted : labels.auditRejected}
-          </span>
+          <StatusPill
+            tone={AUDIT_OUTCOME_PILL[audit.outcome].tone}
+            labelKey={AUDIT_OUTCOME_PILL[audit.outcome].labelKey}
+            resolveText={pillText}
+          />
           <span>{labels.auditAction[audit.action] ?? audit.action}</span>
           <span className="task-automation-mono task-automation-muted">
             {formatTimestamp(audit.createdAt, language) ?? labels.emptyValue}

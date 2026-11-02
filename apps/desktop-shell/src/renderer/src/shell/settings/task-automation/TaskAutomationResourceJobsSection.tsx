@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import type { JobScheduleView } from '@platform/jobs'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockEmpty, BlockError, BlockLoading } from './TaskAutomationBlockParts'
@@ -15,6 +16,7 @@ import {
   type ResourceJobRegistrationFilter,
   type ResourceJobSourceFilter
 } from './resourceJobFilters'
+import { REGISTRATION_PILL, RUN_OUTCOME_PILL, pillTextResolver } from './taskAutomationStatusPills'
 import {
   clampPage,
   DEFAULT_RESOURCE_JOB_PAGE_SIZE,
@@ -54,6 +56,7 @@ export function TaskAutomationResourceJobsSection(props: {
   const pages = pageCount(matched.length, pageSize)
   const currentPage = clampPage(page, matched.length, pageSize)
   const visibleItems = slicePage(matched, page, pageSize)
+  const pillText = pillTextResolver(labels)
   const clearFilters = (): void => {
     setNameQuery('')
     setSource('all')
@@ -166,9 +169,11 @@ export function TaskAutomationResourceJobsSection(props: {
                       <td>{sourceLabel(job, controller.productNames, labels)}</td>
                       <td className="task-automation-mono">{formatJobSchedule(job.trigger, labels, language)}</td>
                       <td>
-                        <span className={`task-automation-tag ${job.registered ? 'task-automation-tag-ok' : 'task-automation-tag-off'}`}>
-                          {job.registered ? labels.registered : labels.notRegistered}
-                        </span>
+                        <StatusPill
+                          tone={REGISTRATION_PILL[job.registered ? 'registered' : 'unregistered'].tone}
+                          labelKey={REGISTRATION_PILL[job.registered ? 'registered' : 'unregistered'].labelKey}
+                          resolveText={pillText}
+                        />
                       </td>
                       <td className="task-automation-mono">
                         {formatTimestamp(job.nextRunAt, language) ?? labels.emptyValue}
@@ -231,15 +236,18 @@ function JobLastRun(props: {
   language: AppLanguage
 }): React.ReactElement {
   const { job, labels, language } = props
+  const pillText = pillTextResolver(labels)
   if (job.lastOutcome === 'never' && !job.lastRunAt) {
     return <span className="task-automation-muted">{labels.outcome.never}</span>
   }
   const at = formatTimestamp(job.lastRunAt, language)
   return (
     <>
-      <span className={`task-automation-tag ${outcomeTone(job.lastOutcome)}`}>
-        {labels.outcome[job.lastOutcome]}
-      </span>
+      <StatusPill
+        tone={RUN_OUTCOME_PILL[job.lastOutcome].tone}
+        labelKey={RUN_OUTCOME_PILL[job.lastOutcome].labelKey}
+        resolveText={pillText}
+      />
       {at ? <span className="task-automation-mono task-automation-muted"> {at}</span> : null}
     </>
   )
@@ -262,10 +270,4 @@ function resourceErrorLabel(
   if (reason === 'bridge-missing') return labels.resourceBridgeMissing
   if (reason === 'timeout') return labels.resourceLoadTimeout
   return labels.resourceLoadFailed
-}
-
-function outcomeTone(outcome: JobScheduleView['lastOutcome']): string {
-  if (outcome === 'success') return 'task-automation-tag-ok'
-  if (outcome === 'failed') return 'task-automation-tag-bad'
-  return 'task-automation-tag-off'
 }
