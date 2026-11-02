@@ -33,6 +33,19 @@ import './iconButton.css'
  * 词与 `StateSize` 的那两档同名，但**故意不是同一个类型**：`StateSize` 还有 `lg`，直接 import
  * 它就会让 `size="lg"` 编译通过，而这颗按钮没有第三档。**同一个词、不同的合法集合，就该是两个
  * 类型**——共用类型是两件事被绑在一起的第一步，之后每一次加档都要问另一方同不同意。
+ *
+ * **子集方向也是危险的，别只看“两套类型”就放心**：
+ *
+ * ```
+ * IconButtonSize = 'sm' | 'md'        StateSize = 'sm' | 'md' | 'lg'
+ * IconButtonSize 是 StateSize 的子集
+ *   父集 → 子集   编译不过   （安全）
+ *   子集 → 父集   编译通过   （危险）
+ * ```
+ *
+ * 现在是危险方向：把 `IconButton` 的 size 直接透传给一个收 `StateSize` 的组件，会得到一次
+ * 「看着合理、类型也对」的传参。所以这两档**可以**传给 `StateView`，反过来不行——加档时两边
+ * 要一起看，别只改一边。
  */
 export const ICON_BUTTON_SIZES = ['sm', 'md'] as const
 
