@@ -15,8 +15,8 @@ describe('daily briefing generation settings service', () => {
     })
     // The derived cron and the zone verdict exist once, inside the period. Nothing at this level
     // restates them — that is what keeps the page and the schedule reading one answer.
+    // The list is the whole view: no flat copy of the first period can drift away from it.
     expect(await service.getView()).toEqual({
-      generationTime: '08:00', generationTimeZone: null, windowHours: 24,
       periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }]
     })
   })
@@ -36,7 +36,7 @@ describe('daily briefing generation settings service', () => {
       { id: 'p_evening', name: 'Evening', generationTime: '09:30', generationTimeZone: 'UTC', windowHours: 12 }
     ])
     // The single-period page keeps reading the first period until 4b shows the list.
-    expect(await service.getView()).toMatchObject({ generationTime: '08:00', windowHours: 24 })
+    expect((await service.getView()).periods[0]).toMatchObject({ generationTime: '08:00', windowHours: 24 })
   })
 
   it('never writes while reading: the old file keeps its shape until a save', async () => {
@@ -64,7 +64,6 @@ describe('daily briefing generation settings service', () => {
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
 
     expect(await service.getView()).toMatchObject({
-      generationTimeZone: 'Asia/Shanghai',
       periods: [{ generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null }]
     })
     expect(write).not.toHaveBeenCalled()
@@ -77,7 +76,6 @@ describe('daily briefing generation settings service', () => {
     })
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
     expect(await service.getView()).toMatchObject({
-      generationTimeZone: 'UTC',
       periods: [{ generationTimeZone: 'UTC', generationTimeZoneInvalid: null }]
     })
   })
@@ -90,7 +88,6 @@ describe('daily briefing generation settings service', () => {
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW, timeZone: () => 'Asia/Shanghai' })
 
     expect(await service.getView()).toMatchObject({
-      generationTimeZone: null,
       periods: [{ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' }]
     })
     // A typo is neither replaced by the display zone nor rewritten.
@@ -108,7 +105,6 @@ describe('daily briefing generation settings service', () => {
     // saying "Asia/Shangai is not a zone, automatic generation is paused" instead of quietly
     // switching to the display zone.
     expect(await service.getView()).toMatchObject({
-      generationTimeZone: null,
       periods: [{ generationTimeZone: null, generationTimeZoneInvalid: 'Asia/Shangai' }]
     })
     expect(write).not.toHaveBeenCalled()
@@ -135,7 +131,7 @@ describe('daily briefing generation settings service', () => {
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => '2026-10-30T01:00:00.000Z', timeZone: () => 'Asia/Shanghai', onSaved })
 
     const saved = await service.save({ generationTime: '09:30' })
-    expect(saved).toMatchObject({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai', windowHours: 24 })
+    expect(saved.periods[0]).toMatchObject({ generationTime: '09:30', generationTimeZone: 'Asia/Shanghai', windowHours: 24 })
 
     expect(write).toHaveBeenCalledTimes(1)
     expect(await storage.read()).toEqual({
@@ -174,7 +170,7 @@ describe('daily briefing generation settings service', () => {
     await expect(service.save({ windowHours: 36 })).rejects.toThrow('daily-briefing-window-hours-invalid')
     expect(onSaved).not.toHaveBeenCalled()
     expect(await storage.read()).toBeUndefined()
-    expect((await service.getView()).windowHours).toBe(24)
+    expect((await service.getView()).periods[0]!.windowHours).toBe(24)
   })
 
   it('trims a partially written settings file to the supported values', async () => {
@@ -185,7 +181,6 @@ describe('daily briefing generation settings service', () => {
     })
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW })
     expect(await service.getView()).toEqual({
-      generationTime: '09:00', generationTimeZone: null, windowHours: 24,
       periods: [{ id: 'default', generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *' }]
     })
   })

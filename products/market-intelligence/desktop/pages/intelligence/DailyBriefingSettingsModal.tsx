@@ -88,17 +88,19 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
         setLoadFailed(true)
         return
       }
-      setZone(settings.view.generation.generationTimeZone ?? null)
-      setInvalidZone(settings.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
-      setPeriodCount(Math.max(1, settings.view.generation.periods?.length ?? 1))
+      const periods = settings.view.generation.periods
+      const first = periods[0]!
+      setZone(first.generationTimeZone)
+      setInvalidZone(first.generationTimeZoneInvalid)
+      setPeriodCount(Math.max(1, periods.length))
       setPlan({
         used: settings.view.language.plan.primary.used,
         requested: settings.view.language.plan.primary.requested,
         fallback: settings.view.language.plan.primary.fallbackReason === 'ui-language-unsupported'
       })
       setDraft({
-        generationTime: settings.view.generation.generationTime,
-        windowHours: settings.view.generation.windowHours,
+        generationTime: first.generationTime,
+        windowHours: first.windowHours,
         additionalLanguages: settings.view.language.settings.additional,
         editorialEnabled: settings.view.settings.editorialEnabled,
         providerId: settings.view.settings.providerId,

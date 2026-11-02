@@ -63,8 +63,8 @@ export type DailyBriefingGenerationSettingsView = Readonly<{
   /** The zone the first period means; null while unknown or unreadable. */
   generationTimeZone: string | null
   windowHours: number
-  /** Every saved period, projected by the service. Absent from an older main process. */
-  periods?: readonly DailyBriefingPeriodView[]
+  /** Every saved period, projected by the service. The list is the view; there is no flat copy. */
+  periods: readonly DailyBriefingPeriodView[]
 }>
 
 export type DailyBriefingPeriodView = Readonly<{
@@ -271,15 +271,10 @@ async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefing
 }
 
 function isGenerationSettings(value: unknown): value is DailyBriefingGenerationSettingsView {
-  // Both zone fields are nullable on purpose: an older main process answers without them, and that
-  // must read as "unknown", not as a failed settings read.
-  // The derived fields (cron, zone verdict) are only accepted inside `periods[]`: a second copy at
-  // this level is how two answers to one question start disagreeing.
-  return isExact(value, ['generationTime', 'windowHours'], ['generationTimeZone', 'periods']) &&
-    isText(value.generationTime) && typeof value.windowHours === 'number' && Number.isFinite(value.windowHours) &&
-
-    (value.generationTimeZone === undefined || value.generationTimeZone === null || isText(value.generationTimeZone)) &&
-    (value.periods === undefined || (Array.isArray(value.periods) && value.periods.every(isPeriodView)))
+  // The list is the only statement of the schedule. A second copy of the first period at this level
+  // is how the page and the schedule start disagreeing without anything breaking.
+  return isExact(value, ['periods']) && Array.isArray(value.periods) &&
+    value.periods.length > 0 && value.periods.every(isPeriodView)
 }
 
 function isPeriodView(value: unknown): value is DailyBriefingPeriodView {

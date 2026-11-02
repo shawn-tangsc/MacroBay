@@ -932,7 +932,7 @@ export function getIntelligenceModule(
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
-      generationSettings: () => dailyBriefingGenerationSettings.getView(),
+      generationSettings: async () => (await dailyBriefingGenerationSettings.getPeriods())[0]!,
       backfillFactory,
       coreFactEnsure: async ({ document, cutoff }) =>
         (await dailyBriefFactEnsure.ensure({ document, cutoff, trigger: 'generation' })).document,

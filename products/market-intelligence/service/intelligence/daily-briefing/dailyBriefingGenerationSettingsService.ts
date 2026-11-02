@@ -37,11 +37,7 @@ export type DailyBriefingPeriodView = Readonly<{
  * derived value up here is exactly the "one thing, two statements" this shape refuses.
  */
 export type DailyBriefingGenerationSettingsView = Readonly<{
-  generationTime: string
-  /** The zone the first period means, or null while it is unknown or unreadable. */
-  generationTimeZone: string | null
-  windowHours: DailyBriefingWindowHours
-  /** Every saved period, projected, with its own cron and zone verdict. */
+  /** Every saved period, projected, with its own cron and zone verdict. The list is the view. */
   periods: readonly DailyBriefingPeriodView[]
 }>
 
@@ -137,13 +133,7 @@ export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
 
   function view(settings: DailyBriefingPeriodsSettings): DailyBriefingGenerationSettingsView {
     const periods = Object.freeze(settings.periods.map(project))
-    const first = periods[0]!
-    return Object.freeze({
-      generationTime: first.generationTime,
-      generationTimeZone: first.generationTimeZone,
-      windowHours: first.windowHours,
-      periods
-    })
+    return Object.freeze({ periods })
   }
 
   async function load(): Promise<DailyBriefingPeriodsSettings> {
