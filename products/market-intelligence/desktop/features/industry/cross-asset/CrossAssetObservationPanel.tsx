@@ -3,6 +3,7 @@ import { Button, Popover, Segmented, Tooltip } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
+import { Tooltip as FocusTooltip } from '@platform/ui/components/tooltip'
 import type { productText } from '../../../shared/i18n/productText'
 import type { createCrossAssetObservationClient } from '../../../shared/ipc/crossAssetObservationClient'
 import { crossAssetContractPolicy } from '../../../../contracts/crossAssetObservationContracts'
@@ -12,6 +13,7 @@ import { macroMarketSnapshotPublicPolicy } from '../../../../contracts/macro/mac
 import type { MacroRatesReading, MacroRatesSnapshotView } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macroRatesSnapshotContracts'
 import { useCrossAssetObservation } from './useCrossAssetObservation'
+import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows } from './crossAssetStatusRegistry'
 import { crossAssetWindowReturns, crossAssetWindows, type CrossAssetWindow } from './crossAssetWindowReturns'
 import { CrossAssetReturnChart } from './CrossAssetReturnChart'
@@ -46,6 +48,16 @@ import './CrossAssetObservationPanel.css'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
 /** The windows the chart offers, from the contract that defines them: a hand-copied list drifts. */
+/**
+ * 提示文案的键：指向本面板自己的那一块 `productText`。
+ *
+ * 平台 `Tooltip` 只收键、句子由调用方的解析器给；写死键名而不是把已解析的句子塞进
+ * `resolveText={() => …}`，后者会让键形同虚设（守卫会拦，但更该一开始就写对）。
+ */
+const crossAssetTextKeys = Object.freeze({
+  subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
+  refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh'
+})
 const crossAssetRanges = crossAssetContractPolicy.ranges
 type CrossAssetRange = typeof crossAssetRanges[number]
 
@@ -258,6 +270,7 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
   onSelectEvent?: (line: CrossAssetEventLine, month: string) => void
 }): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  const resolveProductText = useProductTextKey()
   const view = useCrossAssetObservation({ client })
   const snapshot = view.snapshot
   /**
@@ -312,7 +325,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
           every input the reading depends on, with the ones still missing named rather than faked. */}
       <div className="mi-cross-asset__quote" data-cross-asset-region="status">
         <div className="mi-cross-asset__quote-heading"><h3>{text.statusTitle}</h3>
-        <Tooltip title={text.subtitle} trigger={['hover', 'focus', 'click']}><Button type="text" size="small" aria-label={text.subtitle} icon={<Info size={13} />} /></Tooltip></div>
+        <FocusTooltip labelKey={crossAssetTextKeys.subtitle} resolveText={resolveProductText}>
+          <Button type="text" size="small" aria-label={text.subtitle} icon={<Info size={13} />} /></FocusTooltip></div>
         <table className="mi-cross-asset__status-table">
           {/* Explicit widths: with `table-layout: fixed` the header and the figures share one grid. */}
           <colgroup><col className="mi-cross-asset__status-col" /><col className="mi-cross-asset__status-col-latest" /><col className="mi-cross-asset__status-col-window" span={crossAssetWindows.length} /></colgroup>
@@ -336,7 +350,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
       <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <Tooltip title={historyInfo} trigger={['hover', 'focus', 'click']}><Button type="text" size="small" aria-label={text.analysis} icon={<Info size={13} />} /></Tooltip></div>
         <div className="mi-cross-asset__chart-actions"><Segmented size="small" value={view.range} options={crossAssetRanges.map(range => ({ label: range.toUpperCase(), value: range }))} onChange={range => view.setRange(range as CrossAssetRange)} />
-          <Tooltip title={text.refresh}><Button type="text" size="small" aria-label={text.refresh} loading={view.refreshing} icon={<RefreshCw size={13} />} onClick={() => void view.refresh()} /></Tooltip></div></div>
+          <FocusTooltip labelKey={crossAssetTextKeys.refresh} resolveText={resolveProductText}>
+            <Button type="text" size="small" aria-label={text.refresh} loading={view.refreshing} icon={<RefreshCw size={13} />} onClick={() => void view.refresh()} /></FocusTooltip></div></div>
         {snapshot?.sourceState && snapshot.sourceState !== 'live' ? <small data-source-state={snapshot.sourceState}>{text.states[snapshot.sourceState]}</small> : null}
         {snapshot?.quotes ? <div className="mi-cross-asset__status">{(['btc', 'eth'] as const).filter(asset => snapshot.quotes![asset].state !== 'live').map(asset => <small key={asset} data-quote-asset={asset}>{text.assets[asset]} {text.states[snapshot.quotes![asset].state]}</small>)}</div> : null}
         {/* The legend and the tooltip carry the same name the row does: one panel, one instrument name
