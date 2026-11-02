@@ -9,6 +9,8 @@ import {
 } from 'react'
 
 import { fillLabelParams } from '../textKeyParams'
+import { overlayContainer } from '../overlayContainer'
+import './popover.css'
 
 /**
  * 多行说明浮层（界面设计 2026-11-02 定的五条能力）。
@@ -24,6 +26,11 @@ import { fillLabelParams } from '../textKeyParams'
  * 4. **定位跟随触发器、不遮住被说明的内容**：在下方，空间不足时向上翻；定位与翻转交给 antd，
  *    本组件不自己算坐标（同 `Tooltip` 的理由）；
  * 5. **Esc 关闭后焦点回到触发器**：不然焦点掉到 `body`，键盘读者就丢了位置。
+ *
+ * **锚点由浮层自己拿**（2026-11-02）：触发器被包进一个 `span.platform-popover__anchor`，浮层量的是
+ * 这个真实节点，不指望调用方或子组件转发 `ref`。早先直接拿子元素当锚点，子组件没有转发 ref 时
+ * （`IconButton` 当时就是），浮层拿不到矩形，按 (0,0) 定位——气泡要么不出现，要么停在窗口左上角。
+ * 靠“每个触发器都记得转发 ref”是隐式约定；把它变成浮层自己的责任，调用点不必再懂这件事。
  *
  * 点击别处关闭时**不抢焦点**：读者点的那个地方就是他要去的地方，焦点跟着他走。
  *
@@ -179,6 +186,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
 
   return (
     <AntPopover
+      getPopupContainer={overlayContainer}
       content={
         <div
           className="platform-popover__content"
@@ -201,7 +209,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
       open={open}
       placement={PLACEMENT}
       trigger={[]}>
-      {props.trigger(triggerProps)}
+      <span className="platform-popover__anchor">{props.trigger(triggerProps)}</span>
     </AntPopover>
   )
 }

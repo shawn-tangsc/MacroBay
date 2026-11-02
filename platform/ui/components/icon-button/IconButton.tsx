@@ -1,10 +1,11 @@
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
 import { fillLabelParams } from '../textKeyParams'
 
 import type { LucideIcon } from 'lucide-react'
-import type { CSSProperties, FocusEvent, MouseEvent, ReactElement } from 'react'
+import type { CSSProperties, FocusEvent, MouseEvent, ReactElement, Ref } from 'react'
 
 import { LoadingSpinner } from '../loading'
+import { Tooltip } from '../tooltip'
 
 import './iconButton.css'
 
@@ -215,6 +216,13 @@ type IconButtonCommon = {
   onMouseLeave?: (event: MouseEvent<HTMLElement>) => void
   onFocus?: (event: FocusEvent<HTMLElement>) => void
   onBlur?: (event: FocusEvent<HTMLElement>) => void
+  /**
+   * 真实按钮节点。浮层类组件（`Popover`、`Tooltip`）靠它量锚点矩形来定位。
+   *
+   * 不转发会静默退化：浮层还是“打开”了，但拿不到矩形，于是按 (0,0) 算位置——气泡要么不出现，
+   * 要么停在窗口左上角。2026-11-02 用户报的就是这个症状，所以这里收下并交给底层按钮。
+   */
+  ref?: Ref<HTMLButtonElement | HTMLAnchorElement>
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
@@ -253,6 +261,7 @@ export function IconButton({
   onMouseLeave,
   onFocus,
   onBlur,
+  ref,
   resolveText
 }: IconButtonProps): ReactElement {
   // 配对关系落在运行时：读屏听到「这是弹出按钮」却听不出开没开，比没写更糟。
@@ -271,7 +280,6 @@ export function IconButton({
   if (hasPopup !== undefined && pressed !== undefined) {
     throw new Error('IconButton takes either pressed or hasPopup, not both')
   }
-
   const ariaLabel = fillLabelParams(resolveText(ariaLabelKey), ariaLabelParams)
   const pixels = SIZE_PX[size]
   const tooltipText = tooltipKey === undefined ? undefined : resolveText(tooltipKey)
@@ -280,6 +288,7 @@ export function IconButton({
   // 尺寸、圆角、焦点环仍是我们的规格，写在行内与本地 CSS 里；外观覆盖清单见文档。
   const button = (
     <Button
+      ref={ref}
       aria-label={ariaLabel}
       onBlur={onBlur}
       onFocus={onFocus}
@@ -324,12 +333,13 @@ export function IconButton({
     />
   )
 
-  if (tooltipText === undefined) return button
+  // 两句都在才算有提示：键与解析后的句子缺一不可（句子为空时平台 `Tooltip` 自己不渲染）。
+  if (tooltipKey === undefined || tooltipText === undefined) return button
 
   // 描述文本由 Tooltip 自己挂到触发元素上（`aria-describedby` 指向弹层），焦点一到弹层就开着，
   // 键盘用户和读屏都拿得到。不自己再挂一份：同一个元素两只手写同一个属性，谁最后写谁生效。
   return (
-    <Tooltip title={tooltipText} trigger={['hover', 'focus']}>
+    <Tooltip labelKey={tooltipKey} resolveText={resolveText}>
       {button}
     </Tooltip>
   )

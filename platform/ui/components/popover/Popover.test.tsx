@@ -95,9 +95,14 @@ async function tick(): Promise<void> {
   })
 }
 
-/** 开着的时候 antd 会给触发器加上这个类；比「浮层还在 DOM 里」可靠——容器会留着做动画。 */
+/**
+ * 开着的时候 antd 会把 `ant-popover-open` 标在它拿到的**锚点**上；比「浮层还在 DOM 里」可靠——
+ * 容器会留着做动画。锚点现在是浮层自己包出来的 `.platform-popover__anchor`（不是触发器本身），
+ * 所以这里从触发器往上找它：标记搬家了，语义没变。
+ */
 function isOpen(trigger: HTMLElement): boolean {
-  return trigger.className.includes('ant-popover-open')
+  const anchor = trigger.closest('.platform-popover__anchor') ?? trigger
+  return anchor.className.includes('ant-popover-open')
 }
 
 async function fire(target: HTMLElement, type: string): Promise<void> {
@@ -283,6 +288,73 @@ describe('Popover', () => {
       button.focus()
     })
     await tick()
-    expect(button.className).toContain('ant-popover-open')
+    // 两个平台组件要合成一个触发器：浮层交出的处理器落到真实 `<button>` 上，锚点由浮层自己包。
+    expect(button.closest('.platform-popover__anchor')).not.toBeNull()
+    expect(isOpen(button)).toBe(true)
+  })
+
+  it('anchors the bubble through its own wrapper, so a trigger that drops the ref still opens in place', async () => {
+    // 2026-11-02 用户报的症状：气泡不出现，或者跑到整个应用左上角。根因是浮层拿不到锚点——
+    // 当时 `IconButton` 没有把 `ref` 转到真实 `<button>`，`Popover` 又直接拿子元素当锚点。
+    // 这条用例故意用一个**只摊事件、不接 ref** 的触发器：浮层必须照样定位正确，
+    // 因为锚点是它自己包出来的那个真实节点，不是调用方记得转发的那一个。
+    const render = async (top: number, left: number): Promise<{ left: number; top: number }> => {
+      await act(async () => {
+        root?.unmount()
+      })
+      document.body.replaceChildren()
+      const host = document.createElement('div')
+      document.body.append(host)
+      root = createRoot(host)
+      await act(async () => {
+        root!.render(
+          <Popover
+            labelKey="ui.test.help"
+            resolveText={(value) => value}
+            trigger={(triggerProps) => (
+              <button
+                data-trigger
+                onBlur={triggerProps.onBlur}
+                onClick={triggerProps.onSelect}
+                onFocus={triggerProps.onFocus}
+                onMouseEnter={triggerProps.onMouseEnter}
+                onMouseLeave={triggerProps.onMouseLeave}
+                type="button">
+                help
+              </button>
+            )}
+          />
+        )
+      })
+      const anchor = document.querySelector<HTMLElement>('.platform-popover__anchor')
+      if (anchor === null) throw new Error('popover has no anchor element of its own')
+      expect(anchor.querySelector('[data-trigger]')).not.toBeNull()
+      const rect = { x: left, y: top, width: 24, height: 24, top, left, right: left + 24, bottom: top + 24, toJSON: () => ({}) }
+      Object.defineProperty(anchor, 'getBoundingClientRect', { configurable: true, value: () => rect })
+      const button = anchor.querySelector<HTMLButtonElement>('[data-trigger]')!
+      await act(async () => {
+        button.focus()
+      })
+      const layer = await (async () => {
+        for (let attempt = 0; attempt < 60; attempt += 1) {
+          const found = document.querySelector<HTMLElement>('.ant-popover')
+          if (found !== null) return found
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10))
+          })
+        }
+        return null
+      })()
+      expect(layer).not.toBeNull()
+      expect(layer!.parentElement).toBe(document.body)
+      return { left: Number.parseFloat(layer!.style.left), top: Number.parseFloat(layer!.style.top) }
+    }
+
+    const first = await render(300, 400)
+    expect(first.left).not.toBe(0)
+    expect(first.top).not.toBe(0)
+    const second = await render(600, 900)
+    expect(second.left - first.left).toBe(500)
+    expect(second.top - first.top).toBe(300)
   })
 })

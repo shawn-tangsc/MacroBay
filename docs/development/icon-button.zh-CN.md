@@ -41,6 +41,7 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `className` | `string` | 否 | 调用方自己的类，用于定位与状态。**改不动尺寸**：尺寸写在行内，行内优先于任何类规则。 |
 | `style` | `CSSProperties` | 否 | 只用于定位。组件在**你的样式之后**写 `width`/`height`，所以调用方逃不出 22/24 这个闭集。 |
 | `dataAttributes` | `Record<\`data-${string}\`, …>` | 否 | 测试钩子与状态属性（`data-redock-tab`）。用独立 prop 而不是任意属性透传，`width` 之类的键就混不进来。 |
+| `ref` | `Ref<HTMLButtonElement \| HTMLAnchorElement>` | 否 | 真实按钮节点。浮层组件靠它量触发器矩形；不转发时提示会退回 `(0, 0)`，气泡跑到窗口角落。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的文案解析入口；组件内零文案、不 import i18n。 |
 | `disabled` | `boolean` | 否 | 原生 `disabled`：不进 Tab 序列、点了不触发。与 `tooltipKey` 不能并存，一起传编译不过。 |
 | `variant` | `'plain' \| 'solid' \| 'overlay'` | 否，默认 `plain` | `plain` 透明（行内）；`solid` 是工具栏那一排：边框加浅底；`overlay` 给**绝对定位挂在内容之上**的图标按钮——边框、圆角 5、**刻意半透明的底**（透出一点下面的内容才像浮在上面），hover 转不透明。判据：凡是挂在任意内容之上的，一律 `overlay`，不划到透明档。 |
@@ -50,6 +51,8 @@ import { IconButton } from '@platform/ui/components/icon-button'
 | `expanded` | `boolean` | 否 | 这是个展开/收起触发器时传（铃铛打开抽屉）。映射到 `aria-expanded`；不传时输出里没有这个属性。 |
 | `controls` | `string` | 否 | 被展开区域的 `id`。映射到 `aria-controls`；不传时不输出。 |
 | `pressed` | `boolean` | 否 | 开关类按钮的当前状态（按下/开启）。映射到 `aria-pressed`；不传时不输出。读屏名在两种状态下保持恒定——状态不在名字里重复。**外观不变**：按下态由图标本身或它控制的面板表达。 |
+
+**自带圆圈的图形固定 `plain`。** `Info`、`CircleHelp`、`HelpCircle` 自己就画了一个圆，再有边框的档位就是两个圈。这类调用点必须显式写 `variant="plain"`——`platform/ui/components/icon-button/iconGlyphVariantGuard.test.ts` 扫调用点，答案缺了即红。
 
 ### 尺寸
 

@@ -10,6 +10,8 @@ A multi-line explanation attached to a trigger renders `Popover` from
 paragraph that needs reading, or something the reader wants to pin and compare while looking at the
 page underneath.
 
+**The popover owns its anchor.** The trigger is rendered inside `span.platform-popover__anchor`, and the popup measures that node — a trigger component does not have to forward a `ref`. Call sites pass the interaction handlers the render function hands them and nothing else.
+
 ## The component
 
 | Export | Use it for |

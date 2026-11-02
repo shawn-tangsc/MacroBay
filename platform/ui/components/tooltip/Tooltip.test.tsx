@@ -76,6 +76,32 @@ async function mountWithParams(
   return trigger
 }
 
+/** 给元素装一个固定矩形：happy-dom 不做布局，不装的话所有矩形都是 0。 */
+function stubRect(element: Element, top: number, left: number, width = 24, height = 24): void {
+  const rect = { x: left, y: top, width, height, top, left, right: left + width, bottom: top + height, toJSON: () => ({}) }
+  // `configurable: true`：同一条用例里要挪两次锚点。
+  Object.defineProperty(element, 'getBoundingClientRect', { configurable: true, value: () => rect })
+}
+
+/** 读弹层的行内定位（`left` / `top`）。位置是浮层自己算的，不是我们写的样式。 */
+function popupPosition(): { left: number; top: number } | null {
+  const popup = document.querySelector<HTMLElement>('.ant-tooltip')
+  if (popup === null) return null
+  const style = popup.style
+  return { left: Number.parseFloat(style.left), top: Number.parseFloat(style.top) }
+}
+
+async function waitForPopup(): Promise<HTMLElement | null> {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const popup = document.querySelector<HTMLElement>('.ant-tooltip')
+    if (popup !== null) return popup
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+  }
+  return null
+}
+
 describe('Tooltip', () => {
   it('shows on focus, because a title tooltip never does', async () => {
     const trigger = await mount()
@@ -229,4 +255,36 @@ describe('Tooltip', () => {
     expect(source).toContain("const PLACEMENT = 'bottom' as const")
   })
 
+
+  it('mounts the bubble under body and moves it with the trigger instead of leaving it at (0,0)', async () => {
+    // 2026-11-02 用户报的「气泡显示不了 / 跑到整个应用左上角」：浮层拿不到锚点就按 (0,0) 定位。
+    // 这里判两件事，而不是「气泡出现了」——出现了但位置是原点，读者照样看不见。
+    const positionAt = async (top: number, left: number): Promise<{ left: number; top: number }> => {
+      await act(async () => root?.unmount())
+      document.body.replaceChildren()
+      const trigger = await mount()
+      stubRect(trigger, top, left)
+      await act(async () => {
+        trigger.focus()
+      })
+      const popup = await waitForPopup()
+      expect(popup).not.toBeNull()
+      // ① 挂到 body 下：触发器住在会 overflow:hidden 的面板/抽屉里也不会被裁掉。
+      expect(popup?.parentElement).toBe(document.body)
+      const position = popupPosition()
+      expect(position).not.toBeNull()
+      return position!
+    }
+
+    const first = await positionAt(300, 400)
+    // 不在原点：这就是「气泡跑到左上角」那条症状的反面。
+    expect(first.left).not.toBe(0)
+    expect(first.top).not.toBe(0)
+
+    // ② 换一个锚点位置挂第二遍：浮层位置必须按同样的位移跟着挪。
+    // 这一条才是「锚点真的是那颗按钮」的证据——按 (0,0) 定位的浮层两次都会在原点。
+    const second = await positionAt(600, 900)
+    expect(second.left - first.left).toBe(500)
+    expect(second.top - first.top).toBe(300)
+  })
 })

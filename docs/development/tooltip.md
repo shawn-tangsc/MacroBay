@@ -6,6 +6,8 @@ A short explanation attached to a trigger renders `Tooltip` from
 `@platform/ui/components/tooltip`. Do not use the native `title` attribute: it only follows the
 mouse and never enters the accessible description, so keyboard users never see it.
 
+**The bubble lives under `document.body`.** Triggers sit inside frames that clip (`overflow: hidden`), transform, or have not been laid out on the first frame; a popup mounted beside such a trigger gets clipped or measured at `(0, 0)` and lands in the window corner. The container is fixed by the component, not passed by call sites.
+
 ## The component
 
 | Export | Use it for |

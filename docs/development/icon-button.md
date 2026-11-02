@@ -43,6 +43,7 @@ window) — never per button.
 | `className` | `string` | no | Your own class, for positioning and state. It cannot resize the button: the size is written inline and inline beats any class rule. |
 | `style` | `CSSProperties` | no | Positioning only. The component writes `width`/`height` **after** your style, so a call site cannot escape the 22/24 set. |
 | `dataAttributes` | `Record<\`data-${string}\`, …>` | no | Test hooks and state flags (`data-redock-tab`). A separate prop rather than arbitrary attributes, so nothing like `width` can slip in. |
+| `ref` | `Ref<HTMLButtonElement \| HTMLAnchorElement>` | no | The real button node. Overlay components measure the trigger rectangle through it; without it a tooltip falls back to `(0, 0)` and the bubble lands in the window corner. |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver; the component holds no copy and imports no i18n. |
 | `disabled` | `boolean` | no | Native `disabled`: it leaves the tab order and stops firing. Cannot be combined with `tooltipKey` — that combination does not compile. |
 | `variant` | `'plain' \| 'solid' \| 'overlay'` | no, default `plain` | `plain` is transparent (inline). `solid` is the toolbar row: a border and a soft surface. `overlay` is for an icon button **absolutely positioned over content** — a border, radius 5, and a deliberately translucent surface so the layer below shows through; hover makes it opaque. Rule: anything floating over arbitrary content is `overlay`, never `plain`. |
@@ -52,6 +53,8 @@ window) — never per button.
 | `expanded` | `boolean` | no | Set when the button opens a disclosure (a bell that opens a drawer). Maps to `aria-expanded`; omitted from the DOM when not passed. |
 | `controls` | `string` | no | The `id` of the region the button expands. Maps to `aria-controls`; omitted when not passed. |
 | `pressed` | `boolean` | no | Set for a toggle (the current state is on/off). Maps to `aria-pressed`; omitted when not passed. The accessible name stays constant across both states — the state is not repeated in the name. **No visual change:** the icon or the panel it controls carries the look. |
+
+**Self-enclosing glyphs stay `plain`.** `Info`, `CircleHelp` and `HelpCircle` already draw a circle, so a bordered variant puts a second ring around the first one. Those call sites must write `variant="plain"` out loud — `platform/ui/components/icon-button/iconGlyphVariantGuard.test.ts` scans call sites and fails when the answer is missing.
 
 ### Sizes
 

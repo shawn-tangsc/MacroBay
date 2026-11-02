@@ -512,4 +512,20 @@ describe('IconButton', () => {
       )
     ).toThrow(/either pressed or hasPopup/)
   })
+
+  it('hands the overlay a real button node, so a tooltip can measure where it belongs', async () => {
+    // 2026-11-02 的 bug：气泡要么不出现、要么跑到窗口左上角。根因是浮层拿不到锚点——
+    // 这个组件当时没有把 `ref` 转到真实 `<button>`，浮层只能按 (0,0) 算位置。
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    let node: HTMLElement | HTMLAnchorElement | null = null
+    await act(async () => {
+      root!.render(<IconButton {...props({ ref: (value) => { node = value } })} />)
+    })
+    expect(node).not.toBeNull()
+    // 成为 ref 的必须是真实节点，而且是那颗按钮本身——不是包裹层、不是组件。
+    expect(node).toBe(host.querySelector('button'))
+    expect((node as unknown as HTMLElement).classList.contains('icon-button')).toBe(true)
+  })
 })

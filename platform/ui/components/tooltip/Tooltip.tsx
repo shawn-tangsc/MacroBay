@@ -2,6 +2,7 @@ import { Tooltip as AntTooltip } from 'antd'
 import type { ReactElement } from 'react'
 
 import { fillLabelParams } from '../textKeyParams'
+import { overlayContainer } from '../overlayContainer'
 
 /**
  * 可聚焦提示（规格：`docs-private/05-desktop/ui-audit/2026-11-02-tooltip.html`）。
@@ -98,6 +99,7 @@ export function Tooltip<K extends string = string>(props: TooltipProps<K>): Reac
 
   return (
     <AntTooltip
+      getPopupContainer={overlayContainer}
       mouseEnterDelay={0.3}
       placement={PLACEMENT}
       styles={{ body: BUBBLE_STYLE }}
