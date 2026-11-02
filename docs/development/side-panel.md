@@ -45,8 +45,10 @@ One line: **the parent provides the height, the component provides the width.**
 
 ## Rules the component enforces
 
-- **No mask, no focus trap, no global Esc.** The reader is expected to move between the panel and
-  the page; stealing Esc would fight the page's own Esc.
+- **No mask, no focus trap, no global Esc — deliberately, not by omission.** The reader is expected
+  to move between the panel and the page; taking Esc would fight the page's own Esc (closing a
+  dialog, leaving an edit). Pressing Escape and not closing the panel is the definition of this
+  component, not a bug: a panel that must close on Escape is a `Drawer`, not this.
 - **Two sizes only, and no pixels from call sites.** `flex` keeps its `46vw` cap internally.
 - **The collapse control belongs to the component**, named from its own copy table — a resolver may
   return an empty string for an unknown key, and an empty name is a nameless button.
