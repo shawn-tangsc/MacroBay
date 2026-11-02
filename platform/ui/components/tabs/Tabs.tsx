@@ -2,6 +2,7 @@ import { useId, useRef } from 'react'
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 
 import type { ChoiceItem } from '../choice/choiceItem'
+import { CHOICE_GLYPH_PX } from '../choice/choiceItem'
 import { resolveActiveValue, useChoiceFallback } from '../choice/useChoiceValue'
 
 import './tabs.css'
@@ -104,6 +105,9 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
               role="tab"
               tabIndex={item.value === activeValue ? 0 : -1}
               type="button">
+              {item.icon === undefined ? null : (
+                <item.icon aria-hidden="true" className="choice-item__glyph" size={CHOICE_GLYPH_PX} />
+              )}
               {resolveText(item.labelKey)}
             </button>
           )

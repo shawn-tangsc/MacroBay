@@ -161,4 +161,37 @@ describe('Tabs', () => {
     const { host } = await mount()
     expect(host.querySelector('[role="tablist"] [data-loading-state]')).toBeNull()
   })
+
+  it('renders an item icon when one is given, and leaves no empty slot when it is not', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    const { Sun } = await import('lucide-react')
+    await act(async () => {
+      root!.render(
+        <Tabs
+          ariaLabelKey="ui.test.theme"
+          items={[
+            { value: 'light', labelKey: 'ui.test.light', icon: Sun },
+            { value: 'dark', labelKey: 'ui.test.dark' }
+          ]}
+          onChange={vi.fn()}
+          panel={null}
+          resolveText={key}
+          value="light"
+        />
+      )
+    })
+
+    const [withIcon, withoutIcon] = host.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    const glyph = withIcon?.querySelector('svg')
+    expect(glyph).not.toBeNull()
+    // 图标对读屏是冗余辅助：文字才是这一项的名字，标签的可访问名不能因此变空。
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true')
+    expect(glyph?.getAttribute('width')).toBe('14')
+
+    // 不给图标就不占位：没有包裹元素，文字直接是标签的第一个子节点。
+    expect(withoutIcon?.querySelector('svg')).toBeNull()
+    expect(withoutIcon?.firstChild?.nodeType).toBe(Node.TEXT_NODE)
+  })
 })

@@ -20,7 +20,10 @@
 }
 
 .segmented__item {
+  display: inline-flex;
   flex: none;
+  gap: 6px;
+  align-items: center;
   box-sizing: border-box;
   height: 24px;
   padding: 0 10px;

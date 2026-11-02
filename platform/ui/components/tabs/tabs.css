@@ -21,7 +21,10 @@
 }
 
 .tabs__tab {
+  display: inline-flex;
   flex: none;
+  gap: 6px;
+  align-items: center;
   margin-bottom: -1px;
   padding: 0 0 8px;
   border: 0;
@@ -33,6 +36,14 @@
   line-height: 1.5;
   cursor: pointer;
   white-space: nowrap;
+}
+
+/*
+ * 项内图标：不设固定宽度的包裹槽——没图标的项就不能占位，否则同一排选项的文字会整体错开。
+ * 尺寸由 `Tabs.tsx` 的字形常量给（SVG 的 width/height 属性才缩得动字形），这里只防压扁。
+ */
+.choice-item__glyph {
+  flex: none;
 }
 
 .tabs__tab--selected {

@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import type { KeyboardEvent, ReactElement } from 'react'
 
 import type { ChoiceItem } from '../choice/choiceItem'
+import { CHOICE_GLYPH_PX } from '../choice/choiceItem'
 import { resolveActiveValue, useChoiceFallback } from '../choice/useChoiceValue'
 
 import './segmented.css'
@@ -75,6 +76,9 @@ export function Segmented({ items, value, onChange, ariaLabelKey, resolveText }:
             }}
             tabIndex={item.value === activeValue ? 0 : -1}
             type="button">
+            {item.icon === undefined ? null : (
+              <item.icon aria-hidden="true" className="choice-item__glyph" size={CHOICE_GLYPH_PX} />
+            )}
             {resolveText(item.labelKey)}
           </button>
         )
