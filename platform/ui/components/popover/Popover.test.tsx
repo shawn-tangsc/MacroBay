@@ -208,6 +208,8 @@ describe('Popover', () => {
     // 每行自带参数：共用一份参数会让第二行拿到第一行的值。
     const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
     expect(rendered.map((node) => node.textContent)).toEqual(['A 1', 'B 2'])
+    // 参数填进去了才叫填：残留 `{` 说明只是「句子在那儿」，没测到填充。
+    expect(rendered.map((node) => node.textContent ?? '').join('')).not.toContain('{')
   })
 
   it('fills the template with already-formatted values and leaves no placeholder behind', async () => {

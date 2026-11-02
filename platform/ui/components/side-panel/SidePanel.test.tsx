@@ -192,7 +192,10 @@ describe('SidePanel', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(500)
     })
-    expect(host.querySelector('[role="status"]')?.textContent).toContain('ui.test.eventA')
+    const announced = host.querySelector('[role="status"]')?.textContent ?? ''
+    expect(announced).toContain('ui.test.eventA')
+    // 模板化句子不许残留占位符：`{title}` 没填也会「包含那句话」，那是假绿。
+    expect(announced).not.toContain('{')
 
     await render('ui.test.eventB', 'id-b')
     await render('ui.test.eventC', 'id-c')
