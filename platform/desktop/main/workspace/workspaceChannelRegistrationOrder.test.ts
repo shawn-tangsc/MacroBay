@@ -190,8 +190,8 @@ describe('PLAT-26 ③：app.ts 快照的结构判据（注册语句位于建窗�
 
   it('app.ts 在 bootstrap 里调用 registerChannels()，且位于建窗之前', () => {
     const register = 'panelWorkspace.registerChannels()'
-    const bootWindow = 'mainWindow = await createMainWindow()'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const bootWindow = 'await mainWindowHost.createAndWire()'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
 
     expect(bootstrapSource).toContain(register)
     expect(bootstrapSource).toContain(bootWindow)
@@ -203,7 +203,7 @@ describe('PLAT-26 ③：app.ts 快照的结构判据（注册语句位于建窗�
   it('恢复布局仍在产品 seal 之后、renderer 加载之前（且启动报告一行不动）', () => {
     const restore = 'reportPanelWorkspaceStart({ report: await panelWorkspace.start() })'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
 
     expect(bootstrapSource).toContain(restore)
     expect(bootstrapSource.indexOf(productSeal)).toBeLessThan(bootstrapSource.indexOf(restore))

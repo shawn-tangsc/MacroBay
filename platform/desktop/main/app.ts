@@ -174,6 +174,7 @@ import { registerModelIpc } from './ipc/modelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
 import { registerAgentIpc } from './ipc/agentIpc'
 import { registerAgentToolsIpc } from './ipc/agentToolsIpc'
+import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
@@ -256,7 +257,6 @@ import { registerPlatformCacheProviders } from '../../storage/cache-governance/p
 import { createProductCacheRegistrar } from '../../storage/cache-governance/productCacheRegistrar'
 import { createProductServiceDisposerRegistry } from '../../product-registry/productServiceDisposerRegistry'
 
-let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let agentTaskJobBridge: ReturnType<typeof createAgentTaskJobBridge> | null = null
 let agentTaskExecutionCoordinator: AgentTaskExecutionCoordinator | null = null
@@ -322,6 +322,14 @@ const appLog = createAppLog({
 })
 appLog.log('info', 'app.start', { version: app.getVersion(), platform: process.platform })
 const rendererProcessLog = createRendererProcessLog(appLog)
+
+/** 主窗持有者：建窗、窗口事件、两个取窗口函数（加载/挂载时机由它自己掌握）。 */
+const mainWindowHost = createMainWindowHost({
+  createWindow: () => createMainWindow(),
+  loadRenderer: (window) => loadMainWindowRenderer(window),
+  logRendererEvent: (event) => rendererProcessLog.write(event),
+  getWorkspace: () => panelWorkspaceForDisposal
+})
 
 const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions({
   timeZone: () => shellTimeZone.get()
@@ -1186,22 +1194,10 @@ async function ensureDefaultAssistantSeed(): Promise<void> {
   }
 }
 
-function getMainWindow(): BrowserWindow | null {
-  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
-}
+const getMainWindow = (): BrowserWindow | null => mainWindowHost.getMainWindow()
 
-/**
- * **自绘标题栏**（`frame: false`，见 `window/windowChrome.ts`）下，窗口按钮的**唯一**目标：
- * 发起调用的那个窗口。
- *
- * 之前的实现一律 `getMainWindow()`：主窗只有一层时等价，但独立页面窗/面板窗自己画出最小化/最大化/关闭后，
- * 点「关闭」会去关主窗（用户可见的严重错乱）。身份不从渲染层参数来——`BrowserWindow.fromWebContents`
- * 由 Main 用 `event.sender` 推导，参数里没有任何 webContentsId/窗口句柄。
- */
-function resolveInvokingWindow(event: IpcMainInvokeEvent): BrowserWindow | null {
-  const window = BrowserWindow.fromWebContents(event.sender)
-  return window && !window.isDestroyed() ? window : null
-}
+const resolveInvokingWindow = (event: IpcMainInvokeEvent): BrowserWindow | null =>
+  mainWindowHost.resolveInvokingWindow(event)
 
 async function replaceAgentState(state: AgentStoreState, options?: ReplaceAgentStateOptions): Promise<AgentStoreState> {
   if (!agentStateCoordinator) {
@@ -1475,25 +1471,8 @@ async function readHeartbeatFileFromWorkspace(workspacePath: string): Promise<st
   }
 }
 
-function wireWindowEvents(window: BrowserWindow): void {
-  wireRendererSendGuard(window)
-  wireRendererProcessDiagnostics(window, { logEvent: rendererProcessLog.write })
-  // 自绘标题栏：最大化/还原事实（主窗与独立窗共用同一条广播，见 `window/windowChrome.ts`）
-  wireWindowChromeState(window)
-  window.on('closed', () => {
-    mainWindow = null
-  })
-}
-
 async function createAndLoadMainWindow(): Promise<void> {
-  mainWindow = await createMainWindow()
-  wireWindowEvents(mainWindow)
-  await loadMainWindowRenderer(mainWindow)
-  // workspace：重建的主窗同样要登记并在加载后挂载，否则它的 workspace IPC 会被 not-owner 拒绝
-  if (mainWindow) {
-    panelWorkspaceForDisposal?.registerMainWindow({ webContentsId: mainWindow.webContents.id })
-    panelWorkspaceForDisposal?.attachMainWindow({ webContentsId: mainWindow.webContents.id })
-  }
+  await mainWindowHost.createAndLoad()
 }
 
 async function syncBuiltinSkills(): Promise<void> {
@@ -1684,8 +1663,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   // PLAT-26：只注册（幂等，不恢复）——7 条受控通道此刻已在 ipcMain 上，随后创建的窗口一被驱动就有 handler
   panelWorkspace.registerChannels()
 
-  mainWindow = await createMainWindow()
-  wireWindowEvents(mainWindow)
+  await mainWindowHost.createAndWire()
   tray = createAppTray(getMainWindow)
   await applySessionProxySettings((await settingsStore.get()).network, {
     // 历史遗留的坏地址只可能是旧版本存进去的：退回直连，但要在日志里留一句，不许无声。
@@ -1733,7 +1711,11 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
         : undefined
     },
     { log: appLog, markUnavailable: () => productIpcRegistry.markUnavailable() })
-  if (productBootstrap.ok === false) return showBootFailurePage(mainWindow, productBootstrap.failure)
+  if (productBootstrap.ok === false) {
+    const window = getMainWindow()
+    if (window) showBootFailurePage(window, productBootstrap.failure)
+    return
+  }
 
   reportPanelWorkspaceStart({ report: await panelWorkspace.start() }) // P1-06h N4：恢复/降级原因必须运行期可观测，启动顺序与 fail-closed 语义不变
   panelWorkspaceForDisposal = panelWorkspace
@@ -1830,7 +1812,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     getMainWindow()?.webContents.send(IpcChannels.agentsRuntimeStateChanged, snapshot)
   })
   buildAppMenu(getMainWindow)
-  await loadMainWindowRenderer(mainWindow)
+  await mainWindowHost.loadAndMount()
   // 挂载：退订旧 listener → 直发 current snapshot → 续增量（Main 侧顺序由 router 保证）
   if (workspaceMainWindow) {
     panelWorkspace.attachMainWindow({ webContentsId: workspaceMainWindow.webContents.id })

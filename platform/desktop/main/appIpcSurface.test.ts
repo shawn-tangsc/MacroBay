@@ -287,12 +287,13 @@ describe('desktop main IPC surface', () => {
 
   it('creates a visible boot window before product registration and loads the renderer only after sealing product IPC', () => {
     const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
-    const bootWindow = 'mainWindow = await createMainWindow()'
+    // 建窗/接线搬到 window/mainWindow.ts 后，启动顺序仍由这一行位置证明。
+    const bootWindow = 'await mainWindowHost.createAndWire()'
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
 
     expect(bootstrapSource).toContain(bootWindow)
     expect(bootstrapSource).toContain(proxyApply)
@@ -320,7 +321,7 @@ describe('desktop main IPC surface', () => {
     // 启动时应用代理设置；历史遗留的坏地址会退回直连，但必须留日志，不许无声。
     const proxyApply = 'await applySessionProxySettings((await settingsStore.get()).network, {'
     const productRegistration = 'registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
     const proxyApplyIndex = looseIndexOf(bootstrapSource, proxyApply)
     const productRegistrationIndex = looseIndexOf(bootstrapSource, productRegistration)
 
@@ -399,9 +400,11 @@ describe('desktop main IPC surface', () => {
   })
 
   it('wires renderer lifecycle diagnostics to every main window', () => {
-    expect(appSource).toContain("import { wireRendererProcessDiagnostics } from '../window/rendererProcessDiagnostics'")
+    // 接线随建窗搬到 window/mainWindow.ts；日志写入器仍在 app.ts 构造。
+    const windowHostSource = readSource('window/mainWindow.ts')
+    expect(windowHostSource).toContain("from '../../window/rendererProcessDiagnostics'")
     expect(appSource).toContain("import { createRendererProcessLog } from '../window/rendererProcessLog'")
-    expect(appSource).toContain('wireRendererProcessDiagnostics(window')
+    expect(windowHostSource).toContain('wireRendererProcessDiagnostics(window')
     // 渲染层诊断不再有自己的 ndjson 管道：改走唯一的应用日志写入器，来源由 category 区分。
     expect(appSource).toContain('createRendererProcessLog(appLog)')
     expect(appSource).not.toContain('renderer-lifecycle.ndjson')
@@ -432,10 +435,11 @@ describe('desktop main IPC surface', () => {
     const bootstrapSource = collapseWhitespace(appSource.slice(appSource.indexOf('export async function bootstrapDesktopApp(')))
     const compose = 'const panelWorkspace = composePanelWorkspace({'
     const registerChannels = 'panelWorkspace.registerChannels()'
-    const bootWindow = 'mainWindow = await createMainWindow()'
+    // 建窗/接线搬到 window/mainWindow.ts 后，启动顺序仍由这一行位置证明。
+    const bootWindow = 'await mainWindowHost.createAndWire()'
     const restore = 'await panelWorkspace.start()'
     const productSeal = 'productIpcRegistry.seal(expectedProductIpcMethods(productManifests))'
-    const rendererLoad = 'await loadMainWindowRenderer(mainWindow)'
+    const rendererLoad = 'await mainWindowHost.loadAndMount()'
 
     expect(appSource).toContain("import { composePanelWorkspace } from './workspace/composePanelWorkspace'")
     expect(bootstrapSource).toContain(compose)
