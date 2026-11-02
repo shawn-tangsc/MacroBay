@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Dropdown, Tooltip } from 'antd'
+import { Button, Dropdown, Tooltip as AntTooltip } from 'antd'
 import type { MenuProps } from 'antd'
 import { ChevronDown, Code2 } from 'lucide-react'
 
 import type { ExternalAppView } from '@platform/desktop/main/externalApps/externalAppRegistry'
+import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../../agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
 
 type OpenExternalAppButtonProps = {
   workspacePath: string | null | undefined
@@ -15,6 +17,10 @@ export default function OpenExternalAppButton({
   workspacePath
 }: OpenExternalAppButtonProps): React.ReactElement | null {
   const t = useAgentText()
+  // 只有「选择外部应用」这颗是纯键；上面那颗的文案带应用名（`openInExternalApp(name)`），
+  // 平台的 Tooltip 目前不收参数，先留在 antd，等契约补 params。
+  const tooltipKeys = { openInExternalAppMenu: 'chatNavbar.openInExternalAppMenu' } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
   const [apps, setApps] = useState<ExternalAppView[]>([])
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
 
@@ -60,7 +66,7 @@ export default function OpenExternalAppButton({
 
   return (
     <span className="agent-external-app-actions">
-      <Tooltip title={t.chatNavbar.openInExternalApp(selectedApp.name)}>
+      <AntTooltip title={t.chatNavbar.openInExternalApp(selectedApp.name)}>
         <Button
           className="ant-shell-icon-button"
           type="text"
@@ -69,9 +75,9 @@ export default function OpenExternalAppButton({
           aria-label={t.chatNavbar.openInExternalApp(selectedApp.name)}
           onClick={() => void launch(selectedApp.id)}
         />
-      </Tooltip>
+      </AntTooltip>
       {apps.length > 1 ? (
-        <Tooltip title={t.chatNavbar.openInExternalAppMenu}>
+        <Tooltip labelKey={tooltipKeys.openInExternalAppMenu} resolveText={resolveText}>
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>
             <Button
               className="ant-shell-icon-button"

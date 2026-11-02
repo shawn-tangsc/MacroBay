@@ -24,6 +24,7 @@ export type AgentTooltipKey =
   | 'chatNavbar.clearMessages'
   | 'chatNavbar.taskCenter'
   | 'chatNavbar.chatSettings'
+  | 'chatNavbar.openInExternalAppMenu'
 
 /**
  * 提示文案的点分键解析。
