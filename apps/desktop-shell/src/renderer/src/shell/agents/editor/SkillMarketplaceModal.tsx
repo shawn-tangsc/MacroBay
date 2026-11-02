@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Modal, Tag } from 'antd'
+import { Button, Input, Tag } from 'antd'
 import { Check, Download, ExternalLink, Search, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillSearchResult } from '@platform/ai/agent-platform/schemas/skillSchemas'
+import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
 import type { useAgentText } from '../agentTextProvider'
+import { resolveAgentTextKey } from '../agentTooltipText'
 import { buildSkillMarketplaceRows } from './skillMarketplaceViewModel'
+
+const MARKETPLACE_TITLE_KEY = 'editor.tools.marketplaceTitle'
 
 type SkillMarketplaceModalProps = {
   open: boolean
@@ -62,11 +66,11 @@ export default function SkillMarketplaceModal({
   return (
     <Modal
       open={open}
-      width={720}
-      footer={null}
-      title={text.editor.tools.marketplaceTitle}
+      width="expanded"
+      titleKey={MARKETPLACE_TITLE_KEY}
+      resolveText={(key) => resolveAgentTextKey(text, key)}
       className="agent-skill-marketplace-modal"
-      onCancel={onClose}>
+      onClose={onClose}>
       <div className="agent-skill-marketplace">
         <div className="agent-skill-marketplace-search">
           <Search size={14} />

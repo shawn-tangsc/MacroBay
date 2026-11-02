@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Tag } from 'antd'
+import { Tag } from 'antd'
 import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import type { AgentSkillRuntimeCatalogEntry } from '@platform/ai/agent-platform/skills/skillRuntimeSchemas'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
@@ -16,6 +17,8 @@ import {
   guessSkillFileLanguage,
   isSkillMarkdownFile
 } from './skillFileTreeViewModel'
+
+const SKILL_DETAIL_TITLE_KEY = 'editor.tools.skillDetailTitle'
 
 type SkillDetailModalProps = {
   open: boolean
@@ -101,7 +104,13 @@ export default function SkillDetailModal({
   }, [open, selectedFile, skill])
 
   return (
-    <Modal open={open} width={860} footer={null} title={skill?.name ?? text.editor.tools.skillDetailTitle} onCancel={onClose}>
+    <Modal
+      open={open}
+      width="maximum"
+      titleKey={SKILL_DETAIL_TITLE_KEY}
+      // 标题是运行时数据：技能名，取不到时回落键句。句子由本调用点给，组件只认键。
+      resolveText={(key) => (key === SKILL_DETAIL_TITLE_KEY ? (skill?.name ?? text.editor.tools.skillDetailTitle) : '')}
+      onClose={onClose}>
       {skill ? (
         <div className="agent-skill-detail">
           <header className="agent-skill-detail-header">
