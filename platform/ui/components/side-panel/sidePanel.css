@@ -1,0 +1,68 @@
+/*
+ * 并排面板：出现时把主内容挤窄，不盖住它——这是它与 `Drawer` 的唯一分界。
+ * 宽度只有两档，`flex` 档的比例上限写在组件里（`min(480px, 46vw)`），调用点不传数字。
+ *
+ * 宽度与位移都不做过渡：那会连续重排主内容。只让整块淡入 120ms。
+ */
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--side-panel-width);
+  max-width: 100%;
+  height: 100%;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  animation: side-panel-fade 120ms ease-out;
+}
+
+.side-panel__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.side-panel__title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-panel__body {
+  flex: 1;
+  min-height: 0;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.side-panel__footer {
+  flex: none;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+
+@keyframes side-panel-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 系统关了动效就一律不动：功能与信息一个不少。 */
+@media (prefers-reduced-motion: reduce) {
+  .side-panel {
+    animation: none;
+  }
+}
