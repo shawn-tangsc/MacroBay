@@ -49,11 +49,21 @@
   --ease-enter: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.2, 0, 0, 1);
 
+  /*
+   * `--surface-raised`: a surface that has come forward from the container it sits on —
+   * the selected segment, a raised chip, a table header, a quote or conclusion block.
+   *
+   * It is not an alias of `--surface-strong`: that token is *darker* than the container in the
+   * dark theme (#191d23 against #222832), so anything using it read as pressed in, not raised.
+   * The direction has to be the same in both themes — raised means lighter — so each theme
+   * states its own value here instead of inheriting one from the other.
+   */
+  --surface-raised: #333b48; /* container --surface-soft #222832 → 1.31 */
+
   /* Legacy aliases kept so existing rules resolve; they add no new colour. */
   --text-primary: var(--text-strong);
   --panel: var(--surface);
   --surface-2: var(--surface-soft);
-  --surface-raised: var(--surface-strong);
   /* `--warning` is the pre-2026-11 name of `--caution`; kept as an alias, not a second yellow. */
   --warning: var(--caution);
 }
@@ -63,6 +73,14 @@
   --border-subtle: #eef0f3;
   --success: #2f7d4f;
   --caution: #a2691a;
+
+  /*
+   * Light has no room above white: #ffffff against the container #eef1f4 is 1.13, the physical
+   * ceiling. So light keeps the same *direction* (raised = lighter) and leans on the component's
+   * shadow for the rest of the signal. Do not darken it to gain contrast — darkening reads as
+   * pressed in, which is the direction this token exists to avoid.
+   */
+  --surface-raised: #ffffff; /* container --surface-soft #eef1f4 → 1.13, shadow carries the rest */
 
   --font-metric-sm: 24px;
   --font-metric-md: 30px;
