@@ -10,7 +10,12 @@ import type {
   NotificationRecord,
   NotificationRequest
 } from '../contracts/notificationContracts'
-import { utcDayOf } from './notificationBreaker'
+import {
+  decideNotificationBreaker,
+  pruneNotificationDailyCounters,
+  utcDayOf
+} from './notificationBreaker'
+import type { NotificationDailyCounters } from '../store/notificationStore'
 
 const NOTIFICATION_AGGREGATE_TITLE = 'notification-aggregate'
 const NOTIFICATION_AGGREGATE_TITLE_KEY = 'notification.aggregate.title' as const
@@ -71,4 +76,29 @@ export function withCenterForDisruptiveChannels(
   const disruptive = channels.some((channel) => channel === 'desktop' || channel === 'toast' || channel === 'popup')
   if (!disruptive || channels.includes('center')) return [...channels]
   return ['center', ...channels]
+}
+
+
+/**
+ * 当日写入上限判定：超过就折叠，否则只把新计数交回去。runtime 只管落库/广播，
+ * 决策与聚合都在这里，删旧提交路径时不会把 T2/T10 的行为一起删掉。
+ */
+export function decideDailyCap(input: {
+  records: readonly NotificationRecord[]
+  request: NotificationRequest
+  ownerId: string
+  counters: NotificationDailyCounters
+  now: string
+}):
+  | { fold: true; records: NotificationRecord[]; aggregate: NotificationRecord; counters: NotificationDailyCounters }
+  | { fold: false; counters: NotificationDailyCounters } {
+  const breaker = decideNotificationBreaker({
+    counters: input.counters,
+    ownerId: input.ownerId,
+    now: input.now
+  })
+  const counters = pruneNotificationDailyCounters(breaker.counters, input.now)
+  if (breaker.action !== 'fold') return { fold: false, counters }
+  const folded = foldIntoAggregate(input.records, input.request, input.ownerId, input.now)
+  return { fold: true, records: folded.records, aggregate: folded.aggregate, counters }
 }

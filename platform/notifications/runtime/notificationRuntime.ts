@@ -39,9 +39,11 @@ import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
-import { decideNotificationBreaker, pruneNotificationDailyCounters } from './notificationBreaker'
+import { pruneNotificationDailyCounters } from './notificationBreaker'
 import { createLegacySubmit } from './notificationRuntimeLegacy'
-import { foldIntoAggregate, withCenterForDisruptiveChannels } from './notificationAggregate'
+import { decideDailyCap, withCenterForDisruptiveChannels } from './notificationAggregate'
+import { evaluateProducerGate } from './notificationProducerGate'
+import { emitBackoffEvent } from './notificationBackoffEvents'
 import {
   normalizeRequestedChannels,
   routeTransientDelivery,
@@ -164,19 +166,21 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       return { kind: 'rejected', reason: 'unknown-event-type', message: 'notification catalog is not configured' }
     }
 
-    const producerId = request.producerId
-    if (producerId !== undefined) {
-      const owner = deps.producerOwnership?.[producerId]
-      if (owner !== undefined && owner !== 'platform') {
-        // 让渡：平台不发、不落库；产品自己会发它那条。记一条诊断，排查「为什么没发」时能看到是谁接的。
-        deps.diagnostics?.({ code: 'delegated', eventTypeId: request.eventTypeId, producerId, at: now })
-        return { kind: 'delegated', eventTypeId: request.eventTypeId, producerId, ownerProductId: owner.productId }
-      }
-      const platformProducer = owner === 'platform' || (deps.platformProducerIds?.() ?? []).includes(producerId)
-      if (!platformProducer && !seenUnclaimedProducers.has(producerId)) {
-        // 未声明：平台照发（漏发是安静的），但第一次见到时留一条诊断，别让新任务变成黑箱。
-        seenUnclaimedProducers.add(producerId)
-        deps.diagnostics?.({ code: 'unclaimed-producer', eventTypeId: request.eventTypeId, producerId, at: now })
+    const gate = evaluateProducerGate({
+      producerId: request.producerId,
+      eventTypeId: request.eventTypeId,
+      ownership: deps.producerOwnership,
+      platformProducerIds: deps.platformProducerIds,
+      diagnostics: deps.diagnostics,
+      seenUnclaimedProducers,
+      now
+    })
+    if (gate.action === 'delegated' && request.producerId !== undefined) {
+      return {
+        kind: 'delegated',
+        eventTypeId: request.eventTypeId,
+        producerId: request.producerId,
+        ownerProductId: gate.ownerProductId
       }
     }
 
@@ -217,19 +221,23 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       }
     }
 
-    const entry = deps.catalog.get(request.eventTypeId)
-    const ownerId = entry?.productId ?? 'platform'
-    const breaker = decideNotificationBreaker({ counters: state.dailyCounters, ownerId, now })
-    const dailyCounters = pruneNotificationDailyCounters(breaker.counters, now)
+    const ownerId = deps.catalog.get(request.eventTypeId)?.productId ?? 'platform'
+    const cap = decideDailyCap({
+      records: state.records,
+      request: plan.incoming,
+      ownerId,
+      counters: state.dailyCounters,
+      now
+    })
+    const dailyCounters = cap.counters
     // 折叠第二层：超过当日上限后原文不落库，只留下「今天还出过几条」（T2/T10）。
-    if (breaker.action === 'fold') {
-      const folded = foldIntoAggregate(state.records, plan.incoming, ownerId, now)
-      await persistWithDiagnostics({ ...state, records: folded.records, dailyCounters })
+    if (cap.fold) {
+      await persistWithDiagnostics({ ...state, records: cap.records, dailyCounters })
       notifyChanged()
       return {
         kind: 'collapsed',
-        aggregateRecordId: folded.aggregate.id,
-        collapsedCount: folded.aggregate.collapsedCount ?? 1
+        aggregateRecordId: cap.aggregate.id,
+        collapsedCount: cap.aggregate.collapsedCount ?? 1
       }
     }
 
@@ -243,45 +251,9 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
       notifyChanged()
     }
     if (delivered.transition !== undefined) {
-      await emitBackoffEvent(delivered.transition, settings, now)
+      await emitBackoffEvent({ transition: delivered.transition, now, submit: submitEvent })
     }
     return plan.outcome
-  }
-
-  /**
-   * 熔断进入 / 解除各发一条平台事件（P6a / P6b）。在**投递落盘之后**发，否则这次提交的
-   * 缓存在外层 persist 时会把 P6 记录覆盖掉。P6a 带「去设置检查」深链，P6b 只进中心。
-   */
-  async function emitBackoffEvent(
-    transition: { kind: 'paused' | 'resumed'; channelId: string },
-    settings: NotificationRuntimeSettings,
-    now: string
-  ): Promise<void> {
-    const channelId = transition.channelId
-    const deeplink = { scope: 'platform' as const, settingsSectionId: 'notifications' }
-    if (transition.kind === 'paused') {
-      await submitEvent({
-        eventTypeId: 'platform.channel.push-suspended',
-        producerId: channelId,
-        dedupeVars: { builder: 'template', vars: { channelId } },
-        actions: [{
-          id: 'open-channel-settings',
-          labelKey: 'notification.channelCheck.action',
-          kind: 'open',
-          deeplink
-        }],
-        deeplink,
-        occurredAt: now
-      })
-      return
-    }
-    await submitEvent({
-      eventTypeId: 'platform.channel.push-resumed',
-      producerId: channelId,
-      dedupeVars: { builder: 'template', vars: { channelId, day: now.slice(0, 10) } },
-      actions: [],
-      occurredAt: now
-    })
   }
 
   const settingsSurface = createNotificationSettingsSurface({
