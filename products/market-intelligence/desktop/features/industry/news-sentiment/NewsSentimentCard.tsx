@@ -4,7 +4,7 @@ import { Newspaper, RefreshCw, Settings } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Segmented } from '@platform/ui/components/segmented'
-import { StateView } from '@platform/ui/components/state'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useStateViewText } from '@platform/ui/components/state/stateViewText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -293,9 +293,11 @@ function EmptyCause(props: {
         />
       )
     case 'quiet':
-      // A quiet window is a fact, not a fault: no next step (the product rule, D2).
+      // A quiet window is a fact, not a fault — but the reader can still look further back, so this
+      // code carries the widen action (the contract makes every `nothing-in-window` actionable).
       return wrap(
         <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.widen_time_window, onSelect: props.onWidenWindow }}
           productReason={{ key: 'mi.newsSentiment.quiet', resolve: (key, params) => props.resolve(key, params) }}
           reasonCode="nothing-in-window"
           resolveText={resolveStateText}

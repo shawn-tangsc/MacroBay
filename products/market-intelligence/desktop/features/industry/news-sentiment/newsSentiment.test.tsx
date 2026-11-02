@@ -168,8 +168,9 @@ describe('card empty states', () => {
     // The stale sentence carries the formatted instant, and no placeholder survives to the screen.
     const staleReason = stale.querySelector('[data-reason-source]')?.textContent ?? ''
     expect(staleReason).not.toContain('{time}')
-    // A quiet period is a fact: no action, unlike the other four.
-    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] button')).toBeNull()
+    // A quiet period is a fact, but the reader can still look further back: the contract makes
+    // every `nothing-in-window` carry the widen action, so this one has a button too.
+    expect(quiet.querySelector('[data-news-sentiment-state="quiet"] button')).not.toBeNull()
 
     const press = async (container: HTMLElement) => {
       const button = container.querySelector<HTMLButtonElement>('.mi-news-sentiment__state button')
