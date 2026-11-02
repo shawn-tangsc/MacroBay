@@ -4,6 +4,7 @@ import type { BriefingGenerationStageId, BriefingGenerationTrace, DailyBriefingL
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import { createDailyBriefingService, type DailyBriefingSource, type DailyBriefingStore, type DailyBriefingStoredEdition } from './dailyBriefingService'
+import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 
 const asOf = '2026-10-30T00:30:00.000Z'
 
@@ -85,6 +86,44 @@ function traceOf(result: Awaited<ReturnType<ReturnType<typeof createDailyBriefin
   expect(trace).toBeDefined()
   return trace!
 }
+
+describe('live progress snapshot', () => {
+  it('keeps unstarted stages pending and never reports them as skipped', () => {
+    let changes = 0
+    const recorder = createDailyBriefingGenerationRecorder({
+      attemptId: 'attempt-1',
+      now: () => asOf,
+      onChange: () => { changes += 1 }
+    })
+
+    recorder.begin('source')
+    recorder.end('source', 'success')
+    const snapshot = recorder.snapshot()
+
+    expect(snapshot.attemptId).toBe('attempt-1')
+    expect(snapshot.stages.find((stage) => stage.id === 'source')?.state).toBe('success')
+    // Only a finished attempt may claim a stage was skipped; a running one cannot know yet.
+    expect(snapshot.stages.filter((stage) => stage.id !== 'source').every((stage) => stage.state === 'pending')).toBe(true)
+    expect(changes).toBe(2)
+  })
+
+  it('announces a change only when the attempt actually changed', () => {
+    let changes = 0
+    const recorder = createDailyBriefingGenerationRecorder({
+      attemptId: 'attempt-2',
+      now: () => asOf,
+      onChange: () => { changes += 1 }
+    })
+
+    recorder.begin('source')
+    recorder.begin('source')
+    recorder.skip('repair-1')
+    recorder.skip('repair-1')
+
+    // Two distinct stages spoke; the repeated calls were no-ops.
+    expect(changes).toBe(2)
+  })
+})
 
 describe('daily briefing generation trace', () => {
   it('records a successful attempt with the document and clears the failed-attempt record', async () => {
