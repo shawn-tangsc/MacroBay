@@ -7916,6 +7916,15 @@ h1 {
   overflow: hidden;
 }
 
+.contribution-error {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 260px;
+  padding: 24px;
+}
+
 .settings-contribution-host {
   min-height: 0;
   height: 100%;

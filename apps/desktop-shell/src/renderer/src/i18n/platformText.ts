@@ -56,7 +56,6 @@ export type PlatformText = {
     tools: string
     skills: string
     agents: string
-    contributionLoadFailed: string
     panelActions: string
     /** 同一区域内多个面板时，标签条这组的可访问名（面板标题由注册表给，不走键）。 */
     panelTabs: string
@@ -1449,7 +1448,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tools: '工具',
       skills: '技能',
       agents: '智能体',
-      contributionLoadFailed: '页面加载失败',
       panelActions: '面板操作', panelTabs: '面板标签', panelClose: '关闭面板', panelReopen: '重新打开面板', panelEmbedded: '嵌入页面',
       panelDockRight: '停靠右侧', panelDockBottom: '停靠底部', panelDetach: '分离窗口', panelResetSize: '恢复默认尺寸',
       panelUnsupported: '当前空间不足', panelFallback: '面板', panelResize: '调整面板大小', panelInspector: '检查器', inspectorTitle: '检查器',
@@ -2623,7 +2621,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tools: 'Tools',
       skills: 'Skills',
       agents: 'Agents',
-      contributionLoadFailed: 'Failed to load page',
       panelActions: 'Panel actions', panelTabs: 'Panel tabs', panelClose: 'Close panel', panelReopen: 'Reopen panel', panelEmbedded: 'Embed',
       panelDockRight: 'Dock right', panelDockBottom: 'Dock bottom', panelDetach: 'Detach window', panelResetSize: 'Reset size',
       panelUnsupported: 'Not available at this size', panelFallback: 'Panel', panelResize: 'Resize panel', panelInspector: 'Inspector', inspectorTitle: 'Inspector',

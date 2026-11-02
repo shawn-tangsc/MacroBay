@@ -14,7 +14,6 @@ import {
   findProductSettingsEntry,
   groupShellSettingsPanels
 } from '../navigation/mergeShellNavigation'
-import { resolveLocalizedTitle } from '../navigation/shellIconRegistry'
 import {
   PINNED_MODEL_IDS_STORAGE_KEY, parsePinnedModelIds, serializePinnedModelIds, togglePinnedModelId
 } from '../modelPins'
@@ -225,7 +224,6 @@ function DetachedSettingsBody({ language, settingsPanelEntries }: {
         <ProductContributionHost
           language={language}
           load={productEntry.load}
-          title={resolveLocalizedTitle(productEntry.title, language)}
         />
       ) : null}
       {isBuiltInSettingsPanelId(panelKey) && panelKey === 'assistant-library'
@@ -292,7 +290,7 @@ export function createWorkspacePageContentProvider(options: {
       if (entry === undefined) return null
       return (
         <div className="workspace-page-body" data-page-body={pageId}>
-          <ProductContributionHost language={language} load={entry.load} title={resolveLocalizedTitle(entry.title, language)} />
+          <ProductContributionHost language={language} load={entry.load} />
         </div>
       )
     },

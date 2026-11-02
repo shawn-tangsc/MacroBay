@@ -1126,7 +1126,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
           <ProductContributionHost
             language={settings.language}
             load={productSettingsEntry.load}
-            title={resolveLocalizedTitle(productSettingsEntry.title, settings.language)}
           />
         ) : null}
       </div>
@@ -1600,7 +1599,6 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         <ProductContributionHost
           language={settings.language}
           load={productMenuEntry.load}
-          title={resolveLocalizedTitle(productMenuEntry.title, settings.language)}
         />
       )
     }
