@@ -6,6 +6,7 @@ import { Info } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover } from '@platform/ui/components/popover'
+import { Tooltip } from '@platform/ui/components/tooltip'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -34,6 +35,21 @@ import './PositioningPanel.css'
  * template string hides from them. A table also makes it obvious that the panel's help and the text
  * table have the same number of lines.
  */
+/**
+ * The six state labels, one literal key each.
+ *
+ * Literal for the same reason as the help lines: a template string hides the key from the guard,
+ * and the guard is the only thing that can tell a live key from a typo.
+ */
+export const positioningStateLabelKeys: Readonly<Record<PositioningState, string>> = Object.freeze({
+  deleveraging: 'pages.intelligence.portal.dashboard.positioning.states.deleveraging',
+  'short-crowded': 'pages.intelligence.portal.dashboard.positioning.states.short-crowded',
+  'long-crowded': 'pages.intelligence.portal.dashboard.positioning.states.long-crowded',
+  refilling: 'pages.intelligence.portal.dashboard.positioning.states.refilling',
+  neutral: 'pages.intelligence.portal.dashboard.positioning.states.neutral',
+  mixed: 'pages.intelligence.portal.dashboard.positioning.states.mixed'
+})
+
 export const positioningHelpLineKeys = Object.freeze([
   'pages.intelligence.portal.dashboard.positioning.helpLines.0',
   'pages.intelligence.portal.dashboard.positioning.helpLines.1',
@@ -213,17 +229,20 @@ function Asset({ asset, text, rate, rateAgo, change, notional, state }: Readonly
       <div className="mi-positioning-panel__asset-head">
         <span className="mi-positioning-panel__name">{text.assets[asset]}</span>
         {state ? (
-          // The label alone is a conclusion. Hovering it shows the two numbers the conclusion was
-          // drawn from, which is what makes it checkable rather than another opaque badge.
-          <span className="mi-positioning-panel__state" data-state={state} tabIndex={0}>
-            <StatusPill tone={statePillTone(state)} labelKey={`pages.intelligence.portal.dashboard.positioning.states.${state}`} resolveText={resolveProductKey} />
-            <span className="mi-positioning-panel__state-tip" role="tooltip">
-              {text.stateWhy
-                .replace('{change}', formatDashboardChange(change?.h24Pct))
-                .replace('{now}', rate ? formatRate(rate.ratePercent) : text.missingValue)
-                .replace('{ago}', rateAgo ? formatRate(rateAgo.ratePercent) : text.missingValue)}
+          // One line: the numbers the conclusion was drawn from, so it can be checked rather than
+          // trusted. A single sentence stays on the tooltip; the paragraph lives in the help above.
+          <Tooltip
+            labelKey="pages.intelligence.portal.dashboard.positioning.stateWhy"
+            labelParams={{
+              change: formatDashboardChange(change?.h24Pct),
+              now: rate ? formatRate(rate.ratePercent) : text.missingValue,
+              ago: rateAgo ? formatRate(rateAgo.ratePercent) : text.missingValue
+            }}
+            resolveText={resolveProductKey}>
+            <span className="mi-positioning-panel__state" data-state={state} tabIndex={0}>
+              <StatusPill tone={statePillTone(state)} labelKey={positioningStateLabelKeys[state]} resolveText={resolveProductKey} />
             </span>
-          </span>
+          </Tooltip>
         ) : null}
       </div>
       <div className="mi-positioning-panel__quote">

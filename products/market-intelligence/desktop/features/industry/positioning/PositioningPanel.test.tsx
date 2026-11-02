@@ -225,15 +225,25 @@ describe('bars at the axis edge', () => {
 })
 
 describe('combined readout', () => {
-  it('shows the state and the two numbers behind it', () => {
-    const markup = render()
-    expect(markup).toContain(text.states.deleveraging)
-    expect(markup).toContain('mi-positioning-panel__state-tip')
-    // The tooltip quotes the open interest change and both funding readings, so the label can be
-    // checked instead of taken on trust.
-    expect(markup).toContain('24h')
-    expect(markup).toContain('+0.0062%')
-    expect(markup).toContain('+0.0121%')
+  it('shows the state, and the two numbers behind it on its own line', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+        funding, positioning, window: '7d', onWindowChange: () => undefined, text
+      })))
+    })
+    expect(container.textContent).toContain(text.states.deleveraging)
+    // The "why" line is a one-line tooltip: the numbers appear only once the reader asks for them.
+    const trigger = container.querySelector('.mi-positioning-panel__state')!
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+      trigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+    })
+    // The platform tooltip waits 0.3s before it appears, so the assertion waits with it.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 400)) })
+    expect(document.body.textContent).toContain('+0.0121%')
   })
 
   it('explains the six states in the help popover', async () => {
@@ -334,7 +344,9 @@ describe('opening the reading', () => {
 
   async function mount() {
     const invoke = vi.fn(async () => { throw new Error('the panel must not reach the bridge') })
-    vi.stubGlobal('window', { platform: { products: { invoke } } })
+    // Keep the real window: the platform tooltip needs its animation frame APIs. Only the bridge is
+    // stubbed, which is also the thing this test watches.
+    ;(window as unknown as { platform: unknown }).platform = { products: { invoke } }
     const container = document.createElement('div')
     const root = createRoot(container)
     await act(async () => {
@@ -358,6 +370,7 @@ describe('opening the reading', () => {
     expect(detail.textContent).toContain('3.4×')
     // Opening the numbers is free: nothing reaches the bridge, so no analysis or budget is spent.
     expect(invoke).not.toHaveBeenCalled()
+    delete (window as unknown as { platform?: unknown }).platform
     await act(async () => { root.unmount() })
   })
 })

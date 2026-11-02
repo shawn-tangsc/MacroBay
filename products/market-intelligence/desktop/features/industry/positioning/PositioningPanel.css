@@ -94,22 +94,13 @@
 .mi-positioning-panel__tooltip span[data-series='eth'] { border-left: 2px solid var(--mi-dashboard-etf-eth); padding-left: 5px; }
 .mi-positioning-panel__tooltip span[data-series='rate'] { padding-left: 7px; }
 
-.mi-positioning-panel__foot { margin: 4px 0 0; color: var(--mi-dashboard-caution); font-size: 9px; opacity: .9; }
-.mi-positioning-panel__foot[data-hints-state='unavailable'] { color: var(--mi-dashboard-muted); }
 
 @container (max-width: 700px) {
   .mi-positioning-panel__body { grid-template-columns: minmax(0, 1fr); }
   .mi-positioning-panel__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--mi-dashboard-line); }
 }
 
-.mi-positioning-panel__state-tip {
-  position: absolute; z-index: 3; top: 17px; right: 0; display: none; width: 220px;
-  padding: 6px 8px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  background: color-mix(in srgb, var(--mi-dashboard-surface) 97%, transparent);
-  color: var(--mi-dashboard-muted); font-size: 9.5px; font-weight: 400; line-height: 1.5; text-align: left;
-}
-.mi-positioning-panel__state:hover .mi-positioning-panel__state-tip,
-.mi-positioning-panel__state:focus-visible .mi-positioning-panel__state-tip { display: block; }
+
 
 /* The module rule's chip: at most one per card, beside the title, never over a reading. */
 .mi-positioning-panel__signal {
