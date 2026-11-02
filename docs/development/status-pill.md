@@ -40,11 +40,11 @@ forbids 9px; a second size would be a new type scale invented at a call site.
 
 | `tone` | Means | Token (dot + border) |
 | --- | --- | --- |
-| `ok` | Working, enabled, saved | `--success` |
-| `warn` | Stale, degraded, needs a look — **not** an error | `--caution` (5px hollow ring) |
-| `bad` | Failed | `--danger` (6px solid dot) |
-| `info` | In progress, or a neutral notice | `--accent` |
-| `muted` | Off, paused, not configured | `--muted` |
+| `ok` | Working, enabled, saved | `--success` (6px solid dot) |
+| `warn` | Stale, degraded, needs a look — **not** an error | `--caution` (6px hollow ring, 1.5px stroke) |
+| `bad` | Failed | `--danger` (6px solid square, 1px radius) |
+| `info` | In progress, or a neutral notice | `--accent` (6×2 bar) |
+| `muted` | Off, paused, not configured | `--muted` (3px solid dot) |
 
 The tone rides on **the dot and the border**, and the word itself stays `--text-strong`. That is a
 deliberate departure from colouring the text: `color: var(--danger)` is a foreground the
@@ -87,11 +87,14 @@ that quietly says the wrong thing.
   refresh" belongs in a button. Making the pill clickable would only make that mistake look
   intended.
 - **`warn` and `bad` never borrow each other's token** — a stale value is not a failure.
-- **`warn` and `bad` differ in shape, not only in colour.** `warn` carries a 5px hollow ring,
-  `bad` a 6px solid dot, so a grayscale reader — or a reader who never compares two shades side by
-  side, since only one state is on screen at a time — still tells them apart. The word is always
-  there; the dot and the border only reinforce it. Changing either rule needs a reason that starts
-  with grayscale, because that is the only reason they exist.
+- **All five tones differ in dot shape, not only in colour.** Solid dot, hollow ring, square, bar,
+  small dot — one per tone, in that order — because `ok` and `info` carry tones whose values differ
+  mainly in hue, and a grayscale or red-green colour-blind reader cannot compare two shades when
+  only one state is on screen. Colour stays; shape is the second channel. Neither may be dropped.
+  The point is 6px (3px for `muted`) for a reason: at 5px the 1.5px ring leaves a 2px hole and reads
+  as a solid dot in grayscale, so a shape code at that size is decoration pretending to be encoding.
+  Acceptance is a grayscale and a colour-blind simulation render with all five dots still pairwise
+  distinct — a colour screenshot does not count, which is exactly how the earlier gap was missed.
 - **`labelKey` must be a key.** It stays an open string because every call site names its own state
   word, so `statusPillKeyGuard.test.ts` holds the line: a `<StatusPill …>` call site that passes a
   sentence, a CJK label or an already-resolved string turns that guard red. Variables and constants

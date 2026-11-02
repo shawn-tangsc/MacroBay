@@ -20,6 +20,26 @@ export const STATUS_PILL_TONES = ['ok', 'warn', 'bad', 'info', 'muted'] as const
 
 export type StatusPillTone = (typeof STATUS_PILL_TONES)[number]
 
+/**
+ * 每档的圆点形状（界面设计 2026-11-02 定，Chief 批准）。
+ *
+ * 为什么五档都要形状、不再只靠颜色：浅色主题下 `ok`（`--success`）与 `info`（`--accent`）的色值
+ * 只差色相，灰度或红绿色盲下几乎分不开——而点就是读者最先扫到的那个东西。形状是**第二通道**，
+ * 颜色照旧保留，两者并存；去掉颜色的那个是错的，只靠颜色的那个也是错的。
+ *
+ * 三件「让它成立」的细节：点从 5px 调到 6px（`muted` 3px）——5px 上 1.5px 描边的空心环内孔只剩
+ * 2px，灰度和实心圆一样，形状编码就成了假的；方块带 1px 圆角，与圆一眼分开；横条是 6×2。
+ *
+ * 这张表是**闭集**：新增一档必须同时给出形状，否则 `Record` 直接编译不过——形状不能是"没想过就算了"。
+ */
+export const STATUS_PILL_DOT_SHAPES: Record<StatusPillTone, 'circle' | 'ring' | 'square' | 'bar' | 'small'> = {
+  ok: 'circle',
+  warn: 'ring',
+  bad: 'square',
+  info: 'bar',
+  muted: 'small'
+}
+
 export type StatusPillProps = {
   /** `ok` 正常、`warn` 需要看一眼、`bad` 失败、`info` 进行中或中性提示、`muted` 未启用。 */
   tone: StatusPillTone
@@ -33,11 +53,10 @@ export function StatusPill({ tone, labelKey, resolveText }: StatusPillProps): Re
   return (
     <span className={`status-pill status-pill--${tone}`}>
       {/*
-        灰度可分：关掉颜色、或者读者本来就不区分颜色时，`warn` 与 `bad` 不能只靠两种灰的深浅区分。
-        所以这两档的圆点**形状不同**——`warn` 是空心环、`bad` 是实心点；字始终在，点只是辅助。
-        形状写在 `data` 上而不是写在组件里判色，是为了让 CSS 那一份规则成为唯一出口。
+        灰度可分：关掉颜色、或者读者本来就不区分颜色时，五档靠**形状**分开（见 STATUS_PILL_DOT_SHAPES）。
+        字始终在，点只是辅助。形状写在 `data` 上而不是在组件里判色，是为了让 CSS 那一份规则成为唯一出口。
       */}
-      <i className="status-pill__dot" data-dot-shape={tone === 'warn' ? 'ring' : tone === 'bad' ? 'dot' : undefined} aria-hidden="true" />
+      <i className="status-pill__dot" data-dot-shape={STATUS_PILL_DOT_SHAPES[tone]} aria-hidden="true" />
       <span className="status-pill__label">{resolveText(labelKey)}</span>
     </span>
   )

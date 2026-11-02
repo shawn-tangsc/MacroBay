@@ -40,10 +40,10 @@ import { StatusPill } from '@platform/ui/components/status-pill'
 | `tone` | 含义 | token（圆点 + 描边） |
 | --- | --- | --- |
 | `ok` | 工作中、已启用、已保存 | `--success` |
-| `warn` | 数据偏旧、降级、需要看一眼——**不是**错误 | `--caution`（5px 空心环） |
-| `bad` | 失败 | `--danger`（6px 实心点） |
-| `info` | 进行中，或中性提示 | `--accent` |
-| `muted` | 关闭、暂停、未配置 | `--muted` |
+| `warn` | 数据偏旧、降级、需要看一眼——**不是**错误 | `--caution`（6px 空心环，描边 1.5px） |
+| `bad` | 失败 | `--danger`（6px 实心方块，圆角 1px） |
+| `info` | 进行中，或中性提示 | `--accent`（6×2 短横条） |
+| `muted` | 关闭、暂停、未配置 | `--muted`（3px 小实心圆） |
 
 **档位色落在圆点与描边上，字本身用 `--text-strong`。** 这是有意与「给字上色」不同：
 `color: var(--danger)` 属于 `check:danger-color` 门禁只减不增的前景（深色下 3.25–3.94，正文门槛
@@ -76,6 +76,7 @@ const STATUS_TONE: Record<ChannelCatalogStatus, StatusPillTone> = { supported: '
 - **一个药丸一个档位，一共五档。** 不接受通过 props 传自定义颜色。
 - **是 `<span>`，不是按钮。** 药丸是状态不是动作：「点击刷新」这种动词属于按钮。把药丸做成可点，
   只会让那个错误看起来像是有意设计。
+- **五档的圆点形状两两不同，不只颜色不同。** 实心圆／空心环／方块／短横条／小实心圆，按档位一一对应；因为 `ok` 与 `info` 的色值主要差在色相，灰度或红绿色盲读者面前「同一时刻只出现一个状态」就等于没法比较深浅。颜色保留，形状是第二通道，两者都不许去掉。点取 6px（`muted` 3px）是有原因的：5px 上 1.5px 描边的空心环内孔只剩 2px，灰度里读起来就是实心圆——那个尺寸上的形状编码是装饰冒充编码。验收用灰度与红绿色盲模拟，五个点两两可分才算过；彩色截图不算，这次漏掉正是因为它。
 - **`warn` 与 `bad` 互不借 token**——偏旧不是失败。
 - **`labelKey` 必须是键。** 它是开区间（每个站点的状态词不同，平台枚举不出来），
   这条线由 `statusPillKeyGuard.test.ts` 守：`<StatusPill …>` 调用点如果传了句子、中文标签

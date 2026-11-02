@@ -117,20 +117,30 @@ describe('StatusPill', () => {
     expect(rules).not.toMatch(/@keyframes|animation|transition/)
   })
 
-  it('separates warn from bad by shape, so the two survive a grayscale reader', () => {
-    // 界面设计 2026-11-02：关掉颜色后，两档不能只靠比较两种灰的深浅——同一时刻只会出现一个，
-    // 没有并排就没有深浅可比较。所以形状不同：`warn` 空心环、`bad` 实心点。
-    expect(markup({ tone: 'warn' })).toContain('data-dot-shape="ring"')
-    expect(markup({ tone: 'bad' })).toContain('data-dot-shape="dot"')
-    // 其余三档没有形状变体：多一档变体就等于多一个要维护的差异，而它们之间没有这种歧义。
-    for (const tone of ['ok', 'info', 'muted'] as const) {
-      expect(markup({ tone })).not.toContain('data-dot-shape')
-    }
+  it('gives every tone its own dot shape, so five states survive a grayscale reader', () => {
+    // 界面设计 2026-11-02 定、Chief 批准：浅色下 `ok`（success）与 `info`（accent）色值只差色相，
+    // 灰度或红绿色盲下分不开。所以**五档两两形状不同**，颜色保留，形状是第二通道——
+    // 去掉颜色是错的，只靠颜色也是错的。
+    const shapes = STATUS_PILL_TONES.map((tone) => {
+      const found = /data-dot-shape="([a-z]+)"/.exec(markup({ tone }))?.[1]
+      expect(found, `tone ${tone} renders no dot shape`).toBeDefined()
+      return found
+    })
+    // 两两不同：任何两档共用一个形状，灰度下就又回到「只差深浅」的老问题。
+    expect(new Set(shapes).size).toBe(STATUS_PILL_TONES.length)
 
-    // 形状必须真的来自 CSS，而不是只挂了个属性：环是透明底 + 描边，点是实心。
+    const expected = { ok: 'circle', warn: 'ring', bad: 'square', info: 'bar', muted: 'small' } as const
+    STATUS_PILL_TONES.forEach((tone, index) => expect(shapes[index]).toBe(expected[tone]))
+
+    // 形状必须真的来自 CSS，而不是只挂了个属性。
     expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('background: transparent')
     expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('border: 1.5px solid var(--pill-tone)')
-    expect(block(".status-pill__dot[data-dot-shape='dot']")).toContain('background: var(--pill-tone)')
-    expect(block(".status-pill__dot[data-dot-shape='dot']")).not.toContain('background: transparent')
+    expect(block(".status-pill__dot[data-dot-shape='square']")).toContain('border-radius: 1px')
+    expect(block(".status-pill__dot[data-dot-shape='bar']")).toContain('height: 2px')
+    expect(block(".status-pill__dot[data-dot-shape='small']")).toContain('width: 3px')
+
+    // 5px 上形状编码是假的：空心环的内孔只剩 2px，灰度里与实心圆一样。所以点抬到 6px。
+    expect(rules).not.toContain('width: 5px')
+    expect(block(".status-pill__dot[data-dot-shape='circle']")).toContain('width: 6px')
   })
 })

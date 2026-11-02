@@ -24,34 +24,58 @@
   white-space: nowrap;
 }
 
-/* 圆点只是辅助：颜色关掉之后，读的是旁边的字。 */
-.status-pill__dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--pill-tone);
-  flex: none;
-}
-
 /*
- * 灰度可分：`warn` 与 `bad` 形状不同，不只颜色不同。
+ * 圆点只是辅助：颜色关掉之后，读的是旁边的字。
  *
- * 判据来自界面设计 2026-11-02：关掉颜色（或读者不区分颜色）时，两档不能只靠比较两种灰的深浅——
- * 那需要并排才能比，而同一时刻只会出现一个。所以 `warn` 是 5px 空心环、`bad` 是 6px 实心点，
- * 字始终在，形状是第二道可读的线索。改这两条之前先想清楚：它们存在的唯一理由就是灰度下能分开。
+ * **形状是第二通道**（界面设计 2026-11-02 定，Chief 批准）。五档的点两两不同：
+ * `ok` 实心圆 6×6、`warn` 空心环 6×6（描边 1.5）、`bad` 实心方块 6×6（圆角 1）、
+ * `info` 短横条 6×2、`muted` 小实心圆 3×3。
+ *
+ * 为什么不是 5px：5px 上 1.5px 描边的空心环内孔只剩 2px，灰度截图里和实心圆几乎一样——
+ * 形状编码在 5px 上是假的，所以点整体抬到 6px。改这几条之前先想清楚：
+ * 它们存在的唯一理由，是灰度与红绿色盲下五个点仍能两两分开。
  */
-.status-pill__dot[data-dot-shape='ring'] {
-  box-sizing: border-box;
-  width: 5px;
-  height: 5px;
-  background: transparent;
-  border: 1.5px solid var(--pill-tone);
+.status-pill__dot {
+  flex: none;
+  background: var(--pill-tone);
 }
 
-.status-pill__dot[data-dot-shape='dot'] {
+/* ok：满圆。 */
+.status-pill__dot[data-dot-shape='circle'] {
   width: 6px;
   height: 6px;
-  background: var(--pill-tone);
+  border-radius: 50%;
+}
+
+/* warn：空心环——灰度和实心圆不是「深浅差」，是「有没有心」。 */
+.status-pill__dot[data-dot-shape='ring'] {
+  box-sizing: border-box;
+  width: 6px;
+  height: 6px;
+  background: transparent;
+  border: 1.5px solid var(--pill-tone);
+  border-radius: 50%;
+}
+
+/* bad：实心方块——有直角，与两档圆一眼分开。 */
+.status-pill__dot[data-dot-shape='square'] {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+}
+
+/* info：短横条——横的，不是点；与「进行中」同为动态语义的读者最先认这一条。 */
+.status-pill__dot[data-dot-shape='bar'] {
+  width: 6px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* muted：小实心圆——用大小做第三通道，避免再出现一个空心形与 warn 混淆。 */
+.status-pill__dot[data-dot-shape='small'] {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
 }
 
 /* 五档各给一个档位色，描边由它混中性边框求出，深浅两个主题下都不会跳成另一种颜色。 */
