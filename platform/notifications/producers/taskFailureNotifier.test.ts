@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { JobRunRecord } from '../../jobs/contracts/jobTypes'
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createTaskFailureNotifier } from './taskFailureNotifier'
 
 function run(overrides: Partial<JobRunRecord> = {}): JobRunRecord {
@@ -29,7 +29,7 @@ function run(overrides: Partial<JobRunRecord> = {}): JobRunRecord {
 function notifier(overrides: {
   resolveTaskName?: (input: { definitionId: string; productId?: string }) => string | null
 } = {}) {
-  const submit = vi.fn<(request: NotificationRequest) => Promise<unknown>>(async () => undefined)
+  const submit = vi.fn<(request: NotificationSubmitRequest) => Promise<unknown>>(async () => undefined)
   const notify = createTaskFailureNotifier({
     submit,
     resolveTaskName: overrides.resolveTaskName ?? (() => '央行利率决议采集'),
@@ -44,15 +44,20 @@ describe('task failure notifier', () => {
     await notify({ run: run(), cause: 'executed' })
 
     expect(submit).toHaveBeenCalledTimes(1)
-    const request = submit.mock.calls[0]?.[0] as NotificationRequest
-    // 记录里存的是键 + 参数，不是句子：句子由解析器按读者语言产出。
-    expect(request.titleKey).toBe('notification.taskFailed.title')
+    const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    // 契约 §3.2：事件 id、参数、去重变量；标题/正文键在 P1 声明里，不在这里。
+    expect(request.eventTypeId).toBe('platform.job.failed-terminal')
+    expect(request.producerId).toBe('definition-1')
+    expect(request.dedupeVars).toEqual({
+      builder: 'template',
+      vars: { definitionId: 'definition-1', date: '2026-11-02' }
+    })
     expect(request.titleParams).toEqual({ taskName: '央行利率决议采集' })
     // 不是 run.title：那是任务标识（`Collect 央行`），不是给人看的标题。
     expect(JSON.stringify(request)).not.toContain('Collect 央行')
-    expect(request.dedupeKey).toBe('task-failed:definition-1:2026-11-02')
-    expect(request.requestedChannels).toContain('center')
+    expect(request.actions).toHaveLength(1)
     expect(request.deeplink).toMatchObject({ entityType: 'job-definition', entityId: 'definition-1' })
+    expect(request.occurredAt).toBe('2026-11-02T01:00:05.000Z')
   })
 
   it('stays silent when the run succeeded: a quiet day produces nothing', async () => {
@@ -77,10 +82,10 @@ describe('task failure notifier', () => {
   it('truncates a long failure reason instead of pasting a stack trace into the notification', async () => {
     const { submit, notify } = notifier()
     await notify({ run: run({ lastError: 'x'.repeat(500) }), cause: 'executed' })
-    const request = submit.mock.calls[0]?.[0] as NotificationRequest
-    // 长错误不进记录：正文只留键，原因细节留给运行记录。
-    expect(request.bodyKey).toBe('notification.taskFailed.body')
+    const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    // 长错误不进记录：只有截断后的 reason 参数，正文键在声明里。
     expect(request.titleParams?.taskName).toBe('央行利率决议采集')
-    expect(JSON.stringify(request)).not.toContain('xxxxxxxx')
+    expect(String(request.reasonParams?.reason).length).toBeLessThanOrEqual(160)
+    expect(JSON.stringify(request)).not.toContain('x'.repeat(200))
   })
 })

@@ -1,5 +1,5 @@
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 
 /**
  * 第一个真实通知来源：**任务最终失败**。
@@ -18,7 +18,7 @@ import type { NotificationRequest } from '../contracts/notificationContracts'
  * 所以它可以被直接测，且平台模块之间不必互相 import。
  */
 export type TaskFailureNotifierDeps = {
-  submit: (request: NotificationRequest) => Promise<unknown>
+  submit: (request: NotificationSubmitRequest) => Promise<unknown>
   /** 把 definition 解析成给人看的任务名；解析不出返回 `null`（调用方据此不发）。 */
   resolveTaskName: (input: { definitionId: string; productId?: string }) => string | null
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
@@ -48,19 +48,18 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
     }
 
     return deps.submit({
-      owner: run.owner,
-      ...(run.productId === undefined ? {} : { productId: run.productId }),
-      sourceId: `job-run-failed:${run.definitionId}`,
-      // 记录里**只存键与参数**：句子由解析器按读者语言产出，切语言时历史通知跟着变。
-      titleKey: 'notification.taskFailed.title',
+      // 契约 §3.2：键来自声明，提交只带参数。标题/正文键在 P1 声明里，行为与旧路径一致。
+      eventTypeId: 'platform.job.failed-terminal',
+      producerId: run.owner === 'product' ? run.handlerId : run.definitionId,
+      dedupeVars: {
+        builder: 'template',
+        vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
+      },
       titleParams: { taskName },
-      ...(reason === '' ? {} : { bodyKey: 'notification.taskFailed.body' }),
-      severity: 'warning',
-      priority: 'normal',
-      requestedChannels: ['center', 'desktop'],
+      ...(reason === '' ? {} : { reasonParams: { reason } }),
       actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
       deeplink,
-      dedupeKey: `task-failed:${run.definitionId}:${deps.dayToken(completedAt)}`,
+      occurredAt: completedAt,
       correlationId: run.id
     }).then(() => undefined)
   }

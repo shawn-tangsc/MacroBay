@@ -1,5 +1,5 @@
 import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
-import type { NotificationRequest } from '../contracts/notificationContracts'
+import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 import { createTaskFailureNotifier } from './taskFailureNotifier'
 
 /**
@@ -9,7 +9,7 @@ import { createTaskFailureNotifier } from './taskFailureNotifier'
  * 没有生命周期、没有 Electron，抽出来不牵任何运行期状态，`app.ts` 只留一行调用。
  */
 export function wireTaskFailureNotifier(deps: {
-  submit: (request: NotificationRequest) => Promise<unknown>
+  submit: (request: NotificationSubmitRequest) => Promise<unknown>
   /** 任务定义（只用来解析可读任务名）；`run.title` 是标识，绝不使用。 */
   listDefinitions: () => readonly { id: string; title: string }[]
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */

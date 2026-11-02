@@ -33,11 +33,13 @@ export function notificationEventBodyKey(eventTypeId: string, variant?: string):
 
 function declaration(
   id: string,
-  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey'>
+  input: Omit<NotificationEventDeclaration, 'id' | 'titleKey' | 'reasonKey'>,
+  copy?: { titleKey?: string; bodyKey?: string }
 ): NotificationEventDeclaration {
   return {
     id,
-    titleKey: notificationEventTitleKey(id),
+    titleKey: copy?.titleKey ?? notificationEventTitleKey(id),
+    ...(copy?.bodyKey === undefined ? {} : { bodyKey: copy.bodyKey }),
     reasonKey: notificationEventReasonKey(id),
     ...input
   }
@@ -52,7 +54,7 @@ export const PLATFORM_NOTIFICATION_EVENTS: readonly NotificationEventDeclaration
     dedupeUnit: 'condition',
     conditionWindowMs: 86_400_000,
     notifyOnlyIfSubscribed: false
-  }),
+  }, { titleKey: 'notification.taskFailed.title', bodyKey: 'notification.taskFailed.body' }),
   // P2 同一任务连续 3 次终态失败：只通知、不暂停任务；同一天同一任务一条。
   declaration('platform.job.repeated-failed', {
     requiresUserAction: true,

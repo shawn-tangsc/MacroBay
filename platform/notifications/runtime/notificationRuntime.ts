@@ -196,10 +196,10 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     const record = plan.record
     await persistWithDiagnostics({ ...state, records: [record, ...state.records] })
     notifyChanged()
-    const delivered = await delivery.deliverNewRecord(record, settings)
-    if (delivered !== record) {
-      const records = [delivered, ...state.records]
-      await persistWithDiagnostics({ ...state, records })
+    const delivered = await delivery.deliverNewRecord(record, settings, state.pushBackoff)
+    if (delivered.record !== record || delivered.pushBackoff !== state.pushBackoff) {
+      const records = [delivered.record, ...state.records]
+      await persistWithDiagnostics({ ...state, records, pushBackoff: delivered.pushBackoff })
       notifyChanged()
     }
     return plan.outcome
@@ -210,6 +210,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     getSettings: deps.getSettings,
     updateSettings: deps.updateSettings,
     getPushTargets: deps.getPushTargets,
+    pushWired: () => deps.deliveryHooks?.push !== undefined,
     load,
     persistWithDiagnostics,
     notifyChanged

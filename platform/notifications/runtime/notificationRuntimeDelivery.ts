@@ -6,7 +6,11 @@
  */
 import { notificationCopyText } from '../../i18n/notificationCopy'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
-import type { NotificationRecord, NotificationRuntimeSettings } from '../contracts/notificationContracts'
+import type {
+  NotificationPushBackoff,
+  NotificationRecord,
+  NotificationRuntimeSettings
+} from '../contracts/notificationContracts'
 import {
   routeTransientDelivery,
   type DeliveryHooks,
@@ -54,8 +58,9 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
    */
   async function deliverNewRecord(
     record: NotificationRecord,
-    settings: NotificationRuntimeSettings
-  ): Promise<NotificationRecord> {
+    settings: NotificationRuntimeSettings,
+    pushBackoff: Readonly<Record<string, NotificationPushBackoff>>
+  ): Promise<{ record: NotificationRecord; pushBackoff: Readonly<Record<string, NotificationPushBackoff>> }> {
     const content = await resolveContent(record)
     const attempts = await routeTransientDelivery(record, settings, input.deliveryHooks ?? {}, input.clock, content)
     const delivery: NotificationRecord['delivery'] = { ...record.delivery }
@@ -72,18 +77,36 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       }
     }
 
+    const nextBackoff: Record<string, NotificationPushBackoff> = { ...pushBackoff }
     if (delivery.push?.state === 'queued') {
       const at = input.now()
-      if (settings.push.channelId === null || !input.deliveryHooks?.push) {
+      const channelId = settings.push.channelId
+      const current = channelId === null ? undefined : pushBackoff[channelId]
+      if (channelId === null || !input.deliveryHooks?.push) {
         delivery.push = { state: 'failed', reason: 'push-unavailable', at }
+      } else if (current?.pausedUntil !== null && current?.pausedUntil !== undefined && current.pausedUntil > at) {
+        // 熔断窗口内不发：写独立原因码，不调用端口（通道方案 §3）。
+        delivery.push = { state: 'failed', reason: 'push-backoff', at }
       } else {
         const result = await input.deliveryHooks.push({ ...record, delivery }, content)
-        delivery.push = result.ok
-          ? { state: 'sent-accepted', at, ...(result.messageId === undefined ? {} : { messageId: result.messageId }) }
-          : { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
+        if (result.ok) {
+          nextBackoff[channelId] = { channelId, failures: 0, pausedUntil: null }
+          delivery.push = {
+            state: 'sent-accepted',
+            at,
+            ...(result.messageId === undefined ? {} : { messageId: result.messageId })
+          }
+        } else {
+          const failures = (current?.failures ?? 0) + 1
+          const pausedUntil = failures >= 3
+            ? new Date(Date.parse(at) + 30 * 60_000).toISOString()
+            : null
+          nextBackoff[channelId] = { channelId, failures, pausedUntil }
+          delivery.push = { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
+        }
       }
     }
-    return { ...record, delivery }
+    return { record: { ...record, delivery }, pushBackoff: nextBackoff }
   }
 
   return { resolveContent, deliverNewRecord }

@@ -15,10 +15,7 @@ import {
   type NotificationSubscriptionPatch,
   type NotificationSubscriptionTable
 } from '../contracts/notificationSubscriptions'
-import {
-  notificationPushWired,
-  type NotificationRuntimeSettings
-} from '../contracts/notificationContracts'
+import type { NotificationRuntimeSettings } from '../contracts/notificationContracts'
 import type { NotificationStoreState } from '../store/notificationStore'
 
 export type NotificationSettingsSurfaceInput = {
@@ -26,6 +23,8 @@ export type NotificationSettingsSurfaceInput = {
   getSettings: () => Promise<NotificationRuntimeSettings>
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
+  /** 端口真的装配好才为 true；不再读一个永远 false 的常量。 */
+  pushWired?: () => boolean
   load: () => Promise<NotificationStoreState>
   persistWithDiagnostics: (state: NotificationStoreState) => Promise<void>
   notifyChanged: () => void
@@ -77,7 +76,7 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       return {
         toastEnabled: settings.toastEnabled,
         channelId: settings.push.channelId,
-        pushWired: notificationPushWired,
+        pushWired: input.pushWired?.() ?? false,
         channels: (await input.getPushTargets?.()) ?? []
       }
     },
