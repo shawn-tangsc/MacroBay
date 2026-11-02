@@ -220,6 +220,7 @@ import { createPlatformCore } from './composition/platformCore'
 import { createRepositories } from './composition/repositories'
 import { createAgentRuntime, platformRuntimesDisposed } from './composition/agentRuntime'
 import { createChannelsAndJobs } from './composition/channelsAndJobs'
+import { createAssistantsAndRuntimes } from './composition/assistantsAndRuntimes'
 
 // 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
 bindReplaceAgentState(replaceAgentState)
@@ -550,193 +551,32 @@ const agentModelCompatibilityControl = createAgentModelCompatibilityControl({
   gatewayService: agentModelGatewayService,
   snapshotStore: agentRuntimeProbeSnapshotStore
 })
-const claudeCodeRuntimeDependencies = createClaudeCodeRuntimeDriverDependencies({
-  getProviderState: providerStore.getState,
-  refreshRuntimeCheck: async (providerId, modelId, checkGateway) => providerRuntimeCheckService.runChecks({
-    providerId,
-    modelId,
-    runtimeId: 'claude-code',
-    checkGateway
-  }),
-  gatewayService: agentModelGatewayService,
-  snapshotStore: agentRuntimeProbeSnapshotStore,
-  systemWorkspaceRoot: agentSystemWorkspacesRoot
-})
-const isAgentWebSearchProviderReady = async (): Promise<boolean> => {
-  const [settings, providers] = await Promise.all([webSearchService.getSettings(), webSearchService.listProviderViews()])
-  const search = providers.find((provider) => provider.id === settings.defaultSearchProviderId)
-  const fetch = providers.find((provider) => provider.id === settings.defaultFetchProviderId)
-  return Boolean(search?.enabled && (search.id === 'fetch' || search.hasApiKey) && fetch?.enabled)
-}
-const platformAgentWebSearchBridge = {
-  search: async (request: Readonly<{ query: string; maxResults?: number }>, options?: Readonly<{ signal?: AbortSignal }>) => {
-    const response = await webSearchService.searchKeywords(
-      { keywords: [request.query] },
-      { ...(options?.signal ? { signal: options.signal } : {}), consumer: { kind: 'agent' } }
-    )
-    return request.maxResults ? { ...response, results: response.results.slice(0, request.maxResults) } : response
-  },
-  isReady: isAgentWebSearchProviderReady
-}
-const claudeAgentSdkRuntime = createClaudeAgentSdkRuntime({
-  loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
-  getProviderState: providerStore.getState,
-  getAgentState: () => agentStore.getState(),
-  saveAgentState: async (state, options) => {
-    if (options?.mergeSessionId) {
-      await mergeAndReplaceAgentSessionState(state, options.mergeSessionId)
-      return
-    }
-    await replaceAgentState(state)
-  },
-  platformWebSearchBridge: platformAgentWebSearchBridge,
-  productAgentToolBridge: {
-    registry: productAgentToolRegistry,
-    runtime: productAgentToolRuntimeService,
-    getAgentState: () => agentStore.getState()
-  },
-  skillToolBridge: {
-    runtime: skillsRuntimeService,
-    getAgentState: () => agentStore.getState()
-  },
-  taskManagementToolBridge: {
-    runtime: taskManagementToolRuntimeService,
-    commands: agentServices.taskCommands,
-    getAgentState: () => agentStore.getState(),
-    getTaskRunController: () => getAgentTaskRunController()
-  }
-})
-const claudeCodeRuntimeDriver = new ClaudeCodeRuntimeDriver({
-  ...claudeCodeRuntimeDependencies,
-  emitChunk: (chunk) => agentRuntimeService.emitChunk?.(chunk),
-  requestToolApproval: (input) => agentRuntimeService.requestToolApproval(input),
-  prewarmSession: (input) => claudeAgentSdkRuntime.prewarmSession(input),
-  executeTurn: createClaudeSdkPreferredExecutor({
-    sdkRuntime: claudeAgentSdkRuntime,
-    platformWebSearchBridge: platformAgentWebSearchBridge,
-    loadClaudeSdkModule: claudeCodeRuntimeDependencies.loadClaudeSdkModule,
-    getProviderState: providerStore.getState,
-    getAgentState: () => agentStore.getState(),
-    saveAgentState: async (state, options) => {
-      if (options?.mergeSessionId) {
-        await mergeAndReplaceAgentSessionState(state, options.mergeSessionId)
-        return
-      }
-      await replaceAgentState(state)
-    }
-  })
-})
-if (workspaceTestFixtures.enabled && workspaceTestFixtures.streamStub !== null) {
-  /**
-   * PLAT-33（test-only）：受控**流源驱动桩**经**既有注册点**替换 claude-code 驱动（与 task smoke 同一姿态，
-   * 不新增 AgentType、不写假 provider、不发网络请求）。块间延迟让真机能在**流仍 in-flight** 时 detach/redock；
-   * send/emit 计数只经 seam 自装的 `globalThis` 钩子暴露给同进程 harness。
-   */
-  const streamStub = createWorkspaceTestStreamDriver({
-    getState: () => agentStore.getState(),
-    saveState: async (state, sessionId) => {
-      await mergeAndReplaceAgentSessionState(state, sessionId)
-    },
-    emitChunk: (chunk) => agentRuntimeService.emitChunk(chunk),
-    chunkCount: workspaceTestFixtures.streamStub.chunkCount,
-    chunkIntervalMs: workspaceTestFixtures.streamStub.chunkIntervalMs,
-    finalText: workspaceTestFixtures.streamStub.finalText
-  })
-  runtimeDriverRegistry.register('claude-code', streamStub.driver)
-  installWorkspaceTestFixtureHandle({ target: globalThis as unknown as Record<string, unknown>, fixtures: workspaceTestFixtures, streamStub: streamStub.stats })
-} else if (taskAutomationSmokeProfile.enabled) {
-  runtimeDriverRegistry.register(
-    'claude-code',
-    createTaskAutomationSmokeDriver({
-      getState: () => agentStore.getState(),
-      saveState: async (state, sessionId) => {
-        await mergeAndReplaceAgentSessionState(state, sessionId)
-      },
-      taskTools: taskManagementToolRuntimeService
-    })
-  )
-} else {
-  runtimeDriverRegistry.register('claude-code', claudeCodeRuntimeDriver)
-}
-const agentIpcHandlers = createAgentIpcHandlers(
-  agentServices,
-  agentRuntimeService,
-  {
-    runTask: (agentId: string, taskId: string, expectedRevision: number) =>
-      getAgentTaskExecutionCoordinator().enqueueManualRun({
-        agentId,
-        taskId,
-        expectedRevision,
-        actor: { kind: 'user', source: 'renderer-agent-drawer' }
-      })
-        .then((runLog) => ({ taskId, runLogId: runLog.id }))
-  },
-  {
-    cancelTaskRun: (runLogId: string) => {
-      const controller = getAgentTaskRunController()
-      if (!controller) {
-        throw new Error('Agent task run controller is not available.')
-      }
-      return controller.cancelTaskRun(runLogId)
-    }
-  },
-  {
-    getSkillRuntime: async (agentId: string) =>
-      buildAgentSkillsRuntimeCatalog(skillsRuntimeService.getAgentRuntime(await agentStore.getState(), agentId))
-  },
-  {
-    listProductToolPackages: async (agentId: string) => {
-      const state = await agentStore.getState()
-      return productAgentToolRegistry.listPackages(getInstalledProductManifestIds()).map((pkg) =>
-        buildProductAgentToolPackageEditorView({
-          package: pkg,
-          binding: (state.agentProductToolPackages ?? []).find(
-            (item) => item.agentId === agentId && item.productId === pkg.productId
-          ),
-          installedProductIds: getInstalledProductManifestIds()
-        })
-      )
-    },
-    updateProductToolPackageBinding: async (
-      agentId: string,
-      productId: string,
-      permissionMode: 'allow-read-only' | 'prompt' | 'disabled'
-    ) => {
-      const nextState = await agentStore.update((state) => ({
-        ...state,
-        agentProductToolPackages: upsertAgentProductToolPackageBinding(state.agentProductToolPackages ?? [], {
-          agentId,
-          productId,
-          permissionMode,
-          updatedAt: new Date().toISOString()
-        })
-      }))
-      syncProductToolsRuntimeFromState(nextState)
-      agentBroadcasts.stateChanged(nextState)
-      return nextState
-    },
-    listProductToolCallTracePage: async (query: {
-      agentSessionId?: string
-      productId?: string
-      consumerProductId?: string
-      cursor?: string
-      limit?: number
-    }) => agentRepositories.productToolTraces.listPage(query),
-    getProductToolCallTrace: async (toolCallId: string) => agentRepositories.productToolTraces.get(toolCallId)
-  },
-  {
-    getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot(),
-    restartChannelRuntime: (channelId) => channelRuntimeSupervisor.restart(channelId)
-  },
+const assistantsAndRuntimes = createAssistantsAndRuntimes({
+  core: platformCore,
+  repositories,
+  agentRuntime,
+  channelsAndJobs,
+  agentModelGatewayService,
+  agentRuntimeProbeSnapshotStore,
+  providerRuntimeCheckService,
+  webSearchService,
   agentModelCompatibilityControl,
-  {
-    compose: (input) => agentRuntimeCompositionService.compose(input)
-  },
-  {
-    retryTaskDelivery: (agentId, runLogId, attemptId) => deliverTaskResultToChannels.retry(agentId, runLogId, attemptId)
-  }
-)
-
+  agentTaskSchedulerRuntimeService,
+  agentBroadcasts,
+  getMainWindow,
+  syncSkillsRuntimeFromState,
+  syncProductToolsRuntimeFromState,
+  workspaceTestFixtures,
+  taskAutomationSmokeProfile
+})
+const {
+  agentIpcHandlers,
+  assistantIpcHandlers,
+  assistantChatRuntime,
+  assistantTemplateRegistry,
+  ensureDefaultAssistantSeed,
+  isAgentWebSearchProviderReady
+} = assistantsAndRuntimes
 function invalidateAgentModelCompatibilityCache(providerId?: string): void {
   if (providerId) {
     agentModelRuntimeProbeService.invalidateProvider(providerId)
@@ -746,62 +586,6 @@ function invalidateAgentModelCompatibilityCache(providerId?: string): void {
   agentModelRuntimeProbeService.invalidateAll()
   void agentRuntimeProbeSnapshotStore.clear()
 }
-
-const assistantTopicNamingService = new AssistantTopicNamingService({
-  isEnabled: async () => (await settingsStore.get()).assistant.topicNamingEnabled,
-  getLanguage: async () => (await settingsStore.get()).language,
-  getNamingPrompt: async () => (await settingsStore.get()).assistant.topicNamingPrompt,
-  getNamingModelId: async () => (await settingsStore.get()).assistant.topicNamingModelId,
-  getProviderState: providerStore.getState,
-  fetch: getPlatformFetch(),
-  renameTopic: async (topicId, name) => {
-    assistantRepositories.topics.update(topicId, { name, isNameManuallyEdited: false })
-  }
-})
-
-const assistantChatRuntime = createAssistantChatRuntimeService({
-  repos: assistantRepositories,
-  getProviderState: providerStore.getState,
-  fetch: getPlatformFetch(),
-  webSearchService,
-  topicNaming: assistantTopicNamingService,
-  getTopicNamingModelId: async () => (await settingsStore.get()).assistant.topicNamingModelId,
-  getDefaultAssistantModelId: async () => (await settingsStore.get()).modelDefaults.assistantModelId,
-  logContextPlan: (summary) =>
-    appLog.log('info', 'assistant.context-plan', { ...summary }),
-  // 流式广播的装配只有这一行：通道名与窗口都在 assistantStreamBroadcast 里，
-  // 组合根不再出现任何一个 assistantsStream* 的名字。
-  // 传 thunk 而不是引用：`getMainWindow` 在本文件更靠后声明，直接取值会撞 TDZ（tsc 2448）。
-  // 而它本来就应该在**发送那一刻**取窗口——所以延迟取值正是我们想要的行为。
-  events: createAssistantStreamSink({ getMainWindow: () => getMainWindow() })
-})
-const assistantTemplateRegistry = new AssistantTemplateRegistry()
-assistantTemplateRegistry.registerMany(platformAssistantTemplates)
-const assistantLibraryService = new AssistantLibraryService({
-  registry: assistantTemplateRegistry,
-  repos: assistantRepositories
-})
-const assistantIpcHandlers = createAssistantIpcHandlers(
-  assistantRepositories,
-  assistantChatRuntime,
-  assistantLibraryService
-)
-
-async function ensureDefaultAssistantSeed(): Promise<void> {
-  const language = (await settingsStore.get()).language
-  const seed = createDefaultAssistantSeed({ language })
-  const existing = assistantRepositories.assistants.getById(seed.id)
-  if (!existing) {
-    assistantRepositories.assistants.create(seed)
-    return
-  }
-
-  const localizationPatch = buildDefaultAssistantLocalizationPatch(existing, language)
-  if (localizationPatch) {
-    assistantRepositories.assistants.update(existing.id, localizationPatch)
-  }
-}
-
 
 const resolveInvokingWindow = (event: IpcMainInvokeEvent): BrowserWindow | null =>
   mainWindowHost.resolveInvokingWindow(event)
@@ -828,19 +612,6 @@ async function replaceAgentStateAfterSkillMutation(
     },
     previousState
   })
-}
-
-async function mergeAndReplaceAgentSessionState(
-  runtimeSnapshot: AgentStoreState,
-  sessionId: string
-): Promise<AgentStoreState> {
-  const nextState = await agentStore.update((current) => mergeAgentRuntimeSessionState(current, runtimeSnapshot, sessionId))
-  syncSkillsRuntimeFromState(nextState)
-  syncProductToolsRuntimeFromState(nextState)
-  mcpRuntimeService.syncFromState(nextState)
-  agentTaskSchedulerRuntimeService.syncFromState(nextState)
-  agentBroadcasts.stateChanged(nextState)
-  return nextState
 }
 
 function syncSkillsRuntimeFromState(state: AgentStoreState): void {

@@ -24,6 +24,8 @@ const repositoriesSource = readSource('composition/repositories.ts')
 const agentRuntimeSource = readSource('composition/agentRuntime.ts')
 // 通道与任务作业的构造已搬到 composition/channelsAndJobs.ts（退出链仍留在 app.ts）。
 const channelsAndJobsSource = readSource('composition/channelsAndJobs.ts')
+// 助手与智能体运行时驱动的构造已搬到 composition/assistantsAndRuntimes.ts（退出链与槽位仍在 app.ts）。
+const assistantsAndRuntimesSource = readSource('composition/assistantsAndRuntimes.ts')
 const assistantIpcSource = readSource('ipc/assistantIpc.ts')
 const agentIpcSource = readSource('ipc/agentIpc.ts')
 const agentToolsIpcSource = readSource('ipc/agentToolsIpc.ts')
@@ -110,8 +112,8 @@ describe('desktop main IPC surface', () => {
     expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(repositoriesSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
     expect(agentRuntimeSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
-    expect(appSource).toContain('taskManagementToolBridge: {')
-    expect(appSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
+    expect(assistantsAndRuntimesSource).toContain('taskManagementToolBridge: {')
+    expect(assistantsAndRuntimesSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
     expect(appSource).toContain('await getAgentTaskExecutionCoordinatorOrNull()?.recoverAfterRestart()')
     expect(appSource).toContain('taskAutomationMaintenance.recoverAfterRestart()')
     expect(appSource).toContain('scheduleTaskAutomationMaintenance(taskAutomationMaintenance)')
@@ -168,7 +170,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
     expect(appSource).toContain('getScheduleValidationOptions: taskIpcScheduleValidationOptions')
     expect(appSource).toContain('afterCommit: refreshTaskStateAfterCommit')
-    expect(appSource).toContain('retryTaskDelivery: (agentId, runLogId, attemptId)')
+    expect(assistantsAndRuntimesSource).toContain('retryTaskDelivery: (agentId, runLogId, attemptId)')
   })
 
   it('keeps the task smoke fixture launch-only before normal persistence composition', () => {
@@ -183,13 +185,13 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf('app.setPath(\'userData\''))
       .toBeLessThan(appSource.indexOf('createPlatformCore({'))
     expect(repositoriesSource).toContain('createTaskAutomationSmokeSeed(')
-    expect(appSource).toContain('createTaskAutomationSmokeDriver(')
-    expect(appSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
+    expect(assistantsAndRuntimesSource).toContain('createTaskAutomationSmokeDriver(')
+    expect(assistantsAndRuntimesSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
     // 构造点搬进 channelsAndJobs 片：adapter 与 supervisor 都在那里，退出链仍在 app.ts。
     expect(channelsAndJobsSource).toContain('new ChannelRuntimeSupervisor({')
-    expect(appSource).toContain('getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot()')
+    expect(assistantsAndRuntimesSource).toContain('getChannelRuntimeSnapshot: () => channelRuntimeSupervisor.snapshot()')
     expect(appSource).not.toContain('channelRuntimeService')
-    expect(appSource).toContain('if (taskAutomationSmokeProfile.enabled)')
+    expect(assistantsAndRuntimesSource).toContain('if (taskAutomationSmokeProfile.enabled)')
     expect(appSource).toContain('resolveBootstrapProductManifests(options.productManifests ?? [], taskAutomationSmokeProfile.enabled)')
     expect(collapseWhitespace(appSource)).toContain(
       collapseWhitespace('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
