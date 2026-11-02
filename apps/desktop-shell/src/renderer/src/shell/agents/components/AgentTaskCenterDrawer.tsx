@@ -1,4 +1,4 @@
-import { Button, Tag } from 'antd'
+import { Button } from 'antd'
 import { Plus, RefreshCw } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { AgentEntity } from '@platform/ai/agent-platform/schemas/agentSchemas'
