@@ -38,6 +38,7 @@ Source: `platform/ui/components/drawer/`. Visual spec:
 | `side` | `'left' \| 'right'` | no, default `right` | Only for `mode="inline"`. Modal drawers are always right. |
 | `header` | `'titled' \| 'none'` | no, default `titled` | A titled header, or no header at all. |
 | `titleKey` | `string` | with `header="titled"` | Header text, **as a key**. |
+| `titleParams` | `Readonly<Record<string, string>>` | no | Values for `{name}` placeholders in the title. **Already formatted** strings only (`3`, `10–2`). |
 | `ariaLabelKey` | `string` | with `header="none"` | The screen-reader name a headless drawer still needs. |
 | `titleExtra` | `ReactNode` | no | Badge or action beside the title. Not a custom-header entry. |
 | `footer` | `ReactNode` | no | Bottom action row. **Not passing it renders no row at all.** |

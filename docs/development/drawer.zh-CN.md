@@ -37,6 +37,7 @@ import { Drawer } from '@platform/ui/components/drawer'
 | `side` | `'left' \| 'right'` | 否，默认 `right` | 只对 `mode="inline"` 有意义；浮层一律右置。 |
 | `header` | `'titled' \| 'none'` | 否，默认 `titled` | 有标题栏，或整块不要。 |
 | `titleKey` | `string` | `header="titled"` 时 | 标题，**收键**。 |
+| `titleParams` | `Readonly<Record<string, string>>` | 否 | 填标题模板 `{name}` 的值，**只收已经格式化好的字符串**（`3`、`10–2`）。 |
 | `ariaLabelKey` | `string` | `header="none"` 时 | 无头抽屉仍然需要的读屏名。 |
 | `titleExtra` | `ReactNode` | 否 | 标题旁的徽标或动作，不是自定义标题栏的入口。 |
 | `footer` | `ReactNode` | 否 | 底部动作区。**不传就整行不渲染。** |

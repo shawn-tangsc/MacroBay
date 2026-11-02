@@ -254,4 +254,47 @@ describe('Drawer', () => {
     // 我们自己的样式里不许给抽屉整体定宽（`.drawer__sr-only` 的 1px 是读屏隐藏用的）。
     expect(css).not.toMatch(/\.drawer(?:__panel)?\s*(?:,|\{)[^}]*\bwidth\s*:/)
   })
+
+  it('fills a parameterised title and keeps a missing placeholder visible', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const resolve = (value: string): string => (value === 'ui.test.counted' ? 'Gaps ({count})' : value)
+
+    act(() => {
+      root.render(
+        <Drawer
+          open
+          mode="modal"
+          size="narrow"
+          titleKey="ui.test.counted"
+          titleParams={{ count: '3' }}
+          onClose={() => undefined}
+          resolveText={resolve}>
+          <p>body</p>
+        </Drawer>
+      )
+    })
+    expect(document.body.textContent).toContain('Gaps (3)')
+
+    act(() => {
+      root.render(
+        <Drawer
+          open
+          mode="modal"
+          size="narrow"
+          titleKey="ui.test.counted"
+          titleParams={{}}
+          onClose={() => undefined}
+          resolveText={resolve}>
+          <p>body</p>
+        </Drawer>
+      )
+    })
+    // 缺参时占位符原样留着：读者看得见「这里少了一个数」，组件不替调用方猜。
+    expect(document.body.textContent).toContain('Gaps ({count})')
+
+    act(() => root.unmount())
+    host.remove()
+  })
 })

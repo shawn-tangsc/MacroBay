@@ -7,6 +7,8 @@ import { DRAWER_CLOSE_KEY, useDrawerText } from './drawerText'
 
 import './drawer.css'
 
+import { fillLabelParams } from '../textKeyParams'
+
 /**
  * 抽屉（契约：`docs-private/05-desktop/ui-component-genericity.md` §3）。包 antd `Drawer`，
  * 不另起一套：焦点陷阱、滚动锁、portal、遮罩、Esc 与焦点回位都是它的能力，重写一遍只会漏。
@@ -86,6 +88,14 @@ type DrawerHeaderShape =
       header?: 'titled'
       /** 标题的 i18n 键；不收句子。 */
       titleKey: string
+      /**
+       * 填标题模板里 `{name}` 的值，**只收已经格式化好的名词与数字**（`3 条`、`10–2`）。
+       *
+       * 与 `Popover.labelParams` 同形、共用同一份填充实现。有它之前，带计数的标题只有两条路：
+       * 调用点自己拼好句子传进来（违反「不收句子」），或把计数挪到 `titleExtra` 变成徽章
+       * （那是可见结构变更）。两者都比一个参数贵。
+       */
+      titleParams?: Readonly<Record<string, string>>
       /** 标题旁的徽标或动作槽，不是自定义整个标题栏的入口。 */
       titleExtra?: ReactNode
     }
@@ -122,7 +132,7 @@ export function Drawer(props: DrawerProps): ReactElement {
       <span className="drawer__sr-only">{resolveText(props.ariaLabelKey)}</span>
     ) : (
       <span className="drawer__title-row">
-        <span className="drawer__title">{resolveText(props.titleKey)}</span>
+        <span className="drawer__title">{fillLabelParams(resolveText(props.titleKey), props.titleParams)}</span>
         {props.titleExtra === undefined ? null : <span className="drawer__title-extra">{props.titleExtra}</span>}
       </span>
     )
