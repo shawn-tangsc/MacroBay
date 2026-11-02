@@ -198,7 +198,9 @@ export function ModelServiceProviderPage({
       confirmLabel: labels.removeProvider,
       cancelLabel: labels.cancel,
       tone: 'danger',
-      onConfirm: () => autosave.run('removeProvider', () => actions.removeProviderById(target.id))
+      onConfirm: async () => {
+        await autosave.run('removeProvider', () => actions.removeProviderById(target.id))
+      }
     })
   }
 
@@ -257,10 +259,7 @@ export function ModelServiceProviderPage({
         onSelect={onSelectProvider}
         onAdd={onAddProvider}
         onToggleProvider={(target) => void actions.setProviderEnabledById(target.id, !target.enabled)}
-        onDeleteProvider={(target) => {
-          setPendingRemove(target)
-          setRemoveConfirmOpen(true)
-        }}
+        onDeleteProvider={(target) => confirmRemove(target)}
       />
 
       <div className="model-service-detail">
