@@ -404,7 +404,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             productReason={{ key: 'mi.calendar.empty-day', resolve: () => text.unifiedDay.empty }} /> : null}
         </section>
       </div>
-      <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" title={text.calendarSettings} onClose={() => setCalendarPanelOpen(false)} />
+      <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
       <DetailDrawer open={selectedMarket !== undefined || selectedEventKey !== undefined} title={text.details.title} onClose={clearDetail}>
         {selectedMarket && selectedMarketSourceAdvanced ? <p className="mi-economic-calendar__comparison-rule" data-source-advanced>{text.market.sourceAdvanced}</p> : null}
         {selectedMarket ? <MarketCalendarInspector event={selectedMarket} source={market.sources.find(source => source.eventType === selectedMarket.eventType)} text={text} /> : null}

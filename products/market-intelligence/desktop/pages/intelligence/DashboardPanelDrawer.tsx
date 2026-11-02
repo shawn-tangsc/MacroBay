@@ -1,12 +1,14 @@
-import { Alert, Button, Drawer, Input, Switch } from 'antd'
+import { Alert, Button, Input, Switch } from 'antd'
 import { ChevronRight, Play } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
+import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
 import { productText } from '../../shared/i18n/productText'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openIntelligenceSourcesSettings } from '../../shared/navigation/productShellNavigation'
 import { ProviderDetail } from '../../settings/intelligence-sources/ProviderDetail'
 import { useIntelligenceTranslationSettings } from '../../settings/intelligence-sources/useIntelligenceTranslationSettings'
@@ -31,16 +33,18 @@ type DrawerRead =
   | Readonly<{ status: 'ready'; view: PanelView; sampleFallback: boolean }>
   | Readonly<{ status: 'unavailable' }>
 
-export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', open, onClose, title, sampleActive = false }: {
+export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', open, onClose, titleKey, sampleActive = false }: {
   initialSourceId?: string
   panelId?: PanelId
   open: boolean
   onClose: () => void
-  title?: string
+  /** The header's i18n key; the drawer resolves it. */
+  titleKey?: string
   /** Only an explicit sample session may stand in the registry projection for a failed read. */
   sampleActive?: boolean
 }): React.ReactElement {
   const language = useShellLanguage()
+  const resolveKey = useProductTextKey()
   const portalText = productText[language].pages.intelligence.portal
   const text = portalText.dashboard.sourceConfiguration
   const dataText = portalText.data
@@ -110,9 +114,10 @@ export function DashboardPanelDrawer({ initialSourceId, panelId = 'dashboard', o
     try { await intelligenceSourcesClient.testConnection(sourceId) } finally { setBusy(undefined) }
   }
 
-  return <Drawer className="mi-dashboard-source-drawer" open={open} onClose={onClose} title={title ?? text.title} width={860} footer={
-    <Button onClick={openIntelligenceSourcesSettings}>{text.configure}</Button>
-  }>
+  return <Drawer className="mi-dashboard-source-drawer" open={open} onClose={onClose} resolveText={resolveKey} size="wide"
+    titleKey={titleKey ?? 'pages.intelligence.portal.dashboard.sourceConfiguration.title'} footer={
+      <Button onClick={openIntelligenceSourcesSettings}>{text.configure}</Button>
+    }>
     {read.status === 'loading' ? <LoadingState label={text.loading} fill />
       : read.status === 'unavailable' ? <div data-drawer-state="unavailable">
         <Alert
