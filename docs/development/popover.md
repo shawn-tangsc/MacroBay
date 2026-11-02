@@ -28,12 +28,35 @@ component adds the open/close model, the width cap and the focus return.
 
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
-| `labelKey` | `K extends string` | yes | The explanation, **as a key**. `K` is inferred from `resolveText`, so a resolver typed to a key union locks the allowed keys. |
+| `labelKey` | `K extends string` | one of | A single-sentence explanation, **as a key**. |
+| `lines` | `readonly K[]` | one of | A multi-line explanation, **one key per line**. The first line is the subject and is rendered bold. |
+| `labelParams` | `Readonly<Record<string, string>>` | no | Values to fill `{name}` placeholders. **Already formatted** strings only (`10–2`, `289/289`). |
 | `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
 | `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
 
+`labelKey` and `lines` are a union: you give exactly one, never both and never neither. `K` is
+inferred from `resolveText`, so a resolver typed to a key union locks the allowed keys.
+
+### One key or one key per line — never a `\n` in a sentence
+
+`lines` is an array because a multi-line explanation is **structure**, not typography:
+
+```tsx
+// Correct: three keys, three lines, the first one carries the emphasis.
+<Popover lines={['…help.summary', '…help.caveat', '…help.howToAdd']} resolveText={t}>
+
+// Wrong: one sentence joined with \n and wrapped by CSS.
+<Popover labelKey={t('…help.joined')} resolveText={t}>   // t() returns "a\nb\nc"
+```
+
+A newline inside a sentence is a typographic accident: translation merges or drops it, and "the
+first line is the subject" cannot be expressed inside one string. `popoverCallSiteGuard.test.ts`
+fails on a `\n` smuggled into `labelKey` or a `lines` entry.
+
 There is no `placement`, no `open`, no `onOpenChange` and no arbitrary `content` node: the open
-model and the position are fixed behaviour, not call-site options.
+model and the position are fixed behaviour, not call-site options. A panel that lets the reader
+*choose something* (search, filters, a result list) is not this component — it is a picker, and
+wrapping a picker in an explanation panel is a classification error, not a migration.
 
 ## Rules the component enforces
 
@@ -48,7 +71,25 @@ model and the position are fixed behaviour, not call-site options.
   reader loses their place.
 - **Maximum width 320 px**, text wraps, the page never widens.
 - **An empty sentence renders no bubble.** Reading a key name aloud is worse than saying nothing;
-  the same rule as `Tooltip`.
+  the same rule as `Tooltip`. With `lines`, a line that resolves to nothing is dropped, and when every
+  line is empty the whole bubble is absent — never an empty frame.
+- **Multi-line comes from an array of keys, never from `\n`.** A newline is a typographic accident:
+  translation merges or eats it, and only an array can say which line is the subject. A call site that
+  puts `\n` into a `labelKey` or `lines` entry is red in `popoverCallSiteGuard.test.ts`.
+- **Placeholders are filled from `labelParams` and never re-formatted here.** The component receives
+  `10–2` or `289/289` already formatted by the caller: numbers, units and clocks are the caller's
+  knowledge, and a second formatter here is how the same number ends up written two ways. A missing
+  parameter keeps its `{name}` visible instead of silently dropping a number.
+- **The first line carries the emphasis** (`600`), the rest are detail. Without that distinction three
+  lines read as three equal facts.
+
+## Placeholders
+
+`labelParams` takes values that are **already formatted by the caller**: the component formats no
+numbers and no dates, because the same value formatted in two places ends up looking like two
+different facts. A parameter that is missing stays visible as `{name}` rather than vanishing —
+a reader can see that something was not wired, while a silently dropped number reads as a real
+measurement. `fillLabelParams` is shared with `IconButton`, so the two cannot drift.
 
 ## Call-site rule
 
@@ -64,7 +105,13 @@ backlog stays honest instead of becoming a permanent exemption.
     onSelect={() => undefined} resolveText={t} />
 </Popover>
 
-// Wrong: a hand-written floating panel, or a literal sentence.
+// Correct: a multi-line explanation with a filled value, one key per line.
+<Popover
+  lines={['…policy.summary', '…policy.example', '…policy.howToAdd']}
+  labelParams={{ span: '10–2' }}
+  resolveText={t}>
+
+// Wrong: a hand-written floating panel, a literal sentence, or lines joined by \n.
 <div className="my-popover">先检查来源，再重新采集……</div>
 ```
 
@@ -74,4 +121,6 @@ backlog stays honest instead of becoming a permanent exemption.
 2. **Pinning**: click the trigger, move the mouse away — the panel stays; click elsewhere — it
    closes and focus stays where you clicked.
 3. **Width**: a long sentence wraps inside 320 px and does not widen the page.
-4. **Copy**: the text comes from a key; a literal sentence does not pass the guard.
+4. **Lines**: an explanation passed as `lines` renders one line per key, and the first line is bold.
+5. **Copy**: the text comes from a key; a literal sentence or a `\n`-joined one does not pass the
+   guard.
