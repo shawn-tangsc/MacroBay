@@ -275,8 +275,8 @@ describe('PLAT-55 masked API key field', () => {
     expect(input.value).toBe(preview)
     expect(container.innerHTML).not.toContain(savedKey)
 
-    // 铅笔同样进入编辑态。
-    await click(container, '.web-search-api-key-pencil')
+    // 铅笔同样进入编辑态。迁移到 IconButton 后不再有私有类名，按读屏名找。
+    await click(container, `[aria-label="${labels.editApiKey}"]`)
     expect(input.value).toBe('')
   })
 

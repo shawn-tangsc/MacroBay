@@ -2,8 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Button, Input } from 'antd'
 import { Check, Copy, Eye, EyeOff, Pencil } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
+
 import type { PlatformText } from '../../../i18n/platformText'
 import { copyTextToClipboard } from '../../clipboard'
+
+/** 图标按钮的读屏名只收点分键：句子由调用方注入的 resolver 给。 */
+export const EDIT_KEY = 'webSearch.editApiKey'
 
 const ALL_MASK = '••••••••'
 export const API_KEY_REVEAL_TIMEOUT_MS = 30_000
@@ -217,14 +222,24 @@ export function WebSearchApiKeyField({
           suffix={
             <span className="web-search-api-key-suffix">
               {savedMode ? (
-                <button
-                  type="button"
-                  className="web-search-api-key-icon web-search-api-key-pencil"
-                  aria-label={labels.editApiKey}
-                  disabled={disabled}
-                  onClick={startEditing}>
-                  <Pencil size={13} />
-                </button>
+                disabled ? (
+                  <IconButton
+                    ariaLabelKey={EDIT_KEY}
+                    disabled
+                    icon={Pencil}
+                    onSelect={startEditing}
+                    resolveText={(key) => (key === EDIT_KEY ? labels.editApiKey : '')}
+                    size="sm"
+                  />
+                ) : (
+                  <IconButton
+                    ariaLabelKey={EDIT_KEY}
+                    icon={Pencil}
+                    onSelect={startEditing}
+                    resolveText={(key) => (key === EDIT_KEY ? labels.editApiKey : '')}
+                    size="sm"
+                  />
+                )
               ) : null}
               {revealedKey ? (
                 <button
