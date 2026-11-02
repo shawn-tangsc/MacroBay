@@ -80,7 +80,6 @@
   "products/market-intelligence/desktop/pages/intelligence/policyPathDrawer.css :: .mi-policy-drawer__delta[data-direction='down']": 1,
   "products/market-intelligence/desktop/pages/intelligence/policyPathDrawer.css :: .mi-policy-drawer__delta[data-direction='up']": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: :root[data-theme=\"light\"] .source-provider-detail__proxy": 1,
-  "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: .source-provider-detail__health.is-degraded": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/intelligence-sources.css :: .source-provider-detail__proxy": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__detail .mi-sync-run__failure": 1,
   "products/market-intelligence/desktop/settings/intelligence-sources/sync-run-section.css :: .mi-sync-run__grid span[data-outcome='succeeded']": 1,
