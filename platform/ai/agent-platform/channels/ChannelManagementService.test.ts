@@ -1120,3 +1120,103 @@ function supportedTelegramEntry() {
     receiveSmokeAt: '2026-07-19', sendSmokeAt: '2026-07-19', reconnectSmokeAt: '2026-07-19', restartRecoveryAt: '2026-07-19', proxySmokeAt: '2026-07-19', credentialRotationAt: '2026-07-19', disableDeleteFencingAt: '2026-07-19', capabilityEvidence: {}
   }
 }
+
+describe('read-only delivery targets projection', () => {
+  function deliveryHarness() {
+    const { database, repository, vault, cipher } = harness()
+    const id = 'channel-deliverable'
+    expect(repository.create({ id, name: 'Telegram', agentId: 'agent-a', now: '2026-07-19' })).toBe(true)
+    database.connection.prepare(
+      "update agent_channels set credential_ref=?, credential_revision=1, credential_health='configured', requested_enabled=1, lifecycle_state='enabled' where id=?"
+    ).run(`channel-migration:${id}:ref`, id)
+    const service = new ChannelManagementService({
+      repository,
+      vault,
+      cipher,
+      registry: new ChannelAdapterAcceptanceRegistry([supportedTelegramEntry()]),
+      handoff: new ChannelSecureHandoff(),
+      now: () => new Date('2026-07-19T00:00:00.000Z')
+    })
+    return { database, repository, service, id }
+  }
+
+  function addTarget(
+    database: ReturnType<typeof harness>['database'],
+    channelId: string,
+    index: number,
+    kind: 'direct' | 'group' | 'channel' = 'direct'
+  ): void {
+    database.connection.prepare(
+      `insert into channel_conversations(id, channel_id, conversation_key_ciphertext, conversation_key_ref, conversation_key_revision, conversation_key_hash, conversation_kind, agent_session_id, created_at, updated_at)
+       values(?, ?, x'01', 'ref', 1, ?, ?, ?, '2026-07-19', '2026-07-19')`
+    ).run(`conversation-${index}`, channelId, `hash-${index}`, kind, `session-${index}`)
+    database.connection.prepare(
+      `insert into channel_delivery_targets(id, channel_id, conversation_id, enabled, created_at, updated_at)
+       values(?, ?, ?, 1, '2026-07-19', '2026-07-19')`
+    ).run(`target-${index}`, channelId, `conversation-${index}`)
+  }
+
+  it('reports a ready channel with one enabled target as deliverable and shows that target', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct')
+
+    expect(service.listDeliveryTargets()).toEqual({
+      channels: [{
+        id,
+        name: 'Telegram',
+        deliverable: true,
+        reason: null,
+        target: { kind: 'bound', conversationKind: 'direct' }
+      }]
+    })
+  })
+
+  it('names the missing target instead of pretending the channel can deliver', () => {
+    const { service, id } = deliveryHarness()
+
+    expect(service.listDeliveryTargets().channels[0]).toEqual({
+      id,
+      name: 'Telegram',
+      deliverable: false,
+      reason: 'no-enabled-target',
+      target: { kind: 'unbound' }
+    })
+  })
+
+  it('reports the count when several targets are bound, and picks none of them', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1, 'direct')
+    addTarget(database, id, 2, 'group')
+
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({
+      deliverable: true,
+      reason: null,
+      target: { kind: 'ambiguous', count: 2 }
+    })
+  })
+
+  // 判序固定：适配器 → 凭据 → 启用态 → 目标。混着报会让用户去修一个还不是问题的地方。
+  it('stops at the first unmet condition', () => {
+    const { database, service, id } = deliveryHarness()
+    addTarget(database, id, 1)
+
+    database.connection.prepare("update agent_channels set credential_health='missing' where id=?").run(id)
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({ deliverable: false, reason: 'credential-missing' })
+
+    database.connection.prepare("update agent_channels set credential_health='configured', lifecycle_state='ready' where id=?").run(id)
+    expect(service.listDeliveryTargets().channels[0]).toMatchObject({ deliverable: false, reason: 'not-enabled' })
+
+    database.connection.prepare("update agent_channels set lifecycle_state='enabled' where id=?").run(id)
+    const unsupported = new ChannelManagementService({
+      repository: new ChannelManagementRepository(database),
+      vault: new FakeVault(false, false, false, false),
+      cipher: new FakeCipher(),
+      registry: new ChannelAdapterAcceptanceRegistry(),
+      handoff: new ChannelSecureHandoff()
+    })
+    expect(unsupported.listDeliveryTargets().channels[0]).toMatchObject({
+      deliverable: false,
+      reason: 'adapter-not-supported'
+    })
+  })
+})

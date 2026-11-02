@@ -139,6 +139,24 @@ export class ChannelManagementQueryRepository {
     }))
   }
 
+  /**
+   * 每个通道当前启用中的投递目标（只取通道 id 与会话类型，不取会话 id 或名称）。
+   * 一次查询取全量：通道数量是个位数，逐通道查会把一个只读投影变成 N+1。
+   */
+  enabledDeliveryTargets(): Array<{ channelId: string; conversationKind: ChannelConversationSafeView['kind'] }> {
+    return (this.database.connection.prepare(
+      `select t.channel_id as channel_id, c.conversation_kind as conversation_kind
+       from channel_delivery_targets t join channel_conversations c on c.id = t.conversation_id
+       where t.enabled = 1 and exists (
+         select 1 from agent_channels where id = t.channel_id and ${MANAGED_CHANNEL_SQL}
+       )
+       order by t.channel_id asc, t.updated_at asc, t.id asc`
+    ).all() as Array<{ channel_id: string; conversation_kind: ChannelConversationSafeView['kind'] }>).map((row) => ({
+      channelId: row.channel_id,
+      conversationKind: row.conversation_kind
+    }))
+  }
+
   conversations(channelId: string, limit: number): ChannelConversationSafeView[] {
     return (this.database.connection.prepare(
       `select c.id, c.conversation_kind, c.agent_session_id, c.created_at, coalesce(t.enabled, 0) as target_enabled

@@ -75,6 +75,36 @@ export type ChannelDeliveryAuditSafeView = {
   createdAt: string
 }
 
+/**
+ * 为什么这个通道现在不能投递。闭集，四种码对应四个不同的用户动作：
+ * 去启用适配器 / 去存凭据 / 去请求启用 / 去绑定目标。
+ *
+ * 这里给码不给句子：可见文案归 i18n，平台层出中文句子会让英文界面再翻一次，
+ * 同一句人话就有了两个出处。
+ */
+export type ChannelDeliveryBlockReason =
+  | 'adapter-not-supported'
+  | 'credential-missing'
+  | 'not-enabled'
+  | 'no-enabled-target'
+
+/**
+ * 通知设置页「发送到通道」一行要的只读投影：不缓存、不带凭据、不给配置入口。
+ *
+ * 目标三档是刻意的：0 个是未绑定，1 个显示它，多个只报数量——替读者挑一个会话
+ * 等于把「绑定目标」这件事从通道页搬到了通知页。
+ */
+export type ChannelDeliveryTargetView = {
+  id: string
+  name: string
+  deliverable: boolean
+  reason: ChannelDeliveryBlockReason | null
+  target:
+    | { kind: 'unbound' }
+    | { kind: 'bound'; conversationKind: ChannelConversationSafeView['kind'] }
+    | { kind: 'ambiguous'; count: number }
+}
+
 export type ChannelManagementResult = {
   ok: boolean
   code: ChannelManagementCode

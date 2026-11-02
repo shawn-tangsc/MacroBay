@@ -5,12 +5,14 @@ import { ChannelAdapterAcceptanceRegistry } from './ChannelAdapterAcceptanceRegi
 import {
   assertIdentifier,
   assertBoundedInteger,
+  type ChannelDeliveryTargetView,
   type ChannelManagementCatalogEntry,
   type ChannelManagementResult,
   type SecureHandoffSubmit
 } from './ChannelManagementContracts'
 import { ChannelManagementCredentialService } from './ChannelManagementCredentialService'
 import { ChannelManagementRepository } from './ChannelManagementRepository'
+import { projectDeliveryTargets } from './channelDeliveryTargetsProjection'
 import type { AgentChannelType } from '../schemas/channelSchemas'
 import { ChannelSecureHandoff } from './ChannelSecureHandoff'
 import { channelAdapterDescriptor } from './channelAdapterDescriptors'
@@ -65,6 +67,24 @@ export class ChannelManagementService {
 
   list() {
     return this.deps.repository.query.list()
+  }
+
+  /**
+   * 通知设置页的只读投影：每个通道能否投递、为什么不能、绑了几个目标。
+   *
+   * 不缓存第二份通道状态——每次调用都读库，与通道页同源。折算规则在
+   * `projectDeliveryTargets`（纯函数），那里能单独把判序和四档目标验证清楚。
+   */
+  listDeliveryTargets(): { channels: ChannelDeliveryTargetView[] } {
+    return {
+      channels: projectDeliveryTargets({
+        channels: this.deps.repository.query.list(),
+        supportedTypes: new Set(
+          this.catalog().filter((entry) => entry.status === 'supported').map((entry) => entry.type)
+        ),
+        enabledTargets: this.deps.repository.query.enabledDeliveryTargets()
+      })
+    }
   }
 
   listAudits(input: { id: unknown; limit?: unknown; offset?: unknown }) {
