@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -31,8 +31,19 @@ const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/tabs-segmented.json')
 /**
  * 读欠账清单。**读不到就抛，不吞**——兜底静默降级会让这条红在别处（快照、CI）无声失效，
  * 而那正是它存在的理由。清单按文件记，不按行号：行号会随迁移漂。
+ *
+ * 文件不在时给一条能读懂的错，而不是裸 ENOENT：这个清单是**2026-11-02 从本文件里搬出去的**，
+ * 搬家那两半曾被一次路径级提交切进两笔（守卫先进了 `9bbe246`，清单晚了半拍）。谁 checkout 到
+ * 那一棵树都会撞上它，而裸 ENOENT 只会让人以为是自己配错了路径。
  */
 function readDebt(): ReadonlySet<string> {
+  if (!existsSync(DEBT_FILE)) {
+    throw new Error(
+      `migration debt list missing: ${DEBT_FILE}\n` +
+        'It moved out of this guard on 2026-11-02 (see the header). If this tree predates that move, ' +
+        'the list was an inline constant in this file — read `git log` for this path.'
+    )
+  }
   const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
   if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
   return new Set(Object.keys(parsed.entries))
