@@ -15,7 +15,6 @@
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-todo-item.error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-todo-item.error svg": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .agent-tool-approval.danger.ant-tag": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .assistant-library-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .assistant-status-line-error": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .capability-tag.capability-protocol-failed": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .in-use-model-retired-banner": 1,
