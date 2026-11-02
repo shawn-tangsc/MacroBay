@@ -26,6 +26,14 @@ describe('market intelligence notification copy', () => {
     }
   })
 
+  it('claims exactly the two job handlers whose failures this product reports', () => {
+    // 少一个 → 一次坏源收两条（平台任务失败 + 本产品来源事件）；多一个 → 平台静默丢一条别人的通知。
+    expect([...marketIntelligenceProductManifest.notificationProducerClaims].sort()).toEqual([
+      'market-intelligence.collectSource',
+      'market-intelligence.dailyBriefing'
+    ])
+  })
+
   it('keeps the body variants in step with the declaration', () => {
     const failed = marketIntelligenceProductManifest.notificationEvents.find(
       (event) => event.id === IDS.briefingFailed

@@ -359,10 +359,12 @@ export const marketIntelligenceProductManifest = {
   ],
   /**
    * 让渡给本产品的 producerId（契约 §14）：日报 job 的终态失败由本产品发
-   * `market-intelligence.briefing.failed`，平台不再为它发 `platform.job.failed-terminal`。
-   * 键是稳定的 job handler id，不是带期号的 definitionId。
+   * `market-intelligence.briefing.failed`，来源采集 job 的失败由本产品发
+   * `source.consecutive-failed` / `source.stale`，平台不再为它们发任务失败事件。
+   * 键是稳定的 job handler id，不是带期号的 definitionId；两个 handler 各管一类，
+   * 采集是所有来源共用同一个 handler。
    */
-  notificationProducerClaims: ['market-intelligence.dailyBriefing'],
+  notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest
