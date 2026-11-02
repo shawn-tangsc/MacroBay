@@ -214,7 +214,11 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
           </p>
         </div>
 
-        {state.loading ? (
+        {/*
+         * 只有「还没有任何数据」时才整块显示加载中：手里已经有旧读数时再转圈，
+         * 用户会看到表格闪一下消失再回来——那是「等待」被画成了「丢了又找回」。
+         */}
+        {state.loading && state.caches.length === 0 ? (
           <div className="storage-cache-placeholder">
             <LoadingState label={labels.loading} />
           </div>

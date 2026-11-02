@@ -187,6 +187,45 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).not.toContain('data-state="empty"')
   })
 
+  it('shows only the loading state before the first read completes', () => {
+    // 首次进入：读还没回来，屏幕上不许出现错误或空态——空态是「确实没有」，不是「还没读到」。
+    mockFeed.loading = true
+    mockFeed.caches = []
+    mockFeed.error = null
+    const labels = platformText['en-US'].storageCache
+    const markup = renderToStaticMarkup(
+      <ToastHost>
+        <ShellLanguageProvider language="en-US">
+          <StorageCacheSettingsPage language="en-US" />
+        </ShellLanguageProvider>
+      </ToastHost>
+    )
+
+    expect(markup).toContain(labels.loading)
+    expect(markup).not.toContain('data-state="error"')
+    expect(markup).not.toContain('data-state="empty"')
+    expect(markup).not.toContain(labels.staleDataNotice)
+  })
+
+  it('keeps the rows visible while a refresh is still running', () => {
+    // 手里已经有读数时，刷新期间不许把表格换成加载块：那会让表格闪一下消失再回来。
+    mockFeed.loading = true
+    mockFeed.caches = caches
+    const labels = platformText['en-US'].storageCache
+    const markup = renderToStaticMarkup(
+      <ToastHost>
+        <ShellLanguageProvider language="en-US">
+          <StorageCacheSettingsPage language="en-US" />
+        </ShellLanguageProvider>
+      </ToastHost>
+    )
+
+    expect(markup).toContain('Derived analysis cache')
+    expect(markup).toContain('storage-cache-table')
+    expect(markup).not.toContain(labels.loading)
+    expect(markup).not.toContain('data-state="error"')
+  })
+
   it('keeps the last rows when a refresh fails, and says they are stale', () => {
     // 「拿到新的失败」不等于「没有数据」：把旧表换成页面级空态，等于用一次刷新失败惩罚用户。
     const labels = platformText['en-US'].storageCache
