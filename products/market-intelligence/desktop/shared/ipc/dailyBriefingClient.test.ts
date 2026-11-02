@@ -154,3 +154,42 @@ describe('daily briefing client', () => {
     expect(malformed).toEqual({ state: 'unavailable', failureCode: 'source-failed' })
   })
 })
+
+describe('generation progress', () => {
+  it('reports the running attempt with its stages in pipeline order', async () => {
+    stubInvoke((method) => method === 'intelligence.dailyBriefing.getProgress'
+      ? {
+          state: 'running',
+          progress: {
+            attemptId: '2026-11-02:zh-CN:2026-11-02T01:30:00.000Z',
+            startedAt: '2026-11-02T01:30:00.000Z',
+            stages: [
+              { id: 'source', state: 'success', startedAt: '2026-11-02T01:30:00.000Z', durationMs: 400 },
+              { id: 'candidates', state: 'pending', startedAt: '2026-11-02T01:30:00.400Z' },
+              { id: 'store', state: 'pending' }
+            ]
+          }
+        }
+      : { state: 'idle' })
+    const result = await dailyBriefingClient.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    expect(result.state).toBe('running')
+    if (result.state !== 'running') return
+    expect(result.progress.stages.map((stage) => [stage.id, stage.state])).toEqual([
+      ['source', 'success'],
+      ['candidates', 'pending'],
+      ['store', 'pending']
+    ])
+  })
+
+  it('says idle when nothing runs, and unavailable when the reply cannot be read', async () => {
+    stubInvoke(() => ({ state: 'idle' }))
+    expect(await dailyBriefingClient.getProgress({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({ state: 'idle' })
+
+    // "Cannot read the progress" must not be reported as "nothing is running": a reader would stop
+    // waiting for a run that is still going.
+    stubInvoke(() => ({ state: 'running', progress: { attemptId: 'x', startedAt: 'y', stages: [{ id: 'no-such-stage', state: 'pending' }] } }))
+    expect(await dailyBriefingClient.getProgress({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({ state: 'unavailable' })
+    stubInvoke(() => { throw new Error('ipc-down') })
+    expect(await dailyBriefingClient.getProgress({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({ state: 'unavailable' })
+  })
+})

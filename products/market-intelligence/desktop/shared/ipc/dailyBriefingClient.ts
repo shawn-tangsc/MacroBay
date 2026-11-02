@@ -5,6 +5,11 @@ import {
   isDailyBriefingLocale,
   isDailyBriefingReadingState,
   isFactImportanceTier,
+  briefingGenerationStageIds,
+  type BriefingGenerationProgress,
+  type BriefingGenerationStage,
+  type BriefingGenerationStageId,
+  type BriefingGenerationStageState,
   type BriefingGenerationTrace,
   type DailyBriefingDocument,
   type DailyBriefingEditionSummary,
@@ -17,6 +22,7 @@ const METHODS = Object.freeze({
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
   regenerate: 'intelligence.dailyBriefing.regenerate',
+  getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
   saveSettings: 'intelligence.dailyBriefing.saveSettings'
 })
@@ -31,6 +37,17 @@ export type DailyBriefingClientTodayResult =
 export type DailyBriefingClientListResult =
   | Readonly<{ state: 'available'; result: DailyBriefingListResult }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
+
+/**
+ * Where the running generation has got to.
+ *
+ * `unavailable` is its own case on purpose: "could not read the progress" is not "nothing is
+ * running", and a reader told "nothing is running" while a run is in flight would think it died.
+ */
+export type DailyBriefingClientProgressResult =
+  | Readonly<{ state: 'idle' }>
+  | Readonly<{ state: 'running'; progress: BriefingGenerationProgress }>
+  | Readonly<{ state: 'unavailable' }>
 
 export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
@@ -78,6 +95,7 @@ export type DailyBriefingClient = Readonly<{
   list: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientListResult>
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
   regenerate: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
+  getProgress: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientProgressResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
 }>
@@ -93,6 +111,21 @@ export const dailyBriefingClient: DailyBriefingClient = {
       return unavailable()
     } catch {
       return unavailable()
+    }
+  },
+  async getProgress(input) {
+    try {
+      const value = await invoke(METHODS.getProgress, input)
+      if (!isRecord(value)) return { state: 'unavailable' }
+      if (value.state === 'idle') return { state: 'idle' }
+      if (value.state !== 'running' || !isRecord(value.progress)) return { state: 'unavailable' }
+      const attemptId = value.progress.attemptId
+      const startedAt = value.progress.startedAt
+      const stages = parseProgressStages(value.progress.stages)
+      if (typeof attemptId !== 'string' || typeof startedAt !== 'string' || !stages) return { state: 'unavailable' }
+      return { state: 'running', progress: { attemptId, startedAt, stages } }
+    } catch {
+      return { state: 'unavailable' }
     }
   },
   async list(input) {
@@ -347,6 +380,29 @@ function isExact(value: unknown, required: readonly string[], optional: readonly
   if (!isRecord(value)) return false
   const keys = Object.keys(value)
   return required.every((key) => keys.includes(key)) && keys.every((key) => required.includes(key) || optional.includes(key))
+}
+
+const STAGE_STATES: readonly BriefingGenerationStageState[] = ['success', 'failed', 'skipped', 'pending']
+
+/** A trace's stages, or `undefined` when any of them is not a stage this build understands. */
+function parseProgressStages(value: unknown): readonly BriefingGenerationStage[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const parsed: BriefingGenerationStage[] = []
+  for (const entry of value) {
+    if (!isRecord(entry)) return undefined
+    const id = entry.id
+    const state = entry.state
+    if (typeof id !== 'string' || !(briefingGenerationStageIds as readonly string[]).includes(id)) return undefined
+    if (typeof state !== 'string' || !(STAGE_STATES as readonly string[]).includes(state)) return undefined
+    parsed.push(Object.freeze({
+      id: id as BriefingGenerationStageId,
+      state: state as BriefingGenerationStageState,
+      ...(typeof entry.startedAt === 'string' ? { startedAt: entry.startedAt } : {}),
+      ...(typeof entry.finishedAt === 'string' ? { finishedAt: entry.finishedAt } : {}),
+      ...(typeof entry.durationMs === 'number' ? { durationMs: entry.durationMs } : {})
+    }))
+  }
+  return parsed
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
