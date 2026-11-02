@@ -185,6 +185,34 @@ describe('invalidation on focus', () => {
 })
 
 describe('help on the shared popover', () => {
+  it('pins on a click and closes on the second one', async () => {
+    // The reason the shared button pair exists: the popover's handlers reach the trigger, so a
+    // click pins the layer and the next click lets it go. A hand-built button used to swallow them.
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
+        state: { state: 'empty', withheld: [] }, onRetry: () => undefined, text
+      })))
+    })
+    const trigger = container.querySelector(`[aria-label="${text.helpLabel}"]`) as HTMLElement
+    // A closing layer keeps its node while it animates out, so "open" is read from its classes.
+    const layerState = (): 'none' | 'open' | 'closing' => {
+      const layer = document.querySelector('.ant-popover')
+      if (layer === null) return 'none'
+      return /leave|hidden/.test(layer.className) ? 'closing' : 'open'
+    }
+    await act(async () => { trigger.click() })
+    expect(layerState()).toBe('open')
+    // Pinned stays open with the pointer nowhere near it.
+    await act(async () => { trigger.dispatchEvent(new window.MouseEvent('mouseleave', { bubbles: true })) })
+    expect(layerState()).toBe('open')
+    await act(async () => { trigger.click() })
+    expect(layerState()).toBe('closing')
+    await act(async () => { root.unmount() })
+  })
+
   it('opens the same five lines a keyboard reader used to get', async () => {
     // The lines used to be five <b> blocks inside a hand-rolled tooltip. They are now five keys on
     // the shared popover; this asserts none of them went missing in the swap.
