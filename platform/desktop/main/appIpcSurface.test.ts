@@ -19,6 +19,7 @@ const webIpcSource = readSource('ipc/webIpc.ts')
 const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
 const modelIpcSource = readSource('ipc/modelIpc.ts')
+const platformCoreSource = readSource('composition/platformCore.ts')
 const assistantIpcSource = readSource('ipc/assistantIpc.ts')
 const agentIpcSource = readSource('ipc/agentIpc.ts')
 const agentToolsIpcSource = readSource('ipc/agentToolsIpc.ts')
@@ -159,7 +160,10 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain(smokeSetup)
     expect(appSource).toContain('const productAcceptanceRequested = resolveProductAcceptanceProfileOptIn({')
     expect(appSource).toContain('environment: productAcceptanceRequested ? {} : process.env')
-    expect(appSource.indexOf(smokeSetup)).toBeLessThan(appSource.indexOf('const settingsStore = createSettingsStore('))
+    expect(appSource.indexOf(smokeSetup)).toBeGreaterThan(-1)
+    // 设置存储随构造根搬到 platformCore：时机由「接缝先执行、再调用 createPlatformCore」保证。
+    expect(appSource.indexOf('app.setPath(\'userData\''))
+      .toBeLessThan(appSource.indexOf('createPlatformCore({'))
     expect(appSource).toContain('createTaskAutomationSmokeSeed(')
     expect(appSource).toContain('createTaskAutomationSmokeDriver(')
     expect(appSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
@@ -190,8 +194,10 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf('const productAcceptanceRequested = resolveProductAcceptanceProfileOptIn({')).toBeLessThan(
       appSource.indexOf(acceptanceSetup)
     )
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const settingsStore = createSettingsStore('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const providerStore = createProviderStore('))
+    // 设置/供应商存储随构造根搬到 platformCore：时机由「接缝 → 唯一调用点」保证。
+    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('createPlatformCore({'))
+    expect(platformCoreSource).toContain('const settingsStore = createSettingsStore(')
+    expect(platformCoreSource).toContain('const providerStore = createProviderStore(')
     expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
     expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
     expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
@@ -199,24 +205,26 @@ describe('desktop main IPC surface', () => {
   })
 
   it('creates the platform data directory before opening platform databases', () => {
-    const platformDirectory = "const platformDataDirectory = join(app.getPath('userData'), 'platform')"
+    const platformDirectory = "const platformDataDirectory = join(userDataPath, 'platform')"
     const ensureDirectory = 'mkdirSync(platformDataDirectory, { recursive: true })'
 
-    expect(appSource).toContain(platformDirectory)
-    expect(appSource).toContain(ensureDirectory)
-    expect(appSource.indexOf(ensureDirectory)).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
-    expect(appSource.indexOf(ensureDirectory)).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
-    expect(appSource.indexOf(ensureDirectory)).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
+    expect(platformCoreSource).toContain(platformDirectory)
+    expect(platformCoreSource).toContain(ensureDirectory)
+    // 数据库仍在 app.ts 构造（这一片还没搬）：目录创建必须在唯一调用点之前，且早于两个数据库的构造调用。
+    expect(platformCoreSource.indexOf(ensureDirectory)).toBeGreaterThan(-1)
+    expect(appSource.indexOf('createPlatformCore({')).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
+    expect(appSource.indexOf('createPlatformCore({')).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
+    expect(appSource.indexOf('createPlatformCore({')).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
   })
 
   it('constructs the generic provider secret vault before the provider store without changing IPC registration', () => {
     expect(appSource).toContain("import { createElectronSecretVault } from '../../secrets'")
-    expect(appSource).toContain('const providerSecretVault = createElectronSecretVault({')
-    expect(appSource).toContain("directory: join(app.getPath('userData'), 'platform', 'secrets')")
-    expect(appSource).toContain('const providerStore = createProviderStore(')
+    expect(platformCoreSource).toContain('const providerSecretVault = createElectronSecretVault({')
+    expect(platformCoreSource).toContain("directory: join(userDataPath, 'platform', 'secrets')")
+    expect(platformCoreSource).toContain('const providerStore = createProviderStore(')
     expect(appSource).toContain('providerSecretVault')
-    expect(appSource.indexOf('const providerSecretVault = createElectronSecretVault({')).toBeLessThan(
-      appSource.indexOf('const providerStore = createProviderStore(')
+    expect(platformCoreSource.indexOf('const providerSecretVault = createElectronSecretVault({')).toBeLessThan(
+      platformCoreSource.indexOf('const providerStore = createProviderStore(')
     )
     // 模型服务 19 个 handler 已搬到 ipc/modelIpc.ts。
     expect(appSource).toContain('registerModelIpc(ipcMain, {')
@@ -403,10 +411,10 @@ describe('desktop main IPC surface', () => {
     // 接线随建窗搬到 window/mainWindow.ts；日志写入器仍在 app.ts 构造。
     const windowHostSource = readSource('window/mainWindow.ts')
     expect(windowHostSource).toContain("from '../../window/rendererProcessDiagnostics'")
-    expect(appSource).toContain("import { createRendererProcessLog } from '../window/rendererProcessLog'")
+    expect(platformCoreSource).toContain("import { createRendererProcessLog } from '../../window/rendererProcessLog'")
     expect(windowHostSource).toContain('wireRendererProcessDiagnostics(window')
     // 渲染层诊断不再有自己的 ndjson 管道：改走唯一的应用日志写入器，来源由 category 区分。
-    expect(appSource).toContain('createRendererProcessLog(appLog)')
+    expect(platformCoreSource).toContain('createRendererProcessLog(appLog)')
     expect(appSource).not.toContain('renderer-lifecycle.ndjson')
   })
 

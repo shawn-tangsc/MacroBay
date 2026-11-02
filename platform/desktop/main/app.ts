@@ -258,6 +258,7 @@ import { createProductCacheRegistrar } from '../../storage/cache-governance/prod
 import { createProductServiceDisposerRegistry } from '../../product-registry/productServiceDisposerRegistry'
 import { getAgentTaskExecutionCoordinator, getAgentTaskExecutionCoordinatorOrNull, getAgentTaskRunController, getDisposeChannelMaintenanceJobs, getDisposeJobRunRetention, getDisposeTaskAutomationMaintenance, getInstalledProductManifestIds, getJobRuntimeForDisposal, getPanelWorkspaceForDisposal, getProductIpcRegistryForDisposal, setAgentTaskExecutionCoordinator, setAgentTaskRunController, setDisposeChannelMaintenanceJobs, setDisposeJobRunRetention, setDisposeTaskAutomationMaintenance, setInstalledProductManifestIds, setJobRuntimeForDisposal, setPanelWorkspaceForDisposal, setProductIpcRegistryForDisposal } from './composition/slots'
 import { bindReplaceAgentState } from './composition/agentStateBridge'
+import { createPlatformCore } from './composition/platformCore'
 
 // 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
 bindReplaceAgentState(replaceAgentState)
@@ -303,44 +304,23 @@ const productAcceptanceProfile = configureProductAcceptanceProfile({
  * 开发/测试态（`isPackaged === false`）行为与 PLAT-33 逐字相同。
  */
 const workspaceTestFixtures = resolveWorkspaceTestFixtures(process.env, { isPackaged: app.isPackaged })
-const platformDataDirectory = join(app.getPath('userData'), 'platform')
-mkdirSync(platformDataDirectory, { recursive: true })
-const settingsStore = createSettingsStore(
-  createJsonFileStorage(join(app.getPath('userData'), 'platform', 'settings.json'), createDefaultAppSettings())
-)
-/** 主进程唯一的「读者时区」来源；任务排期、免打扰、日报调度、分析展示都从这里取。 */
-const shellTimeZone = createShellTimeZoneProvider({ settings: settingsStore })
-const providerSecretVault = createElectronSecretVault({
-  directory: join(app.getPath('userData'), 'platform', 'secrets'),
-  safeStorage
+const platformCore = createPlatformCore({
+  userDataPath: app.getPath('userData'),
+  appVersion: app.getVersion(),
+  platform: process.platform,
+  workspaceTestFixtures
 })
-// PLAT-72：供应商/模型改为 SQLite 行级存储；旧的 `platform/model-providers.json` 已废弃，
-// 代码不再读取、不删除、不改名 —— 原样留在磁盘上作为用户的备份（用户按需自行清理）。
-const providerStore = createProviderStore(
-  createProviderSqliteStorage({ path: join(app.getPath('userData'), 'platform', 'model-providers.sqlite') }),
-  providerSecretVault
-)
-/** 唯一的日志落盘口：主进程与渲染层诊断共用 `userData/logs/app.log`，写入前统一脱敏。 */
-const appLog = createAppLog({
-  directory: join(app.getPath('userData'), 'logs'),
-  redact: (text) => redactText(text).text
-})
-appLog.log('info', 'app.start', { version: app.getVersion(), platform: process.platform })
-const rendererProcessLog = createRendererProcessLog(appLog)
-
-/** 主窗持有者：建窗、窗口事件、两个取窗口函数（加载/挂载时机由它自己掌握）。 */
-const mainWindowHost = createMainWindowHost({
-  createWindow: () => createMainWindow(),
-  loadRenderer: (window) => loadMainWindowRenderer(window),
-  logRendererEvent: (event) => rendererProcessLog.write(event),
-  getWorkspace: () => getPanelWorkspaceForDisposal()
-})
-
-const taskIpcScheduleValidationOptions = createTaskIpcScheduleValidationOptions({
-  timeZone: () => shellTimeZone.get()
-})
-
-
+const {
+  platformDataDirectory,
+  settingsStore,
+  shellTimeZone,
+  providerSecretVault,
+  providerStore,
+  appLog,
+  rendererProcessLog,
+  mainWindowHost,
+  taskIpcScheduleValidationOptions
+} = platformCore
 async function refreshTaskStateAfterCommit(): Promise<void> {
   const state = await agentServices.state.getState()
   agentTaskSchedulerRuntimeService.syncFromState(state)
