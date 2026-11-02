@@ -27,6 +27,7 @@ import {
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
+import { useConfirm } from '@platform/ui/components/confirm'
 import { useAgentLanguage, useAgentText } from '../../agentTextProvider'
 import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
 import { useAgentProviderNames } from '../../useAgentProviderNames'
@@ -76,6 +77,7 @@ export default function AgentChatNavbar({
   onEditAgent
 }: AgentChatNavbarProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   // 键取自闭合联合 `AgentTooltipKey`：写错一处编译就红。
   const tooltipKeys = {
     agentConfig: 'chatNavbar.agentConfig',
@@ -231,9 +233,18 @@ export default function AgentChatNavbar({
             icon={<Trash2 size={15} />}
             aria-label={t.chatNavbar.clearMessages}
             onClick={() => {
-              if (!window.confirm(t.chatNavbar.confirmClearMessages(activeSession.name))) return
-              void clearSessionMessagesViaApi(window.platform, activeSession.id).catch(() => {
-                onStateChange((current) => clearSessionMessages(current, activeSession.id))
+              const sessionId = activeSession.id
+              confirm({
+                title: t.chatNavbar.clearMessages,
+                description: t.chatNavbar.confirmClearMessages(activeSession.name),
+                confirmLabel: t.chatNavbar.clearMessages,
+                cancelLabel: t.common.cancel,
+                tone: 'danger',
+                onConfirm: () => {
+                  void clearSessionMessagesViaApi(window.platform, sessionId).catch(() => {
+                    onStateChange((current) => clearSessionMessages(current, sessionId))
+                  })
+                }
               })
             }}
           />

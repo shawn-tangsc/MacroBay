@@ -8,6 +8,7 @@ import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { AgentChatBubble } from '@platform/ui/agent-chat'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { IconButton } from '@platform/ui/components/icon-button'
+import { useConfirm } from '@platform/ui/components/confirm'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { copyAgentMessageText, resendAgentMessage } from '../agentMessageActions'
@@ -33,7 +34,7 @@ type AgentSessionMessageGroupProps = {
   activeSessionId: string
   activeSessionWorkspacePath: string | null
   chatSettings: ChatSettings | null
-  text: Pick<AgentText, 'messages' | 'runtimeActivity' | 'runtimeText' | 'input'>
+  text: Pick<AgentText, 'messages' | 'runtimeActivity' | 'runtimeText' | 'input' | 'common'>
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
   onGroupElementRef: (groupId: string, element: HTMLElement | null) => void
   onMessageElementRef: (messageId: string, element: HTMLDivElement | null) => void
@@ -106,7 +107,7 @@ type AgentSessionMessageUnitProps = {
   activeSessionId: string
   activeSessionWorkspacePath: string | null
   chatSettings: ChatSettings | null
-  text: Pick<AgentText, 'messages' | 'runtimeActivity' | 'runtimeText' | 'input'>
+  text: Pick<AgentText, 'messages' | 'runtimeActivity' | 'runtimeText' | 'input' | 'common'>
   pendingStatusText?: string
   contextRenderers?: AgentContextRendererRegistry
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
@@ -127,6 +128,7 @@ function AgentSessionMessageUnit({
   onMessageElementRef
 }: AgentSessionMessageUnitProps): React.ReactElement {
   const language = useAgentLanguage()
+  const confirm = useConfirm()
   // 键取自闭合联合：写错一处编译就红，不靠评审发现。
   const tooltipKeys = {
     copy: 'messages.copy',
@@ -210,10 +212,23 @@ function AgentSessionMessageUnit({
             icon={<Trash2 size={13} />}
             aria-label={text.messages.deleteAria}
             onClick={() => {
-              if (chatSettings?.confirmDeleteMessage !== false && !window.confirm(text.messages.confirmDeleteMessage))
+              const remove = (): void => {
+                void deleteSessionMessageViaApi(window.platform, message.sessionId, message.id).catch(() => {
+                  onStateChange((current) => deleteSessionMessage(current, message.sessionId, message.id))
+                })
+              }
+              // 设置里关掉确认时直接删；默认仍先问一次，且由 Provider 渲染。
+              if (chatSettings?.confirmDeleteMessage === false) {
+                remove()
                 return
-              void deleteSessionMessageViaApi(window.platform, message.sessionId, message.id).catch(() => {
-                onStateChange((current) => deleteSessionMessage(current, message.sessionId, message.id))
+              }
+              confirm({
+                title: text.messages.delete,
+                description: text.messages.confirmDeleteMessage,
+                confirmLabel: text.messages.delete,
+                cancelLabel: text.common.cancel,
+                tone: 'danger',
+                onConfirm: remove
               })
             }}
           />

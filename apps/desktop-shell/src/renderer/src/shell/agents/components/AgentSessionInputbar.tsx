@@ -11,6 +11,7 @@ import type { SafeModelProvider } from '@platform/ai/providers/modelProviderType
 import type { ChatSettings } from '@platform/settings/schema/appSettings'
 import { isSoulModeEnabled } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import { AgentChatComposer } from '@platform/ui/agent-chat'
+import { useConfirm } from '@platform/ui/components/confirm'
 
 import { clearSessionMessages, setAgentToolEnabled } from '../agentStateActions'
 import { supportsVisionAttachments } from '../agentAttachmentPolicy'
@@ -77,6 +78,7 @@ export default function AgentSessionInputbar({
   disabled = false
 }: AgentSessionInputbarProps): React.ReactElement {
   const t = useAgentText()
+  const confirm = useConfirm()
   const draftStorageKey = draftStorageKeyOverride ?? `agent-session-draft:${agent.id}`
   const { draft, setDraft, draftRef } = useAgentDraftBuffer(draftStorageKey)
   const [files, setFiles] = useState<AgentAttachedFile[]>([])
@@ -134,11 +136,18 @@ export default function AgentSessionInputbar({
     onToggleExpanded: toggleExpanded,
     onOpenTools: () => setToolsOpen(true),
     onClearMessages: () => {
-      if (window.confirm(t.input.confirmClearMessages(session.name))) {
-        void clearSessionMessagesViaApi(window.platform, session.id).catch(() => {
-          onStateChange((current) => clearSessionMessages(current, session.id))
-        })
-      }
+      confirm({
+        title: t.chatNavbar.clearMessages,
+        description: t.input.confirmClearMessages(session.name),
+        confirmLabel: t.chatNavbar.clearMessages,
+        cancelLabel: t.common.cancel,
+        tone: 'danger',
+        onConfirm: () => {
+          void clearSessionMessagesViaApi(window.platform, session.id).catch(() => {
+            onStateChange((current) => clearSessionMessages(current, session.id))
+          })
+        }
+      })
     },
     mentionItems: mentionModels.mentionItems,
     onToggleMentionModel: mentionModels.toggleByItemId,
