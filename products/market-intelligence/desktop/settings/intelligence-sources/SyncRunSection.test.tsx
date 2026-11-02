@@ -59,11 +59,13 @@ describe('sync run section', () => {
     // The sentence, not `provider-disabled`: the raw code lives only in the popover.
     expect(dom.textContent).toContain(text.failureCodes['provider-disabled'])
     expect(dom.textContent).not.toContain('provider-disabled')
-    // The code and the raw error text sit behind a focusable trigger, so tabbing reaches them too.
+    // The code and the raw error text are a sentence built from data, so they are the cell's
+    // accessible name: a screen reader gets them, and no unfocusable span pretends to be a control.
     const trigger = dom.querySelector('.mi-sync-run__failure')
     expect(trigger).not.toBeNull()
-    expect(trigger?.getAttribute('tabindex')).toBe('0')
-    expect(trigger?.getAttribute('title')).toBeNull()
+    expect(trigger?.getAttribute('tabindex')).toBeNull()
+    expect(trigger?.getAttribute('aria-label')).toContain('provider-disabled')
+    expect(trigger?.getAttribute('aria-label')).toContain('Macro calendar schedule run failed')
     expect(dom.textContent).toContain(text.outcomes.failed)
     expect(dom.textContent).not.toContain('Macro calendar schedule run failed')
     expect(dom.textContent).toContain('32.0s')

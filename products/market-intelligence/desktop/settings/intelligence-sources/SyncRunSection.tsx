@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { Button, Popover } from 'antd'
+import { Button } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
@@ -242,14 +242,15 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
         <span className="mi-sync-run__duration" role="cell">{row.durationMs === undefined ? '—' : `${(row.durationMs / 1000).toFixed(1)}s`}</span>
         <span className="mi-sync-run__detail" role="cell">
-          {row.failureCode ? <Popover
-            content={<span className="mi-sync-run__failure-detail">{
-              [text.failureCodeHint.replace('{code}', row.failureCode),
-                // The raw error text is implementation wording; it belongs with the code, not on the row.
-                ...(row.detail ? [row.detail] : [])].join(' · ')
-            }</span>}
-            trigger={['hover', 'focus']}
-          ><span className="mi-sync-run__failure mi-sync-run__hint" tabIndex={0}>{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span></Popover> : null}
+          {/* The code and the raw error are a sentence built from data, so they live in the cell's
+              accessible name instead of a bubble: a keyboard reader gets the same facts, and nothing
+              here is reachable only by hovering an unfocusable span. */}
+          {row.failureCode ? <span
+            aria-label={[text.failureCodeHint.replace('{code}', row.failureCode),
+              // The raw error text is implementation wording; it belongs with the code, not on the row.
+              ...(row.detail ? [row.detail] : [])].join(' · ')}
+            className="mi-sync-run__failure"
+          >{text.failureCodes[row.failureCode] ?? text.failureUnknown}</span> : null}
           {!row.failureCode && row.detail ? <span>{row.detail}</span> : null}
         </span>
       </div>)}
