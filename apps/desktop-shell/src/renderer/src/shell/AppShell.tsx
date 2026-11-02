@@ -76,28 +76,9 @@ import {
 import { applyRootThemeAttributes, WorkspaceWindowRoot } from './workspace/WorkspaceWindowRoot'
 import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
 import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
+import { LANGUAGE_LABEL_KEYS, LANGUAGE_SEGMENTED_KEY, resolvePreferencesText } from './shellOptionTables'
+import { THEME_LABEL_KEYS, THEME_SEGMENTED_KEY } from './shellOptionTables'
 import { Segmented } from '@platform/ui/components/segmented'
-
-/** 语言分段的组名键。分段组件只收键，句子仍在 `platformText`。 */
-const LANGUAGE_SEGMENTED_KEY = 'preferences.language'
-
-/**
- * 语言项 → 文案键。**写成查表而不是模板串**：模板串拼出来的键静态校验不到形状，
- * `choiceKeyGuard` 只判得动字面量；而查表还让「加一种语言」在编译期就红——两层都保住了。
- */
-const LANGUAGE_LABEL_KEYS: Record<AppLanguage, string> = {
-  'zh-CN': 'preferences.chinese',
-  'en-US': 'preferences.english'
-}
-
-/** 主题三项同理：键全字面量，加一档主题编译不过。 */
-const THEME_LABEL_KEYS: Record<ThemeMode, string> = {
-  system: 'preferences.system',
-  light: 'preferences.light',
-  dark: 'preferences.dark'
-}
-
-const THEME_SEGMENTED_KEY = 'preferences.displayStyle'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
 import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
@@ -284,13 +265,9 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const previousSelectedProviderIdRef = useRef<string | null>(null)
 
   const t = platformText[settings.language]
-  // 键 → 句子：分段只用 `preferences.*` 这几句；未知键返回空串，组件据此整块不渲染，
-  // 不会把键名念给读者（与平台其余解析器同口径）。
-  const resolvePreferencesText = (key: string): string => {
-    const path = key.startsWith('preferences.') ? key.slice('preferences.'.length) : key
-    const value = (t.preferences as unknown as Record<string, unknown>)[path]
-    return typeof value === 'string' ? value : ''
-  }
+  // 解析器与两张键表都在 `shellOptionTables`：同一件事只有一处定义。
+  const preferencesText = (key: string): string =>
+    resolvePreferencesText(t.preferences as unknown as Record<string, unknown>, key)
   // 结果行的文案、语气、第二行同时算出来：渲染层只照着 tone 上样式，不另算成败。
   const proxySelfTestView =
     proxySelfTest.result === null
@@ -1376,7 +1353,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             }))}
             value={settings.language}
             onChange={(value) => void updateSettings({ language: value as AppLanguage })}
-            resolveText={resolvePreferencesText}
+            resolveText={preferencesText}
           />
         </div>
 
@@ -1400,7 +1377,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             }))}
             value={settings.themeMode}
             onChange={(value) => void updateSettings({ themeMode: value as ThemeMode })}
-            resolveText={resolvePreferencesText}
+            resolveText={preferencesText}
           />
         </div>
 
