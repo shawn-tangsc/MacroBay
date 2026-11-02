@@ -54,6 +54,11 @@ describe('market intelligence notification copy', () => {
     expect(marketIntelligenceNotificationCopy['en-US']).toBeDefined()
   })
 
+  it('is carried by the manifest, so the platform resolves these keys without importing this file', () => {
+    // 少这一行不会报错，只会让每条事件文案回退成兜底句并记 copy-unresolved——所以用断言钉住。
+    expect(marketIntelligenceProductManifest.notificationCopy).toBe(marketIntelligenceNotificationCopy)
+  })
+
   it('claims exactly the two job handlers whose failures this product reports', () => {
     // 少一个 → 一次坏源收两条（平台任务失败 + 本产品来源事件）；多一个 → 平台静默丢一条别人的通知。
     expect([...marketIntelligenceProductManifest.notificationProducerClaims].sort()).toEqual([

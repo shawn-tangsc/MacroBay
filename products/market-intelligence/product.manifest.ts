@@ -9,6 +9,7 @@ import {
   notificationEventTitleKey
 } from '../../platform/notifications/contracts/platformNotificationEvents'
 
+import { marketIntelligenceNotificationCopy } from './desktop/shared/i18n/text/notifications'
 import { intelligenceAgentCapabilities } from './service/intelligence/agent-capabilities/capabilityCatalog'
 import { toManifestRegistrations } from './service/intelligence/agent-capabilities/toManifestRegistrations'
 
@@ -360,6 +361,8 @@ export const marketIntelligenceProductManifest = {
    * 采集是所有来源共用同一个 handler。
    */
   notificationProducerClaims: ['market-intelligence.dailyBriefing', 'market-intelligence.collectSource'],
+  /** 8 条事件的句子；平台的装配从这里收表，不 import 本文件（契约 §3.3）。 */
+  notificationCopy: marketIntelligenceNotificationCopy,
   migrations: [],
   productAgentTools: toManifestRegistrations(intelligenceAgentCapabilities)
 } as const satisfies ProductManifest
