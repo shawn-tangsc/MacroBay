@@ -193,7 +193,10 @@ describe('PLAT-60 provider drawer', () => {
     await mount(provider('tavily'))
     const text = drawer().textContent ?? ''
     const input = drawer().querySelector('.web-search-api-key-control input') as HTMLInputElement
-    const eye = drawer().querySelector('.web-search-api-key-eye') as HTMLButtonElement
+    // 眼睛已迁移到 IconButton：按读屏名找，不再依赖私有类名。
+    const eye = drawer().querySelector(
+      `button[aria-label="${labels.showApiKey}"],button[aria-label="${labels.hideApiKey}"]`
+    ) as HTMLButtonElement
 
     expect(input.placeholder).toBe(labels.apiKeyPlaceholder)
     expect(input.placeholder).toContain('必填')
