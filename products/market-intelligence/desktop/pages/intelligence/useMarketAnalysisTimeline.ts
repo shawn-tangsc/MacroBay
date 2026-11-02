@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { analysisTimelineRefreshPolicy } from './analysisTimelineRefreshPolicy'
 import type { AnalysisWorkspaceBinding } from '../../../contracts/analysisWorkspaceContracts'
 import { analysisWorkspacePolicy } from '../../../contracts/analysisWorkspaceContracts'
+import { isAlreadyAvailableError, withReadTimeout } from './marketAnalysisTimelineRead'
+
+// Kept importable from here: callers and tests already name this module.
+export { isAlreadyAvailableError } from './marketAnalysisTimelineRead'
 import {
   marketAnalysisTimelineClient,
   type MarketAnalysisAttempt,
@@ -52,19 +56,6 @@ type State = Readonly<{
   detailLoading?: boolean
 }>
 
-
-/** Resolves a read against a bounded wait so a silent service cannot hang the UI. */
-async function withReadTimeout<T>(read: Promise<T>, timeoutMs: number): Promise<T | undefined> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      read,
-      new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), timeoutMs) })
-    ])
-  } finally {
-    if (timer) clearTimeout(timer)
-  }
-}
 
 export type UseMarketAnalysisTimelineResult = Readonly<{
   state: State
@@ -485,7 +476,3 @@ export function useMarketAnalysisTimeline(input: Readonly<{
 }
 
 /** The refusal the main process throws when a refresh has nothing new to do. */
-export function isAlreadyAvailableError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.includes('analysis-already-available')
-}
