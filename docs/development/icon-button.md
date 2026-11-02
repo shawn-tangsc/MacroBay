@@ -40,6 +40,9 @@ window) — never per button.
 | `icon` | `LucideIcon` | yes | A lucide component. The component marks it `aria-hidden`; do not pass an `<img>` or a text glyph. |
 | `size` | `'sm' \| 'md'` | yes | `sm` = 22 px inline, `md` = 24 px card header and toolbar. |
 | `onSelect` | `(event: React.MouseEvent) => void` | yes | The click handler, **with the event**. Icon buttons sit inside rows that are themselves clickable, so the handler needs `event.stopPropagation()`. A zero-argument handler still compiles and still fires — TypeScript allows a shorter parameter list. |
+| `className` | `string` | no | Your own class, for positioning and state. It cannot resize the button: the size is written inline and inline beats any class rule. |
+| `style` | `CSSProperties` | no | Positioning only. The component writes `width`/`height` **after** your style, so a call site cannot escape the 22/24 set. |
+| `dataAttributes` | `Record<\`data-${string}\`, …>` | no | Test hooks and state flags (`data-redock-tab`). A separate prop rather than arbitrary attributes, so nothing like `width` can slip in. |
 | `resolveText` | `(key: string) => string` | yes | The caller's text resolver; the component holds no copy and imports no i18n. |
 | `disabled` | `boolean` | no | Native `disabled`: it leaves the tab order and stops firing. Cannot be combined with `tooltipKey` — that combination does not compile. |
 | `loading` | `boolean` | no | The click is in flight: the button is disabled, the glyph becomes the platform spinner (`LoadingSpinner`, `sm`), and `onSelect` stops firing. The name and the 22/24 size stay, so a screen reader still knows which button is busy. Not a third size and not a variant. |

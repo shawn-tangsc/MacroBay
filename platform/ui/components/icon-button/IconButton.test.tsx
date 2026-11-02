@@ -128,6 +128,30 @@ describe('IconButton', () => {
     expect(button.style.height).toBe('24px')
   })
 
+  it('lets a call site position itself, but not resize the button', () => {
+    // 尺寸写在行内、且放在最后：调用方拿得到 position/top，拿不到覆盖 22/24 的机会。
+    // 这条不需要布局引擎——读行内声明就够了。
+    const button = mountElement({
+      style: { width: 999, height: 999, position: 'absolute', top: 6, right: 6 } as never
+    })
+
+    expect(button.style.width).toBe('24px')
+    expect(button.style.height).toBe('24px')
+    expect(button.style.position).toBe('absolute')
+    expect(button.style.top).toBe('6px')
+  })
+
+  it('passes its own class name and data hooks through, without dropping the component ones', () => {
+    const button = mountElement({
+      className: 'workspace-redock',
+      dataAttributes: { 'data-redock-tab': 'page' } as never
+    })
+
+    expect(button.className).toContain('icon-button')
+    expect(button.className).toContain('workspace-redock')
+    expect(button.getAttribute('data-redock-tab')).toBe('page')
+  })
+
   it('is a plain button, so it can never submit a surrounding form', () => {
     expect(markup()).toContain('type="button"')
   })

@@ -1,6 +1,6 @@
 import { Button, Tooltip } from 'antd'
 import type { LucideIcon } from 'lucide-react'
-import type { MouseEvent, ReactElement } from 'react'
+import type { CSSProperties, MouseEvent, ReactElement } from 'react'
 
 import { LoadingSpinner } from '../loading'
 
@@ -97,6 +97,26 @@ type IconButtonCommon = {
    * 只在确实能指向一个元素时传；指向不存在的 id 比不写更糟。
    */
   controls?: string
+  /**
+   * 调用方自己的类名：**只用来加定位与状态类，不碰尺寸与外观**。
+   *
+   * 为什么安全：组件的尺寸写在行内 `style`，**行内样式优先于任何类规则**，所以这里加
+   * `position/top/right` 改不动 22/24；而让调用方各写一个 wrapper 去定位，等于把测试与样式
+   * 都改指外层，问题只是搬了个位置。
+   */
+  className?: string
+  /**
+   * 透传的定位样式。**尺寸永远由组件最后写**（`{ ...style, width, height }`），所以这里给不出
+   * 覆盖 22/24 的机会——`size` 的闭集不因此松动。
+   */
+  style?: CSSProperties
+  /**
+   * 测试钩子与状态属性（`data-redock-tab`、`data-model-chip` 这类）。只收 `data-*` 键。
+   *
+   * 用独立 prop 而不是让 `<IconButton data-x>` 直传：后者要靠索引签名放宽类型，那会让任何
+   * 未知属性都能混进来，包括 `width`。
+   */
+  dataAttributes?: Readonly<Record<`data-${string}`, string | number | boolean | undefined>>
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
@@ -131,6 +151,9 @@ export function IconButton({
   variant = 'plain',
   expanded,
   controls,
+  className,
+  style,
+  dataAttributes,
   resolveText
 }: IconButtonProps): ReactElement {
   const ariaLabel = fillPlaceholders(resolveText(ariaLabelKey), ariaLabelParams)
@@ -146,10 +169,12 @@ export function IconButton({
         'icon-button',
         `icon-button--${size}`,
         variant === 'solid' ? 'icon-button--solid' : 'icon-button--plain',
-        'ant-btn-icon-only'
+        'ant-btn-icon-only',
+        className
       ]
         .filter(Boolean)
         .join(' ')}
+      {...dataAttributes}
       // loading 仍要不可点，但**不能只靠 `:disabled` 表达**：两者语义不同，绑在一起以后就没法只给
       // loading 换色（禁用低对比度可豁免，loading 不行——读者得看出「哪个按钮在忙」）。
       disabled={disabled === true || loading === true}
@@ -165,7 +190,8 @@ export function IconButton({
       // 只有真的传了才写：`aria-expanded={undefined}` 在 DOM 里会变成字符串 "undefined"。
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
       {...(controls === undefined ? {} : { 'aria-controls': controls })}
-      style={{ width: pixels, height: pixels }}
+      // 尺寸放在最后：调用方拿得到定位，拿不到覆盖 22/24 的机会。
+      style={{ ...style, width: pixels, height: pixels }}
       type={variant === 'solid' ? 'default' : 'text'}
     />
   )
