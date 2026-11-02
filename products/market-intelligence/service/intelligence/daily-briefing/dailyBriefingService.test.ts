@@ -127,8 +127,10 @@ describe('daily briefing service', () => {
     expect(localDate('2026-10-29T20:00:00.000Z', 'Asia/Shanghai')).toBe('2026-10-30')
     expect(localDate('not-a-time', 'UTC')).toBeUndefined()
     expect(localDate(asOf, 'Not/AZone')).toBe('2026-10-30')
-    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-29T00:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z', windowHours: 24 })
-    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-29', windowStart: '2026-10-28T00:00:00.000Z', windowEnd: '2026-10-29T00:00:00.000Z', windowHours: 24 })
+    // 08:30 local is past the 07:00 default cutoff, so it reads the edition closed at 07:00.
+    expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24 })
+    // 07:30 local is on the other side of the same cutoff; the day rolls over, the window does not.
+    expect(briefingWindow('2026-10-29T23:30:00.000Z', 'Asia/Shanghai')).toEqual({ date: '2026-10-30', windowStart: '2026-10-28T23:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 24 })
   })
 
   it('moves the cutoff with the configured generation time', () => {
@@ -143,7 +145,7 @@ describe('daily briefing service', () => {
 
   it('subtracts the configured window hours from the cutoff', () => {
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { windowHours: 12 })).toEqual({
-      date: '2026-10-30', windowStart: '2026-10-29T12:00:00.000Z', windowEnd: '2026-10-30T00:00:00.000Z', windowHours: 12
+      date: '2026-10-30', windowStart: '2026-10-29T11:00:00.000Z', windowEnd: '2026-10-29T23:00:00.000Z', windowHours: 12
     })
     expect(briefingWindow('2026-10-30T00:30:00.000Z', 'Asia/Shanghai', { windowHours: 48, generationTime: '06:00' })).toEqual({
       date: '2026-10-30', windowStart: '2026-10-27T22:00:00.000Z', windowEnd: '2026-10-29T22:00:00.000Z', windowHours: 48
@@ -212,7 +214,8 @@ describe('daily briefing service', () => {
 
     const result = await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(result.state).toBe('available')
-    expect(source.lastInput).toEqual({ asOf: '2026-10-30T00:00:00.000Z', windowHours: 24 })
+    // The fallback schedule is the policy default, 07:00 local: 23:00Z the evening before.
+    expect(source.lastInput).toEqual({ asOf: '2026-10-29T23:00:00.000Z', windowHours: 24 })
   })
 
   it('reports only the attempt that is running, and forgets it once the run settles', async () => {
@@ -234,7 +237,7 @@ describe('daily briefing service', () => {
     const progress = await service.getProgress({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(progress.state).toBe('running')
     if (progress.state === 'running') {
-      expect(progress.progress.attemptId).toBe('2026-10-30:zh-CN:2026-10-30T00:00:00.000Z')
+      expect(progress.progress.attemptId).toBe('2026-10-30:zh-CN:2026-10-29T23:00:00.000Z')
       expect(progress.progress.stages.every((stage) => stage.state !== 'skipped')).toBe(true)
     }
 
@@ -648,7 +651,7 @@ describe('daily briefing service', () => {
 
     expect(result.state).toBe('available')
     expect(events).toEqual(['packet', 'ensure', 'agent'])
-    expect(cutoffs).toEqual(['2026-10-30T00:00:00.000Z'])
+    expect(cutoffs).toEqual(['2026-10-29T23:00:00.000Z'])
   })
 
   it('still generates the edition when the core-fact ensure fails', async () => {
@@ -720,7 +723,7 @@ describe('daily briefing service', () => {
     currentNow = '2026-10-31T00:30:00.000Z'
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(cutoffs).toEqual(['2026-10-30T00:00:00.000Z', '2026-10-31T00:00:00.000Z'])
+    expect(cutoffs).toEqual(['2026-10-29T23:00:00.000Z', '2026-10-30T23:00:00.000Z'])
   })
 })
 

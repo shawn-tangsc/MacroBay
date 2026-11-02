@@ -42,7 +42,7 @@ export const dailyBriefingPolicy = Object.freeze({
  * accepted, which keeps the cron expression readable and the cutoff reviewable.
  */
 export const dailyBriefingGenerationPolicy = Object.freeze({
-  defaultGenerationTime: '08:00',
+  defaultGenerationTime: '07:00',
   earliestGenerationHour: 6,
   latestGenerationHour: 10,
   generationMinuteStep: 30,

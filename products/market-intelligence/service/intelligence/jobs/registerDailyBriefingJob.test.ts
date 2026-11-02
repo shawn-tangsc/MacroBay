@@ -165,7 +165,7 @@ describe('daily briefing job handler', () => {
     expect([...definitions.keys()]).toEqual([`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`])
     expect(definitions.get(`${INTELLIGENCE_DAILY_BRIEFING_JOB}.default`)).toMatchObject({
       payload: { periodId: 'default' },
-      trigger: { kind: 'cron', expression: '0 8 * * *', timezone: 'Asia/Shanghai' }
+      trigger: { kind: 'cron', expression: '0 7 * * *', timezone: 'Asia/Shanghai' }
     })
   })
 

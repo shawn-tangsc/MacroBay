@@ -17,7 +17,7 @@ describe('daily briefing generation settings service', () => {
     // restates them — that is what keeps the page and the schedule reading one answer.
     // The list is the whole view: no flat copy of the first period can drift away from it.
     expect(await service.getView()).toEqual({
-      periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }]
+      periods: [{ id: 'default', generationTime: '07:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 7 * * *' }]
     })
   })
 

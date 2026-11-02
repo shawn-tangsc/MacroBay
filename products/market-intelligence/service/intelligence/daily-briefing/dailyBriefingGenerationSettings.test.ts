@@ -12,14 +12,14 @@ import {
 const NOW = '2026-10-30T00:00:00.000Z'
 
 describe('daily briefing generation settings', () => {
-  it('defaults to one period: 08:00, a 24-hour window, no zone of its own', () => {
+  it('defaults to one period: 07:00, a 24-hour window, no zone of its own', () => {
     const settings = createDefaultDailyBriefingPeriodsSettings(NOW)
     expect(settings).toEqual({
-      periods: [{ id: 'default', generationTime: '08:00', windowHours: 24 }],
+      periods: [{ id: 'default', generationTime: '07:00', windowHours: 24 }],
       updatedAt: NOW
     })
-    expect(dailyBriefingGenerationCronExpression(settings.periods[0]!)).toBe('0 8 * * *')
-    expect(dailyBriefingCutoffMinutes(settings.periods[0]!.generationTime)).toBe(480)
+    expect(dailyBriefingGenerationCronExpression(settings.periods[0]!)).toBe('0 7 * * *')
+    expect(dailyBriefingCutoffMinutes(settings.periods[0]!.generationTime)).toBe(420)
   })
 
   it('derives the cron expression from the same time the cutoff uses', () => {
@@ -117,7 +117,7 @@ describe('daily briefing generation settings', () => {
 
   it('repairs an unreadable stored value to the default instead of throwing', () => {
     const read = readDailyBriefingPeriodsSettings({ generationTime: 'noon', windowHours: 36 }, NOW)
-    expect(read.periods[0]).toEqual({ id: 'default', generationTime: '08:00', windowHours: 24 })
+    expect(read.periods[0]).toEqual({ id: 'default', generationTime: '07:00', windowHours: 24 })
   })
 })
 
@@ -143,5 +143,18 @@ describe('generationTimeZoneIssue', () => {
     // it is not reported as a problem: the judgement is "can a clock be formatted in it", not
     // "is it an IANA name".
     expect(generationTimeZoneIssue('+08:00')).toBeUndefined()
+  })
+})
+
+describe('the default moving to 07:00', () => {
+  it('is what a reader without a saved value sees', () => {
+    const settings = readDailyBriefingPeriodsSettings(undefined, NOW)
+    expect(settings.periods[0]?.generationTime).toBe('07:00')
+  })
+
+  it('does not touch a reader who already chose a time', () => {
+    // The default is a starting point, not a migration: only readers who never set a time move.
+    const stored = { periods: [{ id: 'default', generationTime: '09:00', windowHours: 24 }] }
+    expect(readDailyBriefingPeriodsSettings(stored, NOW).periods[0]?.generationTime).toBe('09:00')
   })
 })
