@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect, useState } from 'react'
-import { message } from 'antd'
 
 import { useToast } from '@platform/ui/components/toast'
 

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { act } from 'react'
-import { message } from 'antd'
 
 import { installAntdStaticRender } from '@platform/ui/antd/antdStaticRender'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -104,7 +103,6 @@ describe('PLAT-72 clear all models from the model toolbar', () => {
   })
 
   it('shows an inline error and keeps the models when the clear fails', async () => {
-    const success = vi.spyOn(message, 'success')
     const { api, container } = await mount({
       applyModelSync: async () => {
         throw new Error('ipc-failed')
@@ -115,7 +113,6 @@ describe('PLAT-72 clear all models from the model toolbar', () => {
     await click(confirmButton(true) ?? null)
 
     expect(api.applyModelSync).toHaveBeenCalledTimes(1)
-    expect(success).not.toHaveBeenCalled()
     const inlineError = container.querySelector('[data-models-error]')
     expect(inlineError?.textContent).toContain(pageStatusText.failed)
     expect(container.querySelector('[data-models-count]')?.textContent).toBe(String(providerFixture.models.length))
