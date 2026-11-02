@@ -1,53 +1,53 @@
 import { describe, expect, it } from 'vitest'
 
-import { BANNED_READER_TERMS, BANNED_TERM_SCOPES } from './bannedTerms'
+import { BANNED_READER_TERMS, KNOWN_OFFENDERS, findBannedReaderTerms } from './bannedTerms'
 import { productText } from './productText'
 
 /**
  * The reader-facing copy must not use our internal vocabulary.
  *
- * `MI-2-R14` said "no basis, source or fallback wording on the card" and we still shipped a coined
- * word twice, because a rule in a document is not a rule anything can check. This is that check: it
- * names the offending key, so the next person sees where it grew back rather than only that it did.
+ * `MI-2-R14` said "no basis, source or fallback wording on the card" and the same coinage came back
+ * twice, because a rule in a document is not a rule anything can check. A rule written as "scan
+ * these four surfaces" is the same mistake one level down: the next new surface is not on the list.
+ * So the scan covers every string and only named exceptions are skipped, each with its reason.
  */
 
-type Finding = { key: string; term: string; sentence: string }
-
-function sentencesInScope(): Array<{ key: string; sentence: string }> {
-  const found: Array<{ key: string; sentence: string }> = []
-  for (const language of ['zh-CN', 'en-US'] as const) {
-    for (const scope of BANNED_TERM_SCOPES) {
-      let node: unknown = productText[language]
-      for (const part of scope) {
-        if (node === null || typeof node !== 'object') { node = undefined; break }
-        node = (node as Record<string, unknown>)[part]
-      }
-      if (node === undefined) continue
-      const walk = (value: unknown, path: string): void => {
-        if (typeof value === 'string') { found.push({ key: `${language}.${path}`, sentence: value }); return }
-        if (value === null || typeof value !== 'object') return
-        for (const [key, child] of Object.entries(value)) walk(child, `${path}.${key}`)
-      }
-      walk(node, scope.join('.'))
-    }
-  }
-  return found
-}
-
 describe('banned reader-facing terms', () => {
-  it('keeps every reader-facing sentence free of them, and says which key when it does not', () => {
-    const findings: Finding[] = []
-    for (const { key, sentence } of sentencesInScope()) {
-      for (const term of BANNED_READER_TERMS) {
-        if (sentence.includes(term)) findings.push({ key, term, sentence })
-      }
-    }
-    // Report the key, not just a count: "one sentence is banned" sends someone reading the file.
-    expect(findings).toEqual([])
+  it('reports every occurrence outside the shrinking baseline, by key', () => {
+    const findings = findBannedReaderTerms(productText as unknown as Readonly<Record<string, unknown>>)
+    const unexpected = findings.filter((finding) => KNOWN_OFFENDERS[finding.key] === undefined)
+    // Keys, not a count: "one sentence is banned" sends someone reading a 3,700-line file.
+    expect(unexpected.map((finding) => `${finding.key} :: ${finding.term}`)).toEqual([])
   })
 
-  it('covers a real subtree, so a passing run is not vacuous', () => {
-    // If the scope path ever moves, this test would pass by finding nothing at all.
-    expect(sentencesInScope().length).toBeGreaterThan(10)
+  it('keeps the baseline honest: an entry that no longer offends must be deleted', () => {
+    const found = new Set(findBannedReaderTerms(productText as unknown as Readonly<Record<string, unknown>>).map((finding) => finding.key))
+    // Cleaning a sentence without deleting its line would make the list look like work still owed.
+    expect(Object.keys(KNOWN_OFFENDERS).filter((key) => !found.has(key))).toEqual([])
+  })
+
+  it('catches a banned word in any visible sentence, so a new surface cannot slip past', () => {
+    // The reverse check: inject one into copy that no scope list would have included.
+    const injected = { 'zh-CN': { anywhere: { newlyAdded: '这里有一个快照。' } } }
+    const findings = findBannedReaderTerms(injected)
+    expect(findings).toHaveLength(1)
+    expect(findings[0]).toMatchObject({ key: 'zh-CN.anywhere.newlyAdded', term: '快照' })
+  })
+
+  it('skips only the paths it names, and each one says why', () => {
+    const injected = {
+      'zh-CN': {
+        settings: { intelligenceSources: { syncRun: { tasks: { t: '任务快照' } } } },
+        elsewhere: { t: '任务快照' }
+      }
+    }
+    const findings = findBannedReaderTerms(injected)
+    // The run-record field is exempt; the same sentence outside it is still reported.
+    expect(findings.map((finding) => finding.key)).toEqual(['zh-CN.elsewhere.t'])
+  })
+
+  it('has a word list with no duplicates and no empty entry', () => {
+    expect(new Set(BANNED_READER_TERMS).size).toBe(BANNED_READER_TERMS.length)
+    expect(BANNED_READER_TERMS.every((term) => term.trim() !== '')).toBe(true)
   })
 })
