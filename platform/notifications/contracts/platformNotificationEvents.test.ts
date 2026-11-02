@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { notificationCopy } from '../../i18n/notificationCopy'
+import { findMissingNotificationEventCopy } from './notificationEventCopyGate'
 import { createNotificationEventCatalog } from './notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from './notificationEventPolicy'
 import {
@@ -61,6 +63,31 @@ describe('platform notification event declarations', () => {
       } else {
         expect(event.conditionWindowMs, event.id).toBeUndefined()
       }
+    }
+  })
+
+  /**
+   * 文案键存在性门禁：缺键的事件在设置页会直接显示键名，不红、不报错，只有人看得见。
+   *
+   * 16 条事件的中英文案归营销，还没到货；这里用一张**只减不增**的待补清单兜住当前缺口。
+   * 一旦某条文案到货，`gaps` 变空，下面那条 `toBeGreaterThan(0)` 会红并点名要删的行——
+   * 清单不会偷偷留在代码里。
+   */
+  it('resolves both copy keys in both languages, or is explicitly waiting for marketing copy', () => {
+    const pending = new Set(PLATFORM_NOTIFICATION_EVENTS.map((event) => event.id))
+    const lookup = (language: 'zh-CN' | 'en-US', key: string): string | undefined =>
+      (notificationCopy[language] as Readonly<Record<string, string>>)[key]
+
+    for (const event of PLATFORM_NOTIFICATION_EVENTS) {
+      const gaps = findMissingNotificationEventCopy([event], lookup)
+      if (pending.has(event.id)) {
+        expect(
+          gaps.length,
+          `${event.id} 的中英文案已到货，删掉本用例里 pending 的对应行`
+        ).toBeGreaterThan(0)
+        continue
+      }
+      expect(gaps, `${event.id} 缺文案键`).toEqual([])
     }
   })
 
