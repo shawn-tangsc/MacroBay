@@ -9,6 +9,11 @@ import { Drawer } from '@platform/ui/components/drawer'
 import { LoadingState } from '@platform/ui/components/loading'
 import { useAgentText } from '../agentTextProvider'
 import {
+  emptyAgentTaskCenterLoadState,
+  readAgentTaskCenterLoadState,
+  type AgentTaskCenterLoadState
+} from './agentTaskCenterLoad'
+import {
   buildAgentTaskCenterState,
   buildAgentTaskDraftFromTask,
   buildCreateTaskDtoFromDraft,
@@ -48,18 +53,6 @@ type AgentTaskCenterDrawerProps = {
   onClose: () => void
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
 }
-type LoadState = {
-  tasks: ScheduledTaskEntity[]
-  logsByTaskId: Record<string, TaskRunLogEntity[]>
-  logsTotalByTaskId: Record<string, number>
-  jobsByRunLogId: Record<string, JobRunRecord | null>
-}
-const emptyLoadState: LoadState = {
-  tasks: [],
-  logsByTaskId: {},
-  logsTotalByTaskId: {},
-  jobsByRunLogId: {}
-}
 /** 标题键：句子由 `AgentText` 给，键只回答「这是哪一句」。 */
 const TASK_CENTER_TITLE_KEY = 'agent.taskCenter.title'
 
@@ -72,7 +65,7 @@ export default function AgentTaskCenterDrawer({
   onStateChange
 }: AgentTaskCenterDrawerProps): React.ReactElement {
   const t = useAgentText()
-  const [loadState, setLoadState] = useState<LoadState>(emptyLoadState)
+  const [loadState, setLoadState] = useState<AgentTaskCenterLoadState>(emptyAgentTaskCenterLoadState)
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
   const [draft, setDraft] = useState<AgentTaskDraft>(() => buildDefaultAgentTaskDraft(workspace))
   /** 初值 `true`：`useEffect` 在首帧之后才跑，初值 `false` 会先画一帧「从来没有创建过」。 */
@@ -111,25 +104,9 @@ export default function AgentTaskCenterDrawer({
     setLoadError(false)
     setError(null)
     try {
-      const taskPage = await listTasksViaApi(window.platform, agent.id, { limit: 50 })
-      const logsByTaskId: Record<string, TaskRunLogEntity[]> = {}
-      const logsTotalByTaskId: Record<string, number> = {}
-      const jobsByRunLogId: Record<string, JobRunRecord | null> = {}
-      await Promise.all(
-        taskPage.tasks.map(async (task) => {
-          const logsPage = await getTaskLogsViaApi(window.platform, agent.id, task.id, { limit: 10 })
-          logsByTaskId[task.id] = logsPage.logs
-          logsTotalByTaskId[task.id] = logsPage.total
-          await Promise.all(
-            logsPage.logs.map(async (log) => {
-              const page = await listTaskJobPageViaApi(window.platform, buildTaskJobQuery(log.id))
-              jobsByRunLogId[log.id] = page.runs[0] ?? null
-            })
-          )
-        })
-      )
-      setLoadState({ tasks: taskPage.tasks, logsByTaskId, logsTotalByTaskId, jobsByRunLogId })
-      setSelectedTaskId(nextSelectedTaskId === undefined ? taskPage.tasks[0]?.id ?? null : nextSelectedTaskId)
+      const loaded = await readAgentTaskCenterLoadState(window.platform, agent.id)
+      setLoadState(loaded)
+      setSelectedTaskId(nextSelectedTaskId === undefined ? loaded.tasks[0]?.id ?? null : nextSelectedTaskId)
     } catch {
       setLoadError(true)
     } finally {
