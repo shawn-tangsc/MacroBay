@@ -11,6 +11,7 @@ import type {
   WebSearchSettings
 } from '@platform/ai/web-search/contracts/webSearchContracts'
 import { createDefaultWebSearchSettings } from '@platform/ai/web-search/contracts/webSearchSettings'
+import { expectWaitingFirst } from '@platform/ui/async/expectWaitingFirst'
 import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import { platformText } from '../../../i18n/platformText'
@@ -211,6 +212,46 @@ describe('PLAT-60 settings page shell', () => {
     expect(container.querySelector('[data-web-search-deferred-row="exa"]')?.textContent).toContain(labels.deferredBadge)
   })
 
+  it('draws only the loading state before the first read resolves', async () => {
+    // 台账 §25 的第 ① 种处境：读还没 settle 时，屏幕上不许出现错误，也不许出现空态。
+    let resolveSettings: (value: WebSearchSettings) => void = () => undefined
+    let resolveProviders: (value: SafeWebSearchProviderView[]) => void = () => undefined
+    const pendingSettings = new Promise<WebSearchSettings>((resolve) => { resolveSettings = resolve })
+    const pendingProviders = new Promise<SafeWebSearchProviderView[]>((resolve) => { resolveProviders = resolve })
+    Object.assign(window, {
+      platform: {
+        webSearch: {
+          getSettings: vi.fn(() => pendingSettings),
+          listProviders: vi.fn(() => pendingProviders),
+          updateSettings: async () => settings(),
+          updateProvider: async () => provider('tavily'),
+          checkProvider: async () => ({ valid: true }),
+          revealApiKey: async () => null
+        },
+        app: { openExternal: vi.fn() }
+      }
+    })
+
+    // 同一个页面元素，渲染两次：先证明悬着时只有加载态，再证明读回来能翻成页面。
+    await expectWaitingFirst(pageElement())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root.render(pageElement()))
+    const loadingBefore = container.querySelector('[data-state="error"]')
+    expect(loadingBefore).toBeNull()
+
+    await act(async () => {
+      resolveSettings(settings())
+      resolveProviders(providers())
+      await Promise.all([pendingSettings, pendingProviders])
+    })
+    await vi.waitFor(() => expect(container.querySelector('[data-web-search-settings-page]')).not.toBeNull())
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+    expect(container.querySelector('[data-loading-state]')).toBeNull()
+  })
+
   it('shows one row per provider and read-only default badges', async () => {
     const { container } = await mountPage()
     await click(container, '[data-web-search-tab="providers"]')
@@ -225,6 +266,11 @@ describe('PLAT-60 settings page shell', () => {
     expect(jina.querySelector('.ant-select')).toBeNull()
   })
 })
+
+function pageElement(): React.ReactElement {
+  return createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+    createElement(WebSearchSettingsPage, { language: 'zh-CN' }))
+}
 
 function rows(container: HTMLElement): string[] {
   return [...container.querySelectorAll('[data-web-search-provider-row]')].map(
