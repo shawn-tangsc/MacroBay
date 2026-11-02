@@ -1,10 +1,13 @@
-import { Button, Select, Switch } from 'antd'
+import { Button, Checkbox, Select, Switch } from 'antd'
+import { CircleHelp } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { LoadingState } from '@platform/ui/components/loading'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
+import { Popover } from '@platform/ui/components/popover'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
@@ -19,9 +22,12 @@ import type { DailyBriefingText } from './dailyBriefingText'
 
 const MODEL_CONSTRAINTS: ModelPickerConstraints = { requireCapabilities: ['chat'] }
 
+type EditionLocale = 'zh-CN' | 'en-US'
+
 type SettingsDraft = Readonly<{
   generationTime: string
   windowHours: number
+  additionalLanguages: readonly EditionLocale[]
   editorialEnabled: boolean
   providerId: string
   modelId: string
@@ -54,6 +60,8 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
   // that wrote them; the panel never guesses a zone of its own.
   const [zone, setZone] = useState<string | null>(null)
   const [invalidZone, setInvalidZone] = useState<string | null>(null)
+  const [plan, setPlan] = useState<Readonly<{ used: EditionLocale; requested: string; fallback: boolean }> | null>(null)
+  const [periodCount, setPeriodCount] = useState(1)
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
@@ -82,9 +90,16 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
       }
       setZone(settings.view.generation.generationTimeZone ?? null)
       setInvalidZone(settings.view.generation.periods?.[0]?.generationTimeZoneInvalid ?? null)
+      setPeriodCount(Math.max(1, settings.view.generation.periods?.length ?? 1))
+      setPlan({
+        used: settings.view.language.plan.primary.used,
+        requested: settings.view.language.plan.primary.requested,
+        fallback: settings.view.language.plan.primary.fallbackReason === 'ui-language-unsupported'
+      })
       setDraft({
         generationTime: settings.view.generation.generationTime,
         windowHours: settings.view.generation.windowHours,
+        additionalLanguages: settings.view.language.settings.additional,
         editorialEnabled: settings.view.settings.editorialEnabled,
         providerId: settings.view.settings.providerId,
         modelId: settings.view.settings.modelId,
@@ -118,6 +133,16 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
     return provider ? supportsAnthropicServerWebSearch(provider) : false
   }, [draft?.providerId, defaultModel?.providerId, providers])
 
+  const periodLabels = text.settings.periods
+  const languageName = (locale: EditionLocale): string => (text.settings.languageNames as Record<string, string>)[locale] ?? locale
+  // The extra list never offers the primary: ticking "also English" in an English interface would
+  // write the same edition twice.
+  const extraLanguages: readonly EditionLocale[] = plan && plan.used !== 'en-US' ? ['en-US'] : []
+  const extraChecked = Boolean(draft && extraLanguages.some((locale) => draft.additionalLanguages.includes(locale)))
+  // The number in the cost sentence is the count the generation will actually use, not a 2.
+  const writeCount = 1 + (extraChecked ? 1 : 0)
+  const costParams = { count: String(writeCount), extra: String(writeCount - 1) }
+
   const save = async (): Promise<void> => {
     if (!draft) return
     setSaving(true)
@@ -130,6 +155,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
     try {
       const result = await client.saveSettings({
         generation: { generationTime: draft.generationTime, windowHours: draft.windowHours },
+        language: { additional: draft.additionalLanguages },
         editorialEnabled: draft.editorialEnabled,
         providerId: draft.providerId,
         modelId: draft.modelId,
@@ -160,11 +186,17 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
     width="standard"
   >
     {!draft ? <LoadingState label={text.generationSettings.loading} minHeight={120} /> : <>
+      {plan?.fallback
+        ? <p className="mi-daily-briefing__settings-warning" role="status">
+          {periodLabels.languageUnsupported.replace('{language}', plan.requested)}
+        </p>
+        : null}
       <h3 className="mi-daily-briefing__settings-section">{text.settings.generation}</h3>
+      {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
       <div className="mi-daily-briefing__settings-row">
         <div>
           <strong>{text.generationSettings.generationTime}</strong>
-          <small>{text.generationSettings.generationTimeHint}</small>
+          <small>{periodLabels.timeValue.replace('{time}', draft.generationTime)}</small>
         </div>
         <div className="mi-daily-briefing__settings-time">
           <Select
@@ -183,7 +215,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
       <div className="mi-daily-briefing__settings-row">
         <div>
           <strong>{text.generationSettings.windowHours}</strong>
-          <small>{text.generationSettings.windowHoursHint}</small>
+          <small>{periodLabels.windowValue.replace('{hours}', String(draft.windowHours))}</small>
         </div>
         <Select
           aria-label={text.generationSettings.windowHours}
@@ -195,6 +227,55 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
           }))}
           style={{ width: 128 }}
         />
+      </div>
+
+      {/* One edition only in this version: the button says why it cannot be added instead of
+          disappearing, and that reason is the control's own accessible name. */}
+      <div className="mi-daily-briefing__settings-row">
+        <Button disabled aria-label={periodLabels.addReason}>{periodLabels.add}</Button>
+        <small>{periodLabels.addReason}</small>
+      </div>
+
+      <div className="mi-daily-briefing__settings-row">
+        <div>
+          <strong>{periodLabels.language}</strong>
+          <small>{plan?.fallback
+            ? periodLabels.languageFallback.replace('{language}', languageName(plan.used))
+            : periodLabels.languageFollow.replace('{language}', plan ? languageName(plan.used) : '')}</small>
+        </div>
+        {extraLanguages.length > 0
+          ? <div className="mi-daily-briefing__settings-time">
+            <Checkbox
+              checked={extraChecked}
+              onChange={(event) => {
+                const checked = event.target.checked
+                setDraft((current) => current ? {
+                  ...current,
+                  additionalLanguages: checked
+                    ? [...new Set([...current.additionalLanguages, ...extraLanguages])]
+                    : current.additionalLanguages.filter((locale) => !extraLanguages.includes(locale))
+                } : current)
+              }}
+            >{periodLabels.additional}</Checkbox>
+            {/* The cost exists only while the extra edition is ticked, and its number is the one the
+                generation will use — a hard-coded 2 would drift the day a third language appears. */}
+            {extraChecked
+              ? <Popover
+                labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.cost"
+                labelParams={costParams}
+                resolveText={resolveProductText}
+                trigger={(triggerProps) => <IconButton
+                  ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.costLabel"
+                  expanded={triggerProps.expanded}
+                  icon={CircleHelp}
+                  onSelect={triggerProps.onSelect}
+                  resolveText={resolveProductText}
+                  size="sm"
+                />}
+              />
+              : null}
+          </div>
+          : null}
       </div>
 
       <h3 className="mi-daily-briefing__settings-section">{text.settings.ai}</h3>

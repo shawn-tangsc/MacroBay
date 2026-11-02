@@ -65,7 +65,8 @@ export const dailyBriefingText = {
         languageFallback: '{language}（跟随界面语言，暂不支持你的语言）',
         languageUnsupported: '你的界面语言是{language}，这一版日报还不能用这种语言写，现在用英语代替。',
         additional: '同时生成英语版',
-        cost: '这一期会写作 {count} 次（主语言 1 次 + 附加语言 {extra} 次），慢一倍。'
+        cost: '这一期会写作 {count} 次（主语言 1 次 + 附加语言 {extra} 次），慢一倍。',
+        costLabel: '成本说明'
       },
       languageNames: { 'zh-CN': '中文', 'en-US': '英语' }
     },
@@ -285,7 +286,8 @@ export const dailyBriefingText = {
         languageFallback: '{language} (follows the interface; your language is not supported yet)',
         languageUnsupported: 'Your interface is {language}, but this version cannot write the brief in that language yet, so it uses English instead.',
         additional: 'Also generate an English edition',
-        cost: 'This edition will be written {count} times (1 primary + {extra} extra), roughly twice as slow.'
+        cost: 'This edition will be written {count} times (1 primary + {extra} extra), roughly twice as slow.',
+        costLabel: 'What this costs'
       },
       languageNames: { 'zh-CN': 'Chinese', 'en-US': 'English' }
     },

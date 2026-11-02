@@ -10,7 +10,17 @@ import { DailyBriefingSettingsModal } from './DailyBriefingSettingsModal'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing
 const view: DailyBriefingSettingsView = {
   settings: { editorialEnabled: true, providerId: '', modelId: '', webSearchEnabled: false },
-  generation: { generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' },
+  generation: {
+    generationTime: '08:00',
+    generationTimeZone: 'Asia/Shanghai',
+    windowHours: 24,
+    periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: 'Asia/Shanghai', generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }]
+  },
+  language: {
+    settings: { primary: 'follow-ui', additional: [] },
+    plan: { locales: ['zh-CN'], primary: { requested: 'zh-CN', used: 'zh-CN' }, writeCount: 1 }
+  },
+  webSearchSupported: false,
   resolved: { state: 'agent', providerId: 'p', modelId: 'm', source: 'default' }
 }
 
@@ -63,6 +73,7 @@ describe('daily briefing settings modal', () => {
     // One call, both halves: a second call could save the schedule and drop the model choice.
     expect(client.saveSettings).toHaveBeenCalledWith({
       generation: { generationTime: '08:00', windowHours: 24 },
+      language: { additional: [] },
       editorialEnabled: true,
       providerId: '',
       modelId: '',
@@ -87,6 +98,7 @@ describe('daily briefing settings modal', () => {
 
     expect(client.saveSettings).toHaveBeenCalledWith({
       generation: { generationTime: '08:00', windowHours: 24 },
+      language: { additional: [] },
       editorialEnabled: false,
       providerId: '',
       modelId: '',
@@ -102,5 +114,41 @@ describe('daily briefing settings modal', () => {
 
     expect(document.body.textContent).toContain(text.generationSettings.failed)
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('keeps the add-edition control disabled and gives the reason as its accessible name', async () => {
+    const { client } = await render()
+    const add = [...document.body.querySelectorAll('button')].find((button) => button.textContent === text.settings.periods.add)!
+    // Disabled is the behaviour, not the styling: a control that reads as disabled but still saves
+    // would pass a "the text says it is disabled" check and fail this one.
+    expect(add.disabled).toBe(true)
+    expect(add.getAttribute('aria-label')).toBe(text.settings.periods.addReason)
+    await act(async () => { add.click(); await Promise.resolve() })
+    expect(client.saveSettings).not.toHaveBeenCalled()
+  })
+
+  it('offers the second edition only when ticked and states the cost the plan reports', async () => {
+    const { client } = await render()
+    const costTrigger = (): HTMLElement | null => document.body.querySelector(`[aria-label="${text.settings.periods.costLabel}"]`)
+    // No extra edition ticked, no cost question at all.
+    expect(costTrigger()).toBeNull()
+
+    const tick = document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    await act(async () => { tick.click(); await Promise.resolve() })
+    // Ticking adds the question; the sentence inside it carries the writing count from the plan.
+    const trigger = costTrigger()!
+    expect(trigger).not.toBeNull()
+    await act(async () => { trigger.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(document.body.textContent).toContain('写作 2 次')
+    // Pinned open; close it again so the next assertions see the settled page.
+    await act(async () => { trigger.click(); await Promise.resolve() })
+
+    await act(async () => { saveButton().click(); await Promise.resolve(); await Promise.resolve() })
+    expect(client.saveSettings).toHaveBeenCalledWith(expect.objectContaining({ language: { additional: ['en-US'] } }))
+
+    await act(async () => { tick.click(); await Promise.resolve() })
+    // Unticking removes the question and its sentence with it.
+    expect(costTrigger()).toBeNull()
+    expect(document.body.textContent).not.toContain('写作 2 次')
   })
 })
