@@ -65,6 +65,14 @@
   --mi-dashboard-text: var(--text);
   --mi-dashboard-muted: var(--muted);
   --mi-dashboard-lime: color-mix(in srgb, var(--accent) 30%, var(--text-strong));
+  /*
+   * 语义三色也要重映射：漏了它们，浅色下仍拿深色值——绿 #55d69b 对白底 1.83:1、
+   * 红 #f16d73 2.93:1、警示黄 2 出头，字是发白的。这组值不只有资金流卡在用，
+   * 帮它落在平台 token 上，浅色下所有消费点一起变清楚。
+   */
+  --mi-dashboard-positive: var(--success);
+  --mi-dashboard-caution: var(--caution);
+  --mi-dashboard-negative: var(--danger);
 }
 
 /* 示例水印是覆盖层，不参与布局。 */
