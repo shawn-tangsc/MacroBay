@@ -82,6 +82,7 @@ import { StateView } from '@platform/ui/components/state'
 | `error` | `unavailable` | 必填：检查来源 —— `check-source` / `retry` / `refresh` | 数据源本身不可用，盲目重试没有意义。 |
 | `error` | `operation-failed` | 必填：重试 —— `retry` | 写操作（创建、保存、更新、删除）没成功——不是读失败。 |
 | `error` | `needs-restart` | 必填：重启应用 —— `restart-app` | 本地接口缺失，只有重启才加载。 |
+| `error` | `page-load-failed` | 必填：重新载入界面 —— `reload-page` | 页面本身没有加载成功。恢复办法是重载页面——不是 `retry`（那次操作重试），也不是 `restart-app`（代价完全不同）。 |
 | `disabled` | `capability-not-wired` | 不许有 | 平台侧没接通，读者没做错。 |
 | `disabled` | `target-disabled` | 必填：去启用 —— `enable` | 目标被停用了。 |
 | `disabled` | `precondition-unsaved` | 必填：保存 —— `save` | 表单还没保存，保存之后才能继续。 |

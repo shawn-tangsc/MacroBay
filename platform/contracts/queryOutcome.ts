@@ -32,7 +32,7 @@ export type EmptyReasonCode =
   | 'older-than-window'
   | 'nothing-in-window'
 
-export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart'
+export type ErrorReasonCode = 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart' | 'page-load-failed'
 export type DisabledReasonCode = 'capability-not-wired' | 'target-disabled' | 'precondition-unsaved'
 export type PermissionReasonCode = 'not-granted'
 
@@ -85,6 +85,8 @@ export const STATE_VIEW_ACTION_RULES: Record<string, StateActionRule> = {
   'error.unavailable': 'required',
   'error.operation-failed': 'required',
   'error.needs-restart': 'required',
+  // 页面自己没加载出来：重载页面能恢复，所以不给动作就是缺陷。
+  'error.page-load-failed': 'required',
   'disabled.capability-not-wired': 'forbidden',
   'disabled.target-disabled': 'required',
   'disabled.precondition-unsaved': 'required',
@@ -125,6 +127,8 @@ export const STATE_VIEW_ACTION_CHOICES: Record<string, readonly string[]> = {
   'error.unavailable': ['ui.state.action.check-source', 'ui.state.action.retry', 'ui.state.action.refresh'],
   'error.operation-failed': ['ui.state.action.retry'],
   'error.needs-restart': ['ui.state.action.restart-app'],
+  // 页面级：重载页面，不是「这次操作重试」，也不是「重启应用」——三种代价完全不同。
+  'error.page-load-failed': ['ui.state.action.reload-page'],
   'disabled.target-disabled': ['ui.state.action.enable'],
   'disabled.precondition-unsaved': ['ui.state.action.save'],
   'permission.not-granted': ['ui.state.action.open-system-settings']

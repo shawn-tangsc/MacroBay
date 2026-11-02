@@ -74,6 +74,7 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.error.reason.unavailable',
   'ui.state.error.reason.operation-failed',
   'ui.state.error.reason.needs-restart',
+  'ui.state.error.reason.page-load-failed',
   'ui.state.error.details',
   'ui.state.disabled',
   'ui.state.disabled.reason.capability-not-wired',
