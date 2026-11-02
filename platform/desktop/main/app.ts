@@ -259,6 +259,7 @@ import { createProductServiceDisposerRegistry } from '../../product-registry/pro
 import { getAgentTaskExecutionCoordinator, getAgentTaskExecutionCoordinatorOrNull, getAgentTaskRunController, getDisposeChannelMaintenanceJobs, getDisposeJobRunRetention, getDisposeTaskAutomationMaintenance, getInstalledProductManifestIds, getJobRuntimeForDisposal, getPanelWorkspaceForDisposal, getProductIpcRegistryForDisposal, setAgentTaskExecutionCoordinator, setAgentTaskRunController, setDisposeChannelMaintenanceJobs, setDisposeJobRunRetention, setDisposeTaskAutomationMaintenance, setInstalledProductManifestIds, setJobRuntimeForDisposal, setPanelWorkspaceForDisposal, setProductIpcRegistryForDisposal } from './composition/slots'
 import { bindReplaceAgentState } from './composition/agentStateBridge'
 import { createPlatformCore } from './composition/platformCore'
+import { createRepositories } from './composition/repositories'
 
 // 构造期之前绑定：切片构造时拿到的是转发函数，未绑定即调用会抛 replace-agent-state-before-bind。
 bindReplaceAgentState(replaceAgentState)
@@ -329,151 +330,41 @@ async function refreshTaskStateAfterCommit(): Promise<void> {
 const webSearchCredentialStore = createWebSearchCredentialStore(
   createJsonFileStorage(join(app.getPath('userData'), 'platform', 'web-search-credentials.json'), { providers: {} })
 )
-const legacyAgentStorage = createJsonFileStorage<AgentStoreState>(
-  join(app.getPath('userData'), 'platform', 'agents.json'),
-  createDefaultAgentPersistentState()
-)
-const agentDatabase = createAgentPlatformDatabase(join(app.getPath('userData'), 'platform', 'agents.sqlite'))
-const assistantDatabase = createAssistantPlatformDatabase(join(app.getPath('userData'), 'platform', 'assistants.sqlite'))
-const agentRepositories = createAgentPlatformRepositories(agentDatabase)
-const assistantRepositories = createAssistantPlatformRepositories(assistantDatabase)
-/**
- * T1/T2：生成图片落 `userData/generated-images/`（文件名 = 内容 hash），消息只存引用；
- * 渲染层通过 `app-image://generated-images/<hash>.<ext>` 读图（协议见 generatedImageProtocol.ts）。
- */
-const generatedImagesDirectory = join(app.getPath('userData'), 'generated-images')
-const generatedImageStorage = createGeneratedImageStorage({ directory: generatedImagesDirectory })
-const assistantImageMessages = createAssistantImageMessageService({
-  repositories: assistantRepositories,
-  storage: generatedImageStorage
-})
-// 特权 scheme 必须在 app ready 之前注册（window 创建后只做 protocol.handle）。
-registerGeneratedImageScheme()
-const channelInboundRepository = new ChannelInboundRepository(agentDatabase)
-const channelDeliveryRepository = new ChannelDeliveryRepository(agentDatabase)
-const channelManagementRepository = new ChannelManagementRepository(agentDatabase)
-const channelAdapterRegistry = new ChannelAdapterAcceptanceRegistry()
-const channelAcceptance = new ChannelAcceptanceService(agentDatabase)
-channelAcceptance.load(channelAdapterRegistry)
-const telegramOffsetRepository = new TelegramOffsetRepository(agentDatabase)
-const slackRuntimeRepository = new SlackRuntimeRepository(agentDatabase)
-const larkRuntimeRepository = new LarkRuntimeRepository(agentDatabase)
-const qqRuntimeRepository = new QqRuntimeRepository(agentDatabase)
-const discordRuntimeRepository = new DiscordRuntimeRepository(agentDatabase)
-const wechatEnrollmentRepository = new WechatEnrollmentRepository(agentDatabase)
-const wechatRuntimeRepository = new WechatRuntimeRepository(agentDatabase)
-const jobRunStore = createJobRunSqliteStore(join(app.getPath('userData'), 'platform', 'jobs.sqlite'))
-const channelCredentialVault = createElectronChannelCredentialVault({
-  directory: join(app.getPath('userData'), 'platform', 'channel-secrets'),
-  safeStorage
-})
-const channelManagementService = new ChannelManagementService({
-  repository: channelManagementRepository,
-  vault: channelCredentialVault,
-  cipher: channelCredentialVault.payloadCipher,
-  registry: channelAdapterRegistry,
-  acceptance: channelAcceptance,
-  handoff: new ChannelSecureHandoff()
-})
-const agentStore = createAgentSqliteStoreWithOptions(
-  agentDatabase,
-  taskAutomationSmokeProfile.enabled
-    ? createTaskAutomationSmokeSeed('2026-07-17T00:00:00.000Z')
-    : workspaceTestFixtures.enabled
-      /* PLAT-33：只在 seam 命中时换上受控 agent/session 种子（受控流源桩需要归属）。 */
-      ? createWorkspaceTestFixtureAgentSeed('2026-10-06T00:00:00.000Z')
-      : createDefaultAgentPersistentState(),
-  {
-    legacyStateLoader: () => legacyAgentStorage.read()
-  }
-)
+  registerGeneratedImageScheme()
+  const repositories = createRepositories({
+    userDataPath: app.getPath('userData'),
+    core: platformCore,
+    taskAutomationSmokeProfile
+  })
+  const {
+    legacyAgentStorage,
+    agentDatabase,
+    assistantDatabase,
+    agentRepositories,
+    assistantRepositories,
+    generatedImagesDirectory,
+    generatedImageStorage,
+    assistantImageMessages,
+    channelInboundRepository,
+    channelDeliveryRepository,
+    channelManagementRepository,
+    channelAdapterRegistry,
+    channelAcceptance,
+    telegramOffsetRepository,
+    slackRuntimeRepository,
+    larkRuntimeRepository,
+    qqRuntimeRepository,
+    discordRuntimeRepository,
+    wechatEnrollmentRepository,
+    wechatRuntimeRepository,
+    jobRunStore,
+    channelCredentialVault,
+    channelManagementService,
+    agentStore,
+    inUseModelPatrol,
+    agentServices,
+  } = repositories
 
-const inUseModelPatrol = createInUseModelPatrolRuntime({
-    listProviders: async () => (await providerStore.getState()).providers,
-    loadAgentModelIds: async () => {
-      const state = await agentStore.getState()
-      return state.agents.flatMap((agent) =>
-        [agent.model, agent.planModel, agent.smallModel].filter(
-          (id): id is string => typeof id === 'string' && id.length > 0
-        )
-      )
-    },
-    configuredDefaultModelIds: async () =>
-      Object.values((await settingsStore.get()).modelDefaults).filter(
-        (value) => typeof value === 'string' && value.trim().length > 0
-      ),
-    testConnection: async (providerId, modelId) => {
-      const provider = await providerStore.resolveRuntimeProvider(providerId)
-      if (!provider) return null
-      return testModelProviderConnection(provider, { modelId, fetch: getPlatformFetch() })
-    }
-})
-const agentServices = createAgentPlatformServices(agentStore, {
-  taskAutomation: {
-    getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset,
-    setPolicyPreset: async (policyPreset) => {
-      await settingsStore.update({
-        agent: {
-          taskAutomation: { policyPreset }
-        }
-      })
-    },
-    hasEnabledDeliveryTarget: (channelId, agentId) => channelDeliveryRepository.hasEnabledTarget(channelId, agentId),
-    // 任务排期与「下次运行」都跟设置时区走；改时区当场生效，不等重启。
-    timeZone: () => shellTimeZone.get()
-  },
-  queries: {
-    agents: {
-      get: agentRepositories.agents.get,
-      list: agentRepositories.agents.list
-    },
-    workspaces: {
-      list: agentRepositories.workspaces.list,
-      getById: agentRepositories.workspaces.getById,
-      findByPath: agentRepositories.workspaces.findByPath
-    },
-    sessions: agentRepositories.sessions,
-    messages: {
-      listByCursor: agentRepositories.messages.listByCursor
-    },
-    tasks: {
-      get: agentRepositories.tasks.get,
-      list: agentRepositories.tasks.list,
-      listPage: agentRepositories.tasks.listPage,
-      listLogs: agentRepositories.taskRunLogs.list,
-      upsertLog: agentRepositories.taskRunLogs.upsert
-    },
-    taskRunLogs: {
-      get: agentRepositories.taskRunLogs.get,
-      getOwnerForTask: agentRepositories.taskRunLogs.getOwnerForTask
-    },
-    channelDeliveryAttempts: {
-      listTaskAttempts: channelDeliveryRepository.listTaskAttempts.bind(channelDeliveryRepository)
-    },
-    channelDeliveryTargets: {
-      hasEnabledTarget: channelDeliveryRepository.hasEnabledTarget.bind(channelDeliveryRepository)
-    },
-    taskMutationAudits: {
-      listByTask: agentRepositories.taskMutationAudits.listByTask,
-      listByAgent: agentRepositories.taskMutationAudits.listByAgent
-    },
-    channels: {
-      list: agentRepositories.channels.list,
-      findBySessionId: agentRepositories.channels.findBySessionId,
-      listByTaskId: (taskId: string) => {
-        const channelIds = new Set(
-          agentRepositories.channelTaskSubscriptions.listByTaskId(taskId).map((item) => item.channelId)
-        )
-        return agentRepositories.channels.listAll().filter((channel) => channelIds.has(channel.id))
-      },
-      listTaskIdsByChannelId: (channelId: string) =>
-        agentRepositories.channelTaskSubscriptions.listByChannelId(channelId).map((item) => item.taskId),
-      upsert: agentRepositories.channels.upsert,
-      delete: agentRepositories.channels.delete,
-      replaceSubscriptionsForTask: agentRepositories.channelTaskSubscriptions.replaceForTask
-    }
-  }
-})
 const skillsRoot = join(app.getPath('userData'), 'platform', 'agents', 'Skills')
 const skillRuntimeCapabilityResolver = createSkillRuntimeCapabilityResolver({
   skillsRoot

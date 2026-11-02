@@ -20,6 +20,7 @@ const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
 const modelIpcSource = readSource('ipc/modelIpc.ts')
 const platformCoreSource = readSource('composition/platformCore.ts')
+const repositoriesSource = readSource('composition/repositories.ts')
 const assistantIpcSource = readSource('ipc/assistantIpc.ts')
 const agentIpcSource = readSource('ipc/agentIpc.ts')
 const agentToolsIpcSource = readSource('ipc/agentToolsIpc.ts')
@@ -93,7 +94,7 @@ describe('desktop main IPC surface', () => {
     expect(agentIpcSource).toContain('IpcChannels.agentsSetModelGatewayEnabled')
     expect(agentIpcSource).toContain('IpcChannels.agentsExecuteRuntimeCommand')
     expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
-    expect(appSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
+    expect(repositoriesSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
     expect(appSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
     expect(appSource).toContain('taskManagementToolBridge: {')
     expect(appSource).toContain('getTaskRunController: () => getAgentTaskRunController()')
@@ -144,7 +145,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain("// Lark's audit gate is intentionally active-generation-only")
     expect(appSource).not.toContain('agentServices.channels.create')
     expect(appSource).toContain('getDisposeTaskAutomationMaintenance()?.()')
-    expect(appSource).toContain('agent: {\n          taskAutomation: { policyPreset }')
+    expect(repositoriesSource).toContain('agent: {\n          taskAutomation: { policyPreset }')
     expect(appSource).not.toContain('...settings.agent,\n          taskAutomation: { policyPreset }')
     expect(appSource).toContain("import { registerAgentTaskIpcHandlers } from './registerAgentTaskIpcHandlers'")
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
@@ -164,7 +165,7 @@ describe('desktop main IPC surface', () => {
     // 设置存储随构造根搬到 platformCore：时机由「接缝先执行、再调用 createPlatformCore」保证。
     expect(appSource.indexOf('app.setPath(\'userData\''))
       .toBeLessThan(appSource.indexOf('createPlatformCore({'))
-    expect(appSource).toContain('createTaskAutomationSmokeSeed(')
+    expect(repositoriesSource).toContain('createTaskAutomationSmokeSeed(')
     expect(appSource).toContain('createTaskAutomationSmokeDriver(')
     expect(appSource).toContain('mergeAndReplaceAgentSessionState(state, sessionId)')
     expect(appSource).toContain('new ChannelRuntimeSupervisor({')
@@ -198,10 +199,12 @@ describe('desktop main IPC surface', () => {
     expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('createPlatformCore({'))
     expect(platformCoreSource).toContain('const settingsStore = createSettingsStore(')
     expect(platformCoreSource).toContain('const providerStore = createProviderStore(')
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
-    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('const channelCredentialVault = createElectronChannelCredentialVault('))
+    // 仓储与数据库随构造根搬到 repositories：时机由「接缝 → 唯一调用点」保证。
+    expect(appSource.indexOf(acceptanceSetup)).toBeLessThan(appSource.indexOf('createRepositories({'))
+    expect(repositoriesSource).toContain('const agentDatabase = createAgentPlatformDatabase(')
+    expect(repositoriesSource).toContain('const assistantDatabase = createAssistantPlatformDatabase(')
+    expect(repositoriesSource).toContain('const jobRunStore = createJobRunSqliteStore(')
+    expect(repositoriesSource).toContain('const channelCredentialVault = createElectronChannelCredentialVault(')
   })
 
   it('creates the platform data directory before opening platform databases', () => {
@@ -212,9 +215,10 @@ describe('desktop main IPC surface', () => {
     expect(platformCoreSource).toContain(ensureDirectory)
     // 数据库仍在 app.ts 构造（这一片还没搬）：目录创建必须在唯一调用点之前，且早于两个数据库的构造调用。
     expect(platformCoreSource.indexOf(ensureDirectory)).toBeGreaterThan(-1)
-    expect(appSource.indexOf('createPlatformCore({')).toBeLessThan(appSource.indexOf('const agentDatabase = createAgentPlatformDatabase('))
-    expect(appSource.indexOf('createPlatformCore({')).toBeLessThan(appSource.indexOf('const assistantDatabase = createAssistantPlatformDatabase('))
-    expect(appSource.indexOf('createPlatformCore({')).toBeLessThan(appSource.indexOf('const jobRunStore = createJobRunSqliteStore('))
+    const ensureIndex = platformCoreSource.indexOf(ensureDirectory)
+    expect(ensureIndex).toBeGreaterThan(-1)
+    expect(ensureIndex).toBeLessThan(platformCoreSource.indexOf('const settingsStore = createSettingsStore('))
+    expect(repositoriesSource.indexOf('const agentDatabase = createAgentPlatformDatabase(')).toBeGreaterThan(-1)
   })
 
   it('constructs the generic provider secret vault before the provider store without changing IPC registration', () => {
@@ -605,7 +609,7 @@ describe('desktop main IPC surface', () => {
     // T1：图片用自定义协议读盘（不在渲染层拼路径、不新增 IPC 通道）。
     expect(appSource).toContain('registerGeneratedImageScheme()')
     expect(appSource).toContain('registerGeneratedImageProtocol(generatedImagesDirectory)')
-    expect(appSource).toContain('createGeneratedImageStorage({ directory: generatedImagesDirectory })')
+    expect(repositoriesSource).toContain('createGeneratedImageStorage({ directory: generatedImagesDirectory })')
     // scheme 必须在 app ready 之前注册，handle 必须在 ready 之后。
     expect(appSource.indexOf('registerGeneratedImageScheme()')).toBeLessThan(
       appSource.indexOf('await app.whenReady()')
