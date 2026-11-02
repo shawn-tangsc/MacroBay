@@ -731,6 +731,12 @@ export type PlatformText = {
     probeSkipProviderDisabled: string
     probeSkipNotChatModel: string
     probeSkipProtocolNotConfigured: string
+    /** 模型行内「失败」的短原因：≤12 字、一行放得下（行内不许省略，因为行里没有详情入口）。 */
+    detectionReasonShortNotActivated: string
+    detectionReasonShortModelNotFound: string
+    detectionReasonShortRetired: string
+    detectionReasonShortNoChannel: string
+    detectionReasonShortMissingKey: string
     typeAll: string
     /** 价格筛选：免费 + 折扣模型（不是模型类型，但和类型 pill 同一行）。 */
     typeDeal: string
@@ -1225,7 +1231,7 @@ export type PlatformText = {
     clear: string
     compact: string
     recheck: string
-    recheckFailedReason: (reason: string) => string
+    recheckFailed: string
     flagSensitive: string
     filterEmpty: string
     emptyValue: string
@@ -1255,7 +1261,7 @@ export type PlatformText = {
     fieldSize: string
     fieldWarnings: string
     fieldBackupPolicy: string
-    operationFailedReason: (reason: string) => string
+    operationFailed: string
     /**
      * 失败原因：九条与 `CACHE_ERROR_CODES` 一一对应，按原因码取句子，不在代码里拼原因。
      * 运行时原文（`ENOENT: ...`）只进审计与日志，不上屏。
@@ -1862,6 +1868,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       probeSkipProviderDisabled: '供应商未启用',
       probeSkipNotChatModel: '非聊天模型',
       probeSkipProtocolNotConfigured: '未配置协议端点',
+      detectionReasonShortNotActivated: '未开通',
+      detectionReasonShortModelNotFound: '模型不存在',
+      detectionReasonShortRetired: '已下线',
+      detectionReasonShortNoChannel: '无可用渠道',
+      detectionReasonShortMissingKey: '缺少密钥',
       typeAll: '全部',
       typeDeal: '免费&折扣',
       typeText: '文本',
@@ -2335,7 +2346,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clear: '清理',
       compact: '压缩',
       recheck: '重新检查',
-      recheckFailedReason: (reason) => `重新检查失败：${reason}`,
+      recheckFailed: '重新检查失败',
       flagSensitive: '含用户内容',
       filterEmpty: '此分类下没有缓存',
       emptyValue: '暂无',
@@ -2365,7 +2376,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldSize: '体积',
       fieldWarnings: '影响提示',
       fieldBackupPolicy: '备份策略',
-      operationFailedReason: (reason) => `缓存操作失败：${reason}`,
+      operationFailed: '缓存操作失败',
       errorReasonNotFound: '这个缓存已经不在了',
       errorReasonNotClearable: '这类缓存不允许清理',
       errorReasonNotCompactable: '这类缓存不支持压缩',
@@ -2965,6 +2976,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       probeSkipProviderDisabled: 'provider disabled',
       probeSkipNotChatModel: 'not a chat model',
       probeSkipProtocolNotConfigured: 'no protocol endpoint configured',
+      detectionReasonShortNotActivated: 'Not activated',
+      detectionReasonShortModelNotFound: 'Model not found',
+      detectionReasonShortRetired: 'Retired',
+      detectionReasonShortNoChannel: 'No channel',
+      detectionReasonShortMissingKey: 'Missing key',
       typeAll: 'All',
       typeDeal: 'Free & deals',
       typeText: 'Text',
@@ -3454,7 +3470,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       clear: 'Clear',
       compact: 'Compact',
       recheck: 'Recheck',
-      recheckFailedReason: (reason) => `Recheck failed: ${reason}`,
+      recheckFailed: 'Recheck failed',
       flagSensitive: 'User content',
       filterEmpty: 'No caches in this category',
       emptyValue: 'None',
@@ -3484,7 +3500,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       fieldSize: 'Size',
       fieldWarnings: 'Effects',
       fieldBackupPolicy: 'Backup',
-      operationFailedReason: (reason) => `Cache operation failed: ${reason}`,
+      operationFailed: 'Cache operation failed',
       errorReasonNotFound: 'This cache no longer exists',
       errorReasonNotClearable: 'This kind of cache cannot be cleared',
       errorReasonNotCompactable: 'This kind of cache cannot be compacted',

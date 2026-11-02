@@ -25,8 +25,7 @@ import type { PlatformText } from '../../i18n/platformText'
 import { resolveModelCapabilities } from '@platform/ai/providers/modelCapabilityInference'
 import { resolveModelPriceTag } from '@platform/ai/providers/modelPriceTag'
 import {
-  detectionStatusText,
-  detectionStatusTitle,
+  detectionSkipReasonOf,
   failedDeclaredProtocols,
   protocolOutcomeSummary,
   thisRunFailedProtocolReasons
@@ -39,9 +38,13 @@ import { ModelServiceProtocolChip } from './ModelServiceProtocolChip'
 import { modelAvailabilityTitle } from './modelAvailabilityDisplay'
 import { isAvailabilityProbeModel, type ModelAvailabilityView } from './modelAvailabilityView'
 import { resolveModelMessagesSupport } from './modelMessagesSupport'
+import { probeReasonShortLabel, probeSkipReasonLabel } from './modelProbeReason'
 import {
+  DETECTION_STATUS_PILL_KEYS,
+  DETECTION_STATUS_PILL_TONES,
   MODEL_STATUS_PILL_KEYS,
   MODEL_STATUS_PILL_TONES,
+  resolveDetectionStatusPillText,
   resolveModelStatusPillText,
   type ModelStatusWord
 } from './modelStatusPills'
@@ -95,13 +98,12 @@ export function ModelServiceModelRow({
   // PLAT-82：「支持哪个就画哪个」——协议 chip 排在能力 chip 之前，固定顺序。
   // 集合 = 模型记录里的支持/声明/**实测通过**集合（证据已落库，见 `modelRowProtocolChips`）。
   const protocolChips = modelRowProtocolChips(model)
-  const statusText = detectionStatus === undefined
-    ? undefined
-    : detectionStatusText(labels, detectionStatus, detectionResult)
-  // 逐协议明细走 title（行内只放「协议 2/2」，不撑宽这一行）；摘要不落库，刷新即消失。
-  const statusTitle = detectionStatus === undefined || detectionResult === undefined
-    ? statusText
-    : detectionStatusTitle(labels, detectionStatus, detectionResult)
+  // 行内原因：失败/跳过各一句话短句（≤12 字），不省略——行里没有详情入口，省略就等于藏起半句。
+  const detectionReason = detectionStatus === 'failed'
+    ? probeReasonShortLabel(labels, detectionResult?.reasonCode)
+    : detectionStatus === 'skipped'
+      ? probeSkipReasonLabel(labels, detectionSkipReasonOf(detectionResult))
+      : undefined
   const protocolSummary = protocolOutcomeSummary(detectionResult)
   // 可用性结论 → 状态词：档位表只有一份（`modelStatusPills`），这里只回答「是哪个词」。
   const availabilityWord: ModelStatusWord | undefined = availability === undefined
@@ -170,15 +172,26 @@ export function ModelServiceModelRow({
         </span>
       ) : null}
 
-      {statusText !== undefined ? (
+      {detectionStatus !== undefined ? (
         <span
           className="model-service-model-detection"
           data-model-detection-status={detectionStatus}
           data-model-protocol-summary={protocolSummary === undefined
             ? undefined
-            : `${protocolSummary.passed}/${protocolSummary.total}`}
-          title={statusTitle}>
-          {statusText}
+            : `${protocolSummary.passed}/${protocolSummary.total}`}>
+          <StatusPill
+            tone={DETECTION_STATUS_PILL_TONES[detectionStatus]}
+            labelKey={DETECTION_STATUS_PILL_KEYS[detectionStatus]}
+            resolveText={(key) => resolveDetectionStatusPillText(key, labels)}
+          />
+          {detectionReason === undefined ? null : (
+            <span className="model-service-model-reason" data-model-detection-reason>
+              {detectionReason}
+            </span>
+          )}
+          {protocolSummary === undefined ? null : (
+            <span className="model-service-model-reason">{labels.detectionProtocolCount(protocolSummary.passed, protocolSummary.total)}</span>
+          )}
         </span>
       ) : null}
       {model.probeReason === 'model_retired' ? (

@@ -42,3 +42,38 @@ export function resolveModelStatusPillText(key: string, labels: PlatformText['mo
   )
   return word === undefined ? '' : TEXT_OF[word](labels)
 }
+
+/** 本次检测的状态词 → 药丸档位（界面设计 2026-11-02：通过 ok、失败 bad、检测中 info、跳过/停止 muted）。 */
+export type DetectionStatusWord = 'testing' | 'ok' | 'failed' | 'skipped' | 'cancelled'
+
+export const DETECTION_STATUS_PILL_TONES: Record<DetectionStatusWord, StatusPillTone> = {
+  testing: 'info',
+  ok: 'ok',
+  failed: 'bad',
+  skipped: 'muted',
+  cancelled: 'muted'
+}
+
+export const DETECTION_STATUS_PILL_KEYS: Record<DetectionStatusWord, string> = {
+  testing: 'models.detectionStatus.testing',
+  ok: 'models.detectionStatus.ok',
+  failed: 'models.detectionStatus.failed',
+  skipped: 'models.detectionStatus.skipped',
+  cancelled: 'models.detectionStatus.cancelled'
+}
+
+const DETECTION_TEXT_OF: Record<DetectionStatusWord, (labels: PlatformText['models']) => string> = {
+  testing: (labels) => labels.detectionStatusLabel('testing'),
+  ok: (labels) => labels.detectionStatusLabel('ok'),
+  failed: (labels) => labels.detectionStatusLabel('failed'),
+  skipped: (labels) => labels.detectionStatusLabel('skipped'),
+  cancelled: (labels) => labels.detectionStatusLabel('cancelled')
+}
+
+/** 键 → 短词；未知键返回空串（与其它组件同一约定）。 */
+export function resolveDetectionStatusPillText(key: string, labels: PlatformText['models']): string {
+  const word = (Object.keys(DETECTION_STATUS_PILL_KEYS) as DetectionStatusWord[]).find(
+    (candidate) => DETECTION_STATUS_PILL_KEYS[candidate] === key
+  )
+  return word === undefined ? '' : DETECTION_TEXT_OF[word](labels)
+}
