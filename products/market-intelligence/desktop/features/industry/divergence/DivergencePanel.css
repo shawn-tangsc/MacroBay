@@ -8,6 +8,8 @@
 /* The `?` leads the content instead of sitting in a title row: there is no title any more. */
 .mi-divergence__lead { flex: none; display: flex; align-items: center; padding-top: 0; }
 .mi-divergence__content { display: grid; gap: 5px; flex: 1; min-width: 0; }
+/* A quiet day is one line, not a block: no icon, no heading, no vertical padding to fill. */
+.mi-divergence__quiet { margin: 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.5; }
 .mi-divergence__meta { display: flex; justify-content: flex-end; margin-bottom: -1px; }
 .mi-divergence__head {
   display: flex;

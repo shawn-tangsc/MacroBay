@@ -89,11 +89,9 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
               : { key: `pages.intelligence.portal.dashboard.divergence.unavailableWhy.${state.reason}` })} />
         ) : null}
         {state.state === 'empty' && !nothingCompared ? (
-          // A quiet day is a state, not a hand-written paragraph — but the sentence is ours, so it
-          // rides on `productReason`. No action: when nothing can be compared, the reader has
-          // nothing to do here.
-          <StateView state="empty" reasonCode="nothing-in-window" size="md"
-            productReason={productReason({ key: 'pages.intelligence.portal.dashboard.divergence.empty' })} />
+          // One line, no block: a card with nothing to report must not take half a screen to say so,
+          // and the platform's empty-state heading ("nothing here yet") adds nothing on a quiet day.
+          <p className="mi-divergence__quiet">{text.empty}</p>
         ) : null}
         {nothingCompared ? (
           <>
