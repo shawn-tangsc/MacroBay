@@ -189,7 +189,9 @@ describe('P2-15：独立页面窗的回停靠悬浮入口', () => {
       // 超时收场：控件回到可点，并给出与「被拒 / 抛错」相同的那句说明，用户能再试一次。
       expect(pick()).not.toBeNull()
       expect(pick()?.disabled).toBe(false)
-      expect(view.querySelector('.workspace-page-redock-notice')?.textContent).toBe(labels.tabCommandFailed)
+      // 超时是单独的句子：它可能已经生效，所以句子不能直接让人再点一次。
+      expect(view.querySelector('.workspace-page-redock-notice')?.textContent).toBe(labels.tabCommandTimeout)
+      expect(labels.tabCommandTimeout).not.toBe(labels.tabCommandFailed)
     } finally {
       vi.useRealTimers()
     }

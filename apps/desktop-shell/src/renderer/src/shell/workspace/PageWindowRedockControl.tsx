@@ -31,6 +31,9 @@ export const PAGE_WINDOW_REDOCK_KEY = 'workspace.pageWindowRedock'
  */
 const REDOCK_TIMEOUT_MS = 5_000
 
+/** 超时不是「被拒」：那次可能已经生效，句子不能直接让人再点一次。所以两者必须能分辨。 */
+class RedockTimeout extends Error {}
+
 export type PageWindowRedockControlProps = {
   language: AppLanguage
   /** 本页窗的 Tab 身份（`data-redock-tab` 与回停靠命令都只带它）。 */
@@ -60,9 +63,9 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
       try {
         const result = await Promise.race([
           props.redockTab({ workspaceInstanceKey: props.workspaceInstanceKey }),
-          // 超时按「失败」处理：它和抛错在用户眼里是同一件事——没回去，可以再试一次。
+          // 超时单独一句：它可能**已经生效**，让人直接再点一次会重复操作。
           new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(() => reject(new Error('redock-timeout')), REDOCK_TIMEOUT_MS)
+            timer = setTimeout(() => reject(new RedockTimeout('redock-timeout')), REDOCK_TIMEOUT_MS)
           })
         ])
         // 拒绝必须可见：绝不静默什么都不发生（原生关闭路径仍在，用户不会被困住）
@@ -72,8 +75,9 @@ export function PageWindowRedockControl(props: PageWindowRedockControlProps): Re
           return
         }
         setRedockPhase('accepted')
-      } catch {
-        setNotice(labels.tabCommandFailed)
+      } catch (error) {
+        // 没等到回应 ≠ 被拒绝：前者可能已经生效，让用户直接再点一次会重复操作。
+        setNotice(error instanceof RedockTimeout ? labels.tabCommandTimeout : labels.tabCommandFailed)
         setRedockPhase('idle')
       } finally {
         if (timer !== undefined) clearTimeout(timer)

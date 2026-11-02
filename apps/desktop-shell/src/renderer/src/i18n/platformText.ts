@@ -112,6 +112,8 @@ export type PlatformText = {
     tabEmptyHint: string
     tabCommandRejected: string
     tabCommandFailed: string
+    /** 超时不是「被拒」：那次可能已经生效，所以句子不能直接让人再点一次。 */
+    tabCommandTimeout: string
     /** P2-15：Tab 右键上下文菜单的「分离到新窗口」及其可见原因（禁用项绝不静默灰掉）。 */
     tabDetach: string
     tabDetachUnavailable: string
@@ -1339,6 +1341,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tabCloseUnavailable: '当前没有活动标签', tabCloseOthersUnavailable: '没有其他标签可关闭', tabCloseRightUnavailable: '右侧没有标签可关闭',
       tabPageMissing: '页面不可用', tabEmptyTitle: '当前没有打开的页面', tabEmptyHint: '从顶部标签栏打开一个页面开始工作',
       tabCommandRejected: '操作被拒绝，工作区布局未改变', tabCommandFailed: '操作失败，请重试',
+      tabCommandTimeout: '没有收到回应，先看一眼窗口停靠回去没有，再决定要不要重试',
       tabDetach: '分离到新窗口', tabDetachUnavailable: '当前没有可分离的标签',
       tabDetachUnsupported: '该页面不支持分离到新窗口', tabDetachAlreadyDetached: '该标签已在独立窗口中',
       tabDetachLimitReached: '独立窗口数量已达上限，请先把其中一个窗口回停靠',
@@ -2424,6 +2427,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       tabCloseUnavailable: 'No active tab', tabCloseOthersUnavailable: 'No other tab to close', tabCloseRightUnavailable: 'No tab to the right',
       tabPageMissing: 'Page unavailable', tabEmptyTitle: 'No page is open', tabEmptyHint: 'Open a page from the tab bar to start working',
       tabCommandRejected: 'The action was refused; the workspace layout is unchanged', tabCommandFailed: 'The action failed. Try again',
+      tabCommandTimeout: 'No response came back — check whether the window docked before trying again',
       tabDetach: 'Detach to new window', tabDetachUnavailable: 'No tab can be detached right now',
       tabDetachUnsupported: 'This page cannot be detached into a new window', tabDetachAlreadyDetached: 'This tab already has its own window',
       tabDetachLimitReached: 'Too many separate windows; dock one of them back first',
