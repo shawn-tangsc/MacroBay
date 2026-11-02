@@ -164,14 +164,17 @@
 .mi-divergence__withheld-item[data-reason='window-mismatch'] { color: var(--mi-dashboard-caution); }
 
 
-/* The entry to the readings behind the numbers: a button, not a text link, and body-size copy
-   (11.5px) — never a chip. Hover brightens the word and draws nothing: a block behind a short entry
-   reads as a second button ring. Its label never changes with the state; only the arrows in
-   `aria-expanded` do, so a screen reader does not hear the state twice. */
+/* The entry to the readings behind the numbers: a button, not a text link, and body-size copy —
+   never a chip. Hover brightens the word and draws nothing: a block behind a short entry reads as a
+   second button ring. Its label never changes with the state; only the arrows in `aria-expanded`
+   do, so a screen reader does not hear the state twice.
+   Type comes from the dashboard's reading-note tokens: the same shape exists on another card, and a
+   number written in two places drifts (these two cards already disagreed once, 10px against 11.5). */
 .mi-divergence__help-toggle {
   padding: 0; border: 0; background: none;
-  color: var(--mi-dashboard-muted); font: inherit; font-size: 11.5px;
-  line-height: 1.6; white-space: nowrap; cursor: pointer;
+  color: var(--mi-dashboard-muted); font: inherit;
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  white-space: nowrap; cursor: pointer;
 }
 .mi-divergence__help-toggle:hover { color: var(--mi-dashboard-text); }
 .mi-divergence__help-toggle:focus-visible { outline: 2px solid var(--mi-dashboard-lime); outline-offset: 2px; }
@@ -179,13 +182,15 @@
 /* The notes that would not fit the bubble: opened on purpose, so they get their own row and their
    own scroll instead of stretching the card.
  *
- * Same size as the entry that opened it (11.5px). The entry says "come and read this"; shrinking the
- * text once the reader does is self-contradictory, and that argument survives a taste change better
- * than "which size looks nicer" — so it is written here, not left to memory. */
+ * Same size as the entry that opened it. The entry says "come and read this"; shrinking the text once
+ * the reader does is self-contradictory, and that argument survives a taste change better than "which
+ * size looks nicer" — so both sides read the same dashboard tokens and neither card writes the
+ * numbers down again. */
 .mi-divergence__help {
   display: grid; gap: 6px; flex-basis: 100%; margin-top: 4px;
   padding: 8px 10px; border: 1px solid var(--mi-dashboard-line); border-radius: 4px;
-  color: var(--mi-dashboard-muted); font-size: 11.5px; line-height: 1.6;
-  max-height: 320px; overflow-y: auto;
+  color: var(--mi-dashboard-muted);
+  font-size: var(--mi-reading-note-size); line-height: var(--mi-reading-note-line-height);
+  max-height: var(--mi-reading-note-max-height); overflow-y: auto;
 }
 .mi-divergence__help p { margin: 0; }
