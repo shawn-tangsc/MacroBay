@@ -50,14 +50,28 @@ function sourceFiles(dir: string): string[] {
  */
 const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/tooltip.json')
 
+/**
+ * 清单有两种条目，**分开记**（与 `popover.json` 同形）：
+ * `entries` 是还欠着的（待迁），`decided` 是看过了、决定保留的。
+ *
+ * 混在一起记，下一个人读到的全是「还在排队」——已经裁决过的事会被重新拉一遍。
+ * 一条欠账和一个决定，读者的意思完全不同，所以状态必须是字段，不能是注释。
+ *
+ * 两个集合各自都要**仍然真在 import antd `Tooltip`**：`decided` 不是垃圾桶，它记的是
+ * 「看过了、决定保留」；哪天那个文件不用 antd 了，这行就是在替一个结束的状态作证。
+ */
+type TooltipDebt = { debt: ReadonlySet<string>; decided: ReadonlySet<string> }
+
 /** 读不到就抛，不吞：静默降级会让这条红在别处无声失效，而那正是它存在的理由。 */
-function readDebt(): ReadonlySet<string> {
-  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+export function readDebt(text: string): TooltipDebt {
+  const parsed = JSON.parse(text) as { entries?: Record<string, number>; decided?: Record<string, unknown> }
   if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
-  return new Set(Object.keys(parsed.entries))
+  return { debt: new Set(Object.keys(parsed.entries)), decided: new Set(Object.keys(parsed.decided ?? {})) }
 }
 
-const ANTD_TOOLTIP_BASELINE = readDebt()
+const { debt: ANTD_TOOLTIP_BASELINE, decided: DECIDED_KEEPS } = readDebt(readFileSync(DEBT_FILE, 'utf8'))
+/** 两种条目加起来才是「允许继续 import antd Tooltip」的全集。 */
+const ALLOWED = new Set([...ANTD_TOOLTIP_BASELINE, ...DECIDED_KEEPS])
 const DEBT_SCANNED_ROOTS = ['apps', 'products'] as const
 
 /** 从 `import … from 'antd'` 的具名列表里取出 `Tooltip`（`Tooltip as X` 也算）。 */
@@ -136,7 +150,7 @@ describe('Tooltip call sites', () => {
 
   it('keeps the hand-written antd tooltips on the shrinking list, and nothing else', () => {
     const offenders = DEBT_FILES.map((file) => relative(ROOT, file).replace(/\\/g, '/')).filter(
-      (file) => importsAntdTooltip(readFileSync(join(ROOT, file), 'utf8')) && !ANTD_TOOLTIP_BASELINE.has(file)
+      (file) => importsAntdTooltip(readFileSync(join(ROOT, file), 'utf8')) && !ALLOWED.has(file)
     )
 
     // 单行提示用 `@platform/ui/components/tooltip`；多行解释走 `Popover`，不是这里。
@@ -144,7 +158,7 @@ describe('Tooltip call sites', () => {
   })
 
   it('shrinks the list: a migrated file must have its line deleted', () => {
-    const stale = [...ANTD_TOOLTIP_BASELINE].filter((file) => {
+    const stale = [...ALLOWED].filter((file) => {
       try {
         return !importsAntdTooltip(readFileSync(join(ROOT, file), 'utf8'))
       } catch {
@@ -154,6 +168,30 @@ describe('Tooltip call sites', () => {
     })
 
     expect(stale).toEqual([])
+  })
+
+  it('keeps the decided-keep lines honest: each must still be a real antd import', () => {
+    // 与 `popover` 同一条：`decided` 里的一行必须仍对应一处真实的 antd `Tooltip` 调用。
+    // 已经迁完却还留着「决定保留」，就是把一个决定变成了永久豁免。
+    const stale = [...DECIDED_KEEPS].filter((file) => {
+      try {
+        return !importsAntdTooltip(readFileSync(join(ROOT, file), 'utf8'))
+      } catch {
+        return true
+      }
+    })
+    expect(stale).toEqual([])
+  })
+
+  it('reads both lists out of one file, so a decided entry cannot hide an offender', () => {
+    // 反向实测：只读 `entries` 的旧实现会把 `decided` 里的文件当成违规；只读 `decided` 则相反。
+    const parsed = readDebt('{ "entries": { "a.tsx": 1 }, "decided": { "b.tsx": { "reason": "kept" } } }')
+    expect([...parsed.debt]).toEqual(['a.tsx'])
+    expect([...parsed.decided]).toEqual(['b.tsx'])
+    expect([...new Set([...parsed.debt, ...parsed.decided])]).toEqual(['a.tsx', 'b.tsx'])
+    // 只有 `entries`、没有 `decided` 的旧清单照样能读（不许因为缺字段就把清单当空的）。
+    expect([...readDebt('{ "entries": { "a.tsx": 1 } }').decided]).toEqual([])
+    expect(() => readDebt('{ "decided": {} }')).toThrow(/no "entries"/)
   })
 
   it('catches a sentence smuggled into dataText, so the guard is not vacuous', () => {

@@ -119,9 +119,15 @@ describe('Popover limits', () => {
   })
 
   it('shrinks the list: a site folded back to four items must have its line deleted', () => {
+    // 两种「该删了」：文件没了；或者它仍是字面量数组、已经折回 4 条以内。
+    //
+    // **非字面量不算过期**：`lines={keys.map(…)}` 数不到项数，源码判不了。这时守卫既不替它戴上
+    // 「已超标」也不替它摘掉——那一行只能由迁它的那笔删（同一笔里折句 + 删行）。把它当过期会
+    // 反过来罚正在迁移的人：改成语义化数组的那一刻就红了，而那一刻正是它变对的时候。
     const stale = [...DEBT].filter((file) => {
       const site = SITES.find((entry) => entry.file === file)
-      return site === undefined || site.overCap <= MAX_LINE_ITEMS
+      if (site === undefined) return existsSync(join(ROOT, file)) === false
+      return site.overCap <= MAX_LINE_ITEMS
     })
     expect(stale).toEqual([])
   })
