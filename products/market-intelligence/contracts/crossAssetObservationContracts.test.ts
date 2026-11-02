@@ -11,7 +11,7 @@ const snapshot = () => {
     curves: perAsset(() => Array.from({ length: 13 }, (_, i) => ({ at: new Date(now - (12 - i) * 300_000).toISOString(), returnPercent: null }))),
     closedReturns: perAsset(() => ({ '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric })),
     correlations: { indexBtc: { ...metric, sampleCount: 0, expectedCount: 288 }, indexEth: { ...metric, sampleCount: 0, expectedCount: 288 } },
-    relativeReturns: { btcMinusIndex: metric, ethMinusBtc: metric }, observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' },
+    relativeReturns: { btcMinusIndex: metric, ethMinusBtc: metric },
     indexSource: 'unavailable' }
 }
 
@@ -39,7 +39,7 @@ const snapshot24h = () => {
     closedReturns: perAsset(() => ({ '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric })),
     correlations: { indexBtc: { ...metric, sampleCount: 0, expectedCount: 288 }, indexEth: { ...metric, sampleCount: 0, expectedCount: 288 } },
     relativeReturns: { btcMinusIndex: metric, ethMinusBtc: metric },
-    observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' }, indexSource: 'unavailable' }
+    indexSource: 'unavailable' }
 }
 
 describe('the cross-market reading on the wire (design 142)', () => {
@@ -117,6 +117,7 @@ describe('cross-asset strict snapshot boundary', () => {
     expect(parseCrossAssetSnapshot(current)).toEqual(current)
     expect(parseCrossAssetSnapshot({ ...current, curves: snapshot().curves })).toBeUndefined()
     expect(parseCrossAssetSnapshot({ ...current, sourceState: 'stale' })).toBeUndefined()
+    // 退休字段不能再被悄悄接受：`exact` 只认清单里的字段，多一个就整包拒收。
     expect(parseCrossAssetSnapshot({ ...historical, observationKey: { indexBtc: 'up', ethBtc: 'flat' } })).toBeUndefined()
     expect(parseCrossAssetSnapshot({ ...current, forming: { ...current.forming, index: { at: new Date(now + 300_000).toISOString(), returnPercent: 1 } } })).toBeUndefined()
   })

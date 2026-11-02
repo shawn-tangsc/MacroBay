@@ -29,12 +29,12 @@ describe('cross-asset visible lease hook', () => {
     const api = client()
     const cached = { schemaVersion: 1, range: '24h', mode: 'current', sourceState: 'live', curves: {},
       quotes: { index: { state: 'live', price: '100', tradedAtMs: 1, receivedAtMs: 1 }, btc: { state: 'missing' }, eth: { state: 'missing' } },
-      forming: { index: { at: 'current', returnPercent: 1 }, btc: null, eth: null }, observationKey: { indexBtc: 'up', ethBtc: 'stronger' } }
+      forming: { index: { at: 'current', returnPercent: 1 }, btc: null, eth: null } }
     api.query.mockResolvedValue(cached as never)
     api.renew.mockResolvedValueOnce({ state: 'expired' } as never)
     const page = await render(api)
     await act(async () => vi.advanceTimersByTimeAsync(10_000))
-    expect(page.state().snapshot).toMatchObject({ sourceState: 'unavailable', forming: { index: null }, observationKey: { indexBtc: 'unavailable' } })
+    expect(page.state().snapshot).toMatchObject({ sourceState: 'unavailable', forming: { index: null } })
     await act(async () => vi.advanceTimersByTimeAsync(10_000))
     expect(api.acquire).toHaveBeenCalledTimes(2)
   })
@@ -49,7 +49,7 @@ describe('cross-asset visible lease hook', () => {
     const page = await render(api)
     await act(async () => vi.advanceTimersByTimeAsync(1000))
     expect(page.state().snapshot).toMatchObject({ curves: cached.curves, sourceState: 'unavailable',
-      quotes: { index: { state: 'stale' } }, forming: { index: null }, observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' } })
+      quotes: { index: { state: 'stale' } }, forming: { index: null } })
     await act(async () => page.state().setRange('1h'))
     expect(page.state().snapshot).toBeUndefined()
   })

@@ -637,7 +637,6 @@ function crossAssetSnapshot() {
     closedReturns: perAsset(() => ({ '5m': metric, '15m': metric, '1h': metric, '4h': metric, '24h': metric, '7d': metric })),
     correlations: { indexBtc: { ...metric, sampleCount: 0, expectedCount: 288 }, indexEth: { ...metric, sampleCount: 0, expectedCount: 288 } },
     relativeReturns: { btcMinusIndex: metric, ethMinusBtc: metric },
-    observationKey: { indexBtc: 'unavailable' as const, ethBtc: 'unavailable' as const },
     indexSource: 'unavailable' as const }
 }
 

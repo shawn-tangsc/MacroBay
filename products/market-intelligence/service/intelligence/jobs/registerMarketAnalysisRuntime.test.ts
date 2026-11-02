@@ -542,7 +542,6 @@ function crossAssetSnapshot(asOf: string, range: '1h' | '24h' | '7d', btcReturn:
     },
     correlations: { indexBtc: { state: 'unavailable' as const, reason: 'insufficient' as const, sampleCount: 0, expectedCount: 288 }, indexEth: { state: 'unavailable' as const, reason: 'insufficient' as const, sampleCount: 0, expectedCount: 288 } },
     relativeReturns: { btcMinusIndex: { state: 'available' as const, value: 0.5 }, ethMinusBtc: { state: 'available' as const, value: -1 } },
-    observationKey: { indexBtc: 'unavailable' as const, ethBtc: 'unavailable' as const }
   }
 }
 

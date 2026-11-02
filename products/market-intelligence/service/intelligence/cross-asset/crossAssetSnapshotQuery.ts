@@ -2,7 +2,7 @@ import {
   crossAssetContractPolicy, crossAssetCurveStrideMs, crossAssetMethods, parseCrossAssetInput,
   type CrossAssetId, type CrossAssetMacroProxyId, type CrossAssetQueryInput, type CrossAssetRange
 } from '../../../contracts/crossAssetObservationContracts'
-import { analyzeCrossAssetHistory, crossAssetAnalyticsPolicy, crossAssetObservationPolicy } from './crossAssetAnalytics'
+import { analyzeCrossAssetHistory, crossAssetAnalyticsPolicy } from './crossAssetAnalytics'
 import { crossAssetMacroCurvePolicy, crossAssetMacroCurves, type CrossAssetMacroCandidate } from './crossAssetMacroCurves'
 import type { ClosedBar, StoredSymbol } from './binanceCrossAssetClient'
 import { crossAssetPolicy } from './crossAssetPolicy'
@@ -32,7 +32,6 @@ type Snapshot = {
   marketState?: Record<CrossAssetId, CrossAssetMarketState>
   lastClosed?: Record<CrossAssetId, { at: string; close: string } | null>
   forming?: Record<CrossAssetId, { at: string; returnPercent: number } | null>
-  observationKey: { indexBtc: 'up' | 'down' | 'diverging' | 'mixed' | 'unavailable'; ethBtc: 'stronger' | 'weaker' | 'flat' | 'unavailable' }
 }
 const assets = Object.keys(crossAssetPolicy.assets) as CrossAssetId[]
 const iso = (value: number) => new Date(value).toISOString()
@@ -164,8 +163,7 @@ export function createCrossAssetSnapshotQuery(deps: {
         historyCoverage: analysis.historyCoverage,
         curves: Object.fromEntries(assets.map(asset => [asset, analysis.curves[asset].map(point => ({ at: iso(point.atMs), returnPercent: point.returnPercent }))])) as Snapshot['curves'],
         closedReturns: analysis.closedReturns, correlations: analysis.correlations, relativeReturns: analysis.relativeReturns,
-        indexSource,
-        observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' }
+        indexSource
       }
       /**
        * The macro lines, read on every query rather than cached with the analysis: they come from another
@@ -246,18 +244,6 @@ export function createCrossAssetSnapshotQuery(deps: {
           const returnPercent = crossAssetAnalyticsPolicy.percentFactor * (Number(quote.price) / anchor - 1)
           return [asset, Number.isFinite(returnPercent) ? { at: iso(quote.tradedAtMs), returnPercent } : null]
         })) as Snapshot['forming']
-        const eligible = (asset: CrossAssetId) => fresh(asset) && analysis.observationCoverage[asset]
-        const index = analysis.closedReturns.index['1h']; const btc = analysis.closedReturns.btc['1h']
-        if (eligible('index') && eligible('btc') && index.state === 'available' && btc.state === 'available') {
-          const direction = (asset: CrossAssetId, value: number) => value > crossAssetObservationPolicy.flatPercent[asset] ? 1 :
-            value < -crossAssetObservationPolicy.flatPercent[asset] ? -1 : 0
-          const a = direction('index', index.value); const b = direction('btc', btc.value)
-          safeCopy.observationKey.indexBtc = a === 1 && b === 1 ? 'up' : a === -1 && b === -1 ? 'down' : a * b < 0 ? 'diverging' : 'mixed'
-        }
-        const relative = analysis.relativeReturns.ethMinusBtc
-        if (eligible('eth') && eligible('btc') && relative.state === 'available') {
-          safeCopy.observationKey.ethBtc = relative.value > 0 ? 'stronger' : relative.value < 0 ? 'weaker' : 'flat'
-        }
         /**
          * The cross-market reading (design 142).
          *

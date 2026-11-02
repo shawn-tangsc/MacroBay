@@ -50,18 +50,6 @@ describe('cross-asset bounded snapshot query', () => {
     expect(query.query({ range: '1h' }).forming?.index).toBeNull()
   })
 
-  it('only emits current observation facts with live quotes and complete one-hour history', () => {
-    const { query, live, setNow } = setup()
-    const quote = { state: 'live', price: '103', tradedAtMs: now, receivedAtMs: now }
-    live.mockReturnValue({ state: 'live', quotes: { index: quote, btc: quote, eth: quote } })
-    expect(query.query({ range: '24h' }).observationKey).toEqual({ indexBtc: 'mixed', ethBtc: 'flat' })
-    live.mockReturnValue({ state: 'disabled', quotes: { index: quote, btc: quote, eth: quote } })
-    expect(query.query({ range: '24h' }).observationKey).toEqual({ indexBtc: 'unavailable', ethBtc: 'unavailable' })
-    live.mockReturnValue({ state: 'live', quotes: { index: quote, btc: quote, eth: quote } })
-    setNow(now + 15_001)
-    expect(query.query({ range: '24h' }).observationKey.indexBtc).toBe('unavailable')
-    expect(query.query({ range: '24h', asOf: new Date(now).toISOString() }).observationKey.indexBtc).toBe('unavailable')
-  })
   it('expires missing endpoints after 90 seconds without rebuilding cached closed analysis', () => {
     let clock = now
     const read = vi.fn(input => input.symbol === 'USTEC' ? [] : histories(input.symbol).slice(0, -1))

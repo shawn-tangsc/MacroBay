@@ -35,7 +35,7 @@ const snapshot = {
   curves: { index: curves, btc: curves, eth: curves },
   closedReturns: { index: {}, btc: {}, eth: {} },
   correlations: { indexBtc: { sampleCount: 3 }, indexEth: { sampleCount: 3 } },
-  relativeReturns: {}, observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' },
+  relativeReturns: {},
   indexSource: 'proxy'
 }
 /** A calendar page for one month, shaped the way the panel's own mapping reads it. */

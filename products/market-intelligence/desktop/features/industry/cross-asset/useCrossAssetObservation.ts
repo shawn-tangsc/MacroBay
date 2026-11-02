@@ -26,7 +26,6 @@ export function useCrossAssetObservation({ client }: { client: ReturnType<typeof
       setState('unavailable')
       setSnapshot(previous => previous?.mode !== 'current' ? previous : {
         ...previous, sourceState: 'unavailable', forming: { index: null, btc: null, eth: null },
-        observationKey: { indexBtc: 'unavailable', ethBtc: 'unavailable' },
         quotes: previous.quotes && Object.fromEntries(Object.entries(previous.quotes).map(([asset, quote]) =>
           [asset, quote.state === 'missing' ? quote : { ...quote, state: 'stale' }])) as CrossAssetSnapshot['quotes']
       })
