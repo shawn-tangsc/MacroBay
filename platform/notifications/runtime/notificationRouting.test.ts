@@ -169,7 +169,7 @@ describe('notification transient delivery wiring', () => {
 })
 
 describe('the reader clock has no UTC default', () => {
-  it('both entry points stop compiling when the clock is omitted', () => {
+  it('both entry points stop compiling when the clock is omitted, and refuse to run without one', () => {
     const request: NotificationRequest = {
       owner: 'platform',
       sourceId: 'job-runtime',
@@ -186,6 +186,8 @@ describe('the reader clock has no UTC default', () => {
     // 并让 typecheck 变红——缺省值不能靠人盯着文档来守，得靠编译期。
     void normalizeRequestedChannels(request, settings)
     // @ts-expect-error 同上：删掉时钟参数就编译不过，而不是悄悄按格林尼治算。
-    void routeTransientDelivery(record, settings, {})
+    const withoutClock = (): unknown => routeTransientDelivery(record, settings, {})
+    // 编译期之外再挡一次：绕过类型传空值时明确失败，而不是退回某个默认时区。
+    expect(withoutClock).toThrow('notification-clock-required')
   })
 })

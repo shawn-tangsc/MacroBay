@@ -71,13 +71,15 @@ export type NotificationRuntimeDependencies = {
 
 export function createNotificationRuntime(deps: NotificationRuntimeDependencies) {
   let cache: NotificationStoreState | null = null
+  /** 唯一的「现在」：不可注入的时钟等于不可测的熔断，跨零点会长出一条自己变红的用例。 */
+  const nowIso = (): string => deps.clock.now().toISOString()
   /** 进程内单调递增的变更版本：订阅方用它丢掉重复/乱序事件，重启后从 1 重新开始即可。 */
   let version = 0
 
   async function load(): Promise<NotificationStoreState> {
     if (cache) return cache
     const state = normalizeNotificationStoreState(await deps.storage.read())
-    const now = new Date().toISOString()
+    const now = nowIso()
     const normalized = {
       ...state,
       records: expireDueNotifications(reactivateSnoozedNotifications(state.records, now), now),
@@ -101,7 +103,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     async submit(request: NotificationRequest): Promise<SafeNotificationRecord> {
       const state = await load()
       const settings = await deps.getSettings()
-      const now = new Date().toISOString()
+      const now = nowIso()
       const duplicate = findActiveDuplicate(state.records, request, now)
 
       // 折叠第一层：同 dedupeKey 且仍活跃 → 只累加次数，不新增记录，也不消耗熔断额度。
@@ -151,7 +153,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     async prune(): Promise<{ removedRecords: number; removedCounters: number }> {
       const state = await load()
       const settings = await deps.getSettings()
-      const now = new Date().toISOString()
+      const now = nowIso()
       const pruned = pruneNotificationRecords(state.records, { retentionDays: settings.retentionDays, now })
       const counters = pruneNotificationDailyCounters(state.dailyCounters ?? {}, now)
       const removedCounters = Object.keys(state.dailyCounters ?? {}).length - Object.keys(counters).length
@@ -168,7 +170,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      */
     async list(query: NotificationListQuery = {}): Promise<NotificationListPage> {
       const state = await load()
-      const now = new Date().toISOString()
+      const now = nowIso()
       const limit = Math.min(Math.max(query.limit ?? 50, 1), 200)
       const allowedStates = query.state?.length ? new Set(query.state) : null
       const unreadFirst = query.unreadFirst === true
@@ -199,7 +201,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     async submitSelfTest(request: NotificationRequest): Promise<SafeNotificationRecord> {
       const state = await load()
       const settings = await deps.getSettings()
-      const now = new Date().toISOString()
+      const now = nowIso()
       const record = createNotificationFromRequest(
         {
           ...request,
@@ -214,7 +216,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
 
     async getUnreadState(productId?: string): Promise<NotificationUnreadState> {
       const state = await load()
-      const now = new Date().toISOString()
+      const now = nowIso()
       return unreadStateOf(state.records, now, productId, version)
     },
 
@@ -227,7 +229,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
      */
     async markAllRead(productId?: string): Promise<NotificationUnreadState> {
       const state = await load()
-      const now = new Date().toISOString()
+      const now = nowIso()
       let changed = false
       const records = state.records.map((record: NotificationRecord) => {
         if (record.state !== 'unread') return record
@@ -273,7 +275,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     },
 
     async snooze(id: string, until: string): Promise<SafeNotificationRecord> {
-      if (until <= new Date().toISOString()) {
+      if (until <= nowIso()) {
         throw new Error('Snooze time must be in the future.')
       }
       return transition(id, (record) => snoozeNotification(record, until))

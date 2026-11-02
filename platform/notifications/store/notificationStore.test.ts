@@ -31,11 +31,11 @@ describe('notification store', () => {
     }
 
     const first = createNotificationFromRequest(request)
-    const duplicate = findActiveDuplicate([first], {
-      ...request,
-      severity: 'critical',
-      priority: 'urgent'
-    })
+    const duplicate = findActiveDuplicate(
+      [first],
+      { ...request, severity: 'critical', priority: 'urgent' },
+      first.createdAt
+    )
     expect(duplicate?.id).toBe(first.id)
 
     const merged = mergeDuplicateNotification(first, { ...request, severity: 'critical', priority: 'urgent' }, '2026-07-05T11:00:00.000Z')

@@ -6,7 +6,7 @@ import { isActiveNotification } from '../store/notificationStore'
 export function findActiveDuplicate(
   records: NotificationRecord[],
   request: NotificationRequest,
-  now = new Date().toISOString()
+  now: string
 ): NotificationRecord | undefined {
   if (!request.dedupeKey) return undefined
   return records.find((record) => record.dedupeKey === request.dedupeKey && isActiveNotification(record, now))

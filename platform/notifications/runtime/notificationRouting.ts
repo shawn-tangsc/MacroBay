@@ -34,7 +34,10 @@ export function routeTransientDelivery(
   clock: NotificationClock
 ): Promise<DeliveryAttempt[]> {
   const attempts: DeliveryAttempt[] = []
-  const now = new Date().toISOString()
+  // 编译期已经要求必传；这里再挡一次 `as never` 之类的绕过，并给出可读原因，
+  // 免得「没传时钟」表现成一句 `Cannot read properties of undefined`。
+  if (!clock || typeof clock.now !== 'function') throw new Error('notification-clock-required')
+  const now = clock.now().toISOString()
   const transientChannels = record.channels.filter((channel) => channel !== 'center')
 
   for (const channel of transientChannels) {
