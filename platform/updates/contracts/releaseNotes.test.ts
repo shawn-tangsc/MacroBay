@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import { nodesToPlainText, parseReleaseNotes, releaseNotesLimits } from './releaseNotes'
 
-const kinds = (text: string) => (parseReleaseNotes(text) ?? []).map((node) => node.kind)
+const nodesOf = (text: string) => parseReleaseNotes(text)?.nodes ?? []
+const kinds = (text: string) => nodesOf(text).map((node) => node.kind)
 
 describe('parsing a Markdown release note', () => {
   it('turns headings of any level into one section kind, without the level', () => {
-    expect(parseReleaseNotes('# 第一行\n## 第二行\n### 第三行')).toEqual([
+    expect(nodesOf('# 第一行\n## 第二行\n### 第三行')).toEqual([
       { kind: 'section', title: '第一行' },
       { kind: 'section', title: '第二行' },
       { kind: 'section', title: '第三行' }
@@ -14,14 +15,14 @@ describe('parsing a Markdown release note', () => {
   })
 
   it('accepts a standalone bold line as a section', () => {
-    expect(parseReleaseNotes('**已知限制**\n内容一行')).toEqual([
+    expect(nodesOf('**已知限制**\n内容一行')).toEqual([
       { kind: 'section', title: '已知限制' },
       { kind: 'paragraph', runs: [{ text: '内容一行', bold: false }] }
     ])
   })
 
   it('treats -, * and + the same way, and keeps list items out of paragraphs', () => {
-    expect(parseReleaseNotes('- 甲\n* 乙\n+ 丙')).toEqual([
+    expect(nodesOf('- 甲\n* 乙\n+ 丙')).toEqual([
       {
         kind: 'list',
         items: [
@@ -35,7 +36,7 @@ describe('parsing a Markdown release note', () => {
 
   it('renders an ordered list as paragraphs that still carry the number', () => {
     // `list` 会再画一个圆点：配序号就是「• 1.」，删序号又是丢字。所以走段落、序号留在文字里。
-    const nodes = parseReleaseNotes('1. 先装依赖\n2. 再启动')
+    const nodes = nodesOf('1. 先装依赖\n2. 再启动')
     expect(nodes).toEqual([
       { kind: 'paragraph', runs: [{ text: '1. 先装依赖', bold: false }] },
       { kind: 'paragraph', runs: [{ text: '2. 再启动', bold: false }] }
@@ -44,14 +45,14 @@ describe('parsing a Markdown release note', () => {
   })
 
   it('keeps a fenced code block verbatim, and never interprets what is inside it', () => {
-    const nodes = parseReleaseNotes('```\n- item\n# not a heading\n| a | b |\n```')
+    const nodes = nodesOf('```\n- item\n# not a heading\n| a | b |\n```')
     expect(nodes).toEqual([{ kind: 'code', lines: ['- item', '# not a heading', '| a | b |'] }])
     // 块里的 `-` 不许变成列表。
     expect(nodes?.[0]).not.toHaveProperty('items')
   })
 
   it('turns inline code into a code run and drops the backticks', () => {
-    expect(parseReleaseNotes('跑 `pnpm verify` 一次')).toEqual([
+    expect(nodesOf('跑 `pnpm verify` 一次')).toEqual([
       {
         kind: 'paragraph',
         runs: [
@@ -64,7 +65,7 @@ describe('parsing a Markdown release note', () => {
   })
 
   it('keeps only the words of a link or an image, never the address', () => {
-    const nodes = parseReleaseNotes('看 [发布页](https://example.invalid/x) 和 ![截图](https://example.invalid/y.png)')
+    const nodes = nodesOf('看 [发布页](https://example.invalid/x) 和 ![截图](https://example.invalid/y.png)')
     const plain = nodesToPlainText(nodes ?? [])
     expect(plain).toContain('发布页')
     expect(plain).toContain('截图')
@@ -73,29 +74,40 @@ describe('parsing a Markdown release note', () => {
   })
 
   it('keeps table rows and quotes as ordinary paragraphs instead of dropping them', () => {
-    expect(parseReleaseNotes('| 甲 | 乙 |\n> 注意这里')).toEqual([
+    expect(nodesOf('| 甲 | 乙 |\n> 注意这里')).toEqual([
       { kind: 'paragraph', runs: [{ text: '| 甲 | 乙 |', bold: false }] },
       { kind: 'paragraph', runs: [{ text: '注意这里', bold: false }] }
     ])
   })
 
   it('shows HTML as literal text and never creates elements', () => {
-    const nodes = parseReleaseNotes('<img src=x onerror=alert(1)>')
+    const nodes = nodesOf('<img src=x onerror=alert(1)>')
     expect(nodesToPlainText(nodes ?? [])).toBe('<img src=x onerror=alert(1)>')
   })
 
   it('keeps every word of a mixed Markdown note (U33: markers may go, words may not)', () => {
     const source = ['# 本次更新', '', '- 修好一个问题', '1. 先升级', '再看 [说明](https://example.invalid)', '```', '- 代码里的连字符', '```', '> 一句引用']
-    const plain = nodesToPlainText(parseReleaseNotes(source.join('\n')) ?? [])
+    const plain = nodesToPlainText(nodesOf(source.join('\n')))
     for (const word of ['本次更新', '修好一个问题', '先升级', '再看', '说明', '代码里的连字符', '一句引用']) {
       expect(plain, word).toContain(word)
     }
   })
 
-  it('refuses to show half of an oversized note', () => {
+  it('truncates an oversized note and says so, instead of dropping it silently', () => {
     const many = Array.from({ length: releaseNotesLimits.nodes + 5 }, (_, index) => `- 第 ${index} 条`).join('\n')
-    // 超上限整块不显示：部分展示会让读者不知道少了什么。
-    expect(parseReleaseNotes(many)).toBeNull()
+    const parsed = parseReleaseNotes(many)
+    // 截到上限，但**告诉读者**：悄悄截断和整块消失都是沉默，两个都不要。
+    expect(parsed?.truncated).toBe(true)
+    expect(nodesToPlainText(parsed?.nodes ?? [])).toContain('第 0 条')
+  })
+
+  it('truncates past the character limit and flags it; exactly at the limit does not', () => {
+    const over = parseReleaseNotes(`${'甲'.repeat(releaseNotesLimits.textCharacters)}乙`)
+    expect(over?.truncated).toBe(true)
+    expect(nodesToPlainText(over?.nodes ?? []).length).toBe(releaseNotesLimits.textCharacters)
+
+    const exact = parseReleaseNotes('甲'.repeat(releaseNotesLimits.textCharacters))
+    expect(exact?.truncated).toBe(false)
   })
 
   it('answers null for an empty note, so the block disappears instead of leaving a shell', () => {

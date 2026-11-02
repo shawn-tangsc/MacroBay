@@ -22,13 +22,13 @@ export type UpdateCheckIpcPorts = Readonly<{
   /** `destination` 由渲染层传入，可能是任何东西——处理器原样交给端口，由端口做封闭校验。 */
   openUpdateLink: (destination: unknown) => Promise<{ ok: boolean }>
   /** 说明正文：成功给版本与节点，失败或冷却期一律 `{ ok: false }`（没有这一块）。 */
-  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[] }>
+  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[]; truncated?: boolean }>
 }>
 
 export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: UpdateCheckIpcPorts): void {
   ipcMain.handle(IpcChannels.updatesGetState, () => ports.getProjection())
 
-  // 开发态到此为止：下面两条通道在源码启动时不存在。
+  // 开发态到此为止：下面三条通道在源码启动时不存在。
   if (ports.mode !== 'packaged') return
 
   ipcMain.handle(IpcChannels.updatesCheckNow, () => ports.checkNow())

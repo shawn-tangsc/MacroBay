@@ -17,7 +17,7 @@ export type UpdateCheckClient = Readonly<{
   /** 订阅「结论变了」，返回退订函数。壳层只订阅，不轮询、不自己比版本号。 */
   onChanged: (callback: (projection: UpdateCheckProjection) => void) => () => void
   /** 取这一版的更新说明；`ok:false` 表示「没有这一块」，不是错误。 */
-  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[] }>
+  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[]; truncated?: boolean }>
 }>
 
 /**
@@ -46,7 +46,7 @@ type UpdateCheckBridge = {
   checkNow: () => Promise<UpdateCheckProjection>
   openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
   onChanged: (callback: (projection: UpdateCheckProjection) => void) => () => void
-  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[] }>
+  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[]; truncated?: boolean }>
 }
 
 function requireBridge(): UpdateCheckBridge {

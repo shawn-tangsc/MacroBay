@@ -46,7 +46,9 @@ export function createReleaseNotesService(ports: ReleaseNotesServicePorts): Rele
     try {
       const cached = await ports.storage.read()
       return typeof cached?.text === 'string' && typeof cached?.version === 'string' ? cached : null
-    } catch {
+    } catch (error) {
+      // 照 `state.json` 那边的做法记一条：缓存坏了要能查出来，不能全静默。
+      ports.log('warn', 'update.notes.cache-read-failed', { message: errorMessage(error) })
       return null
     }
   }
@@ -74,15 +76,24 @@ export function createReleaseNotesService(ports: ReleaseNotesServicePorts): Rele
       return null
     }
 
-    let raw: string
-    try {
-      raw = await response.text()
-    } catch (error) {
-      ports.log('warn', 'update.notes.failed', { reason: 'offline', message: errorMessage(error) })
+    // ③ 先看声明长度：声明就超限，一个字节都不读。
+    const declaredLength = Number(response.headers?.get?.('content-length') ?? Number.NaN)
+    if (Number.isFinite(declaredLength) && declaredLength > releaseNotesLimits.bodyBytes) {
+      ports.log('warn', 'update.notes.failed', { reason: 'too-large' })
       return null
     }
-    // 先按字节上限判，再解析：不让远端决定我们的内存。
-    if (Buffer.byteLength(raw, 'utf8') > releaseNotesLimits.bodyBytes) {
+
+    let raw: string | null
+    try {
+      raw = await readBodyWithLimit(response, releaseNotesLimits.bodyBytes)
+    } catch (error) {
+      ports.log('warn', 'update.notes.failed', {
+        reason: error instanceof Error && error.message === tooLargeMessage ? 'too-large' : 'offline',
+        message: errorMessage(error)
+      })
+      return null
+    }
+    if (raw === null) {
       ports.log('warn', 'update.notes.failed', { reason: 'too-large' })
       return null
     }
@@ -124,6 +135,37 @@ export function createReleaseNotesService(ports: ReleaseNotesServicePorts): Rele
       return body
     }
   }
+}
+
+const tooLargeMessage = 'release-notes-too-large'
+
+/**
+ * 流式读取并**到上限即中止**：远端给一个 500 MB 的身体，我们不能先吃下去再拒绝。
+ * 拿不到 `body` reader（例如测试替身）时退回归一化的 `text()`，但**仍然按字节数判**。
+ */
+async function readBodyWithLimit(response: Response, limit: number): Promise<string | null> {
+  const body = response.body as (ReadableStream<Uint8Array> | null) | undefined
+  if (body === null || body === undefined || typeof body.getReader !== 'function') {
+    const text = await response.text()
+    return Buffer.byteLength(text, 'utf8') > limit ? null : text
+  }
+
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let received = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    if (value === undefined) continue
+    received += value.byteLength
+    if (received > limit) {
+      // 到上限立刻中止：不再往后读，也不把已读的部分交给解析器。
+      await reader.cancel().catch(() => undefined)
+      throw new Error(tooLargeMessage)
+    }
+    chunks.push(value)
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))))
 }
 
 function errorMessage(error: unknown): string {

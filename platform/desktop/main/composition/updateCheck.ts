@@ -71,8 +71,10 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
       if (projection.state !== 'available') return { ok: false }
       const body = await notesService.getBody(projection.latestVersion)
       if (body === null) return { ok: false }
-      const nodes = parseReleaseNotes(body)
-      return nodes === null ? { ok: false } : { ok: true, version: projection.latestVersion, nodes }
+      const parsed = parseReleaseNotes(body)
+      return parsed === null
+        ? { ok: false }
+        : { ok: true, version: projection.latestVersion, nodes: parsed.nodes, truncated: parsed.truncated }
     },
     openUpdateLink: (destination) =>
       openUpdateLink(destination, {

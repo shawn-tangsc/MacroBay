@@ -25,13 +25,19 @@ export const releaseNotesLimits = {
   nodes: 200
 } as const
 
-export function parseReleaseNotes(markdown: string): StructuredTextNode[] | null {
+export type ReleaseNotesParseResult = {
+  nodes: StructuredTextNode[]
+  /** 内容被截到上限：页面据此多渲染**一行**「正文过长…」。取不到正文是另一回事（整块不存在）。 */
+  truncated: boolean
+}
+
+export function parseReleaseNotes(markdown: string): ReleaseNotesParseResult | null {
   if (typeof markdown !== 'string') return null
-  const normalized = markdown.replace(/\r\n?/gu, '\n')
-  const text = normalized.length > releaseNotesLimits.textCharacters
-    ? normalized.slice(0, releaseNotesLimits.textCharacters)
-    : normalized
-  if (text.trim().length === 0) return null
+  const full = markdown.replace(/\r\n?/gu, '\n')
+  if (full.trim().length === 0) return null
+  // 内容太长：**截到上限并告知**（悄悄截断和整块消失都是沉默，两个都不要）。
+  const truncatedText = full.length > releaseNotesLimits.textCharacters
+  const text = truncatedText ? full.slice(0, releaseNotesLimits.textCharacters) : full
 
   const nodes: StructuredTextNode[] = []
   let paragraph: StructuredTextRun[] = []
@@ -131,9 +137,27 @@ export function parseReleaseNotes(markdown: string): StructuredTextNode[] | null
   if (nodes.length === 0) return null
   // 上限按「内容单元」数：一个列表的每一项也算一个，否则 200 条项目符号会被当成 1 个节点混过去。
   const units = nodes.reduce((total, node) => total + (node.kind === 'list' ? node.items.length : 1), 0)
-  // 超上限：整块不显示（`too-large`），不截断——部分展示会让读者不知道少了什么。
-  if (units > releaseNotesLimits.nodes) return null
-  return nodes
+  if (units <= releaseNotesLimits.nodes) return { nodes, truncated: truncatedText }
+  // 超上限也是「内容太长」：截到上限，同样告知。
+  return { nodes: truncateToUnits(nodes, releaseNotesLimits.nodes), truncated: true }
+}
+
+/** 按内容单元截断：列表按项切，其余一类算一个。 */
+function truncateToUnits(nodes: StructuredTextNode[], limit: number): StructuredTextNode[] {
+  const kept: StructuredTextNode[] = []
+  let used = 0
+  for (const node of nodes) {
+    if (used >= limit) break
+    if (node.kind !== 'list') {
+      kept.push(node)
+      used += 1
+      continue
+    }
+    const room = limit - used
+    kept.push({ kind: 'list', items: node.items.slice(0, room) })
+    used += Math.min(room, node.items.length)
+  }
+  return kept
 }
 
 /** 行内解析：只切 `**加粗**`、`` `代码` ``、`[文字](地址)`、`![说明](图片)`；其余原样保留。 */

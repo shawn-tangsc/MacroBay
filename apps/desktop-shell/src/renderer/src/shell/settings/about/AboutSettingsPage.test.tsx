@@ -23,13 +23,15 @@ afterEach(async () => {
 
 function clientFor(
   state: UpdateCheckProjection,
-  options: { openOk?: boolean; opened?: string[]; notes?: unknown[] | null } = {}
+  options: { openOk?: boolean; opened?: string[]; notes?: unknown[] | null; truncated?: boolean } = {}
 ): UpdateCheckClient {
   return {
     getState: async () => state,
     checkNow: async () => state,
     getReleaseNotes: async () =>
-      options.notes ? { ok: true, version: '0.4.0', nodes: options.notes as never } : { ok: false },
+      options.notes
+        ? { ok: true, version: '0.4.0', nodes: options.notes as never, truncated: options.truncated === true }
+        : { ok: false },
     openUpdateLink: async (destination) => {
       options.opened?.push(destination)
       return { ok: options.openOk !== false }
@@ -69,7 +71,7 @@ describe('the about page', () => {
 
     expect(container.textContent).toContain('MacroBay')
     expect(container.textContent).toContain(text.tagline)
-    expect(container.textContent).toContain(text.updates)
+    expect(container.querySelectorAll('.about-section .preference-heading')).toHaveLength(1)
     // 更新块是同一个组件，文案与药丸沿用已签过的那一版。
     expect(container.textContent).toContain(versionText.pill.available)
     expect(container.textContent).toContain('0.4.0')
@@ -140,6 +142,24 @@ describe('the about page', () => {
     )
     // 已是最新时不铺开：那段正文属于最新那版，未必是读者正在跑的这版。
     expect(hidden.querySelector('[data-structured-text]')).toBeNull()
+  })
+
+  it('says the note was truncated only when it really was', async () => {
+    const notes = [{ kind: 'paragraph', runs: [{ text: '开头', bold: false }] }]
+    const truncated = await mount(
+      { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' },
+      clientFor({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes, truncated: true })
+    )
+    expect(truncated.querySelector('.about-notes-truncated')?.textContent).toBe(
+      platformText['zh-CN'].about.notes.truncated
+    )
+
+    const whole = await mount(
+      { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' },
+      clientFor({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes })
+    )
+    // 正好在上限内：不出这一行。
+    expect(whole.querySelector('.about-notes-truncated')).toBeNull()
   })
 
   it('holds no address anywhere in the page', async () => {

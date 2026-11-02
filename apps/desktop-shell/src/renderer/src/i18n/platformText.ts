@@ -1062,7 +1062,6 @@ export type PlatformText = {
   about: {
     title: string
     tagline: string
-    updates: string
     settingsWithUpdate: string
     /** 更新块里那颗唯一动作按钮（有新版时写「立即更新」）——它不属于链接块，键就挂在 action 下。 */
     action: {
@@ -1083,6 +1082,8 @@ export type PlatformText = {
       title: string
       expand: string
       collapse: string
+      /** 内容被截到上限时那一行：他看的是开头，也知道去哪儿看全。 */
+      truncated: string
     }
   }
   notifications: {
@@ -2243,7 +2244,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     about: {
       title: '关于我们',
       tagline: '本地优先的 AI 工作台 · 平台 + 可拆卸模块',
-      updates: '更新',
       settingsWithUpdate: '设置，有新版本可用',
       action: {
         update: '立即更新'
@@ -2262,7 +2262,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       notes: {
         title: '更新说明',
         expand: '展开全部',
-        collapse: '收起'
+        collapse: '收起',
+        truncated: '正文过长，已显示开头部分；完整内容见更新日志'
       }
     },
     notifications: {
@@ -3429,7 +3430,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
     about: {
       title: 'About',
       tagline: 'A local-first AI workspace: platform plus removable modules',
-      updates: 'Updates',
       settingsWithUpdate: 'Settings, an update is available',
       action: {
         update: 'Update now'
@@ -3448,7 +3448,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       notes: {
         title: 'What changed',
         expand: 'Show all',
-        collapse: 'Show less'
+        collapse: 'Show less',
+        truncated: 'This note is long, so only the beginning is shown; see Release notes for the full text'
       }
     },
     notifications: {

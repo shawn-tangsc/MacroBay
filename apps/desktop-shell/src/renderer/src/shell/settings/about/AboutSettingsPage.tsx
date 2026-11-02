@@ -33,6 +33,7 @@ export function AboutSettingsPage(props: {
   const [openFailed, setOpenFailed] = useState<UpdateLinkId | null>(null)
   const [hasNewer, setHasNewer] = useState(false)
   const [notes, setNotes] = useState<readonly StructuredTextNode[] | null>(null)
+  const [notesTruncated, setNotesTruncated] = useState(false)
   const [notesExpanded, setNotesExpanded] = useState(false)
 
   // 只有「有新版本」才显示说明块：它的正文属于最新那版，未必是读者正在跑的那一版。
@@ -51,6 +52,7 @@ export function AboutSettingsPage(props: {
         .then((result) => {
           if (!alive) return
           setNotes(result.ok && result.nodes ? result.nodes : null)
+          setNotesTruncated(result.ok && result.truncated === true)
         })
         .catch(() => {
           if (alive) setNotes(null)
@@ -93,8 +95,8 @@ export function AboutSettingsPage(props: {
         </div>
       </header>
 
+      {/* 标题跟组件走：VersionCheckRow 自带「版本」那一层，页面不再叠第二个标题。 */}
       <div className="about-section">
-        <h3 className="about-section-title">{text.updates}</h3>
         <VersionCheckRow settings={props.settings} onUpdateSettings={props.onUpdateSettings} client={client} />
       </div>
 
@@ -103,6 +105,8 @@ export function AboutSettingsPage(props: {
           <h3 className="about-section-title">{text.notes.title}</h3>
           {/* 组件不记状态：展开由这一页给 maxNodes。默认 7 块。 */}
           <StructuredText nodes={notes} maxNodes={notesExpanded ? undefined : 7} />
+          {/* 「有这行」和「有那块」是两件事：只有内容被截断才出这一行。 */}
+          {notesTruncated ? <p className="preference-hint about-notes-truncated">{text.notes.truncated}</p> : null}
           {notes.length > 7 ? (
             <Button type="link" size="small" onClick={() => setNotesExpanded((value) => !value)}>
               {notesExpanded ? text.notes.collapse : text.notes.expand}
