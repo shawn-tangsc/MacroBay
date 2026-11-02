@@ -109,6 +109,9 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
             at,
             ...(result.messageId === undefined ? {} : { messageId: result.messageId })
           }
+        } else if (result.reason === 'unknown-after-send') {
+          // 「拿不到确认」不是「失败」：不计入连续失败、也不清零（否则断网一次就把正常通道推进暂停）。
+          delivery.push = { state: 'failed', reason: 'unknown-after-send', at }
         } else {
           const failures = (current?.failures ?? 0) + 1
           const pausedUntil = failures >= 3

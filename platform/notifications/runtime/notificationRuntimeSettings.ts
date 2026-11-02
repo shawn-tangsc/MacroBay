@@ -71,13 +71,23 @@ export function createNotificationSettingsSurface(input: NotificationSettingsSur
       channelId: string | null
       pushWired: boolean
       channels: readonly unknown[]
+      lastPushFailureAt: string | null
     }> {
       const settings = await input.getSettings()
+      const state = await input.load()
+      // U3 的「最近一次推送失败（含时刻）」：从已存记录里取，不给 pushBackoff 加字段。
+      let lastPushFailureAt: string | null = null
+      for (const record of state.records) {
+        const push = record.delivery.push
+        if (push?.state !== 'failed') continue
+        if (lastPushFailureAt === null || push.at > lastPushFailureAt) lastPushFailureAt = push.at
+      }
       return {
         toastEnabled: settings.toastEnabled,
         channelId: settings.push.channelId,
         pushWired: input.pushWired?.() ?? false,
-        channels: (await input.getPushTargets?.()) ?? []
+        channels: (await input.getPushTargets?.()) ?? [],
+        lastPushFailureAt
       }
     },
 

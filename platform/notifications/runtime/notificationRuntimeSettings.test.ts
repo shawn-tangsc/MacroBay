@@ -154,7 +154,8 @@ describe('notification settings surface', () => {
       toastEnabled: false,
       channelId: 'telegram',
       pushWired: false,
-      channels: []
+      channels: [],
+      lastPushFailureAt: null
     })
     const withPush = createRuntime({ push: async () => ({ ok: true }) })
     expect((await withPush.runtime.getDeliverySettings()).pushWired).toBe(true)
@@ -192,6 +193,7 @@ describe('notification settings surface', () => {
     expect(
       state().records.some((record: any) => record.eventTypeId === 'platform.channel.push-suspended')
     ).toBe(true)
+    expect((await runtime.getDeliverySettings()).lastPushFailureAt).toBe('2026-11-03T00:00:00.000Z')
   })
 
   it('keeps subscriptions and records when they alternate twenty times', async () => {
@@ -210,6 +212,17 @@ describe('notification settings surface', () => {
   it('reads the current toast switch, not just a write port', async () => {
     const { runtime } = createRuntime({ settings: { toastEnabled: true } })
     expect((await runtime.getDeliverySettings()).toastEnabled).toBe(true)
+  })
+
+  it('does not count unknown-after-send as a failure and does not clear the backoff', async () => {
+    const { runtime, state } = createRuntime({
+      subscriptions: { 'platform.done': { channel: true } },
+      push: async () => ({ ok: false, reason: 'unknown-after-send' })
+    })
+    for (const date of ['2026-11-01', '2026-11-02', '2026-11-03']) await runtime.submit(request(date))
+    // 「拿不到确认」不是「失败」：不累计、不暂停。
+    expect(state().pushBackoff.telegram).toBeUndefined()
+    expect((await runtime.getDeliverySettings()).lastPushFailureAt).toBe('2026-11-03T00:00:00.000Z')
   })
 
   it('clears the backoff after a successful send', async () => {
