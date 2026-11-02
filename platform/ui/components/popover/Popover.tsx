@@ -38,7 +38,15 @@ import './popover.css'
  * 鼠标移开就关，**钉不住**；只在「读者自己点了」的时候钉住，需要一个别人不知道的状态。
  */
 
-const MAX_WIDTH = 320
+/**
+ * 胶囊上限（契约 §8 / 界面设计 2026-11-02）：宽 ≤ 360、高 ≤ 320，超了在框内滚动。
+ *
+ * 这两个数**写在组件里、由守卫读源码校验**，不是文档口径：文档里的上限没有守门人，
+ * 而「气泡长到盖住半张图」正是今天在永续卡上刚演过一遍的事故。
+ * 高必须靠 `maxHeight + overflow:auto` 兜，不能靠调用方少写两句——提醒不守的门等于没有门。
+ */
+const MAX_WIDTH = 360
+const MAX_HEIGHT = 320
 const PLACEMENT = 'bottom' as const
 
 /**
@@ -192,7 +200,7 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
           className="platform-popover__content"
           data-popover-content
           ref={content}
-          style={{ maxWidth: MAX_WIDTH }}>
+          style={{ maxHeight: MAX_HEIGHT, maxWidth: MAX_WIDTH }}>
           {resolvedLines.map((line, index) => (
             <p
               // 文案是纯数据、顺序固定，没有稳定 id 可用，按位置当键是这里唯一诚实的做法。

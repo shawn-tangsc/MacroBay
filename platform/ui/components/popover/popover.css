@@ -9,3 +9,12 @@
   display: inline-flex;
   align-items: center;
 }
+
+/*
+ * 上限写在组件里（宽 360 / 高 320），这里补的是「超了怎么办」：框内滚动。
+ * 让气泡自己长到整屏，就是让一段说明盖住它本来要解释的内容。
+ */
+.platform-popover__content {
+  overflow: auto;
+  overscroll-behavior: contain;
+}

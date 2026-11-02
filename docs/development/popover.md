@@ -12,6 +12,8 @@ page underneath.
 
 **The popover owns its anchor.** The trigger is rendered inside `span.platform-popover__anchor`, and the popup measures that node — a trigger component does not have to forward a `ref`. Call sites pass the interaction handlers the render function hands them and nothing else.
 
+**Four caps, and only two of them can be checked mechanically.** At most 4 lines, at most 60 characters per line, at most 360 px wide, at most 320 px tall; content over that scrolls inside the bubble instead of covering what it explains. Width and height are component constants, and `popoverLimitsGuard.test.ts` reads them plus the item count of any literal `lines={[…]}` array — over the cap fails before the commit, not in review. The 60-character rule cannot be checked from source: keys resolve to sentences at runtime, and throwing on a long line in DEV would delete a whole panel over copy, the failure we just refused for `IconButton`. That one stays a review rule.
+
 ## The component
 
 | Export | Use it for |

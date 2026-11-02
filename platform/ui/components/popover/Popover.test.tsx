@@ -176,7 +176,9 @@ describe('Popover', () => {
     })
     await tick()
     const node = document.querySelector<HTMLElement>('[data-popover-content]')
-    expect(node?.style.maxWidth).toBe('320px')
+    // 上限是规格值（宽 360 / 高 320），不是调用方能改的：超了在框内滚动。
+    expect(node?.style.maxWidth).toBe('360px')
+    expect(node?.style.maxHeight).toBe('320px')
   })
 
   it('sits below the trigger with a gap, so it never covers what it explains', async () => {
