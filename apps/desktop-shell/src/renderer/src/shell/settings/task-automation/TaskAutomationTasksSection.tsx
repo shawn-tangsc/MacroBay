@@ -9,7 +9,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { formatTaskSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockEmpty, BlockLoading } from './TaskAutomationBlockParts'
+import { BlockLoading } from './TaskAutomationBlockParts'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
 import {
   AUDIT_OUTCOME_PILL,
@@ -181,8 +181,11 @@ export function TaskAutomationTasksSection(props: {
         />
       ) : (
         // 「还没有定时任务」不是六态里的空：产生一条任务的动作在对话里，不在这一屏，
-        // 所以按契约 §13 的判定问句它不属于 `not-yet`，也不该硬塞进别的码——保留行内说明。
-        <BlockEmpty title={labels.emptyTasksTitle} body={labels.emptyTasksBody} />
+        // 所以按契约 §13 的判定问句它不属于 `not-yet`，也不该硬塞进别的码——这里是行内说明。
+        <div className="task-automation-inline-note">
+          <strong>{labels.emptyTasksTitle}</strong>
+          <p>{labels.emptyTasksBody}</p>
+        </div>
       )}
       {!controller.loading && !controller.error && state.rows.length > 0 && controller.hasMore ? (
         <div className="task-automation-block-footer">

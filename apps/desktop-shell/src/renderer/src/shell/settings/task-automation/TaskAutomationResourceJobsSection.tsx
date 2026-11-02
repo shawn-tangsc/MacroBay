@@ -8,7 +8,7 @@ import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockEmpty, BlockError, BlockLoading } from './TaskAutomationBlockParts'
+import { BlockError, BlockLoading } from './TaskAutomationBlockParts'
 import {
   buildResourceJobSourceOptions,
   buildResourceJobSourceSelectOptions,
@@ -100,7 +100,12 @@ export function TaskAutomationResourceJobsSection(props: {
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
         />
       ) : controller.items.length === 0 ? (
-        <BlockEmpty title={labels.resourceEmptyTitle} body={labels.resourceEmptyBody} />
+        // 「一个都没注册」不是六态里的空：让它们出现的动作在产品设置里，不在这一屏，
+        // 所以按契约 §13 的判定问句它不属于任何一个空态码——这里是行内说明，不是状态块。
+        <div className="task-automation-inline-note">
+          <strong>{labels.resourceEmptyTitle}</strong>
+          <p>{labels.resourceEmptyBody}</p>
+        </div>
       ) : (
         <>
           <div className="task-automation-filters">
