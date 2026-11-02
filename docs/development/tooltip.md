@@ -29,8 +29,15 @@ component adds the focus trigger and the copy rules.
 | Prop | Type | Required | Meaning |
 | --- | --- | --- | --- |
 | `labelKey` | `K extends string` | yes | The hint, **as a key**. `K` is inferred from `resolveText`, so a resolver typed to an explicit key union locks the allowed keys. |
+| `labelParams` | `Readonly<Record<string, string>>` | no | Values to fill `{name}` placeholders. **Already formatted** strings only (`Finder`, `289/289`). |
 | `resolveText` | `(key: K) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
 | `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
+
+`labelParams` is the same shape and the same implementation as `IconButton.ariaLabelParams` and
+`Popover.labelParams` (`fillLabelParams`): values in, no formatting inside the component, and a
+missing parameter stays visible as `{name}` rather than vanishing. A hint that names an object
+("Open in Finder") is still **one line** — multi-line explanations belong to `Popover.lines`, and
+`labelParams` is not a way to assemble a paragraph.
 
 There is no `placement`, no `open`, no `onOpenChange` and no rich content: the trigger set and the
 position are fixed behaviour, not call-site options. The bubble sits below the trigger and flips up

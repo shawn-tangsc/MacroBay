@@ -55,6 +55,27 @@ async function tooltipText(trigger: HTMLButtonElement): Promise<string | null> {
   return null
 }
 
+async function mountWithParams(
+  params?: Readonly<Record<string, string>>,
+  resolveText: (value: string) => string = key
+): Promise<HTMLButtonElement> {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(
+      <Tooltip labelKey="ui.test.openApp" labelParams={params} resolveText={resolveText}>
+        <button type="button" data-trigger>
+          trigger
+        </button>
+      </Tooltip>
+    )
+  })
+  const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')
+  if (!trigger) throw new Error('no trigger rendered')
+  return trigger
+}
+
 describe('Tooltip', () => {
   it('shows on focus, because a title tooltip never does', async () => {
     const trigger = await mount()
@@ -74,6 +95,31 @@ describe('Tooltip', () => {
 
     expect(await tooltipText(trigger)).toBeNull()
     expect(document.body.textContent).not.toContain('ui.test.hint')
+  })
+
+  it('fills the template with the caller-formatted value and leaves no placeholder behind', async () => {
+    // 带对象的提示（「在 X 中打开」）靠这一条：模板在文案表，值由调用方格式化好传进来。
+    const trigger = await mountWithParams(
+      { app: 'Finder' },
+      (value) => (value === 'ui.test.openApp' ? 'Open in {app}' : '')
+    )
+    await act(async () => {
+      trigger.focus()
+    })
+
+    expect(await tooltipText(trigger)).toBe('Open in Finder')
+    expect(await tooltipText(trigger)).not.toContain('{')
+  })
+
+  it('keeps a missing parameter visible instead of dropping it silently', async () => {
+    // 和 `Popover` 同一条：缺参数在界面上看得见，比安静地少一个对象名好——
+    // 后者会被读成一个完整的句子，读者看不出这里本应有内容。
+    const trigger = await mountWithParams({}, (value) => (value === 'ui.test.openApp' ? 'Open in {app}' : ''))
+    await act(async () => {
+      trigger.focus()
+    })
+
+    expect(await tooltipText(trigger)).toBe('Open in {app}')
   })
 
   it('closes on Escape and keeps the focus where it was', async () => {

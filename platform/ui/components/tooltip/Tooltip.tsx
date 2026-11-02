@@ -1,6 +1,8 @@
 import { Tooltip as AntTooltip } from 'antd'
 import type { ReactElement } from 'react'
 
+import { fillLabelParams } from '../textKeyParams'
+
 /**
  * 可聚焦提示（规格：`docs-private/05-desktop/ui-audit/2026-11-02-tooltip.html`）。
  *
@@ -34,6 +36,14 @@ import type { ReactElement } from 'react'
 export type TooltipProps<K extends string = string> = {
   /** 提示文案的 i18n 键；解析器带键联合时不收联合之外的键。 */
   labelKey: K
+  /**
+   * 要填进模板的数字或名词，**只收已经格式化好的字符串**（`选中应用名`、`289/289`）。
+   *
+   * 与 `IconButton.ariaLabelParams`、`Popover.labelParams` 同一套占位符（`{name}`），
+   * 也共用同一份填充实现（`../textKeyParams`）。三件同类组件里只有一件支持时，带参数的
+   * 提示就只能留在 antd——那会变成第二套，而「动宾 + 对象名」是最常见的提示写法。
+   */
+  labelParams?: Readonly<Record<string, string>>
   /** 调用方的文案解析入口；未知键返回空串时本组件不渲染提示。 */
   resolveText: (key: K) => string
   /** 触发器：必须是可聚焦元素（按钮、链接、带 tabIndex 的元素）。 */
@@ -58,8 +68,13 @@ const BUBBLE_STYLE = { fontSize: 12 } as const
  */
 const PLACEMENT = 'bottom' as const
 
-export function Tooltip<K extends string = string>({ labelKey, resolveText, children }: TooltipProps<K>): ReactElement {
-  const text = resolveText(labelKey)
+export function Tooltip<K extends string = string>({
+  labelKey,
+  labelParams,
+  resolveText,
+  children
+}: TooltipProps<K>): ReactElement {
+  const text = fillLabelParams(resolveText(labelKey), labelParams)
 
   // 没有句子就不存在提示：空气泡比没有气泡更糟，键名更糟。
   if (text.trim() === '') return children

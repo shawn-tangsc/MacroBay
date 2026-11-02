@@ -26,8 +26,14 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 | 字段 | 类型 | 必填 | 含义 |
 | --- | --- | --- | --- |
 | `labelKey` | `K extends string` | 是 | 提示文案，**收键**。`K` 由 `resolveText` 反推：解析器的参数是键联合时，允许的键就被锁在联合里。 |
+| `labelParams` | `Readonly<Record<string, string>>` | 否 | 填进模板 `{name}` 的值，**只收已经格式化好的字符串**（`Finder`、`289/289`）。 |
 | `resolveText` | `(key: K) => string` | 是 | 调用方的解析入口；未知键解析成空串。 |
 | `children` | `ReactElement` | 是 | 触发器，必须可聚焦——按钮、链接或带 `tabIndex` 的元素。 |
+
+`labelParams` 与 `IconButton.ariaLabelParams`、`Popover.labelParams` **同形、同一份实现**
+（`fillLabelParams`）：值由调用方格式化好传进来，组件内不再格式化；缺参数时占位符原样保留，
+不安静地少一个对象名。带对象的提示（「在 Finder 中打开」）**仍然只有一行**——多行解释走
+`Popover.lines`，`labelParams` 不是用来拼段落的。
 
 没有 `placement`、没有 `open` / `onOpenChange`、也不放富内容：触发方式和位置是固定行为，不是调用点选项。
 气泡在触发器下方，只有空间不足时才向上翻转。
