@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { Info } from 'lucide-react'
+import { Button } from 'antd'
 
 import type { AppSettings, AppSettingsPatch } from '@platform/settings/schema/appSettings'
 
 import { platformText } from '../../../i18n/platformText'
+import type { UpdateLinkId } from '@platform/updates/updateSource'
+
 import { VersionCheckRow } from '../version/VersionCheckRow'
-import type { UpdateCheckClient } from '../version/updateCheckClient'
+import { platformUpdateCheckClient, type UpdateCheckClient } from '../version/updateCheckClient'
 
 /**
  * 设置 → 关于我们。
@@ -23,6 +27,25 @@ export function AboutSettingsPage(props: {
   client?: UpdateCheckClient
 }): React.ReactElement {
   const text = platformText[props.settings.language].about
+  const client = props.client ?? platformUpdateCheckClient
+  const [openFailed, setOpenFailed] = useState<UpdateLinkId | null>(null)
+
+  // 「打开下载页」由更新块渲染；链接块固定四颗，download 不在这里重复（两颗按钮开同一地址就是缺陷）。
+  const linkRows: { id: UpdateLinkId; label: string; action: string }[] = [
+    { id: 'changelog', label: text.links.changelog, action: text.links.actionView },
+    { id: 'docs', label: text.links.docs, action: text.links.actionView },
+    { id: 'site', label: text.links.site, action: text.links.actionView },
+    { id: 'feedback', label: text.links.feedback, action: text.links.actionFeedback }
+  ]
+
+  async function openLink(id: UpdateLinkId): Promise<void> {
+    try {
+      const result = await client.openUpdateLink(id)
+      setOpenFailed(result.ok ? null : id)
+    } catch {
+      setOpenFailed(id)
+    }
+  }
 
   return (
     <section className="settings-detail-pane about-page">
@@ -38,11 +61,27 @@ export function AboutSettingsPage(props: {
 
       <div className="about-section">
         <h3 className="about-section-title">{text.updates}</h3>
-        <VersionCheckRow
-          settings={props.settings}
-          onUpdateSettings={props.onUpdateSettings}
-          client={props.client}
-        />
+        <VersionCheckRow settings={props.settings} onUpdateSettings={props.onUpdateSettings} client={client} />
+      </div>
+
+      <div className="about-section">
+        <h3 className="about-section-title">{text.links.title}</h3>
+        <ul className="about-links">
+          {linkRows.map((row) => (
+            <li key={row.id} className="about-link-row">
+              <span className="about-link-label">{row.label}</span>
+              <Button type="link" size="small" onClick={() => void openLink(row.id)}>
+                {row.action}
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <p className="preference-hint">{text.links.hint}</p>
+        {openFailed === null ? null : (
+          <p className="preference-hint about-link-failed" role="status">
+            {text.links.openFailed}
+          </p>
+        )}
       </div>
     </section>
   )

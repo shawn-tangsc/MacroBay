@@ -139,7 +139,7 @@ export function VersionCheckRow(props: {
           */}
           {view.showDownloadButton ? (
             <div className="version-download">
-              <Button className="ant-primary-button" size="small" onClick={() => void row.openUpdateLink()}>
+              <Button className="ant-primary-button" size="small" onClick={() => void row.openUpdateLink('download')}>
                 {linkText.download}
               </Button>
             </div>

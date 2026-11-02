@@ -41,7 +41,7 @@ describe('the platform update client without its bridge', () => {
     }).not.toThrow()
     await expect(pending).rejects.toThrow(/bridge/u)
     await expect(platformUpdateCheckClient.checkNow()).rejects.toThrow(/bridge/u)
-    await expect(platformUpdateCheckClient.openUpdateLink()).rejects.toThrow(/bridge/u)
+    await expect(platformUpdateCheckClient.openUpdateLink('docs')).rejects.toThrow(/bridge/u)
   })
 
   it('still renders the row as "not checked yet" instead of crashing the settings page', async () => {
@@ -78,6 +78,6 @@ describe('the platform update client without its bridge', () => {
     }
 
     await expect(platformUpdateCheckClient.getState()).resolves.toEqual({ state: 'idle', currentVersion: '0.3.1' })
-    await expect(platformUpdateCheckClient.openUpdateLink()).resolves.toEqual({ ok: true })
+    await expect(platformUpdateCheckClient.openUpdateLink('docs')).resolves.toEqual({ ok: true })
   })
 })

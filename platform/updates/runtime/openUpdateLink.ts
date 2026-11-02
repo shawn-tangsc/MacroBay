@@ -1,43 +1,36 @@
-import { updateDownloadAllowedHosts, updateDownloadPageUrl } from '../updateSource'
+import { isAllowedUpdateLinkUrl, isUpdateLinkId, updateLinkUrl } from '../updateSource'
 
 /**
- * 「打开下载页」的主进程一侧：地址由常量拼出、协议与域名在这里校验、失败只回结果不抛异常。
+ * 关于页 / 更新块「去某一个地方」的主进程一侧。
  *
- * 三条都是需求里定死的，写在这里而不是散在 IPC 处理器里：
- * - **不接受入参地址**：渲染层只发「打开」这个动作。地址若能传，界面就等于能决定打开哪个页面。
- * - **只放行 https + 白名单域名**：判据来自 `updateSource` 那一份，不在调用点各写一遍。
- * - **失败回 `{ ok: false }`，不 throw**：界面要能知道「没打开」，而抛异常会变成渲染层猜。
+ * 三条都是定死的，写在这里而不是散在 IPC 处理器里：
+ * - **只收封闭的 id**（五个字面量），不收地址——渲染层连网址字符串都没有；
+ * - **地址由常量拼出**，再用两层校验核一遍（主机 + 仓库路径段、id 与地址严格相等）；
+ * - **失败回 `{ ok: false }`，不 throw**：界面靠结果判断有没有打开，不靠异常。
  *
- * 还有一个如实记下的边界（见技术方案 §12.1）：Windows 上没有默认浏览器时，系统可能弹出
- * 「选择应用」框而调用**正常返回**。那种情况我们拿不到信号，也就不补一句——只保证「调用失败一定说」。
+ * 边界如实记下（技术方案 §12.1）：Windows 上没有默认浏览器时，系统可能弹「选择应用」框而
+ * 调用**正常返回**。那种情况我们拿不到信号，也就不补一句——只保证「调用失败一定说」。
  */
 
-export type UpdateDownloadLog = (level: 'info' | 'warn', event: string, fields?: Record<string, unknown>) => void
+export type UpdateLinkLog = (level: 'info' | 'warn', event: string, fields?: Record<string, unknown>) => void
 
 export type OpenUpdateLinkPorts = Readonly<{
   openExternal: (url: string) => Promise<void>
-  log: UpdateDownloadLog
+  log: UpdateLinkLog
 }>
 
 export type OpenUpdateLinkResult = { ok: boolean }
 
-export function isAllowedUpdateLinkUrl(url: string): boolean {
-  let parsed: URL
-  try {
-    parsed = new URL(url)
-  } catch {
-    return false
+export async function openUpdateLink(destination: unknown, ports: OpenUpdateLinkPorts): Promise<OpenUpdateLinkResult> {
+  if (!isUpdateLinkId(destination)) {
+    // 运行期塞对象（例如 `{ url }`）走到这里：拒掉，并且**一次 `openExternal` 都不调**。
+    ports.log('warn', 'update.open-link.rejected', { reason: 'unknown-destination' })
+    return { ok: false }
   }
-  return parsed.protocol === 'https:' && (updateDownloadAllowedHosts as readonly string[]).includes(parsed.host)
-}
 
-export async function openUpdateLink(
-  ports: OpenUpdateLinkPorts
-): Promise<OpenUpdateLinkResult> {
-  const url = updateDownloadPageUrl()
-  if (!isAllowedUpdateLinkUrl(url)) {
-    // 常量本身不合格属于代码错误，不许交给系统打开，也不许静默——记一条 warn 就够了，界面只看到失败。
-    ports.log('warn', 'update.open-link.rejected', { reason: 'not-allowed' })
+  const url = updateLinkUrl(destination)
+  if (!isAllowedUpdateLinkUrl(destination, url)) {
+    ports.log('warn', 'update.open-link.rejected', { reason: 'not-allowed', destination })
     return { ok: false }
   }
 
@@ -46,6 +39,7 @@ export async function openUpdateLink(
     return { ok: true }
   } catch (error) {
     ports.log('warn', 'update.open-link.failed', {
+      destination,
       message: error instanceof Error ? error.message : String(error)
     })
     return { ok: false }

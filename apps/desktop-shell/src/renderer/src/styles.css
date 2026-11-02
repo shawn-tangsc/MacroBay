@@ -9123,6 +9123,32 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   gap: 8px;
 }
 
+.about-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  max-width: 480px;
+}
+
+.about-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+
+.about-link-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.about-link-failed {
+  max-width: 480px;
+}
+
 .about-section-title {
   margin: 0;
   font-size: 12px;

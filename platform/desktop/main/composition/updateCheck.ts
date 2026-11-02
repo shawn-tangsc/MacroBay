@@ -51,8 +51,8 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
     mode: ports.mode,
     getProjection: service.getProjection,
     checkNow: () => service.checkNow('manual'),
-    openUpdateLink: () =>
-      openUpdateLink({
+    openUpdateLink: (destination) =>
+      openUpdateLink(destination, {
         openExternal: ports.openExternal,
         log: ports.log
       })

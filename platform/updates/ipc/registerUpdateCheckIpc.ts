@@ -17,7 +17,8 @@ export type UpdateCheckIpcPorts = Readonly<{
   mode: 'packaged' | 'development'
   getProjection: () => UpdateCheckProjection
   checkNow: () => Promise<UpdateCheckProjection>
-  openUpdateLink: () => Promise<{ ok: boolean }>
+  /** `destination` 由渲染层传入，可能是任何东西——处理器原样交给端口，由端口做封闭校验。 */
+  openUpdateLink: (destination: unknown) => Promise<{ ok: boolean }>
 }>
 
 export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: UpdateCheckIpcPorts): void {
@@ -27,5 +28,5 @@ export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: 
   if (ports.mode !== 'packaged') return
 
   ipcMain.handle(IpcChannels.updatesCheckNow, () => ports.checkNow())
-  ipcMain.handle(IpcChannels.updatesOpenLink, () => ports.openUpdateLink())
+  ipcMain.handle(IpcChannels.updatesOpenLink, (_event, destination: unknown) => ports.openUpdateLink(destination))
 }

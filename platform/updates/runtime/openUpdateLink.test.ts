@@ -1,50 +1,41 @@
 import { describe, expect, it } from 'vitest'
 
-import { updateDownloadPageUrl } from '../updateSource'
-import { isAllowedUpdateLinkUrl, openUpdateLink } from './openUpdateLink'
+import { updateLinkUrl } from '../updateSource'
+import { openUpdateLink } from './openUpdateLink'
 
-describe('opening the download page', () => {
-  it('opens the constant page and reports success', async () => {
-    const opened: string[] = []
-    const result = await openUpdateLink({
-      openExternal: async (url) => {
-        opened.push(url)
-      },
-      log: () => undefined
-    })
+function ports(opened: string[]) {
+  return {
+    openExternal: async (url: string) => {
+      opened.push(url)
+    },
+    log: () => undefined
+  }
+}
 
-    expect(result).toEqual({ ok: true })
-    expect(opened).toEqual([updateDownloadPageUrl()])
+describe('opening a link destination', () => {
+  it('opens the constant address of each of the five destinations', async () => {
+    for (const id of ['download', 'changelog', 'docs', 'site', 'feedback'] as const) {
+      const opened: string[] = []
+      await expect(openUpdateLink(id, ports(opened))).resolves.toEqual({ ok: true })
+      expect(opened).toEqual([updateLinkUrl(id)])
+    }
+  })
+
+  it('rejects anything that is not one of the five ids, without opening anything', async () => {
+    for (const payload of [{ url: 'https://example.invalid/x' }, 'download ', '', null, 42, ['download']]) {
+      const opened: string[] = []
+      await expect(openUpdateLink(payload, ports(opened))).resolves.toEqual({ ok: false })
+      expect(opened, JSON.stringify(payload)).toEqual([])
+    }
   })
 
   it('answers ok:false instead of throwing when the system refuses to open it', async () => {
-    const result = await openUpdateLink({
+    const result = await openUpdateLink('docs', {
       openExternal: async () => {
         throw new Error('Failed to open')
       },
       log: () => undefined
     })
-
     expect(result).toEqual({ ok: false })
-  })
-
-  it('only lets https pages on the allowlisted host through', () => {
-    const page = updateDownloadPageUrl()
-    expect(isAllowedUpdateLinkUrl(page)).toBe(true)
-    // 坏地址从真地址派出来，**不要**把发布地址的字面量抄第二遍：全仓「发布地址只出现一次」有守卫用例守着。
-    for (const rejected of [
-      page.replace('https://', 'http://'),
-      'https://example.invalid/shawn-tangsc/MacroBay',
-      'file:///Applications/MacroBay.app',
-      'javascript:alert(1)',
-      'not a url'
-    ]) {
-      expect(isAllowedUpdateLinkUrl(rejected), rejected).toBe(false)
-    }
-  })
-
-  it('never takes a url from the caller: the payload has no address to pass', () => {
-    // 契约层面的防守：这个函数只收 ports，不收地址。类型上就没有「传地址」这条路。
-    expect(openUpdateLink.length).toBe(1)
   })
 })

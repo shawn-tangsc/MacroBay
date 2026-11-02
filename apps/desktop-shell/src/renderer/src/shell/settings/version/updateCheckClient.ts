@@ -1,4 +1,5 @@
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
+import type { UpdateLinkId } from '@platform/updates/updateSource'
 
 /**
  * 「版本」那一行需要的三个动作，**从外面传进来**。
@@ -10,8 +11,8 @@ import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCh
 export type UpdateCheckClient = Readonly<{
   getState: () => Promise<UpdateCheckProjection>
   checkNow: () => Promise<UpdateCheckProjection>
-  /** 打开下载页；主进程回 `{ ok: false }` 表示没交给系统打开。**不 throw** 是契约的一部分。 */
-  openUpdateLink: () => Promise<{ ok: boolean }>
+  /** 打开五个目的地之一；主进程回 `{ ok: false }` 表示没交给系统打开。**不 throw** 是契约的一部分。 */
+  openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
 }>
 
 /**
@@ -23,13 +24,13 @@ export type UpdateCheckClient = Readonly<{
 export const platformUpdateCheckClient: UpdateCheckClient = {
   getState: async () => requireBridge().getState(),
   checkNow: async () => requireBridge().checkNow(),
-  openUpdateLink: async () => requireBridge().openUpdateLink()
+  openUpdateLink: async (destination) => requireBridge().openUpdateLink(destination)
 }
 
 type UpdateCheckBridge = {
   getState: () => Promise<UpdateCheckProjection>
   checkNow: () => Promise<UpdateCheckProjection>
-  openUpdateLink: () => Promise<{ ok: boolean }>
+  openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
 }
 
 function requireBridge(): UpdateCheckBridge {

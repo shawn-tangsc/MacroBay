@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { manualCooldownMs, type UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
 
+import type { UpdateLinkId } from '@platform/updates/updateSource'
+
 import type { UpdateCheckClient } from './updateCheckClient'
 
 /**
@@ -19,7 +21,7 @@ export type UpdateCheckRowState = {
   justChecked: boolean
   openFailed: boolean
   checkNow: () => Promise<void>
-  openUpdateLink: () => Promise<void>
+  openUpdateLink: (destination: UpdateLinkId) => Promise<void>
 }
 
 export function useUpdateCheckRow(client: UpdateCheckClient): UpdateCheckRowState {
@@ -61,9 +63,9 @@ export function useUpdateCheckRow(client: UpdateCheckClient): UpdateCheckRowStat
     }
   }, [client])
 
-  const openUpdateLink = useCallback(async () => {
+  const openUpdateLink = useCallback(async (destination: UpdateLinkId) => {
     try {
-      const result = await client.openUpdateLink()
+      const result = await client.openUpdateLink(destination)
       setOpenFailed(!result.ok)
     } catch {
       setOpenFailed(true)

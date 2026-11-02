@@ -2,7 +2,7 @@ import type { IpcMain } from 'electron'
 import { describe, expect, it, vi } from 'vitest'
 
 import { IpcChannels } from '../../desktop/ipc/channels'
-import { updateDownloadPageUrl } from '../updateSource'
+import { updateLinkUrl } from '../updateSource'
 import { openUpdateLink } from '../runtime/openUpdateLink'
 import { registerUpdateCheckIpc } from './registerUpdateCheckIpc'
 
@@ -85,8 +85,8 @@ describe('registering the update check channels', () => {
       getProjection: () => projection,
       checkNow: async () => projection,
       // 生产里这个端口就是 openUpdateLink：地址由常量拼出，入参里没有地址。
-      openUpdateLink: () =>
-        openUpdateLink({
+      openUpdateLink: (destination) =>
+        openUpdateLink(destination, {
           openExternal: async (url) => {
             opened.push(url)
           },
@@ -95,10 +95,14 @@ describe('registering the update check channels', () => {
     })
 
     const handler = ipc.handlers.get(IpcChannels.updatesOpenLink)
-    await handler?.({}, { url: 'https://example.invalid/evil' })
 
-    // E4 的反向用例：把实现改成读载荷（或读元数据里的 files[].url）时，这条必须变红。
-    expect(opened).toEqual([updateDownloadPageUrl()])
+    // 运行期塞一个带地址的对象：拒掉，并且一次 openExternal 都不调（E2 的运行期半边）。
+    await expect(handler?.({}, { url: 'https://example.invalid/evil' })).resolves.toEqual({ ok: false })
+    expect(opened).toEqual([])
+
+    // 合法 id 才会真的打开，且打开的是常量拼出的地址。
+    await expect(handler?.({}, 'download')).resolves.toEqual({ ok: true })
+    expect(opened).toEqual([updateLinkUrl('download')])
     expect(opened[0]).not.toContain('example.invalid')
   })
 

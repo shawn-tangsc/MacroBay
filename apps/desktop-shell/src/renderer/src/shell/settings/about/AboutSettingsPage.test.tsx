@@ -21,15 +21,21 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
-function clientFor(state: UpdateCheckProjection): UpdateCheckClient {
+function clientFor(
+  state: UpdateCheckProjection,
+  options: { openOk?: boolean; opened?: string[] } = {}
+): UpdateCheckClient {
   return {
     getState: async () => state,
     checkNow: async () => state,
-    openUpdateLink: async () => ({ ok: true })
+    openUpdateLink: async (destination) => {
+      options.opened?.push(destination)
+      return { ok: options.openOk !== false }
+    }
   }
 }
 
-async function mount(state: UpdateCheckProjection): Promise<HTMLElement> {
+async function mount(state: UpdateCheckProjection, client?: UpdateCheckClient): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
@@ -39,7 +45,7 @@ async function mount(state: UpdateCheckProjection): Promise<HTMLElement> {
         settings: createDefaultAppSettings(),
         onUpdateSettings: async () => undefined,
         productName: 'MacroBay',
-        client: clientFor(state)
+        client: client ?? clientFor(state)
       })
     )
   })
@@ -75,6 +81,42 @@ describe('the about page', () => {
 
     expect(container.textContent).toContain(versionText.pill.unavailable)
     expect(container.textContent).toContain(versionText.unavailableLine)
+  })
+
+  it('lists the four link destinations with their action words', async () => {
+    const container = await mount({ state: 'idle', currentVersion: '0.3.1' })
+    const rows = [...container.querySelectorAll('.about-link-row')]
+    expect(rows).toHaveLength(4)
+    expect(rows.map((row) => row.textContent)).toEqual([
+      `${text.links.changelog}${text.links.actionView}`,
+      `${text.links.docs}${text.links.actionView}`,
+      `${text.links.site}${text.links.actionView}`,
+      `${text.links.feedback}${text.links.actionFeedback}`
+    ])
+    // 「打开下载页」只由更新块渲染，链接块不重复。
+    expect(container.textContent).not.toContain(text.links.download)
+  })
+
+  it('sends the id of the row that was clicked, never an address', async () => {
+    const opened: string[] = []
+    const container = await mount({ state: 'idle', currentVersion: '0.3.1' }, clientFor({ state: 'idle', currentVersion: '0.3.1' }, { opened }))
+    const buttons = [...container.querySelectorAll('.about-link-row button')]
+    await act(async () => {
+      buttons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(opened).toEqual(['changelog'])
+  })
+
+  it('says the browser did not open, using the sentence all five buttons share', async () => {
+    const container = await mount(
+      { state: 'idle', currentVersion: '0.3.1' },
+      clientFor({ state: 'idle', currentVersion: '0.3.1' }, { openOk: false })
+    )
+    const buttons = [...container.querySelectorAll('.about-link-row button')]
+    await act(async () => {
+      buttons[2].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(text.links.openFailed)
   })
 
   it('holds no address anywhere in the page', async () => {

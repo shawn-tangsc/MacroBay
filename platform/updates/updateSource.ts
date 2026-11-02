@@ -1,16 +1,14 @@
 /**
- * 更新检查的地址唯一出处。
+ * 更新提示与关于页的地址唯一出处。
  *
- * 这个文件存在，只为一件事：**发布地址在仓库里只写一遍**。渲染层不持有地址，IPC 载荷里不带地址，
- * 主进程从这里的常量拼出要打开的页面——远端返回的内容（元数据里的 `files[].url`）永远不能决定
- * 我们打开哪个地址，否则「打开下载页」就变成了「打开远端指定的任意地址」。
+ * 两条规矩，写在这里而不是散在各调用点：
  *
- * 地址长这样（同名文件覆盖，不需要知道 tag）：
- * - macOS：`releases/latest/download/latest-mac.yml`
- * - Windows：`releases/latest/download/latest.yml`
+ * 1. **地址只在本文件拼一次**，界面永远拿不到网址——IPC 只传一个封闭的 id；
+ * 2. **两层校验缺一不可**：
+ *    - 第 1 层「主机精确 + 仓库路径段」挡**越权**：`/MacroBay-evil`、`/MacroBayX`、别人的 owner 全拒；
+ *    - 第 2 层「id 与地址严格相等」挡**同仓库任意页面**：每个 id 只能打开它自己那条常量。
  *
- * 为什么读静态元数据而不是发布接口：不受接口限流约束，且元数据本来就是发布流水线产出的
- * （`release.yml` 里 electron-builder 生成 `latest-mac.yml` / `latest.yml` 并挂到 Release 上）。
+ * 只有第 1 层，`/MacroBay` 下任何页面都能开；只有第 2 层，常量写错成别人的仓库也会放行。
  */
 
 export const UPDATE_REPOSITORY = {
@@ -30,6 +28,9 @@ const metadataFileNames = {
 
 export type UpdateMetadataPlatform = keyof typeof metadataFileNames
 
+/** 主机的精确值。按域名放行等于允许打开该站任意页面，所以这里比对的是完整 host。 */
+export const updateLinkHost = 'github.com'
+
 const releaseSiteBase = `https://github.com/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.name}`
 
 function isUpdateMetadataPlatform(platform: string): platform is UpdateMetadataPlatform {
@@ -45,13 +46,63 @@ export function updateMetadataUrl(platform: string): string | null {
   return fileName === null ? null : `${releaseSiteBase}/releases/latest/download/${fileName}`
 }
 
-/** 读者点「打开下载页」去的页面；由本文件的常量拼出，不接受任何入参覆盖。 */
-export function updateDownloadPageUrl(): string {
-  return `${releaseSiteBase}/releases/latest`
+/**
+ * 关于页与更新块能打开的五个去处。**id 就是按钮的名字**（`changelog` 对应「更新日志」），
+ * 载荷类型就是这五个字面量的联合——渲染层没有位置放地址。
+ */
+export const updateLinkIds = ['download', 'changelog', 'docs', 'site', 'feedback'] as const
+
+export type UpdateLinkId = (typeof updateLinkIds)[number]
+
+const updateLinkPaths: Readonly<Record<UpdateLinkId, string>> = {
+  // 最新那一版的发布页：看说明 + 拿安装包
+  download: '/releases/latest',
+  // 发布列表：逐版看改了什么。与 download 是**两个目的地**，所以不重复。
+  changelog: '/releases',
+  docs: '/tree/main/docs',
+  site: '',
+  feedback: '/issues/new/choose'
+}
+
+export function isUpdateLinkId(value: unknown): value is UpdateLinkId {
+  return typeof value === 'string' && (updateLinkIds as readonly string[]).includes(value)
+}
+
+/** 由 id 拼出地址；这是全仓唯一一处把 id 变成网址的地方。 */
+export function updateLinkUrl(id: UpdateLinkId): string {
+  return `${releaseSiteBase}${updateLinkPaths[id]}`
+}
+
+function pathSegments(pathname: string): string[] {
+  return pathname.split('/').filter((segment) => segment.length > 0)
 }
 
 /**
- * 交给系统打开之前只放行这些域名（协议必须是 https）。
- * 目前只有发布页所在的那个域名；将来地址换了，改这里，不要在各个调用点各写一份。
+ * 两层校验。第 1 层看主机与仓库段，第 2 层看 id 与地址是否严格相等。
+ *
+ * 段比较**不用字符串 `startsWith`**：`/MacroBay-evil`、`/MacroBayX` 都会被它放过去。
+ * 含百分号的段一律拒——解码后再比会多出一层「看起来是同名路径」的空间。
  */
-export const updateDownloadAllowedHosts = ['github.com'] as const
+export function isAllowedUpdateLinkUrl(id: UpdateLinkId, url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') return false
+  if (parsed.host !== updateLinkHost) return false
+
+  // 第 1 层：仓库路径段（大小写不敏感；GitHub 的 owner/repo 是同一个仓库）。
+  const segments = pathSegments(parsed.pathname)
+  if (segments.some((segment) => segment.includes('%'))) return false
+  if (segments.length < 2) return false
+  if (segments[0].toLowerCase() !== UPDATE_REPOSITORY.owner.toLowerCase()) return false
+  if (segments[1].toLowerCase() !== UPDATE_REPOSITORY.name.toLowerCase()) return false
+
+  // 第 2 层：id 与地址严格相等（允许一个结尾斜杠）。
+  const normalizedPath = `/${segments.join('/')}`
+  const expectedPath = `/${pathSegments(updateLinkPaths[id]).join('/')}`
+  const normalizedExpected = expectedPath === '/' ? `/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.name}` : `/${UPDATE_REPOSITORY.owner}/${UPDATE_REPOSITORY.name}${expectedPath}`
+  return normalizedPath === normalizedExpected
+}
