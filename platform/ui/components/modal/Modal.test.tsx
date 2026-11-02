@@ -7,7 +7,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { Modal, type ModalProps } from './Modal'
+import { MODAL_ALIGNS, MODAL_LAYERS, MODAL_WIDTHS, Modal, type ModalProps } from './Modal'
 import { MODAL_CLOSE_KEY, resolveModalText } from './modalText'
 
 const source = readFileSync(join(__dirname, 'Modal.tsx'), 'utf8')
@@ -28,6 +28,7 @@ afterEach(async () => {
 function props(overrides: Partial<ModalProps> = {}): ModalProps {
   return {
     open: true,
+    width: 'standard',
     onClose: () => undefined,
     titleKey: 'ui.test.title',
     resolveText: key,
@@ -140,6 +141,76 @@ describe('Modal 的打开态与关闭', () => {
   })
 })
 
+describe('Modal 的宽度', () => {
+  it('offers four widths and no fifth', () => {
+    expect(MODAL_WIDTHS).toEqual(['compact', 'standard', 'expanded', 'maximum'])
+  })
+
+  it('measures each width from the one table, never from the call site', async () => {
+    const expected: Record<string, string> = {
+      compact: '420px',
+      standard: '520px',
+      expanded: '720px',
+      maximum: '860px'
+    }
+    for (const [width, px] of Object.entries(expected)) {
+      await mount({ width: width as ModalProps['width'] })
+      expect(document.querySelector<HTMLElement>('.ant-modal')?.style.width).toBe(px)
+      await act(async () => root?.unmount())
+      root = undefined
+      document.body.replaceChildren()
+    }
+  })
+})
+
+describe('Modal 的形态与层级', () => {
+  it('offers two alignments and two layers, and no boolean or number for either', () => {
+    expect(MODAL_ALIGNS).toEqual(['top', 'center'])
+    expect(MODAL_LAYERS).toEqual(['base', 'over-drawer'])
+  })
+
+  it('leaves the dialog at the top by default and centres it on request', async () => {
+    await mount()
+    // 默认与 antd 一致：不居中。
+    expect(document.querySelector('.ant-modal-centered')).toBeNull()
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    await mount({ align: 'center' })
+    expect(document.querySelector('.ant-modal-centered')).not.toBeNull()
+  })
+
+  it('keeps the z-index numbers inside the component and only accepts a layer word', async () => {
+    await mount({ layer: 'over-drawer' })
+    const wrap = document.querySelector<HTMLElement>('.ant-modal-wrap')
+    expect(wrap?.style.zIndex).toBe('1500')
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    await mount()
+    // base 不跳到弹窗层：保持 antd 自己的默认，不在这里另写一个数字。
+    expect(document.querySelector<HTMLElement>('.ant-modal-wrap')?.style.zIndex).not.toBe('1500')
+  })
+
+  it('fills a parameterised title and keeps a missing placeholder visible', async () => {
+    const resolveText = (value: string): string => (value === 'ui.test.title' ? '技能 {name}' : value)
+    await mount({ resolveText, titleParams: { name: '检索' } })
+    expect(document.querySelector('.ant-modal-title')?.textContent).toBe('技能 检索')
+
+    await act(async () => root?.unmount())
+    root = undefined
+    document.body.replaceChildren()
+
+    // 缺参数原样保留：少一个名字看得见，比安静地少一个词好。
+    await mount({ resolveText })
+    expect(document.querySelector('.ant-modal-title')?.textContent).toBe('技能 {name}')
+  })
+})
+
 describe('Modal 的页脚槽', () => {
   it('renders no footer row at all when the caller passes none', async () => {
     await mount()
@@ -161,9 +232,12 @@ describe('Modal 的边界', () => {
     expect(rendered?.classList.contains('modal')).toBe(true)
   })
 
-  it('takes no width, style, centered or layer prop while the spec is open', () => {
+  it('takes no pixel width, style, centered boolean or zIndex number', () => {
     const propsType = source.slice(source.indexOf('type ModalBase'), source.indexOf('export function Modal'))
-    for (const escape of ['width', 'style', 'centered', 'zIndex', 'layer']) {
+    // 宽度只收档位名：`width: number` 或 `width: string` 都是口子。
+    expect(propsType).toMatch(/width:\s*ModalWidth/)
+    expect(propsType).not.toMatch(/width:\s*(number|string)/)
+    for (const escape of ['style', 'centered', 'zIndex']) {
       expect(propsType).not.toMatch(new RegExp(`\\b${escape}\\b`))
     }
     // 样式文件里也不许提前长出一套宽度；读屏隐藏的 1px 是隐身旁路，不是档位。
