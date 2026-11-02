@@ -9626,27 +9626,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   font-size: 11px;
 }
 
-.task-automation-inline-note {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-  padding: 22px 14px;
-  color: var(--muted);
-  text-align: center;
-}
-
-.task-automation-inline-note strong {
-  color: var(--text);
-  font-size: 13px;
-}
-
-.task-automation-inline-note p {
-  max-width: 560px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .task-automation-policy-row {
   display: flex;
   align-items: center;
@@ -11807,10 +11786,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--text);
 }
 
-.model-service-protocol-pills .model-service-type-pill {
-  gap: 5px;
-}
-
 .model-service-type-pill small {
   color: var(--muted);
   font-size: 11px;
@@ -12359,31 +12334,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
   font-size: 11.5px;
   white-space: nowrap;
-}
-
-/* 协议 pill 的品牌图标：只显示 glyph 本身，不加圆形底色。 */
-.model-service-protocol-icon {
-  width: 12px;
-  height: 12px;
-  object-fit: contain;
-  border-radius: 0;
-  background: transparent;
-  /* simple-icons 是单色路径：用 currentColor 无法作用于 <img>，所以在深色下反相显示 */
-  filter: var(--protocol-icon-filter, none);
-}
-
-:root[data-theme='dark'] { --protocol-icon-filter: invert(1) brightness(1.6); }
-:root[data-theme='light'] { --protocol-icon-filter: none; }
-
-/* 协议 pill：品牌 glyph + 语义符号（10px，弱化色）。 */
-.model-service-protocol-semantic {
-  flex: none;
-  color: var(--muted);
-  opacity: 0.85;
-}
-.model-service-type-pill[data-active='true'] .model-service-protocol-semantic {
-  color: var(--accent);
-  opacity: 1;
 }
 
 /* Runtime activity reads as an inline harness log: one collapsible row under the conversation,

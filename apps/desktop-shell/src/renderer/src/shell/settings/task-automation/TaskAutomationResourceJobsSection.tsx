@@ -100,12 +100,9 @@ export function TaskAutomationResourceJobsSection(props: {
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
         />
       ) : controller.items.length === 0 ? (
-        // 「一个都没注册」不是六态里的空：让它们出现的动作在产品设置里，不在这一屏，
-        // 所以按契约 §13 的判定问句它不属于任何一个空态码——这里是行内说明，不是状态块。
-        <div className="task-automation-inline-note">
-          <strong>{labels.resourceEmptyTitle}</strong>
-          <p>{labels.resourceEmptyBody}</p>
-        </div>
+        // 这些任务由产品注册，读者在这一屏改不了，所以 `not-yet` + 不给动作；
+        // 「去哪个产品里启用」写在 `nothing-enabled` 的平台原因句里，不另造第二种空态。
+        <StateView state="empty" reasonCode="nothing-enabled" size="md" />
       ) : (
         <>
           <div className="task-automation-filters">

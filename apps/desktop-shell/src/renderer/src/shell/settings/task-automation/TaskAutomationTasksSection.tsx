@@ -180,12 +180,9 @@ export function TaskAutomationTasksSection(props: {
           action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: controller.clearFilters }}
         />
       ) : (
-        // 「还没有定时任务」不是六态里的空：产生一条任务的动作在对话里，不在这一屏，
-        // 所以按契约 §13 的判定问句它不属于 `not-yet`，也不该硬塞进别的码——这里是行内说明。
-        <div className="task-automation-inline-note">
-          <strong>{labels.emptyTasksTitle}</strong>
-          <p>{labels.emptyTasksBody}</p>
-        </div>
+        // 一条任务都没有过。创建入口在对话里，这一屏拿不到可点的「新建」，
+        // 所以按契约 §13：给 `not-yet`、不给动作——不放一个点了没反应的按钮。
+        <StateView state="empty" reasonCode="not-yet" size="md" />
       )}
       {!controller.loading && !controller.error && state.rows.length > 0 && controller.hasMore ? (
         <div className="task-automation-block-footer">

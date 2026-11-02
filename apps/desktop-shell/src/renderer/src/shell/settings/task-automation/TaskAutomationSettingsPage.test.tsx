@@ -16,6 +16,10 @@ vi.mock('./useResourceJobSchedules', () => ({
 import { TaskAutomationSettingsPage } from './TaskAutomationSettingsPage'
 import { TASK_AUTOMATION_CONTROL_CLASSES } from './taskAutomationControlWidths'
 
+function countOccurrences(markup: string, needle: string): number {
+  return markup.split(needle).length - 1
+}
+
 describe('TaskAutomationSettingsPage', () => {
   it('renders the four blocks with their own empty states on an empty profile', () => {
     hooks.settings.mockReturnValue(settings({ tasks: [], emptyState: 'never-created' }))
@@ -28,9 +32,11 @@ describe('TaskAutomationSettingsPage', () => {
     // 「还没有定时任务」 below already said the one true thing.
     expect(markup).not.toContain('任务开始运行后，这里会显示成功、失败与跳过计数。')
     expect(markup).toContain('我的定时任务')
-    expect(markup).toContain('还没有定时任务')
+    // 空态只有 `StateView` 一个出口：没有任务 = `not-yet`，没有可点的动作就不给动作。
+    expect(markup).toContain('还没有发生过；等有数据进来后这里就会出现')
     expect(markup).toContain('平台与产品资源任务')
-    expect(markup).toContain('当前没有产品注册自动任务')
+    // 资源任务由产品注册，读者在这一屏改不了；原因是「一个都没启用」，不是「等着就会来」。
+    expect(markup).toContain('一个都还没有启用，先启用一个')
     expect(markup).toContain('执行策略')
     expect(markup).toContain('当前没有自动任务，策略会在任务开始运行后生效。')
     expect(markup).not.toContain('没有匹配的任务。')
@@ -149,8 +155,11 @@ describe('TaskAutomationSettingsPage', () => {
     hooks.settings.mockReturnValue(settings({ tasks: [], emptyState: 'never-created' }))
     hooks.schedules.mockReturnValue(schedules({ items: [] }))
     const neverCreated = renderPage()
-    expect(neverCreated).toContain('还没有定时任务')
-    expect(neverCreated).toContain('每天早上 9 点总结行情')
+    expect(neverCreated).toContain('data-state="empty"')
+    expect(neverCreated).toContain('data-size="md"')
+    expect(neverCreated).toContain('还没有发生过；等有数据进来后这里就会出现')
+    // 创建入口在对话里，这一屏拿不到按钮：不许给点了没反应的动作，也不许另起一套行内说明。
+    expect(neverCreated).not.toContain('每天早上 9 点总结行情')
     expect(neverCreated).not.toContain('当前筛选下没有任务。')
 
     hooks.settings.mockReturnValue(settings({
@@ -164,7 +173,9 @@ describe('TaskAutomationSettingsPage', () => {
     const filterEmpty = renderPage()
     expect(filterEmpty).toContain('有数据，但被当前筛选挡住了')
     expect(filterEmpty).toContain('清除筛选')
-    expect(filterEmpty).not.toContain('还没有定时任务')
+    // 注意：`还没有发生过` 在「投递健康」块里也有自己的空态，所以不能拿它当整页否定断言——
+    // 这里只认「任务表这一格给的是 filtered-out 并且带清除筛选」。
+    expect(countOccurrences(filterEmpty, '有数据，但被当前筛选挡住了')).toBe(1)
   })
 
   it('never renders a blank policy dropdown while the policy is loading', () => {
