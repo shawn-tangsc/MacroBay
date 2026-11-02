@@ -292,6 +292,11 @@ export const productText = {
               // 窗口切换的选项与整组的可访问名：与界面上原来的 1H/24H/7D 逐字一致，只是改成键。
               rangeLabel: '收益率窗口',
               ranges: { '1h': '1H', '24h': '24H', '7d': '7D' },
+              // 图表工具条那颗「?」的三行说明：与原来逐字一致，只是改成模板 + 参数，不再在调用点拼句子。
+              hintAnalysis: '闭合数据截至 {time}',
+              hintCoverage: '历史覆盖 {coverage}',
+              hintCorrelations: '{correlations} · 样本 {indexBtc} · {indexEth}',
+              hintListSep: ' · ',
               eventLine: '事件',
               // 官方与 provider 同分钟、未能确认是同一条发布时的线上说明（设计 145 §8 B 的留痕）。
               eventLineIdentityUnconfirmed: '同一分钟里官方日历也有一条发布，没能确认是同一条，两边的名字都保留',
@@ -306,6 +311,7 @@ export const productText = {
               indexNames: { real: '纳斯达克 100', proxy: 'QQQ' },
               noData: '无数据', windowNoData: '—', forming: '实时未闭合',
               refresh: '更新历史', loading: '正在加载行情…', unavailable: '行情暂不可用',
+              contractMismatch: '界面与主进程的版本不一致，当前数据无法读取。请完全退出观潮后重新启动，只刷新页面不够。',
               quote: '纳斯达克 100 最新收盘', closed: '已闭合涨跌', observed: '成交时间', analysis: '闭合数据截至',
               observations: '跨市场观察', correlations: '24h · 5m 收益率相关性', indexBtc: '纳斯达克 100 ↔ BTC', indexEth: '纳斯达克 100 ↔ ETH',
               proxyTag: '代理', proxyCaveat: '代币化合成品：Binance QQQUSDT 永续（24/7），不是标准纳斯达克 100 指数。本行默认显示它；真实指数只在它拿不到数据时接手。',
@@ -1844,9 +1850,10 @@ export const productText = {
           empty: '暂无',
           statuses: {
             healthy: '健康',
-            degraded: '降级',
+            'multiple-failures': '多次失败',
+            'data-stale': '数据偏旧',
             failed: '失败',
-            paused: '已暂停'
+            paused: '已关闭'
           }
         },
         actions: {
@@ -2154,6 +2161,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               chart: 'Common-anchor returns',
               rangeLabel: 'Return window',
               ranges: { '1h': '1H', '24h': '24H', '7d': '7D' },
+              hintAnalysis: 'Closed data through {time}',
+              hintCoverage: 'History coverage {coverage}',
+              hintCorrelations: '{correlations} · samples {indexBtc} · {indexEth}',
+              hintListSep: ' · ',
               eventLine: 'Event',
               eventLineIdentityUnconfirmed: 'An official calendar release falls in the same minute; not confirmed to be the same event, so both names are kept',
               eventsCollapsed: '{count} events folded',
@@ -2166,6 +2177,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               indexNames: { real: 'Nasdaq 100', proxy: 'QQQ' },
               noData: 'No data', windowNoData: '—', forming: 'Live, unclosed',
               refresh: 'Update history', loading: 'Loading market data…', unavailable: 'Market data unavailable',
+              contractMismatch: 'The interface and the main process are running different versions, so this data cannot be read. Quit the app completely and start it again; reloading the page is not enough.',
               quote: 'Nasdaq 100 latest close', closed: 'Closed returns', observed: 'Trade time', analysis: 'Closed data through',
               observations: 'Cross-market observations', correlations: '24h · 5m return correlation', indexBtc: 'Nasdaq 100 ↔ BTC', indexEth: 'Nasdaq 100 ↔ ETH',
               proxyTag: 'Proxy', proxyCaveat: 'A tokenised synthetic: Binance QQQUSDT perpetual (24/7), not the standard Nasdaq 100 index. It is the default reading of this row; the real index takes over only when it cannot answer.',
@@ -3678,9 +3690,10 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
           empty: 'None',
           statuses: {
             healthy: 'Healthy',
-            degraded: 'Degraded',
+            'multiple-failures': 'Repeated failures',
+            'data-stale': 'Data is stale',
             failed: 'Failed',
-            paused: 'Paused'
+            paused: 'Off'
           }
         },
         actions: {

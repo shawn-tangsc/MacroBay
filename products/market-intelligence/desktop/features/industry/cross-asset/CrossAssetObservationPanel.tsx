@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Popover, Tooltip } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Popover as FocusPopover } from '@platform/ui/components/popover'
 import { Segmented } from '@platform/ui/components/segmented'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { Tooltip as FocusTooltip } from '@platform/ui/components/tooltip'
@@ -58,7 +59,11 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 const crossAssetTextKeys = Object.freeze({
   subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
-  rangeLabel: 'pages.intelligence.portal.dashboard.crossAsset.rangeLabel'
+  rangeLabel: 'pages.intelligence.portal.dashboard.crossAsset.rangeLabel',
+  hintAnalysis: 'pages.intelligence.portal.dashboard.crossAsset.hintAnalysis',
+  hintCoverage: 'pages.intelligence.portal.dashboard.crossAsset.hintCoverage',
+  hintCorrelations: 'pages.intelligence.portal.dashboard.crossAsset.hintCorrelations',
+  unavailable: 'pages.intelligence.portal.dashboard.crossAsset.unavailable'
 })
 /** 窗口切换每一项的文案键：句子仍是 1H/24H/7D，只是不再在调用点拼字符串。 */
 const crossAssetWindowLabelKeys: Readonly<Record<CrossAssetRange, string>> = Object.freeze({
@@ -304,11 +309,24 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
   const rateReadings = rates && rates.state !== 'unavailable' ? rates.readings : []
   const rateBySeries = new Map(rateReadings.map(reading => [reading.seriesId, reading]))
   const statusRows = resolveCrossAssetStatusRows(readings, rateReadings)
-  const historyInfo = snapshot ? <>
-    <div>{text.analysis} {formatTime(snapshot.analysisEnd, 'second')}</div>
-    <div>{text.coverage} {(['index', 'btc', 'eth'] as const).map(asset => `${asset === 'index' ? indexRowName(snapshot, text) : text.assets[asset]} ${snapshot.historyCoverage[asset].count}/${snapshot.historyCoverage[asset].expectedCount}`).join(' · ')}</div>
-    <div>{text.correlations} · {text.samples} {snapshot.correlations.indexBtc.sampleCount}/288 · {snapshot.correlations.indexEth.sampleCount}/288</div>
-  </> : text.unavailable
+  /**
+   * 图表工具条的说明：三行，分别是分析时刻、三条曲线的覆盖、相关性样本数。
+   *
+   * 交给平台浮层的 `lines` + `labelParams`：一行一个键，数字先格式化好再传，调用点不拼句子。
+   * 没有快照时只留一行「暂不可用」，与原来那句同一个键。
+   */
+  const historyHint = snapshot ? {
+    lines: [crossAssetTextKeys.hintAnalysis, crossAssetTextKeys.hintCoverage, crossAssetTextKeys.hintCorrelations],
+    labelParams: {
+      time: formatTime(snapshot.analysisEnd, 'second'),
+      coverage: (['index', 'btc', 'eth'] as const).map(asset =>
+        `${asset === 'index' ? indexRowName(snapshot, text) : text.assets[asset]} ${snapshot.historyCoverage[asset].count}/${snapshot.historyCoverage[asset].expectedCount}`
+      ).join(text.hintListSep),
+      correlations: text.correlations,
+      indexBtc: `${snapshot.correlations.indexBtc.sampleCount}/288`,
+      indexEth: `${snapshot.correlations.indexEth.sampleCount}/288`
+    }
+  } : { lines: [crossAssetTextKeys.unavailable] }
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
@@ -356,7 +374,8 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
         <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
       <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
-        <Tooltip title={historyInfo} trigger={['hover', 'focus', 'click']}><Button type="text" size="small" aria-label={text.analysis} icon={<Info size={13} />} /></Tooltip></div>
+        <FocusPopover {...historyHint} resolveText={resolveProductText}>
+          <Button type="text" size="small" aria-label={text.analysis} icon={<Info size={13} />} /></FocusPopover></div>
         <div className="mi-cross-asset__chart-actions"><Segmented value={view.range} ariaLabelKey={crossAssetTextKeys.rangeLabel} resolveText={resolveProductText}
             items={crossAssetRanges.map(range => ({ value: range, labelKey: crossAssetWindowLabelKeys[range] }))}
             onChange={range => view.setRange(range as CrossAssetRange)} />
@@ -376,8 +395,13 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
             ? <LoadingState label={text.loading} fill />
             // 查询失败是「读不到」，不是「没有」：走统一状态面，码用 unreadable（程序故障，可重试）。
             // 「来源被关」那一支等设置深链入口落地后再拆成 disabled · target-disabled。
-            : <StateView state="error" reasonCode="unreadable" size="md"
-                action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
+            // 主进程发来的快照不符合本版契约（版本不一致）时不给重试：重试只会再失败一次，那是假动作；
+            // 原因句直接说要重启应用。
+            : view.failure === 'contract'
+              ? <StateView state="error" reasonCode="unreadable" size="md"
+                  productReason={{ key: 'mi.crossAsset.contractMismatch', resolve: () => text.contractMismatch }} />
+              : <StateView state="error" reasonCode="unreadable" size="md"
+                  action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void view.refresh() }} />}
       </div>
       {/* The reading line (design 142): one footnote spanning the panel, under the chart it explains.
           It is the product's own statement about the chart, kept apart from the model's conclusion — a

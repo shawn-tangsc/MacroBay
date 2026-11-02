@@ -157,6 +157,27 @@ describe('cross-asset observation workspace', () => {
     } finally { await act(async () => root.unmount()); host.remove() }
   })
 
+  it('says the interface and main process differ instead of offering a retry that cannot work', async () => {
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+    const client = {
+      acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+      renew: async () => ({ state: 'active' }),
+      query: async () => ({ state: 'unavailable', cause: 'contract' }),
+      refresh: vi.fn(async () => ({ state: 'refreshed' })),
+      // 客户端契约里 `release` 返回 Promise，钩子对它 `.catch`；返回 undefined 会让卸载路径直接抛。
+      release: vi.fn(async () => ({ state: 'released' }))
+    }
+    try {
+      await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+      for (let attempt = 0; attempt < 6; attempt += 1) await act(async () => { await Promise.resolve() })
+      expect(host.textContent).toContain(text.contractMismatch)
+      // Retrying a version mismatch only fails the same way, so the state offers no action at all.
+      expect(host.querySelector('.state-view button')).toBeNull()
+    } finally { await act(async () => root.unmount()); host.remove() }
+  })
+
   it('keeps both macro rows unconnected and figureless when no macro snapshot is supplied at all', async () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
