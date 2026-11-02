@@ -221,6 +221,8 @@ export const dailyBriefingText = {
       windowHours: '统计窗口', windowHoursHint: '日报覆盖最近这段时间的数据，默认 24 小时。',
       windowHoursOption: '{hours} 小时',
       note: '保存后从下一份日报生效；已生成的版次保留当时的窗口和截止时间，不回溯改写。',
+        noteLabel: '生效说明',
+        retry: '重试',
       save: '保存', saving: '保存中…', cancel: '取消', loading: '正在读取设置…', failed: '保存失败，请重试'
     }
   },
@@ -443,6 +445,8 @@ export const dailyBriefingText = {
       windowHours: 'Statistics window', windowHoursHint: 'How far back each brief reads. Defaults to 24 hours.',
       windowHoursOption: '{hours} hours',
       note: 'Applies from the next brief. Editions that already exist keep the window and cutoff they were generated with.',
+        noteLabel: 'When this applies',
+        retry: 'Retry',
       save: 'Save', saving: 'Saving…', cancel: 'Cancel', loading: 'Reading settings…', failed: 'Save failed — try again'
     }
   }

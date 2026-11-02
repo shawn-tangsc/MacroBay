@@ -66,7 +66,10 @@ describe('daily briefing settings modal', () => {
     // Two sections, not two dialogs: schedule rules and the model preference.
     expect(document.body.textContent).toContain(text.settings.generation)
     expect(document.body.textContent).toContain(text.settings.ai)
-    expect(document.body.textContent).toContain(text.generationSettings.note)
+    // The "applies from the next brief" sentence lives in a question mark, not on the panel: its
+    // accessible name is what a screen reader gets without opening anything.
+    expect(document.body.querySelector(`[aria-label="${text.generationSettings.noteLabel}"]`)).not.toBeNull()
+    expect(document.body.textContent).not.toContain(text.generationSettings.note)
 
     await act(async () => { saveButton().click(); await Promise.resolve(); await Promise.resolve() })
 
@@ -150,5 +153,36 @@ describe('daily briefing settings modal', () => {
     // Unticking removes the question and its sentence with it.
     expect(costTrigger()).toBeNull()
     expect(document.body.textContent).not.toContain('写作 2 次')
+  })
+
+  it('shows a read failure as an error with a retry instead of a spinner that never stops', async () => {
+    ;(window as unknown as { platform: unknown }).platform = {
+      modelProviders: { list: async () => [] },
+      settings: { get: async () => ({}) }
+    }
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    const getSettings = vi.fn()
+      .mockResolvedValueOnce({ state: 'unavailable', failureCode: 'daily-briefing-request-failed' })
+      .mockResolvedValue({ state: 'available', view })
+    const client = { getSettings, saveSettings: vi.fn(async () => ({ state: 'available' as const, view })) }
+
+    await act(async () => {
+      root!.render(<DailyBriefingSettingsModal open text={text} client={client} onClose={vi.fn()} />)
+    })
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+
+    // A failed read must not look like work in progress: the reader is told and can act.
+    expect(document.body.textContent).not.toContain(text.generationSettings.loading)
+    expect(document.body.querySelector('[data-state="error"]')).not.toBeNull()
+
+    const retry = [...document.body.querySelectorAll('button')]
+      .find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.retry)!
+    await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
+
+    expect(getSettings).toHaveBeenCalledTimes(2)
+    expect(document.body.querySelector('[data-state="error"]')).toBeNull()
+    expect(document.body.textContent).toContain(text.settings.generation)
   })
 })

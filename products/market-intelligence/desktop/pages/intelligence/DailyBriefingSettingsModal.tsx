@@ -8,6 +8,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
 import { Popover } from '@platform/ui/components/popover'
+import { StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
@@ -65,6 +66,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [webSearchBlocked, setWebSearchBlocked] = useState(false)
   const resolveProductText = useProductTextKey()
 
@@ -112,7 +114,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
       setDefaultModel(await readDefaultModel(modelProviders ?? []))
     })()
     return () => { active = false }
-  }, [open, client])
+  }, [open, client, reloadKey])
 
   const candidates = useMemo<ModelPickerCandidate[]>(
     () => providers.flatMap((provider) => provider.models.map((model) => ({ providerId: provider.id, model }))),
@@ -187,12 +189,14 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
     titleKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.title"
     width="standard"
   >
-    {!draft ? <LoadingState label={text.generationSettings.loading} minHeight={120} /> : <>
-      {plan?.fallback
-        ? <p className="mi-daily-briefing__settings-warning" role="status">
-          {periodLabels.languageUnsupported.replace('{language}', plan.requested)}
-        </p>
-        : null}
+    {loadFailed
+      ? <>
+        <StateView reasonCode="unreadable" resolveText={resolveProductText} state="error" />
+        <div className="mi-daily-briefing__settings-link">
+          <Button onClick={() => setReloadKey((count) => count + 1)}>{text.generationSettings.retry}</Button>
+        </div>
+      </>
+      : !draft ? <LoadingState label={text.generationSettings.loading} minHeight={120} /> : <>
       <h3 className="mi-daily-briefing__settings-section">{text.settings.generation}</h3>
       {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
       <div className="mi-daily-briefing__settings-row">
@@ -235,7 +239,18 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
           disappearing, and that reason is the control's own accessible name. */}
       <div className="mi-daily-briefing__settings-row">
         <Button disabled aria-label={periodLabels.addReason}>{periodLabels.add}</Button>
-        <small>{periodLabels.addReason}</small>
+        <Popover
+          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
+          resolveText={resolveProductText}
+          trigger={(triggerProps) => <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
+            expanded={triggerProps.expanded}
+            icon={CircleHelp}
+            onSelect={triggerProps.onSelect}
+            resolveText={resolveProductText}
+            size="sm"
+          />}
+        />
       </div>
 
       <div className="mi-daily-briefing__settings-row">
@@ -244,6 +259,22 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
           <small>{plan?.fallback
             ? periodLabels.languageFallback.replace('{language}', languageName(plan.used))
             : periodLabels.languageFollow.replace('{language}', plan ? languageName(plan.used) : '')}</small>
+          {plan?.fallback
+            ? <Popover
+              labelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
+              labelParams={{ language: plan.requested }}
+              resolveText={resolveProductText}
+              trigger={(triggerProps) => <IconButton
+                ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
+                ariaLabelParams={{ language: plan.requested }}
+                expanded={triggerProps.expanded}
+                icon={CircleHelp}
+                onSelect={triggerProps.onSelect}
+                resolveText={resolveProductText}
+                size="sm"
+              />}
+            />
+            : null}
         </div>
         {extraLanguages.length > 0
           ? <div className="mi-daily-briefing__settings-time">
@@ -326,7 +357,20 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
       <p className="mi-daily-briefing__settings-link">
         <button type="button" onClick={() => { openModelSettings(); onClose() }}>{text.aiSettings.openModelSettings}</button>
       </p>
-      <p className="mi-daily-briefing__settings-note">{text.generationSettings.note}</p>
+      <p className="mi-daily-briefing__settings-link">
+        <Popover
+          labelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.note"
+          resolveText={resolveProductText}
+          trigger={(triggerProps) => <IconButton
+            ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
+            expanded={triggerProps.expanded}
+            icon={CircleHelp}
+            onSelect={triggerProps.onSelect}
+            resolveText={resolveProductText}
+            size="sm"
+          />}
+        />
+      </p>
       {failed || loadFailed ? <p className="mi-daily-briefing__settings-error" role="alert">{text.generationSettings.failed}</p> : null}
     </>}
   </Modal>
