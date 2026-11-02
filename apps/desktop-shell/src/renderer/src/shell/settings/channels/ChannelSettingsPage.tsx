@@ -79,6 +79,13 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [candidateTargets, setCandidateTargets] = useState<Record<string, boolean>>({})
   const [runtimeStatus, setRuntimeStatus] = useState<RuntimeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * 列表读取失败，与写操作失败分成两个状态。
+   *
+   * 合成一个的话，「一次都没读成」和「创建没成功」在侧栏里长得一样，可前者该说「读不到」、
+   * 后者该说「还没有通道」。两个处境的原因不同，就不能共用一个标记。
+   */
+  const [readError, setReadError] = useState(false)
   /** First read of the rail (channels, catalog, agents); later refreshes keep the list on screen. */
   const [initialLoading, setInitialLoading] = useState(true)
   /** 空态动作用它把光标送进第一个可输入控件，而不是只把用户滚过去。 */
@@ -110,10 +117,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setChannels(nextChannels as Channel[])
       setAgents((agentState as { agents?: Agent[] }).agents ?? [])
       setSelected((previous) => previous ?? (nextChannels as Channel[])[0]?.id ?? null)
+      setReadError(false)
     } catch {
-      // A failed first read used to leave an empty panel and an unhandled rejection: the page then
-      // looked like "no channels" instead of "could not read".
-      setError(labels.channelOperationFailed)
+      // 读失败不写进 `error`：那个位置属于写操作。这里只记「没读成」，渲染时再分
+      // 「一次都没读到」与「有旧数据、这次没刷上」两种处境——它们是两句话，不是一个。
+      setReadError(true)
     } finally {
       setInitialLoading(false)
     }
@@ -230,9 +238,28 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           </Button>
         </header>
         {initialLoading ? (
+          // 首次读完成之前只画加载中：这时既不「没有」，也不「读不到」。
           <StateView state="loading" size="md" />
+        ) : readError && channels.length === 0 ? (
+          // 一次都没读成 —— 这是「读不到」，不是「还没有通道」。两个处的动作都是去创建/重试，
+          // 但原因不同，画成同一个空态就等于告诉用户「你没有通道」。
+          <StateView
+            state="error"
+            reasonCode="unreadable"
+            size="sm"
+            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reload() }}
+          />
         ) : (
           <>
+            {readError ? (
+              // 手上还有上一次的列表：不清空它，只标一句这是旧的，并把重试放在同一行。
+              <p className="channel-settings-stale" role="status">
+                <span>{labels.channelStaleNotice}</span>
+                <button type="button" onClick={() => void reload()}>
+                  {labels.channelRefresh}
+                </button>
+              </p>
+            ) : null}
             {channels.length === 0 ? (
               <StateView
                 state="empty"

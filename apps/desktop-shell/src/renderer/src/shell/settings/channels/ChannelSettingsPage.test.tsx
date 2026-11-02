@@ -15,7 +15,7 @@ const catalogEntries = [
   { type: 'feishu', status: 'blocked', reason: 'adapter-blocked', implemented: false, credentialFields: [] }
 ]
 
-function installPlatform(overrides: Record<string, unknown>): void {
+function installPlatform(overrides: Record<string, unknown>): Record<string, ReturnType<typeof vi.fn>> {
   const channels = {
     catalog: vi.fn(async () => catalogEntries),
     list: vi.fn(async () => []),
@@ -30,6 +30,11 @@ function installPlatform(overrides: Record<string, unknown>): void {
       platform: { channels, agents: { listAgents: vi.fn(async () => ({ agents: [] })) } }
     })
   })
+  return channels as unknown as Record<string, ReturnType<typeof vi.fn>>
+}
+
+function stateOf(container: HTMLElement, state: string): Element | null {
+  return container.querySelector(`[data-state="${state}"]`)
 }
 
 async function mount(): Promise<HTMLElement> {
@@ -47,13 +52,15 @@ afterEach(async () => {
 })
 
 describe('ChannelSettingsPage read failures and catalog copy', () => {
-  it('surfaces a failed first read instead of showing an empty panel', async () => {
+  it('surfaces a failed first read as an error with retry, never as an empty rail', async () => {
     installPlatform({ catalog: vi.fn(async () => { throw new Error('ipc-unavailable') }) })
 
     const container = await mount()
 
-    // Before this, a rejected read left an empty rail with no error and an unhandled rejection.
-    expect(container.textContent).toContain(labels.channelOperationFailed)
+    // 读失败与「还没有通道」是两句话：前者给重试，后者给创建。画成空态就是告诉用户「你没有通道」。
+    expect(stateOf(container, 'error')).not.toBeNull()
+    expect(stateOf(container, 'empty')).toBeNull()
+    expect(container.textContent).not.toContain(labels.channelStaleNotice)
   })
 
   it('names what each blocked adapter is missing', async () => {
@@ -64,6 +71,45 @@ describe('ChannelSettingsPage read failures and catalog copy', () => {
     expect(container.textContent).toContain(labels.channelCatalogReason.planned)
     expect(container.textContent).toContain(labels.channelCatalogReason.blockedUnimplemented)
     expect(container.textContent).toContain('telegram')
+  })
+})
+
+describe('three waiting states', () => {
+  it('draws only loading before the first read returns — neither error nor empty', async () => {
+    // 首次读永不返回：屏幕上只许有加载中。
+    installPlatform({ catalog: vi.fn(() => new Promise(() => {})) })
+    const container = await mount()
+
+    // 加载态由 LoadingState 承担（它自己就是 live region，不再套一层 StateView）。
+    expect(container.querySelector('.loading-state')).not.toBeNull()
+    expect(stateOf(container, 'error')).toBeNull()
+    expect(stateOf(container, 'empty')).toBeNull()
+  })
+
+  it('keeps the list and marks it as the last read when a refresh fails', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [{
+        id: 'channel-1',
+        type: 'telegram',
+        name: 'Telegram',
+        agentId: 'agent-1',
+        state: 'credential-missing',
+        credential: { status: 'missing', hasCredential: false }
+      }])
+    })
+    const container = await mount()
+    expect(container.textContent).toContain('Telegram')
+
+    // 第二次读失败：列表是旧的，不该被换成一块空白或一个错误态。
+    channels.list.mockRejectedValueOnce(new Error('ipc-unavailable'))
+    const refresh = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === labels.channelRefresh
+    )
+    await act(async () => refresh?.click())
+
+    expect(container.textContent).toContain('Telegram')
+    expect(container.textContent).toContain(labels.channelStaleNotice)
+    expect(stateOf(container, 'error')).toBeNull()
   })
 })
 
