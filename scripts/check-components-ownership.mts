@@ -161,6 +161,15 @@ export function claimsIn(commit: InspectedCommit): string[] {
 export type ClaimOptions = {
   /** 已推送到远程的提交不许被后置认领。默认当作全部未推送（单元用例不必连网）。 */
   isPushed?: (hash: string) => boolean
+  /**
+   * 机械删除豁免（Chief 2026-11-02 定，`MI-11-R166`）：**同一行文本、全仓一致地删掉**，
+   * 允许整体一笔。判据必须机械：提交里只有删除、没有任何新增，且所有删除行的文本完全相同。
+   *
+   * 为什么需要它：把「逐文件各设一行」改成「环境里只设一处」这种清理，天然会横跨上百个文件；
+   * 为它写一百多行 `Also:` 解释，只会把一句真话扩成一百多行套话。
+   * 反过来也必须严：**有一条新增行、或两处删除文本不同，就不算机械删除**。
+   */
+  isMechanicalDeletion?: (hash: string) => boolean
 }
 
 /** 被有效认领的提交哈希。无效认领一律忽略——于是那笔照原样红，不会因为“认领过了”就消失。 */
@@ -193,17 +202,41 @@ export function claimedCommits(
   return claimed
 }
 
+/**
+ * 机械删除的判据**只看 diff，不看声明**：只有删除、没有任何新增，且所有删除行的文本完全相同。
+ *
+ * 为什么需要它（Chief 2026-11-02 定，`MI-11-R166`）：把「逐文件各设一行」改成「环境里只设一处」
+ * 这种清理，天然横跨上百个文件；为它写一百多行 `Also:` 解释，只会把一句真话扩成一百多行套话。
+ *
+ * 反过来必须严：**有一条新增行、或两处删除文本不同，就不算机械删除**——那时它就有语义了，
+ * 有语义的改动要一条一条说清为什么。
+ *
+ * 判据单独抽成函数，是为了让它能被用例喂手写 patch 验证：这段逻辑在 CLI 里，而 CLI 不可测。
+ */
+export function isMechanicalDeletionPatch(patch: string): boolean {
+  const changed = patch
+    .split('\n')
+    .filter((line) => (line.startsWith('+') || line.startsWith('-')) && !line.startsWith('+++') && !line.startsWith('---'))
+  const added = changed.filter((line) => line.startsWith('+'))
+  const removed = changed.filter((line) => line.startsWith('-'))
+  if (added.length > 0 || removed.length === 0) return false
+  return new Set(removed).size === 1
+}
+
 export function findViolations(
   commits: readonly InspectedCommit[],
   options: ClaimOptions = {}
 ): ComponentOwnershipViolation[] {
   const claimed = claimedCommits(commits, options)
+  const isMechanicalDeletion = options.isMechanicalDeletion ?? ((): boolean => false)
   const violations: ComponentOwnershipViolation[] = []
   for (const commit of commits) {
     if (!touchesComponents(commit.files)) continue
     // 早于生效点的提交：两条新规则都不判（它们写在规则存在之前，不可能满足）。
     if (predatesRules(commit.authorDate)) continue
     if (claimed.has(commit.hash)) continue
+    // 同一行文本全仓机械删除：允许整体一笔，不要求逐文件解释。
+    if (isMechanicalDeletion(commit.hash)) continue
     const unexplained = unexplainedFiles(commit.files, commit.message)
     if (declaresComponentOwner(commit.message) && unexplained.length === 0) continue
     violations.push({
@@ -267,7 +300,15 @@ function main(): void {
       return true
     }
   }
-  const violations = findViolations(commits, { isPushed })
+  const mechanical = (hash: string): boolean => {
+    try {
+      return isMechanicalDeletionPatch(git(['show', '--format=', '--unified=0', hash]))
+    } catch {
+      // 读不出 diff 时从严：当作不是机械删除。
+      return false
+    }
+  }
+  const violations = findViolations(commits, { isPushed, isMechanicalDeletion: mechanical })
   if (violations.length === 0) {
     console.log(`components-ownership: ${commits.length} commit(s) checked, none touched ${COMPONENTS_DIR} without a ${OWNER_TRAILER} trailer.`)
     return

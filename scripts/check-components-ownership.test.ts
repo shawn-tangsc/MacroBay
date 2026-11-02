@@ -279,4 +279,29 @@ describe('components ownership guard', () => {
       expect(findViolations([untagged, claim()], { isPushed: (hash) => hash === 'd1d1d1d' })).toHaveLength(1)
     })
   })
+
+  it('lets a mechanical same-line deletion span many files without a trailer', () => {
+    // `MI-11-R166`：同一行文本全仓一致删掉，允许整体一笔。判据是 diff，不是声明。
+    const mechanical = {
+      hash: 'aaa',
+      subject: 'test(env): one place instead of 177',
+      message: 'test(env): one place instead of 177',
+      authorDate: '2026-11-02T15:00:00+08:00',
+      files: [`${COMPONENTS_DIR}/tabs/Tabs.test.tsx`, 'apps/desktop-shell/x.test.ts']
+    }
+    expect(findViolations([mechanical], { isMechanicalDeletion: () => true })).toEqual([])
+    // 没有豁免时照旧红——证明这条豁免不是「默认放行」。
+    expect(findViolations([mechanical])).toHaveLength(1)
+  })
+
+  it('does not exempt a commit that also adds a line', () => {
+    const adds = {
+      hash: 'bbb',
+      subject: 'test(ui): touch a component and delete a line',
+      message: 'test(ui): touch a component and delete a line',
+      authorDate: '2026-11-02T15:00:00+08:00',
+      files: [`${COMPONENTS_DIR}/tabs/Tabs.tsx`]
+    }
+    expect(findViolations([adds], { isMechanicalDeletion: () => false })).toHaveLength(1)
+  })
 })
