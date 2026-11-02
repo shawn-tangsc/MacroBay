@@ -14,10 +14,14 @@ const TRANSLATION_QUEUE_LIMIT = 50
 
 export function useIntelligenceTranslationSettings(labels: {
   saveFailed: string
+  /** Reading the saved settings is not saving them: a failed read must not say "save failed". */
+  loadFailed: string
   queueFailed: string
   queueQueued: string
 }) {
   const [settings, setSettings] = useState<SafeIntelligenceTranslationSettings>()
+  /** True until the first read settles: before that, the card must not draw switches as "off". */
+  const [loading, setLoading] = useState(true)
   const [moduleStatus, setModuleStatus] = useState<SafeTranslationModuleStatus>()
   const [modelProviders, setModelProviders] = useState<SafeModelProvider[]>([])
   const [saving, setSaving] = useState(false)
@@ -40,8 +44,10 @@ export function useIntelligenceTranslationSettings(labels: {
   }, [])
 
   useEffect(() => {
-    void load().catch(() => setErrorMessage(labels.saveFailed))
-  }, [labels.saveFailed, load])
+    void load()
+      .catch(() => setErrorMessage(labels.loadFailed))
+      .finally(() => setLoading(false))
+  }, [labels.loadFailed, load])
 
   const updateSettings = useCallback(
     async (patch: Partial<IntelligenceTranslationSettings>) => {
@@ -92,6 +98,7 @@ export function useIntelligenceTranslationSettings(labels: {
 
   return {
     settings,
+    loading,
     moduleStatus,
     modelProviders,
     saving,

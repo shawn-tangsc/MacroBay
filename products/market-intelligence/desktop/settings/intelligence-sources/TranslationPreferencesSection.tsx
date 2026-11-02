@@ -3,6 +3,7 @@ import { Button, Select, Switch } from 'antd'
 
 import { resolveConfiguredModel, parseConfiguredModelRef } from '@platform/ai/model-defaults/configuredDefaultModel'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { LoadingState } from '@platform/ui/components/loading'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
@@ -28,12 +29,16 @@ export function TranslationPreferencesSection(props: {
   /** The provider's own sources; omitted keeps the global module counts. */
   sourceIds?: readonly string[]
   modelProviders: SafeModelProvider[]
+  /** The first read is still in flight: the card draws a loading line, never switches in the "off" position. */
+  loading?: boolean
   saving: boolean
   /** Set only when this card saved during this session; a loaded file never sets it. */
   savedThisSession?: boolean
   queuing: boolean
   labels: {
     title: string
+    loading: string
+    loadFailed: string
     autoTranslateEnabled: string
     targetLocale: string
     translationModel: string
@@ -120,7 +125,8 @@ export function TranslationPreferencesSection(props: {
         <span>{props.labels.title}</span>
         {props.savedThisSession ? <small className="intelligence-section-saved">{props.labels.savedThisSession}</small> : null}
       </div>
-      {settings ? (
+      {props.loading ? <LoadingState label={props.labels.loading} minHeight={60} /> : null}
+      {!props.loading && settings ? (
         <div className="intelligence-setting-grid">
           <SettingRow label={props.labels.autoTranslateEnabled}>
             <Switch

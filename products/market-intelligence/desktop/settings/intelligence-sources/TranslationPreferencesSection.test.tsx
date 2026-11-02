@@ -11,6 +11,17 @@ import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { productText } from '../../shared/i18n/productText'
 import type { SafeIntelligenceTranslationSettings } from '../../../service/intelligence/schema/intelligenceTranslation'
 import { TranslationPreferencesSection } from './TranslationPreferencesSection'
+import { useIntelligenceTranslationSettings } from './useIntelligenceTranslationSettings'
+import { intelligenceTranslationClient } from '../../shared/ipc/intelligenceTranslationClient'
+
+vi.mock('../../shared/ipc/intelligenceTranslationClient', () => ({
+  intelligenceTranslationClient: {
+    getSettings: vi.fn(),
+    getModuleStatus: vi.fn(),
+    saveSettings: vi.fn(),
+    queueMissing: vi.fn()
+  }
+}))
 
 const labels = productText['zh-CN'].settings.intelligenceSources.translationPreferences
 
@@ -274,5 +285,54 @@ describe('TranslationPreferencesSection model picker', () => {
     })
 
     expect(onQueueMissing).toHaveBeenCalledWith(['coindesk-rss', 'federal-reserve-rss'])
+  })
+})
+
+/**
+ * 首次读取期间的三种形状：还没读到、读到、读不到。
+ *
+ * 卡片原来在读取期间直接画开关（值取 `settings?.` 所以一律是「关」），数据到了再翻成「开」——
+ * 读者看到的是开关自己跳了一下。读失败时更糟：它报的是「保存失败」，而这期间没有任何人保存过。
+ */
+describe('TranslationPreferencesSection first read', () => {
+  it('draws a loading line instead of switches in the off position', () => {
+    const markup = renderToStaticMarkup(
+      <ShellLanguageProvider language="zh-CN">
+        <TranslationPreferencesSection
+          loading
+          modelProviders={[silicon]}
+          saving={false}
+          queuing={false}
+          labels={labels}
+          onChange={() => undefined}
+          onQueueMissing={() => undefined}
+        />
+      </ShellLanguageProvider>
+    )
+    expect(markup).toContain(labels.loading)
+    expect(markup).not.toContain('ant-switch')
+  })
+
+  it('reports a failed read as a read, not as a save', async () => {
+    vi.mocked(intelligenceTranslationClient.getSettings).mockRejectedValue(new Error('offline'))
+    vi.mocked(intelligenceTranslationClient.getModuleStatus).mockResolvedValue({ pendingCount: 0, failedCount: 0, translatedCount: 0 })
+
+    function Harness(): React.ReactElement {
+      const state = useIntelligenceTranslationSettings({
+        saveFailed: 'SAVE-FAILED',
+        loadFailed: 'LOAD-FAILED',
+        queueFailed: 'QUEUE-FAILED',
+        queueQueued: 'QUEUED'
+      })
+      return <em>{state.errorMessage ?? ''}</em>
+    }
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root!.render(<Harness />))
+    await act(async () => { await Promise.resolve() })
+    expect(container.textContent).toBe('LOAD-FAILED')
+    expect(container.textContent).not.toContain('SAVE-FAILED')
   })
 })
