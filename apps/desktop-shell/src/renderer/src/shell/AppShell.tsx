@@ -80,6 +80,15 @@ import { Segmented } from '@platform/ui/components/segmented'
 /** 语言分段的组名键。分段组件只收键，句子仍在 `platformText`。 */
 const LANGUAGE_SEGMENTED_KEY = 'preferences.language'
 
+/**
+ * 语言项 → 文案键。**写成查表而不是模板串**：模板串拼出来的键静态校验不到形状，
+ * `choiceKeyGuard` 只判得动字面量；而查表还让「加一种语言」在编译期就红——两层都保住了。
+ */
+const LANGUAGE_LABEL_KEYS: Record<AppLanguage, string> = {
+  'zh-CN': 'preferences.chinese',
+  'en-US': 'preferences.english'
+}
+
 export { resolveAntDesignLocale } from './shellOptionTables'
 import { buildWindowAntdTheme, WINDOW_ANTD_BUTTON_CONFIG, WINDOW_ANTD_WAVE_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 import {
@@ -1346,7 +1355,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
             ariaLabelKey={LANGUAGE_SEGMENTED_KEY}
             items={languageOptions.map((option) => ({
               value: option.value,
-              labelKey: `preferences.${option.labelKey}`
+              labelKey: LANGUAGE_LABEL_KEYS[option.value]
             }))}
             value={settings.language}
             onChange={(value) => void updateSettings({ language: value as AppLanguage })}
