@@ -1,7 +1,7 @@
-import { message } from 'antd'
 import { useState } from 'react'
 import type { AssistantTemplateDetail } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { useToast } from '@platform/ui/components/toast'
 import { platformText } from '../../../i18n/platformText'
 import { AssistantLibraryCategoryRail } from '../../assistants/library/AssistantLibraryCategoryRail'
 import { AssistantTemplateDetailDialog } from '../../assistants/library/AssistantTemplateDetailDialog'
@@ -15,6 +15,10 @@ type AssistantLibrarySettingsPageProps = {
   language: AppLanguage
   onManageAssistants: () => void
 }
+
+/** 成功回执的键：句子仍在 `platformText.assistants.library`，键只回答「哪一句」。 */
+const INSTALLED_TOAST_KEY = 'assistants.library.installedToast'
+const CREATED_TOAST_KEY = 'assistants.library.createdToast'
 
 export function AssistantLibrarySettingsPage({
   language,
@@ -33,10 +37,12 @@ export function AssistantLibrarySettingsPage({
   const activeGroup = library.groups.find((group) => group.id === library.selectedGroup)
   const activeTitle = activeProductGroup?.name ?? labels.groups[library.selectedGroup]
   const activeCount = activeProductGroup?.count ?? activeGroup?.count ?? library.items.length
+  // 平台 Toast：宿主挂在渲染根上，回执不再走 antd 的 message（第二套实现）。
+  const toast = useToast()
 
   async function installTemplate(templateId: string): Promise<void> {
     await library.installTemplate(templateId)
-    message.success(labels.installedMessage)
+    toast.success({ titleKey: INSTALLED_TOAST_KEY, resolveText: (key) => (key === INSTALLED_TOAST_KEY ? labels.installedMessage : '') })
   }
 
   async function openTemplateDetail(templateId: string): Promise<void> {
@@ -58,7 +64,7 @@ export function AssistantLibrarySettingsPage({
 
   async function createAssistant(input: Parameters<typeof library.createAssistant>[0]): Promise<void> {
     await library.createAssistant(input)
-    message.success(labels.created)
+    toast.success({ titleKey: CREATED_TOAST_KEY, resolveText: (key) => (key === CREATED_TOAST_KEY ? labels.created : '') })
   }
 
   return (

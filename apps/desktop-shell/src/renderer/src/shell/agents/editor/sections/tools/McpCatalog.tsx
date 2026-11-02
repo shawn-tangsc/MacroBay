@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Button, Input, Switch, Tag, Tooltip, message } from 'antd'
+import { Button, Input, Switch, Tag, Tooltip } from 'antd'
 import type { InputRef } from 'antd'
 import { Copy, ExternalLink, Network, Plus, RefreshCw, Settings2 } from 'lucide-react'
 
@@ -12,6 +12,7 @@ import type { AgentText } from '../../../agentText'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { useToast, type ToastApi } from '@platform/ui/components/toast'
 import {
   emptyToolsHint,
   McpStatusTag,
@@ -39,6 +40,8 @@ type McpCatalogProps = {
 const MANUAL_BADGE_KEY = 'agent.tools.mcpManualBadge'
 /** 工具名是分类名词（这个服务器提供了什么），不是状态。 */
 const MCP_TOOL_CHIP_KEY = 'agent.tools.mcpToolChip'
+/** 复制动作的回执键。 */
+const COPIED_TOAST_KEY = 'agent.tools.mcpActionCopied'
 
 export function McpCatalog({
   text,
@@ -199,7 +202,7 @@ function McpRow({
         {tools.length > 0 ? (
           <span className="agent-mcp-tool-list">
             {tools.slice(0, 4).map((tool) => (
-              <span key={tool.id} className="meta-chip">{tool.name}</span>
+              <Tag key={tool.id} className="agent-mcp-tool-chip">{tool.name}</Tag>
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
@@ -260,6 +263,7 @@ function McpCredentialActionButton({
   onRestart?: () => void
 }): React.ReactElement {
   const label = resolveCredentialActionLabel(action, text)
+  const toast = useToast()
 
   return (
     <Tooltip title={label}>
@@ -269,7 +273,7 @@ function McpCredentialActionButton({
         icon={credentialActionIcon(action.id)}
         aria-label={label}
         onClick={() => {
-          void runCredentialAction(action, text, onRestart)
+          void runCredentialAction(action, text, toast, onRestart)
         }}>
         {label}
       </Button>
@@ -295,6 +299,7 @@ function credentialActionIcon(id: RuntimeCredentialAction['id']): React.ReactNod
 async function runCredentialAction(
   action: RuntimeCredentialAction,
   text: AgentText,
+  toast: ToastApi,
   onRestart?: () => void
 ): Promise<void> {
   if (action.id === 'open-url' && action.url) {
@@ -313,7 +318,10 @@ async function runCredentialAction(
 
   if (action.id === 'copy-hint' && action.hint) {
     await copyTextToClipboard(action.hint)
-    message.success(text.editor.tools.mcpActionCopied)
+    toast.success({
+      titleKey: COPIED_TOAST_KEY,
+      resolveText: (key) => (key === COPIED_TOAST_KEY ? text.editor.tools.mcpActionCopied : '')
+    })
     return
   }
 

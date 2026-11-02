@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Input, message } from 'antd'
+import { Input } from 'antd'
 import { Search, Wrench } from 'lucide-react'
 
 import type { AgentFormState } from '@platform/ai/agent-platform/agents/agentConfigDescriptor'
@@ -18,6 +18,7 @@ import { useAgentText } from '../../agentTextProvider'
 import { BuiltinToolCatalog } from './tools/BuiltinToolCatalog'
 import { resolveAgentTextKey } from '../../agentTooltipText'
 import { StateView } from '@platform/ui/components/state'
+import { useToast } from '@platform/ui/components/toast'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { McpCatalog } from './tools/McpCatalog'
 import { SkillCatalog } from './tools/SkillCatalog'
@@ -37,6 +38,11 @@ type ToolsSectionProps = {
   onSave: () => void
 }
 
+/** 手动绑定回执的键：句子仍在 `AgentText.editor.tools`。 */
+const MANUAL_EMPTY_KEY = 'agent.tools.mcpManualEmpty'
+const MANUAL_DUPLICATE_KEY = 'agent.tools.mcpManualDuplicate'
+const MANUAL_ADDED_KEY = 'agent.tools.mcpManualAdded'
+
 type ToolTab = 'tools' | 'mcp' | 'skills' | 'product-packages'
 
 export default function ToolsSection({
@@ -51,6 +57,8 @@ export default function ToolsSection({
 }: ToolsSectionProps): React.ReactElement {
   const t = useAgentText()
   const [activeTab, setActiveTab] = useState<ToolTab>('tools')
+  // 平台 Toast：宿主挂在渲染根上，回执不再走 antd 的 message。
+  const toast = useToast()
   const [search, setSearch] = useState('')
   const [mcpDraft, setMcpDraft] = useState('')
   const [skillRuntime, setSkillRuntime] = useState<AgentSkillsRuntimeCatalog | null>(null)
@@ -98,16 +106,25 @@ export default function ToolsSection({
   function addMcp(): void {
     const result = addManualMcpBinding(form.mcps, mcpDraft)
     if (result.status === 'empty') {
-      message.warning(t.editor.tools.mcpManualEmpty)
+      toast.info({
+        titleKey: MANUAL_EMPTY_KEY,
+        resolveText: (key) => (key === MANUAL_EMPTY_KEY ? t.editor.tools.mcpManualEmpty : '')
+      })
       return
     }
     if (result.status === 'duplicate') {
-      message.info(t.editor.tools.mcpManualDuplicate(result.id))
+      toast.info({
+        titleKey: MANUAL_DUPLICATE_KEY,
+        resolveText: (key) => (key === MANUAL_DUPLICATE_KEY ? t.editor.tools.mcpManualDuplicate(result.id) : '')
+      })
       return
     }
     onChange({ mcps: result.mcps })
     setMcpDraft('')
-    message.success(t.editor.tools.mcpManualAdded(result.id))
+    toast.success({
+      titleKey: MANUAL_ADDED_KEY,
+      resolveText: (key) => (key === MANUAL_ADDED_KEY ? t.editor.tools.mcpManualAdded(result.id) : '')
+    })
   }
 
   async function installSkillFromDirectory(): Promise<void> {
