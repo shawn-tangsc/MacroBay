@@ -49,20 +49,63 @@ function sourceFiles(dir: string): string[] {
 
 /** 每个 `<StateView …>` 开标签取一段窗口；JSX 里属性顺序不固定，所以窗口而不是正则一次解析。 */
 const OPEN_TAG = /<StateView\b/g
-const WINDOW = 600
+/* 开标签的长度不再用常量截断：边界由 `openTagEnd` 的配对决定。 */
 
-function callSitesIn(file: string): CallSite[] {
-  const text = readFileSync(file, 'utf8')
-  const sites: CallSite[] = []
-  for (const match of text.matchAll(OPEN_TAG)) {
-    const start = match.index ?? 0
-    const raw = text.slice(start, start + WINDOW)
-    // 自闭合标签到此为止：不截断的话，窗口会吃进下一个相邻的 <StateView>，把它的动作算到上一个头上。
-    const close = raw.indexOf('/>')
-    const window = close >= 0 ? raw.slice(0, close) : raw
+/**
+ * 从 `<StateView` 扫到**开标签真正结束**：引号与括号配对，字符串里出现的 `>` 不算结束。
+ *
+ * 原来是「从起点截 600 字、到第一个 `/>` 为止」。那个写法会把**合法的动作写法**判成没有动作：
+ *
+ * ```
+ * action={{ labelKey: 'x', onSelect: () => { … } }}
+ *                                    ↑ 这个 '>' 把窗口截断在动作对象中间
+ * ```
+ *
+ * 于是守卫报「缺动作」，人去补一个本来就在的动作——**守卫读不出一个合法写法时，错的不是写法**。
+ * 所以这里按字符走一个小状态机，而不是找第一个分隔符：字符串里出现 `>`、`/` 或 `}` 都不该改变状态。
+ */
+function openTagEnd(text: string, start: number): { end: number; selfClosing: boolean } {
+  let depth = 0
+  let quote: string | null = null
+  for (let index = start; index < text.length; index += 1) {
+    const ch = text[index]
+    if (quote !== null) {
+      if (ch === '\\') {
+        index += 1
+        continue
+      }
+      if (ch === quote) quote = null
+      continue
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch
+      continue
+    }
+    if (ch === '{' || ch === '(') {
+      depth += 1
+      continue
+    }
+    if (ch === '}' || ch === ')') {
+      depth -= 1
+      continue
+    }
+    if (ch === '>' && depth === 0) return { end: index, selfClosing: text[index - 1] === '/' }
+  }
+  return { end: text.length, selfClosing: false }
+}
+
+/**
+ * 从一个起点解析一处调用点。**导出的**，因为夹具要能直接喂一段字符串进来——
+ * 「内联箭头不被截断」这种事，只能靠一段带 `() => {` 的源码证明，不能靠仓库里恰好有那样的调用点。
+ */
+export function parseCallSite(text: string, start: number, file = '<fixture>'): CallSite | undefined {
+  {
+    // 开标签的边界由配对决定，不由长度猜：截断会吃进相邻的下一个 <StateView>，把它的动作算到上一个头上。
+    const { end, selfClosing } = openTagEnd(text, start)
+    const window = text.slice(start, selfClosing ? end : end + 1)
     const state = /state="([a-z]+)"/.exec(window)?.[1]
     const reasonCode = /reasonCode="([a-z-]+)"/.exec(window)?.[1]
-    if (state === undefined || reasonCode === undefined) continue
+    if (state === undefined || reasonCode === undefined) return undefined
     const hasAction = /\baction=/.test(window)
     // 两种写法都要认：字面量（`labelKey: 'ui.state.action.x'`）与常量引用
     // （`labelKey: STATE_VIEW_ACTION_KEYS.x`）。后者是我们推荐给调用点的写法，
@@ -72,7 +115,7 @@ function callSitesIn(file: string): CallSite[] {
       .map((m) => STATE_VIEW_ACTION_KEYS[m[1] as keyof typeof STATE_VIEW_ACTION_KEYS])
       .filter((key) => typeof key === 'string')
     const actionKeys = [...literalKeys, ...constantKeys]
-    sites.push({
+    return {
       file: relative(ROOT, file),
       line: text.slice(0, start).split('\n').length,
       source: window,
@@ -80,7 +123,16 @@ function callSitesIn(file: string): CallSite[] {
       reasonCode,
       actionKeys,
       hasAction
-    })
+    }
+  }
+}
+
+function callSitesIn(file: string): CallSite[] {
+  const text = readFileSync(file, 'utf8')
+  const sites: CallSite[] = []
+  for (const match of text.matchAll(OPEN_TAG)) {
+    const site = parseCallSite(text, match.index ?? 0, file)
+    if (site !== undefined) sites.push(site)
   }
   return sites
 }
@@ -241,5 +293,40 @@ describe('StateView call sites match the action rules', () => {
     for (const site of sites) {
       expect(STATE_VIEW_ACTION_RULES[`${site.state}.${site.reasonCode}`], `${site.file}:${site.line} 用了码表里没有的码`).toBeDefined()
     }
+  })
+})
+
+/**
+ * 守卫读的是**整条开标签**，不是「到第一个 `>` 为止」。
+ *
+ * 这三条夹具是一次真实返工留下的：`action={{ labelKey: …, onSelect: () => { … } }}` 里那个 `>`
+ * 曾经把窗口截断在动作对象中间，于是守卫报「缺动作」，人去补一个本来就在的动作。
+ * **守卫读不出一个合法写法时，错的不是写法**——所以这几条钉的是读法，不是那些调用点的写法。
+ */
+describe('the guard reads whole open tags, not up to the first ">"', () => {
+  const at = (source: string): ReturnType<typeof parseCallSite> => parseCallSite(source, source.indexOf('<StateView'))
+
+  it('sees an action whose handler is an inline arrow', () => {
+    const site = at(
+      `<StateView state="empty" reasonCode="never-created" action={{ labelKey: 'ui.state.action.create', onSelect: () => { void onAdd() } }} />`
+    )
+    expect(site?.hasAction).toBe(true)
+    // 窗口必须覆盖到处理函数本身：只看到 `action={` 就开始猜，等于没读到这个属性。
+    expect(site?.source).toContain('void onAdd()')
+  })
+
+  it('does not stop at a brace that lives inside a string', () => {
+    // 按“读到第一个 }} 为止”的写法在这里会截断：字符串里的 `}` 先出现。
+    const site = at(
+      `<StateView state="empty" reasonCode="never-created" action={{ labelKey: 'ui.state.action.create', onSelect: () => ({ a: '}' }) }} />`
+    )
+    expect(site?.hasAction).toBe(true)
+    expect(site?.source).toContain("a: '}'")
+  })
+
+  it('still reports a call site that genuinely has no action', () => {
+    // 反向：读法变宽了，但“真的没有”必须仍然读成没有，否则这条守卫就废了。
+    const site = at(`<StateView state="empty" reasonCode="not-yet" />`)
+    expect(site?.hasAction).toBe(false)
   })
 })
