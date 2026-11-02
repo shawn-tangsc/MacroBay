@@ -1,5 +1,5 @@
 import { Menu } from 'antd'
-import type { ItemType } from 'antd/es/menu/interface'
+import type { MenuProps } from 'antd'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { createPortal } from 'react-dom'
@@ -46,7 +46,16 @@ export type ContextMenuProps = {
 /** 离视口边缘至少留这么多像素，避免菜单贴边或被裁。 */
 const VIEWPORT_MARGIN = 4
 
-function toAntdItems(items: readonly MenuItem[], resolveText: (key: string) => string): ItemType[] {
+/**
+ * 菜单项类型取自 `MenuProps['items']`，**不走 `antd/es/menu/interface` 这种内部路径**。
+ *
+ * 内部路径不在 antd 的公开出口里：CI 用 `moduleResolution: Bundler`（尊重 `exports`）解析，
+ * 同一个版本在本地能过、在 runner 上就报「找不到模块」——依赖内部的深层 import 迟早会在
+ * 某次升级或某台机器上断掉，而它断的位置和原因都跟我们的代码无关。
+ */
+type AntdMenuItem = NonNullable<MenuProps['items']>[number]
+
+function toAntdItems(items: readonly MenuItem[], resolveText: (key: string) => string): AntdMenuItem[] {
   return items.map((item) => ({
     key: item.key,
     label: resolveText(item.labelKey),
