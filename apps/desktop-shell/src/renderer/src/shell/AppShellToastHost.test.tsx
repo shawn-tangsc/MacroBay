@@ -38,14 +38,21 @@ describe('toast host mounting', () => {
     expect(region?.getAttribute('role')).toBe('region')
   })
 
-  it('wraps the workspace window root, which is the single entry for main and detached windows', () => {
+  it('wraps the workspace window root through the extracted layer, not inline', () => {
     // 主窗与每个分离窗都经 AppShell → WorkspaceWindowRoot（role:'panel' 时渲染分离面），
-    // 所以宿主挂在 WorkspaceWindowRoot **外面**，两类窗口各得一处，且都在页面之上。
-    const source = readFileSync(resolve(__dirname, './AppShell.tsx'), 'utf8')
-    const hostIndex = source.indexOf('<ToastHost>')
-    const workspaceRootIndex = source.indexOf('<WorkspaceWindowRoot')
-    expect(source.indexOf("import { ToastHost } from '@platform/ui/components/toast/ToastHost'")).toBeGreaterThan(-1)
-    expect(hostIndex).toBeGreaterThan(-1)
-    expect(workspaceRootIndex).toBeGreaterThan(hostIndex)
+    // 所以宿主挂在 WorkspaceWindowRoot **外面**，两类窗口各得一处。
+    // 这一层已抽到 `window/AppShellToastLayer.tsx`（AppShell 超体积基线，抽离时行为不变）：
+    // 断言改成「AppShell 用那层包住 WorkspaceWindowRoot」+「那层里才是宿主」。
+    const shell = readFileSync(resolve(__dirname, './AppShell.tsx'), 'utf8')
+    const layer = readFileSync(resolve(__dirname, './window/AppShellToastLayer.tsx'), 'utf8')
+
+    const layerIndex = shell.indexOf('<AppShellToastLayer')
+    const workspaceRootIndex = shell.indexOf('<WorkspaceWindowRoot')
+    expect(layerIndex).toBeGreaterThan(-1)
+    expect(workspaceRootIndex).toBeGreaterThan(layerIndex)
+
+    expect(layer).toContain("from '@platform/ui/components/toast/ToastHost'")
+    expect(layer).toContain('<ToastHost>')
+    expect(layer).toContain('{props.children}')
   })
 })

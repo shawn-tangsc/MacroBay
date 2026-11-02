@@ -25,8 +25,8 @@ import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
 import { resolveThemeMode, toThemeAttributes } from '@platform/ui/theme/themeModel'
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
-import { ToastHost } from '@platform/ui/components/toast/ToastHost'
-import { handoffFocusAfterNavigation } from '@platform/workspace/navigation/navigationRequest'
+import { AppShellToastLayer } from './window/AppShellToastLayer'
+import { useNavigationFocusHandoff } from './navigation/useNavigationFocusHandoff'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel, resolveShellTimeZone, resolveSystemTimeZone } from '@platform/ui/time/shellTimeFormat'
 
@@ -206,16 +206,12 @@ export function AppShell(): React.ReactElement {
     return () => { cancelled = true }
   }, [])
   return (
-    // 提示宿主：每个渲染根挂一次。主窗与每个分离窗都经 AppShell 进入（分离窗由 WorkspaceWindowRoot
-    // 判定 role:'panel'），所以这一处同时覆盖两类窗口；宿主在页面内容之外，弹提示不会被布局裁掉。
-    // 语言上下文显式给一层，宿主自己的关闭/区域读屏名才跟着界面语言走（内层 provider 仍按各页面覆盖）。
-    <ShellLanguageProvider language={appLanguage}>
-      <ToastHost>
-        <WorkspaceWindowRoot fallbackLanguage={appLanguage}>
-          <AppShellContent onLanguageChange={setAppLanguage} />
-        </WorkspaceWindowRoot>
-      </ToastHost>
-    </ShellLanguageProvider>
+    // 提示宿主与语言上下文收在 AppShellToastLayer：两个渲染根都经这里进入，宿主只挂一次。
+    <AppShellToastLayer language={appLanguage}>
+      <WorkspaceWindowRoot fallbackLanguage={appLanguage}>
+        <AppShellContent onLanguageChange={setAppLanguage} />
+      </WorkspaceWindowRoot>
+    </AppShellToastLayer>
   )
 }
 
@@ -429,16 +425,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
     props.onLanguageChange?.(settings.language)
   }, [props.onLanguageChange, settings.language])
 
-  // 每次导航 +1：导航成功后由下面的 effect 把焦点交给目标（契约 §14）。
-  const [navFocusTick, setNavFocusTick] = useState(0)
-
-  useEffect(() => {
-    if (navFocusTick === 0) return
-    // 目标容器：优先显式标记，其次主内容区。落点顺序在 helper 里定死。
-    const container = document.querySelector<HTMLElement>('[data-nav-container]') ?? document.querySelector<HTMLElement>('main')
-    handoffFocusAfterNavigation(container)
-  }, [navFocusTick])
-
+  // 导航后的焦点交接收在 hook 里（契约 §14）：导航成功后调一次，effect 在渲染后执行。
+  const scheduleNavFocusHandoff = useNavigationFocusHandoff()
   useEffect(() => {
     const applyNavigation = (detail?: AppShellNavigateDetail): void => {
       // A tab-hosted shell must activate the target tab, not only repaint the sidebar highlight.
@@ -448,8 +436,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         setSettingsPanelKey(resolveAvailableSettingsPanelKey(detail.settingsPanelKey, productSettingsEntries))
       }
       if (detail?.assistant) setAssistantOpenRequest(detail.assistant)
-      // 导航后的焦点交接（契约 §14）：触发它的按钮所在空态随即被卸载，不交接焦点就会掉回 body。
-      setNavFocusTick((tick) => tick + 1)
+      scheduleNavFocusHandoff()
     }
 
     const onNavigate = (event: Event): void => {
