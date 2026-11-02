@@ -1625,6 +1625,7 @@ export const productText = {
         readinessLabels: { live: '可用', 'fixture-ready': '测试数据', planned: '未接入' },
 
         sourceFilters: { all: '全部', calendar: '日历', dashboard: '看板', pending: '待接入', advanced: '高级' },
+        sourceFilterLabel: '来源筛选',
         sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
         proxyNotice: {
           title: '这个来源需要连接 VPN（本地代理）才能采集。',
@@ -3457,6 +3458,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
         readinessLabels: { live: 'Available', 'fixture-ready': 'Fixture data', planned: 'Not connected' },
 
         sourceFilters: { all: 'All', calendar: 'Calendar', dashboard: 'Dashboard', pending: 'Pending', advanced: 'Advanced' },
+        sourceFilterLabel: 'Filter sources',
         sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
         proxyNotice: {
           title: 'This source needs a VPN (local proxy) to collect.',

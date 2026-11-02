@@ -1,7 +1,9 @@
-import { Segmented } from 'antd'
 import { ChevronRight } from 'lucide-react'
 
+import { Segmented } from '@platform/ui/components/segmented'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
+
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 import type { SettingsView } from '../../../service/intelligence/application/sourceProjection'
 import type { SourceCategory } from '../../../service/intelligence/application/providerRegistry'
@@ -11,12 +13,18 @@ export type SourceFilter = 'all' | 'calendar' | 'dashboard' | 'pending' | 'advan
 type Labels = {
   title: string
   categories: Record<SourceCategory, string>
-  filters: Record<SourceFilter, string>
   providerNames: Record<string, string>
   providerSummary: string
 }
 
-const filterOrder: SourceFilter[] = ['all', 'calendar', 'dashboard', 'pending', 'advanced']
+/** One list, so the visible order and the option values cannot drift apart. */
+const FILTERS: ReadonlyArray<{ value: SourceFilter; labelKey: string }> = [
+  { value: 'all', labelKey: 'settings.intelligenceSources.sourceFilters.all' },
+  { value: 'calendar', labelKey: 'settings.intelligenceSources.sourceFilters.calendar' },
+  { value: 'dashboard', labelKey: 'settings.intelligenceSources.sourceFilters.dashboard' },
+  { value: 'pending', labelKey: 'settings.intelligenceSources.sourceFilters.pending' },
+  { value: 'advanced', labelKey: 'settings.intelligenceSources.sourceFilters.advanced' }
+]
 
 function matchesFilter(source: { panels: readonly string[]; visibility: string; kind: string }, filter: SourceFilter): boolean {
   if (filter === 'calendar') return source.kind === 'official-calendar' || source.kind === 'market-calendar'
@@ -35,13 +43,17 @@ export function SettingsSourceTree({ filter, labels, onFilterChange, onSelectPro
   selectedProviderId?: string
   view?: SettingsView
 }): React.ReactElement {
+  const resolveText = useProductTextKey()
   return <aside className="intelligence-catalog-pane intelligence-catalog-pane--filtered">
     <div className="intelligence-catalog-filters">
-      {/* One radio group for the five filters: one Tab stop, arrow keys inside, no hand-rolled tabs. */}
+      {/* One Tab reaches the group; the arrow keys move focus and Enter/Space picks, so a reader can
+          look through the filters before committing. Every label and the group's own name are keys,
+          so this file holds no sentences. */}
       <Segmented
+        ariaLabelKey="settings.intelligenceSources.sourceFilterLabel"
+        items={FILTERS}
         onChange={(value) => onFilterChange(value as SourceFilter)}
-        options={filterOrder.map((item) => ({ label: labels.filters[item], value: item }))}
-        size="small"
+        resolveText={resolveText}
         value={filter}
       />
     </div>

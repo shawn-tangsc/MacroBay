@@ -24,7 +24,6 @@ const ANTD_BASELINE: ReadonlySet<string> = new Set([
   'apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx',
   'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentDrawer.tsx',
   'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisDashboardLayout.tsx',
-  'products/market-intelligence/desktop/settings/intelligence-sources/SettingsSourceTree.tsx'
 ])
 
 function sourceFiles(dir: string): string[] {
