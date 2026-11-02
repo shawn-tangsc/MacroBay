@@ -21,6 +21,7 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
+import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
@@ -236,14 +237,7 @@ export function createDailyBriefingService(deps: Readonly<{
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
-  const inFlight = new Map<string, Promise<DailyBriefingTodayResult>>()
-  /**
-   * Live snapshots for the edits being generated right now, keyed like `inFlight`.
-   *
-   * Dropped the moment the run settles: the finished trace is written to the store (or returned
-   * with the result), so keeping a copy here would be a second version of the same attempt.
-   */
-  const progress = new Map<string, BriefingGenerationProgress>()
+  const runs = createDailyBriefingRunCoalescer<DailyBriefingTodayResult>()
 
   /**
    * The most recent edition published before today — not necessarily yesterday's.
@@ -280,21 +274,20 @@ export function createDailyBriefingService(deps: Readonly<{
     }
   }
 
+  /**
+   * Open today's edition — one named period's when the scheduler says which fired.
+   *
+   * `generation` is that period's own time and window, so a period never borrows another one's
+   * cutoff; an unscheduled caller (the reader opening the page) means the period `default`.
+   */
   async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration }>): Promise<DailyBriefingTodayResult> {
     const periodId = input.periodId ?? DEFAULT_PERIOD_ID
     const window = briefingWindow(now(), input.timeZone, input.generation ?? await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const key = `${window.date}:${periodId}:${input.locale}`
-    const running = inFlight.get(key)
-    if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
-      .then((result) => withStoredAttempt(deps.store, result, window.date, input.locale, periodId))
-      .finally(() => {
-        progress.delete(key)
-        inFlight.delete(key)
-      })
-    inFlight.set(key, promise)
-    return promise
+    return runs.join(runs.key(window.date, periodId, input.locale), async () => {
+      const result = await resolveToday({ asOf: window.windowEnd, date: window.date, periodId, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
+      return withStoredAttempt(deps.store, result, window.date, input.locale, periodId)
+    })
   }
 
   async function regenerate(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
@@ -304,16 +297,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // reader who presses 重新生成 three times started three concurrent runs, and each of them
     // published its own agent session and its own edition. A second request now joins the run that
     // is already working on that edition instead of starting another one.
-    const key = `${window.date}:${DEFAULT_PERIOD_ID}:${input.locale}`
-    const running = inFlight.get(key)
-    if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true)
-      .finally(() => {
-        progress.delete(key)
-        inFlight.delete(key)
-      })
-    inFlight.set(key, promise)
-    return promise
+    return runs.join(runs.key(window.date, DEFAULT_PERIOD_ID, input.locale), () => resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true))
   }
 
   async function resolveToday(input: Readonly<{ asOf: string; date: string; periodId: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
@@ -327,11 +311,11 @@ export function createDailyBriefingService(deps: Readonly<{
     const recorder = createDailyBriefingGenerationRecorder({
       attemptId: `${input.date}:${input.locale}:${input.asOf}`,
       now,
-      onChange: () => progress.set(progressKey, recorder.snapshot())
+      onChange: () => runs.progress.set(progressKey, recorder.snapshot())
     })
     // Publish the first snapshot before any work starts: a reader that polls between the request
     // and the first stage would otherwise be told nothing is running.
-    progress.set(progressKey, recorder.snapshot())
+    runs.progress.set(progressKey, recorder.snapshot())
     // The facts of this period are frozen once, once they exist; every edition of the run is
     // written from that document.
     const run = createDailyBriefingPeriodRunJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
@@ -562,7 +546,7 @@ export function createDailyBriefingService(deps: Readonly<{
     const window = briefingWindow(now(), input.timeZone, await generation())
     // A schedule the reader has not set a valid hour for cannot say which edition is running.
     if (!window) return { state: 'idle' }
-    const running = progress.get(`${window.date}:${DEFAULT_PERIOD_ID}:${input.locale}`)
+    const running = runs.progress.get(runs.key(window.date, DEFAULT_PERIOD_ID, input.locale))
     return running ? { state: 'running', progress: running } : { state: 'idle' }
   }
 
