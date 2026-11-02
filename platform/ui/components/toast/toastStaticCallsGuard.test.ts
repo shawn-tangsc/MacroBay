@@ -22,11 +22,7 @@ const STATIC_CALL = /\b(?:message|notification)\.(?:open|success|error|info|warn
 
 /** 正在迁移、尚未收口的文件（2026-11-02，补丁落地当天扫的）。 */
 const BASELINE = new Set([
-  'apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/ToolsSection.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/tools/McpCatalog.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/assistants/library/ImportAssistantDialog.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/settings/assistants/AssistantLibrarySettingsPage.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/settings/storage-cache/StorageCacheSettingsPage.tsx'
+  'apps/desktop-shell/src/renderer/src/shell/settings/storage-cache/StorageCacheSettingsPage.tsx',
 ])
 
 function files(dir: string): string[] {
