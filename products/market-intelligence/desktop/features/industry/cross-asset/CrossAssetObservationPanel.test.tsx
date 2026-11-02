@@ -636,3 +636,58 @@ describe('cross-asset observation workspace', () => {
   })
 
 })
+
+describe('首次进入的状态顺序', () => {
+  const text = productText['zh-CN'].pages.intelligence.portal.dashboard.crossAsset
+
+  /** 可控的租约/查询：让「读取还没回来」变成一个能断言的时刻，而不是靠肉眼看有没有闪。 */
+  function deferredClient(): {
+    client: Record<string, unknown>
+    resolveQuery: (value: unknown) => void
+    rejectQuery: (error: Error) => void
+  } {
+    let resolveQuery!: (value: unknown) => void
+    let rejectQuery!: (error: Error) => void
+    const pending = new Promise((resolve, reject) => { resolveQuery = resolve; rejectQuery = reject })
+    return {
+      client: {
+        acquire: async () => ({ state: 'active', leaseId: 'lease', expiresAt: Date.now() + 30_000 }),
+        renew: async () => ({ state: 'active' }),
+        query: () => pending,
+        refresh: async () => ({ state: 'refreshed' }),
+        release: async () => ({ state: 'released' })
+      },
+      resolveQuery,
+      rejectQuery
+    }
+  }
+
+  async function mount(client: Record<string, unknown>): Promise<HTMLElement> {
+    const host = document.createElement('div'); document.body.append(host)
+    await act(async () => createRoot(host).render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
+    return host
+  }
+
+  it('shows only the waiting state while the first read is still in flight', async () => {
+    const { client } = deferredClient()
+    const host = await mount(client)
+    for (let tick = 0; tick < 6; tick += 1) await act(async () => { await Promise.resolve() })
+    // 还没 settle：屏幕上不许出现任何「失败/没有」的视图，也不许出现一个可点的重试。
+    expect(host.querySelector('.state-view--error')).toBeNull()
+    expect(host.querySelector('.state-view')).toBeNull()
+    expect(host.textContent).not.toContain(text.unavailable)
+    expect(host.querySelector('[aria-label]')).not.toBeNull()
+    host.remove()
+  })
+
+  it('turns a genuinely failed first read into the error surface with a retry', async () => {
+    const { client, rejectQuery } = deferredClient()
+    const host = await mount(client)
+    await act(async () => { rejectQuery(new Error('request failed')); await Promise.resolve() })
+    for (let tick = 0; tick < 6; tick += 1) await act(async () => { await Promise.resolve() })
+    const failure = host.querySelector('.state-view--error')
+    expect(failure).not.toBeNull()
+    expect(failure?.querySelector('.state-view__action')).not.toBeNull()
+    host.remove()
+  })
+})
