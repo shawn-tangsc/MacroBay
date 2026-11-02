@@ -6,14 +6,18 @@ import { describe, expect, it } from 'vitest'
 import { looksLikeTextKey } from '../textKeyShape'
 
 /**
- * `Tooltip` 的两条调用点守卫（契约 §6）。
+ * `Tooltip` 的三条调用点守卫（契约 §6）。
  *
  * 1. **`labelKey` 只收键**：与 `IconButton` 同口径——开区间 `string`，由守卫保证形状，
  *    含中文、空白或已解析句子即红。
  * 2. **禁用触发器不许挂提示**：禁用的控件接不到焦点，提示就只剩鼠标能看。这条只能扫调用点：
  *    组件无法从一个 `ReactElement` 推导出它会被渲染成禁用，尤其它可能被别的组件包住。
  *
- * 两条都配了反向用例——一条永远通过的守卫比没有守卫更糟。
+ * 3. **迁移欠账清单只减不增**：`apps/` 与 `products/` 里还在 `import { Tooltip } from 'antd'` 的文件记在
+ *    `scripts/migration-debt/tooltip.json`，**双向断言**——代码里每处违规必须在清单里，清单里每条也必须
+ *    仍然违规。只做前一半，清单会越积越假：一条对不上代码的欠账，会让下一个人去修一件已经不存在的事。
+ *
+ * 三条都配了反向用例——一条永远通过的守卫比没有守卫更糟。
  */
 
 const ROOT = resolve(__dirname, '../../../..')
@@ -37,7 +41,43 @@ function sourceFiles(dir: string): string[] {
   return found
 }
 
-/** 只看我们这件组件的调用点：直接 import antd `Tooltip` 的旧代码是迁移对象，不归这两条守卫。 */
+/**
+ * 迁移欠账清单的位置：被 git 追踪、不在组件目录。
+ *
+ * 人读的明细在 `docs-private/.../tooltip-call-site-mapping-2026-11-02.md`（109 行，①/②/③ 分类）；
+ * **机器数的清单不能放那儿**——那个目录被 gitignore，快照与 CI 都读不到，守卫只能 `existsSync`
+ * 跳过，那就成了「在签字跑里永远不生效」。两处清单是刻意的：人读一处，机器数一处。
+ */
+const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/tooltip.json')
+
+/** 读不到就抛，不吞：静默降级会让这条红在别处无声失效，而那正是它存在的理由。 */
+function readDebt(): ReadonlySet<string> {
+  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+  if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
+  return new Set(Object.keys(parsed.entries))
+}
+
+const ANTD_TOOLTIP_BASELINE = readDebt()
+const DEBT_SCANNED_ROOTS = ['apps', 'products'] as const
+
+/** 从 `import … from 'antd'` 的具名列表里取出 `Tooltip`（`Tooltip as X` 也算）。 */
+export function importsAntdTooltip(text: string): boolean {
+  for (const match of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'antd'/g)) {
+    const names = (match[1] ?? '').split(',')
+    if (names.some((name) => /^\s*Tooltip(\s+as\s+\w+)?\s*$/.test(name))) return true
+  }
+  return false
+}
+
+const DEBT_FILES = DEBT_SCANNED_ROOTS.flatMap((root) => {
+  try {
+    return sourceFiles(join(ROOT, root))
+  } catch {
+    return []
+  }
+})
+
+/** 只看我们这件组件的调用点：直接 import antd `Tooltip` 的旧代码是迁移对象，不归前两条守卫。 */
 const OUR_IMPORT = '@platform/ui/components/tooltip'
 
 function callSitesIn(file: string): Array<{ line: number; source: string }> {
@@ -92,6 +132,28 @@ describe('Tooltip call sites', () => {
       }
     }
     expect(offenders).toEqual([])
+  })
+
+  it('keeps the hand-written antd tooltips on the shrinking list, and nothing else', () => {
+    const offenders = DEBT_FILES.map((file) => relative(ROOT, file).replace(/\\/g, '/')).filter(
+      (file) => importsAntdTooltip(readFileSync(join(ROOT, file), 'utf8')) && !ANTD_TOOLTIP_BASELINE.has(file)
+    )
+
+    // 单行提示用 `@platform/ui/components/tooltip`；多行解释走 `Popover`，不是这里。
+    expect(offenders).toEqual([])
+  })
+
+  it('shrinks the list: a migrated file must have its line deleted', () => {
+    const stale = [...ANTD_TOOLTIP_BASELINE].filter((file) => {
+      try {
+        return !importsAntdTooltip(readFileSync(join(ROOT, file), 'utf8'))
+      } catch {
+        // 文件没了也算迁移完成：同样必须删掉清单里那一行。
+        return true
+      }
+    })
+
+    expect(stale).toEqual([])
   })
 
   it('catches a sentence smuggled into dataText, so the guard is not vacuous', () => {
