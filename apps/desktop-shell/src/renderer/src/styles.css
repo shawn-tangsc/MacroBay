@@ -2360,29 +2360,6 @@ h1 {
   text-align: center;
 }
 
-.storage-cache-tabs {
-  display: flex;
-  gap: 2px;
-}
-
-.storage-cache-tab {
-  padding: 8px 16px;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13.5px;
-  cursor: pointer;
-}
-
-.storage-cache-tab:hover {
-  color: var(--text-strong);
-}
-
-.storage-cache-tab.active {
-  border-bottom-color: var(--accent);
-  color: var(--text-strong);
-  font-weight: 600;
-}
 
 .storage-cache-table {
   width: 100%;
