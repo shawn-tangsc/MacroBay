@@ -107,17 +107,23 @@ export function VersionCheckRow(props: {
               <StatusPill tone={view.pillTone} labelKey={pillLabelKeys[view.pill]} resolveText={resolvePillText} />
             )}
             <span className="version-spacer" />
-            {view.showCheckButton ? (
-              <Button
-                className="ant-secondary-button"
-                size="small"
-                loading={row.checking}
-                disabled={row.checking}
-                aria-describedby={view.showAutoToggle ? FREQUENCY_HINT_ID : undefined}
-                onClick={() => void row.checkNow()}>
-                {view.checkLabel === 'justChecked' ? text.justChecked : text.check}
-              </Button>
-            ) : null}
+            {/*
+              一颗按钮、按状态换字：有新版本时它是「立即更新」（去打开发布页），其余时候是「检查更新」。
+              永远只有一个动作在喊——两颗按钮并排就是两个动作抢注意力。
+            */}
+            <Button
+              className={view.action === 'update' ? 'ant-primary-button' : 'ant-secondary-button'}
+              size="small"
+              loading={row.checking}
+              disabled={row.checking}
+              aria-describedby={view.showAutoToggle ? FREQUENCY_HINT_ID : undefined}
+              onClick={() => void (view.action === 'update' ? row.openUpdateLink('download') : row.checkNow())}>
+              {view.checkLabel === 'justChecked'
+                ? text.justChecked
+                : view.action === 'update'
+                  ? linkText.download
+                  : text.check}
+            </Button>
           </div>
 
           {notice === null ? null : view.notice === 'unavailable' && checkedAtText !== null ? (
@@ -132,18 +138,6 @@ export function VersionCheckRow(props: {
           )}
 
           {view.showAutoOffHint ? <p className="preference-hint version-auto-off-hint">{text.autoOffLine}</p> : null}
-
-          {/*
-            下载入口单独一行、主按钮：原型里它本来就独占一行。放在版本行里会把 Tab 顺序变成
-            「打开下载页 → 检查更新」，和验收条相反；单独一行顺序自然对，也不跟检查按钮抢宽度。
-          */}
-          {view.showDownloadButton ? (
-            <div className="version-download">
-              <Button className="ant-primary-button" size="small" onClick={() => void row.openUpdateLink('download')}>
-                {linkText.download}
-              </Button>
-            </div>
-          ) : null}
 
           {view.showOpenFailed ? (
             // 读屏能念；不是弹窗、不着色、不新增按钮——原按钮再点就是重试。

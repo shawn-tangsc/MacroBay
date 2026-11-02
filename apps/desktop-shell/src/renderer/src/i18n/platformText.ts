@@ -2245,7 +2245,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       links: {
         title: '链接',
         hint: '由应用代你打开，只会打开本项目自己的页面。',
-        download: '打开下载页',
+        download: '立即更新',
         changelog: '更新日志',
         docs: '帮助文档',
         site: '官网',
@@ -3429,7 +3429,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       links: {
         title: 'Links',
         hint: 'Opened by the app for you; only this project’s own pages can be opened.',
-        download: 'Open download page',
+        download: 'Update now',
         changelog: 'Release notes',
         docs: 'Documentation',
         site: 'Website',

@@ -37,20 +37,20 @@ describe('the version row', () => {
       pill: 'available',
       pillTone: 'info',
       latestVersion: '0.4.0',
-      showDownloadButton: true,
+      action: 'update',
       notice: 'available'
     })
     expect(describeVersionCheck({ ...base, state: upToDate })).toMatchObject({
       pill: 'upToDate',
       pillTone: 'ok',
-      showDownloadButton: false,
+      action: 'check',
       notice: null
     })
     expect(describeVersionCheck({ ...base, state: unavailable })).toMatchObject({
       pill: 'unavailable',
       pillTone: 'warn',
       latestVersion: null,
-      showDownloadButton: false,
+      action: 'check',
       notice: 'unavailable'
     })
   })
@@ -67,7 +67,7 @@ describe('the version row', () => {
     // 打不开浏览器是浏览器的事，不许把「有新版本 0.4.0」改写成「查不到」或「已是最新」。
     expect(view.pill).toBe('available')
     expect(view.latestVersion).toBe('0.4.0')
-    expect(view.showDownloadButton).toBe(true)
+    expect(view.action).toBe('update')
     // 结论那一句还在，失败句是**加在下面**的一句，不是替换。
     expect(view.notice).toBe('available')
     expect(view.showOpenFailed).toBe(true)
@@ -77,7 +77,7 @@ describe('the version row', () => {
     expect(describeVersionCheck({ ...base, state: idle, checking: true })).toMatchObject({
       pill: 'checking',
       pillTone: 'info',
-      showDownloadButton: false,
+      action: 'check',
       notice: null
     })
   })
@@ -90,9 +90,8 @@ describe('the version row', () => {
       pill: 'available',
       pillTone: 'info',
       latestVersion: '0.4.0',
-      showCheckButton: true,
       showAutoToggle: true,
-      showDownloadButton: true,
+      action: 'update',
       notice: 'available',
       // 描述位只放一句：结论句优先于「开关关着」，不再叠第二句。
       showAutoOffHint: false
@@ -113,9 +112,8 @@ describe('the version row', () => {
     expect(view).toMatchObject({
       pill: 'autoOff',
       pillTone: 'muted',
-      showCheckButton: true,
       showAutoToggle: true,
-      showDownloadButton: false,
+      action: 'check',
       notice: 'autoOff'
     })
   })
@@ -125,7 +123,7 @@ describe('the version row', () => {
     expect(view.checkLabel).toBe('justChecked')
     // 冷却只换按钮上的字，结论与按钮个数都不变。
     expect(view.pill).toBe('available')
-    expect(view.showDownloadButton).toBe(true)
+    expect(view.action).toBe('update')
   })
 
   it('shows "not checked yet" as a checkable row, not as a disabled capability', () => {
@@ -134,7 +132,6 @@ describe('the version row', () => {
       pillTone: 'muted',
       currentVersion: '0.3.1',
       latestVersion: null,
-      showCheckButton: true,
       showAutoToggle: true
     })
   })
@@ -149,9 +146,8 @@ describe('the version row', () => {
       pillTone: 'muted',
       currentVersion: null,
       latestVersion: null,
-      showCheckButton: false,
       showAutoToggle: false,
-      showDownloadButton: false,
+      action: 'check',
       checkLabel: 'check',
       notice: null,
       showOpenFailed: false,
@@ -159,13 +155,13 @@ describe('the version row', () => {
     })
     // 两者必须一眼分得开：一个有药丸有按钮，一个什么都没有。
     expect(notChecked.pill).not.toBeNull()
-    expect(notChecked.showCheckButton).toBe(true)
+    expect(notChecked.action).toBe('check')
   })
 
   it('treats the first frame (no projection yet) as "not checked yet"', () => {
     expect(describeVersionCheck({ ...base, state: null })).toMatchObject({
       pill: 'notChecked',
-      showCheckButton: true
+      action: 'check'
     })
   })
 })

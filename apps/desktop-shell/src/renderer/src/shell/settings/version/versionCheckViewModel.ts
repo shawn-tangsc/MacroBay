@@ -23,10 +23,10 @@ export type VersionCheckView = {
   currentVersion: string | null
   /** `null` 表示显示「未知」（还没查过、查不到、或开发态）。 */
   latestVersion: string | null
-  showCheckButton: boolean
+  /** 更新块里唯一一颗动作按钮：`check` 查一次，`update` 去发布页拿包。**永远只有一颗**。 */
+  action: 'check' | 'update'
   showAutoToggle: boolean
-  showDownloadButton: boolean
-  /** 按钮上的字：平时「检查更新」，冷却中「刚查过」——**永远同一个动作，不换第二个词**。 */
+  /** 冷却期按钮上写「刚查过」：仍是同一个动作，不换第二个词。 */
   checkLabel: 'check' | 'justChecked'
   notice: VersionCheckNotice | null
   /** 「没能打开浏览器」那句话单独一行、**加在结论下面**，不替换它。 */
@@ -86,9 +86,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
       pillTone: 'muted',
       currentVersion: null,
       latestVersion: null,
-      showCheckButton: false,
+      action: 'check',
       showAutoToggle: false,
-      showDownloadButton: false,
       checkLabel: 'check',
       notice: null,
       showOpenFailed: false,
@@ -100,7 +99,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
   // 关掉自动检查只是不自动查：按钮照常可用，也不改写已经查到的结论的展示位置。
   const base = {
     development: false,
-    showCheckButton: true,
+    action: 'check',
     showAutoToggle: true,
     checkLabel
   } as const
@@ -112,7 +111,6 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
       pillTone: toneByPill.checking,
       currentVersion: state?.currentVersion ?? null,
       latestVersion: state?.state === 'available' ? state.latestVersion : null,
-      showDownloadButton: false,
       notice: null,
       showOpenFailed: openFailed,
       showAutoOffHint: false
@@ -129,7 +127,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
       pillTone: toneByPill.autoOff,
       currentVersion: state === null ? null : state.currentVersion,
       latestVersion: null,
-      showDownloadButton: false,
+      action: 'check',
       notice: 'autoOff',
       showOpenFailed: false,
       showAutoOffHint: false
@@ -144,7 +142,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         pillTone: toneByPill.available,
         currentVersion: state.currentVersion,
         latestVersion: state.latestVersion,
-        showDownloadButton: true,
+        action: 'update',
         // 打开失败时版本结论不动（仍是「有新版本」），只在下面补一句。
         notice: 'available',
         showOpenFailed: openFailed,
@@ -158,7 +156,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         pillTone: toneByPill.upToDate,
         currentVersion: state.currentVersion,
         latestVersion: state.latestVersion,
-        showDownloadButton: false,
+        action: 'check',
         notice: null,
         showOpenFailed: openFailed,
         showAutoOffHint: !autoCheckEnabled
@@ -170,7 +168,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         pillTone: toneByPill.unavailable,
         currentVersion: state.currentVersion,
         latestVersion: null,
-        showDownloadButton: false,
+        action: 'check',
         notice: 'unavailable',
         showOpenFailed: openFailed,
         showAutoOffHint: false
@@ -182,7 +180,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         pillTone: toneByPill.notChecked,
         currentVersion: state === null ? null : state.currentVersion,
         latestVersion: null,
-        showDownloadButton: false,
+        action: 'check',
         notice: null,
         showOpenFailed: openFailed,
         showAutoOffHint: false

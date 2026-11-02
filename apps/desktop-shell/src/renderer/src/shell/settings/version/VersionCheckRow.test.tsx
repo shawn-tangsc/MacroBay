@@ -108,7 +108,8 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain('0.4.0')
     expect(container.textContent).toContain(text.pill.available)
     expect(buttonWithText(container, linkText.download)).not.toBeNull()
-    expect(buttonWithText(container, text.check)).not.toBeNull()
+    // 永远只有一颗动作按钮：有新版时它叫「立即更新」，不再有第二颗「检查更新」。
+    expect(container.querySelectorAll('button')).toHaveLength(2)
   })
 
   it('keeps the address out of the page: the download entry is a button, not a link', async () => {
@@ -205,7 +206,6 @@ describe('the version row in the settings page', () => {
     const download = buttonWithText(container, linkText.download)
     expect(download).not.toBeNull()
     expect(download?.className).toContain('ant-primary-button')
-    expect(buttonWithText(container, text.check)).not.toBeNull()
     // 描述位只放一句：结论句在，「未开启自动检查」不再叠第二句（叠起来就是最高的一档）。
     expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
     expect(container.querySelector('.version-notice')?.textContent).toBe(text.availableLine('0.4.0'))
@@ -265,8 +265,8 @@ describe('the version row in the settings page', () => {
     const container = await mount({ client })
 
     const focusable = [...container.querySelectorAll('button')].map((button) => button.textContent ?? '')
-    // 下载入口独占一行、排在说明句下面，顺序才是「检查更新 → 打开下载页 → 开关」。
-    expect(focusable).toEqual([text.check, linkText.download, ''])
+    // 一颗动作按钮（有新版时叫「立即更新」）+ 开关，顺序固定。
+    expect(focusable).toEqual([linkText.download, ''])
     expect(container.querySelector('[role="switch"]')).not.toBeNull()
   })
 
@@ -279,11 +279,10 @@ describe('the version row in the settings page', () => {
     expect(container.querySelector('[role="switch"]')?.getAttribute('aria-describedby')).toBe(
       'version-check-frequency-hint'
     )
-    expect(buttonWithText(container, text.check)?.getAttribute('aria-describedby')).toBe(
+    // 那一颗动作按钮挂着频率说明（有新版时它叫「立即更新」，仍是同一个位置）。
+    expect(buttonWithText(container, linkText.download)?.getAttribute('aria-describedby')).toBe(
       'version-check-frequency-hint'
     )
-    // 下载入口不挂：它跟频率无关。
-    expect(buttonWithText(container, linkText.download)?.getAttribute('aria-describedby')).toBeNull()
   })
 
   it('stays quiet when the check cannot even be sent (development channel absent)', async () => {
