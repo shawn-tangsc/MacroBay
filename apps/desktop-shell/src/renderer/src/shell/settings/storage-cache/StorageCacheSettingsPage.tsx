@@ -158,7 +158,13 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
         ) : (
           <section className="storage-cache-panel">
             {filteredCaches.length === 0 ? (
-              <p className="storage-cache-muted storage-cache-filter-empty">{labels.filterEmpty}</p>
+              // 「有缓存、但被筛选挡住」不是「没有数据」：动作回到全部，而不是让用户对着空白猜。
+              <StateView
+                state="empty"
+                reasonCode="filtered-out"
+                size="sm"
+                action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: () => setActiveFilter('all') }}
+              />
             ) : (
               <StorageCacheTable
                 language={language}
