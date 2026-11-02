@@ -1,15 +1,17 @@
-import { Modal, Switch } from 'antd'
+import { Button, Switch } from 'antd'
 import { useEffect, useMemo, useState } from 'react'
 import { parseConfiguredModelRef, resolveConfiguredModel } from '@platform/ai/model-defaults/configuredDefaultModel'
 import { supportsAnthropicServerWebSearch } from '@platform/ai/providers/providerServerTools'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Modal } from '@platform/ui/components/modal'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { platformText } from '@renderer/i18n/platformText'
 import { ModelPicker } from '@renderer/shell/components/ModelPicker/ModelPicker'
 import type { ModelPickerCandidate, ModelPickerConstraints } from '@renderer/shell/components/ModelPicker/modelPickerOptions'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import type { DailyBriefingText } from './dailyBriefingText'
 
@@ -33,6 +35,7 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
   const [webSearchBlocked, setWebSearchBlocked] = useState(false)
+  const resolveProductText = useProductTextKey()
 
   useEffect(() => {
     if (!open) return
@@ -109,14 +112,18 @@ export function DailyBriefingAiSettingsModal({ open, text, client, onClose }: Re
   }
 
   return <Modal
+    footer={<>
+      <Button onClick={onClose}>{text.aiSettings.cancel}</Button>
+      <Button disabled={!draft || loadFailed} loading={saving} onClick={() => void save()} type="primary">
+        {saving ? text.aiSettings.saving : text.aiSettings.save}
+      </Button>
+    </>}
+    layer="over-drawer"
+    onClose={onClose}
     open={open}
-    title={text.aiSettings.title}
-    onCancel={onClose}
-    onOk={() => void save()}
-    okText={saving ? text.aiSettings.saving : text.aiSettings.save}
-    cancelText={text.aiSettings.cancel}
-    okButtonProps={{ loading: saving, disabled: !draft || loadFailed }}
-    zIndex={1500}
+    resolveText={resolveProductText}
+    titleKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.title"
+    width="standard"
   >
     {!draft ? <LoadingState label={text.aiSettings.loading} minHeight={90} /> : <>
       <div className="mi-daily-briefing__settings-row">

@@ -54,6 +54,8 @@ describe('daily briefing AI settings modal', () => {
   it('loads the current preference and saves a change', async () => {
     const { client, onClose } = await render()
     expect(document.body.textContent).toContain(text.aiSettings.title)
+    // 标题由共用弹窗按键解析（键 → 句子），不是调用点直接塞句子。
+    expect(document.querySelector('.modal__title')?.textContent).toBe(text.aiSettings.title)
     expect(document.body.textContent).toContain(text.aiSettings.followDefault)
     const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.aiSettings.save)!
     await act(async () => { save.click(); await Promise.resolve(); await Promise.resolve() })
