@@ -9,6 +9,7 @@ import type {
   DailyBriefingProgressResult
 } from '../../../contracts/dailyBriefing'
 import {
+  DEFAULT_PERIOD_ID,
   dailyBriefingGenerationPolicy,
   dailyBriefingPolicy,
   isDailyBriefingGenerationTime,
@@ -19,6 +20,7 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
+import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
 import { briefingWindow, localDate, type DailyBriefingWindow } from './dailyBriefingWindow'
@@ -39,7 +41,7 @@ const defaultGeneration: DailyBriefingGeneration = Object.freeze({
 export type DailyBriefingStoredEdition = Readonly<{
   date: string
   /** Which issue of that day this edition is; absent means the only one, `default`. */
-  editionSerial?: string
+  periodId?: string
   locale: DailyBriefingLocale
   generatedAt: string
   windowStart: string
@@ -47,24 +49,50 @@ export type DailyBriefingStoredEdition = Readonly<{
   document: DailyBriefingDocument
 }>
 
-export type DailyBriefingAttempt = Readonly<{
+/** An attempt is opened when the work starts, so an interrupted run is still a row. */
+export type DailyBriefingAttemptStart = Readonly<{
   date: string
-  /** Which issue the failed attempt belonged to; absent means `default`. */
-  editionSerial?: string
+  /** Which issue this attempt belongs to; absent means `default`. */
+  periodId?: string
   locale: DailyBriefingLocale
-  trace: BriefingGenerationTrace
+  startedAt: string
 }>
 
+/** The same row, settled. It is updated in place, never deleted: the attempt is history. */
+export type DailyBriefingAttemptEnd = Readonly<{
+  date: string
+  periodId?: string
+  locale: DailyBriefingLocale
+  attemptNo: number
+  state: 'succeeded' | 'failed'
+  finishedAt: string
+  failureCode?: string
+  /** A failed attempt has no document, so its stage trace is the only record of what happened. */
+  trace?: BriefingGenerationTrace
+}>
+
+export type DailyBriefingStorageState = Readonly<
+  | { state: 'ready' }
+  | { state: 'incomplete'; reason: 'backup-failed' | 'migration-failed' }
+>
+
 export type DailyBriefingStore = Readonly<{
-  /** `editionSerial` defaults to the single-issue `default`, so existing callers read their row. */
-  get: (date: string, locale: DailyBriefingLocale, editionSerial?: string) => Promise<DailyBriefingStoredEdition | undefined>
+  /** `periodId` defaults to the single issue `default`, so existing callers read their row. */
+  get: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<DailyBriefingStoredEdition | undefined>
   put: (edition: DailyBriefingStoredEdition) => Promise<void>
   list: (from: string, to: string, locale: DailyBriefingLocale) => Promise<readonly DailyBriefingStoredEdition[]>
   prune: (beforeDate: string) => Promise<void>
-  /** A failed attempt has no document, so its stage trace is kept beside the edition key. */
-  putAttempt?: (attempt: DailyBriefingAttempt) => Promise<void>
-  getAttempt?: (date: string, locale: DailyBriefingLocale) => Promise<BriefingGenerationTrace | undefined>
-  clearAttempt?: (date: string, locale: DailyBriefingLocale) => Promise<void>
+  /**
+   * Opens a row in state `running` and returns its attempt number. The number is allocated here and
+   * nowhere else; a session link only refers to it.
+   */
+  beginAttempt?: (attempt: DailyBriefingAttemptStart) => Promise<number>
+  finishAttempt?: (attempt: DailyBriefingAttemptEnd) => Promise<void>
+  /** The newest attempt of that edition, whatever its state; a stored trace when it has one. */
+  getAttempt?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<BriefingGenerationTrace | undefined>
+  /** Whether the storage upgrade ran; `incomplete` means the old shape is still in use. */
+  upgradeState?: () => DailyBriefingStorageState
+  retryUpgrade?: () => Promise<DailyBriefingStorageState>
 }>
 
 export type DailyBriefingSource = Readonly<{
@@ -207,11 +235,11 @@ export function createDailyBriefingService(deps: Readonly<{
   async function getToday(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingTodayResult> {
     const window = briefingWindow(now(), input.timeZone, await generation())
     if (!window) return { state: 'unavailable', failureCode: 'time-invalid' }
-    const key = `${window.date}:${input.locale}`
+    const key = `${window.date}:${DEFAULT_PERIOD_ID}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
-      .then((result) => withStoredAttempt(deps.store, result, window.date, input.locale))
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, false)
+      .then((result) => withStoredAttempt(deps.store, result, window.date, input.locale, DEFAULT_PERIOD_ID))
       .finally(() => {
         progress.delete(key)
         inFlight.delete(key)
@@ -227,10 +255,10 @@ export function createDailyBriefingService(deps: Readonly<{
     // reader who presses 重新生成 three times started three concurrent runs, and each of them
     // published its own agent session and its own edition. A second request now joins the run that
     // is already working on that edition instead of starting another one.
-    const key = `${window.date}:${input.locale}`
+    const key = `${window.date}:${DEFAULT_PERIOD_ID}:${input.locale}`
     const running = inFlight.get(key)
     if (running) return running
-    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true)
+    const promise = resolveToday({ asOf: window.windowEnd, date: window.date, periodId: DEFAULT_PERIOD_ID, locale: input.locale, timeZone: input.timeZone, windowHours: window.windowHours }, true)
       .finally(() => {
         progress.delete(key)
         inFlight.delete(key)
@@ -239,10 +267,14 @@ export function createDailyBriefingService(deps: Readonly<{
     return promise
   }
 
-  async function resolveToday(input: Readonly<{ asOf: string; date: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
-    const cached = force ? undefined : await deps.store.get(input.date, input.locale).catch(() => undefined)
+  async function resolveToday(input: Readonly<{ asOf: string; date: string; periodId: string; locale: DailyBriefingLocale; timeZone: string; windowHours: number }>, force: boolean): Promise<DailyBriefingTodayResult> {
+    const cached = force ? undefined : await deps.store.get(input.date, input.locale, input.periodId).catch(() => undefined)
     if (cached && isCurrent(cached.document)) return { state: 'available', document: cached.document }
-    const progressKey = `${input.date}:${input.locale}`
+    // The attempt row is opened before any work: a run the process never finishes is still a
+    // record of an attempt that did not succeed, instead of an attempt that never happened.
+    const attempts = createDailyBriefingAttemptJournal(deps.store, { date: input.date, periodId: input.periodId, locale: input.locale, now })
+    await attempts.open()
+    const progressKey = `${input.date}:${input.periodId}:${input.locale}`
     const recorder = createDailyBriefingGenerationRecorder({
       attemptId: `${input.date}:${input.locale}:${input.asOf}`,
       now,
@@ -255,7 +287,7 @@ export function createDailyBriefingService(deps: Readonly<{
     let failedStage: BriefingGenerationStageId | undefined
     const fail = async (failureCode: DailyBriefingTodayFailureCode): Promise<DailyBriefingTodayResult> => {
       const generationTrace = recorder.complete('failed')
-      await deps.store.putAttempt?.({ date: input.date, locale: input.locale, trace: generationTrace }).catch(() => undefined)
+      await attempts.settle('failed', generationTrace.finishedAt, { failureCode, trace: generationTrace })
       return { state: 'unavailable', failureCode, generationTrace }
     }
     const onStage = (event: DailyBriefTurnStageEvent): void => {
@@ -405,13 +437,14 @@ export function createDailyBriefingService(deps: Readonly<{
       try {
         await deps.store.put({
           date: input.date,
+          periodId: input.periodId,
           locale: input.locale,
           generatedAt: traced.edition.generatedAt,
           windowStart: traced.edition.windowStart,
           windowEnd: traced.edition.windowEnd,
           document: traced
         })
-        await deps.store.clearAttempt?.(input.date, input.locale).catch(() => undefined)
+        await attempts.settle('succeeded', traced.provenance.generationTrace?.finishedAt ?? now())
       } catch {
         // Returning the document here would report a stored edition that does not exist; the next
         // read would fall back to a different generation, so surface the write failure instead.
@@ -425,7 +458,9 @@ export function createDailyBriefingService(deps: Readonly<{
     // A failed editorial turn still returns the fact-layer document; the page renders its failure
     // panel from `provenance.editorialFailure`. The trace travels with it so the panel can show the
     // stage that stopped, while no edition is stored.
-    return { state: 'available', document: withGenerationTrace(document, recorder.complete('failed')) }
+    const failedTrace = recorder.complete('failed')
+    await attempts.settle('failed', failedTrace.finishedAt, { trace: failedTrace })
+    return { state: 'available', document: withGenerationTrace(document, failedTrace) }
   }
 
   async function list(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingListResultView> {
@@ -448,7 +483,7 @@ export function createDailyBriefingService(deps: Readonly<{
   }
 
   async function get(input: Readonly<{ date: string; locale: DailyBriefingLocale }>): Promise<DailyBriefingGetResult> {
-    const row = await deps.store.get(input.date, input.locale).catch(() => undefined)
+    const row = await deps.store.get(input.date, input.locale, DEFAULT_PERIOD_ID).catch(() => undefined)
     return row ? { state: 'available', document: row.document } : { state: 'missing' }
   }
 
@@ -456,7 +491,7 @@ export function createDailyBriefingService(deps: Readonly<{
     const window = briefingWindow(now(), input.timeZone, await generation())
     // A schedule the reader has not set a valid hour for cannot say which edition is running.
     if (!window) return { state: 'idle' }
-    const running = progress.get(`${window.date}:${input.locale}`)
+    const running = progress.get(`${window.date}:${DEFAULT_PERIOD_ID}:${input.locale}`)
     return running ? { state: 'running', progress: running } : { state: 'idle' }
   }
 
@@ -592,11 +627,12 @@ async function withStoredAttempt(
   store: DailyBriefingStore,
   result: DailyBriefingTodayResult,
   date: string,
-  locale: DailyBriefingLocale
+  locale: DailyBriefingLocale,
+  periodId: string
 ): Promise<DailyBriefingTodayResult> {
   if (result.state !== 'unavailable' || result.generationTrace || !store.getAttempt) return result
   try {
-    const generationTrace = await store.getAttempt(date, locale)
+    const generationTrace = await store.getAttempt(date, locale, periodId)
     return generationTrace ? { ...result, generationTrace } : result
   } catch {
     return result

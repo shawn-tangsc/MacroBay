@@ -1,6 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
-import { dailyBriefingPolicy, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
+
+import { dailyBriefingPolicy, type BriefingGenerationTrace, type DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import { createDailyBriefingSqliteStore } from './dailyBriefingStore'
 
 const document = (date: string, text = '今日要点。'): DailyBriefingDocument => ({
@@ -90,7 +96,7 @@ describe('daily briefing store', () => {
 it('keeps two issues of the same day apart, and leaves the old API on the default one', async () => {
   const store = createDailyBriefingSqliteStore(':memory:')
   await store.put(edition('2026-10-30', '第一期'))
-  await store.put({ ...edition('2026-10-30', '第二期'), editionSerial: 'second' })
+  await store.put({ ...edition('2026-10-30', '第二期'), periodId: 'second' })
 
   // A caller that knows nothing about issues still reads the row it wrote.
   expect((await store.get('2026-10-30', 'zh-CN'))?.document.lede.text).toBe('第一期')
@@ -98,4 +104,66 @@ it('keeps two issues of the same day apart, and leaves the old API on the defaul
   // Both issues are listed for the day; neither replaced the other.
   expect((await store.list('2026-10-30', '2026-10-30', 'zh-CN')).map((row) => row.document.lede.text).sort())
     .toEqual(['第一期', '第二期'])
+})
+
+
+describe('writing attempts', () => {
+  let directory: string | undefined
+  afterEach(() => {
+    if (directory !== undefined) rmSync(directory, { recursive: true, force: true })
+    directory = undefined
+  })
+
+  const trace = (finishedAt: string): BriefingGenerationTrace => ({
+    attemptId: 'attempt',
+    startedAt: '2026-11-02T00:00:00.000Z',
+    finishedAt,
+    state: 'failed',
+    stages: [{ id: 'source', state: 'failed', startedAt: '2026-11-02T00:00:00.000Z', finishedAt }]
+  } as BriefingGenerationTrace)
+
+  it('appends one row per attempt and settles the same row instead of replacing it', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'briefing-attempts-'))
+    const filePath = join(directory, 'daily-briefings.sqlite')
+    const store = createDailyBriefingSqliteStore(filePath)
+    const key = { date: '2026-11-02', locale: 'zh-CN' as const }
+
+    const first = await store.beginAttempt!({ ...key, startedAt: '2026-11-02T00:00:00.000Z' })
+    await store.finishAttempt!({ ...key, attemptNo: first, state: 'failed', failureCode: 'source-failed', finishedAt: '2026-11-02T00:01:00.000Z', trace: trace('2026-11-02T00:01:00.000Z') })
+    // A failed attempt is the newest record, so it is what a later read shows.
+    expect(await store.getAttempt?.(key.date, key.locale)).toMatchObject({ state: 'failed' })
+
+    const second = await store.beginAttempt!({ ...key, startedAt: '2026-11-02T01:00:00.000Z' })
+    await store.finishAttempt!({ ...key, attemptNo: second, state: 'succeeded', finishedAt: '2026-11-02T01:01:00.000Z' })
+
+    expect([first, second]).toEqual([1, 2])
+    // The successful attempt does not delete the failed one; the newest row has no trace of its own.
+    expect(await store.getAttempt?.(key.date, key.locale)).toBeUndefined()
+
+    const db = openSqliteDatabase(filePath)
+    try {
+      expect(db.prepare(`select attempt_no, state, failure_code, finished_at, trace_json is not null as has_trace
+        from daily_briefing_attempts order by attempt_no`).all()).toEqual([
+        { attempt_no: 1, state: 'failed', failure_code: 'source-failed', finished_at: '2026-11-02T00:01:00.000Z', has_trace: 1 },
+        { attempt_no: 2, state: 'succeeded', failure_code: null, finished_at: '2026-11-02T01:01:00.000Z', has_trace: 0 }
+      ])
+    } finally {
+      db.close()
+    }
+  })
+
+  it('opens a row as running before any work, so an interrupted attempt still exists', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'briefing-attempts-'))
+    const filePath = join(directory, 'daily-briefings.sqlite')
+    const store = createDailyBriefingSqliteStore(filePath)
+    await store.beginAttempt!({ date: '2026-11-02', locale: 'zh-CN', startedAt: '2026-11-02T00:00:00.000Z' })
+
+    const db = openSqliteDatabase(filePath)
+    try {
+      expect(db.prepare('select attempt_no, state, finished_at from daily_briefing_attempts').all())
+        .toEqual([{ attempt_no: 1, state: 'running', finished_at: null }])
+    } finally {
+      db.close()
+    }
+  })
 })

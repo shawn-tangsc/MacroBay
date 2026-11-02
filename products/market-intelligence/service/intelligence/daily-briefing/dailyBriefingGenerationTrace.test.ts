@@ -26,7 +26,6 @@ const emptyPacket = (): DailyBriefingFactPacket => ({
   enabled: { fearGreed: false, funding: false, stablecoin: false, etf: false, calendar: false }
 })
 
-type AttemptRow = Readonly<{ date: string; locale: DailyBriefingLocale; trace: BriefingGenerationTrace }>
 
 function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefingStore & {
   rows: Map<string, DailyBriefingStoredEdition>
@@ -34,6 +33,7 @@ function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefing
 } {
   const rows = new Map<string, DailyBriefingStoredEdition>()
   const attempts = new Map<string, BriefingGenerationTrace>()
+  const attemptCounts = new Map<string, number>()
   const key = (date: string, locale: string): string => `${date}:${locale}`
   return {
     rows,
@@ -44,9 +44,15 @@ function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefing
       return [...rows.values()].filter((row) => row.locale === locale && row.date >= from && row.date <= to)
     },
     async prune() {},
-    async putAttempt(attempt: AttemptRow) { attempts.set(key(attempt.date, attempt.locale), attempt.trace) },
+    async beginAttempt(attempt) {
+      const no = (attemptCounts.get(key(attempt.date, attempt.locale)) ?? 0) + 1
+      attemptCounts.set(key(attempt.date, attempt.locale), no)
+      return no
+    },
+    async finishAttempt(attempt) {
+      if (attempt.trace) attempts.set(key(attempt.date, attempt.locale), attempt.trace)
+    },
     async getAttempt(date, locale) { return attempts.get(key(date, locale)) },
-    async clearAttempt(date, locale) { attempts.delete(key(date, locale)) },
     ...overrides
   }
 }
@@ -232,7 +238,7 @@ describe('daily briefing generation trace', () => {
     const attempts = new Map<string, BriefingGenerationTrace>()
     const store = memoryStore({
       async put() { throw new Error('disk full') },
-      async putAttempt(attempt: AttemptRow) { attempts.set(`${attempt.date}:${attempt.locale}`, attempt.trace) }
+      async finishAttempt(attempt) { if (attempt.trace) attempts.set(`${attempt.date}:${attempt.locale}`, attempt.trace) }
     })
     const service = createDailyBriefingService({ source: source(), store, now: () => asOf, agentRunner: runner() })
 
