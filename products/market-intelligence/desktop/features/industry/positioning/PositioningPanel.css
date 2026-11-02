@@ -9,25 +9,6 @@
 
 .mi-positioning-panel__head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .mi-positioning-panel h2 { margin: 0; color: var(--mi-dashboard-text); font-size: 13px; font-weight: 650; }
-.mi-positioning-panel__help { position: relative; display: inline-flex; }
-.mi-positioning-panel__help > i {
-  display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%;
-  border: 1px solid var(--mi-dashboard-line); color: var(--mi-dashboard-muted);
-  font-size: 9px; font-style: normal; cursor: help;
-}
-.mi-positioning-panel__help:hover > i,
-.mi-positioning-panel__help:focus-visible > i { color: var(--mi-dashboard-text); border-color: var(--mi-dashboard-text); }
-.mi-positioning-panel__help-pop {
-  position: absolute; z-index: 4; top: 18px; left: -10px; display: none; width: 330px; gap: 6px;
-  padding: 9px 11px; border: 1px solid var(--mi-dashboard-line); border-radius: 5px;
-  background: color-mix(in srgb, var(--mi-dashboard-surface) 97%, transparent);
-  color: var(--mi-dashboard-muted); font-size: 10px; font-weight: 400; line-height: 1.55;
-}
-.mi-positioning-panel__help:hover .mi-positioning-panel__help-pop,
-.mi-positioning-panel__help:focus-visible .mi-positioning-panel__help-pop,
-.mi-positioning-panel__help:focus-within .mi-positioning-panel__help-pop { display: grid; }
-.mi-positioning-panel__help-pop b { font-weight: 400; }
-.mi-positioning-panel__help-pop b:first-child { color: var(--mi-dashboard-text); }
 .mi-positioning-panel__asof { margin-left: auto; color: var(--mi-dashboard-muted); font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mi-positioning-panel__status { color: var(--mi-dashboard-muted); font-size: 12px; }
 

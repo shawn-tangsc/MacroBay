@@ -43,6 +43,27 @@ const render = (props: Partial<Parameters<typeof PositioningPanel>[0]> = {}) =>
 
 afterEach(() => { document.body.innerHTML = '' })
 
+
+/** Renders the panel and opens the help popover, which is where the prose lives now. */
+async function mountAndOpenHelp(): Promise<HTMLElement> {
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => {
+    root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(PositioningPanel, {
+      funding, positioning, window: '7d', onWindowChange: () => undefined, text
+    })))
+  })
+  const trigger = container.querySelector(`button[aria-label="${text.helpLabel}"]`)!
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    trigger.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }))
+  })
+  // The overlay mounts on the next tick after the trigger reports itself.
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)) })
+  return container
+}
+
 describe('positioning panel', () => {
   it('prints the funding rate and the notional reading side by side, one asset per row', () => {
     const markup = render()
@@ -171,7 +192,8 @@ describe('hover readout', () => {
         funding, positioning, window: '7d', onWindowChange: () => undefined, text
       })))
     })
-    const svg = container.querySelector('svg')!
+    // The help trigger is an SVG icon too; pick the chart, not the glyph.
+    const svg = container.querySelector('.mi-positioning-panel__chart svg')!
     act(() => {
       svg.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 300, clientY: 40 }))
     })
@@ -214,8 +236,12 @@ describe('combined readout', () => {
     expect(markup).toContain('+0.0121%')
   })
 
-  it('explains the six states in the help popover', () => {
-    expect(render()).toContain('六档判定')
+  it('explains the six states in the help popover', async () => {
+    // The help is a paragraph in a popover now: it opens on hover/focus and pins on click, so the
+    // sentence exists only once the reader asks for it.
+    await mountAndOpenHelp()
+    // The overlay mounts in a portal, so the sentence lands on the document, not inside the panel.
+    expect(document.body.textContent).toContain('六档判定')
   })
 })
 
@@ -249,11 +275,10 @@ describe('what the mark does not cover', () => {
 })
 
 describe('the liquidation multiple', () => {
-  it('names what the multiple measures, on the mark and in the help', () => {
-    const markup = render()
-    // A bare "14.4×" over a chart said nothing about what was multiplied.
-    expect(markup).toContain('量 3.4×')
-    expect(text.helpLines.some(line => line.includes('相对过去 24 小时同长度桶均量的倍数'))).toBe(true)
+  it('names what the multiple measures, in the help the reader can open', async () => {
+    // A bare "3.4×" said nothing about what was multiplied; the sentence lives in the help.
+    await mountAndOpenHelp()
+    expect(document.body.textContent).toContain('相对过去 24 小时同长度桶均量的倍数')
   })
 })
 

@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react'
 
 import { Segmented } from '@platform/ui/components/segmented'
+import { Info } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Popover } from '@platform/ui/components/popover'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -23,6 +26,23 @@ import { PositioningChart, formatRate } from './PositioningChart'
 import type { PositioningPanelText } from './positioningText'
 
 import './PositioningPanel.css'
+
+/**
+ * The help's paragraph, one literal key per line.
+ *
+ * Literal on purpose: the guards check that a key exists and is spelled as a dotted path, which a
+ * template string hides from them. A table also makes it obvious that the panel's help and the text
+ * table have the same number of lines.
+ */
+export const positioningHelpLineKeys = Object.freeze([
+  'pages.intelligence.portal.dashboard.positioning.helpLines.0',
+  'pages.intelligence.portal.dashboard.positioning.helpLines.1',
+  'pages.intelligence.portal.dashboard.positioning.helpLines.2',
+  'pages.intelligence.portal.dashboard.positioning.helpLines.3',
+  'pages.intelligence.portal.dashboard.positioning.helpLines.4',
+  'pages.intelligence.portal.dashboard.positioning.helpLines.5',
+  'pages.intelligence.portal.dashboard.positioning.helpLines.6'
+] as const)
 
 type Rate = Readonly<{ observedAt: string; ratePercent: number; paymentDirection: 'long-pays-short' | 'short-pays-long' | 'neutral' }>
 
@@ -74,12 +94,19 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
         // "Insufficient data" is a statement, not a control: there is nothing behind it to open.
         <StatusPill tone="warn" labelKey="pages.intelligence.portal.dashboard.positioning.signalInsufficient" resolveText={resolveProductKey} />
       )) : null}
-      <span className="mi-positioning-panel__help" tabIndex={0} role="note" aria-label={text.helpLabel} data-help>
-        <i aria-hidden="true">?</i>
-        <span className="mi-positioning-panel__help-pop" role="tooltip">
-          {text.helpLines.map(line => <b key={line}>{line}</b>)}
-        </span>
-      </span>
+      {/*
+        The help is a paragraph, not a sentence: hover/focus must open it and a click must pin it,
+        which is the shared popover's job. The trigger is the shared icon button, so the 22px size,
+        the focus ring and the accessible name are not re-invented here.
+      */}
+      <Popover
+        lines={positioningHelpLineKeys.map(labelKey => ({ labelKey }))}
+        resolveText={resolveProductKey}>
+        <IconButton
+          ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpLabel"
+          icon={Info} size="sm" resolveText={resolveProductKey}
+          onSelect={() => undefined} />
+      </Popover>
       {extra}
       <WindowTabs window={window} onWindowChange={onWindowChange} text={text} />
     </header>
