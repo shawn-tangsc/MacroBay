@@ -1,6 +1,5 @@
-import { Tag } from 'antd'
-
 import type { AgentMcpCatalogItem } from '@platform/ai/agent-platform/mcp/agentMcpViewModel'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import type { AgentText } from '../../../agentText'
 
@@ -11,6 +10,9 @@ import type { AgentText } from '../../../agentText'
  * 怎么增删绑定是两件事；混在一起会让主组件的行数继续长。
  */
 
+/** 一行的状态词：句子来自 `mcpStatusLabel`，键只回答「这是哪一类」。 */
+const MCP_STATUS_KEY = 'agent.tools.mcpStatus'
+
 export function McpStatusTag({
   item,
   text
@@ -18,17 +20,13 @@ export function McpStatusTag({
   item: AgentMcpCatalogItem
   text: AgentText
 }): React.ReactElement {
+  const tone: StatusPillTone = item.status === 'connected' ? 'ok' : item.status === 'error' ? 'bad' : 'muted'
   return (
-    <Tag
-      className={
-        item.status === 'connected'
-          ? 'agent-tool-approval auto'
-          : item.status === 'error'
-            ? 'agent-tool-approval danger'
-            : 'agent-tool-approval'
-      }>
-      {mcpStatusLabel(item.status, text)}
-    </Tag>
+    <StatusPill
+      tone={tone}
+      labelKey={MCP_STATUS_KEY}
+      resolveText={(key) => (key === MCP_STATUS_KEY ? mcpStatusLabel(item.status, text) : '')}
+    />
   )
 }
 

@@ -11,6 +11,7 @@ import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import {
   emptyToolsHint,
   McpStatusTag,
@@ -33,6 +34,9 @@ type McpCatalogProps = {
   onRemove: (mcpId: string) => void
   onRefresh: (mcpId: string) => void
 }
+
+/** 「手动绑定」是状态词，不是描述标签。 */
+const MANUAL_BADGE_KEY = 'agent.tools.mcpManualBadge'
 
 export function McpCatalog({
   text,
@@ -150,7 +154,11 @@ function ManualMcpRow({
         <strong>{mcpId}</strong>
         <small>{text.editor.tools.mcpManualCustomDescription}</small>
       </span>
-      <Tag className="agent-tool-approval">{text.editor.tools.mcpManualBadge}</Tag>
+      <StatusPill
+        tone="warn"
+        labelKey={MANUAL_BADGE_KEY}
+        resolveText={(key) => (key === MANUAL_BADGE_KEY ? text.editor.tools.mcpManualBadge : '')}
+      />
       <Switch
         size="small"
         checked

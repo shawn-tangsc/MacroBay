@@ -1,8 +1,15 @@
-import { Switch, Tag } from 'antd'
+import { Switch } from 'antd'
 
 import type { Tool } from '@platform/ai/agent-platform/schemas/toolSchemas'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import type { AgentText } from '../../../agentText'
+
+/** 审批方式两种：`auto` 放行、其余需要读者点一次，所以是 `ok` / `muted`。 */
+const APPROVAL_PILLS = {
+  auto: { tone: 'ok', labelKey: 'agent.tools.approvalAuto' },
+  prompt: { tone: 'muted', labelKey: 'agent.tools.approvalPrompt' }
+} as const satisfies Record<'auto' | 'prompt', { tone: StatusPillTone; labelKey: string }>
 
 type BuiltinToolCatalogProps = {
   text: AgentText
@@ -49,6 +56,7 @@ function ToolRow({
   enabled: boolean
   onToggle: (checked: boolean) => void
 }): React.ReactElement {
+  const pill = tool.approval === 'auto' ? APPROVAL_PILLS.auto : APPROVAL_PILLS.prompt
   return (
     <div className="agent-tool-row">
       <span className="agent-tool-icon">{icon}</span>
@@ -56,9 +64,13 @@ function ToolRow({
         <strong>{tool.name}</strong>
         <small>{tool.description}</small>
       </span>
-      <Tag className={tool.approval === 'auto' ? 'agent-tool-approval auto' : 'agent-tool-approval'}>
-        {tool.approval === 'auto' ? text.editor.tools.approvalAutoBadge : text.editor.tools.approvalPromptBadge}
-      </Tag>
+      <StatusPill
+        tone={pill.tone}
+        labelKey={pill.labelKey}
+        resolveText={(key) =>
+          key === APPROVAL_PILLS.auto.labelKey ? text.editor.tools.approvalAutoBadge : text.editor.tools.approvalPromptBadge
+        }
+      />
       <Switch size="small" checked={enabled} onChange={onToggle} />
     </div>
   )
