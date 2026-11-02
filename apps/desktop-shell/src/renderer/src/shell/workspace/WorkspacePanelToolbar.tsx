@@ -1,7 +1,7 @@
 import { Button, Dropdown, type MenuProps } from 'antd'
 import { CornerDownLeft, ChevronDown, X } from 'lucide-react'
 
-import { Tooltip } from '@platform/ui/components/tooltip'
+import { IconButton } from '@platform/ui/components/icon-button'
 
 /**
  * Owner: apps/desktop-shell renderer / workspace 面板工具栏。
@@ -39,26 +39,33 @@ export type WorkspacePanelToolbarProps = {
 
 export function WorkspacePanelToolbar(props: WorkspacePanelToolbarProps): React.ReactElement {
   const actionsLabel = props.resolveText('workspace.panelActions')
-  const closeLabel = props.resolveText('workspace.panelClose')
+  // `IconButton` 的解析器收开区间 string；这里只接受闭集里的三个键，写错仍在 `tsc` 红。
+  const resolveIconText = (key: string): string => props.resolveText(key as WorkspacePanelTextKey)
   return (
     <header className="workspace-panel-toolbar">
       <span className="workspace-panel-title">{props.title}</span>
       <div className="workspace-panel-actions">
         {props.returnToPage ? (
-          <Tooltip labelKey="workspace.panelReturnToPage" resolveText={props.resolveText}>
-            <Button
-              aria-label={props.resolveText('workspace.panelReturnToPage')}
-              icon={<CornerDownLeft size={14} />}
-              onClick={props.returnToPage.onClick}
-            />
-          </Tooltip>
+          <IconButton
+            ariaLabelKey="workspace.panelReturnToPage"
+            icon={CornerDownLeft}
+            onSelect={props.returnToPage.onClick}
+            resolveText={resolveIconText}
+            size="md"
+            tooltipKey="workspace.panelReturnToPage"
+          />
         ) : null}
         <Dropdown menu={{ items: props.menuItems, onClick: props.onMenuClick }} trigger={['click']}>
           <Button aria-label={actionsLabel} title={actionsLabel} icon={<ChevronDown size={14} />} />
         </Dropdown>
-        <Tooltip labelKey="workspace.panelClose" resolveText={props.resolveText}>
-          <Button aria-label={closeLabel} icon={<X size={14} />} onClick={props.onClose} />
-        </Tooltip>
+        <IconButton
+          ariaLabelKey="workspace.panelClose"
+          icon={X}
+          onSelect={props.onClose}
+          resolveText={resolveIconText}
+          size="md"
+          tooltipKey="workspace.panelClose"
+        />
       </div>
     </header>
   )
