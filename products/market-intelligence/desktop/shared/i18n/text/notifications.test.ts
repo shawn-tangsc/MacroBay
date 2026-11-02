@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { findMissingNotificationEventCopy } from '@platform/notifications/contracts/notificationEventCopyGate'
 
 import { marketIntelligenceProductManifest } from '../../../../product.manifest'
-import {
-  MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS,
-  notificationEventActionKey
-} from '../../../../contracts/notificationEventKeys'
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as IDS } from '../../../../contracts/notificationEventKeys'
 import { marketIntelligenceNotificationCopy } from './notifications'
 
 const lookup = (language: 'zh-CN' | 'en-US', key: string): string | undefined =>
@@ -18,12 +15,10 @@ describe('market intelligence notification copy', () => {
     expect(findMissingNotificationEventCopy(marketIntelligenceProductManifest.notificationEvents, lookup)).toEqual([])
   })
 
-  it('names the two source actions, because those events require the reader to act', () => {
-    for (const eventTypeId of [IDS.sourceConsecutiveFailed, IDS.sourceStale]) {
-      for (const language of ['zh-CN', 'en-US'] as const) {
-        expect(lookup(language, notificationEventActionKey(eventTypeId)), `${eventTypeId} ${language}`).toBeTruthy()
-      }
-    }
+  it('leaves the action label to the platform key instead of inventing a product one', () => {
+    // 来源两条要求读者动手，动作标签取平台闭集的「去设置」；产品文案表里不该再有一份同名句子。
+    expect(Object.keys(marketIntelligenceNotificationCopy['zh-CN']).some((key) => key.endsWith('.action'))).toBe(false)
+    expect(marketIntelligenceNotificationCopy['en-US']).toBeDefined()
   })
 
   it('claims exactly the two job handlers whose failures this product reports', () => {

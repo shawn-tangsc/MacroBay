@@ -10,18 +10,13 @@ import {
  * 标题/正文/理由直接用平台那三个生成函数（`notification.event.<id>.<part>`），
  * 这样事件改名时键跟着变、文案门禁（`notificationEventCopyGate`）能把缺口点名到事件和语言。
  *
- * 动作标签的键平台还没有生成函数（`NotificationAction.labelKey` 只收平台闭集键），
- * 这里先用同一前缀补一个，键形状与另外四个一致；平台补上后换成平台函数，调用点不变。
+ * 动作标签用平台的动作键（`notification.action.open-settings`），不在产品键里另起一套。
  */
 export {
   notificationEventBodyKey,
   notificationEventReasonKey,
   notificationEventTitleKey
 } from '@platform/notifications/contracts/platformNotificationEvents'
-
-export function notificationEventActionKey(eventTypeId: string): string {
-  return `notification.event.${eventTypeId}.action`
-}
 
 /** 一条事件有正文时用的键；带变体时是 `.body.<variant>`。 */
 export function notificationEventVariantKey(eventTypeId: string, variant: string): string {

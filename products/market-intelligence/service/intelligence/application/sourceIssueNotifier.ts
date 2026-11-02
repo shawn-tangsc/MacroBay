@@ -3,12 +3,7 @@ import type {
   NotificationSubmitOutcome,
   NotificationSubmitRequest
 } from '@platform/notifications/contracts/notificationContracts'
-import type { NotificationCopyKey } from '@platform/i18n/notificationCopy'
-
-import {
-  MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS,
-  notificationEventActionKey
-} from '../../../contracts/notificationEventKeys'
+import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../../contracts/notificationEventKeys'
 import { isSourceStaleAsOf } from './macroSourceHealth'
 import { getIntelligenceSourceDefinition } from './sourceCatalog'
 
@@ -101,26 +96,29 @@ export type SourceIssueNotifierDeps = {
 }
 
 /**
- * 动作标签：`NotificationAction.labelKey` 在平台类型里只收平台闭集键，而情报事件的句子
- * 在产品文案表里（契约 §3.3 的 `scope: 'product'` 解析）。这里按同一前缀生成产品键，
- * 并转一次类型——平台修正这个类型后这一处可以删。
+ * 动作标签用**平台**的「去设置」（`notification.action.open-settings`）：动作键在平台闭集里，
+ * 产品不往动作位塞自己的文案键，渲染端就不必按 productId 特判。
  */
-function sourceIssueActions(kind: SourceIssueKind, sourceId: string): readonly NotificationAction[] {
-  const deeplink = {
+function sourceIssueActions(sourceId: string): readonly NotificationAction[] {
+  return [
+    {
+      id: 'open-source-settings',
+      labelKey: 'notification.action.open-settings',
+      kind: 'open',
+      deeplink: sourceIssueDeeplink(sourceId)
+    }
+  ]
+}
+
+/** 落点：设置页的情报源面板，定位到这个来源。 */
+function sourceIssueDeeplink(sourceId: string) {
+  return {
     scope: 'product' as const,
     productId: 'market-intelligence',
     settingsSectionId: 'intelligence-sources',
     entityType: 'source',
     entityId: sourceId
   }
-  return [
-    {
-      id: 'open-source-settings',
-      labelKey: notificationEventActionKey(SOURCE_ISSUE_EVENT_IDS[kind]) as NotificationCopyKey,
-      kind: 'open',
-      deeplink
-    }
-  ]
 }
 
 export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
@@ -132,13 +130,6 @@ export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
     const sourceName = deps.resolveSourceName?.(input.sourceId) ?? definition?.displayName ?? input.sourceId
     const failures = String(input.consecutiveFailures)
     const eventTypeId = SOURCE_ISSUE_EVENT_IDS[kind]
-    const deeplink = {
-      scope: 'product' as const,
-      productId: 'market-intelligence',
-      settingsSectionId: 'intelligence-sources',
-      entityType: 'source',
-      entityId: input.sourceId
-    }
 
     return deps.submit({
       eventTypeId,
@@ -147,8 +138,8 @@ export function createSourceIssueNotifier(deps: SourceIssueNotifierDeps) {
       titleParams: { sourceName, failures },
       bodyParams: { sourceName, failures },
       reasonParams: { sourceName, failures },
-      actions: sourceIssueActions(kind, input.sourceId),
-      deeplink,
+      actions: sourceIssueActions(input.sourceId),
+      deeplink: sourceIssueDeeplink(input.sourceId),
       occurredAt: input.now
     })
   }

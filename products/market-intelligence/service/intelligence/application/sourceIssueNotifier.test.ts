@@ -27,7 +27,9 @@ const settings: NotificationRuntimeSettings = {
   defaultSnoozeMinutes: 60
 }
 
-function createRuntime() {
+function createRuntime(
+  extra: { producerOwnership?: Record<string, { productId: string }>; productIds?: readonly string[] } = {}
+) {
   let state: unknown = { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
   const storage: NotificationStorage = {
     read: async () => JSON.parse(JSON.stringify(state)),
@@ -47,7 +49,9 @@ function createRuntime() {
     }),
     diagnostics: (entry) => diagnostics.push(entry.code),
     getSettings: async () => settings,
-    clock: { now: () => new Date(NOW), timeZone: () => 'UTC' }
+    clock: { now: () => new Date(NOW), timeZone: () => 'UTC' },
+    ...(extra.producerOwnership === undefined ? {} : { producerOwnership: extra.producerOwnership }),
+    ...(extra.productIds === undefined ? {} : { productIds: extra.productIds })
   })
   return { runtime, records: () => (state as { records: Array<Record<string, unknown>> }).records, diagnostics }
 }
@@ -137,6 +141,30 @@ describe('source issue submission', () => {
     expect(padded).toBe(plain)
     // 大小写不同不是“等价写法”，是脏输入：构造不出键，平台据此拒收，不许悄悄归一。
     expect(notificationDedupeBuilders.sourceIssue({ sourceId: 'FRED-Rates' })).toBeUndefined()
+  })
+
+  it('still records the product’s own notice when the handler is claimed for delegation', async () => {
+    // 让渡只吞平台事件（platform.*）：claim 了 collectSource 之后，来源两条自有事件必须照落库，
+    // 否则一次坏源会变成「平台不发 + 产品也不发」，读者什么都收不到。
+    const { runtime, records } = createRuntime({
+      producerOwnership: { 'market-intelligence.collectSource': { productId: 'market-intelligence' } },
+      productIds: ['market-intelligence']
+    })
+    const notify = createSourceIssueNotifier({ submit: runtime.submit, defaultFreshnessMs: 6 * HOUR })
+
+    await expect(notify(snapshot({ consecutiveFailures: 3 }))).resolves.toMatchObject({ kind: 'accepted' })
+    expect(records()).toHaveLength(1)
+
+    // 同一个 producerId 上的平台事件仍被让渡——这一格由平台不落库来证明。
+    const delegated = await runtime.submit({
+      eventTypeId: 'platform.job.failed-terminal',
+      producerId: 'market-intelligence.collectSource',
+      dedupeVars: { builder: 'template', vars: { definitionId: 'job-1', date: '2026-11-03' } },
+      actions: [],
+      occurredAt: NOW
+    })
+    expect(delegated).toMatchObject({ kind: 'delegated' })
+    expect(records()).toHaveLength(1)
   })
 
   it('N6: failure then stale on one source folds into one centre row inside the 24h window', async () => {
