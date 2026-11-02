@@ -4,6 +4,7 @@ import { Info, RefreshCw } from 'lucide-react'
 import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover as FocusPopover } from '@platform/ui/components/popover'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Segmented } from '@platform/ui/components/segmented'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
@@ -443,8 +444,9 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
         <div className="mi-cross-asset__chart-actions"><Segmented value={view.range} ariaLabelKey={crossAssetTextKeys.rangeLabel} resolveText={resolveProductText}
             items={crossAssetRanges.map(range => ({ value: range, labelKey: crossAssetWindowLabelKeys[range] }))}
             onChange={range => view.setRange(range as CrossAssetRange)} />
-          <FocusTooltip labelKey={crossAssetTextKeys.refresh} resolveText={resolveProductText}>
-            <Button type="text" size="small" aria-label={text.refresh} loading={view.refreshing} icon={<RefreshCw size={13} />} onClick={() => void view.refresh()} /></FocusTooltip></div></div>
+          <IconButton ariaLabelKey={crossAssetTextKeys.refresh} icon={RefreshCw} loading={view.refreshing}
+            onSelect={() => void view.refresh()} size="md" tooltipKey={crossAssetTextKeys.refresh}
+            resolveText={(key) => key === crossAssetTextKeys.refresh ? text.refresh : key} /></div></div>
         {/* 整块来源状态：药丸只标「这一块数据的整体状态」，逐资产的留给下面那行小字。 */}
         {snapshot?.sourceState && snapshot.sourceState !== 'live'
           ? <span data-source-state={snapshot.sourceState}><StatusPill tone={sourceStateTone[snapshot.sourceState]}
