@@ -21,7 +21,6 @@ import { ModelServiceClearModelsControl } from './ModelServiceClearModelsControl
 const labels = platformText['en-US'].models
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 beforeEach(() => {
   // 与渲染入口 `main.tsx` 同一句：测试里不接这一步，`Modal.confirm` 在 React 19 下什么都不画。

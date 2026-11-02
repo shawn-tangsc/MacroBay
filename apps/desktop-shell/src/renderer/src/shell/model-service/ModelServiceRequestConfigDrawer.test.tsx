@@ -18,7 +18,6 @@ import {
 import { platformText } from '../../i18n/platformText'
 import { MODEL_REQUEST_CONFIG_TITLE_KEY, ModelServiceRequestConfigDrawer } from './ModelServiceRequestConfigDrawer'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const labels = platformText['en-US'].models
 const css = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
 const drawerSource = readFileSync(

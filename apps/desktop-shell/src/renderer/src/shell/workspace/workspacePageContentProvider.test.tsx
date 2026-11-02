@@ -31,7 +31,6 @@ import { WorkspacePageHost } from './WorkspacePageHost'
 import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceWindowRoot'
 import { createWorkspacePageContentProvider, readDetachedPagePlatform } from './workspacePageContentProvider'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const PAGE_WINDOW_ID = 'window-page-1'
 const TAB_KEY = 'workspace-page-1'

@@ -12,7 +12,6 @@ import { MarketCalendarCard } from './MarketCalendarCard'
 
 const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/intelligence.css'), 'utf8')
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 function calendarText(language: 'zh-CN' | 'en-US') {
   const portal = productText[language].pages.intelligence.portal
   return {

@@ -19,7 +19,6 @@ import { renderModelServiceSettings } from './modelServicePageHarness'
  */
 const presets = createSystemProviderPresets()
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 

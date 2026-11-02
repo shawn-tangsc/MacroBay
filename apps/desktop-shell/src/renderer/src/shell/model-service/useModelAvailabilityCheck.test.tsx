@@ -10,7 +10,6 @@ import { modelAvailabilityFingerprint } from '@platform/ai/providers/modelAvaila
 import { resetModelDetectionControllerForTests } from './modelDetectionController'
 import { useModelAvailabilityCheck } from './useModelAvailabilityCheck'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 function providerFixture(overrides: Partial<SafeModelProvider> = {}): SafeModelProvider {
   return {

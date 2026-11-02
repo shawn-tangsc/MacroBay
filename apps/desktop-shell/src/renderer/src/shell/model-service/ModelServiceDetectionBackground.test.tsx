@@ -15,7 +15,6 @@ const fiveModels = ['m-1', 'm-2', 'm-3', 'm-4', 'm-5'].map((id) => ({
 
 const labels = platformText['en-US'].models
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(() => {
   document.body.replaceChildren()

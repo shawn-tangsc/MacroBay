@@ -25,7 +25,6 @@ import { WorkspaceWindowRoot, type WorkspacePendingTimerPort, type WorkspaceWind
  * `platform/desktop/main/workspace/panelWindowPreferenceFollow.test.ts`（真 compose + 真 P1-04 宿主）取证。
  */
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const WINDOW_ID = 'window-panel-1'
 const HOST_EPOCH = 3

@@ -24,7 +24,6 @@ import {
  *  - 端点默认只读，点「覆盖」才可编辑并显示风险提示，失焦保存走既有 upsert 且只改被覆盖的地址。
  */
 
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

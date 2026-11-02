@@ -13,7 +13,6 @@ import type { AssistantImageGenerationView } from './imageGenerationModel'
  * 未配置端点 ⇒ 按钮禁用且 tooltip 说明；面板给出 prompt / 尺寸 / 数量 / 生成。
  */
 const labels = platformText['en-US'].assistants
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
 
 const target = { providerId: 'acme', providerName: 'Acme', modelId: 'acme-image' }

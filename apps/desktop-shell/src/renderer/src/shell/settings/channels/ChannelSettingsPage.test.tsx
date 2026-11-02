@@ -10,7 +10,6 @@ import { ChannelSettingsPage } from './ChannelSettingsPage'
 
 const labels = platformText['zh-CN'].settings
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const catalogEntries = [
   { type: 'telegram', status: 'planned', reason: 'release-a-pending', implemented: true, credentialFields: ['bot_token'] },

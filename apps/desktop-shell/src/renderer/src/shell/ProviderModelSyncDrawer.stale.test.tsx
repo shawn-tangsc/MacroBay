@@ -15,7 +15,6 @@ import { ProviderModelSyncDrawer, type ProviderModelSyncSelection } from './Prov
  * 默认勾选（应用即清理）、用户可取消、组内全选/全不选都可用。
  */
 const models = platformText['en-US'].models
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
 
 const labels = {

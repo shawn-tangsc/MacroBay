@@ -17,7 +17,6 @@ import { renderModelServiceSettings } from './modelServicePageHarness'
  */
 const zhModels = platformText['zh-CN'].models
 const enModels = platformText['en-US'].models
-;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 afterEach(() => {
   document.body.replaceChildren()

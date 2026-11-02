@@ -11,7 +11,6 @@ import { AppShell } from './AppShell'
 import { installPlatform } from './model-service/modelServicePageHarness'
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

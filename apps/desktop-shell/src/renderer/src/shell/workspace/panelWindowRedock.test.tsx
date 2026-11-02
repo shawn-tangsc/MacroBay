@@ -26,7 +26,6 @@ const PANEL_KEY = 'panel-1'
 const PANEL_ID = 'dsh-fixture.board'
 const FLUSH_TURNS = 12
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const labels = platformText['en-US'].workspace
 

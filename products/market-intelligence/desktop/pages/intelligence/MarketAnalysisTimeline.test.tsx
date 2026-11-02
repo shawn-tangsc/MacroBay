@@ -20,7 +20,6 @@ async function flushReads(): Promise<void> {
 }
 const text = productText['zh-CN'].pages.intelligence.portal.analysisTimeline
 let root: Root | undefined
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 /**
  * The list is presentational: data and selection come from the workspace hook,

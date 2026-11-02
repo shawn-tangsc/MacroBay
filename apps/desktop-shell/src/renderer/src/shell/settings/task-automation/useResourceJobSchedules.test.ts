@@ -19,7 +19,6 @@ const labels = platformText['zh-CN'].taskAutomation
 type Captured = { current: ReturnType<typeof useResourceJobSchedules> | null }
 
 describe('useResourceJobSchedules', () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
   afterEach(() => {
     platform.listSchedules.mockReset()

@@ -44,7 +44,6 @@ const sessionImage: AssistantImageMessagePart = {
   byteLength: 128
 }
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined
 
 function view(overrides: Partial<AssistantImageGenerationView> = {}): AssistantImageGenerationView {

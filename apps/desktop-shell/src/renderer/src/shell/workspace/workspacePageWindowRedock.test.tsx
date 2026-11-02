@@ -13,7 +13,6 @@ import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceW
  * 悬浮按钮，点击走已验证的 `.tabs.*` `redockTab`（`tabsCommand` 恰一次），且原生关闭路径不被本包改动。
  */
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const language = 'en-US' as const
 const labels = platformText[language].workspace

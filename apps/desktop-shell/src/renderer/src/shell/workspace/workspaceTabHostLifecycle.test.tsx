@@ -20,7 +20,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { WorkspaceSnapshot } from '@platform/workspace/contracts'
 import { WorkspaceWindowRoot, type WorkspaceWindowRootProps } from './WorkspaceWindowRoot'
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const FLUSH_TURNS = 16
 const PAGE_WINDOW_ID = 'window-page-1'

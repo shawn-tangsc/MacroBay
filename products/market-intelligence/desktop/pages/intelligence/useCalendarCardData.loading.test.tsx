@@ -13,7 +13,6 @@ import { useCalendarCardData } from './useCalendarCardData'
  * happens to see: while the read is in flight the hook may only report `loading`, an error needs a
  * failed read, and a failed refresh over existing rows keeps them and marks them stale.
  */
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const asOf = '2026-10-14T12:00:00.000Z'
 let root: ReturnType<typeof createRoot> | undefined
 

@@ -13,7 +13,6 @@ import { platformText } from '../../../i18n/platformText'
  * 端到端的换区域/换 Tab 保活由 WorkspacePanelHost.test.tsx 覆盖。
  */
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 let root: Root | undefined
 let container: HTMLDivElement | undefined

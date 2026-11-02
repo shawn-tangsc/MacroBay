@@ -29,7 +29,6 @@ function retiredItem(modelName: string, lastObservedAt = '2026-11-01T08:00:00.00
 }
 
 let root: Root | undefined
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(async () => {
   await act(async () => root?.unmount())

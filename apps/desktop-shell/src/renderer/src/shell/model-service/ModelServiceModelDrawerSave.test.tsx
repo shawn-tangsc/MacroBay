@@ -12,7 +12,6 @@ import { renderModelServiceSettings } from './modelServicePageHarness'
 /**
  * PLAT-62：编辑模型抽屉保存走既有 addOrUpdateModel，载荷包含所选能力。
  */
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 afterEach(() => {
   document.body.replaceChildren()
