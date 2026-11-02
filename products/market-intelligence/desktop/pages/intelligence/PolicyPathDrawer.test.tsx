@@ -135,18 +135,19 @@ describe('policy path drawer uncollected sections', () => {
 })
 
 describe('policy drawer pending 24h change', () => {
-  it('explains the dash through a focusable tooltip, not a title attribute', async () => {
+  it('writes the reason for the dash on the line itself, with no hover and no extra tab stop', async () => {
     const rendered = await render({
       ...reading,
       phase: { kind: 'normal' },
       settlement: undefined,
       probability: { venue: 'polymarket', asOf: '2026-10-31T05:39:50.406Z', outcome: 'hike-25', value: 0.69, points: 40 }
     })
-    // `title` is not a hint channel: keyboard and touch readers get nothing from it.
+    // The reason used to live in a hint (first a `title`, then a tooltip): the pointer got it, and
+    // everyone else got a dash. It is now the value's own line.
     expect(rendered.querySelector('dd[title]')).toBeNull()
-    const dash = rendered.querySelector('dd[tabindex="0"]')
-    expect(dash).not.toBeNull()
-    expect(dash?.textContent).toContain('—')
-    expect(dash?.textContent).toContain(text.change24hPendingShort)
+    expect(rendered.querySelector('dd[tabindex="0"]')).toBeNull()
+    const dash = [...rendered.querySelectorAll('dd')].find((cell) => cell.textContent?.includes('—'))
+    expect(dash).toBeDefined()
+    expect(dash?.textContent).toContain(text.change24hPending)
   })
 })

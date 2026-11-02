@@ -310,7 +310,10 @@ describe('daily brief share card in English', () => {
     const changed = await render(withForecast())
     const chip = changed.querySelector('[data-regime-change="true"]')
     expect(chip?.textContent).toBe(text.conclusion.regimeChanged)
-    expect(chip?.getAttribute('title')).toBe('方向由持平转为偏空')
+    // What changed is on the poster now. It used to be a `title` plus an `aria-label`: the pointer
+    // got the sentence, sighted keyboard readers got a chip, and the exported image carried neither.
+    expect(chip?.getAttribute('title')).toBeNull()
+    expect(chip?.nextElementSibling?.textContent).toBe(`${text.labelSeparator}方向由持平转为偏空`)
 
     const unchanged = await render(withForecast({ regimeChange: '无重要变化' }))
     expect(unchanged.querySelector('[data-regime-change="true"]')).toBeNull()

@@ -142,7 +142,7 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
 
     {conclusion ? <section className="mi-brief-poster__conclusion">
       <h2>{text.sections.conclusion}</h2>
-        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{regimeMarker ? <span className="mi-brief-poster__regime" data-regime-change="true" title={regimeMarker.title} aria-label={`${text.conclusion.regimeChanged}${text.labelSeparator}${regimeMarker.title}`}>{text.conclusion.regimeChanged}</span> : null}{conclusion.summary}</p>
+        <p className="mi-brief-poster__summary"><span className="mi-brief-poster__direction" data-direction={conclusion.direction}>{localizedDirectionTerm(conclusion.direction, locale)}</span>{regimeMarker ? <><span className="mi-brief-poster__regime" data-regime-change="true">{text.conclusion.regimeChanged}</span><span>{text.labelSeparator}{regimeMarker.title}</span></> : null}{conclusion.summary}</p>
         {conclusion.translation ? <p className="mi-brief-poster__translation">{text.translated} · {conclusion.translation}</p> : null}
         {synthesis ? <div className="mi-brief-poster__forward">
           <p className="mi-brief-poster__outlook"><span className="mi-brief-poster__forward-label">{text.conclusion.outlook}</span>{synthesis.outlook}</p>
