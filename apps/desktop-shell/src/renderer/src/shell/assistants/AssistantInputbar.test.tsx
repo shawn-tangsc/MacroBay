@@ -43,6 +43,7 @@ describe('AssistantInputbar', () => {
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
         onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 
@@ -79,6 +80,7 @@ describe('AssistantInputbar', () => {
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
         onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 

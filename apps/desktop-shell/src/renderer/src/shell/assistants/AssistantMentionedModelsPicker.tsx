@@ -9,6 +9,8 @@ type AssistantMentionedModelsPickerProps = {
   modelOptions: readonly AssistantMentionedModel[]
   mentionedModels: readonly AssistantMentionedModel[]
   disabled: boolean
+  /** 不可用时的下一步：把读者送到顶部模型选择器（页面层实现焦点，选择器自己不查 DOM）。 */
+  onRequireModel: () => void
   onToggleMentionedModel: (value: string) => void
   onClearMentionedModels: () => void
 }

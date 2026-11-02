@@ -88,6 +88,8 @@ export function AssistantPage({
   const [showSidebar, setShowSidebar] = useState(true)
   /** 输入条要求「先选话题」时加一：侧栏据此把焦点交给话题列表。 */
   const [focusTopicsTick, setFocusTopicsTick] = useState(0)
+  /** 提及选择器不可用时，把读者送到顶部的模型选择器。 */
+  const [focusModelPickerTick, setFocusModelPickerTick] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const deletingTopicIds = useRef(new Set<string>())
@@ -554,6 +556,7 @@ export function AssistantPage({
         labels={t}
         assistants={assistants}
         activeAssistantId={activeAssistantId}
+        focusModelPickerTick={focusModelPickerTick}
         modelPicker={
           <ModelPicker
             pickerId="assistant-header"
@@ -624,6 +627,7 @@ export function AssistantPage({
               setActiveTab('topics')
               setFocusTopicsTick((tick) => tick + 1)
             }}
+            onRequireModel={() => setFocusModelPickerTick((tick) => tick + 1)}
             onOpenSettings={() => setSettingsOpen(true)}
             onSelectSibling={(messageId) => void handleSelectSibling(messageId)}
             onDeleteMessage={(messageId) => void handleDeleteMessage(messageId)}

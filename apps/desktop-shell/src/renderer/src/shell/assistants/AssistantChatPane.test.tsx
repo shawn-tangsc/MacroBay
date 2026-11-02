@@ -52,6 +52,7 @@ describe('AssistantChatPane', () => {
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
         onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 
@@ -100,6 +101,7 @@ describe('AssistantChatPane', () => {
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
         onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 
@@ -157,6 +159,7 @@ describe('AssistantChatPane', () => {
         onToggleMentionedModel={() => undefined}
         onClearMentionedModels={() => undefined}
         onRequireTopic={() => undefined}
+        onRequireModel={() => undefined}
       />
     )
 

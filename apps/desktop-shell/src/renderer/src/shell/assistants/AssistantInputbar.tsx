@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
+import { navigateTo } from '@platform/workspace/navigation/navigationRequest'
 import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../i18n/platformText'
 import { resolveAssistantsText, type AssistantsTextPath } from '../../i18n/assistantsTextKey'
@@ -40,6 +41,8 @@ type AssistantInputbarProps = {
   topicSelected: boolean
   /** 话题还没选时，把读者送到话题选择器去（页面层给回调；输入条不自己找 DOM）。 */
   onRequireTopic: () => void
+  /** 提及选择器不可用时，把读者送到顶部模型选择器（同样由页面层做焦点交接）。 */
+  onRequireModel: () => void
   statusMessage?: string | null
   mentionedModels: readonly AssistantMentionedModel[]
   /** T1–T3：图像生成 / 编辑入口（未配置端点时按钮禁用）。 */
@@ -67,6 +70,8 @@ const INPUTBAR_TOOL_KEYS = {
   'context-source': 'assistants.inputbarTools.context-source'
 } as const satisfies Record<AssistantInputbarToolId, string>
 const TOPIC_REQUIRED_KEY = 'assistants.topicRequiredHint'
+/** 设置 → 模型服务；id 来自 `builtInNavEntries.ts:79`（`label: t.settings.modelService`）。 */
+const MODEL_SERVICE_PANEL_ID = 'models'
 
 const TOOL_ICONS: Record<AssistantInputbarToolId, LucideIcon> = {
   attachment: Paperclip,
@@ -88,6 +93,7 @@ export function AssistantInputbar({
   composerEnabled,
   topicSelected,
   onRequireTopic,
+  onRequireModel,
   statusMessage,
   mentionedModels,
   imageGeneration,
@@ -106,6 +112,10 @@ export function AssistantInputbar({
     return resolveAssistantsText(labels, path as AssistantsTextPath)
   }
   const toast = useToast()
+  const handleImageUnavailable = (): void => {
+    toast.info({ titleKey: 'imageEndpointMissingHint', resolveText: resolveAssistantText })
+    navigateTo({ page: 'settings', panel: MODEL_SERVICE_PANEL_ID })
+  }
   const tools = listVisibleAssistantInputbarTools(createAssistantInputbarTools())
   const canCompose = composerEnabled ?? (assistantSelected && modelReady)
 
@@ -128,8 +138,8 @@ export function AssistantInputbar({
       />
       <div className="assistant-composer-footer">
         <div className="assistant-inputbar-tools">
-          <AssistantImageGenerateControl labels={labels} view={imageGeneration} />
-          <AssistantImageEditControl labels={labels} view={imageGeneration} availableImages={sessionImages} />
+          <AssistantImageGenerateControl labels={labels} onUnavailable={handleImageUnavailable} view={imageGeneration} />
+          <AssistantImageEditControl availableImages={sessionImages} labels={labels} onUnavailable={handleImageUnavailable} view={imageGeneration} />
           {tools.map((tool) => {
             const Icon = TOOL_ICONS[tool.id]
             return (
@@ -157,6 +167,7 @@ export function AssistantInputbar({
             )
           })}
           <AssistantMentionedModelsPicker
+            onRequireModel={onRequireModel}
             labels={labels}
             modelOptions={modelOptions}
             mentionedModels={mentionedModels}
