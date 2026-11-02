@@ -1,4 +1,4 @@
-import { Button, Input, Tooltip as AntTooltip } from 'antd'
+import { Button, Input } from 'antd'
 import {
   Database,
   Eraser,
@@ -120,7 +120,10 @@ export function AssistantInputbar({
             const Icon = TOOL_ICONS[tool.id]
             const label = labels.inputbarTools[tool.labelKey]
             return (
-              <AntTooltip key={tool.id} title={label}>
+              <Tooltip
+                key={tool.id}
+                labelKey={`assistants.inputbarTools.${tool.labelKey}`}
+                resolveText={(key) => (key === `assistants.inputbarTools.${tool.labelKey}` ? label : '')}>
                 <Button
                   type="text"
                   size="small"
@@ -140,7 +143,7 @@ export function AssistantInputbar({
                     onToolAction(tool.id)
                   }}
                 />
-              </AntTooltip>
+              </Tooltip>
             )
           })}
           <AssistantMentionedModelsPicker
