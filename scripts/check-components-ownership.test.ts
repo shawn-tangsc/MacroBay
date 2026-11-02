@@ -30,6 +30,7 @@ describe('components ownership guard', () => {
         hash: 'aaa',
         subject: 'feat(ui): touch the component',
         message: 'feat(ui): touch the component',
+        authorDate: '2026-11-02T14:00:00+08:00',
         files: [`${COMPONENTS_DIR}/status-pill/StatusPill.tsx`]
       }
     ])
@@ -43,12 +44,14 @@ describe('components ownership guard', () => {
         hash: 'bbb',
         subject: 'fix(ui): owner change',
         message: 'fix(ui): owner change\n\nComponent-Owner: 前端组件',
+        authorDate: '2026-11-02T14:00:00+08:00',
         files: [`${COMPONENTS_DIR}/menu/ContextMenu.tsx`]
       },
       {
         hash: 'ccc',
         subject: 'feat(notifications): unrelated',
         message: 'feat(notifications): unrelated',
+        authorDate: '2026-11-02T14:00:00+08:00',
         files: ['platform/notifications/runtime/notificationRuntime.ts']
       }
     ])
@@ -63,6 +66,7 @@ describe('components ownership guard', () => {
         hash: 'bbb',
         subject: 'feat(state): x',
         message: 'feat(state): x\n\nComponent-Owner: 前端组件\n',
+        authorDate: '2026-11-02T14:00:00+08:00',
         files: [
           `${COMPONENTS_DIR}/state/StateView.tsx`,
           'platform/desktop/main/channels/channelMaintenanceJobs.ts',
@@ -90,6 +94,7 @@ describe('components ownership guard', () => {
           'Also: platform/contracts/queryOutcome.ts — 白名单是契约，组件读它',
           'Also: docs/development/ui-state-components.md — 公开文档的码表'
         ].join('\n'),
+        authorDate: '2026-11-02T14:00:00+08:00',
         files: [
           `${COMPONENTS_DIR}/state/StateView.tsx`,
           'platform/contracts/queryOutcome.ts',
@@ -107,6 +112,7 @@ describe('components ownership guard', () => {
       {
         hash: 'old',
         subject: 'feat(state): before the rule',
+        authorDate: '2026-11-02T13:00:00+08:00',
         message: 'feat(state): before the rule\n\nComponent-Owner: 前端组件\n',
         files: [`${COMPONENTS_DIR}/state/StateView.tsx`, 'platform/contracts/queryOutcome.ts']
       },
@@ -114,6 +120,7 @@ describe('components ownership guard', () => {
         hash: 'new',
         subject: 'feat(state): doc follows the component',
         message: 'feat(state): doc follows the component\n\nComponent-Owner: 前端组件\n',
+        authorDate: '2026-11-02T14:00:00+08:00',
         files: [
           `${COMPONENTS_DIR}/state/StateView.tsx`,
           'docs/development/ui-state-components.md',
@@ -128,7 +135,26 @@ describe('components ownership guard', () => {
     const withContract = [
       { ...commits[1], files: [...commits[1].files, 'platform/contracts/queryOutcome.ts'] }
     ]
-    expect(findViolations(withContract, new Set())).toHaveLength(1)
+    expect(findViolations(withContract)).toHaveLength(1)
+  })
+
+  it('judges by author date, so a rebase cannot silently retire the cutover', () => {
+    // 同一条提交形状，只差作者日期：早于生效点 → 放行；晚于生效点 → 红。
+    // 判据用日期而不是哈希，因为 rebase 换哈希、不换作者日期（今晚因此静默失效过一次）。
+    const shape = (authorDate: string) => [
+      {
+        hash: 'x',
+        subject: 'feat(ui): touches components without a declaration',
+        authorDate,
+        message: 'feat(ui): touches components without a declaration',
+        files: [`${COMPONENTS_DIR}/state/StateView.tsx`, 'platform/contracts/queryOutcome.ts']
+      }
+    ]
+
+    expect(findViolations(shape('2026-11-02T13:00:00+08:00'))).toEqual([])
+    expect(findViolations(shape('2026-11-02T14:00:00+08:00'))).toHaveLength(1)
+    // 读不出日期时从严判：兜底不许静默放行。
+    expect(findViolations(shape('not-a-date'))).toHaveLength(1)
   })
 
 })

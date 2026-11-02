@@ -19,31 +19,6 @@ export const COMPONENTS_DIR = 'platform/ui/components'
 export const OWNER_TRAILER = 'Component-Owner'
 export const OWNER_VALUE = '前端组件'
 
-/**
- * `Also:` 这条规矩的生效点：引入它的那次提交。
- *
- * **在它之前的提交一律不按这条规矩判**——用一条当时还不存在的规矩去判旧提交，只会得到
- * 一堆“正确的红”和一次没有意义的返工，而且补齐历史要改写十笔、任何一笔都可能踩到别人的在途工作。
- *
- * 为什么不用「只减不增」的历史基线：那张表要有人维护、会漂；**生效点是一个常量，漂不了**。
- */
-export const ALSO_RULE_SINCE = '60b84c149e6884e2892e965c7468f812d9041b37'
-
-/**
- * 组件自己的公开文档：`docs/development/<组件名>.md` 与 `.zh-CN.md`。
- *
- * 它们本来就在规矩给的允许范围内（改组件必然要同步它的说明），所以不算「附带改动」，
- * 不需要 `Also:` 理由行。**只认目录名对得上的那几份**——`docs/development/` 下的其它页面不算，
- * 否则这条口子会大到能装下任何文档改动。
- */
-export function isComponentDoc(file: string): boolean {
-  // 组件自己的公开文档住在 `docs/development/` 下（`ui-state-components.md`、`icon-button.md`…），
-  // 名字与组件目录不总是同名（`state` → `ui-state-components`），所以不按“目录名对齐”判，
-  // 只按目录判：这一层本来就是组件与开发规范的家。风险是有人顺手夹带无关文档改动——
-  // 那类改动可以单独回退，代价远小于让每一次正常组件改动都红一次。
-  return file.startsWith('docs/development/') && file.endsWith('.md')
-}
-
 /** 是否命中受保护目录。`platform/ui/components-old/` 这种前缀相同但不同的目录不算。 */
 export function touchesComponents(files: readonly string[]): boolean {
   return files.some((file) => file === COMPONENTS_DIR || file.startsWith(`${COMPONENTS_DIR}/`))
@@ -58,25 +33,49 @@ export function declaresComponentOwner(message: string): boolean {
   return false
 }
 
+/** 组件自己的公开文档：`docs/development/*.md`，改组件要同步它，不需要写理由行。 */
+export function isComponentDoc(file: string): boolean {
+  return file.startsWith('docs/development/') && file.endsWith('.md')
+}
+
 /**
- * 组件提交里附带改了别的线的东西时，必须逐条说明。
+ * 组件目录以外的每个文件，都要在提交信息里有一行 `Also: <路径> — 为什么必须同一笔`。
  *
- * 这不是白名单——白名单会逼出「为了合规而拆得别扭」的提交。要求只有一条：**每个附带文件
- * 都要在提交信息里有一行 `Also: <路径> — <为什么必须同一笔>`**。写得出一句诚实的话就放行；
- * 写不出的（比如 220 行业务迁移搭组件提交的车）会红。
+ * 不做白名单：白名单会逼出「为了合规而拆得别扭」的提交；一句能写的理由就放行，
+ * 写不出的（比如 220 行别线业务迁移搭组件提交的车）会红。
  */
-export function unexplainedFiles(
-  files: readonly string[],
-  message: string,
-): string[] {
+export function unexplainedFiles(files: readonly string[], message: string): string[] {
   const declared = new Set<string>()
   for (const line of message.split('\n')) {
     const match = /^Also:\s*(\S+)/u.exec(line.trim())
     if (match) declared.add(match[1])
   }
-  return files.filter(
-    (file) => !touchesComponents([file]) && !isComponentDoc(file) && !declared.has(file)
-  )
+  return files.filter((file) => !touchesComponents([file]) && !isComponentDoc(file) && !declared.has(file))
+}
+
+/**
+ * 规则的生效点：**按作者日期判，不按哈希判**。
+ *
+ * 为什么不是哈希：rebase 会换掉哈希、但保留作者日期。今晚已经吃过一次——`ALSO_RULE_SINCE`
+ * 写死成某个哈希，rebase 之后那个哈希不存在了，`git rev-list` 失败 → 代码静默返回空集 →
+ * 豁免失效而没有人知道。`git rev-list` 那次的教训是「兜底不许静默降级」，这次的教训是
+ * **别再把会漂的东西写成常量**。
+ *
+ * 时刻取值：晚于两笔缺声明提交的时刻（`b4f7f82` 13:18:42、`003bf89` 13:22:58，均 +08:00），
+ * 它们落在豁免侧；之后的一切提交照常严判。
+ *
+ * **不要“优化”回哈希**：那会让下一次 rebase 再静默失效一次。
+ */
+export const RULES_SINCE = '2026-11-02T13:23:30+08:00'
+
+/** 这条提交是否早于生效点（含等于）：早于生效点的不判新规则。 */
+export function predatesRules(authorDate: string): boolean {
+  const at = Date.parse(authorDate)
+  if (Number.isNaN(at)) {
+    // 读不出日期就从严判——兜底不许静默放行。
+    return false
+  }
+  return at <= Date.parse(RULES_SINCE)
 }
 
 export type ComponentOwnershipViolation = {
@@ -91,17 +90,18 @@ export type InspectedCommit = {
   hash: string
   subject: string
   message: string
+  /** 作者日期（ISO）。规则生效点按它判——rebase 会换哈希，不会换它。 */
+  authorDate: string
   files: readonly string[]
 }
 
-export function findViolations(
-  commits: readonly InspectedCommit[],
-  exemptFromAlsoRule: ReadonlySet<string> = new Set()
-): ComponentOwnershipViolation[] {
+export function findViolations(commits: readonly InspectedCommit[]): ComponentOwnershipViolation[] {
   const violations: ComponentOwnershipViolation[] = []
   for (const commit of commits) {
     if (!touchesComponents(commit.files)) continue
-    const unexplained = exemptFromAlsoRule.has(commit.hash) ? [] : unexplainedFiles(commit.files, commit.message)
+    // 早于生效点的提交：两条新规则都不判（它们写在规则存在之前，不可能满足）。
+    if (predatesRules(commit.authorDate)) continue
+    const unexplained = unexplainedFiles(commit.files, commit.message)
     if (declaresComponentOwner(commit.message) && unexplained.length === 0) continue
     violations.push({
       hash: commit.hash,
@@ -132,19 +132,9 @@ function readCommits(range: string): InspectedCommit[] {
     hash,
     subject: git(['log', '-1', '--format=%s', hash]),
     message: git(['log', '-1', '--format=%B', hash]),
+    authorDate: git(['log', '-1', '--format=%aI', hash]),
     files: git(['show', '--name-only', '--format=', hash]).split('\n').filter(Boolean)
   }))
-}
-
-/** 生效点（含）之前的全部提交：它们写在 `Also:` 这行存在之前，不可能满足一条当时还没有的规矩。 */
-function commitsBeforeAlsoRule(): Set<string> {
-  try {
-    const hashes = git(['rev-list', ALSO_RULE_SINCE]).split('\n').filter(Boolean)
-    return new Set(hashes)
-  } catch {
-    // 生效点不在当前历史里（比如换了分支或浅克隆）：不豁免任何人，判定从严。
-    return new Set()
-  }
 }
 
 function main(): void {
@@ -165,8 +155,7 @@ function main(): void {
     return
   }
 
-  const exempt = commitsBeforeAlsoRule()
-  const violations = findViolations(commits, exempt)
+  const violations = findViolations(commits)
   if (violations.length === 0) {
     console.log(`components-ownership: ${commits.length} commit(s) checked, none touched ${COMPONENTS_DIR} without a ${OWNER_TRAILER} trailer.`)
     return
