@@ -171,7 +171,7 @@ export const agentTextEn: AgentText = {
     selectLocalDirectory: 'Select local directory...',
     selectModel: 'Select model',
     openWorkspace: 'Open workspace',
-    openInExternalApp: (name) => `Open in ${name}`,
+    openInExternalApp: 'Open in {name}',
     openInExternalAppMenu: 'Choose external editor',
     clearMessages: 'Clear messages',
     taskCenter: 'Task center',

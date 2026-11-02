@@ -171,7 +171,7 @@ export const agentTextZh: AgentText = {
     selectLocalDirectory: '选择本地目录...',
     selectModel: '选择模型',
     openWorkspace: '打开工作区',
-    openInExternalApp: (name) => `在 ${name} 中打开`,
+    openInExternalApp: '在 {name} 中打开',
     openInExternalAppMenu: '选择外部编辑器',
     clearMessages: '清空消息',
     taskCenter: '任务中心',

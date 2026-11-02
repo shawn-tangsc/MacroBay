@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Dropdown, Tooltip as AntTooltip } from 'antd'
+import { Button, Dropdown } from 'antd'
 import type { MenuProps } from 'antd'
 import { ChevronDown, Code2 } from 'lucide-react'
 
 import type { ExternalAppView } from '@platform/desktop/main/externalApps/externalAppRegistry'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../../agentTextProvider'
@@ -17,9 +18,11 @@ export default function OpenExternalAppButton({
   workspacePath
 }: OpenExternalAppButtonProps): React.ReactElement | null {
   const t = useAgentText()
-  // 只有「选择外部应用」这颗是纯键；上面那颗的文案带应用名（`openInExternalApp(name)`），
-  // 平台的 Tooltip 目前不收参数，先留在 antd，等契约补 params。
-  const tooltipKeys = { openInExternalAppMenu: 'chatNavbar.openInExternalAppMenu' } as const satisfies Record<string, AgentTooltipKey>
+  // 两颗都是键：带应用名的那颗用 `{name}` 模板 + `labelParams`，句子在文案表里，值在这里填。
+  const tooltipKeys = {
+    openInExternalApp: 'chatNavbar.openInExternalApp',
+    openInExternalAppMenu: 'chatNavbar.openInExternalAppMenu'
+  } as const satisfies Record<string, AgentTooltipKey>
   const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
   const [apps, setApps] = useState<ExternalAppView[]>([])
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null)
@@ -66,16 +69,19 @@ export default function OpenExternalAppButton({
 
   return (
     <span className="agent-external-app-actions">
-      <AntTooltip title={t.chatNavbar.openInExternalApp(selectedApp.name)}>
+      <Tooltip
+        labelKey={tooltipKeys.openInExternalApp}
+        labelParams={{ name: selectedApp.name }}
+        resolveText={resolveText}>
         <Button
           className="ant-shell-icon-button"
           type="text"
           size="small"
           icon={<Code2 size={15} />}
-          aria-label={t.chatNavbar.openInExternalApp(selectedApp.name)}
+          aria-label={fillLabelParams(t.chatNavbar.openInExternalApp, { name: selectedApp.name })}
           onClick={() => void launch(selectedApp.id)}
         />
-      </AntTooltip>
+      </Tooltip>
       {apps.length > 1 ? (
         <Tooltip labelKey={tooltipKeys.openInExternalAppMenu} resolveText={resolveText}>
           <Dropdown menu={{ items: menuItems }} trigger={['click']}>

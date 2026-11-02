@@ -135,7 +135,8 @@ export type AgentText = {
     selectLocalDirectory: string
     selectModel: string
     openWorkspace: string
-    openInExternalApp: (name: string) => string
+    /** 模板：`{name}` 由调用点填入应用显示名（`fillLabelParams`），不在调用点拼句子。 */
+    openInExternalApp: string
     openInExternalAppMenu: string
     clearMessages: string
     taskCenter: string

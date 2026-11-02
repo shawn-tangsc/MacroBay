@@ -23,6 +23,7 @@ export type AgentTooltipKey =
   | 'chatNavbar.taskCenter'
   | 'chatNavbar.chatSettings'
   | 'chatNavbar.openInExternalAppMenu'
+  | 'chatNavbar.openInExternalApp'
   | 'sessionItem.deleteShortcut'
   | 'sessionItem.more'
   | 'messages.copy'
