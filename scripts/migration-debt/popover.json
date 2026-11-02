@@ -1,0 +1,12 @@
+{
+  "$comment": "antd Popover call sites still to migrate. One entry per file — the debt is a whole-file import, not a single code path. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: a caller migrating a site must be able to strike its line without touching the component directory, and the guard reads this file as the only copy.",
+  "entries": {
+    "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantMentionedModelsPicker.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx": 1,
+    "apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx": 1,
+    "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx": 1,
+    "products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx": 1,
+    "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx": 1
+  }
+}

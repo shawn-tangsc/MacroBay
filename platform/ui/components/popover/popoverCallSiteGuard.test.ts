@@ -22,16 +22,25 @@ const SCANNED_ROOTS = ['apps', 'products']
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
 const OUR_IMPORT = '@platform/ui/components/popover'
 
-/** antd `Popover` 的既有调用点（迁移欠账，按文件记，不按行号——行号会随迁移漂）。 */
-const ANTD_POPOVER_BASELINE = new Map<string, number>([
-  ['apps/desktop-shell/src/renderer/src/shell/assistants/AssistantMentionedModelsPicker.tsx', 1],
-  ['apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx', 1],
-  ['apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx', 1],
-  ['apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx', 1],
-  ['products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx', 1],
-  ['products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx', 1],
-  ['products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx', 1]
-])
+/**
+ * antd `Popover` 的迁移欠账清单住在 `scripts/migration-debt/popover.json`，**由本守卫读**。
+ *
+ * 为什么不在这个文件里（架构师 2026-11-02 裁定，Chief 批准外移）：这类欠账是**账**，不是组件实现。
+ * 它原来写成这里的常量，于是「迁完一处、同笔划掉那一行」这个被要求的动作必然触碰组件目录，
+ * 与「`platform/ui/components/**` 只有组件线能写」冲突——四条正经迁移收尾因此被判违规。
+ *
+ * 三条约束都保留：**清单只有这一份、由守卫读**；**迁完必须删自己那行**（过期条目会让「清单在缩小」
+ * 那条变红，挪了不等于放宽）；**读不到就抛**（静默降级等于这条红在快照/CI 里无声失效）。
+ */
+const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/popover.json')
+
+function readDebt(): ReadonlyMap<string, number> {
+  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+  if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
+  return new Map(Object.entries(parsed.entries))
+}
+
+const ANTD_POPOVER_BASELINE = readDebt()
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = []
