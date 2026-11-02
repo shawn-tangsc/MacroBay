@@ -54,7 +54,7 @@ export function NewsSentimentCard(props: {
   useEffect(() => { setVisibleCount(8) }, [view?.asOf, view?.window, view?.items?.length ?? 0, includeNeutral])
   const visibleDrivers = drivers.slice(0, visibleCount)
   // "Nothing read yet" is not "nothing there": only a read that came back may end in empty or error.
-  const hasRows = Boolean(view && view.items.length > 0)
+  const hasRows = Boolean(view && (view.items?.length ?? 0) > 0)
   // A view that did not come from the query (a fixture, a partial DTO) must not throw here: without
   // a usable instant there is no window edge, and the card then says only what it can support.
   const windowStart = view?.asOf && NEWS_SENTIMENT_WINDOW_MS[view.window] !== undefined
