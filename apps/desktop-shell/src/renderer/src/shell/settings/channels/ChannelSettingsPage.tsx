@@ -283,7 +283,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <strong>{current.name}</strong>
               <StatusPill
                 tone={runtimeTone(current.state)}
-                labelKey={current.state === 'runtime-ready' ? 'channelRunning' : 'channelPlanned'}
+                labelKey={current.state === 'runtime-ready' ? 'channelRunning' : 'channelNotRunning'}
                 resolveText={resolveChannelLabel}
               />
             </header>

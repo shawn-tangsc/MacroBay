@@ -104,3 +104,26 @@ describe('status pills', () => {
     expect(blocked?.className).toContain('status-pill--bad')
   })
 })
+
+describe('runtime status word', () => {
+  it('answers whether the channel is running, not why it is not', async () => {
+    installPlatform({
+      list: vi.fn(async () => [{
+        id: 'channel-1',
+        type: 'telegram',
+        name: 'Telegram',
+        agentId: 'agent-1',
+        state: 'credential-missing',
+        credential: { status: 'missing', hasCredential: false }
+      }])
+    })
+    const container = await mount()
+
+    // 目录那枚已经回答了"为什么没发布"；这枚只回答"跑没跑"，并且是独立状态词的写法。
+    const runtime = [...container.querySelectorAll('.status-pill')].find(
+      (pill) => pill.textContent?.trim() === labels.channelNotRunning
+    )
+    expect(runtime?.className).toContain('status-pill--muted')
+    expect(container.textContent).not.toContain(labels.channelPlanned)
+  })
+})
