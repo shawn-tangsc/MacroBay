@@ -1234,7 +1234,6 @@ export type PlatformText = {
     categoryDerivedData: string
     statusReady: string
     statusEmpty: string
-    statusActive: string
     statusInspectionFailed: string
     statusSucceeded: string
     statusFailed: string
@@ -2325,7 +2324,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       categoryDerivedData: '派生数据',
       statusReady: '可用',
       statusEmpty: '为空',
-      statusActive: '活跃',
       statusInspectionFailed: '检查失败',
       statusSucceeded: '成功',
       statusFailed: '失败',
@@ -3430,7 +3428,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       categoryDerivedData: 'Derived data',
       statusReady: 'Ready',
       statusEmpty: 'Empty',
-      statusActive: 'Active',
       statusInspectionFailed: 'Inspection failed',
       statusSucceeded: 'Succeeded',
       statusFailed: 'Failed',
