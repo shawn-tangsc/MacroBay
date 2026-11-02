@@ -173,3 +173,93 @@ describe('runtime status word', () => {
     expect(container.textContent).not.toContain(labels.channelPlanned)
   })
 })
+
+describe('detail pane read states', () => {
+  const channel = {
+    id: 'channel-1',
+    type: 'telegram',
+    name: 'Telegram',
+    agentId: 'agent-1',
+    state: 'credential-missing',
+    credential: { status: 'missing', hasCredential: false }
+  }
+
+  it('draws only loading for the detail pane before its first read returns', async () => {
+    installPlatform({
+      list: vi.fn(async () => [channel]),
+      // 详情读永不返回：右栏只许有加载中，空态文案一个字都不许先出现。
+      listPolicies: vi.fn(() => new Promise(() => {})),
+      listConversations: vi.fn(() => new Promise(() => {})),
+      listCandidates: vi.fn(() => new Promise(() => {})),
+      runtimeStatus: vi.fn(() => new Promise(() => {}))
+    })
+
+    const container = await mount()
+
+    // 加载态由 LoadingState 承担，不套 StateView（与左栏同一口径）。
+    expect(container.querySelector('.loading-state')).not.toBeNull()
+    expect(container.textContent).not.toContain(labels.channelCandidates)
+    expect(container.textContent).not.toContain(labels.channelPolicy)
+    expect(container.textContent).not.toContain(labels.channelCandidatesEmpty)
+  })
+
+  it('marks a failed detail read as unreadable with a retry that really re-reads', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [channel]),
+      listPolicies: vi.fn(async () => { throw new Error('ipc-unavailable') }),
+      listConversations: vi.fn(async () => { throw new Error('ipc-unavailable') }),
+      listCandidates: vi.fn(async () => { throw new Error('ipc-unavailable') }),
+      runtimeStatus: vi.fn(async () => { throw new Error('ipc-unavailable') })
+    })
+
+    const container = await mount()
+
+    // 读失败不是「操作失败」：错误态给原因与重试，而不是写操作那句没有出路的提示。
+    expect(stateOf(container, 'error')).not.toBeNull()
+    expect(container.textContent).not.toContain(labels.channelOperationFailed)
+    const callsBefore = channels.listPolicies.mock.calls.length
+
+    channels.listPolicies.mockResolvedValue([{ id: 'policy-1', subjectType: 'user', conversationKind: null }])
+    channels.listConversations.mockResolvedValue([])
+    channels.listCandidates.mockResolvedValue([{
+      id: 'candidate-1', kind: 'direct', displayLabel: 'Alice', firstSeenAt: '', lastSeenAt: '', hitCount: 1, status: 'pending'
+    }])
+    channels.runtimeStatus.mockResolvedValue(null)
+    const retry = container.querySelector('.state-view__action') as HTMLButtonElement | null
+    await act(async () => retry?.click())
+
+    // 重试真的重读右栏详情（不是只重读左栏），读到后详情出现、错误态退场。
+    expect(channels.listPolicies.mock.calls.length).toBeGreaterThan(callsBefore)
+    expect(stateOf(container, 'error')).toBeNull()
+    expect(container.textContent).toContain('Alice')
+    expect(container.textContent).toContain(labels.channelCandidates)
+  })
+
+  it('keeps the detail and marks it stale when a later refresh fails', async () => {
+    const channels = installPlatform({
+      list: vi.fn(async () => [channel]),
+      listPolicies: vi.fn(async () => []),
+      listConversations: vi.fn(async () => []),
+      listCandidates: vi.fn(async () => [{
+        id: 'candidate-1', kind: 'direct', displayLabel: 'Alice', firstSeenAt: '', lastSeenAt: '', hitCount: 1, status: 'pending'
+      }]),
+      runtimeStatus: vi.fn(async () => null),
+      allowCandidate: vi.fn(async () => undefined)
+    })
+
+    const container = await mount()
+    expect(container.textContent).toContain('Alice')
+
+    // 之后一次详情刷新失败：详情留着，只加一行「这是上次读到的」+ 重试。
+    channels.listPolicies.mockRejectedValueOnce(new Error('ipc-unavailable'))
+    const allow = [...container.querySelectorAll('button')].find(
+      // 两字中文按钮会被 antd 自动插空格（「允 许」），比较前先去掉空白。
+      (button) => button.textContent?.replace(/\s+/g, '') === labels.channelCandidateAllow
+    )
+    await act(async () => allow?.click())
+
+    expect(container.textContent).toContain(labels.channelDetailsStaleNotice)
+    expect(container.textContent).toContain('Alice')
+    expect(stateOf(container, 'error')).toBeNull()
+  })
+})

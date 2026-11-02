@@ -88,6 +88,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const [readError, setReadError] = useState(false)
   /** First read of the rail (channels, catalog, agents); later refreshes keep the list on screen. */
   const [initialLoading, setInitialLoading] = useState(true)
+  // 右栏详情独立三态：首帧只加载中；读失败给原因与重试；有数据后再失败保留详情并标 stale。
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsLoadedId, setDetailsLoadedId] = useState<string | null>(null)
+  const [detailsReadError, setDetailsReadError] = useState(false)
+  const [detailsStale, setDetailsStale] = useState(false)
   /** 空态动作用它把光标送进第一个可输入控件，而不是只把用户滚过去。 */
   const nameInputRef = useRef<InputRef | null>(null)
   const focusCreateForm = (): void => {
@@ -128,6 +133,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }
 
   const reloadDetails = async (channelId: string): Promise<void> => {
+    setDetailsLoading(true)
     try {
       const [nextPolicies, nextConversations, nextCandidates, nextRuntime] = await Promise.all([
         window.platform.channels.listPolicies({ id: channelId, limit: 100 }),
@@ -139,8 +145,16 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       setConversations(nextConversations as Conversation[])
       setCandidates(nextCandidates as Candidate[])
       setRuntimeStatus(nextRuntime as RuntimeStatus)
+      setDetailsLoadedId(channelId)
+      setDetailsReadError(false)
+      setDetailsStale(false)
     } catch {
-      setError(labels.channelOperationFailed)
+      // 读失败不是写失败：不写 `error`（那个位置属于操作），否则用户会以为刚才那一步操作坏了，
+      // 而且那条句子不带重试。一次都没读到给错误态；手上有同一通道的旧详情就只标 stale。
+      setDetailsReadError((previous) => (detailsLoadedId === channelId ? previous : true))
+      setDetailsStale(detailsLoadedId === channelId)
+    } finally {
+      setDetailsLoading(false)
     }
   }
 
@@ -149,13 +163,15 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   }, [])
 
   useEffect(() => {
+    // 换通道先清空上一份详情：首帧只画加载中，不把「还没读到」画成「没有待授权会话」。
+    setDetailsLoadedId(null)
+    setDetailsReadError(false)
+    setDetailsStale(false)
+    setPolicies([])
+    setConversations([])
+    setCandidates([])
+    setRuntimeStatus(null)
     if (current) void reloadDetails(current.id)
-    else {
-      setPolicies([])
-      setConversations([])
-      setCandidates([])
-      setRuntimeStatus(null)
-    }
   }, [current?.id])
 
   useEffect(() => {
@@ -320,7 +336,28 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
       <main className="channel-settings-detail">
         {error ? <p role="alert">{error}</p> : null}
         {initialLoading ? <StateView state="loading" size="lg" /> : current ? (
+          detailsReadError && detailsLoadedId !== current.id ? (
+            // 一次都没读成：这是「读不到」，不是「还没有待授权会话」，也不是刚才那步操作失败。
+            <StateView
+              state="error"
+              reasonCode="unreadable"
+              size="lg"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reloadDetails(current.id) }}
+            />
+          ) : detailsLoading && detailsLoadedId !== current.id ? (
+            // 详情回来之前只画加载中，空态文案一个字都不许先出现。
+            <StateView state="loading" size="lg" />
+          ) : (
           <>
+            {detailsStale ? (
+              // 手上有同一通道的旧详情：不清空，只标一句这是旧数据，并把重试放在同一行。
+              <p className="channel-settings-stale" role="status">
+                <span>{labels.channelDetailsStaleNotice}</span>
+                <button type="button" onClick={() => void reloadDetails(current.id)}>
+                  {labels.channelRefresh}
+                </button>
+              </p>
+            ) : null}
             <header>
               <strong>{current.name}</strong>
               <StatusPill
@@ -436,6 +473,7 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
               <Button danger icon={<Trash2 size={14} />}>{labels.channelDelete}</Button>
             </Popconfirm>
           </>
+          )
         ) : null}
       </main>
     </section>
