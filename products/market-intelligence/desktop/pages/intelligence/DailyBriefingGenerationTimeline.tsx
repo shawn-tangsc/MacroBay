@@ -1,6 +1,7 @@
 import { Steps } from 'antd'
 import { CircleHelp } from 'lucide-react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Popover } from '@platform/ui/components/popover'
 
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
@@ -129,14 +130,15 @@ function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBr
   return <Popover
     labelKey={STAGE_HELP_KEYS[id]}
     resolveText={resolveProductText}>
-    <button
-      aria-label={labels.stageHelpLabel.replace('{stage}', labels.stages[id])}
-      className="mi-generation-trace__stage-help"
-      data-stage-help={id}
-      type="button"
-    >
-      <CircleHelp aria-hidden="true" size={10} />
-    </button>
+    <IconButton
+      ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationTrace.stageHelpLabel"
+      ariaLabelParams={{ stage: labels.stages[id] }}
+      dataAttributes={{ 'data-stage-help': id }}
+      icon={CircleHelp}
+      onSelect={() => undefined}
+      resolveText={resolveProductText}
+      size="sm"
+    />
   </Popover>
 }
 
