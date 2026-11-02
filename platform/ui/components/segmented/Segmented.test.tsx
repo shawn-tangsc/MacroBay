@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -150,5 +153,23 @@ describe('Segmented', () => {
     // 不给图标就不占位：没有包裹元素，文字直接是按钮的第一个子节点。
     expect(withoutIcon?.querySelector('svg')).toBeNull()
     expect(withoutIcon?.firstChild?.nodeType).toBe(Node.TEXT_NODE)
+  })
+
+  it('never builds the selected state from a layer token, whose light/dark meaning is inverted', () => {
+    // 这条钉的是**方法**，不是色值。曾经写的是 `background: var(--surface)`：
+    //   浅色 --surface > --surface-soft  → 选中是白块浮在灰底上 ✓
+    //   深色 --surface < --surface-soft  → 选中是暗块陷进亮容器 ✗（还和页面同色，像凿穿一个洞）
+    // 同一行 CSS 在两套主题里方向相反，所以值怎么调都会有一半是错的。
+    const css = readFileSync(join(__dirname, 'segmented.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+    const start = css.indexOf('.segmented__item--selected {')
+    const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start))
+
+    for (const token of ['--surface', '--surface-soft', '--surface-strong']) {
+      expect(body).not.toContain(`var(${token})`)
+    }
+    // 相对叠加：深色叠白变亮、浅色叠黑变深，两套都成立。
+    expect(body).toMatch(/background:\s*color-mix\(in srgb, var\(--text-strong\)/)/
+    // 深色界面上纯黑阴影等于不存在，留着只会让人以为它起了作用。
+    expect(body).not.toMatch(/box-shadow/)
   })
 })
