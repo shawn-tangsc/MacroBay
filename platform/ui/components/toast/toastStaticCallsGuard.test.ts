@@ -18,7 +18,9 @@ const ROOT = resolve(__dirname, '../../../..')
 const ROOTS = ['apps/desktop-shell/src', 'products', 'platform']
 const SKIP = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
 // 不带 `g`：带 g 的正则 `.test()` 会记住 lastIndex，循环里会一半文件判漏。
-const STATIC_CALL = /\b(?:message|notification)\.(?:open|success|error|info|warning|loading)\s*\(/
+// 方法列表要全：`destroy` / `config` 不显示内容，但漏掉它们，「还剩几处」的统计就会偏低，
+// 而这份名单正被用来数剩余处数。宁可多扫一个不显示的，也不要少数一个显示的。
+const STATIC_CALL = /\b(?:message|notification)\.(?:open|success|error|info|warning|loading|destroy|config)\s*\(/
 
 /** 正在迁移、尚未收口的文件（2026-11-02，补丁落地当天扫的）。 */
 const BASELINE = new Set([
