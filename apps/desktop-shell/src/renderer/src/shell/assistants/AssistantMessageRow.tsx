@@ -5,7 +5,7 @@ import { useState } from 'react'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { IconButton } from '@platform/ui/components/icon-button'
 import type { PlatformText } from '../../i18n/platformText'
-import { resolveAssistantsText, type AssistantsTextPath } from '../../i18n/assistantsTextKey'
+import { resolveAssistantsKey } from '../../i18n/assistantsTextKey'
 import { agentText } from '../agents/agentText'
 import type { RenderedAssistantMessage } from './assistantMessageRendering'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -54,7 +54,7 @@ export function AssistantMessageRow({
   onRegenerate,
   onEditResend
 }: AssistantMessageRowProps): React.ReactElement {
-  const resolveAssistantText = (key: string): string => resolveAssistantsText(labels, key as AssistantsTextPath)
+  const resolveAssistantText = (key: string): string => resolveAssistantsKey(labels, key)
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState(message.text)
   const showsModelMeta = Boolean(message.modelName)
@@ -91,17 +91,17 @@ export function AssistantMessageRow({
     <div className="assistant-message-actions">
       {canCopy ? (
         <IconButton
-          ariaLabelKey="copyMessage"
+          ariaLabelKey="assistants.copyMessage"
           icon={Copy}
           onSelect={() => void copyTextToClipboard(copyText)}
           resolveText={resolveAssistantText}
           size="md"
-          tooltipKey="copyMessage"
+          tooltipKey="assistants.copyMessage"
         />
       ) : null}
       {message.role === 'user' && canModifyTree && !isImageMessage ? (
         <IconButton
-          ariaLabelKey="editMessage"
+          ariaLabelKey="assistants.editMessage"
           icon={Pencil}
           onSelect={() => {
             setEditDraft(message.text)
@@ -109,17 +109,17 @@ export function AssistantMessageRow({
           }}
           resolveText={resolveAssistantText}
           size="md"
-          tooltipKey="editMessage"
+          tooltipKey="assistants.editMessage"
         />
       ) : null}
       {message.role === 'assistant' && parentUserMessageId && canModifyTree && !isImageMessage ? (
         <IconButton
-          ariaLabelKey="regenerate"
+          ariaLabelKey="assistants.regenerate"
           icon={RefreshCw}
           onSelect={() => onRegenerate(parentUserMessageId)}
           resolveText={resolveAssistantText}
           size="md"
-          tooltipKey="regenerate"
+          tooltipKey="assistants.regenerate"
         />
       ) : null}
       {canModifyTree && confirmDelete ? (
@@ -136,12 +136,12 @@ export function AssistantMessageRow({
         </Popconfirm>
       ) : canModifyTree ? (
         <IconButton
-          ariaLabelKey="deleteMessage"
+          ariaLabelKey="assistants.deleteMessage"
           icon={Trash2}
           onSelect={() => onDelete(message.id)}
           resolveText={resolveAssistantText}
           size="md"
-          tooltipKey="deleteMessage"
+          tooltipKey="assistants.deleteMessage"
         />
       ) : null}
     </div>

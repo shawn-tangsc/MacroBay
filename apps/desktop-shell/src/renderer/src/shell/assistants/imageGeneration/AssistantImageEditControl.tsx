@@ -8,7 +8,7 @@ import type { AssistantImageMessagePart } from '@platform/ai/assistant-platform/
 import { buildGeneratedImageUrl } from '@platform/ui/images/generatedImageUrl'
 
 import type { PlatformText } from '../../../i18n/platformText'
-import { resolveAssistantsText, type AssistantsTextPath } from '../../../i18n/assistantsTextKey'
+import { resolveAssistantsKey } from '../../../i18n/assistantsTextKey'
 import {
   defaultImageGenerationSize,
   describeImageEditValidationError,
@@ -42,7 +42,7 @@ export function AssistantImageEditControl({ labels, view, availableImages, onUna
   const [source, setSource] = useState<ImageEditSource | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const unavailable = view.editTarget === null
-  const resolveText = (key: string): string => resolveAssistantsText(labels, key as AssistantsTextPath)
+  const resolveText = (key: string): string => resolveAssistantsKey(labels, key)
 
   async function selectFile(file: File | undefined): Promise<void> {
     if (!file) return
@@ -73,7 +73,7 @@ export function AssistantImageEditControl({ labels, view, availableImages, onUna
   return (
     <div className="assistant-image-generation">
       <IconButton
-        ariaLabelKey="imageEdit"
+        ariaLabelKey="assistants.imageEdit"
         dataAttributes={{ 'data-image-edit': true }}
         icon={Brush}
         loading={view.isGenerating && open}

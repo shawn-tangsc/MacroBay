@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import type { AssistantWebSearchSourcePart } from '@platform/ai/web-search/assistant/assistantWebSearchMessageParts'
 import { IconButton } from '@platform/ui/components/icon-button'
 import type { PlatformText } from '../../../i18n/platformText'
-import { resolveAssistantsText, type AssistantsTextPath } from '../../../i18n/assistantsTextKey'
+import { resolveAssistantsKey } from '../../../i18n/assistantsTextKey'
 
 type MessageSourceCitationsProps = {
   labels: PlatformText['assistants']
@@ -11,7 +11,7 @@ type MessageSourceCitationsProps = {
 }
 
 export function MessageSourceCitations({ labels, sources }: MessageSourceCitationsProps): React.ReactElement | null {
-  const resolveAssistantText = (key: string): string => resolveAssistantsText(labels, key as AssistantsTextPath)
+  const resolveAssistantText = (key: string): string => resolveAssistantsKey(labels, key)
   if (sources.length === 0) return null
   return (
     <div className="assistant-source-citations" aria-label={labels.webSearchSources}>
@@ -24,7 +24,7 @@ export function MessageSourceCitations({ labels, sources }: MessageSourceCitatio
             {source.snippet ? <span>{source.snippet}</span> : null}
           </span>
           <IconButton
-            ariaLabelKey="openSource"
+            ariaLabelKey="assistants.openSource"
             icon={ExternalLink}
             onSelect={() => void window.platform.app.openExternal(source.url)}
             resolveText={resolveAssistantText}

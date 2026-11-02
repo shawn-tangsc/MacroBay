@@ -50,3 +50,17 @@ export function resolveAssistantsText(
 export function assistantsTextFor(language: AppLanguage): PlatformText['assistants'] {
   return platformText[language].assistants
 }
+
+/**
+ * 给 `IconButton` / `Tooltip` 用的**全键**入口：`assistants.copyMessage` 这种点分全路径。
+ *
+ * 为什么要这一层：那张组件的读屏名只收键、且守卫要求**点分**（`copyMessage` 这种裸名字会被判成
+ * 一句话或写残的键）。而 `resolveAssistantsText` 的路径是相对 `PlatformText['assistants']` 的，
+ * 二者差一个前缀——在这一处剥掉，调用点就能写全键，解析仍然只有一份实现。
+ */
+export const ASSISTANTS_KEY_PREFIX = 'assistants.' as const
+
+export function resolveAssistantsKey(labels: PlatformText['assistants'], key: string): string {
+  const path = key.startsWith(ASSISTANTS_KEY_PREFIX) ? key.slice(ASSISTANTS_KEY_PREFIX.length) : key
+  return resolveAssistantsText(labels, path as AssistantsTextPath)
+}

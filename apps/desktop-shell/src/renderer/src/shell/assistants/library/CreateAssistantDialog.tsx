@@ -10,6 +10,7 @@ import { resolveTextPath, type Path } from '../../../i18n/assistantsTextKey'
 
 const CREATE_ASSISTANT_TITLE_KEY = 'assistants.library.createTitle'
 const COMING_SOON_KEY = 'assistants.library.promptGenerateComingSoon'
+const LIBRARY_KEY_PREFIX = 'assistants.library.'
 
 type CreateAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -24,7 +25,12 @@ export function CreateAssistantDialog({
   onClose,
   onCreate
 }: CreateAssistantDialogProps): React.ReactElement {
-  const resolveAssistantText = (key: string): string => resolveTextPath(labels, key as Path<typeof labels>)
+  // 键是点分全路径（`assistants.library.*`），这棵表的根是 `library`，解析前剥掉前缀。
+  const resolveAssistantText = (key: string): string =>
+    resolveTextPath(
+      labels,
+      (key.startsWith(LIBRARY_KEY_PREFIX) ? key.slice(LIBRARY_KEY_PREFIX.length) : key) as Path<typeof labels>
+    )
   const toast = useToast()
   const [icon, setIcon] = useState('💬')
   const [name, setName] = useState('')
@@ -89,7 +95,7 @@ export function CreateAssistantDialog({
         </label>
         <div className="assistant-create-dialog-meta">
           <IconButton
-            ariaLabelKey="promptGenerate"
+            ariaLabelKey="assistants.library.promptGenerate"
             icon={Sparkles}
             onSelect={() =>
               toast.info({
@@ -99,7 +105,7 @@ export function CreateAssistantDialog({
             }
             resolveText={resolveAssistantText}
             size="md"
-            tooltipKey="promptGenerate"
+            tooltipKey="assistants.library.promptGenerate"
           />
           <span>{labels.tokenCount(tokenCount)}</span>
         </div>

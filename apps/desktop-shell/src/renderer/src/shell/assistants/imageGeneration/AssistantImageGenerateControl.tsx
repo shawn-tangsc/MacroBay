@@ -5,7 +5,7 @@ import { Image as ImageIcon } from 'lucide-react'
 import { IconButton } from '@platform/ui/components/icon-button'
 
 import type { PlatformText } from '../../../i18n/platformText'
-import { resolveAssistantsText, type AssistantsTextPath } from '../../../i18n/assistantsTextKey'
+import { resolveAssistantsKey } from '../../../i18n/assistantsTextKey'
 import {
   defaultImageGenerationSize,
   imageGenerationSizeOptions,
@@ -32,7 +32,7 @@ export function AssistantImageGenerateControl({ labels, view, onUnavailable }: P
   const [size, setSize] = useState<ImageGenerationSize>(defaultImageGenerationSize)
   const [count, setCount] = useState(1)
   const unavailable = view.target === null
-  const resolveText = (key: string): string => resolveAssistantsText(labels, key as AssistantsTextPath)
+  const resolveText = (key: string): string => resolveAssistantsKey(labels, key)
 
   async function submit(): Promise<void> {
     const accepted = await view.onGenerate({ prompt, size, count })
@@ -45,7 +45,7 @@ export function AssistantImageGenerateControl({ labels, view, onUnavailable }: P
   return (
     <div className="assistant-image-generation">
       <IconButton
-        ariaLabelKey="imageGenerate"
+        ariaLabelKey="assistants.imageGenerate"
         dataAttributes={{ 'data-image-generate': true }}
         icon={ImageIcon}
         loading={view.isGenerating}
