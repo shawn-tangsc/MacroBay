@@ -198,7 +198,6 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
               records={state.operations}
               caches={state.caches}
               showCacheName
-              emptyLabel={labels.historyEmpty}
             />
           ) : null}
         </section>

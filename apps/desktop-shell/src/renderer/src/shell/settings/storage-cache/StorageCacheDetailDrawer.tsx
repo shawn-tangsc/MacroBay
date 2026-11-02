@@ -149,7 +149,6 @@ export function StorageCacheDetailDrawer({
               labels={labels}
               records={records}
               caches={caches}
-              emptyLabel={labels.historyEmpty}
             />
           </section>
         </div>
