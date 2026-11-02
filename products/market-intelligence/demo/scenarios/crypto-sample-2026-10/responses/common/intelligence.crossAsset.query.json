@@ -3610,10 +3610,6 @@
         }
       },
       "indexSource": "proxy",
-      "observationKey": {
-        "indexBtc": "unavailable",
-        "ethBtc": "unavailable"
-      },
       "macroCurves": {
         "dxy": [
           {
@@ -8150,10 +8146,6 @@
         }
       },
       "indexSource": "proxy",
-      "observationKey": {
-        "indexBtc": "unavailable",
-        "ethBtc": "weaker"
-      },
       "macroCurves": {
         "dxy": [
           {
@@ -9857,10 +9849,6 @@
         }
       },
       "indexSource": "proxy",
-      "observationKey": {
-        "indexBtc": "unavailable",
-        "ethBtc": "unavailable"
-      },
       "macroCurves": {
         "dxy": [],
         "gold": []
