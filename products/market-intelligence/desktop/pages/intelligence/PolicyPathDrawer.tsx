@@ -31,6 +31,8 @@ export type PolicyPathDrawerText = Readonly<{
   rangeLower: string; rangeUpper: string
   /** Where the odds come from and what they are not: one sentence, visible under the basis table. */
   basisNote: string
+  /** Points at the dissenters listed above; it used to ride the card's accessible name only. */
+  dissentNote: string
   preferred: Readonly<Record<'raise' | 'lower' | 'maintain', string>>
   /** Why a dash appears where a 24h change belongs: the series is younger than the window. */
   change24hPending: string
@@ -169,6 +171,10 @@ export function PolicyPathDrawer({ reading, text, onClose }: Readonly<{
         </div>
         <p className="mi-policy-drawer__note">{text.dissents} {(reading.lastDecision?.dissents ?? [])
           .map((row) => `${row.name}（${text.preferred[row.preferred]}）`).join('、') || '—'}</p>
+        {/* This sentence used to live in the card's accessible name: sighted readers never saw it,
+            screen readers did. It is guidance, not a transcription of what is on screen, so it
+            belongs where the reader can look at the dissenters it points to. */}
+        <p className="mi-policy-drawer__note">{text.dissentNote}</p>
       </> : <StateView state="empty" reasonCode="not-yet" size="md" />}
     </section>
 

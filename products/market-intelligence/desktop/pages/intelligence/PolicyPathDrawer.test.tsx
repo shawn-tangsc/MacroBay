@@ -104,6 +104,9 @@ describe('policy drawer distribution', () => {
     })
     // The odds' basis is a visible sentence here, not a hover.
     expect(rendered.textContent).toContain(text.basisNote)
+    // The pointer to the dissenters is guidance, not a transcription: it is visible here and no
+    // longer only in the card's accessible name.
+    expect(rendered.textContent).toContain(text.dissentNote)
     const rows = rendered.querySelectorAll('.mi-policy-drawer__distribution tbody tr')
     expect(rows).toHaveLength(5)
     expect(rendered.textContent).toContain('维持')

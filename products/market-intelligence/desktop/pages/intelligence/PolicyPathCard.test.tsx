@@ -78,6 +78,9 @@ describe('policy path card', () => {
     expect(hinted).not.toBeNull()
     expect(hinted?.getAttribute('aria-label')).toContain('10')
     expect(hinted?.getAttribute('aria-label')).not.toContain('{')
+    // Only the readable transcription of "10–2" belongs here; guidance a sighted reader cannot see
+    // must stay out of the accessible name and live in the drawer instead.
+    expect(hinted?.getAttribute('aria-label')).not.toContain(text.dissentNote)
   })
 
   it('keeps one skeleton: a missing reading becomes a dash, not a shorter card', async () => {
