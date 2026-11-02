@@ -17,6 +17,7 @@ function readSource(relativePath: string): string {
 const appSource = readSource('app.ts')
 const webIpcSource = readSource('ipc/webIpc.ts')
 const storageIpcSource = readSource('ipc/storageIpc.ts')
+const channelIpcSource = readSource('ipc/channelIpc.ts')
 // 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
 const windowIpcSource = readSource('ipc/windowIpc.ts')
 
@@ -110,12 +111,14 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('disposeChannelMaintenanceJobs = scheduleChannelMaintenanceJobs(')
     expect(appSource).toContain('disposeChannelMaintenanceJobs?.()')
     expect(appSource).toContain('ChannelManagementService')
-    expect(appSource).toContain('IpcChannels.channelsCatalog')
-    expect(appSource).toContain('IpcChannels.channelsCredentialSubmit')
-    expect(appSource).toContain('IpcChannels.channelsPolicyCreate')
-    expect(appSource).toContain('IpcChannels.channelsRuntimeStatus')
-    expect(appSource).toContain('asChannelHandoff')
-    expect(appSource).toContain('isP256PublicJwk')
+    // 25 个渠道 handler 已搬到 ipc/channelIpc.ts：断言看模块，退出链接线仍看 app.ts。
+    expect(appSource).toContain('registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })')
+    expect(channelIpcSource).toContain('IpcChannels.channelsCatalog')
+    expect(channelIpcSource).toContain('IpcChannels.channelsCredentialSubmit')
+    expect(channelIpcSource).toContain('IpcChannels.channelsPolicyCreate')
+    expect(channelIpcSource).toContain('IpcChannels.channelsRuntimeStatus')
+    expect(channelIpcSource).toContain('asChannelHandoff')
+    expect(channelIpcSource).toContain('isP256PublicJwk')
     expect(appSource).toContain('channelManagementService.recover()')
     expect(appSource).toContain('SlackRuntimeManager')
     expect(appSource).toContain('SlackRuntimeRepository')
