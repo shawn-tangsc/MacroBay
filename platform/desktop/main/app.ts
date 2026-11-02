@@ -173,6 +173,7 @@ import { registerChannelIpc } from './ipc/channelIpc'
 import { registerModelIpc } from './ipc/modelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
 import { registerAgentIpc } from './ipc/agentIpc'
+import { registerAgentToolsIpc } from './ipc/agentToolsIpc'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
@@ -1399,79 +1400,24 @@ function registerIpcHandlers(
     afterCommit: refreshTaskStateAfterCommit
   })
 
-  ipcMain.handle(IpcChannels.agentsRefreshMcpTools, async (_event: IpcMainInvokeEvent, serverId: string) =>
-    refreshAgentMcpTools(
-      {
-        getState: () => agentStore.getState(),
-        refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
-        replaceAgentState
-      },
-      serverId
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsList, async (_event: IpcMainInvokeEvent, query?: { agentId?: string; search?: string }) =>
-    skillService.list(await agentStore.getState(), query)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsGetRuntime, (_event: IpcMainInvokeEvent, agentId: string) =>
-    agentIpcHandlers.getSkillRuntime(agentId)
-  )
-  ipcMain.handle(IpcChannels.agentsListProductToolPackages, (_event: IpcMainInvokeEvent, agentId: string) =>
-    agentIpcHandlers.listProductToolPackages(agentId)
-  )
-  ipcMain.handle(
-    IpcChannels.agentsUpdateProductToolPackageBinding,
-    (_event: IpcMainInvokeEvent, agentId: string, productId: string, permissionMode: 'allow-read-only' | 'prompt' | 'disabled') =>
-      agentIpcHandlers.updateProductToolPackageBinding(agentId, productId, permissionMode)
-  )
-  ipcMain.handle(IpcChannels.agentsListProductToolCallTracePage, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    agentIpcHandlers.listProductToolCallTracePage(
-      (query as Parameters<typeof agentIpcHandlers.listProductToolCallTracePage>[0]) ?? {}
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsGetProductToolCallTrace, (_event: IpcMainInvokeEvent, toolCallId: string) =>
-    agentIpcHandlers.getProductToolCallTrace(toolCallId)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsSearch, (_event: IpcMainInvokeEvent, query: string) => skillSearchService.search(query))
-  ipcMain.handle(IpcChannels.agentsSkillsInstall, async (_event: IpcMainInvokeEvent, options: SkillInstallOptions) => {
-    const previousState = await agentStore.getState()
-    const result = await skillService.install(previousState, options)
-    await replaceAgentStateAfterSkillMutation(previousState, result.state)
-    return result.skill
+  // 智能体工具那一半 16 个 handler 搬到 ipc/agentToolsIpc.ts。
+  registerAgentToolsIpc(ipcMain, {
+    agentIpcHandlers,
+    getState: () => agentStore.getState(),
+    skillService,
+    skillSearchService,
+    refreshMcpTools: (serverId) =>
+      refreshAgentMcpTools(
+        {
+          getState: () => agentStore.getState(),
+          refreshServerTools: mcpRuntimeService.refreshServerTools.bind(mcpRuntimeService),
+          replaceAgentState
+        },
+        serverId
+      ),
+    replaceStateAfterSkillMutation: (previousState, nextState) =>
+      replaceAgentStateAfterSkillMutation(previousState, nextState)
   })
-  ipcMain.handle(IpcChannels.agentsSkillsInstallFromZip, async (_event: IpcMainInvokeEvent, options: SkillInstallFromZipOptions) => {
-    const previousState = await agentStore.getState()
-    const result = await skillService.installFromZip(previousState, options)
-    await replaceAgentStateAfterSkillMutation(previousState, result.state)
-    return result.skill
-  })
-  ipcMain.handle(
-    IpcChannels.agentsSkillsInstallFromDirectory,
-    async (_event: IpcMainInvokeEvent, options: SkillInstallFromDirectoryOptions) => {
-      const previousState = await agentStore.getState()
-      const result = await skillService.installFromDirectory(previousState, options)
-      await replaceAgentStateAfterSkillMutation(previousState, result.state)
-      return result.skill
-    }
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsUninstall, async (_event: IpcMainInvokeEvent, skillId: string) => {
-    const previousState = await agentStore.getState()
-    const nextState = await skillService.uninstall(previousState, skillId)
-    await replaceAgentStateAfterSkillMutation(previousState, nextState)
-    return true
-  })
-  ipcMain.handle(IpcChannels.agentsSkillsToggle, async (_event: IpcMainInvokeEvent, options: SkillToggleOptions) => {
-    const previousState = await agentStore.getState()
-    const result = await skillService.toggle(previousState, options)
-    await replaceAgentStateAfterSkillMutation(previousState, result.state)
-    return result.skill
-  })
-  ipcMain.handle(IpcChannels.agentsSkillsReadFile, async (_event: IpcMainInvokeEvent, skillId: string, filename: string) =>
-    skillService.readFile(await agentStore.getState(), skillId, filename)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsListFiles, async (_event: IpcMainInvokeEvent, skillId: string) =>
-    skillService.listFiles(await agentStore.getState(), skillId)
-  )
-  ipcMain.handle(IpcChannels.agentsSkillsListLocal, (_event: IpcMainInvokeEvent, workdir: string) => skillService.listLocal(workdir))
 
   // 助手域 29 个 handler 搬到 ipc/assistantIpc.ts；流事件广播仍在上面那个构造里。
   registerAssistantIpc(ipcMain, {

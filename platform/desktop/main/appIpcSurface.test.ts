@@ -21,6 +21,7 @@ const channelIpcSource = readSource('ipc/channelIpc.ts')
 const modelIpcSource = readSource('ipc/modelIpc.ts')
 const assistantIpcSource = readSource('ipc/assistantIpc.ts')
 const agentIpcSource = readSource('ipc/agentIpc.ts')
+const agentToolsIpcSource = readSource('ipc/agentToolsIpc.ts')
 // 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
 const windowIpcSource = readSource('ipc/windowIpc.ts')
 
@@ -380,7 +381,7 @@ describe('desktop main IPC surface', () => {
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
     expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.agentsListProductToolPackages')
+    expect(agentToolsIpcSource).toContain('IpcChannels.agentsListProductToolPackages')
   })
 
   it('keeps storage and cache IPC handlers registered without dropping existing seams', () => {
