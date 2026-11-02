@@ -13,6 +13,7 @@ import {
   type BriefingGenerationStageState,
   type BriefingGenerationTrace,
   type DailyBriefingDocument,
+  type DailyBriefingAttemptRecord,
   type DailyBriefingEditionSummary,
   type DailyBriefingListResult,
   type DailyBriefingLocale
@@ -23,6 +24,7 @@ const METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
+  listAttempts: 'intelligence.dailyBriefing.listAttempts',
   regenerate: 'intelligence.dailyBriefing.regenerate',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
@@ -62,6 +64,11 @@ export type DailyBriefingClientProgressResult =
   | Readonly<{ state: 'idle' }>
   | Readonly<{ state: 'running'; progress: BriefingGenerationProgress }>
   | Readonly<{ state: 'unavailable' }>
+
+export type DailyBriefingClientAttemptsResult = Readonly<
+  | { state: 'available'; attempts: readonly DailyBriefingAttemptRecord[] }
+  | { state: 'unavailable' }
+>
 
 export type DailyBriefingClientGetResult =
   | Readonly<{ state: 'available'; document: DailyBriefingDocument }>
@@ -139,6 +146,7 @@ export type DailyBriefingClient = Readonly<{
   getToday: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   list: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientListResult>
   get: (input: DailyBriefingClientGetInput) => Promise<DailyBriefingClientGetResult>
+  listAttempts: (input: DailyBriefingClientGetInput & Readonly<{ periodId?: string }>) => Promise<DailyBriefingClientAttemptsResult>
   regenerate: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   getProgress: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientProgressResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
@@ -211,6 +219,17 @@ export const dailyBriefingClient: DailyBriefingClient = {
   },
   async retryUpgrade() {
     return readStorageState(() => invoke(METHODS.retryUpgrade, {}))
+  },
+  async listAttempts(input) {
+    try {
+      const value = await invoke(METHODS.listAttempts, input)
+      if (!isRecord(value) || value.state !== 'available' || !Array.isArray(value.attempts)) return { state: 'unavailable' }
+      const attempts = value.attempts.map(parseAttempt)
+      if (attempts.some((attempt) => attempt === undefined)) return { state: 'unavailable' }
+      return { state: 'available', attempts: attempts as readonly DailyBriefingAttemptRecord[] }
+    } catch {
+      return { state: 'unavailable' }
+    }
   },
   async get(input) {
     try {
@@ -325,13 +344,28 @@ function isResolvedModel(value: unknown): value is DailyBriefingSettingsView['re
     (value.fallback === undefined || value.fallback === 'custom-unavailable')
 }
 
+function parseAttempt(value: unknown): DailyBriefingAttemptRecord | undefined {
+  if (!isRecord(value) || typeof value.attemptNo !== 'number' || !Number.isSafeInteger(value.attemptNo)) return undefined
+  if (value.state !== 'running' && value.state !== 'succeeded' && value.state !== 'failed') return undefined
+  if (!isText(value.startedAt)) return undefined
+  return Object.freeze({
+    attemptNo: value.attemptNo,
+    state: value.state,
+    ...(isText(value.failureCode) ? { failureCode: value.failureCode } : {}),
+    startedAt: value.startedAt,
+    ...(isText(value.finishedAt) ? { finishedAt: value.finishedAt } : {}),
+    ...(isText(value.cleanedAt) ? { cleanedAt: value.cleanedAt } : {})
+  })
+}
+
 function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
   if (!isRecord(value) || !isText(value.date) || !isDailyBriefingLocale(value.locale) || !Array.isArray(value.availableLocales)) return undefined
-  if (value.state !== 'generated' && value.state !== 'missing') return undefined
+  if (value.state !== 'generated' && value.state !== 'missing' && value.state !== 'partial') return undefined
   if (!value.availableLocales.every(isDailyBriefingLocale)) return undefined
   if (value.state === 'generated' && (!isText(value.generatedAt) || !isText(value.windowEnd))) return undefined
   return Object.freeze({
     date: value.date,
+    periodId: isText(value.periodId) ? value.periodId : 'default',
     locale: value.locale,
     availableLocales: Object.freeze([...value.availableLocales]) as readonly ('zh-CN' | 'en-US')[],
     state: value.state,

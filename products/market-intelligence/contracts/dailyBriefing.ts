@@ -220,9 +220,12 @@ export type DailyBriefingDocument = Readonly<{
 
 export type DailyBriefingEditionSummary = Readonly<{
   date: string
+  /** Which issue of that day this row is; one row per (date, period), languages switch in place. */
+  periodId: string
   locale: DailyBriefingLocale
   availableLocales: readonly DailyBriefingLocale[]
-  state: 'generated' | 'missing'
+  /** `partial`: this period was meant to have more versions than it published. */
+  state: 'generated' | 'missing' | 'partial'
   generatedAt?: string
   direction?: AnalysisConclusionDirection
   summaryLine?: string
@@ -232,6 +235,17 @@ export type DailyBriefingEditionSummary = Readonly<{
 
 export type DailyBriefingListResult = Readonly<{
   editions: readonly DailyBriefingEditionSummary[]
+}>
+
+/** One writing attempt of an edition, as the history rail lists it. */
+export type DailyBriefingAttemptRecord = Readonly<{
+  attemptNo: number
+  state: 'running' | 'succeeded' | 'failed'
+  failureCode?: string
+  startedAt: string
+  finishedAt?: string
+  /** Set when the session behind this attempt was cleaned up; the row stays, its trace is gone. */
+  cleanedAt?: string
 }>
 
 // The IPC guards live in their own module; re-exported so callers keep one import path.

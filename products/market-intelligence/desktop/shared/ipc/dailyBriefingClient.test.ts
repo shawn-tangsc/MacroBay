@@ -50,6 +50,22 @@ describe('daily briefing client', () => {
     expect(missing.state).toBe('missing')
   })
 
+  it('reads attempts, and reports an unreadable list instead of an empty one', async () => {
+    stubInvoke((method) => {
+      if (method === 'intelligence.dailyBriefing.listAttempts') return { state: 'available', attempts: [
+        { attemptNo: 2, state: 'succeeded', startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:05:00.000Z', cleanedAt: '2026-11-02T00:10:00.000Z' },
+        { attemptNo: 1, state: 'failed', failureCode: 'source-failed', startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:01:00.000Z' }
+      ] }
+      return {}
+    })
+    const result = await dailyBriefingClient.listAttempts({ date: '2026-11-02', locale: 'zh-CN', periodId: 'default' })
+    expect(result.state).toBe('available')
+    if (result.state === 'available') expect(result.attempts.map((attempt) => attempt.attemptNo)).toEqual([2, 1])
+
+    stubInvoke(() => ({ state: 'available', attempts: [{ attemptNo: 'x' }] }))
+    expect(await dailyBriefingClient.listAttempts({ date: '2026-11-02', locale: 'zh-CN' })).toEqual({ state: 'unavailable' })
+  })
+
   it('reads the storage upgrade state, and never calls an unread state ready', async () => {
     stubInvoke((method) => {
       if (method === 'intelligence.dailyBriefing.getStorageState') return { state: 'incomplete', reason: 'migration-failed' }

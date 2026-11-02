@@ -962,6 +962,7 @@ export function getIntelligenceModule(
         onEvent: (event) => console.log(JSON.stringify({ marker: 'MI_DAILY_BRIEF_FACT_ENSURE', ...event }))
       }))
       .catch(() => undefined)
+    const markAttemptCleaned = dailyBriefingStore.markAttemptCleaned?.bind(dailyBriefingStore)
     const rescheduleBriefingForDisplayTimeZone = wireDailyBriefingJobs({
       jobRuntime,
       service: dailyBriefingService,
@@ -969,6 +970,7 @@ export function getIntelligenceModule(
       timeZone: shellTimeZone,
       periods: dailyBriefingGenerationSettings,
       links: dailyBriefSessionLinks,
+      ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}),
       ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {})
     })
     modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })

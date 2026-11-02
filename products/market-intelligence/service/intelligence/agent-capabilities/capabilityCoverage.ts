@@ -115,6 +115,7 @@ export const intelligenceCapabilityCoverage: Readonly<Record<string, CoverageDec
   'intelligence.dailyBriefing.getToday': excluded('internal-view'),
   'intelligence.dailyBriefing.list': excluded('internal-view'),
   'intelligence.dailyBriefing.get': excluded('internal-view'),
+  'intelligence.dailyBriefing.listAttempts': excluded('internal-view'),
   'intelligence.dailyBriefing.regenerate': excluded('internal-view'),
   'intelligence.dailyBriefing.getProgress': excluded('internal-view'),
   'intelligence.dailyBriefing.getSettings': excluded('user-private-data'),

@@ -224,3 +224,48 @@ describe('period runs', () => {
     expect(await store.get('2026-11-02', 'zh-CN')).toBeUndefined()
   })
 })
+
+
+describe('tombstones', () => {
+  it('clears the trace and keeps the row, and says zero when the row is already gone', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const key = { date: '2026-11-02', locale: 'zh-CN' as const }
+    const attemptNo = await store.beginAttempt!({ ...key, startedAt: '2026-11-02T00:00:00.000Z' })
+    await store.finishAttempt!({
+      ...key, attemptNo, state: 'failed', failureCode: 'source-failed',
+      finishedAt: '2026-11-02T00:01:00.000Z',
+      trace: {
+        attemptId: 'attempt', startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:01:00.000Z',
+        state: 'failed',
+        stages: [{ id: 'source', state: 'failed', startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:01:00.000Z' }]
+      } as never
+    })
+    expect(await store.getAttempt?.(key.date, key.locale)).toMatchObject({ state: 'failed' })
+
+    // The row stays; only its trace is cleared, and the moment is recorded.
+    expect(await store.markAttemptCleaned!({ editionDate: key.date, periodId: 'default', locale: key.locale, attemptNo, cleanedAt: '2026-11-09T08:10:00.000Z' })).toBe(1)
+    expect(await store.getAttempt?.(key.date, key.locale)).toBeUndefined()
+    expect(await store.listAttempts!(key.date, key.locale)).toEqual([{
+      attemptNo, state: 'failed', failureCode: 'source-failed',
+      startedAt: '2026-11-02T00:00:00.000Z', finishedAt: '2026-11-02T00:01:00.000Z',
+      cleanedAt: '2026-11-09T08:10:00.000Z'
+    }])
+
+    // The 14-day sweep removed the row: the tombstone has nowhere to go, and that is a success.
+    await store.prune('2026-11-03')
+    expect(await store.markAttemptCleaned!({ editionDate: key.date, periodId: 'default', locale: key.locale, attemptNo, cleanedAt: '2026-11-10T08:10:00.000Z' })).toBe(0)
+  })
+
+  it('marks the newest attempt when no number is given, and never deletes a row', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const key = { date: '2026-11-02', locale: 'zh-CN' as const }
+    await store.beginAttempt!({ ...key, startedAt: '2026-11-02T00:00:00.000Z' })
+    await store.beginAttempt!({ ...key, startedAt: '2026-11-02T01:00:00.000Z' })
+
+    expect(await store.markAttemptCleaned!({ editionDate: key.date, periodId: 'default', locale: key.locale, cleanedAt: '2026-11-09T08:10:00.000Z' })).toBe(1)
+    const rows = await store.listAttempts!(key.date, key.locale)
+    expect(rows.map((row) => row.attemptNo)).toEqual([2, 1])
+    expect(rows[0]?.cleanedAt).toBe('2026-11-09T08:10:00.000Z')
+    expect(rows[1]?.cleanedAt).toBeUndefined()
+  })
+})

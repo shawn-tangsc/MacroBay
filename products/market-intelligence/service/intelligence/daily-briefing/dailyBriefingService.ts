@@ -2,6 +2,7 @@ import type {
   BriefingGenerationProgress,
   BriefingGenerationStageId,
   BriefingGenerationTrace,
+  DailyBriefingAttemptRecord,
   DailyBriefingDocument,
   DailyBriefingEditionSummary,
   DailyBriefingListResult,
@@ -20,11 +21,13 @@ import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
+import { createDailyBriefingReads } from './dailyBriefingReads'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
+import { briefingHistorySummaries } from './dailyBriefingHistory'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
@@ -122,6 +125,24 @@ export type DailyBriefingStore = Readonly<{
   finishAttempt?: (attempt: DailyBriefingAttemptEnd) => Promise<void>
   /** The newest attempt of that edition, whatever its state; a stored trace when it has one. */
   getAttempt?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<BriefingGenerationTrace | undefined>
+  /**
+   * The tombstone: the trace is cleared and `cleanedAt` written, the row stays. Returns the number
+   * of rows changed — `0` means the row is already gone (pruned), which is not a failure. A real
+   * write error throws: the caller keeps the session link as its retry anchor and would otherwise
+   * never know the tombstone was never written. `null` is the third answer: the database has not
+   * been upgraded, so it cannot hold a tombstone yet — the row is still there and the caller must
+   * keep the link and try again later, not treat it as "the row is gone".
+   */
+  markAttemptCleaned?: (input: Readonly<{
+    editionDate: string
+    /** Required: without it the update could land on another issue's attempt of the same day. */
+    periodId: string
+    locale: DailyBriefingLocale
+    attemptNo?: number
+    cleanedAt: string
+  }>) => Promise<number | null>
+  /** Every attempt of that edition, newest first; the history rail expands this list. */
+  listAttempts?: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<readonly DailyBriefingAttemptRecord[]>
   /** The run of that period, holding the frozen facts every edition of it was written from. */
   getPeriodRun?: (date: string, periodId?: string) => Promise<DailyBriefingPeriodRun | undefined>
   /** Writes the first run of a period; a second call for the same period keeps the first facts. */
@@ -186,12 +207,22 @@ export type DailyBriefingListResultView =
   | Readonly<{ state: 'available'; result: DailyBriefingListResult }>
   | Readonly<{ state: 'unavailable'; failureCode: 'time-invalid' }>
 
+/**
+ * The attempts of one edition. A read that failed is its own answer: an empty list would say "no
+ * attempts", which is the opposite of what a failed read tells the reader.
+ */
+export type DailyBriefingAttemptsResult = Readonly<
+  | { state: 'available'; attempts: readonly DailyBriefingAttemptRecord[] }
+  | { state: 'unavailable'; failureCode: 'attempts-unreadable' }
+>
+
 export type DailyBriefingService = Readonly<{
   /** One named period's edition when the scheduler says which fired; unscheduled callers mean `default`. */
   getToday: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string; periodId?: string; generation?: DailyBriefingGeneration }>) => Promise<DailyBriefingTodayResult>
   regenerate: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingTodayResult>
   list: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingListResultView>
-  get: (input: Readonly<{ date: string; locale: DailyBriefingLocale }>) => Promise<DailyBriefingGetResult>
+  get: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingGetResult>
+  listAttempts: (input: Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }>) => Promise<DailyBriefingAttemptsResult>
   /**
    * Where the attempt that is running right now has got to.
    *
@@ -254,6 +285,7 @@ export function createDailyBriefingService(deps: Readonly<{
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
+  const reads = createDailyBriefingReads({ store: deps.store })
   const runs = createDailyBriefingRunCoalescer<DailyBriefingTodayResult>()
 
   /**
@@ -548,16 +580,15 @@ export function createDailyBriefingService(deps: Readonly<{
       deps.store.list(from, to, primary).catch(() => []),
       deps.store.list(from, to, otherLocale).catch(() => [])
     ])
-    const byDate = new Map<string, DailyBriefingStoredEdition>()
-    for (const row of otherRows) byDate.set(row.date, row)
-    for (const row of primaryRows) byDate.set(row.date, row)
-    const editions = [...dates].reverse().map((date) => summaryFor(date, primary, byDate.get(date), [primaryRows, otherRows]))
+    // One row per (date, period): the two languages of a period are the same row, not two.
+    const editions = await briefingHistorySummaries({
+      dates,
+      primary,
+      primaryRows,
+      otherRows,
+      periodRun: (date, periodId) => deps.store.getPeriodRun?.(date, periodId)
+    })
     return { state: 'available', result: { editions } }
-  }
-
-  async function get(input: Readonly<{ date: string; locale: DailyBriefingLocale }>): Promise<DailyBriefingGetResult> {
-    const row = await deps.store.get(input.date, input.locale, DEFAULT_PERIOD_ID).catch(() => undefined)
-    return row ? { state: 'available', document: row.document } : { state: 'missing' }
   }
 
   async function getProgress(input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>): Promise<DailyBriefingProgressResult> {
@@ -568,15 +599,7 @@ export function createDailyBriefingService(deps: Readonly<{
     return running ? { state: 'running', progress: running } : { state: 'idle' }
   }
 
-  function getStorageState(): DailyBriefingStorageState {
-    return deps.store.upgradeState?.() ?? { state: 'ready' }
-  }
-
-  async function retryUpgrade(): Promise<DailyBriefingStorageState> {
-    return (await deps.store.retryUpgrade?.()) ?? { state: 'ready' }
-  }
-
-  return { getToday, regenerate, list, get, getProgress, getStorageState, retryUpgrade }
+  return { getToday, regenerate, list, ...reads, getProgress }
 }
 
 /**
@@ -622,31 +645,6 @@ function markEditorialFailure(
 
 function isCurrent(document: DailyBriefingDocument): boolean {
   return document.schemaVersion === dailyBriefingPolicy.schemaVersion && document.policyVersion === dailyBriefingPolicy.policyVersion
-}
-
-function summaryFor(
-  date: string,
-  locale: DailyBriefingLocale,
-  row: DailyBriefingStoredEdition | undefined,
-  allRows: readonly (readonly DailyBriefingStoredEdition[])[]
-): DailyBriefingEditionSummary {
-  const availableLocales = allRows
-    .flat()
-    .filter((candidate) => candidate.date === date)
-    .map((candidate) => candidate.locale)
-  if (!row || row.locale !== locale) return { date, locale, availableLocales: [...new Set(availableLocales)], state: 'missing' }
-  const document = row.document
-  return {
-    date,
-    locale: row.locale,
-    availableLocales: [...new Set(availableLocales)],
-    state: 'generated',
-    generatedAt: row.generatedAt,
-    ...(document.conclusion ? { direction: document.conclusion.direction } : {}),
-    ...(document.lede.text ? { summaryLine: document.lede.text.slice(0, 80) } : {}),
-    readingsAvailable: document.status.readingsAvailable,
-    windowEnd: row.windowEnd
-  }
 }
 
 function previousDateOf(date: string): string {

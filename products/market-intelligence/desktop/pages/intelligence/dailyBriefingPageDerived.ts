@@ -14,6 +14,7 @@ import type { DailyBriefingText } from './dailyBriefingText'
 export function summaryFromDocument(document: DailyBriefingDocument): DailyBriefingEditionSummary {
   return {
     date: document.edition.date,
+    periodId: 'default',
     locale: document.edition.locale,
     availableLocales: [document.edition.locale],
     state: 'generated',

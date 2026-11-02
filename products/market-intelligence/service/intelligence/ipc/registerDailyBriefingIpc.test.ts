@@ -11,6 +11,7 @@ const service = {
   getToday: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
   list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } })),
   get: vi.fn(async () => ({ state: 'missing' as const })),
+  listAttempts: vi.fn(async () => ({ state: 'available' as const, attempts: [] })),
   regenerate: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
   getProgress: vi.fn(async () => ({ state: 'idle' as const })),
   getStorageState: vi.fn(() => ({ state: 'incomplete' as const, reason: 'backup-failed' as const })),
@@ -74,6 +75,11 @@ describe('daily briefing IPC', () => {
   it('regenerates today from a strict query', async () => {
     await handlers.get(DAILY_BRIEFING_IPC_METHODS.regenerate)!({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(service.regenerate).toHaveBeenCalledWith({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+  })
+
+  it('forwards an attempts read for one issue', async () => {
+    await handlers.get(DAILY_BRIEFING_IPC_METHODS.listAttempts)!({ date: '2026-10-30', locale: 'zh-CN', periodId: 'default' })
+    expect(service.listAttempts).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'zh-CN', periodId: 'default' })
   })
 
   it('forwards a valid dated read', async () => {

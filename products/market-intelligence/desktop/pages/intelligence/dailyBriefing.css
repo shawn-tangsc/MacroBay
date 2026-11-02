@@ -193,3 +193,13 @@
 .mi-brief-steps__name { flex: 1 1 auto; min-width: 0; }
 .mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; }
 .mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }
+
+/* 历史行：一行一期，语言与生成记录是行内动作；三者并排但不在主按钮里（按钮不能套按钮）。 */
+.mi-daily-briefing__rail-item { display: grid; grid-template-columns: 1fr auto; column-gap: 6px; align-items: start; }
+.mi-daily-briefing__rail-side { display: flex; align-items: center; gap: 4px; padding-top: 4px; }
+.mi-daily-briefing__rail-lang, .mi-daily-briefing__rail-attempts-toggle { padding: 2px 6px; border: 1px solid var(--mi-dashboard-border); border-radius: 999px; background: transparent; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.4; cursor: pointer; }
+.mi-daily-briefing__rail-lang[aria-pressed="true"] { border-color: var(--mi-dashboard-accent, var(--caution)); color: var(--mi-dashboard-text); }
+.mi-daily-briefing__rail-lang:hover, .mi-daily-briefing__rail-attempts-toggle:hover { color: var(--mi-dashboard-text); }
+.mi-daily-briefing__rail-attempts { grid-column: 1 / -1; margin: 2px 0 6px 6px; padding-left: 8px; border-left: 2px solid var(--mi-dashboard-border); display: flex; flex-direction: column; gap: 3px; color: var(--mi-dashboard-muted); font-size: 11px; }
+.mi-daily-briefing__rail-attempt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; }
+.mi-daily-briefing__rail-attempt em { font-style: normal; color: var(--mi-dashboard-caution); }

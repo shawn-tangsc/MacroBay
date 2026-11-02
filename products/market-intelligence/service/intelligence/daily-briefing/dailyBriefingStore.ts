@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { openSqliteDatabase } from '@platform/storage/sqlite/openSqliteDatabase'
 
-import { DEFAULT_PERIOD_ID, type DailyBriefingDocument, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, type DailyBriefingAttemptRecord, type DailyBriefingDocument, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import { isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from '../../../contracts/dailyBriefing'
 import type {
   DailyBriefingAttemptEnd,
@@ -139,6 +139,10 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
             .run(attempt.trace ? JSON.stringify(attempt.trace) : null, attempt.finishedAt, attempt.date, attempt.locale)
         }
 
+    const listAttemptsStatement = attemptPeriod
+      ? db.prepare(`select attempt_no, state, failure_code, started_at, finished_at, cleaned_at from daily_briefing_attempts
+          where edition_date = ? and period_id = ? and locale = ? order by attempt_no desc`)
+      : db.prepare('select trace_json, updated_at from daily_briefing_attempts where edition_date = ? and locale = ?')
     const latestAttempt = attemptPeriod
       ? db.prepare(`select trace_json from daily_briefing_attempts
           where edition_date = ? and period_id = ? and locale = ? order by attempt_no desc limit 1`)
@@ -191,6 +195,45 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
           throw error
         }
       },
+      listAttempts(date: string, periodId: string, locale: DailyBriefingLocale, attemptPeriod: boolean): readonly DailyBriefingAttemptRecord[] {
+        if (attemptPeriod) {
+          const rows = listAttemptsStatement.all(date, periodId, locale) as Array<Record<string, unknown>>
+          return Object.freeze(rows.map((row) => Object.freeze({
+            attemptNo: Number(row.attempt_no),
+            state: row.state === 'succeeded' || row.state === 'running' ? row.state : 'failed' as const,
+            ...(typeof row.failure_code === 'string' && row.failure_code ? { failureCode: row.failure_code } : {}),
+            startedAt: String(row.started_at),
+            ...(typeof row.finished_at === 'string' && row.finished_at ? { finishedAt: row.finished_at } : {}),
+            ...(typeof row.cleaned_at === 'string' && row.cleaned_at ? { cleanedAt: row.cleaned_at } : {})
+          })))
+        }
+        const rows = listAttemptsStatement.all(date, locale) as Array<Record<string, unknown>>
+        return Object.freeze(rows.map((row) => Object.freeze({
+          attemptNo: 1,
+          state: 'failed' as const,
+          startedAt: String(row.updated_at),
+          finishedAt: String(row.updated_at)
+        })))
+      },
+      markAttemptCleaned(input: Readonly<{ editionDate: string; periodId: string; locale: DailyBriefingLocale; attemptNo?: number; cleanedAt: string }>): number | null {
+        // The old table cannot hold a tombstone: its trace column is NOT NULL. Until the upgrade
+        // runs there is nowhere to write `cleaned_at`. This is not "the row is gone" — it is "not
+        // representable yet" — so it answers `null` and the caller keeps its retry anchor.
+        if (!attemptPeriod) return null
+        if (input.attemptNo !== undefined) {
+          const result = db.prepare(`update daily_briefing_attempts set trace_json = null, cleaned_at = ?
+            where edition_date = ? and period_id = ? and locale = ? and attempt_no = ?`)
+            .run(input.cleanedAt, input.editionDate, input.periodId, input.locale, input.attemptNo)
+          return Number(result.changes)
+        }
+        const newest = db.prepare(`select max(attempt_no) as latest from daily_briefing_attempts
+          where edition_date = ? and period_id = ? and locale = ?`).get(input.editionDate, input.periodId, input.locale) as { latest?: number } | undefined
+        if (newest?.latest === undefined || newest.latest === null) return 0
+        const result = db.prepare(`update daily_briefing_attempts set trace_json = null, cleaned_at = ?
+          where edition_date = ? and period_id = ? and locale = ? and attempt_no = ?`)
+          .run(input.cleanedAt, input.editionDate, input.periodId, input.locale, Number(newest.latest))
+        return Number(result.changes)
+      },
       latestAttempt: (date: string, periodId: string, locale: DailyBriefingLocale) =>
         (attemptPeriod ? latestAttempt.get(date, periodId, locale) : latestAttempt.get(date, locale)) as Row | undefined
     }
@@ -221,6 +264,18 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
     },
     async finishAttempt(attempt) {
       statements.finishAttempt(attempt)
+    },
+    async markAttemptCleaned(input) {
+      return statements.markAttemptCleaned({
+        editionDate: input.editionDate,
+        periodId: input.periodId,
+        locale: input.locale,
+        ...(input.attemptNo === undefined ? {} : { attemptNo: input.attemptNo }),
+        cleanedAt: input.cleanedAt
+      })
+    },
+    async listAttempts(date, locale, periodId) {
+      return statements.listAttempts(date, periodId ?? DEFAULT_PERIOD_ID, locale, tableColumns(db, 'daily_briefing_attempts').includes('period_id'))
     },
     async getAttempt(date, locale, periodId) {
       const row = statements.latestAttempt(date, periodId ?? DEFAULT_PERIOD_ID, locale)

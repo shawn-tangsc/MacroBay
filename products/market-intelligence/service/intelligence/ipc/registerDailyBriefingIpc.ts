@@ -1,6 +1,6 @@
 import type { ProductIpcRegistrar } from '@platform/desktop/ipc/productIpcRegistry'
 
-import { isDailyBriefingEditionDate, isDailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import { isDailyBriefingEditionDate, isDailyBriefingLocale, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingService } from '../daily-briefing/dailyBriefingService'
 import type { DailyBriefingSettingsPatch, DailyBriefingSettingsService } from '../daily-briefing/dailyBriefingSettingsService'
 
@@ -10,6 +10,7 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   getToday: 'intelligence.dailyBriefing.getToday',
   list: 'intelligence.dailyBriefing.list',
   get: 'intelligence.dailyBriefing.get',
+  listAttempts: 'intelligence.dailyBriefing.listAttempts',
   regenerate: 'intelligence.dailyBriefing.regenerate',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
@@ -32,6 +33,8 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     service.getProgress(readQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.get, async (payload) =>
     service.get(readGet(payload)))
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.listAttempts, async (payload) =>
+    service.listAttempts(readAttemptsQuery(payload)))
   register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getSettings, async () => {
     if (!settings) throw new Error('daily-briefing-settings-unavailable')
     return settings.getView()
@@ -100,6 +103,16 @@ function readQuery(payload: unknown): Readonly<{ locale: 'zh-CN' | 'en-US'; time
     throw new Error('daily-briefing-invalid-time-zone')
   }
   return { locale, timeZone }
+}
+
+function readAttemptsQuery(payload: unknown): Readonly<{ date: string; locale: DailyBriefingLocale; periodId?: string }> {
+  const base = readGet(payload)
+  if (!isRecord(payload)) throw new Error('daily-briefing-invalid-request')
+  const periodId = payload.periodId
+  if (periodId !== undefined && (typeof periodId !== 'string' || periodId.length === 0 || periodId.length > 64)) {
+    throw new Error('daily-briefing-invalid-request')
+  }
+  return { ...base, ...(typeof periodId === 'string' ? { periodId } : {}) }
 }
 
 function readGet(payload: unknown): Readonly<{ date: string; locale: 'zh-CN' | 'en-US' }> {

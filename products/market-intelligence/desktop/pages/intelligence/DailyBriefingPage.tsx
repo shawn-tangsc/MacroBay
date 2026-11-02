@@ -64,7 +64,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   onConfigureWebSearch?: () => void
   /** Overrides the built-in platform model-service navigation. */
   onOpenModelSettings?: () => void
-  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'>
+  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'> & Partial<Pick<DailyBriefingClient, 'listAttempts'>>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
   const resolveProductText = useProductTextKey()
@@ -177,14 +177,15 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     if (exportTimer.current !== undefined) window.clearTimeout(exportTimer.current)
   }, [])
 
-  const selectEdition = (date: string): void => {
-    const row = editions.find((edition) => edition.date === date)
+  const selectEdition = (date: string, language?: 'zh-CN' | 'en-US'): void => {
+    const target = language ?? locale
+    const row = editions.find((edition) => edition.date === date && edition.locale === target) ?? editions.find((edition) => edition.date === date)
     if (!row || row.state === 'missing') return
-    if (view.status === 'ready' && view.document.edition.date === date) return
+    if (view.status === 'ready' && view.document.edition.date === date && view.document.edition.locale === target) return
     const request = ++requestRef.current
     setRegenerateFailure(null)
     setView({ status: 'loading' })
-    void client.get({ date, locale })
+    void client.get({ date, locale: target })
       .then((result) => {
         if (request !== requestRef.current) return
         setView(result.state === 'available'
@@ -281,6 +282,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }
   const contentBlocked = editorialBlocked || regenerateFailure !== null
   const selectedDate = view.status === 'ready' ? view.document.edition.date : undefined
+  const selectedLocale = view.status === 'ready' ? view.document.edition.locale : undefined
   // The right rail audits the edition that was actually generated: a missing source, a hidden
   // change and the conclusion's own gaps are separate facts, not one generic caveat list.
   const issues = view.status === 'ready' && !contentBlocked
@@ -346,9 +348,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </div>
     </header>
     <div className={bodyClass}>
-      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} todayDate={todayDate}
+      <DailyBriefingHistoryRail editions={editions} failed={editionsFailed} loading={editionsLoading} onRetry={() => setReloadKey((key) => key + 1)} selectedDate={selectedDate} selectedLocale={selectedLocale} todayDate={todayDate}
         generatingStage={liveProgress ? runningRowName(liveProgress, text) : progressUnreadable ? text.generationProgress.unknownStage : undefined}
-        locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
+        locale={locale} text={text} formatTime={formatTime} resolveText={resolveProductText} onSelect={selectEdition}
+        onLoadAttempts={client.listAttempts ? (date, periodId, language) => client.listAttempts!({ date, locale: language, periodId }) : undefined} />
       <section className="mi-daily-briefing-page__content">
         <DailyBriefingStorageNotice text={text.migration} />
         {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
