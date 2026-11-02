@@ -122,20 +122,20 @@ describe('cross-asset observation workspace', () => {
       // The synthetic label rides with the level and carries the caveat the wire published.
       const tag = host.querySelector('[data-synthetic="dxy"]')
       expect(tag?.textContent).toBe(text.syntheticTag)
-      // 说明挂在可聚焦气泡上：没有 title，焦点进去同一句话就出现。
+      // 不是真控件就不迁：没有 title、没有 tabindex，说明挂到可访问名上。
       expect(tag?.getAttribute('title')).toBeNull()
-      expect(tag?.getAttribute('tabindex')).toBe('0')
-      await act(async () => { (tag as HTMLElement | null)?.focus() })
-      expect(document.body.textContent).toContain(text.syntheticCaveat)
+      expect(tag?.getAttribute('tabindex')).toBeNull()
+      expect(tag?.getAttribute('aria-label')).toBe(text.syntheticCaveat)
       expect(tag?.getAttribute('data-caveat')).toBe('synthetic-dollar-index')
       expect(host.querySelector('[data-status-row="gold"][data-connected="true"]')).not.toBeNull()
       expect(host.querySelector('[data-asset-price="gold"]')?.textContent).toBe('3412.55')
-      // 7d was not in the gold reading: the cell is a dash whose tooltip still says 无数据, not a zero.
+      // 7d was not in the gold reading: the cell is a dash whose accessible name still says 无数据,
+      // not a zero. It is not a control, so there is no tooltip and no focus stop.
       const missing = host.querySelector('[data-asset-return="gold:7d"]')
       expect(missing?.textContent).toBe(text.windowNoData)
       expect(missing?.getAttribute('title')).toBeNull()
-      await act(async () => { (missing as HTMLElement | null)?.focus() })
-      expect(document.body.textContent).toContain(text.noData)
+      expect(missing?.getAttribute('tabindex')).toBeNull()
+      expect(missing?.getAttribute('aria-label')).toBe(text.noData)
       expect(missing?.getAttribute('data-unavailable')).toBe('true')
       expect(host.querySelector('[data-asset-return="dxy:15m"]')?.getAttribute('data-unavailable')).toBeNull()
       expect(host.querySelector('[data-status-row="gold"] [data-synthetic]')).toBeNull()

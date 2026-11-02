@@ -99,8 +99,8 @@ describe('cross-asset Nasdaq 100 row, as rendered', () => {
       expect(label?.textContent).toBe(text.proxyTag)
       expect(label?.getAttribute('data-caveat')).toBe('tokenized-index-proxy')
       expect(label?.getAttribute('title')).toBeNull()
-      await act(async () => { (label as HTMLElement | null)?.focus() })
-      expect(document.body.textContent).toContain(text.proxyCaveat)
+      expect(label?.getAttribute('tabindex')).toBeNull()
+      expect(label?.getAttribute('aria-label')).toBe(text.proxyCaveat)
       // A 24/7 contract has no session to report, so no closure tag rides beside the live price.
       expect(indexRow.dataset.marketState).toBe('open')
       expect(page.host.querySelector('[data-market-state-tag="closed"]')).toBeNull()

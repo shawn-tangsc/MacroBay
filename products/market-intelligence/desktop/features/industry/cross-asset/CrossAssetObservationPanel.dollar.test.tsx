@@ -63,11 +63,10 @@ describe('the dollar row on the market-status table', () => {
     const host = await render(snapshotOf([syntheticReading]))
     expect(host.querySelector('[data-asset-price="dxy"]')?.textContent).toBe('101.42')
     expect(tag(host)?.textContent).toBe(text.syntheticTag)
-    // 悬停说明走可聚焦气泡：title 不再承载句子，焦点进去同一句话出现。
+    // 它不是真控件，所以不套浮层：说明挂在可访问名上，`title` 与 `tabindex` 都不再有。
     expect(tag(host)?.getAttribute('title')).toBeNull()
-    expect(tag(host)?.getAttribute('tabindex')).toBe('0')
-    await act(async () => { tag(host)?.focus() })
-    expect(document.body.textContent).toContain(text.syntheticCaveat)
+    expect(tag(host)?.getAttribute('tabindex')).toBeNull()
+    expect(tag(host)?.getAttribute('aria-label')).toBe(text.syntheticCaveat)
     expect(tag(host)?.getAttribute('data-caveat')).toBe(macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex)
   })
 

@@ -153,10 +153,9 @@ function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMetrics; 
     const cell = <td key={window} data-asset-return={`${id}:${window}`}
       data-direction={metric?.state === 'available' ? Math.sign(metric.value) : 0}
       data-unavailable={percent === undefined ? 'true' : undefined}
-      tabIndex={percent === undefined ? 0 : undefined}>{percent ?? text.windowNoData}</td>
-    return percent === undefined
-      ? <FocusTooltip key={window} labelKey={crossAssetTextKeys.noData} resolveText={resolveText}>{cell}</FocusTooltip>
-      : cell
+      aria-label={percent === undefined ? text.noData : undefined}>{percent ?? text.windowNoData}</td>
+    // 不是真控件就不迁：单元格套 `tabIndex` + 浮层是假控件，说明改挂在可访问名上。
+    return cell
   })}</>
 }
 /** No figure and no value cell at all: the row states the gap instead of filling it. */
@@ -238,9 +237,9 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <th scope="row"><span>{text.assetLabels[id]}
       {/* The synthetic label rides with the level: a level this product computed is never shown as
           if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <FocusTooltip labelKey={crossAssetTextKeys.syntheticCaveat} resolveText={resolveText}>
-        <em className="mi-cross-asset__synthetic" data-synthetic={id}
-          data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex} tabIndex={0}>{text.syntheticTag}</em></FocusTooltip> : null}
+      {reading?.synthetic ? <em className="mi-cross-asset__synthetic" data-synthetic={id}
+        aria-label={text.syntheticCaveat}
+        data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex}>{text.syntheticTag}</em> : null}
       {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
           after the price reads as if it qualified the number itself. */}
       {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
@@ -291,12 +290,10 @@ function IndexStatusRow({ snapshot, text, formatTime }: {
   return <tr data-status-row="index" data-connected="true" data-index-source={source} data-market-state={marketState}
     data-index-name={indexRowName(snapshot, text)}>
     <th scope="row"><span>{indexRowName(snapshot, text)}
-      {proxy ? <FocusTooltip labelKey={crossAssetTextKeys.proxyCaveat} resolveText={resolveText}>
-        <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
-          tabIndex={0}>{text.proxyTag}</em></FocusTooltip> : null}
-      {marketState === 'closed' ? <FocusTooltip labelKey={crossAssetTextKeys.marketClosedHint} resolveText={resolveText}>
-        <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
-          tabIndex={0}>{text.marketClosed}</em></FocusTooltip> : null}
+      {proxy ? <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
+        aria-label={text.proxyCaveat}>{text.proxyTag}</em> : null}
+      {marketState === 'closed' ? <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
+        aria-label={text.marketClosedHint}>{text.marketClosed}</em> : null}
     </span>{text.statusReads.index ? <small>{text.statusReads.index}</small> : null}</th>
     <td data-asset-price="index" data-last-closed-at={lastClosed?.at}>{value === undefined ? text.notConnected : livePriceText(value)}</td>
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
