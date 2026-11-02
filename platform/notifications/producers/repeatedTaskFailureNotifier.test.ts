@@ -58,7 +58,7 @@ describe('repeated task failure notifier (P2)', () => {
     expect(submit).toHaveBeenCalledTimes(1)
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     expect(request.eventTypeId).toBe('platform.job.repeated-failed')
-    expect(request.producerId).toBe('definition-1')
+    expect(request.producerId).toBe('handler-1')
     expect(request.bodyParams).toEqual({ taskName: '央行利率决议采集' })
     expect(request.dedupeVars).toEqual({
       builder: 'template',

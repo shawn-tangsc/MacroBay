@@ -47,7 +47,7 @@ describe('task failure notifier', () => {
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
     // 契约 §3.2：事件 id、参数、去重变量；标题/正文键在 P1 声明里，不在这里。
     expect(request.eventTypeId).toBe('platform.job.failed-terminal')
-    expect(request.producerId).toBe('definition-1')
+    expect(request.producerId).toBe('handler-1')
     expect(request.dedupeVars).toEqual({
       builder: 'template',
       vars: { definitionId: 'definition-1', date: '2026-11-02' }
@@ -90,12 +90,12 @@ describe('task failure notifier', () => {
     expect(JSON.stringify(request)).not.toContain('x'.repeat(200))
   })
 
-  it('uses the definition id as producerId for product-owned jobs too, not the shared handler id', async () => {
+  it('uses the handler id as producerId: the ownership table claims handlers, not period-bearing definition ids', async () => {
     const { submit, notify } = notifier()
     await notify({ run: run({ owner: 'product', productId: 'market-intelligence' }), cause: 'executed' })
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
-    // 归属判定只读 producerId；handlerId 是一类任务共用的处理器，claim 不了也不稳定。
-    expect(request.producerId).toBe('definition-1')
-    expect(request.producerId).not.toBe('handler-1')
+    // 让渡表是 manifest 里的静态表：definitionId 天天新一期就 claim 不上，handler 才稳定。
+    expect(request.producerId).toBe('handler-1')
+    expect(request.producerId).not.toBe('definition-1')
   })
 })

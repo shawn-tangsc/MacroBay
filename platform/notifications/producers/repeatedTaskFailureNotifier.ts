@@ -50,8 +50,10 @@ export function createRepeatedTaskFailureNotifier(deps: RepeatedTaskFailureNotif
       .submit({
         // 契约 §3.2：标题/正文/理由键都在 P2 声明里，提交只带参数。
         eventTypeId: 'platform.job.repeated-failed',
-        // 归属判定只读 producerId；任务定义 id 是稳定标识，handlerId 是「同一类任务」共用的。
-        producerId: run.definitionId,
+        // 归属判定只读 producerId，单位是 **handlerId**：让渡表是 manifest 里的静态表，
+        // 只有 handler 稳定；`definitionId` 带期号，每天新一期就是新 id，claim 永远对不上。
+        // 去重键仍按「任务定义 + 日期」算——合并是同一件事，让渡是一类任务。
+        producerId: run.handlerId,
         dedupeVars: {
           builder: 'template',
           vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }

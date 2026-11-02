@@ -49,10 +49,10 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
       .submit({
         // 契约 §3.2：键来自声明，提交只带参数。标题/正文键在 P1 声明里。
         eventTypeId: 'platform.job.failed-terminal',
-        // 归属判定只读 producerId。**任务定义 id**：平台自有任务视为已登记（不触发
-        // `unclaimed-producer`），产品任务由产品在 manifest 里 claim 同一个 id。
-        // 不用 handlerId——它是一类任务共用的处理器，claim 不了、也不稳定。
-        producerId: run.definitionId,
+        // 归属判定只读 producerId，单位是 **handlerId**：让渡表是 manifest 里的静态表，
+        // 只有 handler 稳定；`definitionId` 带期号，每天新一期就冒出一个新 id，claim 永远对不上。
+        // 一类任务共用一个 handler 不是问题——claim 的单位就是 handler。平台自有任务视为已登记。
+        producerId: run.handlerId,
         dedupeVars: {
           builder: 'template',
           vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
