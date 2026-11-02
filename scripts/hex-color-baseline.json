@@ -50,7 +50,6 @@
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace[data-generation-trace-state=\"success\"] .mi-generation-trace__head span[data-trace-state]": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-issue-drawer__advice": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-issue-drawer__meta, .mi-issue-drawer__advice": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-issue-drawer__panel h2": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-issue-drawer__tags span": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-issue-drawer__tags span[data-severity=\"blocking\"]": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-issue-drawer__tags span[data-severity=\"warning\"]": 1,
