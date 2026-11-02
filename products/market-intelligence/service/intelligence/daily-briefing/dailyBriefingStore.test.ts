@@ -269,3 +269,23 @@ describe('tombstones', () => {
     expect(rows[1]?.cleanedAt).toBeUndefined()
   })
 })
+
+
+describe('tombstones stay inside their own period', () => {
+  it('does not touch the attempt of another issue on the same day', async () => {
+    const store = createDailyBriefingSqliteStore(':memory:')
+    const base = { date: '2026-11-02', locale: 'zh-CN' as const }
+    const morning = await store.beginAttempt!({ ...base, periodId: 'p_morning', startedAt: '2026-11-02T00:00:00.000Z' })
+    const evening = await store.beginAttempt!({ ...base, periodId: 'p_evening', startedAt: '2026-11-02T12:00:00.000Z' })
+
+    expect(await store.markAttemptCleaned!({ editionDate: base.date, periodId: 'p_morning', locale: base.locale, attemptNo: morning, cleanedAt: '2026-11-09T08:10:00.000Z' })).toBe(1)
+    expect((await store.listAttempts!(base.date, base.locale, 'p_morning'))[0]?.cleanedAt).toBe('2026-11-09T08:10:00.000Z')
+    // The evening issue is a different attempt row; cleaning the morning one must not reach it.
+    expect((await store.listAttempts!(base.date, base.locale, 'p_evening'))[0]?.cleanedAt).toBeUndefined()
+    expect(evening).toBe(1)
+
+    // Listing for one issue never mixes in the other.
+    expect((await store.listAttempts!(base.date, base.locale, 'p_evening')).map((row) => row.attemptNo)).toEqual([evening])
+    expect((await store.listAttempts!(base.date, base.locale, 'p_morning')).map((row) => row.attemptNo)).toEqual([morning])
+  })
+})
