@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { Button } from 'antd'
 import { Sparkles } from 'lucide-react'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { localizeAnalysisMagnitudeUnits } from '../../../contracts/marketAnalysisReadableText'
 import type { AnalysisConclusionDetail, AnalysisDetailText } from './AnalysisConclusionDetail'
@@ -14,6 +15,8 @@ import { readConclusion } from './analysisConclusionBlocks'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import type { UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisSettings } from './useMarketAnalysisSettings'
+import { ANALYSIS_STATUS_KEY, ANALYSIS_STATUS_TONE } from './analysisStatusPresentation'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 
 export type LatestConclusionText = Readonly<{
   latestConclusion: string
@@ -32,7 +35,7 @@ export { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAn
  * older node opens the detail drawer instead of replacing this card.
  */
 export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, onOpenDetail, onOpenTimeline, onOpenAnalysisSettings, openTimelineLabel, enableAnalysisLabel, analysisOffHint }: Readonly<{
-  text: Pick<AnalysisDetailText, 'status' | 'conclusion' | 'conclusionDirection' | 'directions' | 'readableLocale'>
+  text: Pick<AnalysisDetailText, 'conclusion' | 'conclusionDirection' | 'directions' | 'readableLocale'>
   workspaceText: LatestConclusionText
   timeline: UseMarketAnalysisTimelineResult
   onOpenDetail: (entry: MarketAnalysisTimelineEntry) => void
@@ -44,6 +47,7 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
 }>): React.ReactElement | null {
   const { state, details, detailState } = timeline
   const formatTime = useShellTimeFormat()
+  const resolveProductText = useProductTextKey()
   const analysisSettings = useMarketAnalysisSettings()
   const latest = selectLatestPublishedEntry(state.entries)
   const detail = latest ? details[latest.id] : undefined
@@ -81,7 +85,7 @@ export function LatestAnalysisConclusionCard({ text, workspaceText, timeline, on
     <header>
       <div><Sparkles size={15} aria-hidden="true" /><h2>{workspaceText.latestConclusion}</h2></div>
       <div>
-        {latest ? <><time>{formatTime(latest.occurredAt, 'second')}</time><em>{text.status[latest.status]}</em></> : null}
+        {latest ? <><time>{formatTime(latest.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[latest.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[latest.status]} /></> : null}
         {onOpenTimeline ? <Button size="small" onClick={onOpenTimeline}>{openTimelineLabel}</Button> : null}
         {latest && detail ? <Button size="small" onClick={() => onOpenDetail(latest)}>{workspaceText.openDetail}</Button> : null}
       </div>

@@ -1,6 +1,9 @@
 import { localizeAnalysisMagnitudeUnits, type MarketAnalysisReadableLocale, type MarketAnalysisReadableNames } from '../../../contracts/marketAnalysisReadableText'
 import type { MarketAnalysisTimelineDetail } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { StatusPill } from '@platform/ui/components/status-pill'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
+import { ANALYSIS_STATUS_KEY, ANALYSIS_STATUS_TONE } from './analysisStatusPresentation'
 import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import { formatChangeEntries, type MarketAnalysisChangeEntry } from './marketAnalysisChangeFormat'
 import { readConclusion } from './analysisConclusionBlocks'
@@ -54,7 +57,6 @@ export type AnalysisDetailText = Readonly<{
   summaryVersion: string
   evidenceCount: string
   asOf: string
-  status: Record<string, string>
   /**
    * Reader-facing names for the analysis identifiers, owned by the product i18n registry.
    * The model prompt keeps its own Chinese vocabulary, so both the published conclusion and
@@ -73,6 +75,7 @@ export type AnalysisDetailText = Readonly<{
  */
 export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: MarketAnalysisTimelineDetail; text: AnalysisDetailText }>): React.ReactElement {
   const formatTime = useShellTimeFormat()
+  const resolveProductText = useProductTextKey()
   const summary = detail.summary
   const locale = text.readableLocale ?? 'zh-CN'
   // Two contract generations: a structured conclusion (current) or the legacy labelled paragraph,
@@ -102,7 +105,7 @@ export function AnalysisConclusionDetail({ detail, text }: Readonly<{ detail: Ma
     <ClaimSection title={text.marketReaction} claims={detail.summary.marketReaction} empty={text.noMarketReaction} locale={locale} />
     <ClaimSection title={text.supportingEvidence} claims={detail.summary.supportingEvidence} locale={locale} />
     <ClaimSection title={text.counterEvidence} claims={detail.summary.counterEvidence} locale={locale} />
-    <section><h3>{text.prediction}</h3>{detail.predictions.length === 0 ? <p className="mi-analysis-timeline__state">{text.noPrediction}</p> : detail.predictions.map((prediction) => <div className="mi-analysis-timeline__prediction" key={prediction.id}><div><strong>{prediction.asset} · {localizeAnalysisMagnitudeUnits(prediction.baseCase, locale)}</strong><em>{text.status[prediction.status]}</em></div><p>{text.conditions}：{prediction.conditions.map(condition => localizeAnalysisMagnitudeUnits(condition, locale)).join('；')}</p><p>{text.invalidation}：{localizeAnalysisMagnitudeUnits(prediction.invalidation, locale)}</p><small>{text.verificationDue}：{formatTime(prediction.verificationDueAt, 'second')}</small></div>)}</section>
+    <section><h3>{text.prediction}</h3>{detail.predictions.length === 0 ? <p className="mi-analysis-timeline__state">{text.noPrediction}</p> : detail.predictions.map((prediction) => <div className="mi-analysis-timeline__prediction" key={prediction.id}><div><strong>{prediction.asset} · {localizeAnalysisMagnitudeUnits(prediction.baseCase, locale)}</strong><StatusPill labelKey={ANALYSIS_STATUS_KEY[prediction.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[prediction.status]} /></div><p>{text.conditions}：{prediction.conditions.map(condition => localizeAnalysisMagnitudeUnits(condition, locale)).join('；')}</p><p>{text.invalidation}：{localizeAnalysisMagnitudeUnits(prediction.invalidation, locale)}</p><small>{text.verificationDue}：{formatTime(prediction.verificationDueAt, 'second')}</small></div>)}</section>
     <ClaimSection title={text.catalysts} claims={detail.summary.nextCatalysts} locale={locale} />
     <section><h3>{text.dataCutoff}</h3>{detail.summary.dataCaveats.map((caveat) => <p className="mi-analysis-timeline__caveat" key={caveat}>{localizeAnalysisMagnitudeUnits(caveat, locale)}</p>)}</section>
     <details className="mi-analysis-timeline__audit"><summary>{text.auditInfo}</summary><dl><div><dt>{text.eventGroup}</dt><dd>{detail.run.eventGroupId}</dd></div><div><dt>{text.analysisRun}</dt><dd>{detail.run.id}</dd></div><div><dt>{text.summaryVersion}</dt><dd>{detail.summary.version}</dd></div><div><dt>{text.evidenceCount}</dt><dd>{detail.run.evidenceCount}</dd></div><div><dt>{text.asOf}</dt><dd>{formatTime(detail.run.asOf, 'second')}</dd></div><div><dt>{text.dataCutoff}</dt><dd>{formatTime(detail.run.dataCutoff, 'second')}</dd></div></dl></details>

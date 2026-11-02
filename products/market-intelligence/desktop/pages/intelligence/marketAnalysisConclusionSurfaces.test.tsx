@@ -273,6 +273,18 @@ describe('market analysis conclusion surfaces', () => {
     expect(reads()).toBe(1 + analysisTimelineRefreshPolicy.detailRetryDelaysMs.length)
   })
 
+  it('renders the published state through the shared status pill, not a hand-drawn span', async () => {
+    const { container } = await mountSurface([entry()], timeline =>
+      createElement(LatestAnalysisConclusionCard, { text: timelineText, workspaceText, timeline, onOpenDetail: vi.fn() }))
+
+    const pill = container.querySelector<HTMLElement>('.mi-analysis-conclusion-card header .status-pill')
+    expect(pill).not.toBeNull()
+    expect(pill?.textContent).toBe(timelineText.status.published)
+    // `published` 是「在正常工作」，档位是 ok；词与档位都来自那一张表。
+    expect(pill?.className).toContain('status-pill--ok')
+    expect(container.querySelector('.mi-analysis-conclusion-card header em')).toBeNull()
+  })
+
   it('renders a failed detail read as the shared error state, and its retry re-reads that one node', async () => {
     // Before this, a failed detail read was one bare sentence with no icon, no live region and no
     // way out: the automatic retries stop, and the reader was left with a dead end. The surface is
@@ -292,6 +304,8 @@ describe('market analysis conclusion surfaces', () => {
         <AnalysisDetailDrawer text={timelineText} workspaceText={workspaceText} timeline={timeline} openEntry={notFound as never} onOpenChange={vi.fn()} />
       </ShellTimeZoneProvider>))
 
+    // The entry's publish state is the shared pill here too: one word, one shape, four surfaces.
+    expect(container.querySelector('.mi-analysis-drawer__meta .status-pill')?.className).toContain('status-pill--ok')
     const surface = container.querySelector<HTMLElement>('[data-state="error"]')
     expect(surface).not.toBeNull()
     expect(surface?.querySelector('[data-reason-source]')?.getAttribute('data-reason-source')).toBe('product')

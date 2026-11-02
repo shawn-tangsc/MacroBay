@@ -3,8 +3,10 @@ import { ArrowLeft, ChevronRight, RefreshCw, Settings2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { LoadingSpinner, LoadingState } from '@platform/ui/components/loading'
+import { StatusPill } from '@platform/ui/components/status-pill'
 import { toReadableConclusionText } from '../../../contracts/marketAnalysisReadableText'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { MarketAnalysisTimelineEntry } from '../../shared/ipc/marketAnalysisTimelineClient'
 import { analysisTimelinePaging, analysisTimelinePagingPolicy } from './analysisTimelinePaging'
 import { groupCaptionFor, timelineSpansGroups } from './analysisTimelineGrouping'
@@ -12,6 +14,7 @@ import { conclusionReadableNames } from './analysisConclusionVocabulary'
 import { conclusionSummaryText, conclusionWithoutDirection, readConclusionDirection } from './analysisConclusionBlocks'
 import { analysisConclusionDirectionPolicy, localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 import { oneOffTriggerReasons } from './analysisTriggerStatusPresentation'
+import { ANALYSIS_STATUS_KEY, ANALYSIS_STATUS_TONE } from './analysisStatusPresentation'
 import type { AnalysisTimelineText, UseMarketAnalysisTimelineResult } from './useMarketAnalysisTimeline'
 import { useMarketAnalysisSettings, type MarketAnalysisSettingsRefusal } from './useMarketAnalysisSettings'
 import { AnalysisRequestErrorBanner, useDismissibleError } from './AnalysisRequestErrorBanner'
@@ -60,7 +63,6 @@ export type MarketAnalysisTimelineText = AnalysisTimelineText & Readonly<{
   evidenceCount: string
   analysisRun: string
   loadMore: string
-  status: Record<string, string>
   triggerStatus: { label: string; since: string; slotOpen: string; slotDelayed: string; reasons: Record<string, string> }
   /**
    * Names for the event kinds. Optional so a partial text object (a test, an older bundle) still
@@ -90,6 +92,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
   // button's own icon must spin for both states instead of freezing next to a disabled label.
   const analysisInFlight = requestState === 'loading' || requestState === 'queued'
   const formatTime = useShellTimeFormat()
+  const resolveProductText = useProductTextKey()
   // An attempt that ended without publishing, kept so an empty list can say why it is empty.
   const failedAttempt = attempt && !['queued', 'running', 'succeeded'].includes(attempt.status) ? attempt : undefined
   // Three failures can be on screen, and each is put away on its own: the request the reader just
@@ -203,7 +206,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
         // it is registered as a clickable row in the exception list. Selection is announced with
         // `aria-current`, never by background colour alone, and the chevron shows the row is openable.
         return <button className={`mi-analysis-timeline__entry${state.selected?.id === entry.id ? ' is-selected' : ''}`} key={entry.id} onClick={() => onSelect ? onSelect(entry) : void timeline.select(entry)} type="button" aria-current={state.selected?.id === entry.id ? 'true' : undefined}>
-            <span><time>{formatTime(entry.occurredAt, 'second')}</time><em>{text.status[entry.status]}</em></span>
+            <span><time>{formatTime(entry.occurredAt, 'second')}</time><StatusPill labelKey={ANALYSIS_STATUS_KEY[entry.status]} resolveText={resolveProductText} tone={ANALYSIS_STATUS_TONE[entry.status]} /></span>
             {/* Which event this row is about. Two conclusions published seconds apart are two
                 different events; without the name they read as one conclusion posted twice. */}
             {groupCaption ? <small className="mi-analysis-timeline__group">{groupCaption}</small> : null}

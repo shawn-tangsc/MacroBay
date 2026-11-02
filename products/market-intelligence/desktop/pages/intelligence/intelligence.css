@@ -110,7 +110,6 @@
    who cannot perform a pull. */
 .mi-analysis-timeline__pull { display: flex; justify-content: center; padding: 10px 0 2px; }
 .mi-analysis-timeline__entry > span { justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
-.mi-analysis-timeline__entry em, .mi-analysis-timeline__prediction em { color: var(--accent); font-size: 10px; font-style: normal; }
 .mi-analysis-timeline__entry strong { color: var(--text-strong); font-size: 12px; font-weight: 650; }
 .mi-analysis-timeline__entry small, .mi-analysis-timeline__entry i, .mi-analysis-timeline__prediction p, .mi-analysis-timeline__prediction small, .mi-analysis-timeline__state, .mi-analysis-timeline__agent-note { color: var(--muted); font-size: 11px; font-style: normal; line-height: 1.45; }
 .mi-analysis-timeline__detail-content { display: grid; gap: 16px; }
