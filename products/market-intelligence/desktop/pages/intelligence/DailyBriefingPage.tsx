@@ -3,6 +3,7 @@ import { Button } from 'antd'
 import { ArrowLeft, Settings2 } from 'lucide-react'
 import { toPng } from 'html-to-image'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
@@ -11,6 +12,7 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
 import { DailyBriefingHistoryRail } from './DailyBriefingHistoryRail'
@@ -52,6 +54,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
+  const resolveProductText = useProductTextKey()
   const formatTime = useShellTimeFormat()
   const timeZoneRef = useRef(timeZone)
   timeZoneRef.current = timeZone
@@ -303,7 +306,13 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
         <Button className="mi-daily-briefing__regenerate" onClick={() => setGenerationSettingsOpen(true)} aria-label={text.generationSettings.open}>
           {text.generationSettings.open}
         </Button>
-        <Button className="mi-daily-briefing__gear" onClick={() => setSettingsOpen(true)} aria-label={text.aiSettings.open} icon={<Settings2 size={14} aria-hidden="true" />} />
+        <IconButton
+          ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.aiSettings.open"
+          icon={Settings2}
+          onSelect={() => setSettingsOpen(true)}
+          resolveText={resolveProductText}
+          size="md"
+        />
       </div>
     </header>
     <div className={bodyClass}>
