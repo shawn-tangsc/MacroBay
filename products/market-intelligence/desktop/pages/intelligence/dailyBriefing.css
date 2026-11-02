@@ -172,11 +172,6 @@
 .mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-title { color: #f0a3a3; }
 .mi-generation-trace__stage-title { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
 .mi-generation-trace__stage-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The stage's fixed logic lives here, not in the timeline: a question mark that can be hovered,
-   focused and pinned, so a long explanation never pushes the recorded result down the rail. */
-.mi-generation-trace__stage-help { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 11px; height: 11px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #6f7981; cursor: pointer; }
-.mi-generation-trace__stage-help:hover, .mi-generation-trace__stage-help:focus-visible, .mi-generation-trace__stage-help[aria-expanded="true"] { color: #c4ccd2; background: rgba(255, 255, 255, .08); }
-.mi-generation-trace__stage-help:focus-visible { outline: 1px solid #7d8790; outline-offset: 1px; }
 .mi-generation-trace__stage-time { font-variant-numeric: tabular-nums; }
 .mi-generation-trace__stage-failure { display: block; margin-top: 1px; color: #e7c98f; font-size: 8.5px; }
 

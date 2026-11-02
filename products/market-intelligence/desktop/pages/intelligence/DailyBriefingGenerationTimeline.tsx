@@ -139,6 +139,7 @@ function StageHelp({ id, text }: Readonly<{ id: GenerationStageId; text: DailyBr
         icon={CircleHelp}
         resolveText={resolveProductText}
         size="sm"
+        variant="plain"
       />
     )}
   />

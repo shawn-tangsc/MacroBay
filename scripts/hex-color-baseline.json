@@ -39,8 +39,6 @@
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__head > span": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__missing": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__stage-failure": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__stage-help": 1,
-  "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__stage-help:hover, .mi-generation-trace__stage-help:focus-visible, .mi-generation-trace__stage-help[aria-expanded=\"true\"]": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-description": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-error .ant-steps-item-title": 1,
   "products/market-intelligence/desktop/pages/intelligence/dailyBriefing.css :: .mi-generation-trace__steps .ant-steps-item-title": 1,
