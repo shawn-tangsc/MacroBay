@@ -26,6 +26,7 @@
     "pretypecheck": "pnpm generate:products && pnpm generate:agent-capabilities",
     "lint": "pnpm --filter @macrobay/desktop-shell lint",
     "docs:check": "node scripts/check-docs.mjs",
+    "docs:event-ids": "node scripts/check-notification-event-docs.mjs",
     "check:file-size": "node scripts/check-file-size.mjs",
     "check:danger-color": "tsx scripts/check-danger-color.mts",
     "check:boot-page": "tsx scripts/boot-failure-layout.mts",
