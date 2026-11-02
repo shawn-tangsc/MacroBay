@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, createElement, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -77,11 +78,18 @@ async function mount(element: React.ReactElement): Promise<HTMLElement> {
   return document.body
 }
 
+const drawerSource = readFileSync(resolve(__dirname, './ModelServiceModelDrawer.tsx'), 'utf8')
+
 describe('PLAT-62 模型编辑抽屉', () => {
-  it('renders a 480px drawer with the 88/1fr grid, readonly id and ten chips', async () => {
+  it('renders on the narrow drawer tier with the 88/1fr grid, readonly id and ten chips', async () => {
     const container = await mount(createElement(Harness))
 
-    expect(container.querySelector<HTMLElement>('.ant-drawer-content-wrapper')?.style.width).toBe('480px')
+    // 平台抽屉只有 420 / 640 / 860 / 1040 四档：原来的 480 落到最近的 narrow（420），
+    // 宽度写成 `min(档位, 92vw)`，所以断言的是档位而不是旧的字面值。
+    // 宽度归平台抽屉的档位表（420/640/860/1040），这里不再钉 antd 的 style；
+    // 能钉的是「它确实换成了平台抽屉、并且是 narrow 档」，以及不再自己写宽度。
+    expect(drawerSource).toContain('size="narrow"')
+    expect(drawerSource).not.toMatch(/\bwidth=\{/)
     expect(container.querySelector('.model-drawer-grid')).not.toBeNull()
     const idInput = container.querySelector<HTMLInputElement>('[data-model-id]')
     expect(idInput?.readOnly).toBe(true)

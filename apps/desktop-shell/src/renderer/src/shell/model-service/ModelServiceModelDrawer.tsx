@@ -12,7 +12,9 @@ import {
   Video,
   Wrench
 } from 'lucide-react'
-import { Button, Drawer } from 'antd'
+import { Button } from 'antd'
+
+import { Drawer } from '@platform/ui/components/drawer'
 
 import type { ModelChatProtocol } from '@platform/ai/providers/modelProviderTypes'
 import { isFreeModel, isFreePricedModel } from '@platform/ai/providers/modelFreeStatus'
@@ -39,6 +41,9 @@ const CAPABILITIES: Array<{ id: ModelTypeCapabilityId; label: keyof PlatformText
 ]
 
 /** PLAT-62：模型编辑抽屉（480 宽、88/1fr 栅格、chips + 标准开关）。 */
+export const EDIT_MODEL_TITLE_KEY = 'models.editModel'
+export const ADD_MODEL_TITLE_KEY = 'models.addModel'
+
 export function ModelServiceModelDrawer({
   open,
   labels,
@@ -100,12 +105,18 @@ export function ModelServiceModelDrawer({
   return (
     <Drawer
       className="model-drawer"
-      title={isEditing ? labels.editModel : labels.addModel}
-      placement="right"
-      width={480}
+      mode="modal"
+      // 480 → 最近的档 420：这是三个抽屉里唯一差值在 60px 以内的，形状不变。
+      size="narrow"
       open={open}
       onClose={onClose}
-      footer={null}>
+      titleKey={isEditing ? EDIT_MODEL_TITLE_KEY : ADD_MODEL_TITLE_KEY}
+      // 未知键返回空串、不回退键名：宁可标题空着，也不能把键名念给读者。
+      resolveText={(key) => {
+        if (key === EDIT_MODEL_TITLE_KEY) return labels.editModel
+        if (key === ADD_MODEL_TITLE_KEY) return labels.addModel
+        return ''
+      }}>
       <form
         id="model-drawer-form"
         onSubmit={(event) => {
