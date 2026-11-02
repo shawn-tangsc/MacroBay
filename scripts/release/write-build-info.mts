@@ -10,6 +10,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { BUILD_INFO_FILE_NAME, createBuildInfo } from '../../platform/desktop/packaging/buildInfo'
 
@@ -32,7 +33,7 @@ if (!platform || !arch) {
   process.exit(2)
 }
 
-const root = resolve(dirname(new URL(import.meta.url).pathname), '../..')
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const outDir = outDirArg ? resolve(outDirArg) : join(root, 'build')
 
 const commit = git(root, ['rev-parse', 'HEAD'])
