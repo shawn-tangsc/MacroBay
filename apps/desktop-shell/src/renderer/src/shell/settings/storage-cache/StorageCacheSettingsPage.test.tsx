@@ -187,6 +187,8 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).toContain(resolveStateViewText('en-US', stateViewTextKeys('error', 'unreadable').reason))
     expect(markup).toContain(resolveStateViewText('en-US', STATE_VIEW_ACTION_KEYS.retry))
     expect(markup).not.toContain('data-state="empty"')
+    // 读失败不是「0 个缓存」：汇总行只在拿到数据后出现。
+    expect(markup).not.toContain(platformText['en-US'].storageCache.metaSummary(0, '0 B', 0, 0))
   })
 
   it('shows only the loading state before the first read completes', () => {
@@ -205,6 +207,8 @@ describe('Storage and Cache settings UI', () => {
     expect(markup).not.toContain('data-state="error"')
     expect(markup).not.toContain('data-state="empty"')
     expect(markup).not.toContain(labels.staleDataNotice)
+    // 首读期间不许把「还没读到」画成「0 个缓存 · 总计 0 B」。
+    expect(markup).not.toContain(labels.metaSummary(0, '0 B', 0, 0))
   })
 
   it('keeps the rows visible while a refresh is still running', () => {

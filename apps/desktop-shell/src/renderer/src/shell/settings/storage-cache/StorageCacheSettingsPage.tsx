@@ -220,14 +220,20 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
             ariaLabelKey={SHELL_KEY_FOR_FILTER_GROUP}
             resolveText={(key) => resolveFilterText(key)}
           />
-          <p className="storage-cache-meta">
-            {labels.metaSummary(
-              summary.totalCaches,
-              formatBytes(summary.totalSizeBytes, labels.emptyValue),
-              summary.clearableCaches,
-              summary.sensitiveCaches
-            )}
-          </p>
+          {/*
+           * 汇总行只在 `ready` 上出现：还没读到的时候它会把「0 个缓存 · 总计 0 B」画成事实，
+           * 而注册表恒有条目——那是「还没读到」被写成了「什么都没有」。
+           */}
+          {state.status === 'ready' && caches.length > 0 ? (
+            <p className="storage-cache-meta">
+              {labels.metaSummary(
+                summary.totalCaches,
+                formatBytes(summary.totalSizeBytes, labels.emptyValue),
+                summary.clearableCaches,
+                summary.sensitiveCaches
+              )}
+            </p>
+          ) : null}
         </div>
 
         {/*
