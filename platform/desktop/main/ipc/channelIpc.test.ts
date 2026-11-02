@@ -4,10 +4,11 @@ import type { ChannelIpcPorts } from './channelIpc'
 
 const { registerChannelIpc } = await import('./channelIpc')
 
-/** 22 个渠道管理通道：顺序即注册顺序。 */
+/** 23 个渠道管理通道：顺序即注册顺序。 */
 const MANAGEMENT_CHANNELS = [
   'platform:channels-catalog',
   'platform:channels-list',
+  'platform:channels-list-delivery-targets',
   'platform:channels-get',
   'platform:channels-create',
   'platform:channels-update',
@@ -69,6 +70,7 @@ function sentinelService(prefix: string, methods: readonly string[]) {
 const MANAGEMENT_METHODS = [
   'catalog',
   'list',
+  'listDeliveryTargets',
   'get',
   'create',
   'update',
@@ -114,7 +116,7 @@ function setup() {
 const event = { sender: { id: 42 } } as never
 
 describe('channel ipc surface', () => {
-  it('registers 22 management channels then 3 inbound channels, in that order', () => {
+  it('registers 23 management channels then 3 inbound channels, in that order', () => {
     const { channels, ipcMain } = record()
     const management = sentinelService('management', MANAGEMENT_METHODS)
     const inbound = sentinelService('inbound', INBOUND_METHODS)
@@ -201,6 +203,7 @@ function managementOf(channel: string): string {
   const map: Record<string, string> = {
     'platform:channels-catalog': 'catalog',
     'platform:channels-list': 'list',
+    'platform:channels-list-delivery-targets': 'listDeliveryTargets',
     'platform:channels-get': 'get',
     'platform:channels-create': 'create',
     'platform:channels-update': 'update',

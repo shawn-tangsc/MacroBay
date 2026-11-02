@@ -85,6 +85,17 @@ describe('desktop main IPC surface', () => {
     expect(appSource).not.toMatch(/from ['"][^'"]*products\//)
     expect(appSource).toContain('options.productAgentSeedFactories')
   })
+  it('keeps the read-only delivery-target projection wired on both halves of the seam', () => {
+    // 两半都要判：只有 handler 没有 preload 方法，渲染层拿不到；只有 preload 没有 handler，
+    // 调用会 reject。少一半都能悄悄丢，所以两条分开写、都指向同一个通道常量。
+    expect(channelIpcSource).toContain(
+      'ipcMain.handle(IpcChannels.channelsListDeliveryTargets, () => channelManagementService.listDeliveryTargets())'
+    )
+    expect(preloadSource).toContain('listDeliveryTargets: () => ipcRenderer.invoke(IpcChannels.channelsListDeliveryTargets)')
+    // 只读面：这条投影不许长出现在时之外的写入入口。
+    expect(preloadSource).not.toContain('channelsListDeliveryTargets, write')
+  })
+
   it('keeps critical agent runtime and compatibility handlers registered in app.ts', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
