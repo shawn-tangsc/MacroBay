@@ -80,6 +80,7 @@ import { MainWindowPanelArea } from './workspace/workspaceMainPanelContext'
 import { languageOptions, proxyModeOptions, resolveAntDesignLocale, themeOptions } from './shellOptionTables'
 import { LANGUAGE_LABEL_KEYS, LANGUAGE_SEGMENTED_KEY, resolvePreferencesText } from './shellOptionTables'
 import { THEME_LABEL_KEYS, THEME_SEGMENTED_KEY } from './shellOptionTables'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import { Segmented } from '@platform/ui/components/segmented'
 
 export { resolveAntDesignLocale } from './shellOptionTables'
@@ -1707,6 +1708,8 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
 
   return (
     <ConfigProvider locale={resolveAntDesignLocale(settings.language)} theme={getAntdTheme()} button={WINDOW_ANTD_BUTTON_CONFIG} wave={WINDOW_ANTD_WAVE_CONFIG}>
+      {/* 确认框宿主：必须在 ConfigProvider 里面，`Modal.useModal()` 才吃得到当前主题（深浅色一致）。 */}
+      <ConfirmProvider>
       {/* 主窗所有内容（含产品页）共用 Main 已解析的显示时区；分离窗由 WorkspaceWindowRoot 提供。 */}
       <ShellTimeZoneProvider timeZone={resolveShellTimeZone(settings.timeZone)}>
       {/* 语言上下文：platform/ui 与其他共享组件按显示语言取文案（产品页/停靠面板由各自的外层提供）。 */}
@@ -1814,6 +1817,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
       </div>
       </ShellLanguageProvider>
       </ShellTimeZoneProvider>
+      </ConfirmProvider>
     </ConfigProvider>
   )
 }

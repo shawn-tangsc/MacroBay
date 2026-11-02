@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { ConfigProvider } from 'antd'
+import { ConfirmProvider } from '@platform/ui/components/confirm'
 import enUS from 'antd/locale/en_US'
 import zhCN from 'antd/locale/zh_CN'
 
@@ -161,6 +162,10 @@ export function DetachedWindowThemeShell({ language, contextTheme, appearance, c
       theme={buildWindowAntdTheme(resolvedTheme, accentColor)}
       button={WINDOW_ANTD_BUTTON_CONFIG}
       wave={WINDOW_ANTD_WAVE_CONFIG}
-    >{children}</ConfigProvider>
+    >
+      {/* 分离窗是**独立的渲染根**：主窗那层 Provider 它吃不到，所以这里必须再挂一次——
+          这条债最早就是在分离窗里发生的（深色窗弹浅色确认框）。 */}
+      <ConfirmProvider>{children}</ConfirmProvider>
+    </ConfigProvider>
   )
 }

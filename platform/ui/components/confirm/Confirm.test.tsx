@@ -3,29 +3,36 @@ import { join } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { confirmAction, type ConfirmProps } from './Confirm'
+import type { ConfirmProps } from './Confirm'
+import { confirmOptions } from './confirmOptions'
 
-const { confirmMock } = vi.hoisted(() => ({ confirmMock: vi.fn() }))
-vi.mock('antd', () => ({ Modal: { confirm: confirmMock } }))
+/**
+ * 选项构造是**纯函数**：确认框长什么样与它由谁渲染无关，所以这里不渲染、不 mock。
+ *
+ * 为什么把测试从 `Modal.confirm` 挪到这里：静态方法站在 React 树外、只吃默认主题——深色界面弹
+ * 浅色框就是这么来的。渲染位置由 `ConfirmProvider` 负责（另一份用例），这里只证明**选项本身**
+ * 没有漂移：四个字符串原样透传、危险档焦点在取消、组件里没有一句自造文案。
+ */
 
-const source = readFileSync(join(__dirname, 'Confirm.tsx'), 'utf8')
+const builder = readFileSync(join(__dirname, 'confirmOptions.ts'), 'utf8')
+const component = readFileSync(join(__dirname, 'Confirm.tsx'), 'utf8')
+const provider = readFileSync(join(__dirname, 'ConfirmProvider.tsx'), 'utf8')
 
-function lastOptions(): Record<string, unknown> {
-  return confirmMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+function options(overrides: Partial<ConfirmProps> = {}): Record<string, unknown> {
+  return confirmOptions({
+    title: 'Delete this conversation?',
+    description: 'Deleted conversations cannot be restored.',
+    confirmLabel: 'Delete',
+    cancelLabel: 'Keep it',
+    tone: 'danger',
+    onConfirm: () => undefined,
+    ...overrides
+  }) as unknown as Record<string, unknown>
 }
 
-describe('confirmAction', () => {
+describe('confirm options', () => {
   it('passes every string through and keeps no copy of its own', () => {
-    confirmAction({
-      title: 'Delete this conversation?',
-      description: 'Deleted conversations cannot be restored.',
-      confirmLabel: 'Delete',
-      cancelLabel: 'Keep it',
-      tone: 'danger',
-      onConfirm: () => undefined
-    })
-
-    expect(lastOptions()).toMatchObject({
+    expect(options()).toMatchObject({
       title: 'Delete this conversation?',
       content: 'Deleted conversations cannot be restored.',
       okText: 'Delete',
@@ -34,55 +41,50 @@ describe('confirmAction', () => {
   })
 
   it('uses the danger button and puts initial focus on cancel for destructive actions', () => {
-    confirmAction({
-      title: 'Delete',
-      confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
-      tone: 'danger',
-      onConfirm: () => undefined
-    })
-
-    expect(lastOptions().okButtonProps).toEqual({ danger: true })
-    expect(lastOptions().autoFocusButton).toBe('cancel')
+    expect(options().okButtonProps).toEqual({ danger: true })
+    expect(options().autoFocusButton).toBe('cancel')
   })
 
   it('keeps focus on confirm for ordinary actions', () => {
-    confirmAction({
-      title: 'Apply',
-      confirmLabel: 'Apply',
-      cancelLabel: 'Cancel',
-      tone: 'default',
-      onConfirm: () => undefined
-    })
-
-    expect(lastOptions().okButtonProps).toBeUndefined()
-    expect(lastOptions().autoFocusButton).toBe('ok')
+    const plain = options({ tone: 'default' })
+    expect(plain.okButtonProps).toBeUndefined()
+    expect(plain.autoFocusButton).toBe('ok')
   })
 
   it('lets a rejected confirm keep the dialog open instead of swallowing the error', async () => {
     const onConfirm = vi.fn(async () => {
       throw new Error('write failed')
     })
-    confirmAction({
-      title: 'Delete',
-      confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
-      tone: 'danger',
-      onConfirm
-    })
-
-    const onOk = lastOptions().onOk as () => Promise<void>
+    const onOk = options({ onConfirm }).onOk as () => Promise<void>
     await expect(onOk()).rejects.toThrow('write failed')
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
   it('never falls back to the native confirm or to an internal default string', () => {
-    const withoutComments = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
+    const code = builder.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 
-    expect(withoutComments).not.toContain('window.confirm')
-    expect(withoutComments).not.toMatch(/[\u4e00-\u9fa5]/)
+    expect(code).not.toContain('window.confirm')
+    expect(code).not.toMatch(/[\u4e00-\u9fa5]/)
     // 默认文案一旦存在，七个调用点就会长出七种「确定」。
-    expect(withoutComments).not.toMatch(/'OK'|"OK"|'Cancel'|"Cancel"|'确定'/)
+    expect(code).not.toMatch(/'OK'|"OK"|'Cancel'|"Cancel"|'确定'/)
+  })
+
+  it('constructs the options in exactly one place, so two render paths cannot drift', () => {
+    // `ConfirmProvider`（树内实例）与遗留的 `confirmAction` 都必须走这一份构造。
+    expect(provider).toContain('confirmOptions(')
+    expect(component).toContain('confirmOptions(')
+    // 而且两边都不许自己拼选项：`okText:` / `autoFocusButton:` 只许出现在构造器里。
+    for (const text of [provider, component]) {
+      expect(text).not.toMatch(/okText\s*:/)
+      expect(text).not.toMatch(/autoFocusButton\s*:/)
+    }
+  })
+
+  it('never reaches for the static modal, whose only defect is where it renders', () => {
+    // 静态入口站在 React 树外 ⇒ 只吃 antd 默认主题。守卫是源码级的：四个文件里都不许出现。
+    for (const text of [component, provider, builder]) {
+      expect(text).not.toContain('Modal.confirm(')
+    }
   })
 })
 
