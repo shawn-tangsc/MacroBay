@@ -120,7 +120,7 @@ export const productText = {
             send: '发送', sending: '分析中', resize: '调整日历与舆情高度', failed: '发送未完成，请检查会话记录和模型配置后再试。', modelRequired: '请在通用 Agent 设置中为数字货币市场解读员选择可用模型。',
             roles: { user: '你', assistant: '市场解读员', system: '系统' }, messageStates: { pending: '处理中', error: '运行失败', paused: '已暂停' },
             closeDetail: '关闭详情', detailUnavailable: '该节点的分析详情暂不可用。', readTrace: '最近一次读取', conclusionBlocks: { change: '本次变化', 'causal-chain': '因果链', condition: '判断前提', macro: '宏观侧', evidence: '证据强弱', 'data-gap': '数据缺口' }, changeFacts: '发生变化的字段', changeStructural: '结构性变化', changeDomainAdded: '新增缺失域', changeDomainRemoved: '恢复缺失域', changeCaveatAdded: '新增数据限制', changeCaveatRemoved: '解除数据限制', changeEvidenceAdded: '新增证据', changeEvidenceRemoved: '移除证据', changeObservationsAdded: '新增观测', changeObservationsRemoved: '退出窗口',
-            changeSummary: '本次数据变化', noChange: '本次无新变化（与上一次快照一致）。', latestConclusion: '最新 AI 结论', latestConclusionHint: '点击下方时间轴节点可在左侧查看该节点的完整结论，不影响当前绑定。', latestConclusionEmpty: '暂无已发布的 AI 结论。可在下方时间轴生成首次分析。', latestConclusionLoading: '正在读取最新 AI 结论…', latestConclusionUnavailable: '最新结论详情暂不可用，请稍后重试。', openDetail: '查看完整结论',
+            changeSummary: '本次数据变化', noChange: '本次无新变化（与上一次读取一致）。', latestConclusion: '最新 AI 结论', latestConclusionHint: '点击下方时间轴节点可在左侧查看该节点的完整结论，不影响当前绑定。', latestConclusionEmpty: '暂无已发布的 AI 结论。可在下方时间轴生成首次分析。', latestConclusionLoading: '正在读取最新 AI 结论…', latestConclusionUnavailable: '最新结论详情暂不可用，请稍后重试。', openDetail: '查看完整结论',
             conclusionDirection: { label: '方向', bullish: '偏多', bearish: '偏空', range: '震荡', undecided: '暂不判断', mixed: '信号冲突' },
             directions: { title: '操作方向建议', horizons: { short: '短期（0-24 小时）', medium: '中期（1-7 天）', long: '长期（1-4 周）' }, unknownHorizon: '其他周期', confidence: { label: '置信度', low: '低', medium: '中', high: '高' } },
             /**
@@ -375,7 +375,7 @@ export const productText = {
                 correlationUnavailable: 'ρ 不可用（样本不足），本条没有相关性背书',
                 relative: 'BTC−纳指 {btcMinusIndex} · ETH−BTC {ethMinusBtc}',
                 undetermined: {
-                  'window-not-judged': '该窗口不判读：相关性固定按 24 小时算，切回 24H',
+                  'window-not-judged': '这个窗口不做解读：相关性固定按 24 小时算，切回 24H',
                   'legs-missing': '数据不足，暂不判：{leg}这条腿在该窗口没有数据',
                   stale: '数据不足，暂不判：{leg}的数据已停止更新',
                   'no-match': '看不出是哪一种：几条线没走出能被认出的组合'
@@ -384,7 +384,7 @@ export const productText = {
                   'index-proxy': '纳指取的是代币化代理', 'dxy-synthetic': '美元为合成指数', 'gold-synthetic': '黄金为合成报价'
                 }
               },
-              statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', us10y: '名义资金成本（口径待定）', realRate: '与 BTC 关系最直接', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
+              statusReads: { dxy: '美元↑ 对加密逆风', gold: '与 BTC 同跌 = 贴现率驱动', us10y: '名义资金成本', realRate: '与 BTC 关系最直接', index: '风险偏好', btc: '双重属性：风险 + 流动性', eth: '跟随 BTC，弹性更大' },
               btcIndex: 'BTC − 纳斯达克 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: '样本', coverage: '历史覆盖',
               states: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', limited: '资源受限', unavailable: '不可用', missing: '无数据' },
               liveStateLabels: { disabled: '未启用', connecting: '连接中', live: '实时', stale: '延迟', unavailable: '实时不可用' },
@@ -641,7 +641,7 @@ export const productText = {
               settlementTitle: '上次决议结算',
               settlementActualLabel: '实际',
               settlementPricingBefore: '决议前 1 小时：',
-              settlementPricingAfter: '决议后 {hours} 小时（兜底，非决议前定价）：',
+              settlementPricingAfter: '决议后 {hours} 小时（不是决议前的定价）：',
               settlementOther: '其他',
               settlementPricedDetail: '（实际档当时只被定价 {value}）',
               settlementStatementLink: '声明原文',
@@ -660,7 +660,7 @@ export const productText = {
               loading: '正在加载利率路径…'
             },
             capitalConditions: {
-              title: '资金面', loading: '正在加载资金面…', empty: '暂无已验证的资金面快照。',
+              title: '资金面', loading: '正在加载资金面…', empty: '暂时没有可用的资金面数据。',
               stablecoin: '稳定币', asset: '资产', totalSupply: '总供给',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: '最新', windowDays: '{days} 日', coverage: '仅 {days} 天', streakColumn: '连续',
@@ -737,7 +737,8 @@ export const productText = {
               states: { available: '', stale: '陈旧', unavailable: '不可用', 'source-disabled': '未启用' },
               // 分享卡只回答一件事：这个数是哪个时点的。五种口径各不相同，所以逐条写出来，
               // 不合并成一个读者没见过的词；没有依据时干脆不标，不拿一句话去凑。
-              staleBasis: { curve: '约 24 小时前（取自曲线）', lastClose: '最近一次收盘', snapshot: '约 24 小时前（读数已偏旧）', seriesReturn: '约 24 小时前（按日频数据算出）', seriesLevel: '最新水平（当天没有 24 小时涨跌）', published: '上一交易日的官方收盘' },
+              // 只在读数不是名字所承诺的口径时才写一句；24 小时的涨跌本来就有下面的时刻在说。
+              staleBasis: { lastClose: '最近一次收盘', seriesLevel: '最新水平（当天没有 24 小时涨跌）', published: '上一交易日的官方收盘' },
               reasons: { 'not-collected': '未采集', 'query-failed': '读取失败', 'capital-gate': '随资金面数据不可用', 'etf-unavailable': 'ETF 读数不可用' },
               changeReasons: { 'no-baseline': '无基线', 'insufficient-window': '窗口不足' },
               // 变化对比的基准：滚动 24 小时写作 1d，交易日取上一收盘，发布型取上次发布。
@@ -804,7 +805,7 @@ export const productText = {
                 listSeparator: '、',
                 sources: {
                   stablecoin: 'DefiLlama 稳定币', etf: '0xRouter ETF', fearGreed: 'Alternative.me', funding: 'Binance 合约',
-                  market: '行情快照', macro: '宏观行情', rates: '宏观利率', calendar: '宏观日历', news: '新闻来源',
+                  market: '行情数据', macro: '宏观行情', rates: '宏观利率', calendar: '宏观日历', news: '新闻来源',
                   analysis: '分析结论', webSearch: 'WebSearch 证据', editorial: '日报 AI 编辑', backfill: '历史接口回补',
                   settings: '日报生成设置', collector: '情报源', system: '生成服务'
                 },
@@ -834,7 +835,7 @@ export const productText = {
                   enableSource: '在「配置看板来源」里启用该来源，等一次采集完成后再生成。',
                   checkSource: '检查来源网络与凭据，等一次成功采集后再生成；沿用上次数据时按陈旧值阅读。',
                   waitCollection: '等一次采集完成后再生成。',
-                  restoreCapital: '先恢复稳定币/资金面快照，ETF 会随之恢复。',
+                  restoreCapital: '先恢复稳定币与资金面数据，ETF 会随之恢复。',
                   etfAfterOpen: '08:00 前 ETF 还没有可用历史；开盘后再生成，或确认 0xRouter ETF 来源已启用。',
                   waitNextRelease: '等下一次发布或上一交易日数据后再比较；本期不显示变化。',
                   widenWindow: '把统计窗口调到 24 小时以上，或等下一期。',
@@ -879,7 +880,7 @@ export const productText = {
                 stageHelpLabel: '查看{stage}的阶段说明',
                 // 每个阶段固定的一行逻辑说明，只在问号 tooltip 里出现：时间线本身不铺长文。
                 stageHelp: {
-                  source: '按 edition cutoff 读取 as-of 快照：窗口、源与禁用/缺失状态，不取晚于 cutoff 的值。',
+                  source: '按本期截止时间读取当时的数据：窗口、源与禁用/缺失状态，不取晚于截止时间的值。',
                   candidates: '汇总 24h 宏观/新闻、7 日事件、数据行、杠杆与利率路径，去重后算 relevance/materiality 并套用上限。',
                   selection: '把完整候选交给 AI，由它给出 shown/items、focus 与 hidden reason；缺 consensus 不是隐藏理由。',
                   'field-backfill': '执行 AI 请求的字段/回补，校验 asOf ≤ cutoff；本地 store 优先，缺失才查历史 API，失败记 gap。',
@@ -2012,7 +2013,7 @@ export const productText = {
             send: 'Send', sending: 'Analyzing', resize: 'Resize calendar and sentiment', failed: 'Send did not complete. Check the conversation and model configuration before retrying.', modelRequired: 'Select an available model for the crypto analyst in the shared Agent settings.',
             roles: { user: 'You', assistant: 'Market analyst', system: 'System' }, messageStates: { pending: 'Processing', error: 'Run failed', paused: 'Paused' },
             closeDetail: 'Close details', detailUnavailable: 'Details for this entry are unavailable.', readTrace: 'Last read', conclusionBlocks: { change: 'What changed', 'causal-chain': 'Causal chain', condition: 'Premises', macro: 'Macro', evidence: 'Evidence strength', 'data-gap': 'Data gaps' }, changeFacts: 'Fields that changed', changeStructural: 'Structural changes', changeDomainAdded: 'Missing domains added', changeDomainRemoved: 'Missing domains resolved', changeCaveatAdded: 'Data caveats added', changeCaveatRemoved: 'Data caveats cleared', changeEvidenceAdded: 'Evidence added', changeEvidenceRemoved: 'Evidence removed', changeObservationsAdded: 'Observations added', changeObservationsRemoved: 'Left the window',
-            changeSummary: 'What changed', noChange: 'No new change since the previous snapshot.', latestConclusion: 'Latest AI conclusion', latestConclusionHint: 'Select a timeline entry below to read that entry in full on the left; the current binding is unchanged.', latestConclusionEmpty: 'No published AI conclusion yet. Start the first analysis from the timeline below.', latestConclusionLoading: 'Reading the latest AI conclusion…', latestConclusionUnavailable: 'The latest conclusion is unavailable. Try again later.', openDetail: 'Read in full',
+            changeSummary: 'What changed', noChange: 'No new change since the previous read.', latestConclusion: 'Latest AI conclusion', latestConclusionHint: 'Select a timeline entry below to read that entry in full on the left; the current binding is unchanged.', latestConclusionEmpty: 'No published AI conclusion yet. Start the first analysis from the timeline below.', latestConclusionLoading: 'Reading the latest AI conclusion…', latestConclusionUnavailable: 'The latest conclusion is unavailable. Try again later.', openDetail: 'Read in full',
             conclusionDirection: { label: 'Direction', bullish: 'Bullish', bearish: 'Bearish', range: 'Range-bound', undecided: 'No call yet', mixed: 'Conflicting signals' },
             directions: { title: 'Operation direction', horizons: { short: 'Short term (0-24h)', medium: 'Medium term (1-7d)', long: 'Long term (1-4w)' }, unknownHorizon: 'Other horizon', confidence: { label: 'Confidence', low: 'low', medium: 'medium', high: 'high' } },
             /**
@@ -2255,7 +2256,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                 correlationUnavailable: 'ρ unavailable (too few samples); this reading has no correlation backing',
                 relative: 'BTC−index {btcMinusIndex} · ETH−BTC {ethMinusBtc}',
                 undetermined: {
-                  'window-not-judged': 'Not judged on this window: the correlation is always the 24-hour one — switch back to 24H',
+                  'window-not-judged': 'This window is not interpreted: the correlation is always the 24-hour one — switch back to 24H',
                   'legs-missing': 'Not enough data to judge: {leg} has no value in this window',
                   stale: 'Not enough data to judge: {leg} stopped updating',
                   'no-match': 'No recognisable combination: these lines do not fit any of the five scenarios'
@@ -2264,7 +2265,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
                   'index-proxy': 'the index leg is the tokenised proxy', 'dxy-synthetic': 'the dollar is a synthetic index', 'gold-synthetic': 'gold is a synthetic quote'
                 }
               },
-              statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', us10y: 'Nominal cost of money (convention open)', realRate: 'The most direct link to BTC', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
+              statusReads: { dxy: 'A rising dollar is a crypto headwind', gold: 'Falling with BTC = discount-rate driven', us10y: 'Nominal cost of money', realRate: 'The most direct link to BTC', index: 'Risk appetite', btc: 'Two natures: risk and liquidity', eth: 'Follows BTC with more beta' },
               btcIndex: 'BTC − Nasdaq 100 · 1h', ethBtc: 'ETH − BTC · 1h', pp: 'pp', unit: 'USDT', samples: 'Samples', coverage: 'History coverage',
               states: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', limited: 'Resource limited', unavailable: 'Unavailable', missing: 'No data' },
               liveStateLabels: { disabled: 'Disabled', connecting: 'Connecting', live: 'Live', stale: 'Delayed', unavailable: 'Live unavailable' },
@@ -2517,7 +2518,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               settlementTitle: 'Last decision settlement',
               settlementActualLabel: 'Outcome',
               settlementPricingBefore: 'One hour before: ',
-              settlementPricingAfter: '{hours}h after the decision (fallback, not a pre-decision price):',
+              settlementPricingAfter: '{hours}h after the decision (not a pre-decision price):',
               settlementOther: 'other',
               settlementPricedDetail: ' (the realised band was priced at {value} then)',
               settlementStatementLink: 'Statement',
@@ -2536,7 +2537,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               loading: 'Loading the policy path…'
             },
             capitalConditions: {
-              title: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'No verified capital-conditions snapshot.',
+              title: 'Capital conditions', loading: 'Loading capital conditions…', empty: 'Capital-conditions data is not available yet.',
               stablecoin: 'Stablecoin', asset: 'Asset', totalSupply: 'Total supply',
               change1d: '1D', change7d: '7D', change30d: '30D',
               latest: 'Latest', windowDays: '{days}-day', coverage: '({days} days only)', streakColumn: 'Streak',
@@ -2614,7 +2615,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
               // This reading is a fallback, not the exact 24h value; unmarked, the poster reads as live.
               // Where the fallback came from: the curve's last point is not the exact 24h pair, and the
               // last close is not today's reading.
-              staleBasis: { curve: 'About 24 hours ago (from curve)', lastClose: 'Most recent close', snapshot: 'About 24 hours ago (reading is past its freshness window)', seriesReturn: 'About 24 hours ago (computed from daily data)', seriesLevel: 'Latest level (no 24-hour move that day)', published: 'Official close of the prior session' },
+              staleBasis: { lastClose: 'Most recent close', seriesLevel: 'Latest level (no 24-hour move that day)', published: 'Official close of the prior session' },
               reasons: { 'not-collected': 'Not collected', 'query-failed': 'Read failed', 'capital-gate': 'Unavailable with the capital snapshot', 'etf-unavailable': 'ETF reading unavailable' },
               changeReasons: { 'no-baseline': 'No baseline', 'insufficient-window': 'Window too short' },
               // What each change is measured against: a rolling window, a session close, a release.
