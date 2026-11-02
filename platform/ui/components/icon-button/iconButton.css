@@ -75,7 +75,15 @@
 }
 
 /* 焦点环是全仓统一的一处：2px accent、offset 2。不许 outline:none 而无替代。 */
-.icon-button:focus-visible {
+/*
+ * 特异性要压过 antd：它自带
+ * `:where(.css-x).ant-btn:not(:disabled):focus-visible`（三个类），把普通的
+ * `.icon-button:focus-visible`（两个类）压掉——实际生效的是 antd 的 3px、offset 1、对比度 2.45:1。
+ *
+ * 「规范这么写」不等于「浏览器这么算」。所以这里把类提到四个，让 2px accent 真正生效；
+ * 验收读 `getComputedStyle` 的 outline 实际值，不看截图。
+ */
+.icon-button.ant-btn:not(:disabled):focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

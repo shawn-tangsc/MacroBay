@@ -208,6 +208,13 @@ describe('IconButton', () => {
     expect(html).toContain('<svg')
   })
 
+  it('out-ranks antd\'s own focus ring instead of merely declaring one', () => {
+    // antd 自带 `:where(.css-x).ant-btn:not(:disabled):focus-visible`（三个类）。只写
+    // `.icon-button:focus-visible` 会被它压掉——规范这么写，不等于浏览器这么算。
+    expect(rules).toContain('.icon-button.ant-btn:not(:disabled):focus-visible')
+    expect(rules).not.toMatch(/^\.icon-button:focus-visible/m)
+  })
+
   it('wears the one focus ring: 2px accent, offset 2, never removed without a replacement', () => {
     expect(rules).toContain('outline: 2px solid var(--accent)')
     expect(rules).toContain('outline-offset: 2px')

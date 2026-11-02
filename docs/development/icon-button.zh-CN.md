@@ -70,7 +70,11 @@ import { IconButton } from '@platform/ui/components/icon-button'
   键盘 Tab 进来也读得到；原生 `title` 不存在。
 - **`disabled` 与 `tooltipKey` 不并存**：禁用的按钮不进 Tab、也接不到 focus，它的提示只有鼠标够得着。
   原因重要就写成可见说明——这个组合在类型上就被拒掉。
-- **焦点环只有一处**：`:focus-visible` 2px accent 描边、offset 2；样式表里没有任何 `outline: none`。
+- **焦点环只有一条，而且必须真的生效**：`:focus-visible` 在**计算样式**里必须是 **2px accent**
+  描边、**offset 2**。触发器底层是 antd `Button`，它自带的 `focus-visible` 规则会压过普通的
+  `.icon-button:focus-visible`；组件要提高特异性，直到实际生效的是那条 2px accent 环。验收用
+  `getComputedStyle` 读描边宽度/颜色（或环的 box-shadow），不看截图；环色对页面底色的对比度
+  **≥ 3:1**。没有 `outline: none` 而不给替代环。
 - **`type="button"`**：放在表单里不会顺手提交。
 - **不承载语义色**：图标按钮一律中性色。危险动作是带文字的按钮，不是红色图标。
 - **加载中必须看得见：对比度不低于 3:1。** 禁用态低于非文字控件 3:1 的下限可以豁免，加载态不行——

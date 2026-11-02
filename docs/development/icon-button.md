@@ -76,16 +76,12 @@ The pixel values live in one table in the component and are written to the eleme
 - **`disabled` and `tooltipKey` never coexist.** A disabled button leaves the tab order and cannot
   take focus, so its tooltip would only ever be reachable with a mouse. When the reason matters,
   write it as visible text; the type rejects the combination.
-- **One focus ring:** `:focus-visible` gets a 2 px accent outline with a 2 px offset. There is no
-  `outline: none` anywhere in the stylesheet.
-- **`type="button"`:** an icon button inside a form never submits it.
-- **No colour semantics:** the icon button is neutral. A destructive action is a button with text,
-  not a red icon.
-- **Loading must stay visible: contrast ≥ 3:1.** A disabled control may sit below the 3:1
-  non-text floor and be exempt; a loading one may not — the reader has to see *which* button is
-  busy. So `loading` carries its own `data-state="loading"` marker and its own colour token, and it
-  must never inherit the disabled paint. A loading state that renders at the disabled grey
-  (measured 2.27:1 dark / 1.84:1 light) fails acceptance.
+- **One focus ring — and it must win:** `:focus-visible` renders a **2 px accent** outline with a
+  **2 px offset** *in the computed style*. The trigger is an antd `Button`, whose own
+  `focus-visible` rule outranks a plain `.icon-button:focus-visible` selector; the component raises
+  its specificity until the 2 px accent ring is what actually applies. Verify with
+  `getComputedStyle` (outline width/colour or the ring's box-shadow), never by eyeballing a
+  screenshot, and keep the ring colour at **≥ 3:1** against the app background. There is no `outline: none` without a replacement.
 
 ```tsx
 // Correct: one icon, one key, one size word.
