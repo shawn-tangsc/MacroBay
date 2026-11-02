@@ -3226,6 +3226,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       sendTestSent: 'Sent — a banner appears in the top right and goes away after six seconds. Click it to open the notification centre.',
       sendTestToastOff: 'Sent — in-app banners are off, so nothing appears in the top right. It is in the notification centre; open the bell.',
       sendTestFailed: 'Not sent — this notification was not recorded. Try again in a moment.',
+      sendTestDesktopQueued: 'The desktop alert was handed to the system; no banner usually means the system muted or blocked it.',
+      sendTestDesktopFailed: (reason) => `The desktop alert did not go out: ${reason}`,
       toastClose: 'Dismiss this notification',
       sendTestHint:
         'This only proves the pipeline works; it describes no real event. Whether a desktop banner appears depends on the system permission status above — when it says the status could not be checked, do not read that as the system blocked it.',
