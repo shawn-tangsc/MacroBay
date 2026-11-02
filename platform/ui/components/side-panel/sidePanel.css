@@ -2,7 +2,7 @@
  * 并排面板：出现时把主内容挤窄，不盖住它——这是它与 `Drawer` 的唯一分界。
  * 宽度只有两档，`flex` 档的比例上限写在组件里（`min(480px, 46vw)`），调用点不传数字。
  *
- * 宽度与位移都不做过渡：那会连续重排主内容。只让整块淡入 120ms。
+ * 宽度与位移都不做过渡：那会连续重排主内容。只让整块按 `--motion-enter` 淡入。
  */
 .side-panel {
   display: flex;
@@ -14,7 +14,7 @@
   height: 100%;
   border-right: 1px solid var(--border);
   background: var(--surface);
-  animation: side-panel-fade 120ms ease-out;
+  animation: side-panel-fade var(--motion-enter) ease-out;
 }
 
 .side-panel__header {
@@ -60,9 +60,7 @@
   }
 }
 
-/* 系统关了动效就一律不动：功能与信息一个不少。 */
-@media (prefers-reduced-motion: reduce) {
-  .side-panel {
-    animation: none;
-  }
-}
+/*
+ * 降级只有一处：`tokens.css` 在 `prefers-reduced-motion: reduce` 下把 `--motion-*` 全部归零。
+ * 这里不再写第二个 `@media`——同一件事两处实现，改一处就会漏另一处。
+ */

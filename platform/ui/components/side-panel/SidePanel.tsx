@@ -46,12 +46,21 @@ export type SidePanelProps = {
 export function SidePanel(props: SidePanelProps): ReactElement | null {
   const { open, onClose, size, titleKey, footer, children, className, resolveText } = props
   const panelRef = useRef<HTMLElement>(null)
+  /** 打开前焦点在哪：收起时还回去。谁移动了焦点，谁负责还原。 */
+  const returnFocusRef = useRef<HTMLElement | null>(null)
   const collapseLabel = usePanelText()()
 
-  // 打开时把焦点送进**正文**里第一个可操作项；正文没有可操作项时才落在收起键上。
-  // 不做焦点陷阱：Tab 仍能走回主内容——这是它与 `Drawer` 在键盘上的区别。
+  // 开：记住原焦点，再把它送进**正文**里第一个可操作项（正文没有才落在收起键上）。
+  // 关：把焦点还回去——三个调用点各写一份等于没人写，而键盘用户的位置会掉到 body 上。
+  // 不做焦点陷阱：Tab 仍能走回主内容，这是它与 `Drawer` 在键盘上的区别。
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      returnFocusRef.current?.focus()
+      returnFocusRef.current = null
+      return
+    }
+    const active = document.activeElement
+    returnFocusRef.current = active instanceof HTMLElement ? active : null
     const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     const body = panelRef.current?.querySelector<HTMLElement>('.side-panel__body')
     const target = body?.querySelector<HTMLElement>(selector) ?? panelRef.current?.querySelector<HTMLElement>(selector)

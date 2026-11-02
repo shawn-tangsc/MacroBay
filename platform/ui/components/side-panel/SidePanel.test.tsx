@@ -92,11 +92,46 @@ describe('SidePanel', () => {
     expect(collapse.getAttribute('aria-label')).toBe('收起面板')
   })
 
-  it('fades in over 120ms and stops when the system asks for reduced motion', () => {
-    expect(css).toContain('animation: side-panel-fade 120ms')
-    expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*?animation: none/)
+  it('fades in through the motion token, with no duration literal of its own', () => {
+    expect(css).toContain('animation: side-panel-fade var(--motion-enter)')
+    // 组件里不许出现 ms/s 字面量：降级由 tokens.css 一处把 --motion-* 归零。
+    expect(css).not.toMatch(/\b\d+(\.\d+)?m?s\b/)
+    expect(css).not.toMatch(/@media\s*\(prefers-reduced-motion/)
     // 宽度不参与过渡：那会连续重排主内容。
     expect(css).not.toMatch(/transition:[^;]*width/)
+  })
+
+  it('gives focus back to whatever had it when the panel closes', async () => {
+    const outside = document.createElement('button')
+    outside.textContent = 'trigger'
+    document.body.append(outside)
+    outside.focus()
+
+    const host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <SidePanel onClose={() => undefined} open resolveText={key} size="rail" titleKey="ui.test.panelTitle">
+          <button type="button" data-inner>
+            inner
+          </button>
+        </SidePanel>
+      )
+    })
+    expect(document.activeElement?.hasAttribute('data-inner')).toBe(true)
+
+    await act(async () => {
+      root!.render(
+        <SidePanel onClose={() => undefined} open={false} resolveText={key} size="rail" titleKey="ui.test.panelTitle">
+          <button type="button" data-inner>
+            inner
+          </button>
+        </SidePanel>
+      )
+    })
+    // 谁移动了焦点谁负责还原：关掉之后焦点回到打开前那一个元素，不是掉到 body 上。
+    expect(document.activeElement).toBe(outside)
   })
 
   it('renders nothing at all while closed, leaving no empty shell', async () => {

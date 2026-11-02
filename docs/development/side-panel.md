@@ -33,4 +33,8 @@ Yes → `SidePanel`. No → `Drawer`.
 - **Two sizes only, and no pixels from call sites.** `flex` keeps its `46vw` cap internally.
 - **The collapse control belongs to the component**, named from its own copy table — a resolver may
   return an empty string for an unknown key, and an empty name is a nameless button.
-- **Width never animates.** Only a 120 ms opacity fade, off entirely under `prefers-reduced-motion`.
+- **Width never animates**, and the arrival fade reads `--motion-enter` — the component holds no
+  duration literal. `tokens.css` zeroes every `--motion-*` under `prefers-reduced-motion`, in one
+  place, so there is no second media query here.
+- **Focus goes back where it came from.** The component remembers what had focus when it opened and
+  restores it on close; a caller does not have to (three call sites would each forget differently).
