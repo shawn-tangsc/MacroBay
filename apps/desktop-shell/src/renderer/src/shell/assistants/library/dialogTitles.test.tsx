@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AssistantTemplateDetail } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
+import { ToastHost } from '@platform/ui/components/toast'
 
 import { platformText } from '../../../i18n/platformText'
 import { AssistantTemplateDetailDialog } from './AssistantTemplateDetailDialog'
@@ -32,7 +33,8 @@ async function mount(node: React.ReactElement): Promise<void> {
   document.body.append(host)
   root = createRoot(host)
   await act(async () => {
-    root!.render(node)
+    // 导入弹窗迁到 `useToast` 后要宿主；`useToast` 是 fail-closed，没有宿主直接抛。
+    root!.render(<ToastHost>{node}</ToastHost>)
   })
   await act(async () => {
     await Promise.resolve()
