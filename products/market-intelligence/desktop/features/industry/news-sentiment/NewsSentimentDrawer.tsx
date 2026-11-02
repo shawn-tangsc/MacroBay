@@ -313,7 +313,7 @@ export function NewsSentimentDrawer(props: {
               // of replacing a still-true reading with an error panel.
               <p className="mi-news-drawer__stale-read" data-news-sentiment-stale-read role="status">
                 <span>{text.staleRead}</span>
-                <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+                <button type="button" className="text-action" onClick={props.onRefresh}>{text.retry}</button>
               </p>
             ) : null}
             {!props.failed && props.loading && !props.view ? (

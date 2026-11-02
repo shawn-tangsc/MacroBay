@@ -230,8 +230,13 @@ describe('PLAT-55 masked API key field', () => {
 
     expect(inputOf(container).value).toBe(preview)
     expect(container.textContent).toContain(labels.revealApiKeyBridgeFailed)
-    // 瞬时失败：重试可能改变结果，按钮必须在。
+    // 瞬时失败：重试可能改变结果，动作必须在——但它是**句子里的文字动作**，不是第二个按钮。
     expect(container.textContent).toContain(labels.retry)
+    const retry = [...container.querySelectorAll('button')].find((button) => button.textContent === labels.retry)
+    // 颜色、字号、焦点环都由共享类给；调用点不许自带走一套（antd 链接色不在 token 里）。
+    expect(retry?.className).toContain('text-action')
+    expect(retry?.getAttribute('style')).toBeNull()
+    expect(container.querySelector('.ant-btn-link')).toBeNull()
     expect(container.innerHTML).not.toContain(savedKey)
   })
 

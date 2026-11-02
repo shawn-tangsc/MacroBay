@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Button, Input } from 'antd'
+import { Input } from 'antd'
 import { Check, Copy, Eye, EyeOff, Pencil } from 'lucide-react'
 
 import { IconButton } from '@platform/ui/components/icon-button'
@@ -286,9 +286,9 @@ export function WebSearchApiKeyField({
             {revealError.text}
             {/* 只有「重试可能改变结果」的失败才给按钮：确定性失败上的按钮永远不会成功。 */}
             {revealError.retryable ? (
-              <Button type="link" size="small" onClick={() => void reveal()}>
+              <button type="button" className="text-action" onClick={() => void reveal()}>
                 {labels.retry}
-              </Button>
+              </button>
             ) : null}
           </span>
         ) : null}

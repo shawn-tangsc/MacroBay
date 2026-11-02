@@ -184,7 +184,7 @@ export function NewsSentimentCard(props: {
             // panel would throw away a reading that is still true, only older.
             <p className="mi-news-sentiment__stale-read" data-news-sentiment-stale-read role="status">
               <span>{text.staleRead}</span>
-              <Button onClick={props.onRefresh} size="small" type="link">{text.retry}</Button>
+              <button type="button" className="text-action" onClick={props.onRefresh}>{text.retry}</button>
             </p>
           ) : null}
           <div
