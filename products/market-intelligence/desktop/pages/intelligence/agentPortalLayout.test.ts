@@ -13,6 +13,10 @@ const dashboardStyles = readFileSync(
   resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'),
   'utf8'
 )
+const sampleSurfaceStyles = readFileSync(
+  resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/sampleMode.css'),
+  'utf8'
+)
 const portal = readFileSync(
   resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/AgentPortal.tsx'),
   'utf8'
@@ -140,18 +144,39 @@ describe('market intelligence agent portal layout', () => {
     expect(portraitImageRule).not.toContain('brightness(0.72)')
   })
 
-  it('maps the intelligence dashboard palette to platform tokens in light theme', () => {
+  it('maps the portal palette to platform tokens in light theme', () => {
+    // The palette belongs to the portal root, not to the dashboard shell: the brief page is a
+    // *sibling* of the dashboard under `.mi-sample-surface`, so tokens declared on the dashboard
+    // never reach it — 58 `var()` references resolved to nothing, silently.
+    const lightPortalRule = cssRule(sampleSurfaceStyles, ":root[data-theme='light'] .mi-sample-surface")
     const lightDashboardRule = cssRule(dashboardStyles, ":root[data-theme='light'] .mi-crypto-dashboard")
     const lightHeadingRule = cssRule(dashboardStyles, ":root[data-theme='light'] .mi-crypto-dashboard h1")
 
-    expect(lightDashboardRule).toContain('--mi-dashboard-line: var(--border)')
-    expect(lightDashboardRule).toContain('--mi-dashboard-surface: var(--surface)')
+    expect(lightPortalRule).toContain('--mi-dashboard-line: var(--border)')
+    expect(lightPortalRule).toContain('--mi-dashboard-surface: var(--surface)')
+    expect(lightPortalRule).toContain('--mi-dashboard-text: var(--text)')
+    expect(lightPortalRule).toContain('--mi-dashboard-muted: var(--muted)')
+    expect(lightPortalRule).toContain('--mi-dashboard-lime: color-mix(in srgb, var(--accent)')
     expect(lightDashboardRule).toContain('--mi-dashboard-surface-muted: var(--surface-soft)')
-    expect(lightDashboardRule).toContain('--mi-dashboard-text: var(--text)')
-    expect(lightDashboardRule).toContain('--mi-dashboard-muted: var(--muted)')
-    expect(lightDashboardRule).toContain('--mi-dashboard-lime: color-mix(in srgb, var(--accent)')
     expect(lightDashboardRule).toContain('var(--bg)')
     expect(lightHeadingRule).toContain('color: var(--text-strong)')
+    // One owner per value: the dashboard shell must not re-declare what the portal root owns.
+    expect(lightDashboardRule).not.toContain('--mi-dashboard-line:')
+    expect(lightDashboardRule).not.toContain('--mi-dashboard-muted:')
+  })
+
+  it('declares the portal palette once, on the portal root both pages share', () => {
+    const portalRootRule = cssRule(sampleSurfaceStyles, '.mi-sample-surface')
+    const dashboardRule = cssRule(dashboardStyles, '.mi-crypto-dashboard')
+
+    for (const token of [
+      '--mi-dashboard-line', '--mi-dashboard-surface', '--mi-dashboard-text',
+      '--mi-dashboard-muted', '--mi-dashboard-lime', '--mi-dashboard-positive',
+      '--mi-dashboard-caution', '--mi-dashboard-negative'
+    ]) {
+      expect(portalRootRule, token).toContain(`${token}:`)
+      expect(dashboardRule, token).not.toContain(`${token}:`)
+    }
   })
 
   it('uses fixed-width cards that wrap from the left without stretching the portal grid', () => {

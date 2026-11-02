@@ -6,6 +6,11 @@
  * 32px。断点算术因此和读代码时的直觉对不上（读者 2026-10-27 的全屏换行就卡在 4px 上）。现在只留一处：
  * 下面这些值就是当时实际生效的值，渲染结果不变。
  */
+/*
+  门户级的语义色（描边、正文、静音、强调、正负、警示）挪到 `.mi-sample-surface`——看板与日报页
+  共用同一套值。名字里的 `dashboard` 是历史遗留（这组值最早只有看板用），语义上是「门户内容区的
+  色板」，两个页面指的是同一件事，所以只挪定义、不改名：改 58 处引用等于制造 58 次挑错词的机会。
+*/
 .mi-crypto-dashboard {
   --mi-dashboard-page-inline: 32px;
   --mi-dashboard-page-block: 32px;
@@ -13,15 +18,7 @@
   --mi-dashboard-compact-gap: 10px;
   --mi-dashboard-context-width: 260px;
   --mi-dashboard-card-radius: 12px;
-  --mi-dashboard-line: color-mix(in srgb, var(--border) 86%, var(--accent));
-  --mi-dashboard-surface: #15191d;
   --mi-dashboard-surface-muted: #101416;
-  --mi-dashboard-text: #edf0ed;
-  --mi-dashboard-muted: color-mix(in srgb, var(--text) 62%, transparent);
-  --mi-dashboard-lime: #d4ff58;
-  --mi-dashboard-positive: #55d69b;
-  --mi-dashboard-caution: #e5ae43;
-  --mi-dashboard-negative: #f16d73;
   --mi-dashboard-band-block-padding: 20px;
   --mi-dashboard-capital-content-column-gap: 32px;
   --mi-dashboard-capital-header-row-gap: 8px;
@@ -487,12 +484,7 @@
  * unreadable as text on white, so the accent is mixed toward `--text-strong`.
  */
 :root[data-theme='light'] .mi-crypto-dashboard {
-  --mi-dashboard-line: var(--border);
-  --mi-dashboard-surface: var(--surface);
   --mi-dashboard-surface-muted: var(--surface-soft);
-  --mi-dashboard-text: var(--text);
-  --mi-dashboard-muted: var(--muted);
-  --mi-dashboard-lime: color-mix(in srgb, var(--accent) 30%, var(--text-strong));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 180px),
     var(--bg);
