@@ -118,7 +118,10 @@ describe('Popover call sites', () => {
       const text = readFileSync(file, 'utf8')
       if (!text.includes(OUR_IMPORT)) continue
       for (const match of text.matchAll(/<Popover\b/g)) {
-        const window = text.slice(match.index ?? 0, (match.index ?? 0) + 400)
+        // 只看到开标签的 `>` 为止：再往后就是兄弟元素，会把它们的 labelKey 误算成本组件的。
+        const raw = text.slice(match.index ?? 0, (match.index ?? 0) + 400)
+        const tagEnd = raw.indexOf('>')
+        const window = tagEnd === -1 ? raw : raw.slice(0, tagEnd + 1)
         const literal = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec(window)?.[1]
         // 传变量/常量的调用点由定义处判，这里只判字面量。
         if (literal === undefined || looksLikeTextKey(literal)) continue
