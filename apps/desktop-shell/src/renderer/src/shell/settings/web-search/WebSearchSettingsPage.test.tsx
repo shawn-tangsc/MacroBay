@@ -237,8 +237,9 @@ describe('PLAT-60 settings page shell', () => {
 
     const container = document.createElement('div')
     document.body.append(container)
-    root = createRoot(container)
-    await act(async () => root.render(pageElement()))
+    const pageRoot = createRoot(container)
+    root = pageRoot
+    await act(async () => pageRoot.render(pageElement()))
     const loadingBefore = container.querySelector('[data-state="error"]')
     expect(loadingBefore).toBeNull()
 
