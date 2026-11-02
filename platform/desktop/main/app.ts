@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, protocol, safeStorage, session, shell, type IpcMainInvokeEvent, type Tray } from 'electron'
 import { mkdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { release } from 'node:os'
+import { release, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import type { AgentChatRuntimeRequest, AgentChatRuntimeResult } from '../../ai/agent-platform/runtime/agentChatRuntime'
@@ -186,6 +186,7 @@ import { persistSkillRowChanges } from './skillRowPersistence'
 import { scheduleTaskAutomationMaintenance } from './taskAutomationMaintenance'
 import { configureTaskAutomationSmokeProfile } from './taskAutomationSmokeProfile'
 import { configureProductAcceptanceProfile, resolveProductAcceptanceProfileOptIn } from './productAcceptanceProfile'
+import { ensureWritableTempDirectory } from './ensureWritableTempDirectory'
 import {
   appendWorkspaceTestFixtureManifests,
   createWorkspaceTestFixtureAgentSeed,
@@ -239,6 +240,15 @@ if (!app.isPackaged && devUserDataOverride) {
   mkdirSync(resolvedUserData, { recursive: true })
   app.setPath('userData', resolvedUserData)
 }
+// 临时目录必须在任何 SQLite 打开之前确认可写：受限会话里 TEMP/TMP 可能指向 `D:\tmp`
+// 这类建不出来的目录，SQLite 建临时文件会返回 `unable to open database file`，
+// 崩在启动迁移上（见 ensureWritableTempDirectory 的注释）。
+const writableTempDirectory = ensureWritableTempDirectory({
+  osTempDirectory: tmpdir(),
+  fallbackDirectory: join(app.getPath('userData'), 'tmp'),
+  environment: process.env,
+  setPath: (name, value) => app.setPath(name, value)
+})
 // Windows derives notification identity and taskbar grouping from the AppUserModelID.
 // Without it the packaged app shows up as a generic Electron process.
 if (process.platform === 'win32') app.setAppUserModelId(APP_BUNDLE_ID)
@@ -281,6 +291,13 @@ const {
   mainWindowHost,
   taskIpcScheduleValidationOptions
 } = platformCore
+if (writableTempDirectory.redirected) {
+  // 只在真的换了目录时记一行：正常机器上启动日志不因此变吵，出问题时又能看出换过。
+  appLog.log('warn', 'app.temp.redirected', {
+    directory: writableTempDirectory.directory,
+    osTempError: writableTempDirectory.osTempError
+  })
+}
 async function refreshTaskStateAfterCommit(): Promise<void> {
   const state = await agentServices.state.getState()
   agentTaskSchedulerRuntimeService.syncFromState(state)
