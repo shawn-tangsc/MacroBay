@@ -12,8 +12,10 @@ import { shortenEventTitle } from './dailyBriefingEventTitle'
  * so the type is larger, the hierarchy is editorial, and the background is paper rather than the
  * product's dark working surface.
  */
-export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, omitFallbackReadings = false, formatTime }: Readonly<{
+export function DailyBriefingShareCard({ document: doc, text: baseText, locale, eventTitles, readOnly = false, omitFallbackReadings = false, completenessNote, formatTime }: Readonly<{
   document: DailyBriefingDocument
+  /** Already produced by the one place that decides completeness; the card only renders it. */
+  completenessNote?: string
   text: DailyBriefingText
   locale: 'zh-CN' | 'en-US'
   eventTitles?: Record<string, string>
@@ -76,6 +78,8 @@ export function DailyBriefingShareCard({ document: doc, text: baseText, locale, 
         <p className="mi-brief-poster__kicker">MI · DAILY BRIEF</p>
         <h1>{text.title}</h1>
         <p className="mi-brief-poster__meta">{doc.edition.date} · {text.window.replace('{time}', formatTime(doc.edition.windowEnd, 'minute'))} · {text.edition.replace('{time}', formatTime(doc.edition.generatedAt, 'minute'))}</p>
+        {/* The exported image carries this only when the edition is short; a complete edition says nothing. */}
+        {completenessNote ? <p className="mi-brief-poster__completeness" data-completeness-note="true">{completenessNote}</p> : null}
       </div>
       <div className="mi-brief-poster__head-side">
         {readOnly ? <span className="mi-brief-poster__readonly">{text.history.readOnly}</span> : null}

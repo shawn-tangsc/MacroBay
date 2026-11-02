@@ -9,9 +9,10 @@ import { StateView } from '@platform/ui/components/state'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
-import type { DailyBriefingDocument, DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
+import { briefingCompleteness, type DailyBriefingDocument, type DailyBriefingEditionSummary } from '../../../contracts/dailyBriefing'
 import { dailyBriefingToMarkdown } from '../../../contracts/dailyBriefingMarkdown'
 import { dailyBriefingClient, type DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import { productText } from '../../shared/i18n/productText'
 import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { openModelSettings } from '../../shared/navigation/productShellNavigation'
 import { resolveBriefingStateReason, type DailyBriefingText } from './dailyBriefingText'
@@ -27,6 +28,7 @@ import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
 import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
+import { buildEditionCompletenessNote } from './dailyBriefingCompletenessNote'
 import { DailyBriefingStorageNotice } from './DailyBriefingStorageNotice'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
@@ -132,7 +134,11 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       if (today?.state === 'available') {
         const date = today.document.edition.date
         rows = rows.some((row) => row.date === date)
-          ? rows.map((row) => row.date === date ? summaryFromDocument(today.document) : row)
+          ? rows.map((row) => row.date === date
+            // The fresh document knows the text; the list row knows which languages this period
+            // was meant to have. Dropping that would make an incomplete period look complete.
+            ? { ...row, ...summaryFromDocument(today.document), availableLocales: row.availableLocales, ...(row.expectedLocales ? { expectedLocales: row.expectedLocales } : {}) }
+            : row)
           : [summaryFromDocument(today.document), ...rows]
         setView({
           status: 'ready',
@@ -314,6 +320,24 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   }
   const openModelService = onOpenModelSettings ?? openModelSettings
   const bodyClass = `mi-daily-briefing-page__body${showAppendix ? ' mi-daily-briefing-page__body--with-appendix' : ''}`
+  // The exported image follows the edition it shows, not the interface: an English window may
+  // export a Chinese edition, so its labels and its completeness sentence come from that edition.
+  const posterDocument = view.status === 'ready' ? view.document : undefined
+  const posterSummary = posterDocument ? editions.find((edition) => edition.date === posterDocument.edition.date) : undefined
+  const posterText = posterDocument
+    ? productText[posterDocument.edition.locale].pages.intelligence.portal.dashboard.dailyBriefing
+    : text
+  const posterCompleteness = posterDocument
+    ? buildEditionCompletenessNote(
+      briefingCompleteness({
+        ...(posterSummary?.expectedLocales ? { expectedLocales: posterSummary.expectedLocales } : {}),
+        publishedLocales: posterSummary?.availableLocales ?? [posterDocument.edition.locale],
+        readingsAvailable: posterDocument.status.readingsAvailable,
+        readingsTotal: 4
+      }),
+      posterText
+    )
+    : undefined
   return <main className="intelligence-page mi-daily-briefing-page" aria-label={text.title}>
     <header className="mi-daily-briefing-page__bar">
       <Button className="mi-daily-briefing-page__back" onClick={onBack}>
@@ -459,7 +483,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     {view.status === 'ready' && !contentBlocked ? <div className="mi-daily-briefing-share-host" aria-hidden="true">
       <div ref={shareRef}>
         {/* The exported node only: rows that are just a fallback reading stay on the page above. */}
-        <DailyBriefingShareCard document={view.document} text={text} locale={locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
+        <DailyBriefingShareCard document={view.document} text={posterText} locale={view.document.edition.locale} readOnly={view.kind === 'history'} omitFallbackReadings {...(posterCompleteness ? { completenessNote: posterCompleteness } : {})} {...(eventTitles ? { eventTitles } : {})} formatTime={formatTime} />
       </div>
     </div> : null}
   </main>

@@ -1,4 +1,4 @@
-import { DEFAULT_PERIOD_ID, type DailyBriefingEditionSummary, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
+import { DEFAULT_PERIOD_ID, briefingCompleteness, type DailyBriefingEditionSummary, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingPeriodRun, DailyBriefingStoredEdition } from './dailyBriefingService'
 
 /**
@@ -25,7 +25,18 @@ export async function briefingHistorySummaries(input: Readonly<{
     for (const periodId of periodIds) {
       const summary = summaryFor(date, periodId, input.primary, byPeriod.get(`${date}:${periodId}`), [input.primaryRows, input.otherRows])
       const run = input.periodRun ? await input.periodRun(date, periodId) : undefined
-      editions.push(run?.state === 'partial' ? { ...summary, state: 'partial' } : summary)
+      const expectedLocales = run?.expectedLocales
+      const completeness = briefingCompleteness({
+        ...(expectedLocales ? { expectedLocales } : {}),
+        publishedLocales: summary.availableLocales,
+        readingsAvailable: summary.readingsAvailable,
+        readingsTotal: 4
+      })
+      editions.push({
+        ...summary,
+        ...(expectedLocales ? { expectedLocales } : {}),
+        ...(completeness.state === 'missing-version' ? { state: 'partial' as const } : {})
+      })
     }
   }
   return Object.freeze(editions)

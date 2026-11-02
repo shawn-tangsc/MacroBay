@@ -181,8 +181,8 @@ function generationTraceFixture(state: 'success' | 'failed', failed?: string, fa
 const editions: readonly DailyBriefingEditionSummary[] = Array.from({ length: 14 }, (_, index) => {
   const date = new Date(Date.parse('2026-10-30T00:00:00.000Z') - index * 86_400_000).toISOString().slice(0, 10)
   return date === '2026-10-28'
-    ? { date, locale: 'zh-CN', availableLocales: [], state: 'missing' }
-    : { date, locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated', generatedAt: `${date}T00:30:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, readingsAvailable: 4 }
+    ? { date, periodId: 'default', locale: 'zh-CN', availableLocales: [], state: 'missing' }
+    : { date, periodId: 'default', locale: 'zh-CN', availableLocales: ['zh-CN'], state: 'generated', generatedAt: `${date}T00:30:00.000Z`, windowEnd: `${date}T00:30:00.000Z`, readingsAvailable: 4 }
 })
 
 function fakeClient(overrides: Record<string, unknown> = {}) {
@@ -746,4 +746,38 @@ it('says the history could not be read instead of claiming there is none', async
   const errorState = rail?.querySelector('.state-view[data-state="error"]')
   expect(errorState).not.toBeNull()
   expect(errorState!.querySelector('.state-view__action')?.textContent).toBe('重试')
+})
+
+
+describe('the exported image follows the edition, not the interface', () => {
+  it('exports a Chinese edition in Chinese, with the completeness line in Chinese', async () => {
+    const partial = editions.map((edition) => edition.date === '2026-10-30'
+      ? { ...edition, expectedLocales: ['zh-CN', 'en-US'] as const, state: 'partial' as const }
+      : edition)
+    const container = await renderPage(
+      fakeClient({ list: vi.fn(async () => ({ state: 'available' as const, result: { editions: partial } })) }),
+      { locale: 'en-US', text: englishText }
+    )
+    const poster = container.querySelector('.mi-daily-briefing-share-host .mi-brief-poster')
+    expect(poster).not.toBeNull()
+    // The edition is Chinese, so the poster is Chinese even though the interface is English.
+    expect(poster!.textContent).toContain(productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing.sections.data)
+    expect(poster!.textContent).not.toContain(englishText.sections.data)
+    // "本该两版、只成一版" is the only case that writes this; the sentence comes from the edition's language.
+    expect(poster!.querySelector('[data-completeness-note="true"]')?.textContent)
+      .toBe(productText['zh-CN'].pages.intelligence.portal.dashboard.dailyBriefing.completeness.missingVersion)
+    // The history rail's word never reaches the image.
+    expect(poster!.textContent).not.toContain('未完整')
+  })
+
+  it('says nothing on the image when the edition is complete', async () => {
+    const complete = editions.map((edition) => edition.date === '2026-10-30'
+      ? { ...edition, expectedLocales: ['zh-CN'] as const }
+      : edition)
+    const container = await renderPage(
+      fakeClient({ list: vi.fn(async () => ({ state: 'available' as const, result: { editions: complete } })) })
+    )
+    const poster = container.querySelector('.mi-daily-briefing-share-host .mi-brief-poster')
+    expect(poster!.querySelector('[data-completeness-note="true"]')).toBeNull()
+  })
 })

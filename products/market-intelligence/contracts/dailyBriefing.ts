@@ -226,6 +226,8 @@ export type DailyBriefingEditionSummary = Readonly<{
   availableLocales: readonly DailyBriefingLocale[]
   /** `partial`: this period was meant to have more versions than it published. */
   state: 'generated' | 'missing' | 'partial'
+  /** What the run intended to publish; absent on rows written before the run record existed. */
+  expectedLocales?: readonly DailyBriefingLocale[]
   generatedAt?: string
   direction?: AnalysisConclusionDirection
   summaryLine?: string
@@ -247,6 +249,8 @@ export type DailyBriefingAttemptRecord = Readonly<{
   /** Set when the session behind this attempt was cleaned up; the row stays, its trace is gone. */
   cleanedAt?: string
 }>
+
+export { briefingCompleteness, type DailyBriefingCompleteness } from './dailyBriefing/completeness'
 
 // The IPC guards live in their own module; re-exported so callers keep one import path.
 export { isDailyBriefingLocale, isDailyBriefingEditionDate, isDailyBriefingReadingState, isFactImportanceTier, isBriefingGenerationTrace, isDailyBriefingDocumentWithinBudget } from './dailyBriefing/guards'

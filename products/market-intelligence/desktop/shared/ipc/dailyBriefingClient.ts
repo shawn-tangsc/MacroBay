@@ -374,7 +374,10 @@ function parseSummary(value: unknown): DailyBriefingEditionSummary | undefined {
     ...(typeof value.readingsAvailable === 'number' && Number.isSafeInteger(value.readingsAvailable)
       ? { readingsAvailable: value.readingsAvailable }
       : {}),
-    ...(isText(value.windowEnd) ? { windowEnd: value.windowEnd } : {})
+    ...(isText(value.windowEnd) ? { windowEnd: value.windowEnd } : {}),
+    ...(Array.isArray(value.expectedLocales) && value.expectedLocales.every(isDailyBriefingLocale)
+      ? { expectedLocales: Object.freeze([...value.expectedLocales]) as readonly ('zh-CN' | 'en-US')[] }
+      : {})
   })
 }
 
