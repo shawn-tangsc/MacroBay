@@ -62,6 +62,8 @@ const ZH_CN: StateViewCopy = {
       'ui.state.error.reason.operation-failed': '这次操作没有成功，可以重试',
       'ui.state.error.reason.needs-restart': '需要重启应用之后才能继续',
       'ui.state.error.reason.page-load-failed': '这个页面没有加载成功',
+      // 状态不明：拿不到，且说不清原因——必须明说「这不代表没有通知」，否则读者会把读不到当成今天没事。
+      'ui.state.error.reason.notification-unknown': '通知暂时读不出来，原因还没查清；这不代表没有通知',
       'ui.state.disabled': '这个功能当前不可用',
       'ui.state.disabled.reason.capability-not-wired': '这项能力平台侧还没接通，不是你的问题；现在没有可做的操作',
       'ui.state.disabled.reason.target-disabled': '目标已经被停用，先重新启用',
@@ -109,6 +111,8 @@ const EN_US: StateViewCopy = {
       'ui.state.error.reason.operation-failed': 'That action did not go through — you can retry',
       'ui.state.error.reason.needs-restart': 'The app needs a restart before this can continue',
       'ui.state.error.reason.page-load-failed': 'This page did not load',
+      'ui.state.error.reason.notification-unknown':
+        "Notifications aren't available right now, and we don't know why yet. This doesn't mean there are none.",
       'ui.state.disabled': 'This is not available right now',
       'ui.state.disabled.reason.capability-not-wired': 'This capability is not wired up on the platform side yet; nothing is wrong on your side, and there is nothing to do here',
       'ui.state.disabled.reason.target-disabled': 'The target is turned off — turn it back on',

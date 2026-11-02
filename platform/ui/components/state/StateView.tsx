@@ -75,6 +75,7 @@ export const STATE_VIEW_TEXT_KEYS = [
   'ui.state.error.reason.operation-failed',
   'ui.state.error.reason.needs-restart',
   'ui.state.error.reason.page-load-failed',
+  'ui.state.error.reason.notification-unknown',
   'ui.state.error.details',
   'ui.state.disabled',
   'ui.state.disabled.reason.capability-not-wired',
@@ -167,6 +168,13 @@ export type StateViewProps =
       details?: StateDetails
     })
   | (StateViewBase & { state: 'error'; reasonCode: 'needs-restart'; action?: StateViewAction; details?: StateDetails })
+  // 「状态不明」：拿不到，且连原因都判不出来。句子必须含「这不代表没有通知」；仍是六态之一，不是第七态。
+  | (StateViewBase & {
+      state: 'error'
+      reasonCode: 'notification-unknown'
+      action?: StateViewAction
+      details?: StateDetails
+    })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'capability-not-wired'; action?: StateViewAction })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'target-disabled'; action?: StateViewAction })
   | (StateViewBase & { state: 'disabled'; reasonCode: 'precondition-unsaved'; action?: StateViewAction })

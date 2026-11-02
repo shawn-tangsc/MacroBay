@@ -269,7 +269,7 @@ describe('StateView', () => {
     for (const reasonCode of ['never-created', 'filtered-out', 'no-target-bound', 'nothing-enabled', 'not-yet']) {
       expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('empty', reasonCode).reason)
     }
-    for (const reasonCode of ['unreadable', 'unavailable']) {
+    for (const reasonCode of ['unreadable', 'unavailable', 'notification-unknown']) {
       expect(STATE_VIEW_TEXT_KEYS).toContain(stateViewTextKeys('error', reasonCode).reason)
     }
     for (const reasonCode of ['capability-not-wired', 'target-disabled']) {

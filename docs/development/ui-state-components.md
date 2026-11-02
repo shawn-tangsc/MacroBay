@@ -87,6 +87,7 @@ needs one gets the code and the key in the same change, never the key on its own
 | `error` | `operation-failed` | required: retry — `retry` | A write (create, save, update, delete) did not go through — this is not a read failure. |
 | `error` | `needs-restart` | required: restart the app — `restart-app` | A local interface is missing; only a restart loads it. |
 | `error` | `page-load-failed` | required: reload the page — `reload-page` | The page itself did not load. Reloading the page is the fix — not `retry` (a failed operation) and not `restart-app` (a different cost). |
+| `error` | `notification-unknown` | required: retry — `retry` | The notification list could not be read and the cause is not known: "can't read" is not "there is none". Never `empty` (that says there is nothing) and never `permission` (an unreadable permission is not a denied one). |
 | `disabled` | `capability-not-wired` | forbidden | The platform side is not connected; nothing is wrong on the reader's side. |
 | `disabled` | `target-disabled` | required: enable — `enable` | The target was switched off. |
 | `disabled` | `precondition-unsaved` | required: save — `save` | The form has unsaved changes; saving unlocks it. |
