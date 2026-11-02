@@ -11,8 +11,12 @@ import { CapitalConditionsPanel } from './CapitalConditionsPanel'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
-const ScopedCapitalConditionsPanel = (props: Parameters<typeof CapitalConditionsPanel>[0]): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, props))
+/** Every host can retry; tests that do not care about the action still need a reachable one. */
+const ScopedCapitalConditionsPanel = (props: Omit<Parameters<typeof CapitalConditionsPanel>[0], 'onRefresh'> & { onRefresh?: () => void }): React.ReactElement =>
+  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props }))
+
+/** The platform state icon is inline SVG; its namespace is the one URL a clean panel may carry. */
+const withoutSvgNamespace = (markup: string): string => markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
 
 const dashboardStyles = readFileSync(
   resolve(process.cwd(), 'products/market-intelligence/desktop/pages/intelligence/cryptoDashboard.css'),
@@ -295,7 +299,7 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('data-size="md"')
     // The panel no longer owns this sentence: the platform state table does.
     expect(markup).not.toContain(text.empty)
-    expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
+    expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy|error/i)
   })
 
   it('tells a failed read apart from an empty one, through the platform error state', () => {
@@ -307,14 +311,44 @@ describe('CapitalConditionsPanel', () => {
     expect(markup).toContain('data-state="error"')
     expect(markup).toContain('data-size="md"')
     expect(markup).not.toContain('data-state="empty"')
-    expect(markup).not.toMatch(/https?:|raw|payload|proxy/i)
+    expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy/i)
   })
 
   it('keeps the initial loading state short and free of diagnostic data', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'loading' } }))
     expect(markup).toContain(text.loading)
-    expect(markup).not.toMatch(/https?:|raw|payload|proxy|error/i)
+    expect(withoutSvgNamespace(markup)).not.toMatch(/https?:|raw|payload|proxy|error/i)
+  })
+
+  it('gives the failed card a reachable retry instead of a dead end', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const onRefresh = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state: { state: 'unavailable' }, onRefresh })))
+    const action = container.querySelector<HTMLButtonElement>('.state-view__action')!
+    expect(action).not.toBeNull()
+    await act(async () => action.click())
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives both unavailable ETF surfaces the same retry as the card', async () => {
+    const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+    const onRefresh = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+
+    const state = { ...fullState(), etf: 'unavailable' as const }
+    await act(async () => root?.render(createElement(ScopedCapitalConditionsPanel, { text, state, onRefresh })))
+    const actions = [...container.querySelectorAll<HTMLButtonElement>('.state-view__action')]
+    expect(actions).toHaveLength(2)
+    await act(async () => actions[0]!.click())
+    await act(async () => actions[1]!.click())
+    expect(onRefresh).toHaveBeenCalledTimes(2)
   })
 
   it.each(['zh-CN', 'en-US'] as const)('offers %s readers a re-collection action instead of another read while unavailable', async (locale) => {
