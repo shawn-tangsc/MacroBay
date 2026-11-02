@@ -1,8 +1,4 @@
 {
   "$comment": "IconButton call sites whose glyph is itself a ring (Info / CircleHelp / HelpCircle) and that still rely on the default variant instead of saying `variant=\"plain\"` out loud. One entry per file. The behaviour is already correct — the default is `plain` — this list exists because the guard requires the answer to be visible in the source, so the next reader cannot 'tidy' it into `solid`. Delete an entry in the same commit that writes the variant out: a stale entry fails the guard.",
-  "entries": {
-    "products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx": 2,
-    "products/market-intelligence/desktop/features/industry/divergence/DivergencePanel.tsx": 1,
-    "products/market-intelligence/desktop/features/industry/positioning/PositioningPanel.tsx": 1
-  }
+  "entries": {}
 }

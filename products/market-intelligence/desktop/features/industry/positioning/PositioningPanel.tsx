@@ -138,7 +138,7 @@ export function PositioningPanel({ funding, positioning, window, onWindowChange,
           <IconButton
             {...triggerProps}
             ariaLabelKey="pages.intelligence.portal.dashboard.positioning.helpLabel"
-            icon={Info} size="sm" resolveText={resolveProductKey} />
+            icon={Info} size="sm" variant="plain" resolveText={resolveProductKey} />
         )} />
       {/*
         The readings behind the numbers open under the card, not in the bubble. A note that needs a
