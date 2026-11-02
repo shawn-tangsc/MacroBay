@@ -1,12 +1,14 @@
-import { useRef, useState } from 'react'
-import { RefreshCw } from 'lucide-react'
 import { Button } from 'antd'
+import { RefreshCw } from 'lucide-react'
 
 import { etfFlowPolicy } from '../../../../contracts/etfFlows'
-import { dashboardCapitalConditionsPresentationPolicy, type DashboardCapitalConditionsState, type DashboardEtfFlowAsset } from './capitalConditionsModel'
+import { fillLabelParams } from '@platform/ui/components/textKeyParams'
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
+import { CapitalFlowChart } from './CapitalFlowChart'
+import { CapitalFlowDailyTable } from './CapitalFlowDailyTable'
+import type { DashboardCapitalConditionsState, DashboardEtfFlowAsset } from './capitalConditionsModel'
 
 type Text = {
   title: string
@@ -28,9 +30,24 @@ type Text = {
   observedAt: string
   etfFlow: string
   chartWindow: string
+  chartScopeNote: string
   fundsColumn: string
+  fundsScope: string
   btc: string
   eth: string
+  etfScope: string
+  /** One template: both notes quote `stablecoin` through `{row}`, so they cannot drift apart. */
+  notComparable: string
+  expandDaily: string
+  collapseDaily: string
+  sameSource: string
+  dailyCaption: string
+  dateColumn: string
+  utcDays: string
+  dailyEmpty: string
+  a11yAmount: string
+  a11yLabel: string
+  a11yCell: string
   flowDirections: Record<'inflow' | 'outflow' | 'zero', string>
   refresh: string
   refreshFailed: string
@@ -66,6 +83,10 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
     </div>
   </section>
 
+  // Filled once: the chart note and the table note render this same string, so "word for word
+  // identical" is a property of the structure rather than of two careful copies.
+  const notComparable = fillLabelParams(text.notComparable, { row: text.stablecoin })
+
   return <section className="mi-capital-conditions" data-state={state.state} aria-label={text.title}>
     <div className="mi-capital-conditions__content-row">
       <div className="mi-capital-conditions__summary">
@@ -79,7 +100,7 @@ export function CapitalConditionsPanel({ state, text, onRefresh, refreshing = fa
         <StablecoinTable state={state} text={text} />
         <EtfTable etf={state.etf} text={text} onRetry={onRefresh} />
       </div>
-      <EtfFlow state={state.etf} flowHistory={state.flowHistory} text={text} onRetry={onRefresh} />
+      <EtfFlow etf={state.etf} flowHistory={state.flowHistory} text={text} notComparable={notComparable} onRetry={onRefresh} />
     </div>
   </section>
 }
@@ -161,60 +182,36 @@ function consecutiveDirectionDays(rows: readonly { direction: 'inflow' | 'outflo
   return days
 }
 
-function EtfFlow({ state, flowHistory, text, onRetry }: { state: Extract<DashboardCapitalConditionsState, { state: 'available' }>['etf']; flowHistory?: Extract<DashboardCapitalConditionsState, { state: 'available' }>['flowHistory']; text: Text; onRetry: () => void }): React.ReactElement {
-  const chartRef = useRef<HTMLDivElement>(null)
-  const [hoveredFlow, setHoveredFlow] = useState<HoveredFlow | null>(null)
-  if (state === 'unavailable' || !flowHistory) return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3><StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} /></section>
-  const visibleRows = flowHistory.rows.slice(-dashboardCapitalConditionsPresentationPolicy.flowChart.defaultVisibleRows)
-  const maximumMagnitude = Math.max(...visibleRows.flatMap((row) => [Math.abs(row.funds), Math.abs(row.btc), Math.abs(row.eth)]))
-  const axisMagnitude = maximumMagnitude === 0 ? undefined : formatFlowValue(maximumMagnitude)
-  const tickIndexes = [0, Math.floor((visibleRows.length - 1) / 2), visibleRows.length - 1]
-  const updateHover = (row: FlowChartRow, event: React.MouseEvent<HTMLElement>) => {
-    const rect = chartRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = clamp(event.clientX - rect.left, 0, rect.width)
-    const y = clamp(event.clientY - rect.top, 0, rect.height)
-    setHoveredFlow({ row, x, y, ...placeTooltip(x, y, rect.width, rect.height) })
+/**
+ * The chart, its two notes and the daily table. All of them read the same `flowHistory.rows`
+ * handed down by the projection — the seven-day window is cut once, in the model, so the bar
+ * labels and the table cannot show different days.
+ */
+function EtfFlow({ etf, flowHistory, text, notComparable, onRetry }: {
+  etf: AvailableState['etf']
+  flowHistory?: AvailableState['flowHistory']
+  text: Text
+  notComparable: string
+  onRetry: () => void
+}): React.ReactElement {
+  if (etf === 'unavailable' || !flowHistory) {
+    return <section className="mi-capital-conditions__etf-flow" data-etf-flow="unavailable"><h3>{text.etfFlow}</h3>
+      <StateView state="error" reasonCode="unavailable" action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />
+    </section>
   }
-  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available"><header><h3>{text.etfFlow}</h3><span className="mi-capital-conditions__chart-window">{text.chartWindow}</span></header><div className="mi-capital-conditions__chart-legend"><span><i data-series="funds" />{text.fundsColumn}</span><span><i data-series="btc" />{text.btc}</span><span><i data-series="eth" />{text.eth}</span></div><div className="mi-capital-conditions__chart" ref={chartRef} role="img" aria-label={text.etfFlow} onMouseLeave={() => setHoveredFlow(null)}><div className="mi-capital-conditions__chart-axis" aria-hidden="true" data-zero-axis={maximumMagnitude === 0 ? 'true' : undefined}>{axisMagnitude ? <><span>{axisMagnitude}</span><span>$0</span><span>-{axisMagnitude.slice(1)}</span></> : <span>$0</span>}</div><div className="mi-capital-conditions__chart-zero" />{hoveredFlow ? <><div className="mi-capital-conditions__chart-crosshair" data-flow-crosshair="vertical" style={{ left: hoveredFlow.x }} /><div className="mi-capital-conditions__chart-crosshair" data-flow-crosshair="horizontal" style={{ top: hoveredFlow.y }} /></> : null}{visibleRows.map((row) => <div className="mi-capital-conditions__chart-day" data-trading-date={row.tradingDate} key={row.tradingDate} onMouseEnter={(event) => updateHover(row, event)} onMouseMove={(event) => updateHover(row, event)}><div className="mi-capital-conditions__chart-half" data-flow-half="inflow">{dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] >= 0).map((series) => <Bar key={series} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}</div><div className="mi-capital-conditions__chart-half" data-flow-half="outflow">{dashboardCapitalConditionsPresentationPolicy.flowChart.series.filter((series) => row[series] < 0).map((series) => <Bar key={series} series={series} value={row[series]} maximumMagnitude={maximumMagnitude} />)}</div></div>)}{hoveredFlow ? <div className="mi-capital-conditions__chart-tooltip" data-flow-tooltip style={{ left: hoveredFlow.tooltipLeft, top: hoveredFlow.tooltipTop }}><strong>{hoveredFlow.row.tradingDate}</strong><span><i data-series="funds" />{text.fundsColumn}<b>{formatFlowValue(hoveredFlow.row.funds)}</b></span><span><i data-series="btc" />{text.btc}<b>{formatFlowValue(hoveredFlow.row.btc)}</b></span><span><i data-series="eth" />{text.eth}<b>{formatFlowValue(hoveredFlow.row.eth)}</b></span></div> : null}</div><div className="mi-capital-conditions__chart-ticks" aria-hidden="true">{tickIndexes.map((index) => <span key={visibleRows[index].tradingDate}>{visibleRows[index].tradingDate}</span>)}</div></section>
-}
-
-type FlowChartRow = { tradingDate: string; funds: number; btc: number; eth: number }
-type HoveredFlow = { row: FlowChartRow; x: number; y: number; tooltipLeft: number; tooltipTop: number }
-
-const chartTooltipPlacementPolicy = { offset: 14, inset: 4, estimatedWidth: 176, estimatedHeight: 86 } as const
-
-function placeTooltip(x: number, y: number, width: number, height: number): Pick<HoveredFlow, 'tooltipLeft' | 'tooltipTop'> {
-  const maxLeft = Math.max(chartTooltipPlacementPolicy.inset, width - chartTooltipPlacementPolicy.estimatedWidth - chartTooltipPlacementPolicy.inset)
-  const maxTop = Math.max(chartTooltipPlacementPolicy.inset, height - chartTooltipPlacementPolicy.estimatedHeight - chartTooltipPlacementPolicy.inset)
-  const left = clamp(x + chartTooltipPlacementPolicy.offset, chartTooltipPlacementPolicy.inset, maxLeft)
-  const above = y - chartTooltipPlacementPolicy.estimatedHeight - chartTooltipPlacementPolicy.offset
-  const below = y + chartTooltipPlacementPolicy.offset
-  const top = clamp(above >= chartTooltipPlacementPolicy.inset ? above : below, chartTooltipPlacementPolicy.inset, maxTop)
-  return { tooltipLeft: left, tooltipTop: top }
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value))
-}
-
-function formatFlowValue(value: number, includeSign = true): string {
-  const normalized = Object.is(value, -0) ? 0 : value
-  const absolute = Math.abs(normalized)
-  const unit = dashboardCapitalConditionsPresentationPolicy.usd.compactUnits.find((candidate) => absolute >= candidate.threshold)
-  const formatted = new Intl.NumberFormat('en-US', { maximumFractionDigits: dashboardCapitalConditionsPresentationPolicy.usd.maximumFractionDigits, useGrouping: false }).format(absolute / (unit?.threshold ?? 1))
-  return `${includeSign && normalized > 0 ? '+' : normalized < 0 ? '-' : ''}$${formatted}${unit?.suffix ?? ''}`
-}
-
-function Bar({ series, value, maximumMagnitude }: { series: typeof dashboardCapitalConditionsPresentationPolicy.flowChart.series[number]; value: number; maximumMagnitude: number }): React.ReactElement {
-  const magnitudePercent = value === 0 ? 0 : maximumMagnitude > 0
-    ? Math.max(dashboardCapitalConditionsPresentationPolicy.flowChart.minimumVisibleMagnitudePercent, Math.min(dashboardCapitalConditionsPresentationPolicy.flowChart.maximumMagnitudePercent, Math.abs(value) / maximumMagnitude * dashboardCapitalConditionsPresentationPolicy.flowChart.maximumMagnitudePercent))
-    : 0
-  return <i data-series={series} data-flow={value > 0 ? 'inflow' : value < 0 ? 'outflow' : 'zero'} style={{ '--mi-flow-height': `${magnitudePercent}%` } as React.CSSProperties} />
-}
-
-function Fact({ kind, label, value, direction }: { kind: 'change' | 'supply' | 'etf'; label: string; value: string; direction?: 'inflow' | 'outflow' | 'zero' }): React.ReactElement {
-  return <div data-capital-fact={kind}><dt>{label}</dt>{value ? <dd data-flow-direction={direction}>{value}</dd> : null}</div>
+  const rows = flowHistory.rows
+  return <section className="mi-capital-conditions__etf-flow" data-etf-flow="available">
+    <header><h3>{text.etfFlow}</h3><span className="mi-capital-conditions__chart-window">{text.chartWindow}</span></header>
+    <div className="mi-capital-conditions__chart-legend">
+      <span><i data-series="funds" />{text.fundsColumn}</span>
+      <span><i data-series="btc" />{text.btc}</span>
+      <span><i data-series="eth" />{text.eth}</span>
+    </div>
+    <CapitalFlowChart rows={rows} text={text} />
+    <p className="mi-capital-conditions__chart-scope">{text.chartScopeNote}</p>
+    <p className="mi-capital-conditions__not-comparable">{notComparable}</p>
+    <CapitalFlowDailyTable rows={rows} text={text} notComparable={notComparable} />
+  </section>
 }
 
 function flowDirection(value: string): 'inflow' | 'outflow' | 'zero' {

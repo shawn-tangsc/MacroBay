@@ -8,12 +8,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { productText } from '../../../shared/i18n/productText'
 import { CapitalConditionsPanel } from './CapitalConditionsPanel'
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ShellTimeZoneProvider } from '@platform/ui/shell/ShellTimeZoneContext'
 
 /** 展示时区由窗口级 provider 提供；测试固定 UTC，断言才与宿主时区无关。 */
 /** Every host can retry; tests that do not care about the action still need a reachable one. */
+const englishCapitalConditions = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
+
+/** The app always has a language in context; the harness has to supply the one the fixture is written in. */
 const ScopedCapitalConditionsPanel = (props: Omit<Parameters<typeof CapitalConditionsPanel>[0], 'onRefresh'> & { onRefresh?: () => void }): React.ReactElement =>
-  createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props }))
+  createElement(ShellLanguageProvider, { language: props.text === englishCapitalConditions ? 'en-US' : 'zh-CN' },
+    createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(CapitalConditionsPanel, { onRefresh: () => undefined, ...props })))
 
 /** The platform state icon is inline SVG; its namespace is the one URL a clean panel may carry. */
 const withoutSvgNamespace = (markup: string): string => markup.replaceAll('xmlns="http://www.w3.org/2000/svg"', '')
@@ -127,7 +132,7 @@ describe('CapitalConditionsPanel', () => {
       text,
       state: {
         state: 'available', conclusion: 'partial', observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-        flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1, btc: 2, eth: -3 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
+        flowHistory: { state: 'available', rows: [{ tradingDate: '2026-08-17', funds: 1_000_000, btc: 2_000_000, eth: -3_000_000 }, { tradingDate: '2026-08-18', funds: 0, btc: 0, eth: 0 }] },
         etf: {
           state: 'available',
           coverage: [{ windowDays: 5, coveredDays: 5, complete: true }, { windowDays: 20, coveredDays: 20, complete: true }],
@@ -150,7 +155,9 @@ describe('CapitalConditionsPanel', () => {
   it('defaults the shared chart to the latest seven complete days without a window control', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: fullState() }))
-    expect(markup).not.toContain('<button')
+    // The only control here is the daily table's toggle; there is no window switcher.
+    expect((markup.match(/<button/g) ?? []).length).toBe(1)
+    expect(markup).toContain('aria-expanded="false"')
     expect((markup.match(/class="mi-capital-conditions__chart-day"/g) ?? []).length).toBe(7)
     expect((markup.match(/data-series="funds" data-flow/g) ?? []).length).toBe(7)
     expect((markup.match(/data-series="btc" data-flow/g) ?? []).length).toBe(7)
@@ -161,34 +168,31 @@ describe('CapitalConditionsPanel', () => {
 
   it('uses the latest seven days and all three series to share the maximum axis magnitude', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
-    const rows = [
-      { tradingDate: '2026-08-01', funds: 999, btc: 0, eth: 0 },
-      ...Array.from({ length: 7 }, (_, index) => ({
-        tradingDate: `2026-08-${String(index + 2).padStart(2, '0')}`,
-        funds: index,
-        btc: index * 2,
-        eth: index === 6 ? -24 : -index
-      }))
-    ]
+    // The seven-day cut happens in the projection; the panel renders what it is handed.
+    const rows = Array.from({ length: 7 }, (_, index) => ({
+      tradingDate: `2026-08-${String(index + 2).padStart(2, '0')}`,
+      funds: index * 1_000_000,
+      btc: index * 2_000_000,
+      eth: index === 6 ? -24_000_000 : -index * 1_000_000
+    }))
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: flowState(rows) }))
 
-    expect(markup).toContain('+$24')
+    expect(markup).toContain('$24M')
     expect(markup).toContain('$0')
-    expect(markup).toContain('-$24')
-    expect(markup).not.toContain('$999')
+    expect(markup).toContain('-$24M')
     expect(markup).toContain('data-series="eth" data-flow="outflow" style="--mi-flow-height:100%"')
   })
 
   it('scales a short flow history from only its actual rows', () => {
     const text = productText['en-US'].pages.intelligence.portal.dashboard.capitalConditions
     const rows = [
-      { tradingDate: '2026-08-17', funds: 3, btc: -4, eth: 5 },
-      { tradingDate: '2026-08-18', funds: -12, btc: 2, eth: 0 }
+      { tradingDate: '2026-08-17', funds: 3_000_000, btc: -4_000_000, eth: 5_000_000 },
+      { tradingDate: '2026-08-18', funds: -12_000_000, btc: 2_000_000, eth: 0 }
     ]
     const markup = renderToStaticMarkup(createElement(ScopedCapitalConditionsPanel, { text, state: flowState(rows) }))
 
-    expect(markup).toContain('+$12')
-    expect(markup).toContain('-$12')
+    expect(markup).toContain('$12M')
+    expect(markup).toContain('-$12M')
     expect(markup).not.toContain('2026-08-01')
     expect((markup.match(/class="mi-capital-conditions__chart-day"/g) ?? []).length).toBe(2)
   })
@@ -207,7 +211,7 @@ describe('CapitalConditionsPanel', () => {
     expect(axisMarkup).toContain('$0')
     expect(axisMarkup).not.toContain('+$0')
     expect(axisMarkup).not.toContain('-$0')
-    expect((markup.match(/data-flow="zero" style="--mi-flow-height:0%"/g) ?? []).length).toBe(6)
+    expect((markup.match(/data-flow="zero"[^>]*style="--mi-flow-height:0%"/g) ?? []).length).toBe(6)
   })
 
   it('keeps the shared-axis maximum at full half-axis height without a second CSS scale', () => {
@@ -425,7 +429,8 @@ function fullState() {
   const rows = Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, direction: index === 29 ? 'zero' as const : 'inflow' as const, magnitudePercent: index === 29 ? 0 : index + 1 }))
   return {
     state: 'available' as const, conclusion: 'partial' as const, observedAt: '2026-08-18T07:00:00.000Z', currentUsd: '$1B', change1dUsd: '$0', change1dPercent: '0.00%', change7dUsd: '$0', change7dPercent: '0.00%', change30dUsd: '$0', change30dPercent: '0.00%',
-    flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: index - 10, btc: index + 1, eth: -(index + 1) })) },
+    // Mirrors the projection: it already cut the window to the last seven days before the panel sees it.
+    flowHistory: { state: 'available' as const, rows: Array.from({ length: 30 }, (_, index) => ({ tradingDate: `2026-08-${String(index + 1).padStart(2, '0')}`, funds: (index - 10) * 1_000_000, btc: (index + 1) * 1_000_000, eth: -(index + 1) * 1_000_000 })).slice(-7) },
     etf: {
       state: 'available' as const,
       coverage: completeCoverage(),
