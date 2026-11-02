@@ -388,6 +388,22 @@ describe('产品原因句入口（§17：只覆盖原因句，参数必须走到
     expect(html).toContain('ui.state.disabled')
   })
 
+  it('renders the page-load-failed code with the reload action it must carry', () => {
+    const html = markup({
+      state: 'error',
+      reasonCode: 'page-load-failed',
+      resolveText: key,
+      action: { labelKey: 'ui.state.action.reload-page', onSelect: () => undefined }
+    })
+
+    // 句子走键：界面上要看到键解析出来的结果，而不是 `{page-load-failed}` 这种裸码。
+    expect(html).toContain('ui.state.error.reason.page-load-failed')
+    expect(html).not.toContain('{page-load-failed}')
+    // 恢复动作是重载页面，不是重试那次操作，也不是重启应用。
+    expect(html).toContain('ui.state.action.reload-page')
+    expect(html).toContain('role="status"')
+  })
+
   it('falls back to the platform sentence when the product asks for a missing key', () => {
     const html = markup({
       state: 'empty',

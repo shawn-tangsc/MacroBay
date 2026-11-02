@@ -168,6 +168,8 @@ export type StateViewProps =
       details?: StateDetails
     })
   | (StateViewBase & { state: 'error'; reasonCode: 'needs-restart'; action?: StateViewAction; details?: StateDetails })
+  // 页面本身没加载出来：恢复办法是重载页面，不是重试那次操作，也不是重启应用。
+  | (StateViewBase & { state: 'error'; reasonCode: 'page-load-failed'; action?: StateViewAction; details?: StateDetails })
   // 「状态不明」：拿不到，且连原因都判不出来。句子必须含「这不代表没有通知」；仍是六态之一，不是第七态。
   | (StateViewBase & {
       state: 'error'
