@@ -1,43 +1,41 @@
-/**
- * 更新说明正文的受控解析：**只认五样**——小节标题、项目符号、段落、行内加粗、行内代码，
- * 外加围栏代码块。
- *
- * 这是「远端文字第一次进门」，所以边界写成结构而不是建议：
- * - 输出是 `StructuredTextNode`（`platform/contracts/structuredText.ts` 一份定义，渲染层读同一份），
- *   **没有「原始 HTML」字段**，渲染层拿不到原文；
- * - HTML 标签、表格、图片、引用**一律当普通文字**；
- * - 围栏代码块里的内容**一个字符都不解释**：`-` 不是列表、`**` 不是加粗、`<img>` 不是元素；
- * - `[文字](地址)` 只留「文字」，地址丢掉；裸地址照旧是文字、不可点。
- *
- * 纯函数：同样的输入永远同样的输出，单测不需要网络。
- */
-import type { StructuredTextNode, StructuredTextRun } from '../../contracts/structuredText'
+import type { StructuredTextNode, StructuredTextRun } from '@platform/contracts/structuredText'
 
-/** 三个上限：宁可不显示，也不让远端决定我们的内存。 */
+/**
+ * 更新说明正文的解析：**输入是 Markdown，输出是封闭节点结构**（契约在 `platform/contracts/structuredText`）。
+ *
+ * 总原则：**任何块都不许静默丢弃**——认不出的行一律当一个段落原样显示。宁可难看，不许少字。
+ *
+ * 对照表（技术方案 §13.7.2，逐行可测）：
+ * - 行首 `#`…（任意级）→ `section`，级号不保留；
+ * - 独占一行的 `**粗体**` → `section`；
+ * - `-` / `*` / `+`（后跟空格）→ `list` 的一项；
+ * - `1.` / `1)` → **每个一项一个段落**，序号原样留在文字里（`list` 会画圆点，配序号就是「• 1.」双标记）；
+ * - 围栏代码块 → `code` 节点，**原样逐行、块内不解释任何标记**；
+ * - 表格行、引用、认不出的行 → 一个段落（不画表格、去掉 `>`）；
+ * - 行内 `**粗体**` → `bold`；行内 `` `代码` `` → `code: true`；
+ * - `[文字](地址)` / `![说明](图片)` → 只留文字/说明，地址丢掉。
+ *
+ * 上限：正文 20,000 字符（超出截断）；节点 200 个——**超了整块不显示**，不截断到 200 再丢后半段
+ * （部分展示比没有更危险：读者不知道少了什么）。
+ */
+
 export const releaseNotesLimits = {
   bodyBytes: 256 * 1024,
   textCharacters: 20_000,
   nodes: 200
 } as const
 
-/**
- * 解析正文。返回 `null` 表示「没有可显示的说明」——空正文、超限都算没有，
- * 由调用方表现为「整块不出现」，不是报错块。
- */
 export function parseReleaseNotes(markdown: string): StructuredTextNode[] | null {
   if (typeof markdown !== 'string') return null
-  let text = markdown.replace(/\r\n?/gu, '\n').trim()
-  if (text.length === 0) return null
-  if (text.length > releaseNotesLimits.textCharacters) {
-    text = text.slice(0, releaseNotesLimits.textCharacters)
-  }
+  const normalized = markdown.replace(/\r\n?/gu, '\n')
+  const text = normalized.length > releaseNotesLimits.textCharacters
+    ? normalized.slice(0, releaseNotesLimits.textCharacters)
+    : normalized
+  if (text.trim().length === 0) return null
 
   const nodes: StructuredTextNode[] = []
   let paragraph: StructuredTextRun[] = []
-  let list: StructuredTextRun[][] = []
-  /** 当前围栏的标记（``` 或 ~~~）；`null` 表示不在代码块里。 */
-  let fenceMarker: string | null = null
-  let codeLines: string[] = []
+  let listItems: StructuredTextRun[][] = []
 
   const flushParagraph = (): void => {
     if (paragraph.length === 0) return
@@ -45,127 +43,133 @@ export function parseReleaseNotes(markdown: string): StructuredTextNode[] | null
     paragraph = []
   }
   const flushList = (): void => {
-    if (list.length === 0) return
-    nodes.push({ kind: 'list', items: list })
-    list = []
-  }
-  const flushCode = (): void => {
-    // 空的围栏不产出一个空 `<pre>`：那在页面上只是一块空白。
-    if (codeLines.length > 0) nodes.push({ kind: 'code', lines: codeLines })
-    codeLines = []
-    fenceMarker = null
+    if (listItems.length === 0) return
+    nodes.push({ kind: 'list', items: listItems })
+    listItems = []
   }
   const flushAll = (): void => {
     flushParagraph()
     flushList()
-    flushCode()
+  }
+  const pushParagraph = (line: string): void => {
+    flushAll()
+    const runs = parseRuns(line)
+    if (runs.length > 0) nodes.push({ kind: 'paragraph', runs })
   }
 
-  for (const rawLine of text.split('\n')) {
-    // 代码块里**只认结束围栏**，其余行逐字收下（不 trim、不解释任何标记）。
-    if (fenceMarker !== null) {
-      if (isClosingFence(rawLine, fenceMarker)) flushCode()
-      else codeLines.push(rawLine)
-      continue
-    }
-
-    const opening = openingFenceMarker(rawLine)
-    if (opening !== null) {
-      flushParagraph()
-      flushList()
-      fenceMarker = opening
-      codeLines = []
-      continue
-    }
-
-    const line = rawLine.trimEnd()
+  const lines = text.split('\n')
+  let index = 0
+  while (index < lines.length) {
+    const raw = lines[index]
+    const line = raw.trimEnd()
     const trimmed = line.trim()
+    index += 1
+
+    // 围栏代码块：整块原样收进 code 节点，块内不解释任何标记。
+    const fence = /^ {0,3}(```|~~~)/u.exec(line)
+    if (fence !== null) {
+      flushAll()
+      const marker = fence[1]
+      const body: string[] = []
+      while (index < lines.length) {
+        const candidate = lines[index]
+        index += 1
+        if (new RegExp(`^ {0,3}${marker}\\s*$`, 'u').test(candidate)) break
+        body.push(candidate.trimEnd())
+      }
+      nodes.push({ kind: 'code', lines: body })
+      continue
+    }
 
     if (trimmed.length === 0) {
-      flushParagraph()
-      flushList()
+      flushAll()
       continue
     }
 
-    // 小节标题：`###` 系列，或独占一行的 `**粗体**`。
-    const hashes = /^(#{1,6})\s+(.*)$/u.exec(trimmed)
-    if (hashes !== null) {
-      flushParagraph()
-      flushList()
-      const title = stripInlineMarkup(hashes[2])
-      if (title.length > 0) nodes.push({ kind: 'section', title })
-      continue
-    }
-    const boldLine = /^\*\*(.+)\*\*$/u.exec(trimmed)
-    if (boldLine !== null) {
-      flushParagraph()
-      flushList()
-      const title = stripInlineMarkup(boldLine[1])
+    const heading = /^(#{1,6})\s+(.*)$/u.exec(trimmed)
+    if (heading !== null) {
+      flushAll()
+      const title = plainText(heading[2])
       if (title.length > 0) nodes.push({ kind: 'section', title })
       continue
     }
 
-    // 项目符号：`-` / `*` / `•`（`*` 后必须跟空白，否则会被当成粗体开头）。
-    const bullet = /^[-*•]\s+(.*)$/u.exec(trimmed)
+    const boldHeading = /^\*\*(.+)\*\*$/u.exec(trimmed)
+    if (boldHeading !== null) {
+      flushAll()
+      const title = plainText(boldHeading[1])
+      if (title.length > 0) nodes.push({ kind: 'section', title })
+      continue
+    }
+
+    const bullet = /^[-*+]\s+(.*)$/u.exec(trimmed)
     if (bullet !== null) {
       flushParagraph()
-      list.push(parseRuns(bullet[1]))
+      listItems.push(parseRuns(bullet[1]))
+      continue
+    }
+
+    // 有序列表：序号留在文字里，走段落——`list` 会再画一个圆点，变成「• 1. xxx」。
+    const ordered = /^\d+[.)]\s+/u.test(trimmed)
+    if (ordered) {
+      pushParagraph(trimmed)
+      continue
+    }
+
+    // 引用：只去掉行首的 `>`。
+    if (/^>\s?/u.test(trimmed)) {
+      pushParagraph(trimmed.replace(/^>\s?/u, ''))
       continue
     }
 
     flushList()
     paragraph.push(...parseRuns(trimmed))
+    flushParagraph()
   }
   flushAll()
 
   if (nodes.length === 0) return null
-  return nodes.length > releaseNotesLimits.nodes ? nodes.slice(0, releaseNotesLimits.nodes) : nodes
+  // 上限按「内容单元」数：一个列表的每一项也算一个，否则 200 条项目符号会被当成 1 个节点混过去。
+  const units = nodes.reduce((total, node) => total + (node.kind === 'list' ? node.items.length : 1), 0)
+  // 超上限：整块不显示（`too-large`），不截断——部分展示会让读者不知道少了什么。
+  if (units > releaseNotesLimits.nodes) return null
+  return nodes
 }
 
-/** 开围栏：行首三个以上反引号或波浪号，可带语言标记（**语言只用来认出这是围栏，不进节点**）。 */
-function openingFenceMarker(line: string): string | null {
-  const match = /^\s{0,3}(`{3,}|~{3,})\s*\S*\s*$/u.exec(line)
-  if (match === null) return null
-  const marker = match[1]
-  // 反引号围栏的语言标记里不能再出现反引号（CommonMark 的同一条限制），否则就是普通文字。
-  if (marker.startsWith('`') && line.slice(line.indexOf(marker) + marker.length).includes('`')) return null
-  return marker
-}
-
-/** 结束围栏：标记相同、只允许尾随空白；比开围栏短的不算结束。 */
-function isClosingFence(line: string, marker: string): boolean {
-  const trimmed = line.trim()
-  if (trimmed.length < marker.length) return false
-  const unit = marker[0]
-  for (const character of trimmed) if (character !== unit) return false
-  return true
-}
-
-/**
- * 行内解析：只切 `**加粗**`、`` `代码` `` 与 `[文字](地址)`。**其余字符原样保留**——
- * 所以 HTML 标签就是一段普通文字，渲染时由 React 当文本转义。
- */
+/** 行内解析：只切 `**加粗**`、`` `代码` ``、`[文字](地址)`、`![说明](图片)`；其余原样保留。 */
 export function parseRuns(line: string): StructuredTextRun[] {
   const runs: StructuredTextRun[] = []
-  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]*)\]\([^)]*\)/gu
+  const pattern = /\*\*([^*]+)\*\*|`([^`]+)`|!\[([^\]]*)\]\([^)]*\)|\[([^\]]*)\]\([^)]*\)/gu
   let cursor = 0
   for (const match of line.matchAll(pattern)) {
-    const index = match.index ?? 0
-    if (index > cursor) runs.push({ text: line.slice(cursor, index), bold: false })
+    const at = match.index ?? 0
+    if (at > cursor) runs.push({ text: line.slice(cursor, at), bold: false })
     if (match[1] !== undefined) runs.push({ text: match[1], bold: true })
     else if (match[2] !== undefined) runs.push({ text: match[2], bold: false, code: true })
-    // 链接：只留文字，地址丢掉。
-    else if (match[3]) runs.push({ text: match[3], bold: false })
-    cursor = index + match[0].length
+    else if (match[3] !== undefined) runs.push({ text: match[3], bold: false })
+    else if (match[4] !== undefined) runs.push({ text: match[4], bold: false })
+    cursor = at + match[0].length
   }
   if (cursor < line.length) runs.push({ text: line.slice(cursor), bold: false })
-  return runs.length === 0 ? [{ text: line, bold: false }] : runs
+  return runs.length === 0 ? [] : runs
 }
 
-/** 标题里不保留任何标记，避免把 `**` 或链接语法显示给读者。 */
-function stripInlineMarkup(line: string): string {
+/** 标题里不保留任何标记：把片段拼成纯文字。 */
+function plainText(line: string): string {
   return parseRuns(line)
     .map((run) => run.text)
     .join('')
     .trim()
+}
+
+/** 把渲染出的节点还原成「读者能看到的词」，供「文字不丢」那条用例比对。 */
+export function nodesToPlainText(nodes: readonly StructuredTextNode[]): string {
+  const parts: string[] = []
+  for (const node of nodes) {
+    if (node.kind === 'section') parts.push(node.title)
+    else if (node.kind === 'code') parts.push(...node.lines)
+    else if (node.kind === 'paragraph') parts.push(node.runs.map((run) => run.text).join(''))
+    else parts.push(...node.items.map((item) => item.map((run) => run.text).join('')))
+  }
+  return parts.join('\n')
 }

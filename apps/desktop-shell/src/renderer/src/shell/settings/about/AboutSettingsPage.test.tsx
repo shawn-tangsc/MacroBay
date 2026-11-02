@@ -95,7 +95,7 @@ describe('the about page', () => {
       `${text.links.feedback}${text.links.actionFeedback}`
     ])
     // 「打开下载页」只由更新块渲染，链接块不重复。
-    expect(container.textContent).not.toContain(text.links.download)
+    expect(container.textContent).not.toContain(platformText['zh-CN'].about.action.update)
   })
 
   it('sends the id of the row that was clicked, never an address', async () => {
