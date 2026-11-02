@@ -1,0 +1,13 @@
+/* 修好后的样本：两个名字都成立，一个是静态定义，一个是白名单里的运行时注入。 */
+
+:root {
+  --fixed-token: #ffffff;
+}
+
+.demo-ok {
+  color: var(--fixed-token);
+}
+
+.demo-injected {
+  width: var(--injected-width);
+}

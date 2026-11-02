@@ -1,0 +1,23 @@
+/*
+ * 造坏用的样本：故意留一处无兜底、一处带兜底、一处注释里的假引用、一处真定义。
+ * 门禁必须先在这里红，才配谈它在全仓是绿的。
+ *
+ * 注释里的 var(--ghost-in-comment) 不算引用；下一行的 --ghost-in-comment: 也不算定义。
+ * --ghost-in-comment: 1px;
+ */
+
+.demo-avatar {
+  width: var(--ghost-size);
+}
+
+.demo-row {
+  border: 1px solid var(--ghost-border, #22252d);
+}
+
+:root {
+  --real-token: #ffffff;
+}
+
+.demo-ok {
+  color: var(--real-token);
+}
