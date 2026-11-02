@@ -45,7 +45,14 @@ export function WebSearchApiKeyField({
   const [revealedKey, setRevealedKey] = useState<string | null>(null)
   const [revealDraft, setRevealDraft] = useState(false)
   const [revealing, setRevealing] = useState(false)
-  const [revealError, setRevealError] = useState<string | null>(null)
+  /**
+   * 失败要带一个「重试能不能改变结果」的标记，而不是只带一句话。
+   *
+   * 判据：**动作必须与失败类型匹配**——桥不存在、没有存过 Key 这类确定性失败，重试永远得到同一
+   * 结果，给按钮只会让人以为是自己点法不对；只有「没连上主进程」这类瞬时失败才给重试。
+   * 原来四种失败共用一个渲染块，于是按钮被无条件画出来。
+   */
+  const [revealError, setRevealError] = useState<{ text: string; retryable: boolean } | null>(null)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -122,18 +129,18 @@ export function WebSearchApiKeyField({
     setRevealError(null)
     // 旧 preload：桥不存在时直接给可诊断文案，不能和“主进程报错/没有 Key”混为一谈。
     if (typeof window.platform?.webSearch?.revealApiKey !== 'function') {
-      setRevealError(labels.revealApiKeyUnavailable)
+      setRevealError({ text: labels.revealApiKeyUnavailable, retryable: false })
       return
     }
     setRevealing(true)
     try {
       const key = await onReveal()
       if (key === null) {
-        setRevealError(labels.revealApiKeyMissing)
+        setRevealError({ text: labels.revealApiKeyMissing, retryable: false })
         return
       }
       if (typeof key !== 'string' || key.length === 0) {
-        setRevealError(labels.revealApiKeyFailed)
+        setRevealError({ text: labels.revealApiKeyFailed, retryable: false })
         return
       }
       setRevealedKey(key)
@@ -143,7 +150,7 @@ export function WebSearchApiKeyField({
         timerRef.current = null
       }, API_KEY_REVEAL_TIMEOUT_MS)
     } catch {
-      setRevealError(labels.revealApiKeyBridgeFailed)
+      setRevealError({ text: labels.revealApiKeyBridgeFailed, retryable: true })
     } finally {
       setRevealing(false)
     }
@@ -245,10 +252,13 @@ export function WebSearchApiKeyField({
         {copied ? <span className="web-search-api-key-copied" role="status">{labels.apiKeyCopied}</span> : null}
         {revealError ? (
           <span className="web-search-api-key-error" role="alert">
-            {revealError}
-            <Button type="link" size="small" onClick={() => void reveal()}>
-              {labels.retry}
-            </Button>
+            {revealError.text}
+            {/* 只有「重试可能改变结果」的失败才给按钮：确定性失败上的按钮永远不会成功。 */}
+            {revealError.retryable ? (
+              <Button type="link" size="small" onClick={() => void reveal()}>
+                {labels.retry}
+              </Button>
+            ) : null}
           </span>
         ) : null}
       </div>

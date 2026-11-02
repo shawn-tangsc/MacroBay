@@ -205,7 +205,8 @@ describe('PLAT-55 masked API key field', () => {
     expect(onReveal).not.toHaveBeenCalled()
     expect(inputOf(container).value).toBe(preview)
     expect(container.textContent).toContain(labels.revealApiKeyUnavailable)
-    expect(container.textContent).toContain(labels.retry)
+    // 确定性失败：桥不会自己出现，重试永远得到同一结果——给按钮只会让人以为是自己点法不对。
+    expect(container.textContent).not.toContain(labels.retry)
     expect(container.innerHTML).not.toContain(savedKey)
   })
 
@@ -220,6 +221,8 @@ describe('PLAT-55 masked API key field', () => {
 
     expect(inputOf(container).value).toBe(preview)
     expect(container.textContent).toContain(labels.revealApiKeyBridgeFailed)
+    // 瞬时失败：重试可能改变结果，按钮必须在。
+    expect(container.textContent).toContain(labels.retry)
     expect(container.innerHTML).not.toContain(savedKey)
   })
 
@@ -233,14 +236,15 @@ describe('PLAT-55 masked API key field', () => {
     expect(container.innerHTML).not.toContain(savedKey)
   })
 
-  it('retries successfully once the bridge is available again', async () => {
+  it('succeeds on the next eye click once the bridge is there (no retry button to click)', async () => {
     const onReveal = vi.fn(async () => savedKey)
     const container = await mount({ onReveal, bridge: false })
     await click(container, '.web-search-api-key-eye')
     expect(container.textContent).toContain(labels.revealApiKeyUnavailable)
 
+    // 确定性失败没有重试按钮：用户能做的就是让桥回来（重启应用）之后再点一次眼睛。
     installBridge(true)
-    await clickText(container, labels.retry)
+    await click(container, '.web-search-api-key-eye')
 
     expect(onReveal).toHaveBeenCalledTimes(1)
     expect(inputOf(container).value).toBe(savedKey)
