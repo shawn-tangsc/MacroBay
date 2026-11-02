@@ -36,7 +36,9 @@ export const agentTextEn: AgentText = {
     sessionCount: (count) => `${count} session${count === 1 ? '' : 's'}`,
     emptyAgents: 'No agents yet. Create one to start.',
     agentSessionCount: (count) => `${count} session${count === 1 ? '' : 's'}`,
-    emptySessions: 'No sessions yet. Create one to start.'
+    emptySessions: 'No sessions yet. Create one to start.',
+    newSessionNeedsAgent: 'Pick an agent first to start a session',
+    clearFilteredNeedsFilter: 'No filtered sessions to clear'
   },
   sessionItem: {
     rename: 'Rename',

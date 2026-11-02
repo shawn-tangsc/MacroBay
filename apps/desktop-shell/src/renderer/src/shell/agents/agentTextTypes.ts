@@ -47,6 +47,10 @@ export type AgentText = {
     emptyAgents: string
     agentSessionCount: (count: number) => string
     emptySessions: string
+    /** 禁用原因：还没选助手。说处境，不说「按钮点了没用」。 */
+    newSessionNeedsAgent: string
+    /** 禁用原因：当前没有筛选结果可清。 */
+    clearFilteredNeedsFilter: string
   }
   sessionItem: {
     rename: string
