@@ -52,10 +52,9 @@ describe('notification settings availability', () => {
 
     // 那句「平台还没有产生通知的来源」已经不在任何状态里成立，键和分支都已删除。
     expect(container.textContent).not.toContain('平台目前还没有产生通知的来源')
-    // 通知中心常开、已从设置页移除：只剩三个投递开关。
-    expect(switches).toHaveLength(3)
-    // 三条可点，弹窗那条不可点（它没有落点）——见下一例的逐渠道断言。
-    expect(switches.filter((control) => (control as HTMLButtonElement).disabled)).toHaveLength(1)
+    // 通知中心常开、已从设置页移除；弹窗能力还没做，整行不渲染：只剩两条投递开关。
+    expect(switches).toHaveLength(2)
+    expect(switches.every((control) => !(control as HTMLButtonElement).disabled)).toBe(true)
     expect(container.textContent).toContain(labels.scopeNote)
   })
 
@@ -86,25 +85,33 @@ describe('notification settings availability', () => {
     )
   })
 
-  it('没落点的那条渠道单独禁用，并说自己这一个原因', async () => {
+  it('「能力有但被挡住」的那条：渲染 + 禁用 + 原因与控件关联', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'denied') } }
+    })
+
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
-    const switches = [...container.querySelectorAll<HTMLButtonElement>('.notification-channel-switch')]
+    const reason = container.querySelector('[data-desktop-permission="denied"]')
+    const desktopSwitch = [...container.querySelectorAll<HTMLButtonElement>('.notification-channel-switch')].at(-1)
 
-    // 弹窗还没有形态：它必须是禁用的，而且原因不能借用「系统没放行」。
-    expect(switches[2]?.disabled).toBe(true)
-    expect(container.textContent).toContain(labels.popupUnavailable)
-    // 横幅已经有落点，所以它可点——这正是逐渠道判的意义。
-    expect(switches[0]?.disabled).toBe(false)
+    expect(reason?.textContent).toBe(labels.desktopPermissionDenied)
+    // 只挂 role="note" 不关联控件，读屏走到开关时听不到原因。
+    expect(desktopSwitch?.getAttribute('aria-describedby')).toBe(reason?.getAttribute('id'))
   })
 
-  it('does not stamp a generic "not enabled" badge on a channel that simply works', async () => {
+  it('没有落点的渠道整行不渲染：禁用一个不存在的能力等于说这里本来有', async () => {
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
 
-    // 通用那句「未启用」已经删掉：它会让「有落点但没授权」的桌面渠道和「本版本没有」的弹窗说同一句话。
-    const tags = [...container.querySelectorAll('.ant-tag')].map((tag) => tag.textContent)
-    expect(tags).toEqual([labels.popupUnavailable])
+    // 弹窗属于「能力没有」这一档：不渲染，也就没有「为什么不能用」要解释。
+    // 按结构断言，不按整屏文字：建议行里仍提到「高优先级弹窗」（那句文案待营销改），
+    // 用文字断言会把文案问题当成渲染问题。
+    const rows = [...container.querySelectorAll('.notification-channel-row')]
+    const titles = rows.map((row) => row.querySelector('.notification-channel-title')?.textContent)
+    expect(titles).toEqual([labels.toastEnabled, labels.desktopEnabled])
+    // 这条屏上没有任何一个「未启用」式的通用徽标。
+    expect([...container.querySelectorAll('.ant-tag')]).toHaveLength(0)
   })
 })
 
@@ -138,14 +145,24 @@ describe('同一屏不许有两种说法', () => {
     expect(english.sendTestHint).toContain('permission status')
   })
 
-  it('已删掉的键不会悄悄回到设置页：判据放在行为上，不放在源码字符串上', async () => {
-    // 「源码里不含某个字符串」在键被删之后恒真，它证明不了任何事；真正的判据是这一屏渲染出来的东西：
-    // 每一条没有落点的渠道只说它自己的原因，没有任何「未启用」这类通用说法。
-    const container = await mount()
-    const labels = platformText['zh-CN'].notifications
-    const tags = [...container.querySelectorAll('.ant-tag')].map((tag) => tag.textContent)
+  it('原因说的是「现在是否成立」：窗口重新获得焦点会重读一次', async () => {
+    let state: 'granted' | 'denied' | 'unknown' = 'denied'
+    const readDesktopPermission = vi.fn(async () => state)
+    Object.assign(globalThis, { platform: { notifications: { readDesktopPermission } } })
 
-    expect(tags).toEqual([labels.popupUnavailable])
+    const container = await mount()
+    expect(container.querySelector('[data-desktop-permission="denied"]')).not.toBeNull()
+
+    // 用户去系统设置放行后切回来：不重读的话，这行还写着「没放行」，他会再改一遍。
+    state = 'granted'
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+
+    expect(readDesktopPermission.mock.calls.length).toBeGreaterThan(1)
+    expect(container.querySelector('[data-desktop-permission="denied"]')).toBeNull()
+    expect(container.querySelector('[data-desktop-permission="granted"]')).not.toBeNull()
   })
 })
 

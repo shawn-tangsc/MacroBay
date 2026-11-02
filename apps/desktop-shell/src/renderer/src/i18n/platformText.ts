@@ -995,7 +995,6 @@ export type PlatformText = {
   notifications: {
     channelsDescription: string
     scopeNote: string
-    popupUnavailable: string
     desktopPermissionGranted: string
     desktopPermissionDenied: string
     desktopPermissionUnknown: string
@@ -2082,7 +2081,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
-      popupUnavailable: '这个版本还不会弹出窗口提示',
       desktopPermissionGranted: '系统已放行桌面通知',
       desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
       desktopPermissionUnknown: '暂时无法确认系统是否放行',
@@ -3185,7 +3183,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
       scopeNote:
         'Keep at least one lightweight channel enabled. Desktop delivery is useful away from the app, while popups are better for events that need immediate attention.',
-      popupUnavailable: 'This version does not show pop-up alerts yet',
       desktopPermissionGranted: 'The system allows desktop notifications',
       desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
       desktopPermissionUnknown: 'Could not check whether the system allows notifications',

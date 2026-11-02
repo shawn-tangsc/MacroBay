@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Bell } from 'lucide-react'
-import { Button, Switch, Tag } from 'antd'
+import { Button, Switch } from 'antd'
 
 import { notificationDeliveryWired } from '@platform/notifications/contracts/notificationContracts'
 import type { NotificationSettings } from '@platform/settings/schema/appSettings'
@@ -23,6 +23,18 @@ const notificationToggleRows: Array<{
   { key: 'popupEnabled', channel: 'popup', titleKey: 'popupEnabled', descriptionKey: 'popupDescription' }
 ]
 
+/**
+ * 只有**有落点**的渠道才出现在这一屏。
+ *
+ * 两类事实不能同一种形态：「能力没有」（弹窗）→ 整行不渲染；「能力有但被挡住」（桌面被系统挡）
+ * → 渲染 + 禁用 + 同一行的原因。禁用一个不存在的能力，等于告诉用户「这里本来有」——
+ * 这正是今晚两颗没有处理函数的顶栏图标被删掉的同一条判据。
+ */
+const visibleRows = notificationToggleRows.filter((row) => notificationDeliveryWired[row.channel])
+
+/** 原因文字的 id：开关用 `aria-describedby` 指过来，读屏读到控件时能听到「为什么」。 */
+export const DESKTOP_PERMISSION_REASON_ID = 'notification-desktop-permission-reason'
+
 export function NotificationSettingsPane(props: {
   title: string
   notice?: string | null
@@ -39,15 +51,22 @@ export function NotificationSettingsPane(props: {
 
   useEffect(() => {
     let alive = true
-    void Promise.resolve(window.platform?.notifications?.readDesktopPermission?.())
-      .then((state) => {
-        if (alive) setDesktopPermission(state ?? 'unknown')
-      })
-      .catch(() => {
-        if (alive) setDesktopPermission('unknown')
-      })
+    const read = (): void => {
+      void Promise.resolve(window.platform?.notifications?.readDesktopPermission?.())
+        .then((state) => {
+          if (alive) setDesktopPermission(state ?? 'unknown')
+        })
+        .catch(() => {
+          if (alive) setDesktopPermission('unknown')
+        })
+    }
+    read()
+    // 用户去系统设置放行后会切回这个窗口：不重读的话，那行还写着「没放行」，他会白改一遍。
+    // 判据：第②类的原因是一个「现在是否仍然成立」的判断，不是「曾经如此」的记录。
+    window.addEventListener('focus', read)
     return () => {
       alive = false
+      window.removeEventListener('focus', read)
     }
   }, [])
 
@@ -61,13 +80,7 @@ export function NotificationSettingsPane(props: {
           : labels.desktopPermissionUnknown
 
   const wired = notificationDeliveryWired
-  // 每条没落点的渠道**被编译器要求**交出自己的原因；不写就编译不过，等于不能靠一句「未启用」糊过去。
-  const unavailableReason: Record<'toast' | 'desktop' | 'popup', 'popupUnavailable' | null> = {
-    toast: null,
-    desktop: null,
-    popup: 'popupUnavailable'
-  }
-  const availableChannels = notificationToggleRows.filter((row) => wired[row.channel]).length
+  const availableChannels = visibleRows.length
   // 点完必须**当场看到结果**：之前没有任何反馈，用户点了以为按钮坏了。
   const [sendResult, setSendResult] = useState<string | null>(null)
 
@@ -97,26 +110,30 @@ export function NotificationSettingsPane(props: {
       </div>
 
       <div className="notification-channel-list">
-        {notificationToggleRows.map((row) => {
+        {visibleRows.map((row) => {
           // 每条渠道各说各的原因：弹窗还没有形态（本版本没有），不能借用「系统没放行」那句——
           // 那是桌面渠道的原因，混用会把用户送去系统设置里白找一圈。
           const rowWired = wired[row.channel]
-          const reasonKey = unavailableReason[row.channel]
-          const reason = reasonKey === null ? null : labels[reasonKey]
           return (
             <label key={row.key} className="notification-channel-row">
               <span className="notification-channel-copy">
                 <strong className="notification-channel-title">{labels[row.titleKey]}</strong>
                 <span className="notification-channel-description">{labels[row.descriptionKey]}</span>
                 {row.channel === 'desktop' && desktopPermissionText !== null ? (
-                  <span className="notification-channel-state" data-desktop-permission={desktopPermission}>
+                  <span
+                    className="notification-channel-state"
+                    data-desktop-permission={desktopPermission}
+                    id={DESKTOP_PERMISSION_REASON_ID}
+                    role="note">
                     {desktopPermissionText}
                   </span>
                 ) : null}
               </span>
               <span className="notification-channel-controls">
-                {rowWired || reason === null ? null : <Tag>{reason}</Tag>}
                 <Switch
+                  aria-describedby={
+                    row.channel === 'desktop' && desktopPermissionText !== null ? DESKTOP_PERMISSION_REASON_ID : undefined
+                  }
                   className="notification-channel-switch"
                   size="small"
                   disabled={!rowWired}
