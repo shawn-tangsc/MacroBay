@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement, ReactNode } from 'react'
 
 import { ToastItem, type ToastAction, type ToastTone } from './ToastItem'
@@ -30,6 +30,11 @@ export type ToastApi = {
 
 type ToastEntry = ToastInput & { id: number; tone: ToastTone }
 
+/** 成功/信息 3s、失败 6s：失败要留够读和做动作的时间。 */
+const DURATION_MS: Record<ToastTone, number> = { success: 3000, info: 3000, danger: 6000 }
+/** 最多两条：第三条挤掉最旧的，不排队。 */
+const MAX_VISIBLE = 2
+
 const ToastContext = createContext<{ push: (tone: ToastTone, input: ToastInput) => void } | null>(null)
 
 export type ToastHostProps = {
@@ -45,7 +50,7 @@ export function ToastHost({ resolveText, children }: ToastHostProps): ReactEleme
     setEntries((current) => {
       const next = { ...input, id: Date.now() + Math.random(), tone }
       // 最多两条：第三条挤掉最旧的，不排队。
-      return [...current, next].slice(-2)
+      return [...current, next].slice(-MAX_VISIBLE)
     })
   }, [])
 
@@ -56,18 +61,69 @@ export function ToastHost({ resolveText, children }: ToastHostProps): ReactEleme
       {children}
       <div aria-label={regionLabel} className="toast-region" role="region">
         {entries.map((entry) => (
-          <ToastItem
-            action={entry.action}
-            descKey={entry.descKey}
+          <TimedToast
+            durationMs={DURATION_MS[entry.tone]}
+            entry={entry}
             key={entry.id}
             onDismiss={() => setEntries((current) => current.filter((item) => item.id !== entry.id))}
+            onExpire={() => setEntries((current) => current.filter((item) => item.id !== entry.id))}
             resolveText={resolveText}
-            titleKey={entry.titleKey}
-            tone={entry.tone}
           />
         ))}
       </div>
     </ToastContext.Provider>
+  )
+}
+
+/**
+ * 一条带计时器的提示。
+ *
+ * 悬停或聚焦**暂停**、离开后恢复的是**剩余时间**，不是重新计时：写成 `clearTimeout` 再设一个
+ * 完整时长，表面上暂停了，实际读者移开鼠标又能多看三秒——测试也看不出来，除非用假计时器在
+ * 快到期时悬停、再多等一会儿断言它还在。
+ */
+function TimedToast({
+  entry,
+  durationMs,
+  onDismiss,
+  onExpire,
+  resolveText
+}: {
+  entry: ToastEntry
+  durationMs: number
+  onDismiss: () => void
+  onExpire: () => void
+  resolveText: (key: string) => string
+}): ReactElement {
+  const [paused, setPaused] = useState(false)
+  const remainingRef = useRef(durationMs)
+
+  useEffect(() => {
+    if (paused) return
+    const startedAt = Date.now()
+    const timer = setTimeout(onExpire, remainingRef.current)
+    return () => {
+      clearTimeout(timer)
+      // 记下这次实际走了多久，恢复时只补剩下的那段。
+      remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAt))
+    }
+  }, [paused, onExpire])
+
+  return (
+    <div
+      onBlur={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}>
+      <ToastItem
+        action={entry.action}
+        descKey={entry.descKey}
+        onDismiss={onDismiss}
+        resolveText={resolveText}
+        titleKey={entry.titleKey}
+        tone={entry.tone}
+      />
+    </div>
   )
 }
 

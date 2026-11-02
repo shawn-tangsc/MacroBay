@@ -48,7 +48,95 @@ async function mount(withHost = true): Promise<{ host: HTMLElement; calls: Array
   return { host, calls }
 }
 
+function MultiProbe({ actions }: { actions: Array<(toast: ReturnType<typeof useToast>) => void> }): null {
+  const toast = useToast()
+  actions.push((api) => api)
+  void toast
+  return null
+}
+
 describe('ToastHost', () => {
+  it('keeps at most two and evicts the oldest without stealing focus', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const input = document.createElement('input')
+    document.body.append(input)
+    input.focus()
+
+    let api: ReturnType<typeof useToast> | null = null
+    function Grab(): null {
+      api = useToast()
+      return null
+    }
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <ToastHost resolveText={key}>
+          <Grab />
+        </ToastHost>
+      )
+    })
+
+    await act(async () => {
+      api!.success({ titleKey: 'ui.test.one' })
+      api!.success({ titleKey: 'ui.test.two' })
+      api!.success({ titleKey: 'ui.test.three' })
+    })
+
+    const titles = [...host.querySelectorAll('.toast__title')].map((node) => node.textContent)
+    expect(titles).toEqual(['ui.test.two', 'ui.test.three'])
+    // 读者可能正在弹窗里打字：挤掉最旧的一条不许把焦点拽走。
+    expect(document.activeElement).toBe(input)
+  })
+
+  it('pauses on hover and resumes the remaining time instead of restarting it', async () => {
+    vi.useFakeTimers()
+    const host = document.createElement('div')
+    document.body.append(host)
+    let api: ReturnType<typeof useToast> | null = null
+    function Grab(): null {
+      api = useToast()
+      return null
+    }
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <ToastHost resolveText={key}>
+          <Grab />
+        </ToastHost>
+      )
+    })
+
+    await act(async () => {
+      api!.success({ titleKey: 'ui.test.timed' })
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2900)
+    })
+
+    const close = host.querySelector<HTMLButtonElement>('.toast button')!
+    await act(async () => {
+      close.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+      close.focus()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    // 悬停期间不消失。
+    expect(host.querySelector('.toast')).not.toBeNull()
+
+    await act(async () => {
+      close.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+      close.blur()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200)
+    })
+    // 剩余时间只够 100ms 左右：恢复的是剩余段，不是重新给 3s。
+    expect(host.querySelector('.toast')).toBeNull()
+    vi.useRealTimers()
+  })
+
   it('keeps its region click-through, so the buttons underneath stay usable', async () => {
     const { host } = await mount()
     const region = host.querySelector<HTMLElement>('.toast-region')!
