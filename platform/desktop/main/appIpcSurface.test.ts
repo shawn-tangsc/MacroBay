@@ -19,6 +19,7 @@ const webIpcSource = readSource('ipc/webIpc.ts')
 const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
 const modelIpcSource = readSource('ipc/modelIpc.ts')
+const assistantIpcSource = readSource('ipc/assistantIpc.ts')
 // 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
 const windowIpcSource = readSource('ipc/windowIpc.ts')
 
@@ -169,7 +170,7 @@ describe('desktop main IPC surface', () => {
       collapseWhitespace('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
     expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
     expect(appSource).toContain('registerJobIpcHandlers(')
@@ -226,7 +227,7 @@ describe('desktop main IPC surface', () => {
     expect(modelSyncHandler).not.toContain("(await providerStore.getState()).providers.find((item) => item.id === providerId)")
     expect(appSource).not.toContain('testModelProviderConnection(provider, options)')
     expect(appSource).not.toContain('apiKey: options?.apiKey')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
   })
@@ -276,7 +277,7 @@ describe('desktop main IPC surface', () => {
     }
     // 既有受保护面逐字未变
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
     expect(appSource).toContain('registerJobIpcHandlers(')
@@ -340,11 +341,11 @@ describe('desktop main IPC surface', () => {
   })
 
   it('keeps assistant IPC handlers registered alongside agent handlers', () => {
-    expect(appSource).toContain('IpcChannels.assistantsList')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
-    expect(appSource).toContain('IpcChannels.assistantsLibraryListTemplates')
-    expect(appSource).toContain('IpcChannels.assistantsLibraryInstallTemplate')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsList')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsLibraryListTemplates')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsLibraryInstallTemplate')
   })
 
   it('adds exactly one web search reveal channel and drops no existing channels', () => {
@@ -375,8 +376,8 @@ describe('desktop main IPC surface', () => {
     expect(webIpcSource).toContain('IpcChannels.webSearchRevealProviderApiKey')
     expect(webIpcSource).toContain('IpcChannels.webSearchCheckProvider')
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
     expect(appSource).toContain('IpcChannels.agentsListProductToolPackages')
   })
@@ -390,7 +391,7 @@ describe('desktop main IPC surface', () => {
     expect(storageIpcSource).toContain('IpcChannels.storageClearCache')
     expect(storageIpcSource).toContain('IpcChannels.storageCompactCache')
     expect(storageIpcSource).toContain('IpcChannels.storageListCacheOperations')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
   })
@@ -472,7 +473,7 @@ describe('desktop main IPC surface', () => {
     }
     // 既有受保护 seam 不得因 workspace 接线丢失
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     // web search handler 已搬到 ipc/webIpc.ts：受保护 seam 看模块而不是只看 app.ts。
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
@@ -542,7 +543,7 @@ describe('desktop main IPC surface', () => {
     ])
     // 既有受保护面逐字未变（agent / assistant / product）
     expect(appSource).toContain('IpcChannels.agentsSendMessage')
-    expect(appSource).toContain('IpcChannels.assistantsStreamOpen')
+    expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
   })
 

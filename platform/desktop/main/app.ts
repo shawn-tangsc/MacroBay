@@ -171,6 +171,7 @@ import { registerStorageIpc } from './ipc/storageIpc'
 import { registerWebIpc } from './ipc/webIpc'
 import { registerChannelIpc } from './ipc/channelIpc'
 import { registerModelIpc } from './ipc/modelIpc'
+import { registerAssistantIpc } from './ipc/assistantIpc'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
@@ -1630,113 +1631,11 @@ function registerIpcHandlers(
   )
   ipcMain.handle(IpcChannels.agentsSkillsListLocal, (_event: IpcMainInvokeEvent, workdir: string) => skillService.listLocal(workdir))
 
-  ipcMain.handle(IpcChannels.assistantsList, () => assistantIpcHandlers.listAssistants())
-  ipcMain.handle(IpcChannels.assistantsGet, (_event: IpcMainInvokeEvent, assistantId: string) =>
-    assistantIpcHandlers.getAssistant(assistantId)
-  )
-  ipcMain.handle(IpcChannels.assistantsCreate, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.createAssistant(input as Parameters<typeof assistantIpcHandlers.createAssistant>[0])
-  )
-  ipcMain.handle(IpcChannels.assistantsUpdate, (_event: IpcMainInvokeEvent, assistantId: string, patch: unknown) =>
-    assistantIpcHandlers.updateAssistant(assistantId, patch as Parameters<typeof assistantIpcHandlers.updateAssistant>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsDelete, (_event: IpcMainInvokeEvent, assistantId: string) =>
-    assistantIpcHandlers.deleteAssistant(assistantId)
-  )
-  ipcMain.handle(IpcChannels.assistantsReorder, (_event: IpcMainInvokeEvent, orderedIds: string[]) =>
-    assistantIpcHandlers.reorderAssistants(orderedIds)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryListTemplates,
-    async (_event: IpcMainInvokeEvent, query?: unknown, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.listAssistantTemplates(
-        (query as Parameters<typeof assistantIpcHandlers.listAssistantTemplates>[0]) ?? {},
-        language ?? (await settingsStore.get()).language
-      )
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryGetTemplate,
-    async (_event: IpcMainInvokeEvent, templateId: string, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.getAssistantTemplate(templateId, language ?? (await settingsStore.get()).language)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryInstallTemplate,
-    async (_event: IpcMainInvokeEvent, input: unknown, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.installAssistantTemplate(
-        input as Parameters<typeof assistantIpcHandlers.installAssistantTemplate>[0],
-        language ?? (await settingsStore.get()).language
-      )
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsLibraryListGroups,
-    async (_event: IpcMainInvokeEvent, language?: 'zh-CN' | 'en-US') =>
-      assistantIpcHandlers.listAssistantTemplateGroups(language ?? (await settingsStore.get()).language)
-  )
-  ipcMain.handle(IpcChannels.assistantsLibraryCreateAssistant, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.createAssistantFromLibrary(
-      input as Parameters<typeof assistantIpcHandlers.createAssistantFromLibrary>[0]
-    )
-  )
-  ipcMain.handle(IpcChannels.assistantsListTopics, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    assistantIpcHandlers.listTopics((query as Parameters<typeof assistantIpcHandlers.listTopics>[0]) ?? {})
-  )
-  ipcMain.handle(IpcChannels.assistantsCreateTopic, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.createTopic(input as Parameters<typeof assistantIpcHandlers.createTopic>[0])
-  )
-  ipcMain.handle(IpcChannels.assistantsUpdateTopic, (_event: IpcMainInvokeEvent, topicId: string, patch: unknown) =>
-    assistantIpcHandlers.updateTopic(topicId, patch as Parameters<typeof assistantIpcHandlers.updateTopic>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsDeleteTopic, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.deleteTopic(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsPinTopic, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.pinTopic(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsUnpinTopic, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.unpinTopic(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsListTopicMessages, (_event: IpcMainInvokeEvent, topicId: string, nodeId?: string | null) =>
-    assistantIpcHandlers.listTopicMessages(topicId, nodeId)
-  )
-  ipcMain.handle(IpcChannels.assistantsSetActiveNode, (_event: IpcMainInvokeEvent, topicId: string, nodeId: string | null) =>
-    assistantIpcHandlers.setActiveNode(topicId, nodeId)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsRenameTopic,
-    (_event: IpcMainInvokeEvent, topicId: string, name: string, isNameManuallyEdited?: boolean) =>
-      assistantIpcHandlers.renameTopic(topicId, name, isNameManuallyEdited)
-  )
-  ipcMain.handle(IpcChannels.assistantsCreateMessageSibling, (_event: IpcMainInvokeEvent, messageId: string, dto: unknown) =>
-    assistantIpcHandlers.createMessageSibling(messageId, dto as Parameters<typeof assistantIpcHandlers.createMessageSibling>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsEditAndResendUserMessage, (_event: IpcMainInvokeEvent, input: unknown) =>
-    assistantIpcHandlers.editAndResendUserMessage(
-      input as Parameters<typeof assistantIpcHandlers.editAndResendUserMessage>[0]
-    )
-  )
-  ipcMain.handle(IpcChannels.assistantsClearTopicMessages, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.clearTopicMessages(topicId)
-  )
-  ipcMain.handle(
-    IpcChannels.assistantsSearchTopicMessages,
-    (_event: IpcMainInvokeEvent, topicId: string, query: string, limit?: number) =>
-      assistantIpcHandlers.searchTopicMessages(topicId, query, limit)
-  )
-  ipcMain.handle(IpcChannels.assistantsDeleteMessage, (_event: IpcMainInvokeEvent, messageId: string, options?: unknown) =>
-    assistantIpcHandlers.deleteMessage(messageId, options as Parameters<typeof assistantIpcHandlers.deleteMessage>[1])
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamOpen, (_event: IpcMainInvokeEvent, request: unknown) =>
-    assistantIpcHandlers.streamOpen(request as Parameters<typeof assistantIpcHandlers.streamOpen>[0])
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamAttach, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.streamAttach(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamAbort, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.streamAbort(topicId)
-  )
-  ipcMain.handle(IpcChannels.assistantsStreamGetStatus, (_event: IpcMainInvokeEvent, topicId: string) =>
-    assistantIpcHandlers.streamGetStatus(topicId)
-  )
+  // 助手域 29 个 handler 搬到 ipc/assistantIpc.ts；流事件广播仍在上面那个构造里。
+  registerAssistantIpc(ipcMain, {
+    assistantIpcHandlers,
+    getLanguage: async () => (await settingsStore.get()).language
+  })
 
   configureNotificationRuntime({
     getSettings: async () => (await settingsStore.get()).notifications,
