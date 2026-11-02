@@ -27,13 +27,6 @@ type SessionItemProps = {
   channelType?: string
   channelRuntime?: AgentSessionChannelRuntimeBadge
   sessionPanelPosition: AgentSessionPanelPosition
-  dragging?: boolean
-  dragOver?: boolean
-  draggable?: boolean
-  onDragStart?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDragOver?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDrop?: (event: React.DragEvent<HTMLDivElement>) => void
-  onDragEnd?: () => void
   onUpdateSessionPanelPosition: (position: AgentSessionPanelPosition) => void
   onPress: () => void
   onStateChange: (updater: (state: AgentStoreState) => AgentStoreState) => void
@@ -47,13 +40,6 @@ export default function SessionItem({
   channelType,
   channelRuntime,
   sessionPanelPosition,
-  dragging = false,
-  dragOver = false,
-  draggable = false,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
   onUpdateSessionPanelPosition,
   onPress,
   onStateChange
@@ -179,19 +165,7 @@ export default function SessionItem({
       <div
         role="button"
         tabIndex={0}
-        className={[
-          'agent-session-item',
-          active ? 'active' : '',
-          dragging ? 'dragging' : '',
-          dragOver ? 'drag-over' : ''
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        draggable={draggable && !editing}
-        onDragStart={onDragStart}
-        onDragOver={onDragOver}
-        onDrop={onDrop}
-        onDragEnd={onDragEnd}
+        className={['agent-session-item', active ? 'active' : ''].filter(Boolean).join(' ')}
         onClick={pressSessionRow}
         onKeyDown={handleSessionRowKeyDown}
         onDoubleClick={() => {

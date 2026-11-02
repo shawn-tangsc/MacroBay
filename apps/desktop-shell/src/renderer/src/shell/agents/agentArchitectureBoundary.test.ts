@@ -36,6 +36,22 @@ describe('agent renderer architecture boundary', () => {
     expect(sidePanel).toContain('t.navbar.createAgent')
   })
 
+  it('offers no manual session ordering while recency decides the list', () => {
+    // 顺序的唯一来源是「最近活跃」（R169）。手工拖拽排序松手后会弹回原位——它动过、也真的存了，
+    // 但屏幕上没有变化，比没有这个能力更糟。数据与写库接口保留：哪天要让用户自定义顺序，
+    // 那是「排序来源」重新立项，而不是把入口悄悄接回来。
+    const sessions = readFileSync(resolve(agentsDir, 'components/Sessions.tsx'), 'utf8')
+    const sessionItem = readFileSync(resolve(agentsDir, 'components/SessionItem.tsx'), 'utf8')
+
+    expect(sessions).not.toContain('onDragStart')
+    expect(sessions).not.toContain('reorderSessionsViaApi')
+    expect(sessionItem).not.toContain('draggable')
+    expect(sessionItem).not.toContain('onDragStart')
+    // 能力本身还在：数据层照旧能写顺序，只是界面不再发起。
+    const store = readFileSync(resolve(process.cwd(), 'platform/ai/agent-platform/store/agentStore.ts'), 'utf8')
+    expect(store).toContain('export function reorderAgentSessions')
+  })
+
   it('routes renderer mutations through the Agent action facade', () => {
     const source = collectSourceFiles(agentsDir)
       .filter((file) => !file.endsWith('agentStateActions.ts'))

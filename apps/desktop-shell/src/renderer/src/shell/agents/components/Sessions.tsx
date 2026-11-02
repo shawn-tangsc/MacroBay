@@ -7,9 +7,7 @@ import type { AgentSessionEntity } from '@platform/ai/agent-platform/schemas/ses
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
 import type { AgentSessionPanelPosition } from '@platform/settings/schema/appSettings'
 
-import { reorderSessions } from '../agentStateActions'
 import { createSessionSeenState, getSessionBadgeStatus, reconcileSessionSeenState } from '../agentSessionSeenState'
-import { reorderSessionsViaApi } from '../agentSessionDataApi'
 import {
   buildSessionRuntimeStatusById,
   getLatestAssistantMessageUpdatedAt,
@@ -47,8 +45,6 @@ export default function Sessions({
   onStateChange
 }: SessionsProps): React.ReactElement {
   const t = useAgentText()
-  const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null)
-  const [dragOverSessionId, setDragOverSessionId] = useState<string | null>(null)
   const [seenState, setSeenState] = useState(createSessionSeenState)
   const groups = groupAgentSessions(sessions, pinnedSessionIds, t.common)
   const statusBySessionId = buildSessionRuntimeStatusById(sessions, runtimeStateBySessionId)
@@ -76,27 +72,6 @@ export default function Sessions({
     )
   }, [activeSessionId, latestAssistantUpdatedAtBySessionId, sessionIds])
 
-  function reorderWithinGroup(groupSessions: AgentSessionEntity[], targetSessionId: string): void {
-    if (!draggingSessionId || draggingSessionId === targetSessionId) return
-    const draggedIndex = groupSessions.findIndex((session) => session.id === draggingSessionId)
-    const targetIndex = groupSessions.findIndex((session) => session.id === targetSessionId)
-    if (draggedIndex < 0 || targetIndex < 0) return
-
-    const nextGroupSessionIds = groupSessions.map((session) => session.id)
-    const [draggedId] = nextGroupSessionIds.splice(draggedIndex, 1)
-    nextGroupSessionIds.splice(targetIndex, 0, draggedId)
-    const nextSessionIds = sessions.map((session) => session.id)
-    const groupSessionIds = new Set(groupSessions.map((session) => session.id))
-    let groupIndex = 0
-    const orderedSessionIds = nextSessionIds.map((sessionId) =>
-      groupSessionIds.has(sessionId) ? nextGroupSessionIds[groupIndex++] : sessionId
-    )
-
-    void reorderSessionsViaApi(window.platform, orderedSessionIds).catch(() => {
-      onStateChange((current) => reorderSessions(current, orderedSessionIds))
-    })
-  }
-
   return (
     <section className="agent-sessions">
       <div className="agent-session-list">
@@ -122,30 +97,6 @@ export default function Sessions({
                 channelType={channelTypeBySessionId[session.id]}
                 channelRuntime={channelRuntimeBySessionId[session.id]}
                 sessionPanelPosition={sessionPanelPosition}
-                dragging={draggingSessionId === session.id}
-                dragOver={dragOverSessionId === session.id && draggingSessionId !== session.id}
-                draggable
-                onDragStart={(event) => {
-                  setDraggingSessionId(session.id)
-                  event.dataTransfer.effectAllowed = 'move'
-                  event.dataTransfer.setData('text/plain', session.id)
-                }}
-                onDragOver={(event) => {
-                  if (!draggingSessionId || draggingSessionId === session.id) return
-                  event.preventDefault()
-                  event.dataTransfer.dropEffect = 'move'
-                  setDragOverSessionId(session.id)
-                }}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  reorderWithinGroup(group.sessions, session.id)
-                  setDraggingSessionId(null)
-                  setDragOverSessionId(null)
-                }}
-                onDragEnd={() => {
-                  setDraggingSessionId(null)
-                  setDragOverSessionId(null)
-                }}
                 onUpdateSessionPanelPosition={onUpdateSessionPanelPosition}
                 onPress={() => {
                   onSelectSession(session.id)

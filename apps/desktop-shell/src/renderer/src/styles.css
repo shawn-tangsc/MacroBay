@@ -3750,21 +3750,6 @@ h1 {
   box-shadow: 0 1px 2px color-mix(in srgb, #000 4%, transparent);
 }
 
-.agent-session-item.dragging {
-  opacity: 0.48;
-}
-
-.agent-session-item.drag-over::after {
-  position: absolute;
-  right: 8px;
-  bottom: 0;
-  left: 12px;
-  height: 1px;
-  border-radius: 999px;
-  background: var(--accent);
-  content: "";
-}
-
 .agent-row-avatar {
   width: 30px;
   height: 30px;
