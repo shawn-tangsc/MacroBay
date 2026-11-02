@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { looksLikeTextKey } from '../textKeyShape'
 
 /**
- * `StatusPill` 的两条守卫（架构师 2026-11-02 定的门槛）：
+ * `StatusPill` 的三条守卫（架构师 2026-11-02 定的门槛）：
  *
  * 1. **`labelKey` 只收键。** 类型是开区间 `string`（每个站点的状态词不同，平台枚举不出来），
  *    所以「必填且必须是键」只能由守卫保证：值含中文、空白或已解析的句子即红。
@@ -14,11 +14,37 @@ import { looksLikeTextKey } from '../textKeyShape'
  * 2. **这个名字只属于平台组件。** 产品里再出现一个同名 `StatusPill`，读代码的人就分不清
  *    哪个是状态药丸、哪个是别的东西（`TranslationPreferencesSection.tsx` 那个实际是
  *    label+value 的计数徽标，已改名 `CountBadge`）。
+ * 3. **迁移欠账清单只减不增**：`apps/` 与 `products/` 里还在 `import { Tag } from 'antd'` 的文件记在
+ *    `scripts/migration-debt/status-pill.json`，**双向断言**。
+ *
+ *    **范围故意窄到 antd `Tag`，不收手写的 chip/pill/badge 类名。** 类名不说明它是不是一个 settled
+ *    状态词——同一个 `-badge`/`-pill` 后缀下，既可能是未读数（计数）、也可能是分类标签、也可能是类型
+ *    标注。把它们算进机器清单，会一次种进十几条没人能迁的假条目，而**一份永远缩不短的清单会被整条
+ *    关掉**。手写那批逐处判，记在人读的映射文档里。
  */
 const ROOT = resolve(__dirname, '../../../..')
 const SCANNED_ROOTS = ['apps', 'platform', 'products']
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
 const PLATFORM_ROOT = join(ROOT, 'platform')
+
+/** 迁移欠账清单：被 git 追踪、不在组件目录；读不到就抛，不吞。 */
+const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/status-pill.json')
+function readDebt(): ReadonlySet<string> {
+  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+  if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
+  return new Set(Object.keys(parsed.entries))
+}
+const ANTD_TAG_BASELINE = readDebt()
+const DEBT_SCANNED_ROOTS = ['apps', 'products'] as const
+
+/** 从 `import … from 'antd'` 的具名列表里取出 `Tag`（`Tag as X` 也算）。 */
+export function importsAntdTag(text: string): boolean {
+  for (const match of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'antd'/g)) {
+    const names = (match[1] ?? '').split(',')
+    if (names.some((name) => /^\s*Tag(\s+as\s+\w+)?\s*$/.test(name))) return true
+  }
+  return false
+}
 
 /**
  * 单元测试里用 `ui.test.*` 这类假键，形状与真键一致，不需要例外。
@@ -86,6 +112,34 @@ describe('StatusPill guards', () => {
       .filter((offender) => !/\.test\.tsx?$/.test(offender.file))
 
     expect(offenders).toEqual([])
+  })
+
+  it('keeps the antd tags on the shrinking list, and nothing else', () => {
+    const files = DEBT_SCANNED_ROOTS.flatMap((root) => {
+      try {
+        return sourceFiles(join(ROOT, root))
+      } catch {
+        return []
+      }
+    })
+    const offenders = files
+      .map((file) => relative(ROOT, file).replace(/\\/g, '/'))
+      .filter((file) => importsAntdTag(readFileSync(join(ROOT, file), 'utf8')) && !ANTD_TAG_BASELINE.has(file))
+
+    // 状态词用 `@platform/ui/components/status-pill`。
+    expect(offenders).toEqual([])
+  })
+
+  it('shrinks the list: a migrated file must have its line deleted', () => {
+    const stale = [...ANTD_TAG_BASELINE].filter((file) => {
+      try {
+        return !importsAntdTag(readFileSync(join(ROOT, file), 'utf8'))
+      } catch {
+        return true
+      }
+    })
+
+    expect(stale).toEqual([])
   })
 
   it('catches a sentence, a CJK label and a second declaration, so neither guard passes vacuously', () => {
