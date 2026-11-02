@@ -192,8 +192,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
         {/* A conclusion about the card above it, not another section: the reader asks "so what do
             these two legs mean together" while looking at the chart, and a band of its own read
             as an unrelated module. */}
-        <DivergencePanel state={divergence.state} text={text.divergence}
-          onRetry={divergence.state.state === 'loading' ? undefined : divergence.reload} />
+        <DivergencePanel state={divergence.state} text={text.divergence} onRetry={divergence.reload} />
       </div>
 
       <DashboardSidebar calendarState={calendarState} fearGreedState={fearGreedState} fundingRateState={fundingRateState} feedRows={feedRows} nowMs={nowMs} text={text} onManageSource={onManageSource} onOpenCalendar={onOpenCalendar} />

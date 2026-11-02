@@ -13,7 +13,7 @@ import { DivergencePanel } from './DivergencePanel'
 const text = productText['zh-CN'].pages.intelligence.portal.dashboard.divergence
 const render = (state: Parameters<typeof DivergencePanel>[0]['state'], locale: 'zh-CN' | 'en-US' = 'zh-CN') =>
   renderToStaticMarkup(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
-    state, text: productText[locale].pages.intelligence.portal.dashboard.divergence
+    state, onRetry: () => undefined, text: productText[locale].pages.intelligence.portal.dashboard.divergence
   })))
 
 const row = {
@@ -147,15 +147,17 @@ describe('states that must not be confused', () => {
         { pairId: 'liquidity-leverage', reason: 'leg-stale', leg: 'stablecoin' }
       ]
     })
+    // The state surface is the shared one now: it owns the title, the icon and the announcement,
+    // and the product still supplies the sentence naming which pairs were withheld.
+    expect(markup).toContain('data-state="error"')
     expect(markup).toContain(text.nothingCompared)
-    expect(markup).toContain('data-tone="error"')
     expect(markup).not.toContain(text.empty)
   })
 
   it('keeps the quiet sentence when the pairs were compared and simply agreed', () => {
     const markup = render({ state: 'empty', withheld: [] })
     expect(markup).toContain(text.empty)
-    expect(markup).not.toContain('data-tone="error"')
+    expect(markup).not.toContain('data-state="error"')
   })
 })
 
@@ -168,7 +170,8 @@ describe('invalidation on focus', () => {
     const root = createRoot(container)
     await act(async () => {
       root.render(createElement(ShellTimeZoneProvider, { timeZone: 'UTC' }, createElement(DivergencePanel, {
-        state: { state: 'available', rows: [{ pairId: 'liquidity-leverage', direction: 'bearish', legs: row.legs }], withheld: [] }, text
+        state: { state: 'available', rows: [{ pairId: 'liquidity-leverage', direction: 'bearish', legs: row.legs }], withheld: [] },
+        onRetry: () => undefined, text
       })))
     })
     const line = container.querySelector('[data-pair="liquidity-leverage"]') as HTMLElement
