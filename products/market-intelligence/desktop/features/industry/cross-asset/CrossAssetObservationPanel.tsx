@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Popover, Tooltip } from 'antd'
+import { Button, Popover } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
 import { Popover as FocusPopover } from '@platform/ui/components/popover'
@@ -69,6 +69,10 @@ const sourceStateTone: Readonly<Record<'disabled' | 'connecting' | 'live' | 'sta
 const crossAssetTextKeys = Object.freeze({
   subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
   refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
+  noData: 'pages.intelligence.portal.dashboard.crossAsset.noData',
+  syntheticCaveat: 'pages.intelligence.portal.dashboard.crossAsset.syntheticCaveat',
+  proxyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.proxyCaveat',
+  marketClosedHint: 'pages.intelligence.portal.dashboard.crossAsset.marketClosedHint',
   rangeLabel: 'pages.intelligence.portal.dashboard.crossAsset.rangeLabel',
   hintAnalysis: 'pages.intelligence.portal.dashboard.crossAsset.hintAnalysis',
   hintCoverage: 'pages.intelligence.portal.dashboard.crossAsset.hintCoverage',
@@ -95,6 +99,13 @@ type CrossAssetRange = typeof crossAssetRanges[number]
 type Text = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
 type MacroDriverId = 'dxy' | 'gold' | 'us10y' | 'realRate'
 type RowMetrics = Readonly<Record<CrossAssetWindow, CrossAssetMetric>>
+/**
+ * 浮层的一行：键 + **这一行自己的**参数（契约 §8）。
+ *
+ * 写成本地类型而不是从左邻右舍推出来：三行的参数键各不相同，不标注时 TS 会把数组元素推成
+ * 「每行都带一整套可选参数」的联合，反而塞不进 `PopoverLine`（`undefined` 不是字符串）。
+ */
+type HintLine = { labelKey: string; params?: Readonly<Record<string, string>> }
 
 function priceOf(snapshot: CrossAssetSnapshot | undefined, asset: CrossAssetId): string {
   const quote = snapshot?.quotes?.[asset]
@@ -123,6 +134,7 @@ function macroMetrics(reading: MacroMarketSnapshotReading | undefined): RowMetri
   return Object.freeze(metrics)
 }
 function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMetrics; text: Text }): React.ReactElement {
+  const resolveText = useProductTextKey()
   return <>{crossAssetWindows.map(window => {
     const metric = metrics?.[window]
     // A missing window is a dash in the cell and 无数据 in a tooltip: the column stays narrow and the
@@ -134,7 +146,7 @@ function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMetrics; 
       data-unavailable={percent === undefined ? 'true' : undefined}
       tabIndex={percent === undefined ? 0 : undefined}>{percent ?? text.windowNoData}</td>
     return percent === undefined
-      ? <Tooltip key={window} title={text.noData} trigger={['hover', 'focus']}>{cell}</Tooltip>
+      ? <FocusTooltip key={window} labelKey={crossAssetTextKeys.noData} resolveText={resolveText}>{cell}</FocusTooltip>
       : cell
   })}</>
 }
@@ -196,13 +208,14 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
   // The live tick rides beside the collected level and never replaces it: the four window cells below
   // still come from stored points, and the freshness tag marks the 最新 cell as an unclosed value.
   const live = reading?.live
+  const resolveText = useProductTextKey()
   return <tr data-status-row={id} data-connected="true">
     <th scope="row"><span>{text.assetLabels[id]}
       {/* The synthetic label rides with the level: a level this product computed is never shown as
           if it were the licensed index, and the caveat sentence is one hover away. */}
-      {reading?.synthetic ? <Tooltip title={text.syntheticCaveat} trigger={['hover', 'focus']}>
+      {reading?.synthetic ? <FocusTooltip labelKey={crossAssetTextKeys.syntheticCaveat} resolveText={resolveText}>
         <em className="mi-cross-asset__synthetic" data-synthetic={id}
-          data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex} tabIndex={0}>{text.syntheticTag}</em></Tooltip> : null}
+          data-caveat={macroMarketSnapshotPublicPolicy.caveats.syntheticDollarIndex} tabIndex={0}>{text.syntheticTag}</em></FocusTooltip> : null}
       {/* Freshness belongs with the name, beside the synthetic tag, not glued to the figure: a tag
           after the price reads as if it qualified the number itself. */}
       {live ? <LiveBadge state={live.state} tick={live} formatTime={formatTime} text={text} /> : null}
@@ -231,6 +244,7 @@ function IndexStatusRow({ snapshot, text, formatTime }: {
   snapshot?: CrossAssetSnapshot; text: Text; formatTime: (value: string, precision: 'second') => string
 }): React.ReactElement {
   const source = snapshot?.indexSource ?? 'unavailable'
+  const resolveText = useProductTextKey()
   // Neither leg has a reading: the row states the gap in one cell, exactly like a macro row whose
   // series is not connected yet. It prints no figure and no window, because there is nothing to
   // compute either from — 未接入 is the honest answer, and it is not a number.
@@ -252,12 +266,12 @@ function IndexStatusRow({ snapshot, text, formatTime }: {
   return <tr data-status-row="index" data-connected="true" data-index-source={source} data-market-state={marketState}
     data-index-name={indexRowName(snapshot, text)}>
     <th scope="row"><span>{indexRowName(snapshot, text)}
-      {proxy ? <Tooltip title={text.proxyCaveat} trigger={['hover', 'focus']}>
+      {proxy ? <FocusTooltip labelKey={crossAssetTextKeys.proxyCaveat} resolveText={resolveText}>
         <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
-          tabIndex={0}>{text.proxyTag}</em></Tooltip> : null}
-      {marketState === 'closed' ? <Tooltip title={text.marketClosedHint} trigger={['hover', 'focus']}>
+          tabIndex={0}>{text.proxyTag}</em></FocusTooltip> : null}
+      {marketState === 'closed' ? <FocusTooltip labelKey={crossAssetTextKeys.marketClosedHint} resolveText={resolveText}>
         <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
-          tabIndex={0}>{text.marketClosed}</em></Tooltip> : null}
+          tabIndex={0}>{text.marketClosed}</em></FocusTooltip> : null}
     </span>{text.statusReads.index ? <small>{text.statusReads.index}</small> : null}</th>
     <td data-asset-price="index" data-last-closed-at={lastClosed?.at}>{value === undefined ? text.notConnected : livePriceText(value)}</td>
     <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
@@ -330,21 +344,31 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
   /**
    * 图表工具条的说明：三行，分别是分析时刻、三条曲线的覆盖、相关性样本数。
    *
-   * 交给平台浮层的 `lines` + `labelParams`：一行一个键，数字先格式化好再传，调用点不拼句子。
+   * 交给平台浮层的 `lines`：**一行一个键、一行一份参数**（契约 §8）。数字先格式化好再传，
+   * 调用点不拼句子；共用一份 `labelParams` 的旧写法已随契约取消——同一页两套气泡不行。
    * 没有快照时只留一行「暂不可用」，与原来那句同一个键。
    */
-  const historyHint = snapshot ? {
-    lines: [crossAssetTextKeys.hintAnalysis, crossAssetTextKeys.hintCoverage, crossAssetTextKeys.hintCorrelations],
-    labelParams: {
-      time: formatTime(snapshot.analysisEnd, 'second'),
-      coverage: (['index', 'btc', 'eth'] as const).map(asset =>
-        `${asset === 'index' ? indexRowName(snapshot, text) : text.assets[asset]} ${snapshot.historyCoverage[asset].count}/${snapshot.historyCoverage[asset].expectedCount}`
-      ).join(text.hintListSep),
-      correlations: text.correlations,
-      indexBtc: `${snapshot.correlations.indexBtc.sampleCount}/288`,
-      indexEth: `${snapshot.correlations.indexEth.sampleCount}/288`
-    }
-  } : { lines: [crossAssetTextKeys.unavailable] }
+  const historyHint: { lines: readonly HintLine[] } = snapshot ? {
+    lines: [
+      { labelKey: crossAssetTextKeys.hintAnalysis, params: { time: formatTime(snapshot.analysisEnd, 'second') } },
+      {
+        labelKey: crossAssetTextKeys.hintCoverage,
+        params: {
+          coverage: (['index', 'btc', 'eth'] as const).map(asset =>
+            `${asset === 'index' ? indexRowName(snapshot, text) : text.assets[asset]} ${snapshot.historyCoverage[asset].count}/${snapshot.historyCoverage[asset].expectedCount}`
+          ).join(text.hintListSep)
+        }
+      },
+      {
+        labelKey: crossAssetTextKeys.hintCorrelations,
+        params: {
+          correlations: text.correlations,
+          indexBtc: `${snapshot.correlations.indexBtc.sampleCount}/288`,
+          indexEth: `${snapshot.correlations.indexEth.sampleCount}/288`
+        }
+      }
+    ]
+  } : { lines: [{ labelKey: crossAssetTextKeys.unavailable }] }
   // Two kinds of reading live in this table and they answer questions at different speeds: intraday
   // ones move all day, official ones arrive once per business day. Mixed together, the daily rows read
   // as if they were merely quiet; kept apart, each block's header says what its numbers mean.
