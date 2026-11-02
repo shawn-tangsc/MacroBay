@@ -1,8 +1,8 @@
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import { LoadingState } from '@platform/ui/components/loading'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
-import { BlockError } from './TaskAutomationBlockParts'
 import type { DeliveryHealthCounts } from './taskAutomationSettingsViewModel'
 import type { ResourceJobRunSummary } from './resourceJobRunSummary'
 
@@ -37,7 +37,13 @@ export function TaskAutomationHealthSection(props: {
             <span className="task-automation-mono task-automation-muted">{labels.healthUpdated(updatedAt)}</span>
           </div>
           {props.error ? (
-            <BlockError label={labels.tasksLoadFailed} retryLabel={labels.retry} onRetry={props.onRetry} />
+            // 读不到 ≠ 订阅失败：这句只说“这次没读到、可以重试”，原因码归 `error/unreadable`。
+            <StateView
+              state="error"
+              reasonCode="unreadable"
+              size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: props.onRetry }}
+            />
           ) : (
             <>
               <dl className="task-automation-health">
