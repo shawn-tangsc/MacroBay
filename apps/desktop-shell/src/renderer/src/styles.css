@@ -3167,8 +3167,8 @@ h1 {
 }
 
 .assistant-inputbar-tool.ant-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 8px;
   color: var(--muted-strong);
   box-shadow: none;

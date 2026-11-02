@@ -1,7 +1,10 @@
 import { Button, Popover } from 'antd'
+
+import { useToast } from '@platform/ui/components/toast'
 import { AtSign, Check, X } from 'lucide-react'
 
 import type { PlatformText } from '../../i18n/platformText'
+import { resolveAssistantsText, type AssistantsTextPath } from '../../i18n/assistantsTextKey'
 import type { AssistantMentionedModel } from './assistantMentionedModels'
 
 type AssistantMentionedModelsPickerProps = {
@@ -20,13 +23,32 @@ export function AssistantMentionedModelsPicker({
   modelOptions,
   mentionedModels,
   disabled,
+  onRequireModel,
   onToggleMentionedModel,
   onClearMentionedModels
 }: AssistantMentionedModelsPickerProps): React.ReactElement {
   const selected = new Set(mentionedModels.map((model) => model.value))
+  const unavailable = disabled || modelOptions.length === 0
+  const toast = useToast()
+  const resolveText = (key: string): string => resolveAssistantsText(labels, key as AssistantsTextPath)
+  const handleUnavailable = (): void => {
+    toast.info({ titleKey: 'mentionedModelsMissingHint', resolveText })
+    onRequireModel()
+  }
+  const trigger = (
+    <Button
+      aria-label={labels.mentionedModels}
+      className="assistant-inputbar-tool"
+      icon={<AtSign size={14} />}
+      onClick={unavailable ? handleUnavailable : undefined}
+      size="small"
+      type="text"
+    />
+  )
 
   return (
     <div className="assistant-mentioned-model-picker">
+      {unavailable ? trigger : (
       <Popover
         trigger="click"
         placement="topLeft"
@@ -47,15 +69,9 @@ export function AssistantMentionedModelsPicker({
             })}
           </div>
         }>
-        <Button
-          type="text"
-          size="small"
-          className="assistant-inputbar-tool"
-          icon={<AtSign size={14} />}
-          aria-label={labels.mentionedModels}
-          disabled={disabled || modelOptions.length === 0}
-        />
+        {trigger}
       </Popover>
+      )}
 
       {mentionedModels.length > 0 ? (
         <div className="assistant-mentioned-model-tags" aria-label={labels.mentionedModels}>

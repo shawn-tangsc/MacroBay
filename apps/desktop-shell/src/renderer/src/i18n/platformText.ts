@@ -396,6 +396,8 @@ export type PlatformText = {
     webSearchHint: string
     comingSoon: string
     mentionedModels: string
+    /** 提及选择器不可用时的回执：带下一步（先选模型）。 */
+    mentionedModelsMissingHint: string
     webSearchCardTitle: string
     webFetchCardTitle: string
     webSearchSources: string
@@ -1555,6 +1557,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       webSearchHint: '允许此助手调用当前互联网搜索与网页读取工具。',
       comingSoon: '即将推出',
       mentionedModels: '提及模型',
+      mentionedModelsMissingHint: '先选择一个模型',
       webSearchCardTitle: '网页搜索',
       webFetchCardTitle: '网页读取',
       webSearchSources: '来源',
@@ -2664,6 +2667,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       webSearchHint: 'Allow this assistant to use current web search and web page fetch tools.',
       comingSoon: 'Coming soon',
       mentionedModels: 'Mentioned models',
+      mentionedModelsMissingHint: 'Select a model first',
       webSearchCardTitle: 'Web Search',
       webFetchCardTitle: 'Page fetch',
       webSearchSources: 'Sources',
