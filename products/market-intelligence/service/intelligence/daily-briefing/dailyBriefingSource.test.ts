@@ -3,6 +3,19 @@ import { describe, expect, it } from 'vitest'
 import type { AnalysisSummary } from '../../../contracts/marketAnalysisContracts'
 import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './dailyBriefingSource'
 
+
+/** Tests keep calling one packet builder; the source itself now reads facts once, then renders. */
+const makeSource = (deps: Parameters<typeof createDailyBriefingSource>[0]) => {
+  const source = createDailyBriefingSource(deps)
+  return {
+    ...source,
+    async buildPacket(input: Readonly<{ asOf: string; windowHours?: number; locale: Parameters<typeof source.renderPacket>[1]; timeZone: string }>) {
+      const facts = await source.readFacts({ asOf: input.asOf, ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours }) })
+      return source.renderPacket(facts, input.locale, input.timeZone)
+    }
+  }
+}
+
 const asOf = '2026-10-30T00:30:00.000Z'
 
 const summary = {
@@ -107,7 +120,7 @@ function deps(overrides: {
 
 describe('daily briefing source', () => {
   it('reads the latest published conclusion, the 24h news, the readings and both calendars', async () => {
-    const packet = await createDailyBriefingSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const packet = await makeSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(packet.windowStart).toBe('2026-10-29T00:30:00.000Z')
     expect(packet.windowHours).toBe(24)
@@ -127,11 +140,11 @@ describe('daily briefing source', () => {
   })
 
   it('reads the configured statistical window instead of assuming 24 hours', async () => {
-    const wide = await createDailyBriefingSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 48 })
+    const wide = await makeSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 48 })
     expect(wide.windowHours).toBe(48)
     expect(wide.windowStart).toBe('2026-10-28T00:30:00.000Z')
 
-    const narrow = await createDailyBriefingSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 12 })
+    const narrow = await makeSource(deps()).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 12 })
     expect(narrow.windowHours).toBe(12)
     expect(narrow.windowStart).toBe('2026-10-29T12:30:00.000Z')
     // The news inside a 12h window survives; the query still asked for its smallest horizon.
@@ -149,7 +162,7 @@ describe('daily briefing source', () => {
       ],
       caveats: []
     })
-    const packet = await createDailyBriefingSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 12 })
+    const packet = await makeSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai', windowHours: 12 })
     expect(packet.news.items.map((item) => item.itemId)).toEqual(['fresh'])
   })
 
@@ -164,13 +177,13 @@ describe('daily briefing source', () => {
         events: [{ ...marketEvent, scheduledAt: '2026-10-29T12:30:00.000Z', providerActual: calls >= 3 ? { displayValue: '3.4%' } : null }]
       }
     }
-    const packet = await createDailyBriefingSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
+    const packet = await makeSource(base).buildPacket({ asOf, locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     expect(packet.calendar.events.find((event) => event.eventKey === 'MC.FOMC')?.actual).toBe('3.4%')
     expect(calls).toBeGreaterThanOrEqual(3)
   })
 
   it('degrades each read to a stated gap instead of failing the packet', async () => {
-    const packet = await createDailyBriefingSource(deps({ failReadings: true, failCalendar: true }))
+    const packet = await makeSource(deps({ failReadings: true, failCalendar: true }))
       .buildPacket({ asOf, locale: 'en-US', timeZone: 'UTC' })
 
     expect(packet.readings.fearGreed).toMatchObject({ state: 'unavailable' })
@@ -180,19 +193,19 @@ describe('daily briefing source', () => {
   })
 
   it('treats a clean install as fully disabled, while an unreadable profile store is unknown', async () => {
-    const clean = await createDailyBriefingSource(deps({ profiles: [] }))
+    const clean = await makeSource(deps({ profiles: [] }))
       .buildPacket({ asOf, locale: 'zh-CN', timeZone: 'UTC' })
     expect(clean.enabled).toEqual({ fearGreed: false, funding: false, stablecoin: false, etf: false, calendar: false })
     expect(clean.calendar.state).toBe('source-disabled')
 
-    const unknown = await createDailyBriefingSource(deps({ profiles: 'throw' }))
+    const unknown = await makeSource(deps({ profiles: 'throw' }))
       .buildPacket({ asOf, locale: 'zh-CN', timeZone: 'UTC' })
     expect(unknown.enabled).toEqual({ fearGreed: true, funding: true, stablecoin: true, etf: true, calendar: true })
   })
 
   it('reads the dollar and gold at the 08:00 cutoff instead of the 21:00 current snapshot', async () => {
     const cutoff = '2026-10-30T00:00:00.000Z'
-    const packet = await createDailyBriefingSource(deps({
+    const packet = await makeSource(deps({
       macroHistory: (input) => input.series === 'dxy'
         ? {
           state: 'available', series: 'dxy', seriesId: 'dxy-synthetic', asOf: input.asOf,
@@ -218,7 +231,7 @@ describe('daily briefing source', () => {
     // The edition cutoff is 08:00 Beijing (00:00Z); the app was opened at 21:00 the same day. A
     // projection that answers with the later bar is refused rather than published as the cutoff.
     const cutoff = '2026-10-30T00:00:00.000Z'
-    const packet = await createDailyBriefingSource(deps({
+    const packet = await makeSource(deps({
       macroHistory: (input) => ({
         state: 'available', series: input.series, seriesId: input.series === 'dxy' ? 'dxy-real' : 'xau-usd',
         asOf: input.asOf, value: 4_000, observedAt: '2026-10-30T12:00:00.000Z',
@@ -252,14 +265,14 @@ describe('daily briefing source', () => {
       },
       conclusion: 'partial'
     })
-    const packet = await createDailyBriefingSource(base)
+    const packet = await makeSource(base)
       .buildPacket({ asOf: '2026-10-30T00:00:00.000Z', locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
     expect(packet.readings.capital).toEqual({ state: 'empty', asOf: '2026-10-30T00:00:00.000Z' })
   })
 
   it('keeps the rates block empty instead of showing only post-cutoff closes', async () => {
-    const packet = await createDailyBriefingSource(deps({
+    const packet = await makeSource(deps({
       macroRates: {
         state: 'available', asOf: '2026-10-30T13:00:00.000Z', caveats: ['official-daily-close'],
         readings: [{ seriesId: 'DGS10', metricKey: 'US_10Y_YIELD', actual: 4.2, period: '2026-10-30' }]
@@ -288,7 +301,7 @@ describe('daily briefing source', () => {
       conclusion: { ...briefDocument.conclusion, summary: 'Current edition must not feed itself.' }
     }
     const base = deps()
-    const packet = await createDailyBriefingSource({
+    const packet = await makeSource({
       ...base,
       briefEditions: {
         list: async () => [
@@ -309,5 +322,26 @@ describe('daily briefing source', () => {
       source: 'daily-brief', direction: 'bullish', confidence: 'medium', rationale: 'Price lags flows.',
       evidenceRefs: ['data:btc', 'ev-9']
     })
+  })
+})
+
+
+describe('one fact read, two languages', () => {
+  it('reads the facts once and renders every language from the same snapshot', async () => {
+    const base = deps() as never as Record<string, never> & { news: { query: (...args: unknown[]) => Promise<unknown> } }
+    let reads = 0
+    const original = base.news.query
+    base.news = { ...base.news, query: async (...args: unknown[]) => { reads += 1; return original(...args) } } as never
+    const source = createDailyBriefingSource(base as never)
+
+    const facts = await source.readFacts({ asOf, windowHours: 24 })
+    const chinese = await source.renderPacket(facts, 'zh-CN', 'Asia/Shanghai')
+    const english = await source.renderPacket(facts, 'en-US', 'Asia/Shanghai')
+
+    // The machine check the acceptance asks for: the fact readers ran exactly once for two editions.
+    expect(reads).toBe(1)
+    expect(chinese.windowEnd).toBe(english.windowEnd)
+    expect(chinese.news.items.map((item) => item.itemId)).toEqual(english.news.items.map((item) => item.itemId))
+    expect([chinese.locale, english.locale]).toEqual(['zh-CN', 'en-US'])
   })
 })

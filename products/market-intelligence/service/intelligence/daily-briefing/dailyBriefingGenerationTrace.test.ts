@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { BriefingGenerationStageId, BriefingGenerationTrace, DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import { factSnapshotFromPacket } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingService, type DailyBriefingSource, type DailyBriefingStore, type DailyBriefingStoredEdition } from './dailyBriefingService'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 
@@ -58,7 +59,7 @@ function memoryStore(overrides: Partial<DailyBriefingStore> = {}): DailyBriefing
 }
 
 function source(packet: () => DailyBriefingFactPacket = emptyPacket): DailyBriefingSource {
-  return { async buildPacket() { return packet() } }
+  return { async readFacts() { return factSnapshotFromPacket(packet()) }, async renderPacket(facts, locale, timeZone) { return Object.freeze({ ...packet(), locale, timeZone }) } }
 }
 
 const validSelection = JSON.stringify({ stage: 'select', news: [], macro: [], next: [] })
@@ -160,7 +161,7 @@ describe('daily briefing generation trace', () => {
   it('locates a source failure and persists the failed trace beside the edition key', async () => {
     const store = memoryStore()
     const service = createDailyBriefingService({
-      source: { async buildPacket() { throw new Error('query failed') } },
+      source: { async readFacts() { throw new Error('query failed') }, async renderPacket() { throw new Error('query failed') } },
       store, now: () => asOf
     })
 

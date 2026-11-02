@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { factSnapshotFromPacket } from './dailyBriefingFactSnapshot'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { NewsSentimentItemView } from '../news-sentiment/newsSentimentQuery'
@@ -59,13 +60,18 @@ function memoryStore(): DailyBriefingStore & { rows: Map<string, DailyBriefingSt
 function fakeSource(
   packet: (input: PacketInput) => DailyBriefingFactPacket = (input) => emptyPacket(input)
 ): DailyBriefingSource & { calls: number; lastInput?: PacketInput } {
+  let lastPacket: DailyBriefingFactPacket | undefined
   const source = {
     calls: 0,
     lastInput: undefined as PacketInput | undefined,
-    async buildPacket(input: PacketInput & { locale: DailyBriefingLocale; timeZone: string }) {
+    async readFacts(input: Readonly<{ asOf: string; windowHours?: number }>) {
       source.calls += 1
       source.lastInput = { asOf: input.asOf, windowHours: input.windowHours ?? 24 }
-      return packet(source.lastInput)
+      lastPacket = packet(source.lastInput)
+      return factSnapshotFromPacket(lastPacket)
+    },
+    async renderPacket(_facts: { asOf: string; windowHours: number }, locale: DailyBriefingLocale, timeZone: string) {
+      return Object.freeze({ ...lastPacket!, locale, timeZone })
     }
   }
   return source
@@ -223,7 +229,7 @@ describe('daily briefing service', () => {
     let release: () => void = () => undefined
     const gate = new Promise<void>((resolve) => { release = resolve })
     const source: DailyBriefingSource = {
-      async buildPacket(input) {
+      async readFacts(input) {
         await gate
         return emptyPacket({ asOf: input.asOf, windowHours: input.windowHours })
       }
@@ -532,7 +538,10 @@ describe('daily briefing service', () => {
     expect(await invalidClock.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({
       state: 'unavailable', failureCode: 'time-invalid'
     })
-    const failing: DailyBriefingSource = { async buildPacket() { throw new Error('query failed') } }
+    const failing: DailyBriefingSource = {
+      async readFacts() { throw new Error('query failed') },
+      async renderPacket() { throw new Error('query failed') }
+    }
     const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
     expect(await service.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toMatchObject({
       state: 'unavailable', failureCode: 'source-failed',
@@ -749,7 +758,10 @@ describe('period run', () => {
 
   it('records a failed run when the source cannot be read', async () => {
     const store = createDailyBriefingSqliteStore(':memory:')
-    const failing: DailyBriefingSource = { async buildPacket() { throw new Error('source-down') } }
+    const failing: DailyBriefingSource = {
+      async readFacts() { throw new Error('source-down') },
+      async renderPacket() { throw new Error('source-down') }
+    }
     const service = createDailyBriefingService({ source: failing, store, now: () => asOf })
     expect((await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })).state).toBe('unavailable')
     expect(await store.getPeriodRun?.('2026-10-30')).toBeUndefined()

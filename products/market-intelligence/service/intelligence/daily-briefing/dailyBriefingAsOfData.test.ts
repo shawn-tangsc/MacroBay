@@ -17,6 +17,19 @@ import { createDailyBriefingSource, type DailyBriefingSourceDeps } from './daily
  * cutoff; the data cards read the current snapshot and printed `—`. These tests build the real
  * packet from the real as-of readers and assert the document's data rows.
  */
+
+/** Tests keep calling one packet builder; the source itself now reads facts once, then renders. */
+const makeSource = (deps: Parameters<typeof createDailyBriefingSource>[0]) => {
+  const source = createDailyBriefingSource(deps)
+  return {
+    ...source,
+    async buildPacket(input: Readonly<{ asOf: string; windowHours?: number; locale: Parameters<typeof source.renderPacket>[1]; timeZone: string }>) {
+      const facts = await source.readFacts({ asOf: input.asOf, ...(input.windowHours === undefined ? {} : { windowHours: input.windowHours }) })
+      return source.renderPacket(facts, input.locale, input.timeZone)
+    }
+  }
+}
+
 const CUTOFF = '2026-10-31T00:00:00.000Z'
 const DATE = '2026-10-31'
 const TIME_ZONE = 'Asia/Shanghai'
@@ -115,7 +128,7 @@ async function packetWith(input: Readonly<{
       ]
     } as never
   }
-  return createDailyBriefingSource(deps).buildPacket({ asOf: CUTOFF, locale: 'zh-CN', timeZone: TIME_ZONE })
+  return makeSource(deps).buildPacket({ asOf: CUTOFF, locale: 'zh-CN', timeZone: TIME_ZONE })
 }
 
 const points: readonly Point[] = [

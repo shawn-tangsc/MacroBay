@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { factSnapshotFromPacket } from './dailyBriefingFactSnapshot'
 
 import type { DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
@@ -68,10 +69,13 @@ function gatedSource(): DailyBriefingSource & { release: () => void; entered: Pr
   return {
     entered: didEnter,
     release: () => release(),
-    async buildPacket(input: Readonly<{ asOf: string; windowHours: number; locale: DailyBriefingLocale; timeZone: string }>) {
+    async readFacts(input: Readonly<{ asOf: string; windowHours?: number }>) {
       entered()
       await gate
-      return emptyPacket({ asOf: input.asOf, windowHours: input.windowHours })
+      return factSnapshotFromPacket(emptyPacket({ asOf: input.asOf, windowHours: input.windowHours ?? 24 }))
+    },
+    async renderPacket(facts: Readonly<{ asOf: string; windowHours: number }>, locale: DailyBriefingLocale, timeZone: string) {
+      return Object.freeze({ ...emptyPacket({ asOf: facts.asOf, windowHours: facts.windowHours }), locale, timeZone })
     }
   }
 }

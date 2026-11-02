@@ -8,6 +8,7 @@ import type { SourceProfileStore } from '../application/sourceProfileStore'
 import { assessMarketCalendarSurprise, toCalendarSurpriseView } from '../../../contracts/macro/marketCalendarSurprise'
 import { selectLatestPublishedEntry } from '../../../contracts/latestPublishedAnalysis'
 import type { DailyBriefingCalendarEvent, DailyBriefingFactPacket } from './dailyBriefingFactPacket'
+import type { DailyBriefingFactSnapshot, TimelineItem } from './dailyBriefingFactSnapshot'
 import { dailyBriefingPolicy, isDailyBriefingWindowHours, type DailyBriefingLocale } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingSource, DailyBriefingStore, DailyBriefingStoredEdition } from './dailyBriefingService'
 import { dailyBriefingEnabledFromProfiles, type DailyBriefingEnabledFlags } from './dailyBriefingReadingSources'
@@ -50,25 +51,22 @@ export type DailyBriefingSourceDeps = Readonly<{
  */
 export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyBriefingSource {
   return {
-    async buildPacket(input) {
+    async readFacts(input) {
       const enabled = await readEnabled(deps)
-      // The reader's statistical window decides the packet's interval; every window-scoped read
-      // below uses it instead of assuming 24 hours.
+      // The reader's statistical window decides the fact interval; every window-scoped read below
+      // uses it instead of assuming 24 hours.
       const windowHours = isDailyBriefingWindowHours(input.windowHours) ? input.windowHours : dailyBriefingPolicy.windowHours
-      const asOfMs = Date.parse(input.asOf)
-      const windowStart = new Date(asOfMs - windowHours * HOUR_MS).toISOString()
+      const windowStart = new Date(Date.parse(input.asOf) - windowHours * HOUR_MS).toISOString()
       const policyPath = deps.policyPathQuery?.read({ asOf: input.asOf })
       // One timeline read feeds both the fact-layer conclusion and the window's prior conclusions:
       // two reads could disagree about which nodes are visible at the cutoff.
       const timeline = readTimeline(deps)
-      const [conclusion, priorConclusions, news, fearGreed, funding, capital, calendar, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
+      const [conclusion, news, fearGreed, funding, capital, crossAsset, macroMarket, macroRates, positioning] = await Promise.all([
         readConclusion(deps, input.asOf, timeline),
-        readPriorConclusions(deps, timeline, input.asOf, windowStart, input.locale),
         readNews(deps, input.asOf, windowStart),
         safe(() => deps.publicQuery.queryFearGreedSnapshot({ asOf: input.asOf }), unavailableFearGreed()),
         safe(() => deps.publicQuery.queryFundingRateHistory({ asOf: input.asOf }), unavailableFunding()),
         safe(() => deps.publicQuery.queryCapitalConditionsSnapshot({ asOf: input.asOf, allowStale: true }), unavailableCapital()),
-        readCalendar(deps, input.asOf, input.locale, enabled.calendar, windowStart),
         safe(() => deps.publicQuery.queryCrossAssetSnapshot({ range: '24h', asOf: input.asOf }), undefined),
         buildMacroMarketAsOf(deps, input.asOf),
         ratesAsOf(safeSync(() => deps.publicQuery.queryMacroRatesSnapshot(), undefined), input.asOf),
@@ -79,12 +77,9 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
         windowStart,
         windowEnd: input.asOf,
         windowHours,
-        locale: input.locale,
-        timeZone: input.timeZone,
+        timeline,
         conclusion,
-        priorConclusions,
         news,
-        calendar,
         readings: Object.freeze({ fearGreed, funding, capital: capitalAsOf(capital, input.asOf) }),
         ...(positioning ? { positioning } : {}),
         ...(policyPath ? { policyPath } : {}),
@@ -101,6 +96,21 @@ export function createDailyBriefingSource(deps: DailyBriefingSourceDeps): DailyB
           calendar: enabled.calendar
         })
       })
+    },
+    async renderPacket(facts, locale, timeZone) {
+      // The localized layer: only text and the reader's own prior conclusions come from here. No
+      // number, row order or cutoff is read a second time.
+      const [priorConclusions, calendar] = await Promise.all([
+        readPriorConclusions(deps, facts.timeline, facts.asOf, facts.windowStart, locale),
+        readCalendar(deps, facts.asOf, locale, facts.enabled.calendar, facts.windowStart)
+      ])
+      return Object.freeze({
+        ...facts,
+        locale,
+        timeZone,
+        priorConclusions,
+        calendar
+      })
     }
   }
 }
@@ -113,7 +123,7 @@ async function readEnabled(deps: DailyBriefingSourceDeps): Promise<DailyBriefing
   }
 }
 
-type TimelineItem = ReturnType<MarketAnalysisRepository['listTimeline']>['items'][number]
+export type { TimelineItem } from './dailyBriefingFactSnapshot'
 
 function readTimeline(deps: DailyBriefingSourceDeps): readonly TimelineItem[] {
   try {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { DailyBriefingDocument } from '../../../contracts/dailyBriefing'
 import type { DailyBriefingFactPacket } from './dailyBriefingFactPacket'
-import { briefingSnapshot } from './dailyBriefingSnapshot'
+import { briefingSnapshot, factSnapshotFromPacket } from './dailyBriefingFactSnapshot'
 
 /**
  * The digest is the same-source proof, so these cases pin the two things it must do: ignore the
@@ -72,24 +72,24 @@ const packet = (title = '就业数据', polarity: 'bullish' | 'bearish' = 'bulli
 
 describe('briefing snapshot digest', () => {
   it('is the same for two editions whose facts match but whose words differ', () => {
-    const chinese = briefingSnapshot(document('今日要点。'), packet('就业数据'))
+    const chinese = briefingSnapshot(document('今日要点。'), factSnapshotFromPacket(packet('就业数据')))
     const englishPacket = { ...packet('Payrolls'), locale: 'en-US' as const }
-    const english = briefingSnapshot(document('Today.’'), englishPacket)
+    const english = briefingSnapshot(document('Today.’'), factSnapshotFromPacket(englishPacket))
     expect(english.hash).toBe(chinese.hash)
     expect(english.id).toBe(chinese.id)
   })
 
   it('changes when a number changes, even if every word stays the same', () => {
-    const before = briefingSnapshot(document('今日要点。', 68000), packet())
-    const after = briefingSnapshot(document('今日要点。', 68001), packet())
+    const before = briefingSnapshot(document('今日要点。', 68000), factSnapshotFromPacket(packet()))
+    const after = briefingSnapshot(document('今日要点。', 68001), factSnapshotFromPacket(packet()))
     expect(after.hash).not.toBe(before.hash)
   })
 
   it('changes when a window or a pointed-at event changes', () => {
-    const base = briefingSnapshot(document(), packet())
+    const base = briefingSnapshot(document(), factSnapshotFromPacket(packet()))
     const shiftedWindow = briefingSnapshot({ ...document(), edition: { ...document().edition, windowEnd: '2026-11-02T01:00:00.000Z' } }, packet())
-    const otherEvent = briefingSnapshot(document(), { ...packet(), calendar: { ...packet().calendar, events: [] } })
+    const otherPolarity = briefingSnapshot(document(), factSnapshotFromPacket(packet('就业数据', 'bearish')))
     expect(shiftedWindow.hash).not.toBe(base.hash)
-    expect(otherEvent.hash).not.toBe(base.hash)
+    expect(otherPolarity.hash).not.toBe(base.hash)
   })
 })

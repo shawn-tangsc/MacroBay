@@ -28,6 +28,7 @@ import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from 
 import { withGenerationTrace, withStoredAttempt } from './dailyBriefingStoredAttempt'
 import { briefingEditionRowIds, briefingFactDirection, restrictEditionRows } from './dailyBriefingEditionSet'
 import { briefingHistorySummaries } from './dailyBriefingHistory'
+import { briefingSnapshot, type DailyBriefingFactSnapshot } from './dailyBriefingFactSnapshot'
 import { createDailyBriefingPeriodRunJournal } from './dailyBriefingPeriodRunJournal'
 import type { DailyBriefingEditorialModel } from './dailyBriefingAiSettings'
 import type { DailyBriefingGenerationSettings } from './dailyBriefingGenerationSettings'
@@ -161,8 +162,14 @@ export type DailyBriefingStore = Readonly<{
   retryUpgrade?: () => Promise<DailyBriefingStorageState>
 }>
 
+/**
+ * Two steps on purpose: the facts are read once and frozen, then each language renders its own
+ * packet from them. A source that fetched per language would let two editions of one period read
+ * different numbers, which is the thing this release exists to prevent.
+ */
 export type DailyBriefingSource = Readonly<{
-  buildPacket: (input: Readonly<{ asOf: string; locale: DailyBriefingLocale; timeZone: string; windowHours?: number }>) => Promise<DailyBriefingFactPacket>
+  readFacts: (input: Readonly<{ asOf: string; windowHours?: number }>) => Promise<DailyBriefingFactSnapshot>
+  renderPacket: (facts: DailyBriefingFactSnapshot, locale: DailyBriefingLocale, timeZone: string) => Promise<DailyBriefingFactPacket>
 }>
 
 /** Attaches which zone produced the window, but only where there is an edition to describe. */
@@ -397,8 +404,11 @@ export function createDailyBriefingService(deps: Readonly<{
 
     recorder.begin('source')
     let packet: DailyBriefingFactPacket
+    let facts: DailyBriefingFactSnapshot
     try {
-      packet = await withDeadline(deps.source.buildPacket({ asOf: input.asOf, locale: input.locale, timeZone: input.timeZone, windowHours: input.windowHours }), 15_000)
+      facts = await withDeadline(deps.source.readFacts({ asOf: input.asOf, windowHours: input.windowHours }), 15_000)
+      // Rendering is text-only work over the frozen facts; it is not a second read.
+      packet = await deps.source.renderPacket(facts, input.locale, input.timeZone)
       recorder.end('source', 'success')
     } catch {
       recorder.end('source', 'failed', { failureCode: 'source-failed' })
@@ -443,7 +453,7 @@ export function createDailyBriefingService(deps: Readonly<{
     // One derivation per run: the row ids and the verdict are read off the frozen facts once, then
     // handed to every version of it.
     const periodFacts = Object.freeze({ rowIds: briefingEditionRowIds(document), direction: briefingFactDirection(document) })
-    await run.open(document, packet, periodFacts)
+    await run.open(document, facts, periodFacts)
     document = restrictEditionRows(document, periodFacts.rowIds)
     let publish = true
     const editorialEnabled = deps.editorialEnabled ? await deps.editorialEnabled().catch(() => false) : true
