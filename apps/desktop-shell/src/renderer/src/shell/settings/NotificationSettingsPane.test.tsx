@@ -58,6 +58,33 @@ describe('notification settings availability', () => {
     expect(container.textContent).toContain(labels.scopeNote)
   })
 
+  it('桌面渠道如实报授权状态：读不到就说读不到，不替系统背锅', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'unknown') } }
+    })
+
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    const state = container.querySelector('[data-desktop-permission]')
+
+    // 「读不到」和「系统没放行」对用户是两件事：混用会把人送进系统设置白找一圈。
+    expect(state?.getAttribute('data-desktop-permission')).toBe('unknown')
+    expect(state?.textContent).toBe(labels.desktopPermissionUnknown)
+    expect(container.textContent).not.toContain(labels.desktopPermissionDenied)
+  })
+
+  it('系统明确拒绝时说要自己去开', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'denied') } }
+    })
+
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    expect(container.querySelector('[data-desktop-permission="denied"]')?.textContent).toBe(
+      labels.desktopPermissionDenied
+    )
+  })
+
   it('没落点的那条渠道单独禁用，并说自己这一个原因', async () => {
     const container = await mount()
     const labels = platformText['zh-CN'].notifications

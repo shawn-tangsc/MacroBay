@@ -998,6 +998,9 @@ export type PlatformText = {
     unavailableNotice: string
     unavailableBadge: string
     popupUnavailable: string
+    desktopPermissionGranted: string
+    desktopPermissionDenied: string
+    desktopPermissionUnknown: string
     desktopEnabled: string
     desktopDescription: string
     toastEnabled: string
@@ -2082,6 +2085,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       unavailableNotice: '通知暂未启用：平台目前还没有产生通知的来源，这些开关不会有任何效果。接到第一个真实来源后重新启用。',
       unavailableBadge: '未启用',
       popupUnavailable: '这个版本还不会弹出窗口提示',
+      desktopPermissionGranted: '系统已放行桌面通知',
+      desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
+      desktopPermissionUnknown: '暂时无法确认系统是否放行',
       desktopEnabled: '桌面通知',
       desktopDescription: '通过系统桌面通知提醒你，不要求应用当前保持在前台。',
       toastEnabled: '应用内提示',
@@ -3184,6 +3190,9 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Notifications are not available yet: nothing in the platform produces one right now, so these switches have no effect. They turn on with the first real source.',
       unavailableBadge: 'Not available',
       popupUnavailable: 'This version does not show pop-up alerts yet',
+      desktopPermissionGranted: 'The system allows desktop notifications',
+      desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
+      desktopPermissionUnknown: 'Could not check whether the system allows notifications',
       desktopEnabled: 'Desktop notifications',
       desktopDescription: 'Use system notifications even when the app is not the active window.',
       toastEnabled: 'In-app toasts',

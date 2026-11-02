@@ -17,7 +17,8 @@ function read(path: string): string {
 
 const runtime = read('platform/notifications/ipc/registerNotificationIpc.ts')
 const channels = read('platform/desktop/ipc/channels.ts')
-const preload = read('platform/desktop/preload/index.ts')
+// 桥面按命名空间拆分后，通知这一段住在这里；读错文件会让这条守卫永远绿（等于没守）。
+const preload = read('platform/desktop/preload/namespaces/notifications.ts')
 
 describe('应用内投递的接线', () => {
   it('运行时把 toast 与 popup 两个钩子都接上', () => {

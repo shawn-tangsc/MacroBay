@@ -210,7 +210,8 @@ export const IpcChannels = {
   notificationsDeleteRead: 'platform:notifications-delete-read',
   notificationsDismiss: 'platform:notifications-dismiss',
   notificationsSnooze: 'platform:notifications-snooze',
-  notificationsRequestDesktopPermission: 'platform:notifications-request-desktop-permission',
+  /** 只读：主进程能查状态，但没有 API 能让系统弹一次授权框。名字不许再写 request。 */
+  notificationsReadDesktopPermission: 'platform:notifications-read-desktop-permission',
   /** 单向事件：记录有变化（投递/标读/撤销/稍后/清理）由 Main 推给所有窗口，载荷是递增版本号。 */
   notificationsChanged: 'platform:notifications-changed',
   /** 应用内投递（横幅 / 弹窗）：事件带那条记录的键与参数，渲染层自己解析句子。 */

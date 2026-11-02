@@ -31,5 +31,6 @@ export function registerNotificationIpcHandlers(): void {
   ipcMain.handle(IpcChannels.notificationsSendTest, () =>
     getNotificationRuntime().submitSelfTest(buildTestNotificationRequest())
   )
-  ipcMain.handle(IpcChannels.notificationsRequestDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
+  // 只读授权状态：主进程没有「申请授权」这个能力，真申请只能从渲染层走 Web Notification API。
+  ipcMain.handle(IpcChannels.notificationsReadDesktopPermission, () => getNotificationRuntime().readDesktopPermission())
 }

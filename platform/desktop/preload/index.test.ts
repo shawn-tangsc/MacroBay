@@ -127,7 +127,7 @@ describe('desktop preload platform api', () => {
       'markRead',
       'onChanged',
       'onDelivered',
-      'requestDesktopPermission',
+      'readDesktopPermission',
       'sendTest',
       'snooze'
     ])

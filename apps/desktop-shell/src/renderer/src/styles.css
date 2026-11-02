@@ -9271,6 +9271,14 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   line-height: 1.5;
 }
 
+/* 桌面渠道的授权状态：只读的结论，弱化成一行说明，不是第二条开关说明。 */
+.notification-channel-state {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .segmented-control,
 .swatch-list {
   display: flex;

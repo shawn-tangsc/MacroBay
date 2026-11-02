@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Bell } from 'lucide-react'
 import { Button, Switch, Tag } from 'antd'
 
@@ -33,6 +33,33 @@ export function NotificationSettingsPane(props: {
   const { labels, settings } = props
   // 可点状态 = 这条渠道背后有没有用户看得见的落点。**逐渠道判**，不要再拿一个布尔量代表四个：
   // 曾经 `notificationProducerWired: true` 把「应用内提示」「高优先级弹窗」一起点亮，而它们没有渲染者。
+  // 桌面渠道的授权状态：**只读**。主进程没有「申请授权」这个能力，真申请只能从渲染层走 Web API，
+  // 而那条路径还没有在真机上验过——所以这里如实报「放行 / 没放行 / 读不到」，不替系统背锅。
+  const [desktopPermission, setDesktopPermission] = useState<'granted' | 'denied' | 'unknown' | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void Promise.resolve(window.platform?.notifications?.readDesktopPermission?.())
+      .then((state) => {
+        if (alive) setDesktopPermission(state ?? 'unknown')
+      })
+      .catch(() => {
+        if (alive) setDesktopPermission('unknown')
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const desktopPermissionText =
+    desktopPermission === null
+      ? null
+      : desktopPermission === 'granted'
+        ? labels.desktopPermissionGranted
+        : desktopPermission === 'denied'
+          ? labels.desktopPermissionDenied
+          : labels.desktopPermissionUnknown
+
   const wired = notificationDeliveryWired
   const availableChannels = notificationToggleRows.filter((row) => wired[row.channel]).length
   // 点完必须**当场看到结果**：之前没有任何反馈，用户点了以为按钮坏了。
@@ -75,6 +102,11 @@ export function NotificationSettingsPane(props: {
               <span className="notification-channel-copy">
                 <strong className="notification-channel-title">{labels[row.titleKey]}</strong>
                 <span className="notification-channel-description">{labels[row.descriptionKey]}</span>
+                {row.channel === 'desktop' && desktopPermissionText !== null ? (
+                  <span className="notification-channel-state" data-desktop-permission={desktopPermission}>
+                    {desktopPermissionText}
+                  </span>
+                ) : null}
               </span>
               <span className="notification-channel-controls">
                 {rowWired ? null : <Tag>{reason}</Tag>}

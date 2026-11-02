@@ -71,7 +71,7 @@ describe('notification producer boundary', () => {
       // 两条订阅都是只读：事件由 Main 推，渲染层不能借此写入任何东西。
       'onChanged',
       'onDelivered',
-      'requestDesktopPermission',
+      'readDesktopPermission',
       'sendTest',
       'snooze'
     ])
