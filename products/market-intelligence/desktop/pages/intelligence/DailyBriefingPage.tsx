@@ -32,6 +32,13 @@ import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
 import './dailyBriefing.css'
 import './dailyBriefingShareCard.css'
+import {
+  editorialFailureText,
+  issueCountsText,
+  localDate,
+  summaryFromDocument,
+  withDeadline
+} from './dailyBriefingPageDerived'
 
 type ViewState =
   | Readonly<{ status: 'loading' }>
@@ -453,55 +460,4 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </div>
     </div> : null}
   </main>
-}
-
-function summaryFromDocument(document: DailyBriefingDocument): DailyBriefingEditionSummary {
-  return {
-    date: document.edition.date,
-    locale: document.edition.locale,
-    availableLocales: [document.edition.locale],
-    state: 'generated',
-    generatedAt: document.edition.generatedAt,
-    ...(document.conclusion ? { direction: document.conclusion.direction } : {}),
-    readingsAvailable: document.status.readingsAvailable,
-    windowEnd: document.edition.windowEnd
-  }
-}
-
-async function withDeadline<T>(read: Promise<T>, milliseconds: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race([
-      read,
-      new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error('daily-briefing-request-timeout')), milliseconds)
-      })
-    ])
-  } finally {
-    if (timer !== undefined) clearTimeout(timer)
-  }
-}
-
-function localDate(timeZone: string): string {
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
-      .format(new Date())
-  } catch {
-    return new Date().toISOString().slice(0, 10)
-  }
-}
-
-function editorialFailureText(code: string, text: DailyBriefingText): string {
-  return (text.aiSettings.failure as Readonly<Record<string, string>>)[code] ?? code
-}
-
-/** "2 blocking · 3 warnings · 1 note", with empty severities omitted. */
-function issueCountsText(
-  counts: Readonly<Record<'blocking' | 'warning' | 'info', number>>,
-  text: DailyBriefingText
-): string {
-  return (['blocking', 'warning', 'info'] as const)
-    .filter((severity) => counts[severity] > 0)
-    .map((severity) => text.limits.counts[severity].replace('{count}', String(counts[severity])))
-    .join(' · ')
 }
