@@ -100,6 +100,20 @@ describe('S16: prune keeps subscriptions and caps records', () => {
     expect(state().records).toHaveLength(2)
   })
 
+  it('actually deletes a record older than the window and keeps subscriptions through the write', async () => {
+    const old = { ...record(0), createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' }
+    const fresh = record(1)
+    const { runtime, state } = createRuntime([old, fresh])
+    await runtime.setSubscription('platform.done', { record: true })
+
+    const result = await runtime.prune()
+
+    // removedRecords === 1 证明这次真写了盘，不是「没东西删」的早退分支。
+    expect(result.removedRecords).toBe(1)
+    expect(state().records).toHaveLength(1)
+    expect(await runtime.getSubscriptions()).toEqual({ 'platform.done': { record: true } })
+  })
+
   it('caps the record list at 500 on the runtime, not only in the pure function', async () => {
     const records = Array.from({ length: 501 }, (_, index) => record(index))
     const { runtime, state } = createRuntime(records)
