@@ -344,18 +344,18 @@ type StaleBasis = NonNullable<BriefingMarketRow['valueBasis']>
 function fallbackLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): React.ReactNode {
   if (row.state !== 'stale') return null
   const basis: StaleBasis | undefined = 'valueBasis' in row ? row.valueBasis : undefined
-  const table: Record<StaleBasis, string> = {
-    snapshot: text.staleBasis.snapshot,
-    curve: text.staleBasis.curve,
+  // Only say something when the number is not the thing its name promises. A 24-hour move computed
+  // from a curve or from the daily series is still a 24-hour move, and the timestamp under the row
+  // already says which instant it is — repeating "about 24 hours ago (from the curve)" tells the
+  // reader how we computed it, which is ours to know, not theirs to read.
+  const spoken: Partial<Record<StaleBasis, string>> = {
     'last-close': text.staleBasis.lastClose,
-    'series-return': text.staleBasis.seriesReturn,
     'series-level': text.staleBasis.seriesLevel,
     published: text.staleBasis.published
   }
-  // No basis means we cannot say which instant the number is from; saying nothing is better than
-  // inventing a label that reads badly when folded into a sentence.
-  if (!basis) return null
-  return <em className="mi-brief-poster__stale" data-basis={basis}>{table[basis]}</em>
+  const label = basis === undefined ? undefined : spoken[basis]
+  if (!label) return null
+  return <em className="mi-brief-poster__stale" data-basis={basis}>{label}</em>
 }
 
 function stateLabel(row: BriefingMarketRow | BriefingPulseRow, text: DailyBriefingText): string {
