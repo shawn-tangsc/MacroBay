@@ -65,8 +65,19 @@ export function unexplainedFiles(files: readonly string[], message: string): str
  * 它们落在豁免侧；之后的一切提交照常严判。
  *
  * **不要“优化”回哈希**：那会让下一次 rebase 再静默失效一次。
+ *
+ * 第二次后移（2026-11-02，架构师裁定）——**受害原因写在下面，别再后移第三次而不写**：
+ * 当时迁移欠账清单住在被测组件的守卫里（`choice/choiceCallSiteGuard.test.ts` 的 `ANTD_BASELINE`），
+ * 于是「迁完一处、同笔划掉那一行」这个被要求的动作**必然触碰组件目录**，与「组件目录只有组件线
+ * 能写」直接冲突。受影响的 4 笔（`e4719f35`、`8855636e`、`1c27281a`、`1ca7333d`，作者日期
+ * 13:47:12–13:56:41）各自只删了基线行，没有越权改组件实现。
+ *
+ * 记法上要说准：**不是“这 4 笔被原谅了”，是“规则当初长错了地方”**。前者是口子，后者是教训。
+ * 清单已迁出到 `scripts/migration-debt/`（被 git 追踪、不在组件目录），冲突消失。
+ *
+ * **今后任何后移都必须写清受害原因，写不出就不许后移。**
  */
-export const RULES_SINCE = '2026-11-02T13:23:30+08:00'
+export const RULES_SINCE = '2026-11-02T13:56:41+08:00'
 
 /** 这条提交是否早于生效点（含等于）：早于生效点的不判新规则。 */
 export function predatesRules(authorDate: string): boolean {
