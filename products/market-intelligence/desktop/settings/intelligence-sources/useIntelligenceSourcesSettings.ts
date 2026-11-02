@@ -82,11 +82,21 @@ export function useIntelligenceSourcesSettings(labels: {
     }))
   }, [])
 
-  useEffect(() => {
+  /**
+   * The first read and a manual retry are the same action, so the retry button cannot drift from
+   * what the page does on mount. `loading` goes back on before the request, which is what keeps the
+   * page from drawing an error during a retry.
+   */
+  const reload = useCallback(() => {
+    setState((current) => ({ ...current, loading: true, errorCode: null }))
     void load().catch(() => {
       setState((current) => ({ ...current, loading: false, errorCode: labels.loadFailed }))
     })
   }, [labels.loadFailed, load])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
 
   const selectSource = useCallback(async (sourceId: string) => {
     setState((current) => ({ ...current, loading: true, errorCode: null }))
@@ -362,6 +372,7 @@ export function useIntelligenceSourcesSettings(labels: {
     ...state,
     sourceEnabledById,
     needsManualRunPrompt,
+    reload,
     selectSource,
     setEnabled,
     updateProfile,

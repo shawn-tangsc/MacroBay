@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { Segmented } from '@platform/ui/components/segmented'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 
@@ -39,6 +40,7 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     replaying,
     errorCode,
     notice,
+    reload,
     selectSource,
     setEnabled,
     updateProfile,
@@ -78,6 +80,21 @@ export default function IntelligenceSourcesSettingsSection(): React.ReactElement
     return (
       <section className="settings-workspace intelligence-sources-workspace" aria-busy="true">
         <LoadingState label={t.loading} fill />
+      </section>
+    )
+  }
+
+  // The first read failed: say so and offer the retry. Drawing the page anyway would look like a
+  // module with no sources registered, which is a different fact from "we could not read them".
+  if (!settingsView && errorCode) {
+    return (
+      <section className="settings-workspace intelligence-sources-workspace">
+        <StateView
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: reload }}
+          reasonCode="unreadable"
+          size="md"
+          state="error"
+        />
       </section>
     )
   }
