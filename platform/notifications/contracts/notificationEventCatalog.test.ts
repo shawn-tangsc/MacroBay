@@ -59,9 +59,10 @@ describe('notification event catalog', () => {
     expect(catalog.list()).toHaveLength(1)
   })
 
-  it('falls back to center only when the platform has no approval row', () => {
+  it('falls back to center only when the platform has no approval row, without failing the declaration', () => {
+    // 契约 §4 第二句：没有批准记录的一律只进中心；「申请了但还没批」不是错误（通道那条也走这里）。
     const catalog = createNotificationEventCatalog({
-      sources: [{ productId: 'platform', events: [declaration({ requestedDisruptionLevels: [] })] }],
+      sources: [{ productId: 'platform', events: [declaration({ requestedDisruptionLevels: ['desktop', 'channel'] })] }],
       policy: {}
     })
     expect(catalog.get('platform.job.failed-terminal')?.approvedDisruptionLevels).toEqual(['center'])

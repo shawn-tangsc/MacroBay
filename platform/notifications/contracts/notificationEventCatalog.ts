@@ -98,9 +98,10 @@ export function createNotificationEventCatalog(input: {
         }
       }
       const policy = input.policy[declaration.id]
-      // 没有批准记录 = 只进中心（契约 §4）；不报错，因为「还没批」是合法状态。
+      // 没有批准记录 = 只进中心（契约 §4 第二句）：**不报错**，因为「还没批」是合法状态，
+      // 生效值本来也只读批准表。只有「有批准行、却和申请对不上」才是签过的表和声明打架，必须红。
       const approvedDisruptionLevels = policy?.approvedDisruptionLevels ?? ['center']
-      assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
+      if (policy !== undefined) assertRequestedWithinApproved(declaration, approvedDisruptionLevels)
       const entry: NotificationEventCatalogEntry = Object.freeze({
         ...declaration,
         productId: source.productId,
