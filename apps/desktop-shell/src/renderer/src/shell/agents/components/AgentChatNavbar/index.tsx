@@ -24,10 +24,11 @@ import {
   setSessionWorkspaceByPathViaApi,
   setSessionWorkspaceViaApi
 } from '../../agentSessionDataApi'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentLanguage, useAgentText } from '../../agentTextProvider'
-import { resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
+import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
 import { useAgentProviderNames } from '../../useAgentProviderNames'
 import { platformText } from '../../../../i18n/platformText'
 import {
@@ -84,6 +85,16 @@ export default function AgentChatNavbar({
     chatSettings: 'chatNavbar.chatSettings'
   } as const satisfies Record<string, AgentTooltipKey>
   const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
+  // 权限模式：默认确认是基线（muted），计划模式「正在发生」（info），
+  // 自动接受编辑与跳过确认都需要读者看一眼（warn）。`bad` 留给真正的失败，不兼职。
+  const permissionMode = activeAgent.configuration?.permission_mode ?? 'default'
+  const PERMISSION_TONE: Record<string, StatusPillTone> = {
+    default: 'muted',
+    plan: 'info',
+    acceptEdits: 'warn',
+    bypassPermissions: 'warn'
+  }
+  const permissionKey = `permissionMode.${permissionMode}`
   const language = useAgentLanguage()
   const providerNames = useAgentProviderNames()
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -207,7 +218,11 @@ export default function AgentChatNavbar({
           </Tooltip>
         ) : null}
         <OpenExternalAppButton workspacePath={activeSession.workspace.path} />
-        <span className="agent-permission-chip">{getAgentPermissionModeLabel(activeAgent, t.permissionMode)}</span>
+        <StatusPill
+          tone={PERMISSION_TONE[permissionMode] ?? 'muted'}
+          labelKey={permissionKey}
+          resolveText={(key) => resolveAgentTextKey(t, key)}
+        />
         <Tooltip labelKey={tooltipKeys.clearMessages} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
