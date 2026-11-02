@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Tag } from 'antd'
 import type { AssistantTemplateCatalogItem } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import type { PlatformText } from '../../../i18n/platformText'
@@ -40,7 +40,7 @@ export function AssistantTemplateCard({
           <small>{item.description || item.promptPreview}</small>
         </span>
         <span className="assistant-template-card-tags">
-          <span className="meta-chip">{source}</span>
+          <Tag>{source}</Tag>
           {item.hasUpdate ? (
             <StatusPill
               tone="info"
@@ -49,7 +49,7 @@ export function AssistantTemplateCard({
             />
           ) : null}
           {item.tags.slice(0, 2).map((tag) => (
-            <span key={tag} className="meta-chip">{tag}</span>
+            <Tag key={tag}>{tag}</Tag>
           ))}
         </span>
       </button>

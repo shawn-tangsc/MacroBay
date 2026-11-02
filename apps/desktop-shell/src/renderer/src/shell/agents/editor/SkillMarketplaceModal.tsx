@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Input } from 'antd'
+import { Button, Input, Tag } from 'antd'
 import { Check, Download, ExternalLink, Search, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillSearchResult } from '@platform/ai/agent-platform/schemas/skillSchemas'
@@ -120,7 +120,7 @@ export default function SkillMarketplaceModal({
                   <strong>{row.name}</strong>
                   <small>{row.description ?? text.common.noDescription}</small>
                   <span className="agent-marketplace-meta">
-                    <span className="meta-chip">{row.sourceRegistry}</span>
+                    <Tag className="agent-tool-approval">{row.sourceRegistry}</Tag>
                     <span>{row.statsText}</span>
                     {row.author ? <span>{row.author}</span> : null}
                   </span>

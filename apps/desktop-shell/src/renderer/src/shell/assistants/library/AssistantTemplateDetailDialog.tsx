@@ -1,4 +1,4 @@
-import { Button } from 'antd'
+import { Button, Tag } from 'antd'
 import type { AssistantTemplateDetail } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
 import { Modal } from '@platform/ui/components/modal'
 import type { PlatformText } from '../../../i18n/platformText'
@@ -63,9 +63,9 @@ export function AssistantTemplateDetailDialog({
             <div>
               <p>{template.description || template.promptPreview}</p>
               <div className="assistant-template-detail-tags">
-                <span className="meta-chip">{source}</span>
+                <Tag>{source}</Tag>
                 {template.tags.map((tag) => (
-                  <span key={tag} className="meta-chip">{tag}</span>
+                  <Tag key={tag}>{tag}</Tag>
                 ))}
               </div>
             </div>

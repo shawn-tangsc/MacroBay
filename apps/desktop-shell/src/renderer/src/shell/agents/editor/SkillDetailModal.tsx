@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Tag } from 'antd'
 import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
@@ -126,7 +127,7 @@ export default function SkillDetailModal({
               <strong>{skill.name}</strong>
               <small>{skill.description ?? text.common.noDescription}</small>
               <span className="agent-marketplace-meta">
-                <span className="meta-chip">{skill.source}</span>
+                <Tag className="agent-tool-approval">{skill.source}</Tag>
                 {skill.author ? <span>{skill.author}</span> : null}
                 {skill.sourceTags.slice(0, 4).map((tag) => (
                   <span key={tag}>{tag}</span>
@@ -147,7 +148,7 @@ export default function SkillDetailModal({
                   {runtimeView.runtimeTools.map((tool) => (
                     <div key={tool.toolId} className="agent-skill-runtime-row">
                       <strong>{tool.toolName}</strong>
-                      <span className="meta-chip">{tool.toolId}</span>
+                      <Tag className="agent-tool-approval">{tool.toolId}</Tag>
                     </div>
                   ))}
                 </div>
@@ -164,7 +165,7 @@ export default function SkillDetailModal({
                     <div key={capability.capabilityId} className="agent-skill-capability-card">
                       <div className="agent-skill-runtime-row">
                         <strong>{capability.title}</strong>
-                        <span className="meta-chip">{capability.entryFile ?? capability.kind}</span>
+                        <Tag className="agent-tool-approval">{capability.entryFile ?? capability.kind}</Tag>
                       </div>
                       {capability.summary ? <p>{capability.summary}</p> : null}
                       {capability.bodyPreview ? (
@@ -211,7 +212,7 @@ export default function SkillDetailModal({
               <div className="agent-skill-preview-title">
                 <strong>{selectedFile ?? text.editor.tools.selectSkillFile}</strong>
                 {selectedFile ? (
-                  <span className="meta-chip">{guessSkillFileLanguage(selectedFile)}</span>
+                  <Tag className="agent-tool-approval">{guessSkillFileLanguage(selectedFile)}</Tag>
                 ) : null}
               </div>
               {loadingContent ? (

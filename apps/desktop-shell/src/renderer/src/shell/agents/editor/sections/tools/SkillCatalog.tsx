@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Switch } from 'antd'
+import { Button, Switch, Tag } from 'antd'
 import { Archive, Eye, FolderPlus, RefreshCw, Sparkles, Store, Trash2 } from 'lucide-react'
 
 import { buildAgentSkillCatalog } from '@platform/ai/agent-platform/skills/agentSkillViewModel'
@@ -153,7 +153,7 @@ function SkillCatalogRow({
         <strong>{skill.name}</strong>
         <small>{runtimeView.primarySummary ?? skill.description ?? skill.folderName}</small>
         <span className="agent-marketplace-meta">
-          <span className="meta-chip">{skill.source}</span>
+          <Tag className="agent-tool-approval">{skill.source}</Tag>
           {runtimeView.toolCount > 0 ? <span>{text.editor.tools.skillRuntimeToolCount(runtimeView.toolCount)}</span> : null}
           {runtimeView.capabilityCount > 0 ? (
             <span>{text.editor.tools.skillRuntimeCapabilityCount(runtimeView.capabilityCount)}</span>
