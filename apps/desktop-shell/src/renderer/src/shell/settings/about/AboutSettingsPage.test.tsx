@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
+import { ConfigProvider } from 'antd'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { createDefaultAppSettings } from '@platform/settings/schema/appSettings'
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
+import { WINDOW_ANTD_BUTTON_CONFIG } from '@platform/ui/theme/windowAntdTheme'
 
 import { platformText } from '../../../i18n/platformText'
 import { AboutSettingsPage } from './AboutSettingsPage'
@@ -45,13 +47,19 @@ async function mount(state: UpdateCheckProjection, client?: UpdateCheckClient): 
   document.body.append(container)
   root = createRoot(container)
   await act(async () => {
+    // 真机里由主窗/分离窗的 ConfigProvider 统一关掉「两个汉字之间加空格」；测试沿用同一份配置，
+    // 不给按钮写逐处覆盖（buttonSpaceGuard 只允许它在 windowAntdTheme 里出现）。
     root?.render(
-      createElement(AboutSettingsPage, {
-        settings: createDefaultAppSettings(),
-        onUpdateSettings: async () => undefined,
-        productName: 'MacroBay',
-        client: client ?? clientFor(state)
-      })
+      createElement(
+        ConfigProvider,
+        { button: WINDOW_ANTD_BUTTON_CONFIG },
+        createElement(AboutSettingsPage, {
+          settings: createDefaultAppSettings(),
+          onUpdateSettings: async () => undefined,
+          productName: 'MacroBay',
+          client: client ?? clientFor(state)
+        })
+      )
     )
   })
   await act(async () => {
@@ -134,6 +142,12 @@ describe('the about page', () => {
     expect(toggle?.textContent).toBe(text.notes.expand)
     expect(toggle?.classList.contains('ant-secondary-button')).toBe(true)
     expect(toggle?.className).not.toContain('ant-btn-link')
+
+    // 两字标签（收起）走同一份全局配置：不出现「收 起」的插入空格。
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(container.querySelector('.about-notes button')?.textContent).toBe(text.notes.collapse)
   })
 
   it('says the browser did not open, using the sentence all five buttons share', async () => {
