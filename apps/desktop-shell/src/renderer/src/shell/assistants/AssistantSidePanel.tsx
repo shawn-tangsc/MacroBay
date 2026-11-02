@@ -6,7 +6,7 @@ import type { PlatformText } from '../../i18n/platformText'
 import { Button, Dropdown } from 'antd'
 import type { MenuProps } from 'antd'
 import { MoreHorizontal, Plus, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type AssistantSidePanelTab = 'assistants' | 'topics'
 
@@ -28,6 +28,8 @@ type AssistantSidePanelProps = {
   onCreateAssistant: () => void
   onCreateTopic: () => void
   onDeleteTopic?: (topicId: string) => Promise<void>
+  /** 每次自增都表示「把读者送到话题列表」：输入条点了需要先选话题的按钮时由页面层加一。 */
+  focusTopicsTick?: number
 }
 
 export function AssistantSidePanel({
@@ -45,11 +47,19 @@ export function AssistantSidePanel({
   onSelectTopic,
   onCreateAssistant,
   onCreateTopic,
-  onDeleteTopic
+  onDeleteTopic,
+  focusTopicsTick = 0
 }: AssistantSidePanelProps): React.ReactElement {
   const showingAssistants = activeTab === 'assistants'
   const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null)
   const deletingTopicIds = useRef(new Set<string>())
+  const panelRef = useRef<HTMLElement | null>(null)
+
+  // 到达后第一件事是选话题：焦点落到列表里第一个可选话题上，不靠读屏去猜列表在哪。
+  useEffect(() => {
+    if (focusTopicsTick === 0) return
+    panelRef.current?.querySelector<HTMLButtonElement>('.assistant-side-panel-topic-select')?.focus()
+  }, [focusTopicsTick])
 
   function confirmDeleteTopic(topic: AssistantTopicEntity): void {
     confirmAction({
@@ -73,7 +83,7 @@ export function AssistantSidePanel({
   }
 
   return (
-    <aside className="agent-side-panel assistant-side-panel">
+    <aside ref={panelRef} className="agent-side-panel assistant-side-panel">
       <div className="agent-side-panel-tabs" role="tablist" aria-label={labels.title}>
         <button
           type="button"

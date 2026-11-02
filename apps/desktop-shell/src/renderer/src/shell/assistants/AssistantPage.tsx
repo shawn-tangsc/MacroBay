@@ -141,6 +141,8 @@ export function AssistantPage({
   const [draft, setDraft] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
+  /** 输入条要求「先选话题」时加一：侧栏据此把焦点交给话题列表。 */
+  const [focusTopicsTick, setFocusTopicsTick] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const deletingTopicIds = useRef(new Set<string>())
@@ -651,6 +653,7 @@ export function AssistantPage({
             onCreateAssistant={() => void handleCreateAssistant()}
             onCreateTopic={() => void handleCreateTopic()}
             onDeleteTopic={handleDeleteTopic}
+            focusTopicsTick={focusTopicsTick}
           />
         ) : null}
         <div className="assistant-workspace-main">
@@ -672,6 +675,10 @@ export function AssistantPage({
             onSend={() => void handleSend()}
             onStop={() => void handleStop()}
             onToolAction={handleToolAction}
+            onRequireTopic={() => {
+              setActiveTab('topics')
+              setFocusTopicsTick((tick) => tick + 1)
+            }}
             onOpenSettings={() => setSettingsOpen(true)}
             onSelectSibling={(messageId) => void handleSelectSibling(messageId)}
             onDeleteMessage={(messageId) => void handleDeleteMessage(messageId)}

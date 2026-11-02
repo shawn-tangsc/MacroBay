@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 
 import { Tooltip } from '@platform/ui/components/tooltip'
+import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../i18n/platformText'
 import {
   createAssistantInputbarTools,
@@ -36,6 +37,8 @@ type AssistantInputbarProps = {
   assistantSelected?: boolean
   composerEnabled?: boolean
   topicSelected: boolean
+  /** 话题还没选时，把读者送到话题选择器去（页面层给回调；输入条不自己找 DOM）。 */
+  onRequireTopic: () => void
   statusMessage?: string | null
   mentionedModels: readonly AssistantMentionedModel[]
   /** T1–T3：图像生成 / 编辑入口（未配置端点时按钮禁用）。 */
@@ -53,6 +56,7 @@ type AssistantInputbarProps = {
 }
 
 const SETTINGS_TOOLTIP_KEY = 'assistants.assistantSettings'
+const TOPIC_REQUIRED_KEY = 'assistants.topicRequiredHint'
 
 const TOOL_ICONS: Record<AssistantInputbarToolId, LucideIcon> = {
   attachment: Paperclip,
@@ -73,6 +77,7 @@ export function AssistantInputbar({
   assistantSelected = true,
   composerEnabled,
   topicSelected,
+  onRequireTopic,
   statusMessage,
   mentionedModels,
   imageGeneration,
@@ -86,6 +91,7 @@ export function AssistantInputbar({
   onToggleMentionedModel,
   onClearMentionedModels
 }: AssistantInputbarProps): React.ReactElement {
+  const toast = useToast()
   const tools = listVisibleAssistantInputbarTools(createAssistantInputbarTools())
   const canCompose = composerEnabled ?? (assistantSelected && modelReady)
 
@@ -119,10 +125,20 @@ export function AssistantInputbar({
                   type="text"
                   size="small"
                   className="assistant-inputbar-tool"
-                  disabled={tool.id === 'clear-topic' && !topicSelected}
                   icon={<Icon size={14} />}
                   aria-label={label}
-                  onClick={() => onToolAction(tool.id)}
+                  onClick={() => {
+                    // 临时不可用不等于禁用：按钮保持可点，点了把读者送到话题选择器，并说一句为什么。
+                    if (tool.id === 'clear-topic' && !topicSelected) {
+                      onRequireTopic()
+                      toast.info({
+                        titleKey: TOPIC_REQUIRED_KEY,
+                        resolveText: (key) => (key === TOPIC_REQUIRED_KEY ? labels.topicRequiredHint : '')
+                      })
+                      return
+                    }
+                    onToolAction(tool.id)
+                  }}
                 />
               </AntTooltip>
             )

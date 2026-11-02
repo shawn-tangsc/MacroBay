@@ -37,6 +37,8 @@ type AssistantChatPaneProps = {
   onSend: () => void
   onStop: () => void
   onToolAction: (toolId: AssistantInputbarToolId) => void
+  /** 话题还没选时把读者送到话题列表（页面层实现焦点交接）。 */
+  onRequireTopic: () => void
   onOpenSettings: () => void
   onSelectSibling: (messageId: string) => void
   onDeleteMessage: (messageId: string) => void
@@ -82,7 +84,8 @@ export function AssistantChatPane({
   mentionedModels,
   modelOptions,
   onToggleMentionedModel,
-  onClearMentionedModels
+  onClearMentionedModels,
+  onRequireTopic,
 }: AssistantChatPaneProps): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState('')
   const messageListRef = useRef<HTMLDivElement | null>(null)
@@ -182,6 +185,7 @@ export function AssistantChatPane({
         assistantSelected={assistantSelected}
         composerEnabled={composerEnabled}
         topicSelected={Boolean(topic)}
+        onRequireTopic={onRequireTopic}
         statusMessage={statusMessage}
         onDraftChange={onDraftChange}
         onSend={onSend}

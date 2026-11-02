@@ -3,9 +3,11 @@ import { Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import { Modal } from '@platform/ui/components/modal'
+import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../../i18n/platformText'
 
 const CREATE_ASSISTANT_TITLE_KEY = 'assistants.library.createTitle'
+const COMING_SOON_KEY = 'assistants.library.promptGenerateComingSoon'
 
 type CreateAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -20,6 +22,7 @@ export function CreateAssistantDialog({
   onClose,
   onCreate
 }: CreateAssistantDialogProps): React.ReactElement {
+  const toast = useToast()
   const [icon, setIcon] = useState('💬')
   const [name, setName] = useState('')
   const [prompt, setPrompt] = useState('')
@@ -83,7 +86,18 @@ export function CreateAssistantDialog({
         </label>
         <div className="assistant-create-dialog-meta">
           <Tooltip title={labels.promptGenerate}>
-            <Button type="text" size="small" disabled icon={<Sparkles size={14} />} aria-label={labels.promptGenerate} />
+            <Button
+              type="text"
+              size="small"
+              icon={<Sparkles size={14} />}
+              aria-label={labels.promptGenerate}
+              onClick={() =>
+                toast.info({
+                  titleKey: COMING_SOON_KEY,
+                  resolveText: (key) => (key === COMING_SOON_KEY ? labels.promptGenerateComingSoon : '')
+                })
+              }
+            />
           </Tooltip>
           <span>{labels.tokenCount(tokenCount)}</span>
         </div>

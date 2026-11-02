@@ -305,6 +305,8 @@ export type PlatformText = {
     newTopic: string
     noAssistant: string
     noTopics: string
+    /** 清除话题但还没选话题时的一句引导。 */
+    topicRequiredHint: string
     defaultAssistant: string
     selectTopic: string
     emptyChat: string
@@ -435,6 +437,8 @@ export type PlatformText = {
       prompt: string
       promptPlaceholder: string
       promptGenerate: string
+      /** 提示词生成还没上线时点了按钮的回执。 */
+      promptGenerateComingSoon: string
       tokenCount: (count: number) => string
       knowledgeBase: string
       knowledgeBaseDisabled: string
@@ -1463,6 +1467,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       newTopic: '新话题',
       noAssistant: '未选择助手',
       noTopics: '暂无话题',
+      topicRequiredHint: '先在上面选一个话题',
       defaultAssistant: '平台默认助手',
       selectTopic: '选择一个话题开始聊天',
       emptyChat: '发送第一条消息开始对话',
@@ -1592,6 +1597,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         prompt: '提示词',
         promptPlaceholder: '输入系统提示词',
         promptGenerate: '提示词生成稍后接入',
+        promptGenerateComingSoon: '提示词生成还没上线',
         tokenCount: (count) => `约 ${count} token`,
         knowledgeBase: '知识库',
         knowledgeBaseDisabled: '知识库将在后续平台能力中接入。',
@@ -2566,6 +2572,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       newTopic: 'New topic',
       noAssistant: 'No assistant selected',
       noTopics: 'No topics yet',
+      topicRequiredHint: 'Pick a topic above first',
       defaultAssistant: 'Platform default assistant',
       selectTopic: 'Select a topic to start chatting',
       emptyChat: 'Send the first message to begin',
@@ -2696,6 +2703,7 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         prompt: 'Prompt',
         promptPlaceholder: 'Enter system prompt',
         promptGenerate: 'Prompt generation will be added later',
+        promptGenerateComingSoon: 'Prompt generation is not available yet',
         tokenCount: (count) => `~${count} tokens`,
         knowledgeBase: 'Knowledge base',
         knowledgeBaseDisabled: 'Knowledge base support will connect through a later platform capability.',
