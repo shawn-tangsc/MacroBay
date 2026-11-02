@@ -177,6 +177,7 @@ import { registerAgentToolsIpc } from './ipc/agentToolsIpc'
 import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
+import { composeNotificationRuntime } from './composition/notifications'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -1216,16 +1217,8 @@ function registerIpcHandlers(
     getLanguage: async () => (await settingsStore.get()).language
   })
 
-  configureNotificationRuntime({
-    getSettings: async () => (await settingsStore.get()).notifications,
-    // 免打扰窗口按设置的读者时区判断，不按运行机器；同一提供者随设置保存刷新。
-    clock: { now: () => new Date(), timeZone: () => shellTimeZone.get() },
-    // 桌面通知在主进程发出：每次读设置拿当前语言，切语言后连历史通知也按新语言解析。
-    getLanguage: async () => {
-      const language = (await settingsStore.get()).language
-      return language === 'en-US' ? 'en-US' : 'zh-CN'
-    }
-  })
+  // 通知运行时的端口在 composition 里定义；这里只提供它需要的两份状态。
+  composeNotificationRuntime({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get() })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
