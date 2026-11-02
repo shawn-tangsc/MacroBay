@@ -36,6 +36,7 @@ import {
   toggleAgentInputExpanded
 } from './agentInputbarControls'
 import { isSendShortcut, resizeTextarea } from './agentInputbarHelpers'
+import { useQuotedToComposer } from './useQuotedToComposer'
 import AgentQuickPanel, { getAgentQuickPanelNextActiveId } from './AgentQuickPanel'
 import AgentSessionInputbarFooter from './AgentSessionInputbarFooter'
 import AgentComposerModelMenu from './AgentComposerModelMenu'
@@ -108,21 +109,7 @@ export default function AgentSessionInputbar({
   }, [agent.disabledTools, builtinTools, t.input])
   const footerLabels = useMemo(() => inputbarFooterLabels(t), [t])
 
-  useEffect(() => {
-    return window.platform.app.onQuotedToMain((selectedText) => {
-      const insertion = buildAgentQuoteInsertion(draftRef.current, selectedText)
-      if (!insertion) return
-
-      const nextDraft = `${draftRef.current}${insertion}`
-      draftRef.current = nextDraft
-      setDraft(nextDraft)
-      requestAnimationFrame(() => {
-        if (textareaRef.current) resizeTextarea(textareaRef.current, maxTextareaHeight)
-        textareaRef.current?.focus()
-        textareaRef.current?.setSelectionRange(nextDraft.length, nextDraft.length)
-      })
-    })
-  }, [maxTextareaHeight])
+  useQuotedToComposer({ draftRef, setDraft, textareaRef, maxTextareaHeight })
 
   const quickPanel = useAgentInputQuickPanel({
     text: t,
