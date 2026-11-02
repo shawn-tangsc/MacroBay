@@ -57,11 +57,11 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             joined sentence with newlines would be lost the first time the copy is translated. */}
         <Popover
           lines={[
-            'pages.intelligence.portal.dashboard.divergence.helpLines.0',
-            'pages.intelligence.portal.dashboard.divergence.helpLines.1',
-            'pages.intelligence.portal.dashboard.divergence.helpLines.2',
-            'pages.intelligence.portal.dashboard.divergence.helpLines.3',
-            'pages.intelligence.portal.dashboard.divergence.helpLines.4'
+            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.0' },
+            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.1' },
+            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.2' },
+            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.3' },
+            { labelKey: 'pages.intelligence.portal.dashboard.divergence.helpLines.4' }
           ]}
           resolveText={resolveProductKey}>
           <Button type="text" size="small" className="mi-divergence__help" aria-label={text.helpLabel}
