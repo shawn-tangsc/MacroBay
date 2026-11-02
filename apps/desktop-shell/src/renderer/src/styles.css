@@ -9070,6 +9070,16 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted);
 }
 
+/* 侧栏「设置」上的小点：有新版才亮。不做动画——它是提示，不是警报。 */
+.settings-update-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 2px;
+  flex: none;
+}
+
 /*
  * 设置 → 关于我们。
  *

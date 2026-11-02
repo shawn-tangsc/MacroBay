@@ -36,6 +36,7 @@ import { AppMenuBar } from './window/AppMenuBar'
 import { WindowControls } from './window/WindowControls'
 import { productMenuEntries, productSettingsEntries } from '@products/generated/shellRegistry'
 import { isBuiltInNavItemId, isBuiltInSettingsPanelId } from './navigation/builtInNavEntries'
+import { SettingsUpdateDot } from './navigation/SettingsUpdateDot'
 import { resolveAvailableSettingsPanelKey, resolveSettingsPanelKeyFromHash } from './navigation/settingsPanelKey'
 import { ModelServiceProviderPage } from './model-service/ModelServiceProviderPage'
 import { ModelServiceLoadSurface } from './model-service/ModelServiceLoadSurface'
@@ -1793,6 +1794,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
                 onClick={() => activateNavKey(item.key)}>
                 <Icon size={17} strokeWidth={1.8} />
                 <span>{item.label}</span>
+                <SettingsUpdateDot language={settings.language} />
               </button>
             )
           })}

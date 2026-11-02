@@ -26,6 +26,8 @@ export type UpdateCheckCompositionPorts = Readonly<{
   now: () => Date
   isCheckEnabled: () => Promise<boolean>
   openExternal: (url: string) => Promise<void>
+  /** Main → 渲染层：结论落定后广播投影。由组合根给（主窗 + 通道名都在那里定）。 */
+  broadcast: (projection: UpdateCheckProjection) => void
   log: (level: 'info' | 'warn', event: string, fields?: Record<string, unknown>) => void
 }>
 
@@ -44,6 +46,7 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
     fetch: ports.fetch,
     now: ports.now,
     isCheckEnabled: ports.isCheckEnabled,
+    onSettled: ports.broadcast,
     log: ports.log
   })
 

@@ -80,7 +80,15 @@ const api = {
   updates: {
     getState: () => ipcRenderer.invoke(IpcChannels.updatesGetState),
     checkNow: () => ipcRenderer.invoke(IpcChannels.updatesCheckNow),
-    openUpdateLink: (destination: unknown) => ipcRenderer.invoke(IpcChannels.updatesOpenLink, destination)
+    openUpdateLink: (destination: unknown) => ipcRenderer.invoke(IpcChannels.updatesOpenLink, destination),
+    /** 订阅「结论变了」。返回退订函数：拿不到退订等于每次挂载漏一个监听。 */
+    onChanged: (callback: (projection: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, projection: unknown) => callback(projection)
+      ipcRenderer.on(IpcChannels.updatesChanged, listener)
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.updatesChanged, listener)
+      }
+    }
   },
   channels: {
     catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog),

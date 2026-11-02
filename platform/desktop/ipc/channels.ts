@@ -35,6 +35,12 @@ export const IpcChannels = {
   updatesGetState: 'platform:updates-get-state',
   updatesCheckNow: 'platform:updates-check-now',
   updatesOpenLink: 'platform:updates-open-link',
+  /**
+   * 结论落定后的广播（成功与失败都算）。小点的唯一来源就是它：
+   * 壳层挂载时用 `get-state` 取一次初值，之后只订阅，不轮询、不自己比版本号。
+   * 载荷是那一刻的投影 `UpdateCheckProjection`，**不是事件对象**。
+   */
+  updatesChanged: 'platform:updates-changed',
   channelsCatalog: 'platform:channels-catalog',
   channelsList: 'platform:channels-list',
   /**

@@ -55,6 +55,7 @@ function createClient(
       if (options.checkRejects === true) throw new Error('No handler registered')
       return options.next ?? available
     },
+    onChanged: () => () => undefined,
     openUpdateLink: async () => {
       calls.openUpdateLink += 1
       if (options.openOk !== false) calls.opened += 1

@@ -109,6 +109,25 @@ describe('desktop preload platform api', () => {
     expect(invoke).toHaveBeenCalledWith(IpcChannels.webSearchListProviders)
   })
 
+  it('lets the renderer subscribe to update conclusions and unsubscribe again', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls[0]?.[1] as {
+      updates: { onChanged: (callback: (projection: unknown) => void) => () => void }
+    }
+
+    const seen: unknown[] = []
+    const unsubscribe = api.updates.onChanged((projection) => seen.push(projection))
+    expect(typeof unsubscribe).toBe('function')
+
+    // 收到的是投影载荷，不是 IpcRendererEvent：事件对象一个字都不透出去。
+    const listener = on.mock.calls.at(-1)?.[1] as (event: unknown, payload: unknown) => void
+    listener({ sender: 'nope' }, { state: 'available' })
+    expect(seen).toEqual([{ state: 'available' }])
+
+    unsubscribe()
+    expect(removeListener).toHaveBeenCalledWith(IpcChannels.updatesChanged, listener)
+  })
+
   it('exposes exactly the notification methods, including the one destructive call', async () => {
     await import('./index')
     const api = exposeInMainWorld.mock.calls[0]?.[1] as {

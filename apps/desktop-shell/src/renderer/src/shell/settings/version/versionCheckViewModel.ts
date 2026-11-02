@@ -56,6 +56,16 @@ export function resolvePillLabel(pills: Readonly<Record<string, string>>, key: s
   return pills[key.slice(key.lastIndexOf('.') + 1)] ?? fallback
 }
 
+/**
+ * 侧栏小点亮不亮：**只看结论的 `state`**。
+ *
+ * 查不到（`unavailable`）永远不亮——「拿失败当有新版」在结构上就不可能；`idle`/`development`
+ * 也不亮。壳层不许拿版本号再算一遍，那是第二个来源。
+ */
+export function shouldShowUpdateDot(projection: UpdateCheckProjection | null): boolean {
+  return projection?.state === 'available'
+}
+
 const toneByPill: Record<VersionCheckPill, StatusPillTone> = {
   upToDate: 'ok',
   available: 'info',

@@ -18,6 +18,7 @@ type Harness = {
   order: () => string[]
   advance: (milliseconds: number) => void
   logs: () => Array<{ level: string; event: string; fields?: Record<string, unknown> }>
+  settled: () => string[]
 }
 
 type HarnessOptions = {
@@ -43,6 +44,7 @@ function makeHarness(options: HarnessOptions = {}): Promise<Harness> {
   const writes: StoredUpdateCheckState[] = []
   const order: string[] = []
   const logs: Array<{ level: string; event: string; fields?: Record<string, unknown> }> = []
+  const settled: string[] = []
   let fetchCalls = 0
 
   const ports: UpdateCheckServicePorts = {
@@ -66,7 +68,8 @@ function makeHarness(options: HarnessOptions = {}): Promise<Harness> {
     isCheckEnabled: async () => options.enabled ?? true,
     log: (level, event, fields) => {
       logs.push({ level, event, fields })
-    }
+    },
+    onSettled: (projection) => settled.push(projection.state)
   }
 
   return createUpdateCheckService(ports).then((service) => ({
@@ -78,7 +81,8 @@ function makeHarness(options: HarnessOptions = {}): Promise<Harness> {
     advance: (milliseconds) => {
       nowMs += milliseconds
     },
-    logs: () => logs
+    logs: () => logs,
+    settled: () => settled
   }))
 }
 
@@ -281,6 +285,27 @@ describe('the request ceiling', () => {
     // 本机实测：同一台机器上第一次请求 17 秒才通、第二次 200。自动检查一天只有一次机会，
     // 10 秒会把「其实能查到」每天静默判成「查不到」——所以下限写死在这里。
     expect(updateCheckTimeoutMs).toBeGreaterThanOrEqual(20_000)
+  })
+})
+
+describe('the single settlement exit', () => {
+  it('reports once when the check succeeds', async () => {
+    const harness = await makeHarness()
+    await harness.service.checkNow('manual')
+    expect(harness.settled()).toEqual(['available'])
+  })
+
+  it('reports once when the check fails too, not only on success', async () => {
+    const harness = await makeHarness({ respond: () => new Response('', { status: 404 }) })
+    await harness.service.checkNow('manual')
+    expect(harness.settled()).toEqual(['unavailable'])
+  })
+
+  it('does not report when a gate skipped the request', async () => {
+    const harness = await makeHarness({ enabled: false })
+    await harness.service.checkNow('auto')
+    // 一个请求都没发，就不是一次「结论落定」。
+    expect(harness.settled()).toEqual([])
   })
 })
 

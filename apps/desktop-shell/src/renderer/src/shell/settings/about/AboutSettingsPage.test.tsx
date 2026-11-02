@@ -31,7 +31,8 @@ function clientFor(
     openUpdateLink: async (destination) => {
       options.opened?.push(destination)
       return { ok: options.openOk !== false }
-    }
+    },
+    onChanged: () => () => undefined
   }
 }
 

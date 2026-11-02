@@ -13,6 +13,8 @@ export type UpdateCheckClient = Readonly<{
   checkNow: () => Promise<UpdateCheckProjection>
   /** 打开五个目的地之一；主进程回 `{ ok: false }` 表示没交给系统打开。**不 throw** 是契约的一部分。 */
   openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
+  /** 订阅「结论变了」，返回退订函数。壳层只订阅，不轮询、不自己比版本号。 */
+  onChanged: (callback: (projection: UpdateCheckProjection) => void) => () => void
 }>
 
 /**
@@ -24,13 +26,22 @@ export type UpdateCheckClient = Readonly<{
 export const platformUpdateCheckClient: UpdateCheckClient = {
   getState: async () => requireBridge().getState(),
   checkNow: async () => requireBridge().checkNow(),
-  openUpdateLink: async (destination) => requireBridge().openUpdateLink(destination)
+  openUpdateLink: async (destination) => requireBridge().openUpdateLink(destination),
+  onChanged: (callback) => {
+    // 订阅失败不能把壳层炸掉（应用没重启时桥不在）：拿不到桥就返回一个空退订，小点保持不亮。
+    try {
+      return requireBridge().onChanged(callback)
+    } catch {
+      return () => undefined
+    }
+  }
 }
 
 type UpdateCheckBridge = {
   getState: () => Promise<UpdateCheckProjection>
   checkNow: () => Promise<UpdateCheckProjection>
   openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
+  onChanged: (callback: (projection: UpdateCheckProjection) => void) => () => void
 }
 
 function requireBridge(): UpdateCheckBridge {

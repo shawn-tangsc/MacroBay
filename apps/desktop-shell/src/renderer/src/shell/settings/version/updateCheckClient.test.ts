@@ -73,7 +73,8 @@ describe('the platform update client without its bridge', () => {
       updates: {
         getState: async () => ({ state: 'idle', currentVersion: '0.3.1' }),
         checkNow: async () => ({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }),
-        openUpdateLink: async () => ({ ok: true })
+        openUpdateLink: async () => ({ ok: true }),
+        onChanged: () => () => undefined
       }
     }
 

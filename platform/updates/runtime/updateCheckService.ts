@@ -49,6 +49,11 @@ export type UpdateCheckServicePorts = Readonly<{
   now: () => Date
   /** 自动检查开关（`updates.checkEnabled`）。关掉时**一次请求都不发**。 */
   isCheckEnabled: () => Promise<boolean>
+  /**
+   * 结论落定（成功或失败）后的唯一出口。组合根把它接到广播上；
+   * 服务**没有第二个出口**，所以「发送点只有一处」是结构保证，不靠数。
+   */
+  onSettled?: (projection: UpdateCheckProjection) => void
   log: (level: 'info' | 'warn', event: string, fields?: Record<string, unknown>) => void
 }>
 
@@ -154,6 +159,7 @@ export async function createUpdateCheckService(ports: UpdateCheckServicePorts): 
     if (result.status !== 'unavailable') state.lastSuccessAt = result.checkedAt
     await persist()
 
+    ports.onSettled?.(projection())
     ports.log('info', 'update.check.finished', {
       trigger,
       status: result.status,

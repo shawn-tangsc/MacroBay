@@ -1174,7 +1174,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     currentVersion: app.getVersion(), platform: process.platform,
     stateFilePath: join(platformDataDirectory, 'updates', 'state.json'), fetch: getPlatformFetch(),
     now: () => new Date(), isCheckEnabled: async () => (await settingsStore.get()).updates.checkEnabled,
-    openExternal: (url) => shell.openExternal(url), log: appLog.log
+    openExternal: (url) => shell.openExternal(url), log: appLog.log,
+    broadcast: (projection) => safeSendToMainWindow(getMainWindow, IpcChannels.updatesChanged, projection)
   })
 
   if (!productAcceptanceProfile.enabled) app.on('second-instance', () => {
