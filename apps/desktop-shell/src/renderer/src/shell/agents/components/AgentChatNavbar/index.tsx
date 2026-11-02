@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Button, Select, Tooltip } from 'antd'
+import { Button, Select } from 'antd'
 import { CalendarClock, FolderOpen, Settings2, SquarePen, TerminalSquare, Trash2 } from 'lucide-react'
 
 import type { AgentEntity, UniqueModelId } from '@platform/ai/agent-platform/schemas/agentSchemas'
@@ -24,7 +24,10 @@ import {
   setSessionWorkspaceByPathViaApi,
   setSessionWorkspaceViaApi
 } from '../../agentSessionDataApi'
+import { Tooltip } from '@platform/ui/components/tooltip'
+
 import { useAgentLanguage, useAgentText } from '../../agentTextProvider'
+import { resolveAgentTooltipText, type AgentTooltipKey } from '../../agentTooltipText'
 import { useAgentProviderNames } from '../../useAgentProviderNames'
 import { platformText } from '../../../../i18n/platformText'
 import {
@@ -72,6 +75,15 @@ export default function AgentChatNavbar({
   onEditAgent
 }: AgentChatNavbarProps): React.ReactElement {
   const t = useAgentText()
+  // 键取自闭合联合 `AgentTooltipKey`：写错一处编译就红。
+  const tooltipKeys = {
+    agentConfig: 'chatNavbar.agentConfig',
+    openWorkspace: 'chatNavbar.openWorkspace',
+    clearMessages: 'chatNavbar.clearMessages',
+    taskCenter: 'chatNavbar.taskCenter',
+    chatSettings: 'chatNavbar.chatSettings'
+  } as const satisfies Record<string, AgentTooltipKey>
+  const resolveText = (key: string): string => resolveAgentTooltipText(t, key)
   const language = useAgentLanguage()
   const providerNames = useAgentProviderNames()
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -140,7 +152,7 @@ export default function AgentChatNavbar({
           <span className="agent-chat-identity-copy">
             <strong>{activeAgent.name}</strong>
           </span>
-          <Tooltip title={t.chatNavbar.agentConfig}>
+          <Tooltip labelKey={tooltipKeys.agentConfig} resolveText={resolveText}>
             <Button
               className="ant-shell-icon-button agent-chat-agent-config-button"
               type="text"
@@ -183,7 +195,7 @@ export default function AgentChatNavbar({
           onChange={(value) => void selectWorkspace(value)}
         />
         {activeSession.workspace.path ? (
-          <Tooltip title={t.chatNavbar.openWorkspace}>
+          <Tooltip labelKey={tooltipKeys.openWorkspace} resolveText={resolveText}>
             <Button
               className="ant-shell-icon-button"
               type="text"
@@ -196,7 +208,7 @@ export default function AgentChatNavbar({
         ) : null}
         <OpenExternalAppButton workspacePath={activeSession.workspace.path} />
         <span className="agent-permission-chip">{getAgentPermissionModeLabel(activeAgent, t.permissionMode)}</span>
-        <Tooltip title={t.chatNavbar.clearMessages}>
+        <Tooltip labelKey={tooltipKeys.clearMessages} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"
@@ -211,7 +223,7 @@ export default function AgentChatNavbar({
             }}
           />
         </Tooltip>
-        <Tooltip title={t.chatNavbar.taskCenter}>
+        <Tooltip labelKey={tooltipKeys.taskCenter} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"
@@ -221,7 +233,7 @@ export default function AgentChatNavbar({
             onClick={() => setTaskCenterOpen(true)}
           />
         </Tooltip>
-        <Tooltip title={t.chatNavbar.chatSettings}>
+        <Tooltip labelKey={tooltipKeys.chatSettings} resolveText={resolveText}>
           <Button
             className="ant-shell-icon-button"
             type="text"

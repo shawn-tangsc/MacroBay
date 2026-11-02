@@ -18,6 +18,11 @@ export type AgentTooltipKey =
   | 'navbar.search'
   | 'messageNavigation.none'
   | 'settingsDrawer.narrowMode'
+  | 'chatNavbar.agentConfig'
+  | 'chatNavbar.openWorkspace'
+  | 'chatNavbar.clearMessages'
+  | 'chatNavbar.taskCenter'
+  | 'chatNavbar.chatSettings'
 
 /**
  * 提示文案的点分键解析。
