@@ -36,12 +36,24 @@ const SIZE_PX: Record<IconButtonSize, number> = { sm: 22, md: 24 }
 /** 图形按档位缩放：行内档 14、工具栏档 16。 */
 const GLYPH_PX: Record<IconButtonSize, number> = { sm: 14, md: 16 }
 
-/** 只放 `data-*` 键进 DOM：类型之外的兜底，cast 绕不过这一层。 */
+/**
+ * 只放 `data-*` 键进 DOM；**违约当场抛错，不静默过滤**。
+ *
+ * 这个 prop 只有我们自己的代码在传，传错的唯一可能是写错或强行 cast——而那正是最该在挂载那
+ * 一瞬间炸掉的时刻。悄悄丢掉一个键会让「我明明传了却没生效」变成一次排查；而它若放过一个
+ * 伪装成属性的尺寸，就等于从内部绕开了 22/24 的闭集。
+ */
 function dataOnly(
   dataAttributes: Readonly<Record<`data-${string}`, string | number | boolean | undefined>> | undefined
 ): Record<string, string | number | boolean | undefined> {
   if (dataAttributes === undefined) return {}
-  return Object.fromEntries(Object.entries(dataAttributes).filter(([key]) => key.startsWith('data-')))
+  for (const key of Object.keys(dataAttributes)) {
+    if (!key.startsWith('data-')) {
+      // 面向实现者的错误，不是给读者看的文案：组件里不许出现可见中文（守卫扫源码），所以用英文。
+      throw new Error(`IconButton dataAttributes accepts only data-* keys; received "${key}"`)
+    }
+  }
+  return dataAttributes
 }
 
 /** 填模板里的 `{name}`；**找不到的参数原样保留**，让缺参在界面上看得见。 */

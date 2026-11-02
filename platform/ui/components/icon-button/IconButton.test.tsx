@@ -152,14 +152,11 @@ describe('IconButton', () => {
     expect(button.getAttribute('data-redock-tab')).toBe('page')
   })
 
-  it('keeps the data-only boundary even when a cast slips a non-data key in', () => {
-    const button = mountElement({
-      dataAttributes: { 'data-redock-tab': 'page', width: 999 } as never
-    })
-
-    expect(button.getAttribute('data-redock-tab')).toBe('page')
-    // 类型能被 cast 绕开，这一层绕不开：伪装成属性的尺寸不许进 DOM。
-    expect(button.getAttribute('width')).toBeNull()
+  it('fails loudly when a cast slips a non-data key in, instead of dropping it', () => {
+    // 类型能被 cast 绕开，这一层绕不开；而且违约当场说话，不静默过滤。
+    expect(() => markup({ dataAttributes: { width: 999 } as never })).toThrow(/width/)
+    // 合规的钩子照常透传。
+    expect(markup({ dataAttributes: { 'data-redock-tab': 'page' } as never })).toContain('data-redock-tab="page"')
   })
 
   it('is a plain button, so it can never submit a surrounding form', () => {
