@@ -4,9 +4,16 @@
     "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantMentionedModelsPicker.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx": 1,
-    "apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx": 1,
     "products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx": 1,
     "products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx": 1,
     "products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx": 1
+  },
+  "$decidedComment": "Reviewed and deliberately kept, not debt. A line here says \"we looked and decided\", so nobody re-opens the discussion; a line in `entries` says \"still to do\". If the file stops importing antd Popover, delete its line here too — a decided entry that no longer matches the code is the same lie as a stale debt entry.",
+  "decided": {
+    "apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx": {
+      "decision": "keep",
+      "decidedOn": "2026-11-02",
+      "reason": "A picker, not an explanation panel: controlled open state, search, category and protocol filters, a result list. The component takes one sentence and a focusable trigger; putting a choose-something panel where the sentence goes either drops half its function or opens an arbitrary-content API for a single site. Revisit only when a second site needs custom content in a floating layer; then both move together."
+    }
   }
 }

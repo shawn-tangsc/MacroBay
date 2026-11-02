@@ -34,13 +34,24 @@ const OUR_IMPORT = '@platform/ui/components/popover'
  */
 const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/popover.json')
 
-function readDebt(): ReadonlyMap<string, number> {
-  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+/**
+ * 清单有两种条目，**分开记**：`entries` 是还欠着的（待迁），`decided` 是看过了、决定保留的。
+ *
+ * 混在一起记，下一个人读到的都是「还在排队」——而已判过的讨论会被重新拉一遍，每次半小时。
+ * 一条欠账和一个决定，对读者的意思完全不同，所以状态必须是字段，不能是注释。
+ */
+function readDebt(): { debt: ReadonlySet<string>; decided: ReadonlySet<string> } {
+  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as {
+    entries?: Record<string, number>
+    decided?: Record<string, unknown>
+  }
   if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
-  return new Map(Object.entries(parsed.entries))
+  return { debt: new Set(Object.keys(parsed.entries)), decided: new Set(Object.keys(parsed.decided ?? {})) }
 }
 
-const ANTD_POPOVER_BASELINE = readDebt()
+const { debt: ANTD_POPOVER_BASELINE, decided: DECIDED_KEEPS } = readDebt()
+/** 两种条目加起来才是「允许继续 import antd Popover」的全集。 */
+const ALLOWED = new Set([...ANTD_POPOVER_BASELINE, ...DECIDED_KEEPS])
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = []
@@ -81,7 +92,7 @@ function importsAntdPopover(text: string): boolean {
 describe('Popover call sites', () => {
   it('keeps the hand-written antd popovers on the shrinking list, and nothing else', () => {
     const offenders = FILES.map(relativeToRoot).filter(
-      (file) => importsAntdPopover(readFileSync(join(ROOT, file), 'utf8')) && !ANTD_POPOVER_BASELINE.has(file)
+      (file) => importsAntdPopover(readFileSync(join(ROOT, file), 'utf8')) && !ALLOWED.has(file)
     )
 
     // 要一块浮层说明就用 `@platform/ui/components/popover`；手写第二份等于绕开焦点与关闭规则。
@@ -133,6 +144,20 @@ describe('Popover call sites', () => {
     }
 
     expect(offenders).toEqual([])
+  })
+
+
+  it('keeps the decided-keep lines honest: each must still name a real antd import', () => {
+    // `decided` 不是垃圾桶：它记的是「看过了、决定保留」。那个文件哪天真的不用 antd 了，
+    // 这条留着就是在替一个已经结束的状态作证——和过期欠账是同一种谎。
+    const stale = [...DECIDED_KEEPS].filter((file) => {
+      try {
+        return !importsAntdPopover(readFileSync(join(ROOT, file), 'utf8'))
+      } catch {
+        return true
+      }
+    })
+    expect(stale).toEqual([])
   })
 
   it('catches both shapes, so neither guard passes vacuously', () => {
