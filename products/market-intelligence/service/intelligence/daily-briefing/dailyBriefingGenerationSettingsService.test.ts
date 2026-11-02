@@ -13,7 +13,10 @@ describe('daily briefing generation settings service', () => {
       storage: createInMemoryDailyBriefingGenerationSettingsStorage(),
       now: () => NOW
     })
-    expect(await service.getView()).toEqual({ generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' })
+    expect(await service.getView()).toEqual({
+      generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *',
+      periods: [{ id: 'default', generationTime: '08:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 8 * * *' }]
+    })
   })
 
   it('hands the scheduler the periods themselves, not a projection', async () => {
@@ -167,7 +170,10 @@ describe('daily briefing generation settings service', () => {
       updatedAt: NOW
     })
     const service = createDailyBriefingGenerationSettingsService({ storage, now: () => NOW })
-    expect(await service.getView()).toEqual({ generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *' })
+    expect(await service.getView()).toEqual({
+      generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *',
+      periods: [{ id: 'default', generationTime: '09:00', generationTimeZone: null, generationTimeZoneInvalid: null, windowHours: 24, cronExpression: '0 9 * * *' }]
+    })
   })
 
   it('shares the one zone judgement with its callers', async () => {

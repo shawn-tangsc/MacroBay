@@ -14,6 +14,20 @@ import {
   type DailyBriefingPeriodsSettings
 } from './dailyBriefingGenerationSettings'
 
+/**
+ * One period as the page reads it. The zone verdict is derived here, never stored, and `cronExpression`
+ * is derived from the same time the cutoff uses — so the row and the schedule cannot disagree.
+ */
+export type DailyBriefingPeriodView = Readonly<{
+  id: string
+  name?: string
+  generationTime: string
+  generationTimeZone: string | null
+  generationTimeZoneInvalid: string | null
+  windowHours: DailyBriefingWindowHours
+  cronExpression: string
+}>
+
 /** The reader-facing shape. `cronExpression` is derived from the time, never stored. */
 export type DailyBriefingGenerationSettingsView = Readonly<{
   generationTime: string
@@ -23,6 +37,11 @@ export type DailyBriefingGenerationSettingsView = Readonly<{
   generationTimeZoneInvalid: string | null
   windowHours: DailyBriefingWindowHours
   cronExpression: string
+  /**
+   * Every saved period, projected. The page renders this list; the flat fields above stay for the
+   * callers that only need one period (they are this list's first entry).
+   */
+  periods: readonly DailyBriefingPeriodView[]
 }>
 
 export type DailyBriefingGenerationSettingsStorage = Readonly<{
@@ -97,23 +116,34 @@ export function createDailyBriefingGenerationSettingsService(deps: Readonly<{
 }>): DailyBriefingGenerationSettingsService {
   const now = deps.now ?? (() => new Date().toISOString())
 
-  function view(settings: DailyBriefingPeriodsSettings): DailyBriefingGenerationSettingsView {
-    const period = firstDailyBriefingPeriod(settings)
+  function project(period: DailyBriefingPeriod): DailyBriefingPeriodView {
     const storedZone = period.generationTimeZone
     const issue = generationTimeZoneIssue(storedZone)
     const readerZone = deps.timeZone?.()
     // A period with no zone means "the reader's zone", so the page can say which clock it uses
     // without anything being written. A zone we cannot read is reported as the raw value, not
     // repaired and not replaced by the reader's zone.
-    const effectiveZone = issue
-      ? null
-      : storedZone ?? (isDailyBriefingTimeZoneId(readerZone) ? readerZone! : null)
     return Object.freeze({
+      id: period.id,
+      ...(period.name ? { name: period.name } : {}),
       generationTime: period.generationTime,
-      generationTimeZone: effectiveZone,
+      generationTimeZone: issue ? null : storedZone ?? (isDailyBriefingTimeZoneId(readerZone) ? readerZone! : null),
       generationTimeZoneInvalid: issue ? storedZone ?? null : null,
       windowHours: period.windowHours,
       cronExpression: dailyBriefingGenerationCronExpression(period)
+    })
+  }
+
+  function view(settings: DailyBriefingPeriodsSettings): DailyBriefingGenerationSettingsView {
+    const periods = Object.freeze(settings.periods.map(project))
+    const first = periods[0]!
+    return Object.freeze({
+      generationTime: first.generationTime,
+      generationTimeZone: first.generationTimeZone,
+      generationTimeZoneInvalid: first.generationTimeZoneInvalid,
+      windowHours: first.windowHours,
+      cronExpression: first.cronExpression,
+      periods
     })
   }
 
