@@ -1,0 +1,809 @@
+/* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
+export const intelligenceSourcesText = {
+  'zh-CN': {
+  viewSources: '来源',
+  viewRuns: '运行记录',
+  syncRun: {
+    title: '运行记录',
+    window: { '24h': '近 24 小时', '7d': '近 7 天', all: '全部（含每日汇总）' },
+    outcome: { any: '全部结果', succeeded: '成功', failed: '失败', running: '进行中' },
+    columns: { time: '时间', task: '任务', source: '来源', action: '动作', outcome: '结果', duration: '耗时', detail: '说明' },
+    actions: { collect: '定时采集', refresh: '手动运行', analysis: '分析', configure: '配置变更', test: '测试连接', import: '导入文件', other: '其他' },
+    outcomes: { succeeded: '成功', failed: '失败', cancelled: '已取消', running: '进行中' },
+    /**
+     * Failure codes reach this table as the first hyphenated token of a job's error text. A
+     * reader sees the sentence; the code itself stays in the element's title, never on screen.
+     */
+    failureCodes: {
+      'analysis-timeout': '分析超时，模型没有在限定时间内返回',
+      'analysis-invalid-job-payload': '分析任务的参数不完整',
+      'analysis-invalid-job-result': '分析任务返回的结果不合规',
+      'analysis-invalid-request': '这次分析请求不合法',
+      'analysis-already-available': '已有可用分析，本次跳过',
+      'analysis-not-eligible': '这条内容不满足分析条件',
+      'analysis-summary-not-found': '找不到对应的分析结论',
+      'analysis-event-group-not-found': '找不到对应的事件分组',
+      'analysis-follow-up-unavailable': '追问分析暂时不可用',
+      'daily-briefing-document-too-large': '日报内容超出长度上限',
+      'daily-briefing-model-half-bound': '日报没有可用的模型',
+      'platform-transport-unavailable': '平台的出网组件不可用，请检查代理设置',
+      'provider-disabled': '这个数据源已停用',
+      'parser-output-empty': '采集到了内容，但解析结果为空',
+      'credential-missing': '还没有配置 API Key',
+      'credential-invalid': 'API Key 被数据源拒绝',
+      'rate-limited': '被数据源限流，稍后会自动重试',
+      'request-timeout': '请求超时，稍后会自动重试',
+      'transport-unavailable': '网络不可达，请检查代理设置',
+      'response-unavailable': '数据源没有返回内容',
+      'invalid-json': '数据源返回的内容不是合法 JSON',
+      cancelled: '已取消',
+      'handler-error': '任务执行报错'
+    },
+    failureUnknown: '任务执行失败，稍后会自动重试',
+    failureCodeHint: '错误码：{code}',
+    tasks: {
+      'market-intelligence.collectSource': '情报源采集',
+      'market-intelligence.refreshMacroCalendar': '官方日历排期',
+      'market-intelligence.refreshMacroCalendar.manual.macro-calendar-fed': '官方日历排期（手动）',
+      'market-intelligence.refreshMacroCalendar.manual.macro-calendar-bea': '官方日历排期（手动）',
+      'market-intelligence.refreshBeaOfficialReleases': 'BEA 官方发布值',
+      'market-intelligence.syncBlsScheduleAndValues': 'BLS 日程与数值',
+      'market-intelligence.refreshMarketCalendar.economic-data': '市场日历 · 经济数据',
+      'market-intelligence.refreshMarketCalendar.financial-events': '市场日历 · 金融事件',
+      'market-intelligence.refreshMarketCalendar.central-bank-activities': '市场日历 · 央行活动',
+      'market-intelligence.collect-macro-market': '宏观行情',
+      'market-intelligence.collect-cross-asset-index': '纳指指数',
+      'market-intelligence.collect-realmarketapi-dxy': '美元指数',
+      'market-intelligence.collect-policy-path': 'Fed 决议盘口',
+      'market-intelligence.runMarketAnalysis': 'AI 分析',
+      'market-intelligence.freezeMarketAnalysisSnapshot': '分析快照',
+      'market-intelligence.dailyBriefing': '每日简报',
+      'market-intelligence.translateItems': '翻译任务',
+      'market-intelligence.scoreNewsSentiment': '舆情评分',
+      'market-intelligence.enrichNewsDocuments': '舆情正文',
+      'market-intelligence.normalizeRawRecords': '原始记录归一',
+      'market-intelligence.assessChangedItems': '变更判定',
+      'market-intelligence.groupMarketAnalysisChange': '变更分组',
+      'market-intelligence.recoverMarketAnalysisRuns': '分析恢复',
+      'market-intelligence.analysisSessionSlots': '分析盘口',
+      'market-intelligence.verifyMarketAnalysisPredictions': '预测校验',
+      'market-intelligence.refreshSentimentAggregates': '舆情汇总',
+      'market-intelligence.retain-market-history': '历史保留'
+    },
+    joiner: ' · ',
+    empty: '这段时间没有运行记录。采集任务在来源启用后才会出现。',
+    unavailable: '运行记录暂时不可用。',
+    loading: '正在读取运行记录…',
+    exportCsv: '复制 CSV',
+    exported: '已复制到剪贴板',
+    exportFailed: '无法写入剪贴板，请重试',
+    allTasks: '全部任务',
+    allSourcesNote: '—',
+    noSourceHint: '该任务不直接读取某个来源：它读已存记录，或一次读全部来源',
+    allSources: '全部来源',
+    showing: '显示 {shown} 条，共 {total} 条',
+    retention: '明细保留 30 天，更早的只留每日汇总',
+    page: '第 {page} / {pages} 页', previous: '上一页', next: '下一页',
+    csvHeader: ['时间', '任务', '来源', '动作', '结果', '耗时(ms)', '失败码', '关联号', '说明'],
+    aggregates: {
+      title: '每日汇总',
+      note: '每日汇总只记一天一个任务的运行次数与失败次数（按 UTC 日界），不记原因与耗时；最多显示最近 60 条（日 × 任务）。',
+      columns: { day: '日期（UTC）', task: '任务', runs: '次数', failures: '失败' },
+      empty: '还没有可显示的汇总——明细保留 30 天，更早的日期才会折成每日汇总。',
+      unavailable: {
+        'memory-store-has-no-aggregates': '这台机器现在不保存每日汇总，所以更早的日子看不到。',
+        'aggregates-unavailable': '每日汇总暂时读不到，稍后再看。'
+      }
+    }
+  },
+
+  sourceCategories: { macro: '宏观', crypto: '加密市场', aggregate: '聚合数据供应商', system: '系统与状态' },
+  sourceNames: {
+    'macro-calendar-fed': '美联储官方日程', 'federal-reserve-rss': '美联储新闻稿',
+    'macro-calendar-bea': 'BEA 官方发布', 'bea-economic-series': 'BEA 经济数据',
+    'macro-calendar-bls': 'BLS 官方日程', 'bls-economic-series': 'BLS 经济数据',
+    'fred-rates-liquidity': '美债利率与流动性', fred: 'FRED（已弃用）',
+    'treasury-fiscal-data': '财政部财政数据', 'sec-rss': 'SEC 监管公告', 'cftc-rss': 'CFTC 监管公告',
+    'binance-announcements': '币安公告', 'binance-api-updates': '币安 API 更新',
+    'binance-spot-market': '币安现货行情', 'binance-futures-positioning': '币安合约持仓',
+    'binance-asset-page': '币安资产页', 'okx-latest-announcements': 'OKX 最新公告',
+    'okx-api-announcements': 'OKX API 公告', 'coingecko-market': 'CoinGecko 行情',
+    'defillama-stablecoins': 'DeFiLlama 稳定币', 'defillama-tvl': 'DeFiLlama TVL',
+    'alternative-fear-greed': '恐惧与贪婪指数', 'coindesk-rss': 'CoinDesk 新闻',
+    'ethereum-foundation-blog': '以太坊基金会博客', cryptopanic: 'CryptoPanic 新闻',
+    coinmarketcal: 'CoinMarketCal 新闻（旧）', 'macro-calendar-coinmarketcal': 'CoinMarketCal 事件日历',
+    '0xrouter-aggregate-provider': '0xRouter 聚合行情',
+    'macro-calendar-0xrouter-economic-data': '0xRouter 经济数据',
+    'macro-calendar-0xrouter-financial-events': '0xRouter 财经事件',
+    'macro-calendar-0xrouter-central-bank-activities': '0xRouter 央行活动',
+    'realmarketapi-market': 'RealMarketAPI 美元指数', 'twelve-data-market': 'Twelve Data 宏观行情',
+    'policy-path-market': 'FOMC 决议市场',
+    'coinbase-status': 'Coinbase 运行状态', 'kraken-status': 'Kraken 运行状态',
+    'kraken-system-status': 'Kraken 系统状态', 'solana-status': 'Solana 运行状态',
+    'github-releases': 'GitHub 版本发布'
+  },
+  providerNames: {
+    fed: '美联储', bea: '美国经济分析局', bls: '美国劳工统计局', fred: 'FRED', 'policy-path': 'Polymarket',
+    treasury: '美国财政部', sec: '美国证监会', cftc: '美国商品期货交易委员会',
+    binance: '币安', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
+    'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': '以太坊基金会',
+    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter',
+    realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
+    kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
+  },
+  readinessLabels: { live: '可用', 'fixture-ready': '测试数据', planned: '未接入' },
+
+  sourceFilters: { all: '全部', calendar: '日历', dashboard: '看板', pending: '待接入', advanced: '高级' },
+  sourceFilterLabel: '来源筛选',
+  sourceBadges: { pending: '待接入', advanced: '高级', agent: '解读员', panel: '面板', calendar: '日历', proxy: '需要代理' },
+  proxyNotice: {
+    title: '这个来源需要连接 VPN（本地代理）才能采集。',
+    failedTitle: '连接失败：请先打开 VPN / 本地代理，再回来重试。',
+    body: '没走代理时「测试连接」和自动采集会一直失败，与 API Key 是否正确无关。请先打开能访问境外网络的 VPN 或本地代理（也就是常说的翻墙），再到「设置 → 基础设置 → 代理模式」选择「自定义代理」并填入同一个本地地址（例如 http://127.0.0.1:7888），保存后回来重试。浏览器能打开不代表应用能连——应用请求只走这里的代理。',
+    action: '去设置代理'
+  },
+  agentNames: { crypto: '数字货币', stocks: '股票', futures: '期货' },
+  panelNames: { dashboard: '看板', 'economic-calendar': '日历' },
+  toggleSource: { enable: '启用 {name}', disable: '停用 {name}' },
+  providerSummary: '{total} 项能力 · 已启用 {enabled}',
+  credentialsRequired: '需要 API Key',
+  website: '官网',
+  signup: '注册 / 获取 Key',
+  inviteNote: '如果这个源帮到你，欢迎用我的邀请链接注册，就当请作者吃根雪糕 🍦',
+  testConnection: '测试连接',
+  jobRegistered: '已注册自动任务',
+  jobNotRegistered: '未注册自动任务',
+  connectionSucceeded: '连接已验证。',
+  connectionFailed: '无法验证连接，请重试。',
+  connectionUnsupported: '该来源由本地同步任务采集，不支持连接测试。',
+  apiKey: { label: 'API Key', save: '保存并验证', emptyHint: '输入 API Key 后保存。', savedHint: '已保存；输入新的 Key 可替换。', revealFailed: '无法读取完整 Key，请重启应用后重试。' },
+  calendarSources: {
+    title: '宏观日历', official: '官方采集', market: '市场日历', pending: '待接入', hint: '在宏观日历中管理',
+    feeds: {
+      'macro-calendar-fed': 'Federal Reserve Board (Fed)',
+      'macro-calendar-bea': '美国经济分析局（BEA）',
+      'macro-calendar-bls': '美国劳工统计局（BLS）',
+      'macro-calendar-0xrouter-economic-data': '0xRouter 市场日历',
+      'macro-calendar-coinmarketcal': 'CoinMarketCal'
+    }
+  },
+  title: '情报源',
+  loading: '加载中…',
+  saving: '保存中…',
+  saved: '已保存',
+  disabledSaved: '已停用',
+  enabledManualHint: '已启用。手动模式不会自动采集，请点击「立即运行」。',
+  enabledAutoCollectQueued: '已启用，首次采集已自动排队。',
+  loadFailed: '加载失败，请重试。',
+  saveFailed: '保存失败，请重试。',
+  runFailed: '立即运行失败，请重试。',
+  runQueued: '采集任务已提交，正在等待结果…',
+  runSucceeded: '采集成功。',
+  testFailed: '凭证测试失败，请重试。',
+  replayFailed: '重放请求失败，请重试。',
+  focusMarkets: {
+    title: '默认覆盖范围',
+    description: '每个信息源都有内置覆盖范围，系统会按默认规则工作。通常无需调整；只有需要强行改变采集覆盖时再自定义。',
+    defaultSummary: '当前来源',
+    customize: '高级自定义',
+    customizeDone: '完成',
+    saving: '保存中…',
+    plannedHint: '待实现',
+    markets: {
+      'global-macro': '全球宏观',
+      'digital-assets': '数字资产',
+      'cn-a-shares': 'A 股',
+      'us-equities': '美股',
+      'china-futures': '国内期货',
+      fx: '外汇',
+      commodities: '大宗商品'
+    }
+  },
+  focusGroups: {
+    globalMacro: '宏观与监管',
+    digitalAssets: '加密市场',
+    aggregateProviders: '聚合数据供应商',
+    multiMarketDynamic: '多市场 / 动态识别',
+    plannedMarkets: '规划中市场',
+    pending: '待接入',
+    macroCalendar: '宏观日历'
+  },
+  groups: {
+    'exchange-announcement': '交易所公告',
+    'exchange-status': '交易所与基础设施状态',
+    'official-source': '官方来源',
+    'mainstream-news': '主流新闻',
+    'macro-regulation': '宏观与监管'
+  },
+  layers: {
+    macro: '宏观情报',
+    industry: '行业情报',
+    asset: '资产微观',
+    exchange: '交易所',
+    project: '项目',
+    infrastructure: '基础设施'
+  },
+  readiness: {
+    title: '实现状态',
+    layer: '情报层级',
+    status: '采集状态',
+    plannedHint: '该来源尚未接入采集适配器，启用后也无法立即运行；下方说明列出了待实现项。',
+    fixtureReadyHint: '该来源仅支持 fixture 重放验证，不能启用生产采集、定时任务或立即运行。',
+    statuses: {
+      live: '可采集',
+      'fixture-ready': 'Fixture 可验证',
+      planned: '待实现'
+    }
+  },
+  sources: {
+    'binance-announcements': 'Binance 公告',
+    'binance-api-updates': 'Binance API 更新',
+    'binance-spot-market': 'Binance 现货行情',
+    'binance-futures-positioning': 'Binance 合约持仓',
+    'binance-asset-page': 'Binance 资产页',
+    'okx-latest-announcements': 'OKX 最新公告',
+    'okx-api-announcements': 'OKX API 公告',
+    'coindesk-rss': 'CoinDesk RSS',
+    cryptopanic: 'CryptoPanic',
+    coinmarketcal: 'CoinMarketCal',
+    'coingecko-market': 'CoinGecko 市场',
+    'ethereum-foundation-blog': 'Ethereum Foundation 博客',
+    'github-releases': 'GitHub Releases',
+    'sec-rss': 'SEC RSS',
+    'cftc-rss': 'CFTC RSS',
+    'federal-reserve-rss': 'Federal Reserve RSS',
+    'bls-economic-series': 'BLS 宏观指标',
+    'bea-economic-series': 'BEA 宏观指标',
+    'fred-rates-liquidity': 'FRED 利率与流动性',
+    'realmarketapi-market': 'RealMarketAPI',
+    'treasury-fiscal-data': '美国财政部数据',
+    fred: 'FRED',
+    'alternative-fear-greed': '恐惧贪婪指数',
+    'defillama-stablecoins': 'DeFiLlama 稳定币',
+    'defillama-tvl': 'DeFiLlama TVL',
+    'kraken-system-status': 'Kraken SystemStatus',
+    'coinbase-status': 'Coinbase Status',
+    'kraken-status': 'Kraken Status',
+    'solana-status': 'Solana Status'
+  },
+  adapters: {
+    'html-page-poller': 'HTML 页面轮询',
+    'rss-poller': 'RSS 轮询',
+    'rest-api-poller': 'REST API 轮询',
+    'statuspage-poller': 'Statuspage 轮询',
+    'websocket-stream-consumer': 'WebSocket 流消费'
+  },
+  status: {
+    enabled: '已启用',
+    disabled: '未启用'
+  },
+  executionModes: {
+    polling: '轮询',
+    websocket: 'WebSocket'
+  },
+  header: {
+    runNow: '立即运行',
+    refreshHealth: '刷新健康状态',
+    replay: '重放窗口',
+    adapter: '适配器',
+    executionMode: '执行模式'
+  },
+  collectionPolicy: {
+    title: '采集策略',
+    enabled: '启用',
+    collectionPreset: '采集预设',
+    manualPresetNote: '手动模式启用后不会自动采集，需点击「立即运行」。',
+    plannedNotConfigurable: '该来源尚未实现，暂不可启用或配置采集策略。',
+    productOwnedNote: '该来源由产品自己的采集作业负责，启用状态由这里控制；采集预设与范围策略不适用于它。',
+    includeInSentiment: '纳入情绪分析',
+    scopePolicy: '范围策略',
+    presets: {
+      manual: '手动',
+      balanced: '均衡',
+      frequent: '高频'
+    },
+    scopePolicies: {
+      all: '全部',
+      'watchlist-priority': '自选优先',
+      'active-position-priority': '持仓优先'
+    }
+  },
+  credentials: {
+    title: '访问凭证',
+    credentialRef: '凭证引用',
+    testCredentials: '保存并验证连接',
+    saveApiKey: '保存 API Key',
+    requestBudget: '请求额度：{maxRequests} 次 / {windowSeconds} 秒',
+    placeholder: '输入 API Key'
+  },
+  beaUserIdGuide: {
+    title: 'BEA UserID',
+    action: '获取 UserID',
+    modalTitle: '获取 BEA UserID',
+    steps: {
+      required: 'BEA UserID 免费，PCE 与 GDP 实际值采集需要该 UserID。',
+      register: '点击下方按钮打开 BEA 官方注册页面。',
+      keep: '完成注册后，请保留获发的 UserID。'
+    },
+    configureInMacroCalendar: '注册后，请在“设置 > 宏观日历”中配置 UserID。',
+    openRegistration: '打开 BEA 注册页面'
+  },
+  sourceSpecific: {
+    title: '来源专属选项',
+    empty: '当前来源没有额外可见字段。'
+  },
+  retentionReplay: {
+    title: '保留与重放',
+    rawArchiveEnabled: '启用原始归档',
+    retentionMode: '保留模式',
+    autoReplayAfterParserUpgrade: '解析器升级后自动重放',
+    retentionModes: {
+      compact: '紧凑',
+      balanced: '均衡',
+      extended: '扩展'
+    }
+  },
+  health: {
+    title: '来源健康',
+    runtimeStatus: '运行状态',
+    lastSuccessAt: '最近成功',
+    lastFailureAt: '最近失败',
+    consecutiveFailures: '连续失败',
+    lastRunSummary: '最近运行摘要',
+    empty: '暂无',
+    statuses: {
+      healthy: '健康',
+      'multiple-failures': '多次失败',
+      'data-stale': '数据偏旧',
+      failed: '失败',
+      paused: '已关闭'
+    }
+  },
+  actions: {
+    save: '保存'
+  },
+  collectionHint: {
+    title: '需要手动采集',
+    body: '当前为手动模式：启用后不会自动拉取数据。点击「立即运行」后，情报页才会出现内容。',
+    action: '立即运行'
+  },
+  translationPreferences: {
+    title: '翻译偏好',
+    loading: '正在读取翻译设置…',
+    loadFailed: '翻译设置读取失败，请重试。',
+    autoTranslateEnabled: '自动翻译',
+    targetLocale: '目标语言',
+    translationModel: '翻译模型',
+    translateTitle: '翻译标题',
+    translateSummary: '翻译摘要',
+    translateEvidenceExcerpt: '翻译证据摘录',
+    queueMissing: '翻译当前筛选结果',
+    saving: '保存中…',
+    saved: '已保存',
+    saveFailed: '保存失败，请重试。',
+    queueFailed: '翻译任务提交失败，请重试。',
+    queueQueued: '翻译任务已提交。',
+    followModelServiceDefault: '跟随模型服务默认',
+    defaultModelNotConfigured: '未设置默认翻译模型',
+    defaultModelUnavailable: '默认翻译模型当前不可用',
+    moduleStatus: '翻译任务',
+    pendingCount: '待处理',
+    failedCount: '失败',
+    translatedCount: '已翻译',
+    lastJobAt: '最近任务',
+    savedThisSession: '设置已保存',
+    joiner: ' · ',
+    labelSep: '：',
+    parenOpen: '（',
+    parenClose: '）',
+    modelPathSep: ' / ',
+    targetLocales: {
+      'follow-app': '跟随应用语言',
+      'zh-CN': '简体中文',
+      'en-US': 'English'
+    }
+  }
+},
+  'en-US': {
+  viewSources: 'Sources',
+  viewRuns: 'Run record',
+  syncRun: {
+    title: 'Run record',
+    window: { '24h': 'Last 24 hours', '7d': 'Last 7 days', all: 'All (with daily totals)' },
+    outcome: { any: 'Any outcome', succeeded: 'Succeeded', failed: 'Failed', running: 'Running' },
+    columns: { time: 'Time', task: 'Task', source: 'Source', action: 'Action', outcome: 'Outcome', duration: 'Duration', detail: 'Detail' },
+    actions: { collect: 'Scheduled run', refresh: 'Manual run', analysis: 'Analysis', configure: 'Configuration', test: 'Connection test', import: 'File import', other: 'Other' },
+    outcomes: { succeeded: 'Succeeded', failed: 'Failed', cancelled: 'Cancelled', running: 'Running' },
+    /** The reader sees the sentence; the code itself stays in the element's title. */
+    failureCodes: {
+      'analysis-timeout': 'Analysis timed out before the model answered',
+      'analysis-invalid-job-payload': 'The analysis task payload was incomplete',
+      'analysis-invalid-job-result': 'The analysis task returned an invalid result',
+      'analysis-invalid-request': 'The analysis request was invalid',
+      'analysis-already-available': 'A usable analysis already exists; this one was skipped',
+      'analysis-not-eligible': 'This item does not qualify for analysis',
+      'analysis-summary-not-found': 'The analysis summary is missing',
+      'analysis-event-group-not-found': 'The event group is missing',
+      'analysis-follow-up-unavailable': 'Follow-up analysis is unavailable',
+      'daily-briefing-document-too-large': 'The briefing exceeded its length limit',
+      'daily-briefing-model-half-bound': 'The briefing has no usable model',
+      'platform-transport-unavailable': 'The platform network component is unavailable; check the proxy setting',
+      'provider-disabled': 'This source is switched off',
+      'parser-output-empty': 'Content arrived but the parser produced nothing',
+      'credential-missing': 'No API key is configured yet',
+      'credential-invalid': 'The source rejected the API key',
+      'rate-limited': 'Rate limited by the source; it will retry',
+      'request-timeout': 'The request timed out; it will retry',
+      'transport-unavailable': 'The network is unreachable; check the proxy setting',
+      'response-unavailable': 'The source returned nothing',
+      'invalid-json': 'The source returned content that is not valid JSON',
+      cancelled: 'Cancelled',
+      'handler-error': 'The task failed'
+    },
+    failureUnknown: 'The task failed; it will retry automatically',
+    failureCodeHint: 'Error code: {code}',
+    tasks: {
+      'market-intelligence.collectSource': 'Source collection',
+      'market-intelligence.refreshMacroCalendar': 'Official calendar refresh',
+      'market-intelligence.refreshMacroCalendar.manual.macro-calendar-fed': 'Official calendar refresh (manual)',
+      'market-intelligence.refreshMacroCalendar.manual.macro-calendar-bea': 'Official calendar refresh (manual)',
+      'market-intelligence.refreshBeaOfficialReleases': 'BEA official releases',
+      'market-intelligence.syncBlsScheduleAndValues': 'BLS schedule and values',
+      'market-intelligence.refreshMarketCalendar.economic-data': 'Market calendar · economic data',
+      'market-intelligence.refreshMarketCalendar.financial-events': 'Market calendar · financial events',
+      'market-intelligence.refreshMarketCalendar.central-bank-activities': 'Market calendar · central bank activities',
+      'market-intelligence.collect-macro-market': 'Macro market quotes',
+      'market-intelligence.collect-cross-asset-index': 'Nasdaq index',
+      'market-intelligence.collect-realmarketapi-dxy': 'Dollar index',
+      'market-intelligence.collect-policy-path': 'Fed decision market',
+      'market-intelligence.runMarketAnalysis': 'AI analysis',
+      'market-intelligence.freezeMarketAnalysisSnapshot': 'Analysis snapshot',
+      'market-intelligence.dailyBriefing': 'Daily briefing',
+      'market-intelligence.translateItems': 'Translation task',
+      'market-intelligence.scoreNewsSentiment': 'Sentiment scoring',
+      'market-intelligence.enrichNewsDocuments': 'Article body fetch',
+      'market-intelligence.normalizeRawRecords': 'Raw record normalization',
+      'market-intelligence.assessChangedItems': 'Change assessment',
+      'market-intelligence.groupMarketAnalysisChange': 'Change grouping',
+      'market-intelligence.recoverMarketAnalysisRuns': 'Analysis recovery',
+      'market-intelligence.analysisSessionSlots': 'Analysis sessions',
+      'market-intelligence.verifyMarketAnalysisPredictions': 'Prediction check',
+      'market-intelligence.refreshSentimentAggregates': 'Sentiment rollup',
+      'market-intelligence.retain-market-history': 'History retention'
+    },
+    joiner: ' · ',
+    empty: 'No runs in this window. Collection appears once a source is enabled.',
+    unavailable: 'The run record is unavailable.',
+    loading: 'Reading the run record…',
+    exportCsv: 'Copy CSV',
+    exported: 'Copied to the clipboard',
+    exportFailed: 'Could not write to the clipboard',
+    allTasks: 'All tasks',
+    allSourcesNote: '—',
+    noSourceHint: 'This task names no single source: it reads stored records or all sources at once',
+    allSources: 'All sources',
+    showing: 'Showing {shown} of {total}',
+    retention: 'Details are kept 30 days; older runs only survive as daily counts',
+    page: 'Page {page} of {pages}', previous: 'Previous', next: 'Next',
+    csvHeader: ['Time', 'Task', 'Source', 'Action', 'Outcome', 'Duration (ms)', 'Failure code', 'Correlation', 'Detail'],
+    aggregates: {
+      title: 'Daily totals',
+      note: 'A daily total keeps one day of one task: how many times it ran and how many failed (UTC day boundaries). No reasons, no durations; at most the newest 60 day-and-task rows are shown.',
+      columns: { day: 'Day (UTC)', task: 'Task', runs: 'Runs', failures: 'Failures' },
+      empty: 'Nothing to show yet — detail is kept for 30 days, and only older dates fold into daily totals.',
+      unavailable: {
+        'memory-store-has-no-aggregates': 'This machine does not save daily totals, so older days cannot be shown.',
+        'aggregates-unavailable': 'The daily totals cannot be read right now; try again later.'
+      }
+    }
+  },
+
+  sourceCategories: { macro: 'Macro', crypto: 'Crypto market', aggregate: 'Aggregate data providers', system: 'System & status' },
+  sourceNames: {
+    'macro-calendar-fed': 'Federal Reserve official schedule', 'federal-reserve-rss': 'Federal Reserve press releases',
+    'macro-calendar-bea': 'BEA official releases', 'bea-economic-series': 'BEA economic data',
+    'macro-calendar-bls': 'BLS official schedule', 'bls-economic-series': 'BLS economic data',
+    'fred-rates-liquidity': 'Treasury rates and liquidity', fred: 'FRED (deprecated)',
+    'treasury-fiscal-data': 'Treasury fiscal data', 'sec-rss': 'SEC regulatory notices', 'cftc-rss': 'CFTC regulatory notices',
+    'binance-announcements': 'Binance announcements', 'binance-api-updates': 'Binance API updates',
+    'binance-spot-market': 'Binance spot market', 'binance-futures-positioning': 'Binance futures positioning',
+    'binance-asset-page': 'Binance asset page', 'okx-latest-announcements': 'OKX latest announcements',
+    'okx-api-announcements': 'OKX API announcements', 'coingecko-market': 'CoinGecko market data',
+    'defillama-stablecoins': 'DeFiLlama stablecoins', 'defillama-tvl': 'DeFiLlama TVL',
+    'alternative-fear-greed': 'Fear and greed index', 'coindesk-rss': 'CoinDesk news',
+    'ethereum-foundation-blog': 'Ethereum Foundation blog', cryptopanic: 'CryptoPanic news',
+    coinmarketcal: 'CoinMarketCal news (legacy)', 'macro-calendar-coinmarketcal': 'CoinMarketCal event calendar',
+    '0xrouter-aggregate-provider': '0xRouter aggregate market data',
+    'macro-calendar-0xrouter-economic-data': '0xRouter economic data',
+    'macro-calendar-0xrouter-financial-events': '0xRouter financial events',
+    'macro-calendar-0xrouter-central-bank-activities': '0xRouter central bank activities',
+    'realmarketapi-market': 'RealMarketAPI dollar index', 'twelve-data-market': 'Twelve Data macro market data',
+    'policy-path-market': 'FOMC decision market',
+    'coinbase-status': 'Coinbase status', 'kraken-status': 'Kraken status',
+    'kraken-system-status': 'Kraken system status', 'solana-status': 'Solana status',
+    'github-releases': 'GitHub releases'
+  },
+  providerNames: {
+    fed: 'Federal Reserve', bea: 'Bureau of Economic Analysis', bls: 'Bureau of Labor Statistics', fred: 'FRED', 'policy-path': 'Polymarket',
+    treasury: 'US Treasury', sec: 'US SEC', cftc: 'US CFTC',
+    binance: 'Binance', okx: 'OKX', coingecko: 'CoinGecko', defillama: 'DeFiLlama',
+    'alternative-me': 'Alternative.me', coindesk: 'CoinDesk', 'ethereum-foundation': 'Ethereum Foundation',
+    cryptopanic: 'CryptoPanic', coinmarketcal: 'CoinMarketCal', '0xrouter': '0xRouter',
+    realmarketapi: 'RealMarketAPI', 'twelve-data': 'Twelve Data', coinbase: 'Coinbase',
+    kraken: 'Kraken', solana: 'Solana', github: 'GitHub'
+  },
+  readinessLabels: { live: 'Available', 'fixture-ready': 'Fixture data', planned: 'Not connected' },
+
+  sourceFilters: { all: 'All', calendar: 'Calendar', dashboard: 'Dashboard', pending: 'Pending', advanced: 'Advanced' },
+  sourceFilterLabel: 'Filter sources',
+  sourceBadges: { pending: 'Pending', advanced: 'Advanced', agent: 'Analyst', panel: 'Panel', calendar: 'Calendar', proxy: 'Proxy required' },
+  proxyNotice: {
+    title: 'This source needs a VPN (local proxy) to collect.',
+    failedTitle: 'Connection failed: turn on your VPN / local proxy, then try again.',
+    body: 'Without a proxy, “Test connection” and automatic collection keep failing — the API key is not the problem. Open a VPN or local proxy that can reach overseas networks, then set “Proxy mode” to “Custom proxy” under Settings → Basic settings with the same local address (for example http://127.0.0.1:7888) and try again. A browser reaching the site does not mean this app can: app requests only use the proxy configured here.',
+    action: 'Open proxy settings'
+  },
+  agentNames: { crypto: 'Crypto', stocks: 'Stocks', futures: 'Futures' },
+  panelNames: { dashboard: 'Dashboard', 'economic-calendar': 'Calendar' },
+  toggleSource: { enable: 'Enable {name}', disable: 'Disable {name}' },
+  providerSummary: '{total} capabilities · {enabled} enabled',
+  credentialsRequired: 'API key required',
+  website: 'Website',
+  signup: 'Sign up / Get key',
+  inviteNote: 'If this source helps, signing up through my invite link buys the author an ice cream 🍦',
+  testConnection: 'Test connection',
+  jobRegistered: 'Auto job registered',
+  jobNotRegistered: 'No auto job',
+  connectionSucceeded: 'Connection verified.',
+  connectionFailed: 'Connection could not be verified.',
+  connectionUnsupported: 'This source is collected by a local sync job and has no connection test.',
+  apiKey: { label: 'API Key', save: 'Save and verify', emptyHint: 'Enter an API key and save it.', savedHint: 'Saved; enter a new key to replace it.', revealFailed: 'Could not read the full key. Restart the app and try again.' },
+  calendarSources: {
+    title: 'Macro calendar', official: 'Official collection', market: 'Market calendar', pending: 'Pending connection', hint: 'Manage in the macro calendar',
+    feeds: {
+      'macro-calendar-fed': 'Federal Reserve Board (Fed)',
+      'macro-calendar-bea': 'Bureau of Economic Analysis (BEA)',
+      'macro-calendar-bls': 'Bureau of Labor Statistics (BLS)',
+      'macro-calendar-0xrouter-economic-data': '0xRouter market calendar',
+      'macro-calendar-coinmarketcal': 'CoinMarketCal'
+    }
+  },
+  title: 'Intelligence Sources',
+  loading: 'Loading…',
+  saving: 'Saving…',
+  saved: 'Saved',
+  disabledSaved: 'Disabled',
+  enabledManualHint: 'Enabled. Manual mode does not collect automatically. Click Run Now.',
+  enabledAutoCollectQueued: 'Enabled. The first collection run was queued automatically.',
+  loadFailed: 'Load failed. Try again.',
+  saveFailed: 'Save failed. Try again.',
+  runFailed: 'Run now failed. Try again.',
+  runQueued: 'Collection queued. Waiting for result…',
+  runSucceeded: 'Collection succeeded.',
+  testFailed: 'Credential test failed. Try again.',
+  replayFailed: 'Replay request failed. Try again.',
+  focusMarkets: {
+    title: 'Default Coverage',
+    description:
+      'Each source has built-in coverage and works with its default rules. You usually do not need to change this; customize only when overriding collection scope.',
+    defaultSummary: 'Current source',
+    customize: 'Advanced customize',
+    customizeDone: 'Done',
+    saving: 'Saving…',
+    plannedHint: 'Planned',
+    markets: {
+      'global-macro': 'Global Macro',
+      'digital-assets': 'Digital Assets',
+      'cn-a-shares': 'A-shares',
+      'us-equities': 'US Equities',
+      'china-futures': 'China Futures',
+      fx: 'FX',
+      commodities: 'Commodities'
+    }
+  },
+  focusGroups: {
+    globalMacro: 'Macro & regulation',
+    digitalAssets: 'Crypto market',
+    aggregateProviders: 'Aggregate data providers',
+    multiMarketDynamic: 'Multi-Market / Dynamic',
+    plannedMarkets: 'Planned Markets',
+    pending: 'Pending connection',
+    macroCalendar: 'Macro calendar'
+  },
+  groups: {
+    'exchange-announcement': 'Exchange Announcements',
+    'exchange-status': 'Exchange And Infra Status',
+    'official-source': 'Official Sources',
+    'mainstream-news': 'Mainstream News',
+    'macro-regulation': 'Macro And Regulation'
+  },
+  layers: {
+    macro: 'Macro Intelligence',
+    industry: 'Industry Intelligence',
+    asset: 'Asset Micro',
+    exchange: 'Exchange',
+    project: 'Project',
+    infrastructure: 'Infrastructure'
+  },
+  readiness: {
+    title: 'Implementation Status',
+    layer: 'Intelligence layer',
+    status: 'Collection status',
+    plannedHint: 'This source has no collection adapter yet. Enabling it will not run until the items below are implemented.',
+    fixtureReadyHint: 'This source is fixture-ready only. Use replay to validate; production enable, schedule, and run-now are disabled.',
+    statuses: {
+      live: 'Collectable',
+      'fixture-ready': 'Fixture verified',
+      planned: 'Planned'
+    }
+  },
+  sources: {
+    'binance-announcements': 'Binance Announcements',
+    'binance-api-updates': 'Binance API Updates',
+    'binance-spot-market': 'Binance Spot Market',
+    'binance-futures-positioning': 'Binance Futures Positioning',
+    'binance-asset-page': 'Binance Asset Page',
+    'okx-latest-announcements': 'OKX Latest Announcements',
+    'okx-api-announcements': 'OKX API Announcements',
+    'coindesk-rss': 'CoinDesk RSS',
+    cryptopanic: 'CryptoPanic',
+    coinmarketcal: 'CoinMarketCal',
+    'coingecko-market': 'CoinGecko Market',
+    'ethereum-foundation-blog': 'Ethereum Foundation Blog',
+    'github-releases': 'GitHub Releases',
+    'sec-rss': 'SEC RSS',
+    'cftc-rss': 'CFTC RSS',
+    'federal-reserve-rss': 'Federal Reserve RSS',
+    'bls-economic-series': 'BLS Macro Series',
+    'bea-economic-series': 'BEA Macro Series',
+    'fred-rates-liquidity': 'FRED Rates And Liquidity',
+    'realmarketapi-market': 'RealMarketAPI Real DXY',
+    'treasury-fiscal-data': 'Treasury Fiscal Data',
+    fred: 'FRED',
+    'alternative-fear-greed': 'Fear And Greed Index',
+    'defillama-stablecoins': 'DeFiLlama Stablecoins',
+    'defillama-tvl': 'DeFiLlama TVL',
+    'kraken-system-status': 'Kraken SystemStatus',
+    'coinbase-status': 'Coinbase Status',
+    'kraken-status': 'Kraken Status',
+    'solana-status': 'Solana Status'
+  },
+  adapters: {
+    'html-page-poller': 'HTML Page Poller',
+    'rss-poller': 'RSS Poller',
+    'rest-api-poller': 'REST API Poller',
+    'statuspage-poller': 'Statuspage Poller',
+    'websocket-stream-consumer': 'WebSocket Stream Consumer'
+  },
+  status: {
+    enabled: 'Enabled',
+    disabled: 'Disabled'
+  },
+  executionModes: {
+    polling: 'Polling',
+    websocket: 'WebSocket'
+  },
+  header: {
+    runNow: 'Run Now',
+    refreshHealth: 'Refresh Health',
+    replay: 'Replay Window',
+    adapter: 'Adapter',
+    executionMode: 'Execution Mode'
+  },
+  collectionPolicy: {
+    title: 'Collection Policy',
+    enabled: 'Enable',
+    collectionPreset: 'Collection Preset',
+    manualPresetNote: 'Manual mode does not collect automatically after enable. Use Run Now.',
+    plannedNotConfigurable: 'This source is not implemented yet and cannot be enabled or configured.',
+    productOwnedNote: 'A product-owned job collects this source; the enable switch below controls it, while the collection preset and scope policy do not apply.',
+    includeInSentiment: 'Include In Sentiment',
+    scopePolicy: 'Scope Policy',
+    presets: {
+      manual: 'Manual',
+      balanced: 'Balanced',
+      frequent: 'Frequent'
+    },
+    scopePolicies: {
+      all: 'All',
+      'watchlist-priority': 'Watchlist Priority',
+      'active-position-priority': 'Active Position Priority'
+    }
+  },
+  credentials: {
+    title: 'Credentials',
+    credentialRef: 'Credential Reference',
+    testCredentials: 'Save And Verify Connection',
+    saveApiKey: 'Save API Key',
+    requestBudget: 'Request budget: {maxRequests} requests / {windowSeconds} seconds',
+    placeholder: 'Enter API key'
+  },
+  beaUserIdGuide: {
+    title: 'BEA UserID',
+    action: 'Get UserID',
+    modalTitle: 'Get a BEA UserID',
+    steps: {
+      required: 'A BEA UserID is free and required for PCE and GDP actual-value collection.',
+      register: 'Click below to open the official BEA registration page.',
+      keep: 'Complete registration and keep the issued UserID.'
+    },
+    configureInMacroCalendar: 'After registration, configure the UserID in Settings > Macro Calendar.',
+    openRegistration: 'Open BEA registration'
+  },
+  sourceSpecific: {
+    title: 'Source-Specific Options',
+    empty: 'No extra visible fields for this source.'
+  },
+  retentionReplay: {
+    title: 'Retention And Replay',
+    rawArchiveEnabled: 'Enable Raw Archive',
+    retentionMode: 'Retention Mode',
+    autoReplayAfterParserUpgrade: 'Auto Replay After Parser Upgrade',
+    retentionModes: {
+      compact: 'Compact',
+      balanced: 'Balanced',
+      extended: 'Extended'
+    }
+  },
+  health: {
+    title: 'Source Health',
+    runtimeStatus: 'Runtime Status',
+    lastSuccessAt: 'Last Success',
+    lastFailureAt: 'Last Failure',
+    consecutiveFailures: 'Consecutive Failures',
+    lastRunSummary: 'Last Run Summary',
+    empty: 'None',
+    statuses: {
+      healthy: 'Healthy',
+      'multiple-failures': 'Repeated failures',
+      'data-stale': 'Data is stale',
+      failed: 'Failed',
+      paused: 'Off'
+    }
+  },
+  actions: {
+    save: 'Save'
+  },
+  collectionHint: {
+    title: 'Manual collection required',
+    body: 'Manual mode does not pull data automatically. Run Now before expecting items on the Intelligence page.',
+    action: 'Run Now'
+  },
+  translationPreferences: {
+    title: 'Translation Preferences',
+    loading: 'Loading translation settings…',
+    loadFailed: 'Translation settings could not be read. Try again.',
+    autoTranslateEnabled: 'Auto translate',
+    targetLocale: 'Target locale',
+    translationModel: 'Translation model',
+    translateTitle: 'Translate titles',
+    translateSummary: 'Translate summaries',
+    translateEvidenceExcerpt: 'Translate evidence excerpts',
+    queueMissing: 'Translate current filter results',
+    saving: 'Saving…',
+    saved: 'Saved',
+    saveFailed: 'Save failed. Try again.',
+    queueFailed: 'Failed to queue translation job.',
+    queueQueued: 'Translation job queued.',
+    followModelServiceDefault: 'Follow model-service default',
+    defaultModelNotConfigured: 'No default translation model configured',
+    defaultModelUnavailable: 'Default translation model is unavailable',
+    moduleStatus: 'Translation jobs',
+    pendingCount: 'Pending',
+    failedCount: 'Failed',
+    translatedCount: 'Translated',
+    lastJobAt: 'Last job',
+    savedThisSession: 'Settings saved',
+    joiner: ' · ',
+    labelSep: ': ',
+    parenOpen: ' (',
+    parenClose: ')',
+    modelPathSep: ' / ',
+    targetLocales: {
+      'follow-app': 'Follow app language',
+      'zh-CN': 'Chinese (Simplified)',
+      'en-US': 'English'
+    }
+  }
+}
+} as const
