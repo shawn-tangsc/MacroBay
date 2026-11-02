@@ -1,13 +1,15 @@
-import { Button, Input, Tooltip } from 'antd'
+import { Button, Input } from 'antd'
 import { Sparkles } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { CreateAssistantDto } from '@platform/ai/assistant-platform/schemas/assistantSchemas'
 import { Modal } from '@platform/ui/components/modal'
+import { Tooltip } from '@platform/ui/components/tooltip'
 import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../../i18n/platformText'
 
 const CREATE_ASSISTANT_TITLE_KEY = 'assistants.library.createTitle'
 const COMING_SOON_KEY = 'assistants.library.promptGenerateComingSoon'
+const PROMPT_GENERATE_TOOLTIP_KEY = 'assistants.library.promptGenerate'
 
 type CreateAssistantDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -85,7 +87,9 @@ export function CreateAssistantDialog({
           />
         </label>
         <div className="assistant-create-dialog-meta">
-          <Tooltip title={labels.promptGenerate}>
+          <Tooltip
+            labelKey={PROMPT_GENERATE_TOOLTIP_KEY}
+            resolveText={(key) => (key === PROMPT_GENERATE_TOOLTIP_KEY ? labels.promptGenerate : '')}>
             <Button
               type="text"
               size="small"

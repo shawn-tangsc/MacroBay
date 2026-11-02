@@ -2,7 +2,6 @@
   "$comment": "antd Tooltip call sites still to migrate. One entry per file — the debt is a whole-file import, not a single hint. Delete an entry in the same commit that migrates its file: a stale entry fails the guard, which is what keeps this list from becoming a permanent exemption. This file lives outside platform/ui/components on purpose: the guard reads it, and a caller migrating a site must be able to strike the line without touching the component directory. The human-readable detail (which hints are single-line, which are data, which are nodes) stays in docs-private/05-desktop/ui-audit/tooltip-call-site-mapping-2026-11-02.md — but the machine count cannot live there: that tree is gitignored, so a guard reading it would skip in CI and vanish exactly where it matters.",
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/agents/components/SessionItem.tsx": 1,
-    "apps/desktop-shell/src/renderer/src/shell/assistants/library/CreateAssistantDialog.tsx": 1,
     "products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEventRow.tsx": 1,
     "products/market-intelligence/desktop/pages/intelligence/MarketCalendarCard.tsx": 1
   }
