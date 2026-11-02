@@ -34,6 +34,9 @@ in a window that has no host.
   closes a dialog must not be hidden by it. The layer is not a prop.
 - **Announced politely**: `role="status"` with `aria-live="polite"`, never `alert`, and it never
   steals focus.
+- **Arriving moves only opacity and a 4px offset**, timed by `--motion-toast-in`. Moving size or
+  position would drag the whole page with it; `tokens.css` zeroes every `--motion-*` under
+  `prefers-reduced-motion`, so there is no second media query here.
 - **The close control is the component's**, named from its own copy table — a caller's resolver may
   return an empty string, and an empty name is a nameless button.
 

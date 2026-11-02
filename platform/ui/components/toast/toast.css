@@ -30,6 +30,22 @@
   box-shadow: 0 2px 8px rgb(0 0 0 / 16%);
   color: var(--text);
   pointer-events: auto;
+  /*
+   * 进场只动 opacity 与 translateY：这两个属性不触发布局重排，右下角这堆浮在内容之上，
+   * 一动尺寸就会带着整页抖。时长走 token，`reduced-motion` 在 tokens.css 一处归零。
+   */
+  animation: toast-in var(--motion-toast-in) ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .toast--success {

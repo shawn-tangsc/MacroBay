@@ -161,6 +161,18 @@ describe('ToastHost', () => {
     error.mockRestore()
   })
 
+  it('moves only opacity and a 4px offset, through the motion tokens', () => {
+    expect(css).toContain('animation: toast-in var(--motion-toast-in)')
+    // 只动 opacity / transform：动尺寸会把整页带着抖。
+    const keyframes = /@keyframes toast-in\s*\{[\s\S]*?\n\}/.exec(css)?.[0] ?? ''
+    expect(keyframes).toContain('opacity')
+    expect(keyframes).toContain('translateY(4px)')
+    // 只动 opacity / transform：动尺寸会把整页带着抖。
+    expect(keyframes).not.toMatch(/(width|height|margin|padding):/)
+    // 组件里没有时长字面量，降级由 tokens.css 一处归零。
+    expect(css).not.toMatch(/\b\d+(\.\d+)?m?s\b/)
+  })
+
   it('names the close control from its own copy table, never an empty string', async () => {
     const { host, calls } = await mount()
     await act(async () => {
