@@ -6,10 +6,13 @@ import { MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS as EVENT_IDS } from '../../.
 import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
 
 /**
- * 日报线的三条通知：`briefing.ready`、`briefing.failed`（两种正文变体）、`timezone.invalid`。
+ * 日报线的两条通知：`briefing.failed`（两种正文变体）、`timezone.invalid`。
  *
- * 提交只带**参数**，键由平台按声明展开（契约 §3.2）：`brief-done:{date}:{period}`、
- * `brief-failed:{date}:{period}`、`timezone-invalid:{date}` 的变量从这里进，拼键只在声明一处。
+ * **成功不通知**（`BACKLOG` §28）：日报每天自己会来，成功是常态，「今天有了」不需要提醒；
+ * 所以这里没有完成类，声明表里也没有那条事件——加回来会被平台以 `unknown-event-type` 拒收。
+ *
+ * 提交只带**参数**，键由平台按声明展开（契约 §3.2）：`brief-failed:{date}:{period}`、
+ * `timezone-invalid:{date}` 的变量从这里进，拼键只在声明一处。
  * 变体名只认声明 `bodyKeyByVariant` 里的两个；写错会被 `rejected: unknown-body-variant` 拒，
  * 不会静默掉到兜底句。
  *
@@ -19,7 +22,6 @@ import { INTELLIGENCE_DAILY_BRIEFING_JOB } from '../jobs/intelligenceJobIds'
  * 一条通知发不出去不能把生成判成失败（日报已经落库），所以这里吞掉提交异常、返回 null。
  */
 export type DailyBriefingNotice =
-  | Readonly<{ kind: 'ready'; date: string; periodId: string }>
   | Readonly<{ kind: 'failed'; variant: 'not-generated' | 'editorial-missing'; date: string; periodId: string }>
   | Readonly<{ kind: 'timezone-invalid'; date: string }>
 
@@ -90,13 +92,5 @@ export function buildBriefingNoticeRequest(
       occurredAt
     }
   }
-  // 完成类：桌面与通道按读者的订阅（`notifyOnlyIfSubscribed`），这里不挑表面。
-  return {
-    eventTypeId: EVENT_IDS.briefingReady,
-    producerId: INTELLIGENCE_DAILY_BRIEFING_JOB,
-    // 变量名必须是声明模板里的那个（`brief-done:{date}:{period}`）：平台按名字填，填不上就拒收。
-    dedupeVars: { builder: 'template', vars: { date: notice.date, period: notice.periodId } },
-    actions: [],
-    occurredAt
-  }
+  throw new Error(`daily-briefing:unhandled-notice:${String(notice)}`)
 }

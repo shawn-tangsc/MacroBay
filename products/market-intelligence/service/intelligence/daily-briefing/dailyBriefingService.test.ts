@@ -769,8 +769,9 @@ describe('period run', () => {
 })
 
 describe('briefing notices', () => {
-  it('reports a stored edition once, not on every read of it', async () => {
-    // 一期一条：第二次读的是已落库的那一期，那不是「又完成了一期」。
+  it('says nothing when an edition is stored (§28: success is silent)', async () => {
+    // 成功不通知是 §28 的口径，不是「这条路径还没接上」——端口就在下面这个依赖里活着，
+    // 同一个端口在失败用例里必须收到恰好一条；两半合起来，"0 条"才证明的是「不该发」，而不是「发不出去」。
     const store = memoryStore()
     const notices: Array<Record<string, unknown>> = []
     const service = createDailyBriefingService({
@@ -787,12 +788,7 @@ describe('briefing notices', () => {
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
     await service.getToday({ locale: 'zh-CN', timeZone: 'Asia/Shanghai' })
 
-    expect(notices).toHaveLength(1)
-    expect(notices[0]).toMatchObject({
-      eventTypeId: 'market-intelligence.briefing.ready',
-      producerId: 'market-intelligence.dailyBriefing',
-      dedupeVars: { builder: 'template', vars: { date: '2026-10-30', period: 'default' } }
-    })
+    expect(notices).toEqual([])
   })
 
   it('N5 ①: a terminal failure says the edition was not generated', async () => {

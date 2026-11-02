@@ -279,6 +279,10 @@ export const marketIntelligenceProductManifest = {
    * 文案只填键、不填句子（句子归营销）：`notification.event.<完整事件 id>.<title|body|reason>`，四个键都由平台生成函数产出，这里不手拼。
    * 去重粒度的出处是情报通知目录 §四之一（`intelligence-notification-catalog.md`），
    * 键形状的出处是契约 §7 / §7.1；这里两处都只引用，不重写清单。
+   *
+   * **完成类不声明**（`BACKLOG` §28，2026-11-03 定）：日报成功是常态，成功不通知，所以这里没有
+   * 「日报好了」这一条。删的是**声明**，不是调用点——声明一旦不存在，谁再把这条 id 提交上来都会被
+   * 平台以 `unknown-event-type` 拒收，不需要靠人记。
    */
   notificationEvents: [
     notificationEvent('market-intelligence.briefing.failed', {
@@ -289,15 +293,6 @@ export const marketIntelligenceProductManifest = {
       dedupeUnit: 'condition',
       conditionWindowMs: 86_400_000,
       notifyOnlyIfSubscribed: false,
-      requestedBypassQuietHours: false
-    }),
-    notificationEvent('market-intelligence.briefing.ready', {
-      body: true,
-      requiresUserAction: false,
-      requestedDisruptionLevels: ['desktop', 'channel'],
-      dedupeKeyTemplate: 'brief-done:{date}:{period}',
-      dedupeUnit: 'occurrence',
-      notifyOnlyIfSubscribed: true,
       requestedBypassQuietHours: false
     }),
     notificationEvent('market-intelligence.signal.triggered', {

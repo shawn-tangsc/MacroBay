@@ -569,7 +569,7 @@ export function createDailyBriefingService(deps: Readonly<{
         return fail('store-failed')
       }
       await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
-      await notifyDailyBriefing(deps.noticeSubmit, { kind: 'ready', date: input.date, periodId: input.periodId }, now())
+      // 成功不通知（`BACKLOG` §28）：日报每天自己会来，「今天有了」不值得打断读者一次。
       return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)

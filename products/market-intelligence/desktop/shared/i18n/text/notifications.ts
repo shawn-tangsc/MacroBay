@@ -9,7 +9,7 @@ import {
 } from '../../../../contracts/notificationEventKeys'
 
 /**
- * 情报模块 8 条通知事件的文案（中英各一份）。
+ * 情报模块 7 条通知事件的文案（中英各一份）。**完成类不在此表**（§28 成功不通知）。
  *
  * 键全部由事件 id 机械生成（`contracts/notificationEventKeys.ts`），这里只给句子，不另起一套键：
  * 事件改名时句子跟着改，键不会落空。正文变体名与声明里的 `bodyKeyByVariant` 逐字对应。
@@ -29,10 +29,6 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: '这一期没有生成出来，点开可以重试。',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: '数据已经齐了，但解读没出来，点开可以重试。',
     [REASON(IDS.briefingFailed)]: '这一期跑完了仍然失败。',
-
-    [TITLE(IDS.briefingReady)]: '日报好了',
-    [BODY(IDS.briefingReady)]: '今天的日报可以看了。',
-    [REASON(IDS.briefingReady)]: '你订阅了日报完成提醒。',
 
     [TITLE(IDS.signalTriggered)]: '模块信号触发',
     [BODY(IDS.signalTriggered)]: '有一条新信号，点开看该模块的读数。',
@@ -63,10 +59,6 @@ export const marketIntelligenceNotificationCopy: MarketIntelligenceNotificationC
     [notificationEventVariantKey(IDS.briefingFailed, 'not-generated')]: 'This edition failed to generate. Open it to retry.',
     [notificationEventVariantKey(IDS.briefingFailed, 'editorial-missing')]: 'The data is ready, but the interpretation is missing. Open it to retry.',
     [REASON(IDS.briefingFailed)]: 'This edition finished its run and still failed.',
-
-    [TITLE(IDS.briefingReady)]: 'Your daily briefing is ready',
-    [BODY(IDS.briefingReady)]: 'Today’s briefing is available to read.',
-    [REASON(IDS.briefingReady)]: 'You subscribed to the briefing-finished notice.',
 
     [TITLE(IDS.signalTriggered)]: 'Module signal triggered',
     [BODY(IDS.signalTriggered)]: 'A new signal fired. Open it to see the reading for that module.',

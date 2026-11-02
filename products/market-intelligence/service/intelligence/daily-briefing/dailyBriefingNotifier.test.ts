@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
-import type { NotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
+import type {
+  NotificationRuntimeSettings,
+  NotificationSubmitRequest
+} from '@platform/notifications/contracts/notificationContracts'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
 import { createNotificationRuntime, type NotificationStorage } from '@platform/notifications/runtime/notificationRuntime'
@@ -11,6 +14,8 @@ import { buildBriefingNoticeRequest, notifyDailyBriefing } from './dailyBriefing
 
 const NOW = '2026-11-03T00:30:00.000Z'
 const DATE = '2026-11-03'
+/** 已按 §28 删除的完成类事件 id：留成字面量，才能证明「它现在提交不进去」。 */
+const REMOVED_READY_EVENT_ID = 'market-intelligence.briefing.ready'
 
 const settings: NotificationRuntimeSettings = {
   desktopEnabled: true,
@@ -52,19 +57,33 @@ function createRuntime(subscriptions: Record<string, unknown> = {}) {
 }
 
 describe('daily briefing notifier', () => {
-  it('asks for the ready notice with parameters only — the key stays in the declaration', () => {
-    const request = buildBriefingNoticeRequest({ kind: 'ready', date: DATE, periodId: 'default' }, NOW)
+  it('does not declare a completion notice at all (§28: success is silent)', () => {
+    // 删的是**声明**，不是调用点：声明不在表里，同一个 id 再提交上来就会被平台拒收。
+    const ids = marketIntelligenceProductManifest.notificationEvents.map((event) => event.id)
+    expect(ids).not.toContain(REMOVED_READY_EVENT_ID)
+    expect(createNotificationEventCatalog({
+      policy: NOTIFICATION_EVENT_POLICY,
+      sources: [{ productId: 'market-intelligence', events: marketIntelligenceProductManifest.notificationEvents }]
+    }).has(REMOVED_READY_EVENT_ID)).toBe(false)
+  })
 
-    expect(request).toMatchObject({
-      eventTypeId: 'market-intelligence.briefing.ready',
-      // 让渡表是静态的，claims 按 handler 登记（契约 §14.1）：带期号的 definition id 只会让它永远对不上。
+  it('rejects a completion submission instead of dropping it silently, so re-adding one cannot pass unnoticed', async () => {
+    // 「没发」有两种：没人发（靠纪律），和发不出去（靠平台）。这里钉的是后者——
+    // 有人把这条请求塞回调用点，回执必须是 rejected，而不是 accepted 或静默丢弃。
+    const { runtime, records } = createRuntime()
+    const attempt: NotificationSubmitRequest = {
+      eventTypeId: REMOVED_READY_EVENT_ID,
       producerId: 'market-intelligence.dailyBriefing',
       dedupeVars: { builder: 'template', vars: { date: DATE, period: 'default' } },
       actions: [],
       occurredAt: NOW
+    }
+
+    await expect(runtime.submit(attempt)).resolves.toMatchObject({
+      kind: 'rejected',
+      reason: 'unknown-event-type'
     })
-    expect(request).not.toHaveProperty('dedupeKey')
-    expect(request).not.toHaveProperty('bodyVariant')
+    expect(records()).toHaveLength(0)
   })
 
   it('names the two failure bodies by the declared variant and gives the reader the open action', () => {
@@ -106,30 +125,6 @@ describe('daily briefing notifier', () => {
     })
   })
 
-  it('keeps a day of successful briefings at zero notifications for a new install', async () => {
-    // S1/N1：完成类在新装默认订阅（全空）下被 suppressed，不落库、不投递。
-    const { runtime, records } = createRuntime()
-    const notified = await notifyDailyBriefing((request) => runtime.submit(request), { kind: 'ready', date: DATE, periodId: 'default' }, NOW)
-
-    expect(notified).toMatchObject({ kind: 'suppressed', reason: 'not-subscribed' })
-    expect(records()).toHaveLength(0)
-  })
-
-  it('submits the ready notice when the reader subscribed to records', async () => {
-    const { runtime, records } = createRuntime({
-      'market-intelligence.briefing.ready': { record: true }
-    })
-    const notified = await notifyDailyBriefing((request) => runtime.submit(request), { kind: 'ready', date: DATE, periodId: 'default' }, NOW)
-
-    expect(notified).toMatchObject({ kind: 'accepted' })
-    expect(records()).toHaveLength(1)
-    expect(records()[0]).toMatchObject({
-      eventTypeId: 'market-intelligence.briefing.ready',
-      dedupeKey: 'market-intelligence|brief-done:2026-11-03:default',
-      occurrenceCount: 1
-    })
-  })
-
   it('N5: two failures of one edition stay one row, and the body follows the latest run', async () => {
     const { runtime, records } = createRuntime()
     const submit = (request: Parameters<typeof runtime.submit>[0]) => runtime.submit(request)
@@ -147,6 +142,24 @@ describe('daily briefing notifier', () => {
       // 正文取最新一次：合并后记录的键换成第二次提交的变体。
       bodyKey: 'notification.event.market-intelligence.briefing.failed.body.editorial-missing'
     })
+  })
+
+  it('N5: a second day starts a second row — 「only one row per edition」 only means something if two editions give two', async () => {
+    // 「同一天只有一行」在通知根本没发出去时也成立，所以必须配这条正向用例：
+    // 换一个日期必须出现第 2 行，否则那条断言证明的只是「什么都没发生」。
+    const { runtime, records } = createRuntime()
+    const submit = (request: Parameters<typeof runtime.submit>[0]) => runtime.submit(request)
+
+    await notifyDailyBriefing(submit, { kind: 'failed', variant: 'not-generated', date: '2026-11-02', periodId: 'default' }, NOW)
+    await notifyDailyBriefing(submit, { kind: 'failed', variant: 'not-generated', date: DATE, periodId: 'default' }, NOW)
+
+    expect(records()).toHaveLength(2)
+    // 记录按最近时间倒序排列，所以这里排序后比键本身，不依赖存储顺序。
+    expect(records().map((record) => record.dedupeKey).sort()).toEqual([
+      'market-intelligence|brief-failed:2026-11-02:default',
+      'market-intelligence|brief-failed:2026-11-03:default'
+    ])
+    for (const record of records()) expect(record.occurrenceCount).toBe(1)
   })
 
   it('N14: repeated detections of an unusable zone stay one centre row and never pop a desktop', async () => {
@@ -167,7 +180,7 @@ describe('daily briefing notifier', () => {
 
   it('does not fail generation when the notification port throws', async () => {
     const notified = await notifyDailyBriefing(() => { throw new Error('notification store unavailable') },
-      { kind: 'ready', date: DATE, periodId: 'default' }, NOW)
+      { kind: 'failed', variant: 'not-generated', date: DATE, periodId: 'default' }, NOW)
 
     expect(notified).toBeNull()
   })

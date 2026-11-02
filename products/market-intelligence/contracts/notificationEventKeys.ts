@@ -26,7 +26,6 @@ export function notificationEventVariantKey(eventTypeId: string, variant: string
 /** 本模块的通知事件 id：与 `notification-event-ownership.md`、批准表逐字一致。 */
 export const MARKET_INTELLIGENCE_NOTIFICATION_EVENT_IDS = Object.freeze({
   briefingFailed: 'market-intelligence.briefing.failed',
-  briefingReady: 'market-intelligence.briefing.ready',
   signalTriggered: 'market-intelligence.signal.triggered',
   macroEventLanded: 'market-intelligence.macro.event-landed',
   sourceConsecutiveFailed: 'market-intelligence.source.consecutive-failed',
