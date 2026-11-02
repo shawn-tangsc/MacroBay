@@ -231,8 +231,10 @@ describe('desktop main IPC surface', () => {
     expect(platformCoreSource.indexOf('const providerSecretVault = createElectronSecretVault({')).toBeLessThan(
       platformCoreSource.indexOf('const providerStore = createProviderStore(')
     )
-    // 模型服务 19 个 handler 已搬到 ipc/modelIpc.ts。
-    expect(appSource).toContain('registerModelIpc(ipcMain, {')
+    // 模型服务 19 个 handler 已搬到 ipc/modelIpc.ts；装配点又搬进 composition/model.ts。
+    // 读者与被读对象必须同笔迁移：这条断言跟着调用点走，否则它会在搬家那一刻变成假红。
+    expect(readSource('composition/model.ts')).toContain('registerModelIpc(ipcMain, {')
+    expect(appSource).toContain('composeModelIpc(ipcMain, {')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersList')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersUpsert')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersTestConnection')
@@ -761,6 +763,9 @@ describe('notification delete-read surface', () => {
     expect(notificationIpcSource).toContain('IpcChannels.notificationsDeleteRead')
     expect(notificationIpcSource).toContain('getNotificationRuntime().deleteRead()')
     // 渲染层入口：preload 暴露方法，但命名空间里只有这一个删除方法。
-    expect(preloadSource).toContain('deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead)')
+    // 通知那半已拆进 namespaces/notifications.ts —— 读者跟着被读对象走，否则这条断言永远看不见它。
+    expect(readSource('../preload/namespaces/notifications.ts')).toContain(
+      'deleteRead: () => ipcRenderer.invoke(IpcChannels.notificationsDeleteRead)'
+    )
   })
 })

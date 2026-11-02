@@ -170,7 +170,6 @@ import { registerSettingsIpc } from './ipc/settingsIpc'
 import { registerStorageIpc } from './ipc/storageIpc'
 import { registerWebIpc } from './ipc/webIpc'
 import { registerChannelIpc } from './ipc/channelIpc'
-import { registerModelIpc } from './ipc/modelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
 import { registerAgentIpc } from './ipc/agentIpc'
 import { registerAgentToolsIpc } from './ipc/agentToolsIpc'
@@ -178,6 +177,7 @@ import { createMainWindowHost } from './window/mainWindow'
 import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { composeNotificationRuntime } from './composition/notifications'
+import { composeModelIpc } from './composition/model'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
 import { registerProductIpcEventSender } from '../ipc/productIpcEventBridge'
@@ -1158,12 +1158,12 @@ function registerIpcHandlers(
   // 退出链（dispose 五步、维护定时器、adapter dispose、fenceAllForQuit）仍留在本文件。
   registerChannelIpc(ipcMain, { channelManagementService, channelInboundService })
 
-  // 模型服务 19 个 handler（含检测事件推送）搬到 ipc/modelIpc.ts。
-  registerModelIpc(ipcMain, {
+  // 模型服务 19 个 handler（含检测事件推送）在 ipc/modelIpc.ts；端口与其状态读法在 composition/model.ts。
+  composeModelIpc(ipcMain, {
     providerStore,
     getPlatformFetch,
     getMainWindow,
-    invalidateModelCompatibilityCache: (providerId) => invalidateAgentModelCompatibilityCache(providerId),
+    invalidateAgentModelCompatibilityCache,
     agentRuntimeProbeSnapshotStore,
     syncInUseModelPatrolScheduleFromState,
     inUseModelPatrol,
