@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react'
-import { Input, Modal } from 'antd'
+import { Input } from 'antd'
 import { Bot, MessageSquareText, Search } from 'lucide-react'
 
 import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentStore'
+import { Modal } from '@platform/ui/components/modal'
 
 import { buildAgentSearchResults, type AgentSearchResult } from '../agentSearchResults'
 import { useAgentText } from '../agentTextProvider'
+
+/** 标题键只在本调用点出现一次；句子由本文件的文案表给，组件只认键。 */
+const AGENT_SEARCH_TITLE_KEY = 'agents.search.title'
 
 type AgentSearchModalProps = {
   open: boolean
@@ -37,10 +41,11 @@ export default function AgentSearchModal({
   return (
     <Modal
       open={open}
-      title={t.search.title}
+      width="expanded"
+      titleKey={AGENT_SEARCH_TITLE_KEY}
+      resolveText={(key) => (key === AGENT_SEARCH_TITLE_KEY ? t.search.title : '')}
       footer={null}
-      onCancel={onClose}
-      width={680}
+      onClose={onClose}
       className="agent-search-modal"
       destroyOnHidden>
       <div className="agent-search-panel">
