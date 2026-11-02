@@ -1,7 +1,7 @@
 /* 只搬位置，不改句子：本条文案归这个文件独占，改之前先看清它属于哪条线。 */
 export const dailyBriefingText = {
   'zh-CN': {
-    entry: '今日简报', title: '每日简报', generation: { schedule: '08:05 自动生成', checking: '检查中…', ready: '已生成', missing: '未生成 · 下次打开补生成', history: '历史版次' }, close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；08:05 只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
+    entry: '今日简报', title: '每日简报', generation: { schedule: '按设置的生成时间自动生成', checking: '检查中…', ready: '已生成', missing: '未生成 · 下次打开补生成', history: '历史版次' }, close: '关闭', backToDashboard: '返回看板', generateNow: '立即生成', generating: '正在生成今天的日报…', exportImage: '导出图片', exportingImage: '正在导出…', exported: '已导出', exportFailed: '导出失败', generateHint: '打开页面会立即生成；设定的生成时刻只是提前准备，错过也会在下次打开时补生成。', regenerate: '重新生成', regenerating: '正在重新生成…', regenerateFailed: '重新生成失败', loading: '正在读取日报…', unavailable: '日报暂不可用', retry: '重试',
     // 升级没跑完时读者看到的就是这一句与一个按钮；它是状态，不是说明，所以一直在明面上。
     migration: { incomplete: '日报数据升级未完成，现在用的是旧数据。其余功能正常，升级完成后新功能会自动可用。', retry: '重试升级', retrying: '正在重试…' },
     window: '过去 24 小时（至 {time}）', edition: '版次 {time}', readings: '{available}/{total} 读数', readingsUnit: '读数', readingsAllMissing: '四个读数都读不到', denseDay: '今日信息较多',
@@ -213,7 +213,7 @@ export const dailyBriefingText = {
       openModelService: '打开模型服务'
     },
     generationSettings: {
-      generationTime: '生成时间', generationTimeHint: '按你的显示时区解释：写 08:05 就是你所在时区的早上 8:05。既是自动生成时刻，也是本期统计截止时间。默认 08:00。',
+      generationTime: '生成时间', generationTimeHint: '按你的显示时区解释：填的时刻就是你所在时区的那个时刻。既是自动生成时刻，也是本期统计截止时间；没改过设置时跟随默认生成时间。',
       invalidTimeZone: '时区无效（{zone}），自动生成已暂停；改成有效的时区后保存即可恢复。',
       manualUtcNote: '时区无效，手动生成会按 UTC 时刻生成。',
       windowHours: '统计窗口', windowHoursHint: '日报覆盖最近这段时间的数据，默认 24 小时。',
@@ -223,7 +223,7 @@ export const dailyBriefingText = {
     }
   },
   'en-US': {
-    entry: 'Daily brief', title: 'Daily brief', generation: { schedule: 'Auto at 08:05', checking: 'Checking…', ready: 'Generated', missing: 'Not generated · caught up on next open', history: 'History' }, close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; 08:05 is only a head start, and a missed run is caught up on the next open.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
+    entry: 'Daily brief', title: 'Daily brief', generation: { schedule: 'Auto-generates at your generation time', checking: 'Checking…', ready: 'Generated', missing: 'Not generated · caught up on next open', history: 'History' }, close: 'Close', backToDashboard: 'Back to dashboard', generateNow: 'Generate now', generating: 'Generating today’s brief…', exportImage: 'Export image', exportingImage: 'Exporting…', exported: 'Exported', exportFailed: 'Export failed', generateHint: 'Opening the page generates it now; the scheduled run is only a head start, and a missed one is caught up the next time you open it.', regenerate: 'Regenerate', regenerating: 'Regenerating…', regenerateFailed: 'Regeneration failed', loading: 'Reading today’s brief…', unavailable: 'The brief is unavailable', retry: 'Retry',
     migration: { incomplete: "The briefing data upgrade didn't finish, so the old data is still in use. Everything else works; the new features become available once it completes.", retry: 'Retry upgrade', retrying: 'Retrying…' },
     window: 'Last 24 hours (to {time})', edition: 'Edition {time}', readings: '{available}/{total} readings', readingsUnit: 'readings', readingsAllMissing: 'No readings available', denseDay: 'A dense day',
     moreNumbers: 'More numbers', noValue: '—',
@@ -433,7 +433,7 @@ export const dailyBriefingText = {
       openModelService: 'Open model service'
     },
     generationSettings: {
-      generationTime: 'Generation time', generationTimeHint: 'Read in your display time zone: 08:05 here is 08:05 in the zone shown beside it. It is both the automatic run and this edition\'s statistical cutoff. Defaults to 08:00.',
+      generationTime: 'Generation time', generationTimeHint: 'Read in your display time zone: the time you enter is that time in the zone shown beside it. It is both the automatic run and this edition\'s statistical cutoff; before you change it, the default generation time applies.',
       invalidTimeZone: 'That time zone is not valid ({zone}), so automatic generation is paused. Save a valid one to resume.',
       manualUtcNote: 'Automatic generation is paused; a manual run uses the UTC time.',
       windowHours: 'Statistics window', windowHoursHint: 'How far back each brief reads. Defaults to 24 hours.',
