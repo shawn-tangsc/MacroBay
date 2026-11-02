@@ -387,8 +387,11 @@ describe('macro economic calendar', () => {
     // The reused body's tokens travel with the drawer. Opened from the market dashboard there is no
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
-    // inspector's labels their muted colour.
-    const tokenRule = styles.slice(styles.indexOf('.mi-economic-calendar,\n.mi-calendar-drawer {'))
+    // inspector's labels their muted colour. The BLS import dialog lands on `body` too (the platform
+    // `Modal` has no container slot), so it must carry the same tokens on its own class.
+    const tokenSelector = '.mi-economic-calendar,\n.mi-calendar-drawer,\n.mi-bls-ics-dialog {'
+    expect(styles).toContain(tokenSelector)
+    const tokenRule = styles.slice(styles.indexOf(tokenSelector))
     const tokens = tokenRule.slice(tokenRule.indexOf('{') + 1, tokenRule.indexOf('\n}'))
     for (const token of ['--mi-economic-page-inline', '--mi-economic-muted', '--mi-economic-line', '--mi-economic-surface', '--mi-economic-text']) {
       expect(tokens).toContain(`${token}:`)

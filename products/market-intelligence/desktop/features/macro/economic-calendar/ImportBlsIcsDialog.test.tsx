@@ -4,6 +4,8 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
+
 import { productText } from '../../../shared/i18n/productText'
 import { ImportBlsIcsDialog } from './ImportBlsIcsDialog'
 
@@ -53,7 +55,7 @@ describe('ImportBlsIcsDialog', () => {
 
   it('uses English import labels when the calendar uses English copy', async () => {
     const text = productText['en-US'].pages.intelligence.portal.calendar
-    await render({ state: 'ready', filename: 'bls.ics', preview: preview() }, {}, text)
+    await render({ state: 'ready', filename: 'bls.ics', preview: preview() }, {}, text, 'en-US')
 
     expect(document.body.textContent).toContain(text.manualImport.title)
     expect(document.body.textContent).toContain(text.manualImport.actions.confirm)
@@ -64,18 +66,22 @@ describe('ImportBlsIcsDialog', () => {
 async function render(
   state: Parameters<typeof ImportBlsIcsDialog>[0]['dialogState'],
   handlers: { onConfirm?: () => void; onClose?: () => void } = {},
-  text = productText['zh-CN'].pages.intelligence.portal.calendar
+  text = productText['zh-CN'].pages.intelligence.portal.calendar,
+  language: 'zh-CN' | 'en-US' = 'zh-CN'
 ) {
   const container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
   await act(async () => root?.render(
-    <ImportBlsIcsDialog
-      dialogState={state}
-      onClose={handlers.onClose ?? (() => undefined)}
-      onConfirm={handlers.onConfirm ?? (() => undefined)}
-      text={text}
-    />
+    // 标题走平台的键解析器，所以这里必须给壳层语言：组件不能再从 `text` 里拿标题句子。
+    <ShellLanguageProvider language={language}>
+      <ImportBlsIcsDialog
+        dialogState={state}
+        onClose={handlers.onClose ?? (() => undefined)}
+        onConfirm={handlers.onConfirm ?? (() => undefined)}
+        text={text}
+      />
+    </ShellLanguageProvider>
   ))
 }
 

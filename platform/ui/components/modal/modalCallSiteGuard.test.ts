@@ -23,7 +23,6 @@ const ANTD_BASELINE: ReadonlySet<string> = new Set([
   'apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSearchModal.tsx',
   'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceModelDetectionDialog.tsx',
   'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderPage.tsx',
-  'products/market-intelligence/desktop/features/macro/economic-calendar/ImportBlsIcsDialog.tsx',
   'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSettingsDialog.tsx'
 ])
 

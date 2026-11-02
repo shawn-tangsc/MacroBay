@@ -6,9 +6,13 @@
  * to another rule, it unset the property — so there the body lost its padding (0 instead of 20px) and
  * the inspector's labels lost their muted colour, quietly, without anything failing. The drawer class
  * carries the tokens with it so one detail surface looks the same wherever it is opened.
+ *
+ * The BLS import dialog is the same story one step further out: the platform `Modal` mounts it on
+ * `body`, so its own class has to carry the tokens too.
  */
 .mi-economic-calendar,
-.mi-calendar-drawer {
+.mi-calendar-drawer,
+.mi-bls-ics-dialog {
   /* EconomicCalendarMonthLayoutPolicy — design 122 §2.1. */
   --mi-calendar-day-height: 200px;
   --mi-calendar-row-height: 22px;
