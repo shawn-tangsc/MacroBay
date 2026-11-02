@@ -9,6 +9,8 @@ The component exists because the same three words were drawn in five places, in 
 implementations, each with its own size and colour. One 11px type size and one tone set is now the
 only way to draw them.
 
+The dot sizes live in one place — custom properties on `.status-pill` — and `statusPillDotSizeGuard.test.ts` reds on two things: a shape rule that hardcodes a size, and a page stylesheet that resizes `.status-pill__dot` itself. Shrinking the dot to fit a dense row would turn the shape channel back into colours only, and nothing on screen would look wrong.
+
 ## The component
 
 | Export | Use it for |

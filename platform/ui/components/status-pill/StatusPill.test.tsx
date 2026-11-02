@@ -134,13 +134,15 @@ describe('StatusPill', () => {
 
     // 形状必须真的来自 CSS，而不是只挂了个属性。
     expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('background: transparent')
-    expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('border: 1.5px solid var(--pill-tone)')
+    // 描边也走变量：点尺寸只在一个地方定义，形状规则里不许出现裸数字。
+    expect(block(".status-pill__dot[data-dot-shape='ring']")).toContain('border: var(--pill-dot-stroke) solid var(--pill-tone)')
     expect(block(".status-pill__dot[data-dot-shape='square']")).toContain('border-radius: 1px')
-    expect(block(".status-pill__dot[data-dot-shape='bar']")).toContain('height: 2px')
-    expect(block(".status-pill__dot[data-dot-shape='small']")).toContain('width: 3px')
+    expect(block(".status-pill__dot[data-dot-shape='bar']")).toContain('height: var(--pill-dot-bar-height)')
+    expect(block(".status-pill__dot[data-dot-shape='small']")).toContain('width: var(--pill-dot-small)')
 
     // 5px 上形状编码是假的：空心环的内孔只剩 2px，灰度里与实心圆一样。所以点抬到 6px。
     expect(rules).not.toContain('width: 5px')
-    expect(block(".status-pill__dot[data-dot-shape='circle']")).toContain('width: 6px')
+    expect(block('.status-pill')).toContain('--pill-dot-size: 6px')
+    expect(block(".status-pill__dot[data-dot-shape='circle']")).toContain('width: var(--pill-dot-size)')
   })
 })
