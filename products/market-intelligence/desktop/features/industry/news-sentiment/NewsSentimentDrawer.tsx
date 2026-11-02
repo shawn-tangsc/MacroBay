@@ -22,14 +22,7 @@ import { labelText, sentimentIcon } from './newsSentimentPresentation'
 import type { NewsSentimentFilters } from './useNewsSentiment'
 import { filterNewsSentimentRows } from './newsSentimentFilters'
 import { useNewsSentimentTranslationQueue } from './useNewsSentimentTranslationQueue'
-
-function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-  ])
-}
-
+import { withTimeout } from './newsSentimentTimeout'
 
 export function NewsSentimentDrawer(props: {
   open: boolean
