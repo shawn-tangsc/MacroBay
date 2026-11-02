@@ -22,17 +22,3 @@
   line-height: 1;
   white-space: nowrap;
 }
-
-/*
- * 数据（运行时标识）**必须和句子看起来不一样**，否则 `scheduled_task_run_now` 会以正文的样子
- * 出现在一句中文中间，读者会以为那是一个写错的词，而不是一个标识。
- *
- * 用等宽体，不加引号：引号在 18 高、0 6 内边距的窄盒子里会把本来就长的标识再挤掉两个字符位，
- * 而等宽在灰底小字上已经足够说明「这不是一句话」。中文字符等宽与否看不出差别，但这些标识
- * 全是 ASCII（工具 id、registry 名、`yaml`），等宽在它们身上有效。
- *
- * 字体族与 `styles.css` 里已有的等宽声明一致，不另起一套名字。
- */
-.meta-chip--data {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
