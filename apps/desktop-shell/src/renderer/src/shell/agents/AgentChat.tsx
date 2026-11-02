@@ -29,6 +29,7 @@ import { listSessionMessagesViaApi } from './agentSessionDataApi'
 import { buildSessionRuntimeStatusById } from './agentSessionViewModel'
 import { useAgentText } from './agentTextProvider'
 import { resolveAgentPageStatus } from './agentPageStatus'
+import { startDefaultSession } from './startDefaultSession'
 import { sortAgentSessionMessages } from '@platform/ui/agent-chat'
 
 const AGENT_MESSAGE_PAGE_SIZE = 50
@@ -243,10 +244,22 @@ export default function AgentChat({
   if (pageStatus.type === 'no-session') {
     return (
       <main className="agent-chat-pane empty">
-        <AgentStatusScreen
-          icon={Bot}
-          title={t.chat.noSessionTitle}
-          description={t.chat.noSessionDescription}
+        <StateView
+          state="empty"
+          reasonCode="never-created"
+          size="lg"
+          action={{
+            labelKey: STATE_VIEW_ACTION_KEYS.create,
+            // 侧栏「新建会话」与这里同一份实现：取当前智能体、补默认模型、建会话、失败回退。
+            onSelect: () =>
+              startDefaultSession({
+                state,
+                activeAgentId: activeAgent?.id ?? null,
+                defaultAgentModelId,
+                sessionName: t.sidePanel.defaultSessionName,
+                onStateChange
+              })
+          }}
         />
       </main>
     )
