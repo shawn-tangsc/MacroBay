@@ -59,9 +59,17 @@ change — a page that silently describes the old shape is worse than a missing 
   added or removed), the first enabled tab takes the keyboard entry and the component calls
   `onChange(firstEnabled)` **once**, in an effect, keyed by the stale value. Showing A while the
   caller still holds B would let a later save or export act on B.
-- **`panel` must derive from the same `value`.** Between the fallback callback and the caller's
-  re-render the panel may still show the old content; that frame is the caller's obligation, not
-  something the component can fix.
+- **Every panel stays mounted; the inactive ones are `hidden`.** Switching away and back keeps the
+  other half's conversation, its selected timeline entry and its drag width. The inactive panel
+  carries the native `hidden` attribute, which leaves both the layout and the accessibility tree —
+  `aria-hidden` alone would only hide it from assistive technology, and hand-written `display: none`
+  is how the two drift apart.
+- **Mounted is not running.** The component mounts panels and wires reachability; it does not pause
+  timers, polling or subscriptions inside a hidden panel, and it deliberately offers **no
+  visibility callback**. The caller already holds `value` and decides for itself. A component that
+  guessed which panel "should stop" would teach callers not to decide.
+- **Panels keep their own state.** The component does not derive panel content from props, so an
+  inactive panel keeps whatever the reader left in it — that is the point of keeping it mounted.
 
 ## How to verify a page that uses it
 
