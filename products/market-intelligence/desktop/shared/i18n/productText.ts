@@ -777,6 +777,7 @@ mi: miText['zh-CN'],
             fomcRefresh: {
               publishedAt: '官方公布时间', retained: '刷新失败，显示上次官方值',
               action: '获取官方值',
+              confirm: '获取', cancel: '取消',
               confirmation: '将请求 Fed 官方 FOMC 决议并更新此事件的已验证值。',
               pending: '正在获取 Fed 官方值…',
               updated: '已获取 Fed 官方值。', unchanged: 'Fed 官方值已是最新。', unavailable: 'Fed 官方值暂不可用，未保存任何值。'
@@ -2013,6 +2014,7 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             fomcRefresh: {
               publishedAt: 'Official publication time', retained: 'Refresh failed; showing previous official value',
               action: 'Fetch official value',
+              confirm: 'Fetch', cancel: 'Cancel',
               confirmation: 'This requests the official Fed FOMC decision and updates verified values for this event.',
               pending: 'Fetching official Fed value…',
               updated: 'Official Fed value was fetched.', unchanged: 'Official Fed value is already current.', unavailable: 'Official Fed value is unavailable. No values were saved.'
