@@ -8,7 +8,7 @@ import { LoadingState } from '@platform/ui/components/loading'
 import { IconButton } from '@platform/ui/components/icon-button'
 import { Modal } from '@platform/ui/components/modal'
 import { Popover } from '@platform/ui/components/popover'
-import { StateView } from '@platform/ui/components/state'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 import { platformText } from '@renderer/i18n/platformText'
@@ -190,12 +190,12 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
     width="standard"
   >
     {loadFailed
-      ? <>
-        <StateView reasonCode="unreadable" resolveText={resolveProductText} state="error" />
-        <div className="mi-daily-briefing__settings-link">
-          <Button onClick={() => setReloadKey((count) => count + 1)}>{text.generationSettings.retry}</Button>
-        </div>
-      </>
+      ? <StateView
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => setReloadKey((count) => count + 1) }}
+        reasonCode="unreadable"
+        resolveText={resolveProductText}
+        state="error"
+      />
       : !draft ? <LoadingState label={text.generationSettings.loading} minHeight={120} /> : <>
       <h3 className="mi-daily-briefing__settings-section">{text.settings.generation}</h3>
       {periodCount > 1 ? <p className="mi-daily-briefing__settings-zone">{periodLabels.label.replace('{index}', '1')}</p> : null}
@@ -244,6 +244,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
           resolveText={resolveProductText}
           trigger={(triggerProps) => <IconButton
             ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.addReason"
+            variant="plain"
             expanded={triggerProps.expanded}
             icon={CircleHelp}
             onSelect={triggerProps.onSelect}
@@ -266,6 +267,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
               resolveText={resolveProductText}
               trigger={(triggerProps) => <IconButton
                 ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.languageUnsupported"
+                variant="plain"
                 ariaLabelParams={{ language: plan.requested }}
                 expanded={triggerProps.expanded}
                 icon={CircleHelp}
@@ -299,12 +301,12 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
                 resolveText={resolveProductText}
                 trigger={(triggerProps) => <IconButton
                   ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.settings.periods.costLabel"
+                  variant="plain"
                   expanded={triggerProps.expanded}
                   icon={CircleHelp}
                   onSelect={triggerProps.onSelect}
                   resolveText={resolveProductText}
                   size="sm"
-                  variant="plain"
                 />}
               />
               : null}
@@ -363,6 +365,7 @@ export function DailyBriefingSettingsModal({ open, text, client, onClose }: Read
           resolveText={resolveProductText}
           trigger={(triggerProps) => <IconButton
             ariaLabelKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.noteLabel"
+            variant="plain"
             expanded={triggerProps.expanded}
             icon={CircleHelp}
             onSelect={triggerProps.onSelect}

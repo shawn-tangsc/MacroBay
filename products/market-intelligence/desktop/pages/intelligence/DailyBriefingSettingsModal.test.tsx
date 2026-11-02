@@ -177,8 +177,9 @@ describe('daily briefing settings modal', () => {
     expect(document.body.textContent).not.toContain(text.generationSettings.loading)
     expect(document.body.querySelector('[data-state="error"]')).not.toBeNull()
 
-    const retry = [...document.body.querySelectorAll('button')]
-      .find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.retry)!
+    // The retry is the error state's own action, not a sibling button: screen-reader order and
+    // visual order have to be the same thing.
+    const retry = document.body.querySelector<HTMLButtonElement>('[data-state="error"] button')!
     await act(async () => { retry.click(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 
     expect(getSettings).toHaveBeenCalledTimes(2)
