@@ -33,6 +33,12 @@ export type PushBackoffDecision = {
   pausedUntil: string | null
   /** 这次结果跨过的边界；同一次失败把窗口往后推不算第二次「暂停」。 */
   transition: PushBackoffTransition | null
+  /**
+   * 这次结果是否**改动了**该通道的熔断状态。
+   * 为 false 时写入口不要落库：`unknown-after-send` 原样返回，写一条 `{failures:0,pausedUntil:null}`
+   * 会给一个从没失败过的通道凭空造出一行状态，也让「没有熔断记录」这件事无法表达。
+   */
+  changed: boolean
 }
 
 function parseInstant(value: string | null | undefined): number | null {
@@ -55,10 +61,10 @@ export function shouldSkipPush(current: NotificationPushBackoff | undefined, now
 }
 
 /**
- * 记一次结果，返回新的计数、新的暂停截止时间，以及这次是否跨过边界。
+ * 记一次结果，返回新的计数、新的暂停截止时间、这次是否跨过边界，以及**要不要落库**。
  *
- * - 成功：清零并解除（此前确实暂停过才算一次 `resumed`）；
- * - `unknown-after-send`：原样返回，`transition` 为 null；
+ * - 成功：清零并解除（此前确实暂停过才算一次 `resumed`）；原本没有记录时 `changed` 为 false；
+ * - `unknown-after-send`：原样返回，`transition` 为 null，`changed` 为 false；
  * - 失败：计数 +1，达到 3 次就暂停 30 分钟；窗口值变了才算一次 `suspended`。
  */
 export function recordPushOutcome(
@@ -70,10 +76,15 @@ export function recordPushOutcome(
   const pausedUntil = current?.pausedUntil ?? null
 
   if (outcome === 'sent-accepted') {
-    return { failures: 0, pausedUntil: null, transition: pausedUntil === null ? null : 'resumed' }
+    return {
+      failures: 0,
+      pausedUntil: null,
+      transition: pausedUntil === null ? null : 'resumed',
+      changed: current !== undefined && (failures !== 0 || pausedUntil !== null)
+    }
   }
   if (outcome === 'unknown-after-send') {
-    return { failures, pausedUntil, transition: null }
+    return { failures, pausedUntil, transition: null, changed: false }
   }
 
   const nextFailures = failures + 1
@@ -84,6 +95,7 @@ export function recordPushOutcome(
   return {
     failures: nextFailures,
     pausedUntil: nextPausedUntil,
-    transition: nextPausedUntil !== null && nextPausedUntil !== pausedUntil ? 'suspended' : null
+    transition: nextPausedUntil !== null && nextPausedUntil !== pausedUntil ? 'suspended' : null,
+    changed: true
   }
 }

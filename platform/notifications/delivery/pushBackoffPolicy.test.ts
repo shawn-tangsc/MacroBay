@@ -22,10 +22,10 @@ describe('pushBackoffPolicy', () => {
 
   it('counts failures without pausing until the third one', () => {
     const first = recordPushOutcome(undefined, 'failed', NOW)
-    expect(first).toEqual({ failures: 1, pausedUntil: null, transition: null })
+    expect(first).toEqual({ failures: 1, pausedUntil: null, transition: null, changed: true })
 
     const second = recordPushOutcome(backoff({ failures: 1 }), 'failed', NOW)
-    expect(second).toEqual({ failures: 2, pausedUntil: null, transition: null })
+    expect(second).toEqual({ failures: 2, pausedUntil: null, transition: null, changed: true })
 
     const third = recordPushOutcome(backoff({ failures: 2 }), 'failed', NOW)
     expect(third.failures).toBe(3)
@@ -46,11 +46,13 @@ describe('pushBackoffPolicy', () => {
   it('resumes on the first accepted send and reports the boundary once', () => {
     const paused = backoff({ failures: 3, pausedUntil: '2026-11-03T00:30:00.000Z' })
     const resumed = recordPushOutcome(paused, 'sent-accepted', '2026-11-03T00:31:00.000Z')
-    expect(resumed).toEqual({ failures: 0, pausedUntil: null, transition: 'resumed' })
+    expect(resumed).toEqual({ failures: 0, pausedUntil: null, transition: 'resumed', changed: true })
 
     // 已经解除之后再成功，不再报第二次 resumed。
     const again = recordPushOutcome(backoff(), 'sent-accepted', NOW)
     expect(again.transition).toBeNull()
+    // 没有既有状态可清：写入口不该为一个从没失败过的通道造一行。
+    expect(again.changed).toBe(false)
   })
 
   it('treats unknown-after-send as neither a failure nor a reset', () => {
@@ -58,17 +60,20 @@ describe('pushBackoffPolicy', () => {
     expect(recordPushOutcome(paused, 'unknown-after-send', NOW)).toEqual({
       failures: 3,
       pausedUntil: '2026-11-03T00:30:00.000Z',
-      transition: null
+      transition: null,
+      changed: false
     })
     expect(recordPushOutcome(backoff({ failures: 2 }), 'unknown-after-send', NOW)).toEqual({
       failures: 2,
       pausedUntil: null,
-      transition: null
+      transition: null,
+      changed: false
     })
     expect(recordPushOutcome(undefined, 'unknown-after-send', NOW)).toEqual({
       failures: 0,
       pausedUntil: null,
-      transition: null
+      transition: null,
+      changed: false
     })
   })
 
