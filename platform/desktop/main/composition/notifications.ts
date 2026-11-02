@@ -10,6 +10,8 @@ import type {
   NotificationRuntimeSettings
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
+import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
+import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
 
 /**
  * 通知运行时的装配。
@@ -32,6 +34,8 @@ export type NotificationCompositionPorts = Readonly<{
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   /** 诊断出口（runtime §2）：装配层接到 AppLog，测试可给 recorder。 */
   diagnostics?: NotificationDiagnosticsSink
+  /** 出站端口；装上后 pushWired 才为真。 */
+  push?: DeliveryHooks['push']
 }>
 
 export function composeNotificationRuntime(ports: NotificationCompositionPorts): void {
@@ -57,7 +61,8 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     // 产品文案表由第 5 步注入；现在只有平台表，产品键解析不到会走兜底句 + 诊断。
     copy: createNotificationCopyPort({ platform: notificationCopy }),
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
-    ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics })
+    ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics }),
+    ...(ports.push === undefined ? {} : { push: ports.push })
   })
 }
 
@@ -68,6 +73,9 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
  * 适配器放这里而不是 app.ts：`app.ts` 是「只减不增」的基线文件，每加一行都要先抽离。
  */
 export type AppNotificationCompositionPorts = NotificationCompositionPorts & {
+  /** 通道侧的只读投影 + 投递入口；只有 app 组合根有这两样。 */
+  channels: ChannelPushPortDeps['channels']
+  deliver: ChannelPushPortDeps['deliver']
   settingsStore: {
     get: () => Promise<AppSettings>
     update: (patch: Partial<AppSettings>) => Promise<unknown>
@@ -78,10 +86,18 @@ export type AppNotificationCompositionPorts = NotificationCompositionPorts & {
 }
 
 export function composeNotificationRuntimeForApp(ports: AppNotificationCompositionPorts): void {
+  const push = createChannelPushPort({
+    channels: ports.channels,
+    deliver: ports.deliver,
+    settings: {
+      pushChannelId: async () => (await ports.settingsStore.get()).notifications.push.channelId
+    }
+  })
   composeNotificationRuntime({
     getSettings: ports.getSettings,
     timeZone: ports.timeZone,
     manifests: ports.manifests,
+    push,
     updateSettings: async (patch) => {
       const current = await ports.settingsStore.get()
       await ports.settingsStore.update({ notifications: { ...current.notifications, ...patch } })

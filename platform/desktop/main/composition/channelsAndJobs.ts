@@ -301,6 +301,7 @@ export function createChannelsAndJobs(ports: ChannelsAndJobsPorts) {
     channelRuntimeSupervisor,
     channelInboundService,
     channelInboundExecutionRunner,
+    channelDeliveryService,
     channelDeliveryMaintenance,
     deliverTaskResultToChannels,
     taskAutomationMaintenance,

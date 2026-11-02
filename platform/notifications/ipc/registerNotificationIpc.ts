@@ -8,7 +8,7 @@ import { createDesktopNotificationAdapter } from '../desktop/desktopNotification
 import { createNotificationJsonStorage, createNotificationRuntime } from '../runtime/notificationRuntime'
 import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import type { NotificationDiagnosticsSink, NotificationRecord, NotificationRuntimeSettings } from '../contracts/notificationContracts'
-import type { NotificationClock, NotificationDeliveryContent } from '../runtime/notificationRouting'
+import type { DeliveryHooks, NotificationClock, NotificationDeliveryContent } from '../runtime/notificationRouting'
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 
@@ -21,6 +21,7 @@ let notificationCopyPort: NotificationCopyPort | null = null
 let notificationDiagnostics: NotificationDiagnosticsSink | null = null
 let updateNotificationSettings: ((patch: Partial<NotificationRuntimeSettings>) => Promise<void>) | null = null
 let getNotificationPushTargets: (() => Promise<readonly unknown[]>) | null = null
+let notificationPushHook: DeliveryHooks['push'] | null = null
 
 export function configureNotificationRuntime(deps: {
   getSettings: () => Promise<NotificationRuntimeSettings>
@@ -29,6 +30,7 @@ export function configureNotificationRuntime(deps: {
   diagnostics?: NotificationDiagnosticsSink
   updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
   getPushTargets?: () => Promise<readonly unknown[]>
+  push?: DeliveryHooks['push']
   /** 读者时区与当前时刻。**必传**：缺省成 UTC 会把「不知道」当成「用户在格林尼治」（`MI-11-R68`）。 */
   clock: NotificationClock
   /**
@@ -46,6 +48,7 @@ export function configureNotificationRuntime(deps: {
   notificationDiagnostics = deps.diagnostics ?? null
   updateNotificationSettings = deps.updateSettings ?? null
   getNotificationPushTargets = deps.getPushTargets ?? null
+  notificationPushHook = deps.push ?? null
 }
 
 /** 记录变化后广播一次：角标与列表订阅它，不轮询。事件只说明「变了」，真值仍由 `list()` 读。 */
@@ -109,7 +112,8 @@ export function getNotificationRuntime() {
           desktopAdapter.show({
             title: content.title,
             ...(content.body.length === 0 ? {} : { body: content.body })
-          })
+          }),
+        ...(notificationPushHook === null ? {} : { push: notificationPushHook })
       },
       readDesktopPermission: () => desktopAdapter.readPermission(),
       onChanged: broadcastNotificationChanged
@@ -128,4 +132,5 @@ export function resetNotificationRuntimeForTests(): void {
   notificationDiagnostics = null
   updateNotificationSettings = null
   getNotificationPushTargets = null
+  notificationPushHook = null
 }

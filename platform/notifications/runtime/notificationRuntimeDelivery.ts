@@ -11,6 +11,7 @@ import type {
   NotificationRecord,
   NotificationRuntimeSettings
 } from '../contracts/notificationContracts'
+import { recordPushOutcome, shouldSkipPush, type PushDeliveryOutcome } from '../delivery/pushBackoffPolicy'
 import {
   routeTransientDelivery,
   type DeliveryHooks,
@@ -94,35 +95,34 @@ export function createNotificationDelivery(input: NotificationDeliveryInput) {
       const current = channelId === null ? undefined : pushBackoff[channelId]
       if (channelId === null || !input.deliveryHooks?.push) {
         delivery.push = { state: 'failed', reason: 'push-unavailable', at }
-      } else if (current?.pausedUntil !== null && current?.pausedUntil !== undefined && current.pausedUntil > at) {
+      } else if (shouldSkipPush(current, at)) {
         // 熔断窗口内不发：写独立原因码，不调用端口（通道方案 §3）。
         delivery.push = { state: 'failed', reason: 'push-backoff', at }
       } else {
         const result = await input.deliveryHooks.push({ ...record, delivery }, content)
-        if (result.ok) {
-          if (current?.pausedUntil !== null && current?.pausedUntil !== undefined) {
-            transition = { kind: 'resumed', channelId }
+        const outcome: PushDeliveryOutcome = result.ok
+          ? 'sent-accepted'
+          : result.reason === 'unknown-after-send'
+            ? 'unknown-after-send'
+            : 'failed'
+        const decision = recordPushOutcome(current, outcome, at)
+        // `unknown-after-send` 与「本来就没失败过」返回原值：不写，保留「没有熔断记录」这个状态。
+        if (decision.changed) {
+          nextBackoff[channelId] = {
+            channelId,
+            failures: decision.failures,
+            pausedUntil: decision.pausedUntil
           }
-          nextBackoff[channelId] = { channelId, failures: 0, pausedUntil: null }
-          delivery.push = {
-            state: 'sent-accepted',
-            at,
-            ...(result.messageId === undefined ? {} : { messageId: result.messageId })
-          }
-        } else if (result.reason === 'unknown-after-send') {
-          // 「拿不到确认」不是「失败」：不计入连续失败、也不清零（否则断网一次就把正常通道推进暂停）。
-          delivery.push = { state: 'failed', reason: 'unknown-after-send', at }
-        } else {
-          const failures = (current?.failures ?? 0) + 1
-          const pausedUntil = failures >= 3
-            ? new Date(Date.parse(at) + 30 * 60_000).toISOString()
-            : null
-          nextBackoff[channelId] = { channelId, failures, pausedUntil }
-          if (pausedUntil !== null && (current?.pausedUntil ?? null) !== pausedUntil) {
-            transition = { kind: 'paused', channelId }
-          }
-          delivery.push = { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
         }
+        if (decision.transition === 'suspended') transition = { kind: 'paused', channelId }
+        if (decision.transition === 'resumed') transition = { kind: 'resumed', channelId }
+        delivery.push = result.ok
+          ? {
+              state: 'sent-accepted',
+              at,
+              ...(result.messageId === undefined ? {} : { messageId: result.messageId })
+            }
+          : { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
       }
     }
     return { record: { ...record, delivery }, pushBackoff: nextBackoff, ...(transition === undefined ? {} : { transition }) }
