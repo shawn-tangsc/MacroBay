@@ -36,6 +36,14 @@ const SIZE_PX: Record<IconButtonSize, number> = { sm: 22, md: 24 }
 /** 图形按档位缩放：行内档 14、工具栏档 16。 */
 const GLYPH_PX: Record<IconButtonSize, number> = { sm: 14, md: 16 }
 
+/** 只放 `data-*` 键进 DOM：类型之外的兜底，cast 绕不过这一层。 */
+function dataOnly(
+  dataAttributes: Readonly<Record<`data-${string}`, string | number | boolean | undefined>> | undefined
+): Record<string, string | number | boolean | undefined> {
+  if (dataAttributes === undefined) return {}
+  return Object.fromEntries(Object.entries(dataAttributes).filter(([key]) => key.startsWith('data-')))
+}
+
 /** 填模板里的 `{name}`；**找不到的参数原样保留**，让缺参在界面上看得见。 */
 function fillPlaceholders(template: string, params?: Readonly<Record<string, string>>): string {
   if (params === undefined) return template
@@ -115,6 +123,10 @@ type IconButtonCommon = {
    *
    * 用独立 prop 而不是让 `<IconButton data-x>` 直传：后者要靠索引签名放宽类型，那会让任何
    * 未知属性都能混进来，包括 `width`。
+   *
+   * **键必须真的以 `data-` 开头**：类型能被 cast 绕开，而这是调用方唯一能在 DOM 上留痕的口子，
+   * 口子小才好查。不在这个前缀下的键**丢弃**，不往 DOM 上写——宁可少一个钩子，也不要一个
+   * 伪装成属性的尺寸，那会让 22/24 的闭集从内部被绕过。
    */
   dataAttributes?: Readonly<Record<`data-${string}`, string | number | boolean | undefined>>
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
@@ -174,7 +186,7 @@ export function IconButton({
       ]
         .filter(Boolean)
         .join(' ')}
-      {...dataAttributes}
+      {...dataOnly(dataAttributes)}
       // loading 仍要不可点，但**不能只靠 `:disabled` 表达**：两者语义不同，绑在一起以后就没法只给
       // loading 换色（禁用低对比度可豁免，loading 不行——读者得看出「哪个按钮在忙」）。
       disabled={disabled === true || loading === true}
