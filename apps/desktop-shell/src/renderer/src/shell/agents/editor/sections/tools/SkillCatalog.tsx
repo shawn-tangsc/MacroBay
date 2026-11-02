@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Switch, Tag } from 'antd'
+import { Button, Switch } from 'antd'
 import { Archive, Eye, FolderPlus, RefreshCw, Sparkles, Store, Trash2 } from 'lucide-react'
 
 import { buildAgentSkillCatalog } from '@platform/ai/agent-platform/skills/agentSkillViewModel'
@@ -9,12 +9,8 @@ import type { AgentText } from '../../../agentText'
 import SkillDetailModal from '../../SkillDetailModal'
 import SkillMarketplaceModal from '../../SkillMarketplaceModal'
 import { buildAgentSkillRuntimeViewModel } from '../../agentSkillRuntimeViewModel'
-import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
-
-/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
-const noopText = (): string => ''
 
 type SkillCatalogProps = {
   text: AgentText
@@ -157,7 +153,7 @@ function SkillCatalogRow({
         <strong>{skill.name}</strong>
         <small>{runtimeView.primarySummary ?? skill.description ?? skill.folderName}</small>
         <span className="agent-marketplace-meta">
-          <MetaChip kind="text" text={skill.source} resolveText={noopText} />
+          <span className="meta-chip">{skill.source}</span>
           {runtimeView.toolCount > 0 ? <span>{text.editor.tools.skillRuntimeToolCount(runtimeView.toolCount)}</span> : null}
           {runtimeView.capabilityCount > 0 ? (
             <span>{text.editor.tools.skillRuntimeCapabilityCount(runtimeView.capabilityCount)}</span>

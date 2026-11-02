@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Button, Input, Tag } from 'antd'
+import { Button, Input } from 'antd'
 import { Check, Download, ExternalLink, Search, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillSearchResult } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import { Modal } from '@platform/ui/components/modal'
-import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -17,9 +16,6 @@ const MARKETPLACE_TITLE_KEY = 'editor.tools.marketplaceTitle'
 
 /** 来源注册表名是分类名词。 */
 const REGISTRY_KEY = 'agent.skills.registry'
-
-/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
-const noopText = (): string => ''
 
 type SkillMarketplaceModalProps = {
   open: boolean
@@ -124,7 +120,7 @@ export default function SkillMarketplaceModal({
                   <strong>{row.name}</strong>
                   <small>{row.description ?? text.common.noDescription}</small>
                   <span className="agent-marketplace-meta">
-                    <MetaChip kind="text" text={row.sourceRegistry} resolveText={noopText} />
+                    <span className="meta-chip">{row.sourceRegistry}</span>
                     <span>{row.statsText}</span>
                     {row.author ? <span>{row.author}</span> : null}
                   </span>

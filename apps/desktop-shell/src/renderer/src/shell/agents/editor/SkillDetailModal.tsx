@@ -4,7 +4,6 @@ import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import type { AgentSkillRuntimeCatalogEntry } from '@platform/ai/agent-platform/skills/skillRuntimeSchemas'
 import { LoadingState } from '@platform/ui/components/loading'
-import { MetaChip } from '@platform/ui/components/meta-chip'
 import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
@@ -25,9 +24,6 @@ const SKILL_SOURCE_KEY = 'agent.skills.source'
 const SKILL_TOOL_ID_KEY = 'agent.skills.toolId'
 const SKILL_ENTRY_KEY = 'agent.skills.entry'
 const SKILL_LANGUAGE_KEY = 'agent.skills.language'
-
-/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
-const noopText = (): string => ''
 
 type SkillDetailModalProps = {
   open: boolean
@@ -130,7 +126,7 @@ export default function SkillDetailModal({
               <strong>{skill.name}</strong>
               <small>{skill.description ?? text.common.noDescription}</small>
               <span className="agent-marketplace-meta">
-                <MetaChip kind="text" text={skill.source} resolveText={noopText} />
+                <span className="meta-chip">{skill.source}</span>
                 {skill.author ? <span>{skill.author}</span> : null}
                 {skill.sourceTags.slice(0, 4).map((tag) => (
                   <span key={tag}>{tag}</span>
@@ -151,7 +147,7 @@ export default function SkillDetailModal({
                   {runtimeView.runtimeTools.map((tool) => (
                     <div key={tool.toolId} className="agent-skill-runtime-row">
                       <strong>{tool.toolName}</strong>
-                      <MetaChip kind="text" text={tool.toolId} resolveText={noopText} />
+                      <span className="meta-chip">{tool.toolId}</span>
                     </div>
                   ))}
                 </div>
@@ -168,7 +164,7 @@ export default function SkillDetailModal({
                     <div key={capability.capabilityId} className="agent-skill-capability-card">
                       <div className="agent-skill-runtime-row">
                         <strong>{capability.title}</strong>
-                        <MetaChip kind="text" text={capability.entryFile ?? capability.kind} resolveText={noopText} />
+                        <span className="meta-chip">{capability.entryFile ?? capability.kind}</span>
                       </div>
                       {capability.summary ? <p>{capability.summary}</p> : null}
                       {capability.bodyPreview ? (
@@ -215,7 +211,7 @@ export default function SkillDetailModal({
               <div className="agent-skill-preview-title">
                 <strong>{selectedFile ?? text.editor.tools.selectSkillFile}</strong>
                 {selectedFile ? (
-                  <MetaChip kind="text" text={guessSkillFileLanguage(selectedFile)} resolveText={noopText} />
+                  <span className="meta-chip">{guessSkillFileLanguage(selectedFile)}</span>
                 ) : null}
               </div>
               {loadingContent ? (

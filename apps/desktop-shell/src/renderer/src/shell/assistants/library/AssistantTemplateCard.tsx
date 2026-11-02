@@ -1,6 +1,5 @@
 import { Button } from 'antd'
 import type { AssistantTemplateCatalogItem } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
-import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StatusPill } from '@platform/ui/components/status-pill'
 import type { PlatformText } from '../../../i18n/platformText'
 
@@ -9,9 +8,6 @@ const UPDATE_AVAILABLE_KEY = 'assistants.library.updateAvailable'
 /** 分类词：模板来源与自带标签。 */
 const TEMPLATE_SOURCE_KEY = 'assistants.template.source'
 const TEMPLATE_TAG_KEY = 'assistants.template.tag'
-
-/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
-const noopText = (): string => ''
 
 type AssistantTemplateCardProps = {
   labels: PlatformText['assistants']['library']
@@ -44,7 +40,7 @@ export function AssistantTemplateCard({
           <small>{item.description || item.promptPreview}</small>
         </span>
         <span className="assistant-template-card-tags">
-          <MetaChip kind="text" text={source} resolveText={noopText} />
+          <span className="meta-chip">{source}</span>
           {item.hasUpdate ? (
             <StatusPill
               tone="info"
@@ -53,7 +49,7 @@ export function AssistantTemplateCard({
             />
           ) : null}
           {item.tags.slice(0, 2).map((tag) => (
-            <MetaChip key={tag} kind="text" text={tag} resolveText={noopText} />
+            <span key={tag} className="meta-chip">{tag}</span>
           ))}
         </span>
       </button>

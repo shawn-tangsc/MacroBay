@@ -1,7 +1,6 @@
 import { Button } from 'antd'
 import type { AssistantTemplateDetail } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
 import { Modal } from '@platform/ui/components/modal'
-import { MetaChip } from '@platform/ui/components/meta-chip'
 import type { PlatformText } from '../../../i18n/platformText'
 
 const TEMPLATE_DETAIL_TITLE_KEY = 'assistants.library.title'
@@ -9,9 +8,6 @@ const TEMPLATE_DETAIL_TITLE_KEY = 'assistants.library.title'
 /** 分类词：来源与模板自带的标签。句子是数据本身，键只回答「这是哪一类」。 */
 const TEMPLATE_SOURCE_KEY = 'assistants.template.source'
 const TEMPLATE_TAG_KEY = 'assistants.template.tag'
-
-/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
-const noopText = (): string => ''
 
 type AssistantTemplateDetailDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -67,9 +63,9 @@ export function AssistantTemplateDetailDialog({
             <div>
               <p>{template.description || template.promptPreview}</p>
               <div className="assistant-template-detail-tags">
-                <MetaChip kind="text" text={source} resolveText={noopText} />
+                <span className="meta-chip">{source}</span>
                 {template.tags.map((tag) => (
-                  <MetaChip key={tag} kind="text" text={tag} resolveText={noopText} />
+                  <span key={tag} className="meta-chip">{tag}</span>
                 ))}
               </div>
             </div>

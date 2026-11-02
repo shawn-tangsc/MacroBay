@@ -9,7 +9,6 @@ import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
-import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -19,9 +18,6 @@ import {
   switchAccessibleName,
   UNBINDABLE_STATUSES
 } from './mcpRowStatus'
-
-/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
-const noopText = (): string => ''
 
 type McpCatalogProps = {
   text: AgentText
@@ -203,7 +199,7 @@ function McpRow({
         {tools.length > 0 ? (
           <span className="agent-mcp-tool-list">
             {tools.slice(0, 4).map((tool) => (
-              <MetaChip key={tool.id} kind="text" text={tool.name} resolveText={noopText} />
+              <span key={tool.id} className="meta-chip">{tool.name}</span>
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>
