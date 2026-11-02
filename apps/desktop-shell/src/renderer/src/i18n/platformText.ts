@@ -1026,6 +1026,35 @@ export type PlatformText = {
     system: string
     light: string
     dark: string
+    /**
+     * 设置页「版本」那一段。**键只放这里**，不开第二套命名（同一页面两套词，以后谁找文案都得猜）。
+     * 版本号、时刻都不进键：数字由数据填，时刻由 `formatShellInstant` 按读者时区格式化后传入。
+     */
+    version: {
+      title: string
+      current: string
+      latest: string
+      unknown: string
+      check: string
+      justChecked: string
+      autoCheck: string
+      autoHint: string
+      devBuild: string
+      autoOffLine: string
+      availableLine: (version: string) => string
+      openDownloadPage: string
+      openDownloadFailed: string
+      unavailableLine: string
+      lastCheckedAt: (time: string) => string
+      pill: {
+        upToDate: string
+        available: string
+        unavailable: string
+        checking: string
+        notChecked: string
+        autoOff: string
+      }
+    }
   }
   notifications: {
     channelsDescription: string
@@ -2147,7 +2176,32 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: '跟随系统',
       light: '浅色',
-      dark: '深色'
+      dark: '深色',
+      version: {
+        title: '版本',
+        current: '当前版本',
+        latest: '最新版本',
+        unknown: '未知',
+        check: '检查更新',
+        justChecked: '刚查过',
+        autoCheck: '启动时检查更新',
+        autoHint: '同一个 UTC 自然日最多查一次；应用不会自己下载或安装。',
+        devBuild: '开发版本，不检查更新',
+        autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
+        availableLine: (version) => `有新版本 ${version} 可以下载。`,
+        openDownloadPage: '打开下载页',
+        openDownloadFailed: '没能打开浏览器，再点一次试试。',
+        unavailableLine: '暂时查不到最新版本。',
+        lastCheckedAt: (time) => `上次检查：${time}`,
+        pill: {
+          upToDate: '已是最新',
+          available: '有新版本',
+          unavailable: '暂时查不到',
+          checking: '正在检查',
+          notChecked: '还没检查',
+          autoOff: '未开启自动检查'
+        }
+      }
     },
     notifications: {
       channelsHeading: '投递渠道',
@@ -3278,7 +3332,32 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       english: 'English',
       system: 'System',
       light: 'Light',
-      dark: 'Dark'
+      dark: 'Dark',
+      version: {
+        title: 'Version',
+        current: 'Current version',
+        latest: 'Latest version',
+        unknown: 'Unknown',
+        check: 'Check for updates',
+        justChecked: 'Just checked',
+        autoCheck: 'Check for updates at startup',
+        autoHint: 'At most once per UTC day; the app never downloads or installs anything on its own.',
+        devBuild: 'Development build — update checks are disabled',
+        autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
+        availableLine: (version) => `Version ${version} is available to download.`,
+        openDownloadPage: 'Open download page',
+        openDownloadFailed: 'The browser could not be opened. Try again.',
+        unavailableLine: 'The latest version cannot be read right now.',
+        lastCheckedAt: (time) => `Last checked: ${time}`,
+        pill: {
+          upToDate: 'Up to date',
+          available: 'Update available',
+          unavailable: 'Cannot tell',
+          checking: 'Checking',
+          notChecked: 'Not checked yet',
+          autoOff: 'Automatic checks are off'
+        }
+      }
     },
     notifications: {
       channelsHeading: 'Delivery Channels',
