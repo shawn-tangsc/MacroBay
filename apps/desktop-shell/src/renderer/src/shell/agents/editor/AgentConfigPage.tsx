@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Drawer } from 'antd'
+import { Button } from 'antd'
 import { Check, FileText, Settings, Shield, SlidersHorizontal, Trash2, Wrench, X } from 'lucide-react'
 
 import {
@@ -14,6 +14,7 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 import type { AgentSkillBinding } from '@platform/ai/agent-platform/store/agentStore'
 import { setAgentSkillEnabled } from '@platform/ai/agent-platform/store/agentRelationsStore'
 import { buildAgentToolCatalog } from '@platform/ai/agent-platform/tools/agentToolCatalog'
+import { Drawer } from '@platform/ui/components/drawer'
 import { normalizePermissionMode } from '@platform/ai/agent-platform/schemas/agentSchemas'
 import type { AgentRuntimeCompatibilityResult } from '@platform/ai/agent-platform/runtime/compatibility/agentRuntimeCompatibilityTypes'
 import type { SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
@@ -47,6 +48,9 @@ const sectionIcons: Record<AgentConfigSection, typeof Settings> = {
   tools: Wrench,
   advanced: SlidersHorizontal
 }
+
+/** 标题句子是动态的（智能体名 / 新建 / 配置中），键只回答「这是哪一句」。 */
+const AGENT_CONFIG_TITLE_KEY = 'agent.configDrawer.title'
 
 export default function AgentConfigPage({
   mode,
@@ -149,13 +153,15 @@ export default function AgentConfigPage({
 
   return (
     <Drawer
+      mode="modal"
+      size="wide"
       open
-      width={860}
-      title={title}
-      placement="right"
+      titleKey={AGENT_CONFIG_TITLE_KEY}
+      resolveText={(key) => (key === AGENT_CONFIG_TITLE_KEY ? title : '')}
       onClose={onClose}
       className="agent-config-drawer"
-      extra={
+      contentPadding="flush"
+      titleExtra={
         <div className="agent-config-actions">
           {editingAgent ? (
             <Button
