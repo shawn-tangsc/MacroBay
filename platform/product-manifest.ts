@@ -1,5 +1,6 @@
 import type { WorkspacePanelRegistration } from './workspace/contracts'
 import type { NotificationEventDeclaration } from './notifications/contracts/notificationEventCatalog'
+import type { NotificationCopyTableSet } from './notifications/contracts/notificationCopyPort'
 
 export interface LocalizedText {
   'zh-CN': string
@@ -199,6 +200,13 @@ export interface ProductManifest {
    * 形状错误在生成期报（`validate.ts`），不等到读者勾了订阅才发现永远不响。
    */
   notificationEvents?: readonly NotificationEventDeclaration[]
+  /**
+   * 该产品**声明**的通知文案表（契约 §3.3）：`{ 'zh-CN': {...}, 'en-US': {...} }`。
+   *
+   * 平台不 import 产品文案文件，装配从注入的 manifest 列表里收这张表；没声明的产品，
+   * 它的事件文案解析不到，走平台兜底句并记一次 `copy-unresolved` 诊断。
+   */
+  notificationCopy?: NotificationCopyTableSet
   /**
    * 该产品**声明**的 producerId（契约 §14.1）：产品自己发的事件所用的稳定任务/来源标识。
    * 声明之后平台不再为同一个 producerId 兜底发；没声明的默认平台发，并记一次

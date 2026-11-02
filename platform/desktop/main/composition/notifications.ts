@@ -1,8 +1,8 @@
 import type { AppLanguage, AppSettings } from '@platform/settings/schema/appSettings'
 import type { ProductManifest } from '@platform/product-manifest'
 import { notificationCopy } from '@platform/i18n/notificationCopy'
-import { marketIntelligenceNotificationCopy } from '@products/market-intelligence/desktop/shared/i18n/text/notifications'
 import { createNotificationCopyPort } from '@platform/notifications/contracts/notificationCopyPort'
+import { productNotificationCopyTables } from './notificationCopyTables'
 import { createNotificationEventCatalog } from '@platform/notifications/contracts/notificationEventCatalog'
 import { NOTIFICATION_EVENT_POLICY } from '@platform/notifications/contracts/notificationEventPolicy'
 import { PLATFORM_NOTIFICATION_EVENTS } from '@platform/notifications/contracts/platformNotificationEvents'
@@ -63,10 +63,10 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
       return language === 'en-US' ? 'en-US' : 'zh-CN'
     },
     catalog,
-    // 装配层注入产品文案表：运行时/契约不 import 产品，平台根才知道产品文案在哪（契约 §3.3）。
+    // 装配层注入产品文案表：运行时/契约不 import 产品，平台根只按 manifest 声明的表收（契约 §3.3）。
     copy: createNotificationCopyPort({
       platform: notificationCopy,
-      products: { 'market-intelligence': marketIntelligenceNotificationCopy }
+      products: productNotificationCopyTables(ports.manifests)
     }),
     ...(ports.updateSettings === undefined ? {} : { updateSettings: ports.updateSettings }),
     ...(ports.diagnostics === undefined ? {} : { diagnostics: ports.diagnostics }),
