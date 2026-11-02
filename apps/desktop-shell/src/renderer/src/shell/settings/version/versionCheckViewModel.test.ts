@@ -94,9 +94,18 @@ describe('the version row', () => {
       showAutoToggle: true,
       showDownloadButton: true,
       notice: 'available',
-      // 「未开启自动检查」不冒充状态，只放描述位。
-      showAutoOffHint: true
+      // 描述位只放一句：结论句优先于「开关关着」，不再叠第二句。
+      showAutoOffHint: false
     })
+  })
+
+  it('puts only one sentence in the description slot, whichever conclusion it is', () => {
+    // 规则（需求 §3）：描述位只放一句，优先级 查不到的解释 > 开关关着 > 空。
+    // 两句叠在一起会把「有新版本」那一档做成七态里最高的一档。
+    expect(describeVersionCheck({ ...base, state: available, autoCheckEnabled: false }).showAutoOffHint).toBe(false)
+    expect(describeVersionCheck({ ...base, state: unavailable, autoCheckEnabled: false }).showAutoOffHint).toBe(false)
+    // 「已是最新」没有自己的解释句，这时才轮到「开关关着」。
+    expect(describeVersionCheck({ ...base, state: upToDate, autoCheckEnabled: false }).showAutoOffHint).toBe(true)
   })
 
   it('still says "automatic checks are off" when nothing has been checked yet', () => {

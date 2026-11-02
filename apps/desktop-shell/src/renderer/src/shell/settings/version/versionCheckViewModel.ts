@@ -138,7 +138,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         // 打开失败时版本结论不动（仍是「有新版本」），只在下面补一句。
         notice: 'available',
         showOpenFailed: openFailed,
-        showAutoOffHint: !autoCheckEnabled
+        // 描述位只放一句：这句的解释权高于「开关关着」，两句叠起来就把整段做回最高的一档。
+        showAutoOffHint: false
       }
     case 'up-to-date':
       return {
@@ -162,7 +163,7 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         showDownloadButton: false,
         notice: 'unavailable',
         showOpenFailed: openFailed,
-        showAutoOffHint: !autoCheckEnabled
+        showAutoOffHint: false
       }
     default:
       return {

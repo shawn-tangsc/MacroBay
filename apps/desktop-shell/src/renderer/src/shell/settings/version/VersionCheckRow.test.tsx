@@ -204,13 +204,34 @@ describe('the version row in the settings page', () => {
     expect(download).not.toBeNull()
     expect(download?.className).toContain('ant-primary-button')
     expect(buttonWithText(container, text.check)).not.toBeNull()
-    // 「未开启自动检查」放在描述位，不占药丸：药丸说的是结论。
-    expect(container.querySelector('.version-auto-off-hint')?.textContent).toBe(text.autoOffLine)
+    // 描述位只放一句：结论句在，「未开启自动检查」不再叠第二句（叠起来就是最高的一档）。
+    expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
+    expect(container.querySelector('.version-notice')?.textContent).toBe(text.availableLine('0.4.0'))
+    expect(container.querySelector('.version-auto-off-hint')).toBeNull()
 
     await act(async () => {
       download?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(calls.openDownloadPage).toBe(1)
+  })
+
+  it('uses the description slot for "automatic checks are off" only when the conclusion has no sentence', async () => {
+    // 「已是最新」没有自己的解释句，这时才轮到开关那句——描述位永远只有一句。
+    const { client } = createClient({ state: { state: 'up-to-date', currentVersion: '0.3.1', latestVersion: '0.3.1', checkedAt: '2026-11-03T00:10:00.000Z' } })
+    const container = await mount({ client, enabled: false })
+
+    expect(container.textContent).toContain(text.pill.upToDate)
+    expect(container.querySelector('.version-auto-off-hint')?.textContent).toBe(text.autoOffLine)
+    expect(container.querySelectorAll('.version-notice')).toHaveLength(0)
+  })
+
+  it('keeps one sentence in the description slot when the check cannot tell and the switch is off', async () => {
+    const { client } = createClient({ state: unavailable })
+    const container = await mount({ client, enabled: false })
+
+    expect(container.textContent).toContain(text.pill.unavailable)
+    expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
+    expect(container.querySelector('.version-auto-off-hint')).toBeNull()
   })
 
   it('still says "automatic checks are off" before anything has been checked', async () => {
