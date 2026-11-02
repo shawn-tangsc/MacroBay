@@ -25,7 +25,6 @@ const BASELINE = new Set([
   'apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/ToolsSection.tsx',
   'apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/tools/McpCatalog.tsx',
   'apps/desktop-shell/src/renderer/src/shell/assistants/library/ImportAssistantDialog.tsx',
-  'apps/desktop-shell/src/renderer/src/shell/model-service/ModelServiceProviderPage.tsx',
   'apps/desktop-shell/src/renderer/src/shell/settings/assistants/AssistantLibrarySettingsPage.tsx',
   'apps/desktop-shell/src/renderer/src/shell/settings/storage-cache/StorageCacheSettingsPage.tsx'
 ])
