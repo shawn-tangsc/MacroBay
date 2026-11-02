@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
+import { APP_NAVIGATE_EVENT } from '@platform/workspace/navigation/navigationRequest'
 
 import { SettingsUpdateDot } from './SettingsUpdateDot'
 import type { UpdateCheckClient } from '../settings/version/updateCheckClient'
@@ -119,5 +120,54 @@ describe('the settings update dot', () => {
     await act(async () => root?.unmount())
     root = undefined
     expect(harness.listeners.size).toBe(0)
+  })
+
+  it('opens About from the dot hit area, while the rest of the button keeps the default landing', async () => {
+    const harness = clientFor(available)
+    const seen: unknown[] = []
+    const onNavigate = (event: Event): void => {
+      seen.push((event as CustomEvent).detail)
+    }
+    window.addEventListener(APP_NAVIGATE_EVENT, onNavigate)
+    let buttonClicks = 0
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(
+        createElement(
+          'button',
+          { type: 'button', 'aria-label': '设置', onClick: () => { buttonClicks += 1 } },
+          createElement(SettingsUpdateDot, { language: 'zh-CN', client: harness.client })
+        )
+      )
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const hit = container.querySelector('[data-update-dot-hit]')
+    expect(hit).not.toBeNull()
+    // 热区在圆点内部、圆点仍是装饰：不进 Tab、没有 role/名字（键盘用户走设置按钮）。
+    expect(hit?.parentElement?.hasAttribute('data-update-dot')).toBe(true)
+    expect(hit?.getAttribute('tabindex')).toBeNull()
+    expect(hit?.getAttribute('role')).toBeNull()
+    expect(container.querySelector('[data-update-dot]')?.getAttribute('aria-hidden')).toBe('true')
+
+    await act(async () => {
+      hit?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    // 一次点击到位：走壳层唯一导航入口，切到设置里的关于页；不触发按钮自己的默认落点。
+    expect(seen).toEqual([{ navKey: 'settings', settingsPanelKey: 'about' }])
+    expect(buttonClicks).toBe(0)
+
+    // 按钮其余区域仍是原来的行为（这里用点击按钮本身代表），不额外发导航事件。
+    await act(async () => {
+      container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(buttonClicks).toBe(1)
+    expect(seen).toHaveLength(1)
+
+    window.removeEventListener(APP_NAVIGATE_EVENT, onNavigate)
   })
 })
