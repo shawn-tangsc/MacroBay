@@ -242,6 +242,30 @@ describe('useTaskAutomationSettings', () => {
     expect(capture.current!.state.aggregateHealth.failed).toBe(0)
   })
 
+  /**
+   * 有数据之后刷新失败：已读到的任务不许消失。失败只加错误条，不换掉整张表——
+   * 「读取失败」和「一个任务都没有」是两件事，前者不该让读者以为任务被删了。
+   */
+  it('keeps the tasks it already read when a refresh fails', async () => {
+    api.getPolicy.mockResolvedValue({ preset: 'balanced', policy: policy() })
+    api.listTasks.mockResolvedValue({ tasks: [task('task-1', 'active')], total: 1 })
+    api.listAudits.mockResolvedValue({ audits: [], total: 0 })
+    api.getLogs.mockResolvedValue({ logs: [], total: 0 })
+    api.getAttempts.mockResolvedValue({ attempts: [], total: 0 })
+
+    const capture = await mountHook()
+    await vi.waitFor(() => expect(capture.current?.loading).toBe(false))
+    expect(capture.current!.tasks.map((item) => item.id)).toEqual(['task-1'])
+
+    api.listTasks.mockRejectedValueOnce(new Error('ipc-failed'))
+    await act(async () => {
+      await capture.current!.reload()
+    })
+
+    expect(capture.current?.error).toBe(true)
+    expect(capture.current!.tasks.map((item) => item.id)).toEqual(['task-1'])
+  })
+
   it('keeps the newest policy update when an older response arrives last', async () => {
     const balanced = deferred<{ preset: 'balanced'; policy: Record<string, number> }>()
     const conservative = deferred<{ preset: 'conservative'; policy: Record<string, number> }>()

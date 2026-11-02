@@ -83,8 +83,7 @@ export function useResourceJobSchedules(options: { language: AppLanguage; timeou
       const bridge = readResourceJobBridge()
       if (!bridge) {
         if (requestId.current !== currentRequest) return
-        setItems([])
-        setProductNames({})
+        // 读到过就不清空：刷新失败不该让读者以为任务被删了。失败由 error + 重试条表达。
         setError(true)
         setErrorReason('bridge-missing')
         return
@@ -107,8 +106,6 @@ export function useResourceJobSchedules(options: { language: AppLanguage; timeou
       ])
       if (requestId.current !== currentRequest) return
       if (settled.kind === 'timeout') {
-        setItems([])
-        setProductNames({})
         setError(true)
         setErrorReason('timeout')
         return
@@ -117,7 +114,6 @@ export function useResourceJobSchedules(options: { language: AppLanguage; timeou
       const [schedules, summaries] = settled.results
       if (schedules.status === 'fulfilled') setItems(schedules.value)
       else {
-        setItems([])
         setError(true)
         setErrorReason('read-failed')
       }
@@ -126,8 +122,6 @@ export function useResourceJobSchedules(options: { language: AppLanguage; timeou
         : {})
     } catch {
       if (requestId.current === currentRequest) {
-        setItems([])
-        setProductNames({})
         setError(true)
         setErrorReason('read-failed')
       }

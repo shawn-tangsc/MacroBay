@@ -36,6 +36,21 @@ export function TaskAutomationTasksSection(props: {
   const { state } = controller
   const pillText = pillTextResolver(labels)
 
+  /**
+   * 读失败只有一套渲染：没有数据时它就是整块内容，有数据时压在表格上方。
+   * 之前失败会顶掉整张表，读者看到「读取失败」就以为任务没了——数据其实还在。
+   */
+  const errorNotice = (
+    <div className="task-automation-block-body">
+      <StateView
+        state="error"
+        reasonCode="unreadable"
+        size="md"
+        action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+      />
+    </div>
+  )
+
   return (
     <section className="task-automation-block" aria-busy={controller.loading}>
       <header className="task-automation-block-header">
@@ -75,19 +90,14 @@ export function TaskAutomationTasksSection(props: {
       </header>
       {controller.loading ? (
         <BlockLoading label={labels.tasksLoading} />
-      ) : controller.error ? (
-        <div className="task-automation-block-body">
-          <StateView
-            state="error"
-            reasonCode="unreadable"
-            size="md"
-            action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
-          />
-        </div>
+      ) : controller.error && state.rows.length === 0 ? (
+        errorNotice
       ) : state.rows.length > 0 ? (
         // Rendering is decided by "are there rows to render", never by the empty-state verdict:
         // a wrong verdict must degrade to a wrong sentence, not to an invisible table.
-        <table className="task-automation-table">
+        <>
+          {controller.error ? errorNotice : null}
+          <table className="task-automation-table">
           <thead>
             <tr>
               <th>{labels.columns.name}</th>
@@ -171,7 +181,8 @@ export function TaskAutomationTasksSection(props: {
               )
             })}
           </tbody>
-        </table>
+          </table>
+        </>
       ) : state.emptyState === 'filter-empty' ? (
         // 有数据、被筛选挡住：状态与动作都归 `StateView`（`filtered-out` 必带「清除筛选」）。
         <StateView

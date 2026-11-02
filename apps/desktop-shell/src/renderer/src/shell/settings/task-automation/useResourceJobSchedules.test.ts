@@ -78,6 +78,29 @@ describe('useResourceJobSchedules', () => {
     expect(capture.current?.items.map((item) => item.id)).toEqual(['job-2'])
   })
 
+  /**
+   * 有数据之后刷新失败：数据不许消失。清空 items 会让读者以为任务被删了，
+   * 而真相只是这一次没读回来 —— 错误条压在旧数据上方，重试仍走同一个 reload。
+   */
+  it('keeps the rows it already read when a refresh fails', async () => {
+    platform.listSchedules.mockResolvedValueOnce([job({ id: 'job-1' })])
+    platform.getProductSummaries.mockResolvedValue([])
+    installPlatform()
+
+    const capture = await mountHook()
+    await vi.waitFor(() => expect(capture.current?.loading).toBe(false))
+    expect(capture.current?.items.map((item) => item.id)).toEqual(['job-1'])
+
+    platform.listSchedules.mockRejectedValueOnce(new Error('ipc-failed'))
+    await act(async () => {
+      await capture.current!.reload()
+    })
+
+    expect(capture.current?.error).toBe(true)
+    expect(capture.current?.errorReason).toBe('read-failed')
+    expect(capture.current?.items.map((item) => item.id)).toEqual(['job-1'])
+  })
+
   it('renders a visible, retryable error when the preload has no jobs bridge', async () => {
     platform.getProductSummaries.mockResolvedValue([])
     ;(window as unknown as { platform: unknown }).platform = {

@@ -65,6 +65,31 @@ export function TaskAutomationResourceJobsSection(props: {
     setPage(1)
   }
 
+  /**
+   * 读失败只有一套渲染：预加载缺接口走行内提示（重启接缝未落地），其余走 `unreadable` + 真重试。
+   * 有数据时它压在表格上方，无数据时它就是整块内容——同一个元素，两处引用。
+   */
+  const errorNotice = controller.error
+    ? controller.errorReason === 'bridge-missing'
+      ? (
+        <div className="task-automation-block-body">
+          <BlockError
+            label={labels.resourceBridgeMissing}
+            retryLabel={labels.retry}
+            onRetry={() => void controller.reload()}
+          />
+        </div>
+      )
+      : (
+        <StateView
+          state="error"
+          reasonCode="unreadable"
+          size="md"
+          action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void controller.reload() }}
+        />
+      )
+    : null
+
   return (
     <section className="task-automation-block" aria-busy={controller.loading}>
       <header className="task-automation-block-header">
@@ -81,7 +106,7 @@ export function TaskAutomationResourceJobsSection(props: {
       </header>
       {controller.loading ? (
         <BlockLoading label={labels.resourceLoading} />
-      ) : controller.error && controller.errorReason === 'bridge-missing' ? (
+      ) : controller.error && controller.items.length === 0 && controller.errorReason === 'bridge-missing' ? (
         // 预加载缺接口的唯一出路是重启应用，而 `error.needs-restart` 必带 `restart-app` 动作，
         // 平台还没这条接缝（架构师 2026-11-02：不许挂一个点了没反应的重启按钮）。
         // 所以这一支保留行内提示，等接缝落地再换；另外两支走下面的 `StateView`。
@@ -92,7 +117,7 @@ export function TaskAutomationResourceJobsSection(props: {
             onRetry={() => void controller.reload()}
           />
         </div>
-      ) : controller.error ? (
+      ) : controller.error && controller.items.length === 0 ? (
         // 读失败 / 超时：原因码 `unreadable`，动作是**真的**重试（同一个 `reload`），不需要导航接缝。
         <StateView
           state="error"
@@ -118,6 +143,7 @@ export function TaskAutomationResourceJobsSection(props: {
         </>
       ) : (
         <>
+          {errorNotice}
           <div className="task-automation-filters">
             <Input
               size="small"
