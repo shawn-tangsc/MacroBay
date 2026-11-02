@@ -1,0 +1,58 @@
+/*
+ * 页内标签的外观（规格 ③）：文字 12.5px、下划线距文字 8px、项间距 20px。
+ * 溢出横向滚动，不折叠成「更多」——折叠会让某一项变成两次点击。
+ */
+.tabs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tabs__list {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+
+.tabs__list::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs__tab {
+  flex: none;
+  margin-bottom: -1px;
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tabs__tab--selected {
+  border-bottom-color: var(--accent);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.tabs__tab:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.tabs__tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.tabs__panel {
+  min-height: 0;
+  padding-top: 12px;
+}

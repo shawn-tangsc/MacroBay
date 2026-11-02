@@ -1,0 +1,111 @@
+import { useId, useRef } from 'react'
+import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
+
+import type { ChoiceItem } from '../choice/choiceItem'
+
+import './tabs.css'
+
+/**
+ * 页内标签（规格：`docs-private/05-desktop/ui-audit/2026-11-02-tabs-segmented.html`；契约 §7）。
+ *
+ * 判据只有一条：**切换后换了一整块内容 → `Tabs`**；同一块内容换一个取值归 `Segmented`。
+ * 两者不合并、不用 `mode` 开关——交互、ARIA、键盘都不同，合并只能靠布尔，而布尔是被禁的。
+ *
+ * 写进结构、不靠评审：
+ * - `value` 是稳定标识，不是下标；下标会随排序漂移；
+ * - `aria-controls` / `aria-labelledby` 由组件用 `useId` 生成，**调用方不传 id**——两边各写一套必然对不上；
+ * - 键盘：←→ 即时切换（这道交互本来就是「切过去就看」），Home/End 到首尾；
+ * - 禁用项不进 Tab 序列、也不参与方向键；面板里的加载/空/出错由 `LoadingState` / `StateView` 承担，
+ *   标签条自己永远不显示转圈。
+ */
+
+export type TabsProps = {
+  items: readonly ChoiceItem[]
+  /** 当前选中项的 `value`。 */
+  value: string
+  onChange: (value: string) => void
+  /** tablist 可访问名（键），必填：读屏要靠它知道这是哪一组标签。 */
+  ariaLabelKey: string
+  resolveText: (key: string) => string
+  /** 选中项的面板。 */
+  panel?: ReactNode
+}
+
+export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel }: TabsProps): ReactElement {
+  const baseId = useId()
+  const listRef = useRef<HTMLDivElement>(null)
+  const tabId = (index: number): string => `${baseId}-tab-${index}`
+  const panelId = `${baseId}-panel`
+
+  const enabled = items.map((item, index) => ({ item, index })).filter(({ item }) => item.disabled !== true)
+  const selectedIndex = items.findIndex((item) => item.value === value)
+
+  function move(from: number, delta: 1 | -1): void {
+    if (enabled.length === 0) return
+    const position = enabled.findIndex(({ index }) => index === from)
+    const next = enabled[(position + delta + enabled.length) % enabled.length]
+    if (!next) return
+    onChange(next.item.value)
+    // 即时切换后把焦点带到新选中的标签上，读屏才会跟着念。
+    listRef.current?.querySelector<HTMLButtonElement>(`#${CSS.escape(tabId(next.index))}`)?.focus()
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLElement>, index: number): void {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      move(index, 1)
+      return
+    }
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      move(index, -1)
+      return
+    }
+    if (event.key === 'Home') {
+      event.preventDefault()
+      const first = enabled[0]
+      if (first) {
+        onChange(first.item.value)
+        listRef.current?.querySelector<HTMLButtonElement>(`#${CSS.escape(tabId(first.index))}`)?.focus()
+      }
+      return
+    }
+    if (event.key === 'End') {
+      event.preventDefault()
+      const last = enabled[enabled.length - 1]
+      if (last) {
+        onChange(last.item.value)
+        listRef.current?.querySelector<HTMLButtonElement>(`#${CSS.escape(tabId(last.index))}`)?.focus()
+      }
+    }
+  }
+
+  return (
+    <div className="tabs">
+      <div aria-label={resolveText(ariaLabelKey)} className="tabs__list" ref={listRef} role="tablist">
+        {items.map((item, index) => {
+          const selected = item.value === value
+          return (
+            <button
+              aria-controls={panelId}
+              aria-selected={selected}
+              className={['tabs__tab', selected ? 'tabs__tab--selected' : ''].filter(Boolean).join(' ')}
+              disabled={item.disabled === true}
+              id={tabId(index)}
+              key={item.value}
+              onClick={() => onChange(item.value)}
+              onKeyDown={(event) => onKeyDown(event, index)}
+              role="tab"
+              tabIndex={selected ? 0 : -1}
+              type="button">
+              {resolveText(item.labelKey)}
+            </button>
+          )
+        })}
+      </div>
+      <div aria-labelledby={selectedIndex >= 0 ? tabId(selectedIndex) : undefined} className="tabs__panel" id={panelId} role="tabpanel">
+        {panel}
+      </div>
+    </div>
+  )
+}
