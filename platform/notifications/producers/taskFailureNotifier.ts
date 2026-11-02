@@ -2,9 +2,9 @@ import type { JobRunTerminalHookInput } from '../../jobs/runtime/jobRuntime'
 import type { NotificationSubmitRequest } from '../contracts/notificationContracts'
 
 /**
- * 第一个真实通知来源：**任务最终失败**。
+ * P1：任务跑到终态仍失败时记一条（平台需求 v2.4 §1 P1、契约 v2.11 §3.2）。
  *
- * 三条边界，都来自今晚的裁定：
+ * 三条边界，都来自冻结文档：
  *
  * 1. **只有 `executed` 且 `failed` 才发**。`rejected`（排队被取消/超时/关机拒绝）不是任务出错，
  *    `recovered`（上个进程遗留的结清）属于历史——把这三类都当失败，用户会在重启后收到一条
@@ -13,6 +13,9 @@ import type { NotificationSubmitRequest } from '../contracts/notificationContrac
  *    `market:cn-holiday`），原样贴到界面不是人话；解析不出可读名字时**宁可不发**。
  * 3. **去重键 = 同一任务 + 同一天**（读者时区的「一天」，由调用方注入 `dayToken`）。
  *    同一个任务一天失败三次只该有一条通知，而三次的 `occurrenceCount` 会记成 3。
+ *    **中间重试不发**：重试是同一跑内的 attempt 循环，终态钩子只通报一次。
+ *
+ * 原始错误**不进通知**（需求 §4 不许出现内部代号、编号、原始错误码）：读者点开去看运行日志。
  *
  * 这个模块不认识 Electron，也不读设置：语言、任务名解析、时区日界都由装配点注入，
  * 所以它可以被直接测，且平台模块之间不必互相 import。
@@ -23,11 +26,7 @@ export type TaskFailureNotifierDeps = {
   resolveTaskName: (input: { definitionId: string; productId?: string }) => string | null
   /** 读者时区的一天（`YYYY-MM-DD`），用于「同任务 + 同一天」去重。 */
   dayToken: (instant: string) => string
-  /** 单条失败原因的截断长度；默认 160，避免把堆栈整段塞进通知。 */
-  maxReasonLength?: number
 }
-
-const DEFAULT_MAX_REASON_LENGTH = 160
 
 export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
   return function notifyTaskFailure(input: JobRunTerminalHookInput): Promise<void> {
@@ -38,7 +37,6 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
     if (taskName === null || taskName.trim() === '') return Promise.resolve()
 
     const completedAt = run.completedAt ?? run.startedAt ?? run.createdAt
-    const reason = truncate(run.lastError?.trim() || '', deps.maxReasonLength ?? DEFAULT_MAX_REASON_LENGTH)
     const deeplink = {
       scope: run.owner === 'product' ? ('product' as const) : ('platform' as const),
       ...(run.productId === undefined ? {} : { productId: run.productId }),
@@ -47,25 +45,24 @@ export function createTaskFailureNotifier(deps: TaskFailureNotifierDeps) {
       entityId: run.definitionId
     }
 
-    return deps.submit({
-      // 契约 §3.2：键来自声明，提交只带参数。标题/正文键在 P1 声明里，行为与旧路径一致。
-      eventTypeId: 'platform.job.failed-terminal',
-      producerId: run.owner === 'product' ? run.handlerId : run.definitionId,
-      dedupeVars: {
-        builder: 'template',
-        vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
-      },
-      titleParams: { taskName },
-      ...(reason === '' ? {} : { reasonParams: { reason } }),
-      actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
-      deeplink,
-      occurredAt: completedAt,
-      correlationId: run.id
-    }).then(() => undefined)
+    return deps
+      .submit({
+        // 契约 §3.2：键来自声明，提交只带参数。标题/正文键在 P1 声明里。
+        eventTypeId: 'platform.job.failed-terminal',
+        // 归属判定只读 producerId。**任务定义 id**：平台自有任务视为已登记（不触发
+        // `unclaimed-producer`），产品任务由产品在 manifest 里 claim 同一个 id。
+        // 不用 handlerId——它是一类任务共用的处理器，claim 不了、也不稳定。
+        producerId: run.definitionId,
+        dedupeVars: {
+          builder: 'template',
+          vars: { definitionId: run.definitionId, date: deps.dayToken(completedAt) }
+        },
+        titleParams: { taskName },
+        actions: [{ id: 'open-task', labelKey: 'notification.taskFailed.open', kind: 'open', deeplink }],
+        deeplink,
+        occurredAt: completedAt,
+        correlationId: run.id
+      })
+      .then(() => undefined)
   }
-}
-
-function truncate(value: string, limit: number): string {
-  if (value.length <= limit) return value
-  return `${value.slice(0, Math.max(0, limit - 1))}…`
 }

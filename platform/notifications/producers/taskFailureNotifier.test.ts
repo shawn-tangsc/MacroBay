@@ -79,13 +79,23 @@ describe('task failure notifier', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it('truncates a long failure reason instead of pasting a stack trace into the notification', async () => {
+  it('keeps the raw error out of the notification: no internal codes, no stack traces (requirement §4)', async () => {
     const { submit, notify } = notifier()
-    await notify({ run: run({ lastError: 'x'.repeat(500) }), cause: 'executed' })
+    await notify({ run: run({ lastError: `upstream returned 503 ${'x'.repeat(500)}` }), cause: 'executed' })
     const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
-    // 长错误不进记录：只有截断后的 reason 参数，正文键在声明里。
+    // 正文键在声明里、没有 {reason} 占位：原始错误只留在运行日志，不进记录也不进推送。
     expect(request.titleParams?.taskName).toBe('央行利率决议采集')
-    expect(String(request.reasonParams?.reason).length).toBeLessThanOrEqual(160)
+    expect(request.reasonParams).toBeUndefined()
+    expect(JSON.stringify(request)).not.toContain('503')
     expect(JSON.stringify(request)).not.toContain('x'.repeat(200))
+  })
+
+  it('uses the definition id as producerId for product-owned jobs too, not the shared handler id', async () => {
+    const { submit, notify } = notifier()
+    await notify({ run: run({ owner: 'product', productId: 'market-intelligence' }), cause: 'executed' })
+    const request = submit.mock.calls[0]?.[0] as NotificationSubmitRequest
+    // 归属判定只读 producerId；handlerId 是一类任务共用的处理器，claim 不了也不稳定。
+    expect(request.producerId).toBe('definition-1')
+    expect(request.producerId).not.toBe('handler-1')
   })
 })
