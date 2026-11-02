@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { JsonFileStorage } from '../../storage/jsonFileStorage'
 import { manualCooldownMs } from '../contracts/updateCheck'
 import type { StoredUpdateCheckState } from './updateCheckState'
+import { updateCheckTimeoutMs } from './updateCheckService'
 import {
   createUpdateCheckService,
   type UpdateCheckMode,
@@ -107,7 +108,7 @@ describe('the update check service', () => {
 
     const projection = await harness.service.checkNow('manual')
 
-    expect(projection).toMatchObject({ state: 'unavailable', lastSuccessAt: null })
+    expect(projection).toMatchObject({ state: 'unavailable', checkedAt: '2026-11-03T00:10:00.000Z' })
     expect(harness.state().lastResult).toMatchObject({ status: 'unavailable', reason: 'not-found' })
   })
 
@@ -119,11 +120,13 @@ describe('the update check service', () => {
 
     const projection = await harness.service.checkNow('manual')
 
+    // 界面显示的是「这一次尝试」的时刻；上次成功的时刻不进界面，只留在结论里。
     expect(projection).toEqual({
       state: 'unavailable',
       currentVersion: '0.3.1',
-      lastSuccessAt: '2026-11-02T09:00:00.000Z'
+      checkedAt: '2026-11-03T00:10:00.000Z'
     })
+    expect(harness.state().lastResult).toMatchObject({ lastSuccessAt: '2026-11-02T09:00:00.000Z' })
     expect(harness.state().lastResult).toMatchObject({ status: 'unavailable', reason: 'offline' })
   })
 
@@ -258,7 +261,7 @@ describe('the update check service', () => {
     // 查不到要说查不到：结论被换成 unavailable，但「上次成功那一刻」还在，那行不至于变成死行。
     expect(await harness.service.checkNow('manual')).toMatchObject({
       state: 'unavailable',
-      lastSuccessAt: '2026-11-03T00:10:00.000Z'
+      checkedAt: '2026-11-03T00:11:00.001Z'
     })
   })
 
@@ -270,6 +273,14 @@ describe('the update check service', () => {
     const finished = harness.logs().find((entry) => entry.event === 'update.check.finished')
     expect(finished?.level).toBe('info')
     expect(finished?.fields).toMatchObject({ status: 'unavailable', reason: 'not-found' })
+  })
+})
+
+describe('the request ceiling', () => {
+  it('waits long enough for a first request that is slow on purpose to succeed', () => {
+    // 本机实测：同一台机器上第一次请求 17 秒才通、第二次 200。自动检查一天只有一次机会，
+    // 10 秒会把「其实能查到」每天静默判成「查不到」——所以下限写死在这里。
+    expect(updateCheckTimeoutMs).toBeGreaterThanOrEqual(20_000)
   })
 })
 

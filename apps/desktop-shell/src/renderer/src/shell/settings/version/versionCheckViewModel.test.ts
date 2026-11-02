@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
 
-import { describeVersionCheck } from './versionCheckViewModel'
+import { describeVersionCheck, resolvePillLabel } from './versionCheckViewModel'
 
 const available: UpdateCheckProjection = {
   state: 'available',
@@ -19,13 +19,19 @@ const upToDate: UpdateCheckProjection = {
 const unavailable: UpdateCheckProjection = {
   state: 'unavailable',
   currentVersion: '0.3.1',
-  lastSuccessAt: null
+  checkedAt: '2026-11-03T00:10:00.000Z'
 }
 const idle: UpdateCheckProjection = { state: 'idle', currentVersion: '0.3.1' }
 
 const base = { autoCheckEnabled: true, checking: false, justChecked: false, openFailed: false }
 
 describe('the version row', () => {
+  it('never shows a raw key when a pill key is missing', () => {
+    // 缺键时回落一句通用文案；回落成键名（原来的 `?? key`）会让用户读到 `preferences.version.pill.xxx`。
+    expect(resolvePillLabel({}, 'preferences.version.pill.available', '未知')).toBe('未知')
+    expect(resolvePillLabel({ available: '有新版本' }, 'preferences.version.pill.available', '未知')).toBe('有新版本')
+  })
+
   it('shows the three settled conclusions with one pill and one next action each', () => {
     expect(describeVersionCheck({ ...base, state: available })).toMatchObject({
       pill: 'available',
@@ -76,16 +82,32 @@ describe('the version row', () => {
     })
   })
 
-  it('degrades to "automatic checks are off" but keeps the manual button', () => {
+  it('keeps the download entry when the switch is off but a newer version is known', () => {
+    // 这条是死路的回归：关掉自动检查 → 手动查到 v0.4.0，却没有任何入口可去，功能就废了一半。
+    // 原型的表里写着「开关已关 · 但已知有新版」：药丸仍是有新版本，右侧两个按钮都在。
     const view = describeVersionCheck({ ...base, state: available, autoCheckEnabled: false })
+    expect(view).toMatchObject({
+      pill: 'available',
+      pillTone: 'info',
+      latestVersion: '0.4.0',
+      showCheckButton: true,
+      showAutoToggle: true,
+      showDownloadButton: true,
+      notice: 'available',
+      // 「未开启自动检查」不冒充状态，只放描述位。
+      showAutoOffHint: true
+    })
+  })
+
+  it('still says "automatic checks are off" when nothing has been checked yet', () => {
+    const view = describeVersionCheck({ ...base, state: idle, autoCheckEnabled: false })
     expect(view).toMatchObject({
       pill: 'autoOff',
       pillTone: 'muted',
       showCheckButton: true,
       showAutoToggle: true,
       showDownloadButton: false,
-      notice: 'autoOff',
-      showOpenFailed: false
+      notice: 'autoOff'
     })
   })
 
@@ -123,7 +145,8 @@ describe('the version row', () => {
       showDownloadButton: false,
       checkLabel: 'check',
       notice: null,
-      showOpenFailed: false
+      showOpenFailed: false,
+      showAutoOffHint: false
     })
     // 两者必须一眼分得开：一个有药丸有按钮，一个什么都没有。
     expect(notChecked.pill).not.toBeNull()

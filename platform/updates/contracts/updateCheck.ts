@@ -216,7 +216,12 @@ export type UpdateCheckProjection =
   | { state: 'idle'; currentVersion: string }
   | { state: 'up-to-date'; currentVersion: string; latestVersion: string; checkedAt: string }
   | { state: 'available'; currentVersion: string; latestVersion: string; checkedAt: string }
-  | { state: 'unavailable'; currentVersion: string; lastSuccessAt: string | null }
+  /**
+   * 「暂时查不到」。带的是**这一次**尝试的时刻（`checkedAt`），不是上一次成功的时刻：
+   * 这一行要说的是「它到底试过没有」，读者问的也是这个。显示上次成功会让人以为刚才那次成功了。
+   * `lastSuccessAt` 仍留在结论里供排查，**不进界面**。
+   */
+  | { state: 'unavailable'; currentVersion: string; checkedAt: string }
 
 /**
  * 投影只有一个入口：拿「模式 + 当前版本 + 上次结论」判出一个读者能看到的状态。
@@ -232,7 +237,7 @@ export function projectUpdateCheckState(input: Readonly<{
   if (result === null) return { state: 'idle', currentVersion }
   switch (result.status) {
     case 'unavailable':
-      return { state: 'unavailable', currentVersion, lastSuccessAt: result.lastSuccessAt }
+      return { state: 'unavailable', currentVersion, checkedAt: result.checkedAt }
     case 'up-to-date':
       return { state: 'up-to-date', currentVersion, latestVersion: result.latestVersion, checkedAt: result.checkedAt }
     case 'available':

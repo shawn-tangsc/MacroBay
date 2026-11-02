@@ -19,8 +19,13 @@ import {
 
 /** 启动后先让首屏和网络高峰过去，再查一次（§4）。 */
 export const autoCheckDelayMs = 15_000
-/** 单次请求的上限；超时就按「暂时查不到」处理，不许把界面挂住。 */
-export const updateCheckTimeoutMs = 10_000
+/**
+ * 单次请求的上限；超时就按「暂时查不到」处理，不许把界面挂住。
+ *
+ * **30 秒，不是 10 秒**：本机实测发布元数据第一次请求 17 秒才通、第二次 200。自动检查一天只有一次
+ * 机会，10 秒会把「其实能查到」每天静默判成「查不到」，而且没人会知道。这条路径在后台，多等不打扰人。
+ */
+export const updateCheckTimeoutMs = 30_000
 
 export type UpdateCheckMode = 'packaged' | 'development'
 export type UpdateCheckTrigger = 'auto' | 'manual'

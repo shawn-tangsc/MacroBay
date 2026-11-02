@@ -9112,6 +9112,27 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   color: var(--muted-strong);
 }
 
+.version-dev-build {
+  /* 整行只剩这一句时不能再被 `preference-hint` 压成 11px/--muted：它是这个状态下唯一的信息。 */
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.version-checked-line {
+  /* 「上次检查：{时刻} · 这不代表没有新版本」合成一行：时间在前，数字等宽，不跳位。 */
+  color: var(--muted);
+}
+
+.version-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.version-download {
+  /* 下载入口独占一行：它排在说明句下面、开关上面，Tab 顺序才是「检查更新 → 打开下载页 → 开关」。 */
+  margin-top: 8px;
+}
+
 .version-open-failed {
   /* 失败句不着色、不加重：它是说明，不是第二个结论。 */
   color: var(--muted);

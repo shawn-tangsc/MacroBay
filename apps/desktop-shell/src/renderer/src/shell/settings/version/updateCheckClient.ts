@@ -33,7 +33,9 @@ type UpdateCheckBridge = {
 }
 
 function requireBridge(): UpdateCheckBridge {
-  const bridge = (window.platform as { updates?: UpdateCheckBridge }).updates
+  // `window.platform` 本身可能整个不在（应用没重启、或测试只桩了一半）：这里必须用可选链，
+  // 否则抛的是 TypeError「Cannot read properties of undefined」，比一句说清原因的话难排查得多。
+  const bridge = (window.platform as { updates?: UpdateCheckBridge } | undefined)?.updates
   if (!bridge) throw new Error('update check bridge is not available; the app may need a restart')
   return bridge
 }

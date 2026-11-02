@@ -21,7 +21,7 @@ const available: UpdateCheckProjection = {
 const unavailable: UpdateCheckProjection = {
   state: 'unavailable',
   currentVersion: '0.3.1',
-  lastSuccessAt: '2026-11-02T09:00:00.000Z'
+  checkedAt: '2026-11-03T00:10:00.000Z'
 }
 const development: UpdateCheckProjection = { state: 'development' }
 
@@ -141,7 +141,8 @@ describe('the version row in the settings page', () => {
     })
 
     const notice = container.querySelector('[role="status"]')
-    expect(notice?.textContent).toBe(text.openDownloadFailed)
+    // 断言**字面量**而不是常量：断言常量本身的话，文案被改坏测试照样绿（上一版就是这么漏的）。
+    expect(notice?.textContent).toBe('打不开浏览器，可以稍后再试，或到项目的 Releases 页下载。')
     // 结论一个字不动：仍是「有新版本 0.4.0」，没有被改写成查不到或已是最新。
     expect(container.textContent).toContain(text.pill.available)
     expect(container.textContent).toContain('0.4.0')
@@ -156,7 +157,14 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).toContain(text.pill.unavailable)
     expect(container.textContent).not.toContain(text.pill.upToDate)
     // 查不到时把「上次检查」一起写出来，让读者知道这行还活着。
-    expect(container.textContent).toContain(text.lastCheckedAt('').replace(/\s$/u, ''))
+    // 「暂时查不到」只有两层：药丸 + 一行「上次检查：{时刻} · 这不代表没有新版本」。
+    // 分开两行会做出七态里最高的一档（实测 414，比带下载按钮的那档还高）。
+    const checkedLine = container.querySelector('.version-checked-line')
+    expect(checkedLine?.textContent).toContain('上次检查：')
+    // 配的是「这一次尝试」的时刻，不是上一次成功的时刻。
+    expect(checkedLine?.textContent).toContain('2026-11-03')
+    expect(checkedLine?.textContent).toContain('这不代表没有新版本')
+    expect(container.querySelectorAll('.version-notice')).toHaveLength(1)
     expect(buttonWithText(container, text.openDownloadPage)).toBeNull()
   })
 
@@ -177,7 +185,8 @@ describe('the version row in the settings page', () => {
     const { client } = createClient({ state: development })
     const container = await mount({ client })
 
-    expect(container.textContent).toContain(text.devBuild)
+    // 整行只剩这一句：给它自己的类（12px / --muted-strong），不能复用被压到 11px 的 preference-hint。
+    expect(container.querySelector('.version-dev-build')?.textContent).toBe(text.devBuild)
     // 和「还没检查」必须一眼分得开：这里一个控件都没有。
     expect(container.querySelectorAll('button')).toHaveLength(0)
     expect(container.textContent).not.toContain(text.current)
@@ -185,14 +194,32 @@ describe('the version row in the settings page', () => {
     expect(container.textContent).not.toContain(text.autoCheck)
   })
 
-  it('degrades to "automatic checks are off" but keeps the manual button', async () => {
-    const { client } = createClient({ state: available })
+  it('keeps the download entry when the switch is off but a newer version is known', async () => {
+    // 死路回归：关掉自动检查后手动查到新版，却没有任何入口可去，这功能就废了一半。
+    const { client, calls } = createClient({ state: available })
+    const container = await mount({ client, enabled: false })
+
+    expect(container.textContent).toContain(text.pill.available)
+    const download = buttonWithText(container, text.openDownloadPage)
+    expect(download).not.toBeNull()
+    expect(download?.className).toContain('ant-primary-button')
+    expect(buttonWithText(container, text.check)).not.toBeNull()
+    // 「未开启自动检查」放在描述位，不占药丸：药丸说的是结论。
+    expect(container.querySelector('.version-auto-off-hint')?.textContent).toBe(text.autoOffLine)
+
+    await act(async () => {
+      download?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(calls.openDownloadPage).toBe(1)
+  })
+
+  it('still says "automatic checks are off" before anything has been checked', async () => {
+    const { client } = createClient({ state: { state: 'idle', currentVersion: '0.3.1' } })
     const container = await mount({ client, enabled: false })
 
     expect(container.textContent).toContain(text.pill.autoOff)
     expect(container.textContent).toContain(text.autoOffLine)
     expect(buttonWithText(container, text.check)).not.toBeNull()
-    // 关掉的只是自动查，这一行不摆下载按钮。
     expect(buttonWithText(container, text.openDownloadPage)).toBeNull()
   })
 
@@ -208,6 +235,32 @@ describe('the version row in the settings page', () => {
     })
 
     expect(onUpdateSettings).toHaveBeenCalledWith({ updates: { checkEnabled: false } })
+  })
+
+  it('walks the keyboard in the order the acceptance line says: check, download, switch', async () => {
+    const { client } = createClient({ state: available })
+    const container = await mount({ client })
+
+    const focusable = [...container.querySelectorAll('button')].map((button) => button.textContent ?? '')
+    // 下载入口独占一行、排在说明句下面，顺序才是「检查更新 → 打开下载页 → 开关」。
+    expect(focusable).toEqual([text.check, text.openDownloadPage, ''])
+    expect(container.querySelector('[role="switch"]')).not.toBeNull()
+  })
+
+  it('points the switch and the check button at the frequency hint for screen readers', async () => {
+    const { client } = createClient({ state: available })
+    const container = await mount({ client })
+
+    const hint = container.querySelector('#version-check-frequency-hint')
+    expect(hint?.textContent).toBe(text.autoHint)
+    expect(container.querySelector('[role="switch"]')?.getAttribute('aria-describedby')).toBe(
+      'version-check-frequency-hint'
+    )
+    expect(buttonWithText(container, text.check)?.getAttribute('aria-describedby')).toBe(
+      'version-check-frequency-hint'
+    )
+    // 下载入口不挂：它跟频率无关。
+    expect(buttonWithText(container, text.openDownloadPage)?.getAttribute('aria-describedby')).toBeNull()
   })
 
   it('stays quiet when the check cannot even be sent (development channel absent)', async () => {

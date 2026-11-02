@@ -31,6 +31,8 @@ export type VersionCheckView = {
   notice: VersionCheckNotice | null
   /** 「没能打开浏览器」那句话单独一行、**加在结论下面**，不替换它。 */
   showOpenFailed: boolean
+  /** 有结论但自动检查关着：把「未开启自动检查」放到**描述位**，不让它冒充状态。 */
+  showAutoOffHint: boolean
 }
 
 export type VersionCheckInput = Readonly<{
@@ -43,6 +45,16 @@ export type VersionCheckInput = Readonly<{
   /** 上一次「打开下载页」没成功；**只多出下面那一句话，不动版本结论**。 */
   openFailed: boolean
 }>
+
+/**
+ * 药丸文案：键取不到时回落一句通用文案。
+ *
+ * **不许回落成键名**（原来写的是 `?? key`）：一旦漏了一个键，用户会在设置页看到
+ * `preferences.version.pill.xxx`。缺键是文案缺陷，不该以「泄漏键名」的样子出现。
+ */
+export function resolvePillLabel(pills: Readonly<Record<string, string>>, key: string, fallback: string): string {
+  return pills[key.slice(key.lastIndexOf('.') + 1)] ?? fallback
+}
 
 const toneByPill: Record<VersionCheckPill, StatusPillTone> = {
   upToDate: 'ok',
@@ -69,7 +81,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
       showDownloadButton: false,
       checkLabel: 'check',
       notice: null,
-      showOpenFailed: false
+      showOpenFailed: false,
+      showAutoOffHint: false
     }
   }
 
@@ -91,21 +104,25 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
       latestVersion: state?.state === 'available' ? state.latestVersion : null,
       showDownloadButton: false,
       notice: null,
-      showOpenFailed: openFailed
+      showOpenFailed: openFailed,
+      showAutoOffHint: false
     }
   }
 
-  if (!autoCheckEnabled) {
+  // 开关关掉**不是一种结论**，它只是开关的位置（原型 11-03 那张表：「开关已关 · 但已知有新版」）。
+  // 所以只有「还没有任何结论」时，才退化成「未开启自动检查」那一态；已知有新版本时，
+  // 药丸、版本号、下载入口一个都不许少——拿走入口等于让用户关个开关就再也装不上。
+  if (!autoCheckEnabled && (state === null || state.state === 'idle')) {
     return {
       ...base,
       pill: 'autoOff',
       pillTone: toneByPill.autoOff,
-      currentVersion: state?.currentVersion ?? null,
-      latestVersion: state?.state === 'available' ? state.latestVersion : null,
-      // 开关关掉时只说明「自动检查已关闭」；结论不在这时候改口，也不摆一个下载按钮。
+      currentVersion: state === null ? null : state.currentVersion,
+      latestVersion: null,
       showDownloadButton: false,
       notice: 'autoOff',
-      showOpenFailed: openFailed
+      showOpenFailed: false,
+      showAutoOffHint: false
     }
   }
 
@@ -120,7 +137,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         showDownloadButton: true,
         // 打开失败时版本结论不动（仍是「有新版本」），只在下面补一句。
         notice: 'available',
-        showOpenFailed: openFailed
+        showOpenFailed: openFailed,
+        showAutoOffHint: !autoCheckEnabled
       }
     case 'up-to-date':
       return {
@@ -131,7 +149,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         latestVersion: state.latestVersion,
         showDownloadButton: false,
         notice: null,
-        showOpenFailed: openFailed
+        showOpenFailed: openFailed,
+        showAutoOffHint: !autoCheckEnabled
       }
     case 'unavailable':
       return {
@@ -142,7 +161,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         latestVersion: null,
         showDownloadButton: false,
         notice: 'unavailable',
-        showOpenFailed: openFailed
+        showOpenFailed: openFailed,
+        showAutoOffHint: !autoCheckEnabled
       }
     default:
       return {
@@ -153,7 +173,8 @@ export function describeVersionCheck(input: VersionCheckInput): VersionCheckView
         latestVersion: null,
         showDownloadButton: false,
         notice: null,
-        showOpenFailed: openFailed
+        showOpenFailed: openFailed,
+        showAutoOffHint: false
       }
   }
 }

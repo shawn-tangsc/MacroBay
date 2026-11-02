@@ -2198,8 +2198,11 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         autoOffLine: '自动检查已关闭。要现在查一次，点右边「检查更新」。',
         availableLine: (version) => `有新版本 ${version} 可以下载。`,
         openDownloadPage: '打开下载页',
-        openDownloadFailed: '没能打开浏览器，再点一次试试。',
-        unavailableLine: '暂时查不到最新版本。',
+        // 定稿句（需求 §3.1 / 原型 297 行）：不给地址，所以「到 Releases 页下载」是读者唯一能自救的一条路。
+        openDownloadFailed: '打不开浏览器，可以稍后再试，或到项目的 Releases 页下载。',
+        // 与「上次检查：{时刻}」合成一行（时间在前、`·` 连接）：药丸已经说了「暂时查不到」，
+        // 这句要补的是「这不代表没有新版本」——丢了它就是把「拿不到」说成「没有」。
+        unavailableLine: '这不代表没有新版本。',
         lastCheckedAt: (time) => `上次检查：${time}`,
         pill: {
           upToDate: '已是最新',
@@ -3361,8 +3364,8 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         autoOffLine: 'Automatic checks are off. To check once now, use "Check for updates" on the right.',
         availableLine: (version) => `Version ${version} is available to download.`,
         openDownloadPage: 'Open download page',
-        openDownloadFailed: 'The browser could not be opened. Try again.',
-        unavailableLine: 'The latest version cannot be read right now.',
+        openDownloadFailed: 'The browser could not be opened. Try again later, or download from the project releases page.',
+        unavailableLine: 'this does not mean there is no newer version.',
         lastCheckedAt: (time) => `Last checked: ${time}`,
         pill: {
           upToDate: 'Up to date',
