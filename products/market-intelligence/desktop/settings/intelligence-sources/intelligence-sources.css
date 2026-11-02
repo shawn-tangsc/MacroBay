@@ -1265,15 +1265,6 @@
   flex: none;
 }
 
-.source-provider-detail__reveal {
-  display: inline-flex;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
 .source-provider-detail__actions {
   display: flex;
   align-items: center;

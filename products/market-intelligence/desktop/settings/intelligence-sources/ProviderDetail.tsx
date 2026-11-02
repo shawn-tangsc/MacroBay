@@ -2,6 +2,7 @@ import { Alert, Button, Input, Switch } from 'antd'
 import { ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { IconButton } from '@platform/ui/components/icon-button'
 import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 
 import { intelligenceSourcesClient } from '../../shared/ipc/intelligenceSourcesClient'
@@ -244,13 +245,12 @@ export function ProviderDetail({ labels, provider, onChanged, onSelectSource, sh
               placeholder={labels.apiKey.emptyHint}
               type={revealed || credentialPristine ? 'text' : 'password'}
               value={revealed ? rawKey ?? '' : credentialDraft}
-              suffix={<Button
-                aria-label={labels.apiKey.label}
-                className="source-provider-detail__reveal"
-                icon={revealed ? <EyeOff size={13} /> : <Eye size={13} />}
-                onClick={() => void toggleReveal()}
-                size="small"
-                type="text"
+              suffix={<IconButton
+                ariaLabelKey={revealed ? 'settings.intelligenceSources.apiKey.hide' : 'settings.intelligenceSources.apiKey.reveal'}
+                icon={revealed ? EyeOff : Eye}
+                onSelect={() => void toggleReveal()}
+                resolveText={resolveText}
+                size="sm"
               />}
               onChange={(event) => { setCredentialPristine(false); setRevealed(false); setRevealFailed(false); setCredentialDraft(event.target.value) }}
             />
