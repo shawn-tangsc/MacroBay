@@ -8,6 +8,8 @@ import {
   type ReactElement
 } from 'react'
 
+import { fillLabelParams } from '../textKeyParams'
+
 /**
  * 多行说明浮层（界面设计 2026-11-02 定的五条能力）。
  *
@@ -40,17 +42,40 @@ type TriggerHandlers = {
   onBlur?: (event: ReactMouseEvent<HTMLElement>) => void
 }
 
-export type PopoverProps<K extends string = string> = {
-  /** 说明文案的 i18n 键；解析器带键联合时只收联合内的键。 */
-  labelKey: K
+/**
+ * 文案的两种形状：一句话（`labelKey`），或一段分行的说明（`lines`）。
+ *
+ * 写成联合而不是「两个都可选」：调用点必须给至少一个，少给是编译错误，
+ * 而不是渲染出一个空浮层——空框比没有框更糟，这一点和 `resolveText` 返回空串时整块不渲染是同一条。
+ */
+export type PopoverText<K extends string> =
+  | { labelKey: K; lines?: undefined }
+  | { labelKey?: undefined; lines: readonly K[] }
+
+export type PopoverProps<K extends string = string> = PopoverText<K> & {
+  /**
+   * 要填进模板的数字或名词，**只收已经格式化好的字符串**（`10–2`、`289/289`）。
+   * 与 `IconButton.ariaLabelParams` 同一套占位符（`{name}`），也共用同一份填充实现。
+   */
+  labelParams?: Readonly<Record<string, string>>
   /** 调用方的文案解析入口；未知键返回空串时整块浮层不渲染。 */
   resolveText: (key: K) => string
   /** 触发器：必须是可聚焦元素。 */
   children: ReactElement<TriggerHandlers>
 }
 
-export function Popover<K extends string = string>({ labelKey, resolveText, children }: PopoverProps<K>): ReactElement {
-  const text = resolveText(labelKey)
+export function Popover<K extends string = string>({
+  labelKey,
+  lines,
+  labelParams,
+  resolveText,
+  children
+}: PopoverProps<K>): ReactElement {
+  // 多行只来自**键数组**，不来自 `\n` 折行：换行属于排版巧合，翻译会被合并或吃掉，而首行强调只有数组能表达。
+  const sourceKeys: readonly K[] = lines ?? (labelKey === undefined ? [] : [labelKey])
+  const resolvedLines = sourceKeys
+    .map((key) => fillLabelParams(resolveText(key), labelParams))
+    .filter((line) => line.trim() !== '')
   const [pinned, setPinned] = useState(false)
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
@@ -59,7 +84,7 @@ export function Popover<K extends string = string>({ labelKey, resolveText, chil
   const open = pinned || hovered || focused
 
   // 没有句子就不存在浮层：空框比没有框更糟，键名更糟。
-  const resolved = text.trim() !== ''
+  const resolved = resolvedLines.length > 0
 
   const close = (): void => {
     setPinned(false)
@@ -130,7 +155,17 @@ export function Popover<K extends string = string>({ labelKey, resolveText, chil
           data-popover-content
           ref={content}
           style={{ maxWidth: MAX_WIDTH }}>
-          {text}
+          {resolvedLines.map((line, index) => (
+            <p
+              // 文案是纯数据、顺序固定，没有稳定 id 可用，按位置当键是这里唯一诚实的做法。
+              key={index}
+              className="platform-popover__line"
+              data-popover-line={index}
+              // 首行是这句说明的主题，其余是细节：它必须一眼看得出来，否则读者会把同级并列读成同一件事。
+              style={index === 0 ? { fontWeight: 600 } : undefined}>
+              {line}
+            </p>
+          ))}
         </div>
       }
       open={open}

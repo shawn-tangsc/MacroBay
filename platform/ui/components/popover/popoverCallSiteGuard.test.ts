@@ -109,6 +109,23 @@ describe('Popover call sites', () => {
     expect(offenders).toEqual([])
   })
 
+  it('never smuggles a multi-line sentence in through an escape sequence', () => {
+    // 多行只走 `lines`（一行一个键）：把五行拼成一句、塞 `\n` 再折行，是把排版当语义——
+    // 翻译会合并或吃掉换行，首行强调也无处可放。这条只扫我们这件组件的调用点。
+    const offenders: Array<{ file: string }> = []
+    for (const file of FILES) {
+      const text = readFileSync(file, 'utf8')
+      if (!text.includes(OUR_IMPORT)) continue
+      for (const match of text.matchAll(/<Popover\b/g)) {
+        const window = text.slice(match.index ?? 0, (match.index ?? 0) + 400)
+        const literal = /(?:labelKey|lines)\s*[:=]\s*\{?\s*(?:\[)?\s*['"`]([^'"`\n]*)['"`]/.exec(window)?.[1] ?? ''
+        if (literal.includes('\\n')) offenders.push({ file: relativeToRoot(file) })
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
   it('catches both shapes, so neither guard passes vacuously', () => {
     // 反向实测：antd 的写法必须被认出来，本组件的写法不能被误判。
     expect(importsAntdPopover("import { Button, Popover } from 'antd'")).toBe(true)
@@ -118,6 +135,9 @@ describe('Popover call sites', () => {
 
     // 键形状：中文或带空白的「句子」必须被拒，点分驼峰键必须放行。
     expect(looksLikeTextKey('pages.intelligence.sources.help')).toBe(true)
+    // `\n` 检查也要能真的报红，而不是一条永远通过的用例。
+    expect('pages.intelligence.help.first\\nsecond'.includes('\\n')).toBe(true)
+    expect('pages.intelligence.help.first'.includes('\\n')).toBe(false)
     expect(looksLikeTextKey('先检查来源，再重新采集')).toBe(false)
     expect(looksLikeTextKey('pages.intelligence.来源')).toBe(false)
   })

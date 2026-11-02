@@ -35,6 +35,28 @@ async function mount(resolveText: (value: string) => string = key): Promise<HTML
   return trigger
 }
 
+async function mountLines(lines: readonly string[], resolveText: (value: string) => string = key, params?: Record<string, string>) {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => {
+    root!.render(
+      <Popover lines={lines} labelParams={params} resolveText={resolveText}>
+        <button type="button" data-trigger>
+          trigger
+        </button>
+      </Popover>
+    )
+  })
+  const trigger = host.querySelector<HTMLButtonElement>('[data-trigger]')
+  if (!trigger) throw new Error('no trigger rendered')
+  await act(async () => {
+    trigger.focus()
+  })
+  await tick()
+  return trigger
+}
+
 async function tick(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -130,6 +152,37 @@ describe('Popover', () => {
     // 位置是组件的固定行为，不是调用点选项：下方、空间不足时由 antd 向上翻。
     expect(layer?.className).toContain('ant-popover-placement-bottom')
     expect(layer?.className).not.toContain('ant-popover-placement-top')
+  })
+
+  it('renders one key per line, with the first line carrying the emphasis', async () => {
+    await mountLines(['ui.test.line0', 'ui.test.line1', 'ui.test.line2'])
+    const rendered = [...document.querySelectorAll<HTMLElement>('[data-popover-line]')]
+    expect(rendered.map((node) => node.textContent)).toEqual(['ui.test.line0', 'ui.test.line1', 'ui.test.line2'])
+    // 首行是这句说明的主题，其余是细节：丢了这个区分，三行并列读起来就是同一件事。
+    expect(rendered[0]?.style.fontWeight).toBe('600')
+    expect(rendered[1]?.style.fontWeight).toBe('')
+  })
+
+  it('fills the template with already-formatted values and leaves no placeholder behind', async () => {
+    await mountLines(['ui.test.coverage'], (value) => (value === 'ui.test.coverage' ? 'Coverage {coverage} of {total}' : ''), {
+      coverage: '289/289',
+      total: '289'
+    })
+    const rendered = document.querySelector<HTMLElement>('[data-popover-line]')
+    expect(rendered?.textContent).toBe('Coverage 289/289 of 289')
+    // 没有残留占位：`{` 还在说明参数没填进去，读者会把模板当正文。
+    expect(rendered?.textContent).not.toContain('{')
+  })
+
+  it('keeps a missing placeholder visible instead of dropping the number silently', async () => {
+    await mountLines(['ui.test.coverage'], (value) => (value === 'ui.test.coverage' ? 'Coverage {coverage}' : ''), {})
+    expect(document.querySelector<HTMLElement>('[data-popover-line]')?.textContent).toBe('Coverage {coverage}')
+  })
+
+  it('renders nothing when every line resolves to an empty string', async () => {
+    const trigger = await mountLines(['ui.test.missing'], () => '')
+    expect(isOpen(trigger)).toBe(false)
+    expect(document.body.textContent).not.toContain('ui.test.missing')
   })
 
   it('renders nothing when the resolver misses, so no empty frame appears', async () => {

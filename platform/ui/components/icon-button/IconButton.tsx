@@ -1,4 +1,6 @@
 import { Button, Tooltip } from 'antd'
+import { fillLabelParams } from '../textKeyParams'
+
 import type { LucideIcon } from 'lucide-react'
 import type { CSSProperties, MouseEvent, ReactElement } from 'react'
 
@@ -54,14 +56,6 @@ function dataOnly(
     }
   }
   return dataAttributes
-}
-
-/** 填模板里的 `{name}`；**找不到的参数原样保留**，让缺参在界面上看得见。 */
-function fillPlaceholders(template: string, params?: Readonly<Record<string, string>>): string {
-  if (params === undefined) return template
-  return template.replace(/\{(\w+)\}/g, (whole, name: string) =>
-    Object.prototype.hasOwnProperty.call(params, name) ? params[name] : whole
-  )
 }
 
 /** 工具栏那一排需要一点底色才不被当成正文，规格里叫 `solid`。 */
@@ -187,7 +181,7 @@ export function IconButton({
   dataAttributes,
   resolveText
 }: IconButtonProps): ReactElement {
-  const ariaLabel = fillPlaceholders(resolveText(ariaLabelKey), ariaLabelParams)
+  const ariaLabel = fillLabelParams(resolveText(ariaLabelKey), ariaLabelParams)
   const pixels = SIZE_PX[size]
   const tooltipText = tooltipKey === undefined ? undefined : resolveText(tooltipKey)
 
