@@ -3,6 +3,8 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { expectWaitingFirst } from '@platform/ui/async/expectWaitingFirst'
+
 import { platformText } from '../../../i18n/platformText'
 import { ChannelSettingsPage } from './ChannelSettingsPage'
 
@@ -184,6 +186,19 @@ describe('detail pane read states', () => {
     credential: { status: 'missing', hasCredential: false }
   }
 
+  it('draws the loading state, never a settled one, before the detail read resolves', async () => {
+    // 台账口径（`MI-11-R164`）：首帧用例必须走 `expectWaitingFirst`，否则「各线自报」对不上。
+    installPlatform({
+      list: vi.fn(async () => [channel]),
+      listPolicies: vi.fn(() => new Promise(() => {})),
+      listConversations: vi.fn(() => new Promise(() => {})),
+      listCandidates: vi.fn(() => new Promise(() => {})),
+      runtimeStatus: vi.fn(() => new Promise(() => {}))
+    })
+
+    await expectWaitingFirst(createElement(ChannelSettingsPage, { language: 'zh-CN' }))
+  })
+
   it('draws only loading for the detail pane before its first read returns', async () => {
     installPlatform({
       list: vi.fn(async () => [channel]),
@@ -235,7 +250,7 @@ describe('detail pane read states', () => {
     expect(container.textContent).toContain(labels.channelCandidates)
   })
 
-  it('keeps the detail and marks it stale when a later refresh fails', async () => {
+  it('keeps the detail on screen when a refresh fails, and says it is stale', async () => {
     const channels = installPlatform({
       list: vi.fn(async () => [channel]),
       listPolicies: vi.fn(async () => []),
