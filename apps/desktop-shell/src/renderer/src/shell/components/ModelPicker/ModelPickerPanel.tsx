@@ -1,11 +1,12 @@
 import { Input } from 'antd'
 import { Filter, Search, X } from 'lucide-react'
 
+import { FilterChip } from '@platform/ui/components/filter-chip'
 import { resolveProviderVisual } from '@platform/ui/icons/modelProviderVisuals'
 
 import type { PlatformText } from '../../../i18n/platformText'
 import { ModelAvailabilityIcon } from '../../model-service/ModelAvailabilityIcon'
-import { modelProtocolLabel, type ModelProtocolTab } from '../../model-service/modelProtocolFilter'
+import { MODEL_PROTOCOL_TABS, type ModelProtocolTab } from '../../model-service/modelProtocolFilter'
 import { getProviderIconUrl } from '../../visualIconAssets'
 import {
   resolveModelPickerEmptyState,
@@ -23,6 +24,11 @@ const CATEGORY_LABEL_KEYS: Record<ModelPickerCategory, keyof PlatformText['model
   tools: 'pickerCategoryTools',
   deal: 'pickerCategoryDeal'
 }
+
+/** 协议名到文案键：从唯一那张协议表派生，不再手写第二份。 */
+const PROTOCOL_LABEL_KEYS = Object.fromEntries(
+  MODEL_PROTOCOL_TABS.map(({ key, labelKey }) => [key, labelKey])
+) as Record<ModelProtocolTab, keyof PlatformText['models']>
 
 type ModelPickerPanelProps = {
   labels: PlatformText['models']
@@ -72,6 +78,11 @@ export function ModelPickerPanel({
   onOpenModelService
 }: ModelPickerPanelProps): React.ReactElement {
   const hasActiveFilters = categories.length + protocols.length > 0
+  // 平台组件的文案字段只收键；这里把 `labels` 当成「键 → 句子」表，未知键返回空串。
+  const resolveChipText = (key: string): string => {
+    const value = (labels as unknown as Record<string, unknown>)[key]
+    return typeof value === 'string' ? value : ''
+  }
   // 空态原因由数据层按 constraints 推导（这里只渲染 title/hint，不写 if 堆）。
   const empty = resolveModelPickerEmptyState(built, visibleCount, labels)
 
@@ -136,34 +147,30 @@ export function ModelPickerPanel({
         style={{ display: filtersOpen ? 'flex' : 'none' }}>
         <div className="model-picker-chips" data-model-picker-categories>
           {built.categories.map((chip) => (
-            <button
+            <FilterChip
+              count={String(chip.count)}
+              dataAttributes={{ 'data-model-picker-category': chip.key }}
               key={chip.key}
-              type="button"
-              className="model-picker-chip"
-              data-model-picker-category={chip.key}
-              data-active={categories.includes(chip.key)}
-              aria-pressed={categories.includes(chip.key)}
-              onClick={() => onToggleCategory(chip.key)}>
-              {String(labels[CATEGORY_LABEL_KEYS[chip.key]])}
-              <small>{chip.count}</small>
-            </button>
+              labelKey={CATEGORY_LABEL_KEYS[chip.key]}
+              onPressedChange={() => onToggleCategory(chip.key)}
+              pressed={categories.includes(chip.key)}
+              resolveText={resolveChipText}
+            />
           ))}
         </div>
 
         {built.showProtocolFilter ? (
           <div className="model-picker-chips" data-model-picker-protocols>
             {built.protocols.map((chip) => (
-              <button
+              <FilterChip
+                count={String(chip.count)}
+                dataAttributes={{ 'data-model-picker-protocol': chip.key }}
                 key={chip.key}
-                type="button"
-                className="model-picker-chip"
-                data-model-picker-protocol={chip.key}
-                data-active={protocols.includes(chip.key)}
-                aria-pressed={protocols.includes(chip.key)}
-                onClick={() => onToggleProtocol(chip.key)}>
-                {modelProtocolLabel(labels, chip.key)}
-                <small>{chip.count}</small>
-              </button>
+                labelKey={PROTOCOL_LABEL_KEYS[chip.key]}
+                onPressedChange={() => onToggleProtocol(chip.key)}
+                pressed={protocols.includes(chip.key)}
+                resolveText={resolveChipText}
+              />
             ))}
           </div>
         ) : null}
