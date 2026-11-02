@@ -38,6 +38,8 @@ export function useWebSearchSettings(): WebSearchSettingsState {
       setSettings(nextSettings as WebSearchSettings)
       setProviders(nextProviders as SafeWebSearchProviderView[])
     } catch (error) {
+      // 原始异常只进日志、不上屏：屏幕上是平台的原因句，读者不该看到 ENOENT 这类内部串。
+      console.error('[web-search] failed to load settings', error)
       setError(error instanceof Error ? error.message : String(error))
     } finally {
       setLoading(false)

@@ -101,6 +101,47 @@ async function click(container: ParentNode, selector: string): Promise<void> {
 }
 
 describe('PLAT-60 settings page shell', () => {
+  it('shows a load failure as an error with a retry, and keeps the raw message off screen', async () => {
+    const raw = 'ENOENT: no such file or directory, open settings.json'
+    const getSettings = vi.fn()
+      .mockRejectedValueOnce(new Error(raw))
+      .mockResolvedValue(settings())
+    Object.assign(window, {
+      platform: {
+        webSearch: {
+          getSettings,
+          listProviders: async () => providers(),
+          updateSettings: async () => settings(),
+          updateProvider: async () => provider('tavily'),
+          checkProvider: async () => ({ valid: true }),
+          revealApiKey: async () => null
+        },
+        app: { openExternal: vi.fn() }
+      }
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    await act(async () => root?.render(createElement(ConfigProvider, { button: WINDOW_ANTD_BUTTON_CONFIG },
+      createElement(WebSearchSettingsPage, { language: 'zh-CN' }))))
+    await settle()
+
+    // 「没读出来」不是「这里没有内容」：必须是 error 态，不是空态。
+    const errorView = container.querySelector('[data-state="error"]')
+    expect(errorView).not.toBeNull()
+    // 原始异常只进日志，一个字都不上屏。
+    expect(container.textContent).not.toContain('ENOENT')
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
+
+    // 重试是真的重新拉一次，并且恢复后页面正常渲染。
+    await click(container, '[data-state="error"] .state-view__action')
+    expect(getSettings).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[data-state="error"]')).toBeNull()
+  })
+
   it('owns its own single-column workspace and hides the old rail', async () => {
     const css = readFileSync(resolve(process.cwd(), 'apps/desktop-shell/src/renderer/src/styles.css'), 'utf8')
     const rule = css.match(/\.settings-workspace\.web-search-settings\s*\{[^}]*\}/)?.[0] ?? ''
