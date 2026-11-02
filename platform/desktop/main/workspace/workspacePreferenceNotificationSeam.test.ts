@@ -286,7 +286,10 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
     expect(appSource).toMatch(/import \{[^}]*\bnativeTheme\b[^}]*\} from 'electron'/)
     // 恰两处显式通知：设置写入（settingsIpc 成功路径）+ OS 外观变化；没有第三条对账链。
     expect(settingsIpcSource.split('ports.notifyPreferencesChanged()').length - 1).toBe(1)
-    // app.ts 只剩接线（端口接线 + nativeTheme 回调两处引用）。
-    expect(appSource.split('notifyPreferencesChanged()').length - 1).toBe(2)
+    // 「设置写入 → 现取宿主」那层端口接线随装配搬进 `composition/settingsAndStorage.ts`，由该文件的
+    // 用例按运行时钉住（保存后恰通知一次、无宿主不抛），所以 `app.ts` 只剩 nativeTheme 回调一处。
+    // 两条合起来仍是「两处」；旧写法在 app.ts 里数 2，接线一搬走就红——它红的原因正是「搬对了」，
+    // 这正是「读源码文本的断言要跟着对象走」的例子。
+    expect(appSource.split('notifyPreferencesChanged()').length - 1).toBe(1)
   })
 })
