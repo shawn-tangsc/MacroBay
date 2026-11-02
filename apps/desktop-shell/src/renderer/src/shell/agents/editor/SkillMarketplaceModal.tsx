@@ -9,6 +9,7 @@ import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewT
 import { StatusPill } from '@platform/ui/components/status-pill'
 
 import type { useAgentText } from '../agentTextProvider'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { resolveAgentTextKey } from '../agentTooltipText'
 import { buildSkillMarketplaceRows } from './skillMarketplaceViewModel'
 
@@ -126,13 +127,13 @@ export default function SkillMarketplaceModal({
                   </span>
                 </span>
                 {row.sourceUrl ? (
-                  <Button
-                    className="ant-icon-button"
-                    size="small"
-                    icon={<ExternalLink size={13} />}
-                    title={text.editor.tools.openSkillSource}
-                    aria-label={text.editor.tools.openSkillSource}
-                    onClick={() => void window.platform.app.openExternal(row.sourceUrl!)}
+                  <IconButton
+                    ariaLabelKey="editor.tools.openSkillSource"
+                    icon={ExternalLink}
+                    onSelect={() => void window.platform.app.openExternal(row.sourceUrl!)}
+                    resolveText={(key) => resolveAgentTextKey(text, key)}
+                    size="md"
+                    tooltipKey="editor.tools.openSkillSource"
                   />
                 ) : null}
                 {row.isInstalled ? (

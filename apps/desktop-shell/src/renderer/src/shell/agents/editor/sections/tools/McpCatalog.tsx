@@ -8,6 +8,7 @@ import type { RuntimeCredentialAction } from '@platform/ai/agent-platform/mcp/ru
 import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { resolveAgentTextKey } from '../../../agentTooltipText'
 import type { AgentText } from '../../../agentText'
 import { StateView } from '@platform/ui/components/state'
@@ -235,13 +236,13 @@ function McpRow({
         </Button>
       ) : null}
       {checked && onRefresh ? (
-        <Button
-          className="ant-icon-button"
-          size="small"
-          icon={<RefreshCw size={13} />}
-          aria-label={text.editor.tools.refreshMcpTools}
-          title={text.editor.tools.refreshMcpTools}
-          onClick={onRefresh}
+        <IconButton
+          ariaLabelKey="editor.tools.refreshMcpTools"
+          icon={RefreshCw}
+          onSelect={onRefresh}
+          resolveText={(key) => resolveAgentTextKey(text, key)}
+          size="md"
+          tooltipKey="editor.tools.refreshMcpTools"
         />
       ) : null}
       <Switch

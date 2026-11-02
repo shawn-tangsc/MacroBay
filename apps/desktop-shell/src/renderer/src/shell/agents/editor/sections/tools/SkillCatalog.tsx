@@ -9,6 +9,8 @@ import type { AgentText } from '../../../agentText'
 import SkillDetailModal from '../../SkillDetailModal'
 import SkillMarketplaceModal from '../../SkillMarketplaceModal'
 import { buildAgentSkillRuntimeViewModel } from '../../agentSkillRuntimeViewModel'
+import { resolveAgentTextKey } from '../../../agentTooltipText'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
@@ -59,13 +61,13 @@ export function SkillCatalog({
         onClick={() => void onInstallFromDirectory()}>
         {text.editor.tools.installSkillFromDirectory}
       </Button>
-      <Button
-        className="ant-icon-button"
-        size="small"
-        icon={<RefreshCw size={13} />}
-        title={text.editor.tools.refreshSkills}
-        aria-label={text.editor.tools.refreshSkills}
-        onClick={() => void onRefresh()}
+      <IconButton
+        ariaLabelKey="editor.tools.refreshSkills"
+        icon={RefreshCw}
+        onSelect={() => void onRefresh()}
+        resolveText={(key) => resolveAgentTextKey(text, key)}
+        size="md"
+        tooltipKey="editor.tools.refreshSkills"
       />
     </div>
   )
@@ -165,22 +167,22 @@ function SkillCatalogRow({
         ) : null}
       </span>
       <Switch size="small" checked={skill.enabledForAgent} onChange={(checked) => void onToggle(skill.id, checked)} />
-      <Button
-        className="ant-icon-button"
-        size="small"
-        icon={<Eye size={13} />}
-        title={text.editor.tools.viewSkillDetail}
-        aria-label={text.editor.tools.viewSkillDetail}
-        onClick={onOpenDetail}
+      <IconButton
+        ariaLabelKey="editor.tools.viewSkillDetail"
+        icon={Eye}
+        onSelect={onOpenDetail}
+        resolveText={(key) => resolveAgentTextKey(text, key)}
+        size="md"
+        tooltipKey="editor.tools.viewSkillDetail"
       />
       {skill.source !== 'builtin' ? (
-        <Button
-          className="ant-icon-button"
-          size="small"
-          icon={<Trash2 size={13} />}
-          title={text.editor.tools.uninstallSkill}
-          aria-label={text.editor.tools.uninstallSkill}
-          onClick={() => void onUninstall(skill.id)}
+        <IconButton
+          ariaLabelKey="editor.tools.uninstallSkill"
+          icon={Trash2}
+          resolveText={(key) => resolveAgentTextKey(text, key)}
+          size="md"
+          tooltipKey="editor.tools.uninstallSkill"
+          onSelect={() => void onUninstall(skill.id)}
         />
       ) : null}
     </div>
