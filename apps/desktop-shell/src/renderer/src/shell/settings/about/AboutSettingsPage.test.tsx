@@ -112,6 +112,30 @@ describe('the about page', () => {
     expect(opened).toEqual(['changelog'])
   })
 
+  it('styles every link action as an outlined secondary button, not a blue text link', async () => {
+    const container = await mount({ state: 'idle', currentVersion: '0.3.1' })
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>('.about-link-row button')]
+    expect(buttons).toHaveLength(4)
+    for (const button of buttons) {
+      // 14b：这一页只允许一种交互色（主按钮的荧光绿）；antd 默认蓝链接会把页面变成第二个交互色。
+      expect(button.classList.contains('ant-secondary-button')).toBe(true)
+      expect(button.className).not.toContain('ant-btn-link')
+    }
+  })
+
+  it('styles the notes disclosure as the same secondary button', async () => {
+    const notes = Array.from({ length: 8 }, (_, index) => ({
+      kind: 'paragraph',
+      runs: [{ text: `第 ${index + 1} 条`, bold: false }]
+    }))
+    const state = { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' } as const
+    const container = await mount(state, clientFor(state, { notes }))
+    const toggle = container.querySelector<HTMLButtonElement>('.about-notes button')
+    expect(toggle?.textContent).toBe(text.notes.expand)
+    expect(toggle?.classList.contains('ant-secondary-button')).toBe(true)
+    expect(toggle?.className).not.toContain('ant-btn-link')
+  })
+
   it('says the browser did not open, using the sentence all five buttons share', async () => {
     const container = await mount(
       { state: 'idle', currentVersion: '0.3.1' },

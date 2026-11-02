@@ -108,7 +108,7 @@ export function AboutSettingsPage(props: {
           {/* 「有这行」和「有那块」是两件事：只有内容被截断才出这一行。 */}
           {notesTruncated ? <p className="preference-hint about-notes-truncated">{text.notes.truncated}</p> : null}
           {notes.length > 7 ? (
-            <Button type="link" size="small" onClick={() => setNotesExpanded((value) => !value)}>
+            <Button className="ant-secondary-button" size="small" autoInsertSpace={false} onClick={() => setNotesExpanded((value) => !value)}>
               {notesExpanded ? text.notes.collapse : text.notes.expand}
             </Button>
           ) : null}
@@ -121,7 +121,7 @@ export function AboutSettingsPage(props: {
           {linkRows.map((row) => (
             <li key={row.id} className="about-link-row">
               <span className="about-link-label">{row.label}</span>
-              <Button type="link" size="small" onClick={() => void openLink(row.id)}>
+              <Button className="ant-secondary-button" size="small" autoInsertSpace={false} onClick={() => void openLink(row.id)}>
                 {row.action}
               </Button>
             </li>
