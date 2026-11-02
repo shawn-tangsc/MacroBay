@@ -81,11 +81,7 @@ export function AgentPage({
     return model.includes(':') ? model : null
   }, [state.activeAgentId, state.agents])
 
-  const compatibilityByModelKey = useAgentModelCompatibilityMap(
-    providers,
-    gateway.snapshot,
-    activeAgentModelKey
-  )
+  const compatibility = useAgentModelCompatibilityMap(providers, gateway.snapshot, activeAgentModelKey)
 
   const activeAgentModelRef = useMemo(() => {
     if (!activeAgentModelKey) return null
@@ -214,7 +210,8 @@ export function AgentPage({
           pinnedModelIds={pinnedModelIds}
           chatSettings={chatSettings}
           gatewaySnapshot={gateway.snapshot}
-          compatibilityByModelKey={compatibilityByModelKey}
+          compatibilityByModelKey={compatibility.map}
+          compatibilityLoaded={compatibility.loaded}
           defaultAgentModelId={defaultAgentModelId}
           loadingModelService={loadingModelService}
           gatewayStatusCard={
@@ -296,7 +293,7 @@ export function AgentPage({
             state={state}
             providers={providers}
             defaultModelId={defaultAgentModelId}
-            compatibilityByModelKey={compatibilityByModelKey}
+            compatibilityByModelKey={compatibility.map}
             onStateChange={updateState}
             onClose={() => setEditorMode({ type: 'closed' })}
           />

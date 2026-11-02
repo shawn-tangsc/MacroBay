@@ -60,12 +60,24 @@ export function useAgentModelGatewaySnapshot(): {
   }
 }
 
+export type AgentModelCompatibilityMap = {
+  map: ReadonlyMap<string, AgentRuntimeCompatibilityResult>
+  /**
+   * 第一次读取有没有回来。**它不是「忙不忙」**，而是「屏幕上那些结论有没有证据」：
+   * 空 map 与「读完了、确实没有证据」在取值上一样，只有这个标志能分开。
+   */
+  loaded: boolean
+}
+
 export function useAgentModelCompatibilityMap(
   providers: readonly SafeModelProvider[],
   gatewaySnapshot: AgentModelGatewayUiSnapshot | null,
   selectedModelKey?: string | null
-): ReadonlyMap<string, AgentRuntimeCompatibilityResult> {
-  const [map, setMap] = useState<ReadonlyMap<string, AgentRuntimeCompatibilityResult>>(() => new Map())
+): AgentModelCompatibilityMap {
+  const [state, setState] = useState<AgentModelCompatibilityMap>(() => ({ map: new Map(), loaded: false }))
+  const map = state.map
+  const setMap = (next: ReadonlyMap<string, AgentRuntimeCompatibilityResult>): void =>
+    setState({ map: next, loaded: true })
 
   useEffect(() => {
     let cancelled = false
@@ -178,7 +190,7 @@ export function useAgentModelCompatibilityMap(
     selectedModelKey
   ])
 
-  return map
+  return state
 }
 
 /**

@@ -43,6 +43,8 @@ type AgentChatProps = {
   chatSettings: ChatSettings
   gatewaySnapshot?: AgentModelGatewayUiSnapshot | null
   compatibilityByModelKey?: ReadonlyMap<string, AgentRuntimeCompatibilityResult>
+  /** 兼容性结论读回来了没有：空 map 与「确实没有证据」取值相同，只有它能把两者分开。 */
+  compatibilityLoaded?: boolean
   /** 模型服务页「默认智能体模型」：会话没有显式模型时用于状态判断。 */
   defaultAgentModelId?: string
   loadingModelService?: boolean
@@ -66,6 +68,7 @@ export default function AgentChat({
   chatSettings: initialChatSettings,
   gatewaySnapshot = null,
   compatibilityByModelKey,
+  compatibilityLoaded = true,
   defaultAgentModelId,
   loadingModelService = false,
   gatewayStatusCard,
@@ -98,6 +101,8 @@ export default function AgentChat({
     activeAgent?.model && compatibilityByModelKey
       ? (compatibilityByModelKey.get(activeAgent.model) ?? null)
       : undefined
+  /** 判据不是「忙不忙」，是「有没有证据」：没有证据时不许给终态。 */
+  const compatibilityPending = compatibilityLoaded === false && activeAgent?.model != null
   const pageStatus = resolveAgentPageStatus({
     agents: state.agents,
     activeAgent,
@@ -140,7 +145,7 @@ export default function AgentChat({
     })
   }, [activeSession?.id])
 
-  if (loadingModelService) {
+  if (loadingModelService || compatibilityPending) {
     return (
       <main className={blockedPaneClass}>
         {navbar}
