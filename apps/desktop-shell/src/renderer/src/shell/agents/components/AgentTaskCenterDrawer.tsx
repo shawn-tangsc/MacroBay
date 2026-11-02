@@ -34,6 +34,7 @@ import {
   updateTaskViaApi
 } from '../agentTaskDataApi'
 import { selectSessionViaApi } from '../agentSessionDataApi'
+import AgentTaskCenterList from './AgentTaskCenterList'
 import AgentTaskDraftForm from './AgentTaskDraftForm'
 import AgentTaskRunSection from './AgentTaskRunSection'
 import { useAgentTaskDeliveryAttempts } from './useAgentTaskDeliveryAttempts'
@@ -283,41 +284,14 @@ export default function AgentTaskCenterDrawer({
         </div>
       }>
       <div className="agent-task-center">
-        <aside className="agent-task-list-pane">
-          <header>
-            <strong>{t.taskCenter.taskList}</strong>
-            <small>{t.taskCenter.taskCount(centerState.items.length)}</small>
-          </header>
-          {loading && centerState.items.length === 0 ? <LoadingState label={t.taskCenter.loading} minHeight={120} /> : null}
-          {!loading && centerState.items.length === 0 ? (
-            <StateView
-              state="empty"
-              reasonCode="never-created"
-              size="sm"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.create, onSelect: startCreate }}
-            />
-          ) : null}
-          <div className="agent-task-list">
-            {centerState.items.map((item) => (
-              <button
-                key={item.task.id}
-                type="button"
-                className={item.task.id === centerState.selectedTaskId ? 'agent-task-list-item active' : 'agent-task-list-item'}
-                onClick={() => {
-                  setSelectedTaskId(item.task.id)
-                }}>
-                <span className={`agent-task-status-dot ${item.runtimeStatus}`} />
-                <span>
-                  <strong>{item.task.name}</strong>
-                  <small>{item.triggerLabel}</small>
-                </span>
-                {item.task.status === 'paused' ? <Tag className="agent-task-tag">{t.taskCenter.paused}</Tag> : null}
-                {item.task.status === 'completed' ? <Tag className="agent-task-tag">{t.taskCenter.status.completed}</Tag> : null}
-                {item.isOverdue ? <Tag className="agent-task-tag">{t.taskCenter.overdue}</Tag> : null}
-              </button>
-            ))}
-          </div>
-        </aside>
+        <AgentTaskCenterList
+          items={centerState.items}
+          selectedTaskId={centerState.selectedTaskId}
+          loading={loading}
+          labels={t.taskCenter}
+          onSelect={setSelectedTaskId}
+          onCreate={startCreate}
+        />
 
         <main className="agent-task-detail-pane">
           {error ? <div className="agent-task-error">{error}</div> : null}
