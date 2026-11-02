@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import type { IntelligenceFearGreedClient } from '../../features/industry/fear-greed'
 import { isCanonicalFearGreedSnapshotTime } from '../../../contracts/intelligenceQueryContracts'
@@ -9,12 +9,17 @@ type Input = {
   now: () => Date
 }
 
-export function useDashboardFearGreed({ client, now }: Input): DashboardFearGreedState {
+export function useDashboardFearGreed({ client, now }: Input): Readonly<{ state: DashboardFearGreedState; reload: () => void }> {
   const [state, setState] = useState<DashboardFearGreedState>({ state: 'loading' })
+  const [attempt, setAttempt] = useState(0)
   const [mountInput] = useState(() => ({ client, now }))
+  /** 重试入口：读者按「再试一次」时重新问一次快照，而不是刷新整页。 */
+  const reload = useCallback(() => setAttempt(current => current + 1), [])
 
   useEffect(() => {
     let active = true
+    // 每次重试先回到加载态，读者才看得出这一下真的重新问了。
+    setState({ state: 'loading' })
     const asOf = readCanonicalClock(mountInput.now)
     if (!asOf) {
       setState({ state: 'unavailable' })
@@ -26,9 +31,9 @@ export function useDashboardFearGreed({ client, now }: Input): DashboardFearGree
       if (active) setState({ state: 'unavailable' })
     })
     return () => { active = false }
-  }, [mountInput])
+  }, [mountInput, attempt])
 
-  return state
+  return { state, reload }
 }
 
 function readCanonicalClock(now: () => unknown): string | undefined {

@@ -32,7 +32,7 @@ import type { MacroMarketSnapshotClient } from '../../shared/ipc/macroMarketSnap
 import type { MacroRatesSnapshotClient } from '../../shared/ipc/macroRatesSnapshotClient'
 import type { productText } from '../../shared/i18n/productText'
 import { LoadingState } from '@platform/ui/components/loading'
-import { StateView } from '@platform/ui/components/state'
+import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 import { PolicyPathDrawer } from './PolicyPathDrawer'
 import { createPortal } from 'react-dom'
@@ -79,7 +79,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   /** A chart event line the reader picked: the page opens its detail and records it. */
   onSelectChartEvent?: (line: CrossAssetEventLine, month: string) => void }): React.ReactElement {
   const calendarState = useDashboardEconomicCalendar({ client, now })
-  const fearGreedState = useDashboardFearGreed({ client: fearGreedClient, now })
+  const { state: fearGreedState, reload: reloadFearGreed } = useDashboardFearGreed({ client: fearGreedClient, now })
   const fundingRateState = useDashboardFundingRateHistory({ client: fundingRateClient, now })
   // Positioning is read per window rather than reshaped in the browser: the fold and
   // the liquidation lookback belong to the query, so switching windows is one more read.
@@ -122,7 +122,11 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   })
   const nowMs = now().getTime()
   const refreshCapitalConditions = async (): Promise<void> => {
-    if (!collectCapitalConditionsSources) return
+    // A host without a collection layer still has a real retry: re-reading the stored snapshot.
+    if (!collectCapitalConditionsSources) {
+      setCapitalReloadKey(key => key + 1)
+      return
+    }
     setCapitalRefreshing(true)
     setCapitalRefreshFailed(false)
     try {
@@ -181,9 +185,9 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
       {/* Reading order is 资金 → 风险偏好 → 杠杆: the sentiment gauge sits with the money rows, not
           beside the perpetual card, where it read as part of the funding reading. */}
       <div className="mi-crypto-dashboard__capital-positioning-row">
-        <SentimentPanel fearGreedState={fearGreedState} text={text} />
+        <SentimentPanel fearGreedState={fearGreedState} text={text} onRetry={reloadFearGreed} />
         <CapitalConditionsPanel state={capitalConditionsState} text={text.capitalConditions}
-          onRefresh={collectCapitalConditionsSources ? () => void refreshCapitalConditions() : undefined}
+          onRefresh={() => void refreshCapitalConditions()}
           refreshing={capitalRefreshing} refreshFailed={capitalRefreshFailed} />
       </div>
       <div className="mi-crypto-dashboard__positioning-row">
@@ -200,7 +204,7 @@ export function CryptoIntelligenceDashboard({ text, locale = 'zh-CN', briefingEn
   )
 }
 
-function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText }): React.ReactElement {
+function SentimentPanel({ fearGreedState, text, onRetry }: { fearGreedState: DashboardFearGreedState; text: CryptoDashboardText; onRetry: () => void }): React.ReactElement {
   const formatTime = useShellTimeFormat()
   return <>
     <section className="mi-crypto-dashboard__sentiment" aria-labelledby="mi-sentiment-heading"><h2 id="mi-sentiment-heading">{text.sentiment.title}</h2>
@@ -226,7 +230,8 @@ function SentimentPanel({ fearGreedState, text }: { fearGreedState: DashboardFea
         ? <LoadingState label={text.fearGreed.loading} minHeight={120} />
         : fearGreedState.state === 'empty'
           ? <StateView state="empty" reasonCode="not-yet" />
-          : <StateView state="error" reasonCode="unavailable" />}
+          : <StateView state="error" reasonCode="unavailable"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRetry }} />}
       </div>
     </section>
   </>
