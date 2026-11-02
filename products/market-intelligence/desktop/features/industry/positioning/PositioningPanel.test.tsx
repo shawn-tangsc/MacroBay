@@ -125,9 +125,18 @@ describe('positioning panel', () => {
   it('keeps the funding half when the positioning half is missing, and marks which half failed', () => {
     const markup = render({ positioning: { state: 'empty' } })
     expect(markup).toContain('data-state="empty"')
-    expect(markup).toContain(text.empty)
+    // An empty card is a state, and the shared StateView owns its sentence and shape now.
+    expect(markup).toContain('class="state-view')
+    expect(markup).toContain('data-state="empty"')
     expect(markup).toContain('+0.0062%')
     expect(markup).toContain('—')
+  })
+
+  it('tells a failed read from an empty one', () => {
+    // Nothing collected is `empty`; a read that could not answer is `error`. Mixing them is how
+    // "we have nothing" and "we could not look" start reading alike.
+    expect(render({ positioning: { state: 'unavailable' } })).toContain('data-state="error"')
+    expect(render({ positioning: { state: 'empty' } })).toMatch(/class="state-view[^"]*"[^>]*data-state="empty"/)
   })
 
   it('shows the loading state through the shared component', () => {
