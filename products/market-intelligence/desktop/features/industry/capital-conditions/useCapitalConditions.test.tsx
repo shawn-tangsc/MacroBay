@@ -52,6 +52,42 @@ describe('useCapitalConditions', () => {
     expect(querySnapshot).toHaveBeenLastCalledWith({ asOf })
   })
 
+  // Rule: "not read yet" is neither "nothing" nor "failed". A slow first read must render loading
+  // the whole time — an error or an empty view appearing before the read settles is the flash the
+  // reader sees as "spinner → failed → data".
+  it('stays on loading — never an error or an empty view — until the first read settles', async () => {
+    let settle!: (value: unknown) => void
+    const page = await renderHook({ querySnapshot: vi.fn(() => new Promise((done) => { settle = done })) }, () => new Date(asOf))
+    await flush()
+    expect(page.state()).toBe('loading')
+
+    await act(async () => settle(available()))
+    await flush()
+    expect(page.container.textContent).toContain('$254.9B')
+  })
+
+  // Rule: a refresh that fails keeps the readings the reader already has; dropping to an error
+  // view makes a transient failure look like the data disappeared.
+  it('keeps the last readings when a reload fails, instead of replacing them with an error', async () => {
+    let calls = 0
+    const querySnapshot = vi.fn(async () => {
+      calls += 1
+      if (calls === 1) return available()
+      throw new Error('read failed')
+    })
+    const now = vi.fn(() => new Date(asOf))
+    const page = await renderHook({ querySnapshot }, now)
+    await flush()
+    expect(page.state()).toBe('available')
+
+    await act(async () => page.root.render(createElement(Harness, { client: { querySnapshot }, now, reloadKey: 1 })))
+    await flush()
+
+    expect(querySnapshot).toHaveBeenCalledTimes(2)
+    expect(page.state()).toBe('available')
+    expect(page.container.textContent).toContain('$254.9B')
+  })
+
   it('ignores stale resolution after unmount', async () => {
     let resolve!: (value: unknown) => void
     const page = await renderHook({ querySnapshot: vi.fn(() => new Promise((done) => { resolve = done })) }, () => new Date(asOf))
@@ -78,7 +114,7 @@ async function renderHook(client: { querySnapshot: (input: { asOf: string }) => 
   const container = document.createElement('div'); document.body.append(container)
   const localRoot = createRoot(container); root = localRoot
   await act(async () => localRoot.render(createElement(Harness, { client, now })))
-  return { root: localRoot, container }
+  return { root: localRoot, container, state: () => container.querySelector('output')?.getAttribute('data-state') ?? '' }
 }
 
 function Harness({ client, now, reloadKey }: { client: { querySnapshot: (input: { asOf: string }) => Promise<unknown> }; now: () => Date; reloadKey?: number }) {

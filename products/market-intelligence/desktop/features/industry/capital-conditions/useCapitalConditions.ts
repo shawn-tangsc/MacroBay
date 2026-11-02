@@ -24,14 +24,27 @@ export function useCapitalConditions({ client, now, reloadKey = 0 }: Input): Das
       return () => { active = false }
     }
     void mountInput.client.querySnapshot({ asOf }).then((result) => {
-      if (active) setState(projectDashboardCapitalConditionsSnapshot(result, asOf))
+      if (active) setState((previous) => keepLastReadings(previous, projectDashboardCapitalConditionsSnapshot(result, asOf)))
     }).catch(() => {
-      if (active) setState({ state: 'unavailable' })
+      if (active) setState((previous) => keepLastReadings(previous, { state: 'unavailable' }))
     })
     return () => { active = false }
   }, [mountInput, reloadKey])
 
   return state
+}
+
+/**
+ * A re-read that fails must not erase readings the reader already has: the panel keeps the last
+ * good state instead of replacing it with an error view. A first read has nothing to keep, so a
+ * failure there still reports itself. (The "these are the previous readings" label needs a copy key
+ * that is currently being edited by another line, so it lands on its own.)
+ */
+function keepLastReadings(
+  previous: DashboardCapitalConditionsState,
+  next: DashboardCapitalConditionsState
+): DashboardCapitalConditionsState {
+  return next.state === 'unavailable' && previous.state === 'available' ? previous : next
 }
 
 function readCanonicalClock(now: () => unknown): string | undefined {
