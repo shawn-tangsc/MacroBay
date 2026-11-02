@@ -5,6 +5,7 @@ import type { DailyBriefingGenerationSettingsService } from './dailyBriefingGene
 import type { DailyBriefSessionLinkStore } from './dailyBriefSessionLinks'
 import type { DailyBriefAttemptCleanup } from './dailyBriefSessionRetention'
 import type { DailyBriefingService } from './dailyBriefingService'
+import { createDailyBriefingNotifier, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { localDate } from './dailyBriefingWindow'
 import { registerDailyBriefSessionRetentionJob } from '../jobs/registerDailyBriefSessionRetentionJob'
 import { applyDailyBriefingSchedules, registerDailyBriefingJob } from '../jobs/registerDailyBriefingJob'
@@ -27,12 +28,21 @@ export function wireDailyBriefingJobs(deps: Readonly<{
   deleteAgentSessions?: (sessionIds: string[]) => Promise<unknown>
   /** The attempt store's tombstone writer; absent in a build that has no attempt table. */
   markAttemptCleaned?: DailyBriefAttemptCleanup
+  /** 通知端口；缺省表示未装配运行时，排期照常、只是不报「时区无效」。 */
+  submitNotification?: DailyBriefingNoticeSubmit
 }>): (timeZone: string) => Promise<void> {
+  const notice = deps.submitNotification ? createDailyBriefingNotifier({ submit: deps.submitNotification }) : undefined
+  // 一期因为时区读不出来被暂停时，读者不会自己发现（自动生成静默停了）。一天一条由去重键判。
+  const onPaused = (): void => {
+    if (!notice) return
+    void notice({ kind: 'timezone-invalid', date: new Date().toISOString().slice(0, 10) })
+  }
   registerDailyBriefingJob(deps.jobRuntime, {
     service: deps.service,
     getLocale: deps.getLocale,
     timeZone: deps.timeZone,
-    getPeriods: () => deps.periods.getPeriods()
+    getPeriods: () => deps.periods.getPeriods(),
+    onPaused
   })
   if (deps.deleteAgentSessions) {
     const deleteSessions = deps.deleteAgentSessions
@@ -48,6 +58,6 @@ export function wireDailyBriefingJobs(deps: Readonly<{
     })
   }
   return async (timeZone) => {
-    applyDailyBriefingSchedules(deps.jobRuntime, await deps.periods.getPeriods(), timeZone)
+    applyDailyBriefingSchedules(deps.jobRuntime, await deps.periods.getPeriods(), timeZone, onPaused)
   }
 }

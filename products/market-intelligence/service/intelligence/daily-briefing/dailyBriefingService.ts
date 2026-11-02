@@ -22,6 +22,7 @@ import type { DailyBriefAgentRunner } from './dailyBriefAgentRunner'
 import { runDailyBriefAgentTurn, type DailyBriefTurnStageEvent, type DailyBriefBackfillExecutor } from './dailyBriefAgentTurn'
 import { createDailyBriefingGenerationRecorder } from './dailyBriefingGenerationTrace'
 import { createDailyBriefingReads } from './dailyBriefingReads'
+import { createDailyBriefingNotifier, type DailyBriefingNoticeSubmit } from './dailyBriefingNotifier'
 import { createDailyBriefingAttemptJournal } from './dailyBriefingAttemptJournal'
 import { createDailyBriefingRunCoalescer } from './dailyBriefingRunCoalescer'
 import { candidateOverflow, cutoffDate, isOutputTruncation, withDeadline } from './dailyBriefingGenerationGuards'
@@ -289,9 +290,12 @@ export function createDailyBriefingService(deps: Readonly<{
    * cutoff.
    */
   generationSettings?: () => Promise<DailyBriefingGeneration>
+  /** 一期落库后提交 `briefing.ready`；缺省表示这次装配没有通知端口（测试或未装配），生成照常。 */
+  noticeSubmit?: DailyBriefingNoticeSubmit
   now?: () => string
 }>): DailyBriefingService {
   const now = deps.now ?? (() => new Date().toISOString())
+  const notice = deps.noticeSubmit ? createDailyBriefingNotifier({ submit: deps.noticeSubmit, now }) : undefined
   const reads = createDailyBriefingReads({ store: deps.store })
   const runs = createDailyBriefingRunCoalescer<DailyBriefingTodayResult>()
 
@@ -566,6 +570,7 @@ export function createDailyBriefingService(deps: Readonly<{
         return fail('store-failed')
       }
       await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)
+      await notice?.({ kind: 'ready', date: input.date, periodId: input.periodId }) // 落库之后才算「好了」。
       return { state: 'available', document: traced }
     }
     await deps.store.prune(cutoffDate(input.date)).catch(() => undefined)

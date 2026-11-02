@@ -21,7 +21,8 @@ import {
 } from './dailyBriefingPriorConclusions'
 
 
-type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
+/** The news port the source reads; exported so a build without a news query can supply the "no news" answer. */
+export type NewsQuery = Pick<ReturnType<typeof createNewsSentimentQuery>, 'query'>
 
 export type DailyBriefingSourceDeps = Readonly<{
   repository: Pick<MarketAnalysisRepository, 'listTimeline' | 'getSummary' | 'listPredictions' | 'getRun' | 'getSnapshot'>

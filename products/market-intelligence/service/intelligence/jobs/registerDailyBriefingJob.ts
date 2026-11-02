@@ -39,6 +39,8 @@ export function registerDailyBriefingJob(
     timeZone: () => string
     /** The saved periods, read at registration and again at every run. */
     getPeriods: () => Promise<readonly DailyBriefingPeriod[]>
+    /** 期自己的时区读不出来、这一期因此不排期时调用；只在真的暂停了时才调。 */
+    onPaused?: (paused: readonly string[]) => void
   }>
 ): void {
   jobRuntime.registerHandler(INTELLIGENCE_DAILY_BRIEFING_JOB, async (payload) => {
@@ -61,15 +63,19 @@ export function registerDailyBriefingJob(
   // install gets. The fallback registers the period id too, so a fresh install has the same id
   // shape the saved periods produce.
   void deps.getPeriods()
-    .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods))
-    .catch(() => applyDailyBriefingSchedules(jobRuntime, [createDefaultDailyBriefingPeriod()], deps.timeZone()))
+    .then((periods) => applyDailyBriefingSchedules(jobRuntime, periods, undefined, deps.onPaused))
+    .catch(() => applyDailyBriefingSchedules(jobRuntime, [createDefaultDailyBriefingPeriod()], deps.timeZone(), deps.onPaused))
 }
 
 /** Re-register the definitions that changed and remove the ones whose period is gone. */
 export function applyDailyBriefingSchedules(
   jobRuntime: Pick<JobRuntime, 'setSchedule' | 'removeSchedule' | 'listSchedules'>,
   periods: readonly DailyBriefingPeriod[],
-  readerTimeZone?: string
+  readerTimeZone?: string,
+  onPaused?: (paused: readonly string[]) => void
 ): DailyBriefingScheduleSync {
-  return syncDailyBriefingSchedules(jobRuntime, periods, readerTimeZone ?? 'UTC', generationTimeZoneIssue)
+  const sync = syncDailyBriefingSchedules(jobRuntime, periods, readerTimeZone ?? 'UTC', generationTimeZoneIssue)
+  // 暂停是读者会吃亏的状态（自动生成静默停了），所以在判决落地的这一处报出去，不在读路径上报。
+  if (sync.paused.length > 0) onPaused?.(sync.paused)
+  return sync
 }

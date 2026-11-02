@@ -65,6 +65,7 @@ import { summarizeNewsSentimentReadiness } from './news-sentiment/newsSentimentR
 import { createNewsSentimentBodyTranslationService } from './news-sentiment/newsSentimentBodyTranslation'
 import { createDailyBriefingSqliteStore } from './daily-briefing/dailyBriefingStore'
 import { createDailyBriefingSource } from './daily-briefing/dailyBriefingSource'
+import { unavailableNewsQuery } from './daily-briefing/dailyBriefingNewsFallback'
 import { createDailyBriefingService, type DailyBriefingService } from './daily-briefing/dailyBriefingService'
 import { createDailyBriefFactEnsure } from './daily-briefing/dailyBriefFactEnsure'
 import { createDailyBriefFactEnsureJsonCache } from './daily-briefing/dailyBriefFactEnsureCache'
@@ -924,24 +925,12 @@ export function getIntelligenceModule(
         // Read-only history: the morning brief synthesizes the window's earlier brief conclusions
         // together with the analysis conclusions instead of copying one of them.
         briefEditions: dailyBriefingStore,
-        news: newsSentimentQuery
-          ? { query: (input) => newsSentimentQuery.query(input) }
-          : {
-            async query(input) {
-              return {
-                state: 'unavailable' as const,
-                asOf: input.asOf,
-                generatedAt: input.asOf,
-                window: input.window,
-                items: [],
-                caveats: []
-              }
-            }
-          },
+        news: newsSentimentQuery ? { query: (input) => newsSentimentQuery.query(input) } : unavailableNewsQuery,
         profiles: profileStore
       }),
       store: dailyBriefingStore,
       ...(dailyBriefAgentRunner ? { agentRunner: dailyBriefAgentRunner } : {}),
+      ...(hooks?.submitNotification ? { noticeSubmit: hooks.submitNotification } : {}),
       agentModel: () => dailyBriefingAiSettings.ensureAgentModel(),
       editorialEnabled: async () => (await dailyBriefingAiSettings.getView()).settings.editorialEnabled,
       generationSettings: async () => (await dailyBriefingGenerationSettings.getPeriods())[0]!,
@@ -983,7 +972,8 @@ export function getIntelligenceModule(
       periods: dailyBriefingGenerationSettings,
       links: dailyBriefSessionLinks,
       ...(markAttemptCleaned ? { markAttemptCleaned: (input) => markAttemptCleaned(input) } : {}),
-      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {})
+      ...(hooks?.deleteAgentSessions ? { deleteAgentSessions: hooks.deleteAgentSessions } : {}),
+      ...(hooks?.submitNotification ? { submitNotification: hooks.submitNotification } : {})
     })
     modulePlatformHooks?.onSettingsCommitted?.((change) => { if (change.changedKeys.includes('timeZone')) void rescheduleBriefingForDisplayTimeZone(change.next.timeZone) })
     intelligenceModule = {
