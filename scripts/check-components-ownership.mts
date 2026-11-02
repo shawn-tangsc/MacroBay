@@ -157,6 +157,14 @@ export type InspectedCommit = {
  */
 export type Claim = { hash: string; why: string }
 
+export type ClaimOptions = {
+  /**
+   * 机械删除豁免（Chief 2026-11-02 定，`MI-11-R166`）：**同一行文本、全仓一致地删掉**，
+   * 允许整体一笔。判据必须机械：提交里只有删除、没有任何新增，且所有删除行的文本完全相同。
+   */
+  isMechanicalDeletion?: (hash: string) => boolean
+}
+
 export function claimsIn(commit: InspectedCommit): Claim[] {
   if (!declaresComponentOwner(commit.message)) return []
   const lines = commit.message.split('\n').map((line) => line.trim())
