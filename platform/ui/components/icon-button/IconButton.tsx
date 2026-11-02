@@ -27,7 +27,13 @@ import './iconButton.css'
  * `StateView` 的 `sm` / `md` 是同一套词，像素值只在这张表里出现一次。
  */
 
-/** 两档，仅此两档。名字与 `StateSize` 共用一套词。 */
+/**
+ * 两档，仅此两档。
+ *
+ * 词与 `StateSize` 的那两档同名，但**故意不是同一个类型**：`StateSize` 还有 `lg`，直接 import
+ * 它就会让 `size="lg"` 编译通过，而这颗按钮没有第三档。**同一个词、不同的合法集合，就该是两个
+ * 类型**——共用类型是两件事被绑在一起的第一步，之后每一次加档都要问另一方同不同意。
+ */
 export const ICON_BUTTON_SIZES = ['sm', 'md'] as const
 
 export type IconButtonSize = (typeof ICON_BUTTON_SIZES)[number]
