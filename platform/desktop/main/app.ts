@@ -174,6 +174,7 @@ import { registerModelIpc } from './ipc/modelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
 import { registerAgentIpc } from './ipc/agentIpc'
 import { registerAgentToolsIpc } from './ipc/agentToolsIpc'
+import { createQuitOrchestrator, createRuntimeDisposer } from './lifecycle/quit'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
@@ -567,17 +568,10 @@ const agentRuntimeService = new AgentSessionRuntimeService({
 })
 let platformRuntimesDisposed = false
 /**
- * P1-06m 退出期编排状态（真机 P1-07R runG/runI：已提交独立窗存在时优雅退出无法完成，窗口全销毁但主进程残留）：
- * - `appQuitting`：app 级退出期标记，`before-quit` 置位。派生窗工厂据此在退出期**不再** preventDefault
- *   （否则 Electron 的退出关窗相位被取消 ⇒ 进程残留）；退出期的派生窗销毁由宿主 `appExit` 统一执行。
- * - `quitDisposeStarted`：本轮退出的有界清理是否已启动（重复 `before-quit` 绝不并发第二条清理链）。
- * - `quitDisposeSettled`：清理已结束，退出可以真正放行（第二次 `app.quit()` 不再挂起）。
+ * P1-06m 退出期编排状态现在由 `lifecycle/quit.ts` 的编排器持有（四个布尔收进一个对象）：
+ * `before-quit` 置标记、挂起本轮退出、有界清理后放行一次 `app.quit()`。
+ * 派生窗工厂据此在退出期**不再** preventDefault（否则 Electron 的退出关窗相位被取消 ⇒ 进程残留）。
  */
-let appQuitting = false
-let quitDisposeStarted = false
-let quitDisposeSettled = false
-/** 退出清理挂起本轮退出的上界：清理再慢也绝不让进程永远退不出去（有界逃逸）。 */
-const QUIT_DISPOSE_BUDGET_MS = 15_000
 let jobRuntimeForDisposal: JobRuntime | null = null
 
 /** 供应商的启用/凭据/增删都会改变「有没有可探目标」，调度要跟着走。 */
@@ -611,39 +605,48 @@ async function flushPanelWorkspaceLayoutForExit(): Promise<void> {
   // 绝不抛：flushLayout 内部已把异常收敛成 failed，这里只负责把受控报告落日志
   reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })
 }
-async function disposePlatformRuntimes(): Promise<void> {
-  if (platformRuntimesDisposed) return
-  platformRuntimesDisposed = true
-  // 先关产品 IPC 入口，再拆产品服务/DB：退出期迟到的 renderer 调用不应再触碰已关闭的连接。
-  productIpcRegistryForDisposal?.markClosed()
-  await flushPanelWorkspaceLayoutForExit()
-  disposeTaskAutomationMaintenance?.()
-  disposeTaskAutomationMaintenance = null
-  disposeJobRunRetention?.()
-  disposeJobRunRetention = null
-  disposeChannelMaintenanceJobs?.()
-  disposeChannelMaintenanceJobs = null
+/** 退出清理的唯一实现（顺序由 lifecycle/quit.ts 决定）；这里只提供端口。 */
+const runtimeDisposer = createRuntimeDisposer({
+  markProductIpcClosed: () => productIpcRegistryForDisposal?.markClosed(),
+  flushPanelWorkspaceLayout: async () => {
+    // 绝不抛：flushLayout 内部已把异常收敛成 failed，这里只负责把受控报告落日志
+    if (panelWorkspaceForDisposal === null) return
+    reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })
+  },
+  disposeMaintenanceTimers: [
+    () => {
+      disposeTaskAutomationMaintenance?.()
+      disposeTaskAutomationMaintenance = null
+    },
+    () => {
+      disposeJobRunRetention?.()
+      disposeJobRunRetention = null
+    },
+    () => {
+      disposeChannelMaintenanceJobs?.()
+      disposeChannelMaintenanceJobs = null
+    }
+  ],
   // Abort every adapter lifetime before the shared SQLite fence closes all owners.
-  await telegramRuntimeManager.dispose()
-  await slackRuntimeManager.dispose()
-  await larkRuntimeManager.dispose()
-  await qqRuntimeManager.dispose()
-  await discordRuntimeManager.dispose()
-  await wechatRuntimeManager.dispose()
-  channelManagementRepository.fenceAllForQuit(new Date().toISOString())
-  agentTaskSchedulerRuntimeService.stop()
-  jobRuntimeForDisposal?.stopAll()
-  await productServiceDisposerRegistry.disposeAll()
-  await Promise.allSettled([
-    agentRuntimeService.dispose(),
-    mcpRuntimeService.dispose()
-  ])
-  // workspace：有界 flush 后释放路由目标；flush 超时/失败只如实上报，不阻断其余清理。
-  // P1-06m：dispose 报告必须落日志（含「退出瞬间是否仍有待写」与销毁窗数/撤销 owner 数），绝不静默丢弃。
-  const workspaceDisposeReport = await panelWorkspaceForDisposal?.dispose()
-  if (workspaceDisposeReport !== undefined) reportPanelWorkspaceDispose({ report: workspaceDisposeReport })
-  panelWorkspaceForDisposal = null
-  jobRunStore.close()
+  disposeAdapters: [
+    () => telegramRuntimeManager.dispose(),
+    () => slackRuntimeManager.dispose(),
+    () => larkRuntimeManager.dispose(),
+    () => qqRuntimeManager.dispose(),
+    () => discordRuntimeManager.dispose(),
+    () => wechatRuntimeManager.dispose()
+  ],
+  fenceChannels: () => channelManagementRepository.fenceAllForQuit(new Date().toISOString()),
+  stopTaskScheduler: () => agentTaskSchedulerRuntimeService.stop(),
+  stopJobs: () => jobRuntimeForDisposal?.stopAll(),
+  disposeProductServices: () => productServiceDisposerRegistry.disposeAll(),
+  disposeAgentRuntimes: [() => agentRuntimeService.dispose(), () => mcpRuntimeService.dispose()],
+  disposeWorkspace: async () => panelWorkspaceForDisposal?.dispose(),
+  reportWorkspaceDispose: (report) => reportPanelWorkspaceDispose({ report }),
+  closeJobRunStore: () => jobRunStore.close()
+})
+async function disposePlatformRuntimes(): Promise<void> {
+  await runtimeDisposer.dispose()
 }
 function broadcastChannelRuntimeSnapshot(snapshot: ReturnType<ChannelRuntimeSupervisor['snapshot']>): void {
   getMainWindow()?.webContents.send(IpcChannels.agentsChannelRuntimeStateChanged, snapshot)
@@ -1632,7 +1635,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     onNativeClose: (input) => { void panelWorkspaceMainHostBridge?.nativeClose(input).catch(() => undefined) },
     onWindowDestroyed: (input) => { void panelWorkspaceMainHostBridge?.windowDestroyed(input).catch(() => undefined) },
     // P1-06m：退出期标记注入 —— 退出期间 close 绝不 preventDefault（否则 app.quit() 被取消、主进程残留）
-    isAppQuitting: () => appQuitting
+    isAppQuitting: () => quitOrchestrator.isQuitting()
   })
   const panelDetachedWindowHost = createPanelDetachedWindowHost({
     entryUrl: workspaceDetachedEntryUrl,
@@ -1851,25 +1854,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
  * `window-all-closed` 不再自己发起清理（那会让两条链并发、退出可能早于 flush），只负责非 darwin 的托盘收尾。
  * 有界逃逸：清理再慢也最多挂起 `QUIT_DISPOSE_BUDGET_MS`，绝不因为某个消费者挂住就永远退不出去。
  */
-app.on('before-quit', (event) => {
-  appQuitting = true
-  if (platformRuntimesDisposed || quitDisposeSettled) return
-  event.preventDefault()
-  if (quitDisposeStarted) return
-  quitDisposeStarted = true
-  let released = false
-  const releaseQuit = (): void => {
-    if (released) return
-    released = true
-    quitDisposeSettled = true
-    app.quit()
-  }
-  const escape = setTimeout(releaseQuit, QUIT_DISPOSE_BUDGET_MS)
-  ;(escape as unknown as { unref?: () => void }).unref?.()
-  void disposePlatformRuntimes()
-    .catch(() => undefined)
-    .finally(() => { clearTimeout(escape); releaseQuit() })
-})
+const quitOrchestrator = createQuitOrchestrator({ dispose: disposePlatformRuntimes, quit: () => app.quit() })
+app.on('before-quit', (event) => quitOrchestrator.handleBeforeQuit(event))
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

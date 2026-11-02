@@ -110,6 +110,7 @@ import type { WorkspaceEvent } from '@platform/workspace/contracts'
 import { createPanelLayoutStore } from '@platform/workspace/persistence/panelLayoutStore'
 import type { PanelLayoutDocumentV1 } from '@platform/workspace/persistence/panelLayoutDocument'
 import { createSecureWindowSecurity } from '../../window/createMainWindow'
+import { createQuitOrchestrator } from '../lifecycle/quit'
 import { composePanelWorkspace } from './composePanelWorkspace'
 import { createDetachedWindowFactory } from './panelDetachedWindowFactory'
 import { createPanelDetachedWindowHost, type DetachedHostEvent } from './panelDetachedWindowHost'
@@ -205,10 +206,19 @@ function createExitHarness(options: { savedAtNow?: () => string } = {}) {
   const fakeApp = createFakeApp(windows)
   const order: string[] = []
 
-  // 退出期标记（app.ts 的同名模块级布尔）：`before-quit` 置位 ⇒ 窗口 `close` 不再 preventDefault
-  let appQuitting = false
-  let quitDisposeStarted = false
-  let quitDisposeSettled = false
+  // 退出编排用真身：本文件不再复刻 before-quit 的五步，替身与本体分叉就会红。
+  const escapeTimers: Timer[] = []
+  let quitChain: () => Promise<void> = async () => undefined
+  const quitOrchestrator = createQuitOrchestrator({
+    dispose: () => quitChain(),
+    quit: () => { fakeApp.quit() },
+    setTimeout: (callback, delayMs) => {
+      const entry: Timer = { delayMs, run: callback, cancelled: false, fired: false }
+      escapeTimers.push(entry)
+      return entry
+    },
+    clearTimeout: (handle) => { (handle as Timer).cancelled = true }
+  })
 
   let bridge: ReturnType<typeof composePanelWorkspace>['mainHostBridge'] = null
   const factory = createDetachedWindowFactory({
@@ -217,7 +227,7 @@ function createExitHarness(options: { savedAtNow?: () => string } = {}) {
     openExternal: (url) => void electronMocks.openExternal(url),
     onNativeClose: (input) => { void bridge?.nativeClose(input).catch(() => undefined) },
     onWindowDestroyed: (input) => { void bridge?.windowDestroyed(input).catch(() => undefined) },
-    isAppQuitting: () => appQuitting
+    isAppQuitting: () => quitOrchestrator.isQuitting()
   })
   const host = createPanelDetachedWindowHost({
     entryUrl: ENTRY,
@@ -313,17 +323,10 @@ function createExitHarness(options: { savedAtNow?: () => string } = {}) {
   let lastDisposeReport: Awaited<ReturnType<typeof composition.dispose>> | null = null
   let lastFlushReport: Awaited<ReturnType<typeof composition.flushLayout>> | null = null
 
-  // app.ts 的 before-quit 编排（逐句同构）：挂起本轮退出 → 有界 flush → 有界 dispose → 放行 → 再次 quit
-  fakeApp.onBeforeQuit((quitEvent) => {
-    appQuitting = true
-    if (quitDisposeSettled) return
-    quitEvent.preventDefault()
-    if (quitDisposeStarted) return
-    quitDisposeStarted = true
-    order.push('quit:held')
-  })
+  // 真身接线：事件交给 lifecycle/quit 的编排器，这里只提供 dispose 链
+  fakeApp.onBeforeQuit((quitEvent) => quitOrchestrator.handleBeforeQuit(quitEvent))
 
-  const quitChain = async (): Promise<void> => {
+  quitChain = async (): Promise<void> => {
     order.push('flush:start')
     lastFlushReport = await composition.flushLayout()
     order.push('flush:end')
@@ -332,15 +335,16 @@ function createExitHarness(options: { savedAtNow?: () => string } = {}) {
     for (const window of [...windows()]) window.close()
     lastDisposeReport = await disposing
     order.push('dispose:end')
-    quitDisposeSettled = true
-    fakeApp.quit()
   }
 
   /** 发起一次优雅退出并等整条退出链落定（返回时 quit 已在 dispose 之后再次触发）。 */
   const quitAndSettle = async (): Promise<void> => {
     fakeApp.quit()
-    await quitChain()
-    await settle()
+    // 编排器在 dispose 落定后自己再发一次 quit()：让微任务、真实定时器与落盘都走完。
+    for (let round = 0; round < 6; round += 1) {
+      await settle()
+      await runLayoutTimers()
+    }
   }
 
   return {
@@ -369,7 +373,8 @@ describe('P1-06m 退出路径：已提交独立窗下的优雅退出必须完成
 
     // 本轮退出被 app 级标记挂起（等有界 flush + dispose），随后由同一条链再次 app.quit() 放行
     expect(harness.fakeApp.outcomes).toEqual(['cancelled-before-quit', 'completed'])
-    expect(harness.order).toEqual(['quit:held', 'flush:start', 'flush:end', 'dispose:end'])
+    // 编排器本身不往 order 里塞标记：第一件事就是 flush（退出期标记由真身维护）
+    expect(harness.order).toEqual(['flush:start', 'flush:end', 'dispose:end'])
     expect(harness.fakeApp.quitCalls).toBe(2)
     // 退出期不再 preventDefault：退出关窗相位绝不被取消（真机主进程残留的直接原因）
     expect(targetWindow.closePreventedCount).toBe(0)
@@ -553,30 +558,31 @@ describe('P1-06m closePanel 收敛：已提交独立窗必须被销毁/收敛', 
   })
 })
 
-describe('P1-06m app.ts 退出编排（受保护 seam：源形状断言）', () => {
+describe('P1-06m 退出编排接线（app.ts 只留接线，编排在 lifecycle/quit.ts）', () => {
   const appSource = readFileSync(resolve(__dirname, '../app.ts'), 'utf8')
+  const quitSource = readFileSync(resolve(__dirname, '../lifecycle/quit.ts'), 'utf8')
 
-  it('before-quit 置退出期标记并挂起本轮退出，dispose 完成后才再次 app.quit()', () => {
-    expect(appSource).toContain('let appQuitting = false')
-    expect(appSource).toContain('let quitDisposeSettled = false')
-    expect(appSource).toContain('isAppQuitting: () => appQuitting')
-    const beforeQuitIndex = appSource.indexOf("app.on('before-quit'")
-    expect(beforeQuitIndex).toBeGreaterThan(0)
-    const block = appSource.slice(beforeQuitIndex, beforeQuitIndex + 800)
-    expect(block).toContain('appQuitting = true')
-    expect(block).toContain('event.preventDefault()')
-    expect(block).toContain('quitDisposeSettled = true')
-    expect(block).toContain('app.quit()')
-    // 有界逃逸：清理挂住也绝不让进程永远退不出去
-    expect(block).toContain('setTimeout')
+  it('app.ts 把 before-quit 交给编排器，自己不再维护四个退出期布尔', () => {
+    expect(appSource).toContain("app.on('before-quit', (event) => quitOrchestrator.handleBeforeQuit(event))")
+    expect(appSource).not.toContain('let quitDisposeStarted = false')
+    expect(appSource).not.toContain('quitDisposeSettled = true')
+    expect(appSource).toContain('isAppQuitting: () => quitOrchestrator.isQuitting()')
   })
 
-  it('退出第一件事是有界 flush 待写布局，并记录 flush/dispose 结果', () => {
-    const disposeIndex = appSource.indexOf('async function disposePlatformRuntimes')
-    const disposeBlock = appSource.slice(disposeIndex, disposeIndex + 400)
-    expect(disposeBlock).toContain('await flushPanelWorkspaceLayoutForExit()')
-    expect(appSource).toContain('reportPanelWorkspaceFlush({ report: await panelWorkspaceForDisposal.flushLayout() })')
-    expect(appSource).toContain('reportPanelWorkspaceDispose({ report:')
+  it('编排器的五步与清理链顺序只有一个实现（lifecycle/quit.ts）', () => {
+    expect(quitSource).toContain('quitting = true')
+    expect(quitSource).toContain('event.preventDefault()')
+    expect(quitSource).toContain('if (disposeStarted) return')
+    expect(quitSource).toContain('.dispose()')
+    expect(quitSource).toContain('ports.quit()')
+    expect(quitSource).toContain('QUIT_DISPOSE_BUDGET_MS')
+    expect(quitSource).toContain('ports.fenceChannels()')
+    expect(quitSource).toContain('ports.stopJobs()')
+    // 顺序只由这个文件决定：fence 在 adapter 之后、jobs stopAll 之前。
+    expect(quitSource.indexOf('ports.fenceChannels()')).toBeLessThan(quitSource.indexOf('ports.stopJobs()'))
+    // app.ts 只提供端口实现，不再自己拼一条顺序链。
+    expect(appSource).toContain('fenceChannels: () => channelManagementRepository.fenceAllForQuit(')
+    expect(appSource).not.toContain('await telegramRuntimeManager.dispose()')
   })
 
   it('window-all-closed 只发起 app.quit()：清理编排归 before-quit 单点，绝不并发两条链', () => {
@@ -584,11 +590,11 @@ describe('P1-06m app.ts 退出编排（受保护 seam：源形状断言）', () 
     expect(index).toBeGreaterThan(0)
     const block = appSource.slice(index, index + 400)
     expect(block).toContain('app.quit()')
-    expect(block).not.toContain('disposePlatformRuntimes')
+    expect(block).not.toContain('runtimeDisposer')
   })
 
   it('SIGTERM/SIGINT 也进同一条优雅退出编排（信号路径同样不得绕过 flush 与派生窗销毁）', () => {
     expect(appSource).toContain("for (const signal of ['SIGTERM', 'SIGINT'] as const)")
-    expect(appSource).toContain("process.on(signal, () => { app.quit() })")
+    expect(appSource).toContain('process.on(signal, () => { app.quit() })')
   })
 })

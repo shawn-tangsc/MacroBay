@@ -452,7 +452,8 @@ describe('desktop main IPC surface', () => {
     expect(bootstrapSource.indexOf(restore)).toBeLessThan(bootstrapSource.indexOf(rendererLoad))
     expect(looseIndexOf(bootstrapSource, productSeal)).toBeLessThan(looseIndexOf(bootstrapSource, rendererLoad))
     // 退出走 workspace 有界 flush
-    expect(appSource).toContain('await panelWorkspaceForDisposal?.dispose()')
+    // 退出链搬到 lifecycle/quit.ts 后，dispose 决策由编排器驱动；app.ts 只提供端口。
+    expect(appSource).toContain('disposeWorkspace: async () => panelWorkspaceForDisposal?.dispose()')
     expect(appSource).toContain('let panelWorkspaceForDisposal: ReturnType<typeof composePanelWorkspace> | null = null')
 
     // 5 条通道常量与 preload 命名空间一一对应，且不引入任意 channel/URL 入口
