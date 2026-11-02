@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Filter, Plus, RefreshCw, Search } from 'lucide-react'
 
 import type { ModelDefinition, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
+import { StateView } from '@platform/ui/components/state'
 
 import type { PlatformText } from '../../i18n/platformText'
 import type { ModelGroup } from '../modelGrouping'
@@ -286,9 +287,12 @@ export function ModelServiceModelsSection({
         </p>
       ) : null}
 
-      {modelCount === 0 ? <p className="model-service-empty">{labels.noModels}</p> : null}
-      {visibleGroups.length === 0 ? (
-        <p className="model-service-empty">{modelCount === 0 ? labels.noModels : labels.noMatchedModels}</p>
+      {/* 一个区域只有一处说「这里没有」：原来这两行在「还没有模型」时**同时成立**，
+          同一块地方会渲染两遍同一句话。现在按处境分支，只出一处。 */}
+      {modelCount === 0 ? (
+        <StateView state="empty" reasonCode="never-created" size="md" />
+      ) : visibleGroups.length === 0 ? (
+        <StateView state="empty" reasonCode="filtered-out" size="md" />
       ) : null}
 
       <div className="model-service-groups" data-model-list-scroll>
