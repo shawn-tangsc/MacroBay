@@ -66,6 +66,13 @@ async function mount(options: MountOptions = {}): Promise<HTMLElement> {
   return container
 }
 
+/** 复制入口按读屏名找：迁移后不再有私有类名。 */
+function copyButton(container: HTMLElement): HTMLElement | null {
+  return [...container.querySelectorAll<HTMLElement>('button')].find(
+    (button) => button.getAttribute('aria-label') === labels.copyApiKey
+  ) ?? null
+}
+
 function inputOf(container: HTMLElement): HTMLInputElement {
   return container.querySelector('.web-search-api-key-control input') as HTMLInputElement
 }
@@ -130,14 +137,14 @@ describe('PLAT-55 masked API key field', () => {
     const container = await mount()
 
     // 掩码态没有复制：看不到就不该能复制。
-    expect(container.querySelector('.web-search-api-key-copy')).toBeNull()
+    expect(copyButton(container)).toBeNull()
 
     await click(container, '.web-search-api-key-eye')
-    await click(container, '.web-search-api-key-copy')
+    await click(container, `[aria-label="${labels.copyApiKey}"]`)
     expect(writeText).toHaveBeenCalledWith(savedKey)
 
     await click(container, '.web-search-api-key-eye')
-    expect(container.querySelector('.web-search-api-key-copy')).toBeNull()
+    expect(copyButton(container)).toBeNull()
   })
 
   it('auto-hides the revealed key after 30 seconds', async () => {

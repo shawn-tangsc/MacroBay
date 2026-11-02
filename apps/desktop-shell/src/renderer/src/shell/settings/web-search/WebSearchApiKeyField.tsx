@@ -9,6 +9,8 @@ import { copyTextToClipboard } from '../../clipboard'
 
 /** 图标按钮的读屏名只收点分键：句子由调用方注入的 resolver 给。 */
 export const EDIT_KEY = 'webSearch.editApiKey'
+export const COPY_KEY = 'webSearch.copyApiKey'
+export const COPY_DONE_KEY = 'webSearch.apiKeyCopied'
 
 const ALL_MASK = '••••••••'
 export const API_KEY_REVEAL_TIMEOUT_MS = 30_000
@@ -242,14 +244,17 @@ export function WebSearchApiKeyField({
                 )
               ) : null}
               {revealedKey ? (
-                <button
-                  type="button"
-                  className="web-search-api-key-copy"
-                  aria-label={labels.copyApiKey}
-                  title={copied ? labels.apiKeyCopied : labels.copyApiKey}
-                  onClick={() => void copyRevealedKey()}>
-                  {copied ? <Check size={13} /> : <Copy size={13} />}
-                </button>
+                <IconButton
+                  ariaLabelKey={copied ? COPY_DONE_KEY : COPY_KEY}
+                  icon={copied ? Check : Copy}
+                  onSelect={() => void copyRevealedKey()}
+                  resolveText={(key) => {
+                    if (key === COPY_KEY) return labels.copyApiKey
+                    if (key === COPY_DONE_KEY) return labels.apiKeyCopied
+                    return ''
+                  }}
+                  size="sm"
+                />
               ) : null}
               <button
                 type="button"
