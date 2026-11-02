@@ -1,10 +1,9 @@
-import { Button } from 'antd'
 import { ArrowDown, ArrowUp, ChevronsDown, ChevronsUp } from 'lucide-react'
 
-import { Tooltip } from '@platform/ui/components/tooltip'
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import { useAgentText } from '../agentTextProvider'
-import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
+import { resolveAgentTextKey, type AgentTooltipKey } from '../agentTooltipText'
 
 type AgentMessageNavigationProps = {
   onTop: () => void
@@ -27,50 +26,46 @@ export default function AgentMessageNavigation({
     next: 'messages.navigateNext',
     bottom: 'messages.navigateBottom'
   } as const satisfies Record<string, AgentTooltipKey>
-  const resolveText = (key: AgentTooltipKey): string => resolveAgentTooltipText(t, key)
+  const resolveText = (key: string): string => resolveAgentTextKey(t, key)
 
   return (
     <div className="agent-message-navigation" aria-label={t.messages.anchorRailAria}>
-      <Tooltip labelKey={tooltipKeys.top} resolveText={resolveText}>
-        <Button
-          type="text"
-          size="small"
-          className="agent-message-navigation-button"
-          icon={<ChevronsUp size={14} />}
-          aria-label={t.messages.navigateTop}
-          onClick={onTop}
-        />
-      </Tooltip>
-      <Tooltip labelKey={tooltipKeys.previous} resolveText={resolveText}>
-        <Button
-          type="text"
-          size="small"
-          className="agent-message-navigation-button"
-          icon={<ArrowUp size={14} />}
-          aria-label={t.messages.navigatePrevious}
-          onClick={onPrevious}
-        />
-      </Tooltip>
-      <Tooltip labelKey={tooltipKeys.next} resolveText={resolveText}>
-        <Button
-          type="text"
-          size="small"
-          className="agent-message-navigation-button"
-          icon={<ArrowDown size={14} />}
-          aria-label={t.messages.navigateNext}
-          onClick={onNext}
-        />
-      </Tooltip>
-      <Tooltip labelKey={tooltipKeys.bottom} resolveText={resolveText}>
-        <Button
-          type="text"
-          size="small"
-          className="agent-message-navigation-button"
-          icon={<ChevronsDown size={14} />}
-          aria-label={t.messages.navigateBottom}
-          onClick={onBottom}
-        />
-      </Tooltip>
+      <IconButton
+        ariaLabelKey="messages.navigateTop"
+        className="agent-message-navigation-button"
+        icon={ChevronsUp}
+        onSelect={onTop}
+        resolveText={resolveText}
+        size="md"
+        tooltipKey={tooltipKeys.top}
+      />
+      <IconButton
+        ariaLabelKey="messages.navigatePrevious"
+        className="agent-message-navigation-button"
+        icon={ArrowUp}
+        onSelect={onPrevious}
+        resolveText={resolveText}
+        size="md"
+        tooltipKey={tooltipKeys.previous}
+      />
+      <IconButton
+        ariaLabelKey="messages.navigateNext"
+        className="agent-message-navigation-button"
+        icon={ArrowDown}
+        onSelect={onNext}
+        resolveText={resolveText}
+        size="md"
+        tooltipKey={tooltipKeys.next}
+      />
+      <IconButton
+        ariaLabelKey="messages.navigateBottom"
+        className="agent-message-navigation-button"
+        icon={ChevronsDown}
+        onSelect={onBottom}
+        resolveText={resolveText}
+        size="md"
+        tooltipKey={tooltipKeys.bottom}
+      />
     </div>
   )
 }

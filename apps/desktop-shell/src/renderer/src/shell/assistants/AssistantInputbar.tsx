@@ -13,9 +13,10 @@ import {
   Wrench
 } from 'lucide-react'
 
-import { Tooltip } from '@platform/ui/components/tooltip'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { useToast } from '@platform/ui/components/toast'
 import type { PlatformText } from '../../i18n/platformText'
+import { resolveAssistantsText, type AssistantsTextPath } from '../../i18n/assistantsTextKey'
 import {
   createAssistantInputbarTools,
   listVisibleAssistantInputbarTools,
@@ -100,6 +101,10 @@ export function AssistantInputbar({
   onToggleMentionedModel,
   onClearMentionedModels
 }: AssistantInputbarProps): React.ReactElement {
+  const resolveAssistantText = (key: string): string => {
+    const path = key.startsWith('assistants.') ? key.slice('assistants.'.length) : key
+    return resolveAssistantsText(labels, path as AssistantsTextPath)
+  }
   const toast = useToast()
   const tools = listVisibleAssistantInputbarTools(createAssistantInputbarTools())
   const canCompose = composerEnabled ?? (assistantSelected && modelReady)
@@ -127,19 +132,13 @@ export function AssistantInputbar({
           <AssistantImageEditControl labels={labels} view={imageGeneration} availableImages={sessionImages} />
           {tools.map((tool) => {
             const Icon = TOOL_ICONS[tool.id]
-            const label = labels.inputbarTools[tool.labelKey]
             return (
-              <Tooltip
+              <IconButton
                 key={tool.id}
-                labelKey={INPUTBAR_TOOL_KEYS[tool.id]}
-                resolveText={(key) => (key === INPUTBAR_TOOL_KEYS[tool.id] ? label : '')}>
-                <Button
-                  type="text"
-                  size="small"
-                  className="assistant-inputbar-tool"
-                  icon={<Icon size={14} />}
-                  aria-label={label}
-                  onClick={() => {
+                ariaLabelKey={INPUTBAR_TOOL_KEYS[tool.id]}
+                className="assistant-inputbar-tool"
+                icon={Icon}
+                onSelect={() => {
                     // 临时不可用不等于禁用：按钮保持可点，点了把读者送到话题选择器，并说一句为什么。
                     if (tool.id === 'clear-topic' && !topicSelected) {
                       onRequireTopic()
@@ -151,8 +150,10 @@ export function AssistantInputbar({
                     }
                     onToolAction(tool.id)
                   }}
-                />
-              </Tooltip>
+                resolveText={resolveAssistantText}
+                size="md"
+                tooltipKey={INPUTBAR_TOOL_KEYS[tool.id]}
+              />
             )
           })}
           <AssistantMentionedModelsPicker
@@ -163,16 +164,15 @@ export function AssistantInputbar({
             onToggleMentionedModel={onToggleMentionedModel}
             onClearMentionedModels={onClearMentionedModels}
           />
-          <Tooltip labelKey={SETTINGS_TOOLTIP_KEY} resolveText={(key) => (key === SETTINGS_TOOLTIP_KEY ? labels.assistantSettings : '')}>
-            <Button
-              type="text"
-              size="small"
-              className="assistant-inputbar-tool"
-              icon={<Settings2 size={14} />}
-              aria-label={labels.assistantSettings}
-              onClick={onOpenSettings}
-            />
-          </Tooltip>
+          <IconButton
+            ariaLabelKey={SETTINGS_TOOLTIP_KEY}
+            className="assistant-inputbar-tool"
+            icon={Settings2}
+            onSelect={onOpenSettings}
+            resolveText={resolveAssistantText}
+            size="md"
+            tooltipKey={SETTINGS_TOOLTIP_KEY}
+          />
         </div>
         <div className="assistant-composer-actions">
           {isStreaming || isSending ? (

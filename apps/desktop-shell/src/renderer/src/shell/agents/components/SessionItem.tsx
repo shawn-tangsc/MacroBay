@@ -13,10 +13,11 @@ import { deleteSessionsViaApi, switchSessionPinStateViaApi, updateSessionViaApi 
 import { getSessionDeleteClickIntent } from '../agentSessionDeleteInteraction'
 import type { AgentSessionRuntimeStatus } from '../agentSessionViewModel'
 import { getAgentChannelTypeIconUrl } from '../agentChannelVisuals'
+import { IconButton } from '@platform/ui/components/icon-button'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from '../agentTextProvider'
-import { resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
+import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from '../agentTooltipText'
 
 type SessionItemProps = {
   session: AgentSessionEntity
@@ -223,16 +224,15 @@ export default function SessionItem({
                 <strong>{session.name}</strong>
               </span>
               <span className="agent-session-actions">
-                <Tooltip labelKey={tooltipKeys.deleteShortcut} resolveText={resolveText}>
-                  <Button
-                    className={confirmingDelete ? 'agent-session-delete confirming' : 'agent-session-delete'}
-                    type="text"
-                    size="small"
-                    icon={confirmingDelete ? <Trash2 size={14} /> : <X size={14} />}
-                    onClick={requestInlineDelete}
-                    aria-label={t.sessionItem.delete}
-                  />
-                </Tooltip>
+                <IconButton
+                  ariaLabelKey="sessionItem.delete"
+                  className={confirmingDelete ? 'agent-session-delete confirming' : 'agent-session-delete'}
+                  icon={confirmingDelete ? Trash2 : X}
+                  onSelect={requestInlineDelete}
+                  resolveText={(key) => resolveAgentTextKey(t, key)}
+                  size="sm"
+                  tooltipKey={tooltipKeys.deleteShortcut}
+                />
                 <Dropdown menu={{ items: menuItems }} trigger={['click']}>
                   <Tooltip labelKey={tooltipKeys.more} resolveText={resolveText}>
                     <Button
