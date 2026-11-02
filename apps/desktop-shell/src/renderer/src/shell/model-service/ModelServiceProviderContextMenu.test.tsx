@@ -7,7 +7,11 @@ import { platformText } from '../../i18n/platformText'
 import { renderModelServiceSettings } from './modelServicePageHarness'
 
 const confirmSpy = vi.hoisted(() => vi.fn())
-vi.mock('@platform/ui/components/confirm', () => ({ confirmAction: confirmSpy }))
+vi.mock('@platform/ui/components/confirm', () => ({
+  // 页面用 `useConfirm()` 取宿主；这组用例只验「菜单把哪些参数交给了确认框」，所以直接给一个 spy。
+  useConfirm: () => confirmSpy,
+  ConfirmProvider: ({ children }: { children: unknown }) => children
+}))
 
 const labels = platformText['en-US'].models
 
@@ -39,7 +43,7 @@ describe('PLAT-62 provider row context menu', () => {
     })
     expect(document.querySelector('[data-provider-context-menu]')).toBeNull()
 
-    // 二次确认改由平台 `confirmAction` 承担。这里断言的是「菜单把正确的参数交给了它」：
+    // 二次确认改由平台 `confirm` 承担。这里断言的是「菜单把正确的参数交给了它」：
     // 标题/正文带着供应商名、危险档、按钮文案。对话框本身的真渲染由清空模型那组用例覆盖，
     // 两边各守一段，不重复也不留空档。
     confirmSpy.mockClear()
