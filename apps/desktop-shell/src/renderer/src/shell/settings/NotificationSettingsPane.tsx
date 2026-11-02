@@ -32,7 +32,8 @@ const notificationToggleRows: Array<{
  */
 const visibleRows = notificationToggleRows.filter((row) => notificationDeliveryWired[row.channel])
 
-/** 原因文字的 id：开关用 `aria-describedby` 指过来，读屏读到控件时能听到「为什么」。 */
+/** 授权状态那行的 id：开关用 `aria-describedby` 指过来，读屏读到控件时能听到「为什么」。 */
+export const DESKTOP_PERMISSION_REASON_ID = 'notification-desktop-permission-reason'
 /**
  * 把这次测试的投递结果说成一句话。顺序按用户关心的先后：横幅出来没有 → 桌面那条的下场。
  *
@@ -69,6 +70,46 @@ export function NotificationSettingsPane(props: {
   // 而那条路径还没有在真机上验过——所以这里如实报「放行 / 没放行 / 读不到」，不替系统背锅。
   const wired = notificationDeliveryWired
   const availableChannels = visibleRows.length
+
+  /**
+   * 桌面渠道的授权状态：**只读**，三种取值如实显示。
+   *
+   * 主进程没有「申请授权」这个能力（真申请只能从渲染层走 Web API，那条路未在真机验过），
+   * 所以这里不承诺，也不替系统背锅：「放行 / 明确拒绝 / 读不到」三件事分三句说。
+   *
+   * **窗口重新获得焦点时重读一次**：用户按提示去系统设置放行、再切回来，那行必须跟着变，
+   * 否则他会以为设置没生效、回去再改一遍。判据：这条原因说的是「现在是否仍然成立」，
+   * 不是「启动那一刻曾经如此」。
+   */
+  const [desktopPermission, setDesktopPermission] = useState<'granted' | 'denied' | 'unknown' | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const read = (): void => {
+      void Promise.resolve(window.platform?.notifications?.readDesktopPermission?.())
+        .then((state) => {
+          if (alive) setDesktopPermission(state ?? 'unknown')
+        })
+        .catch(() => {
+          if (alive) setDesktopPermission('unknown')
+        })
+    }
+    read()
+    window.addEventListener('focus', read)
+    return () => {
+      alive = false
+      window.removeEventListener('focus', read)
+    }
+  }, [])
+
+  const desktopPermissionText =
+    desktopPermission === 'granted'
+      ? labels.desktopPermissionGranted
+      : desktopPermission === 'denied'
+        ? labels.desktopPermissionDenied
+        : desktopPermission === 'unknown'
+          ? labels.desktopPermissionUnknown
+          : null
   // 点完必须**当场看到结果**：之前没有任何反馈，用户点了以为按钮坏了。
   const [sendResult, setSendResult] = useState<string | null>(null)
 
@@ -110,7 +151,18 @@ export function NotificationSettingsPane(props: {
               <span className="notification-channel-copy">
                 <strong className="notification-channel-title">{labels[row.titleKey]}</strong>
                 <span className="notification-channel-description">{labels[row.descriptionKey]}</span>
+                {row.channel === 'desktop' && desktopPermissionText !== null ? (
+                  // 状态行：说「我们知道什么」。id 给开关的 aria-describedby 用。
+                  <span
+                    className="notification-channel-state"
+                    data-desktop-permission={desktopPermission}
+                    id={DESKTOP_PERMISSION_REASON_ID}
+                    role="note">
+                    {desktopPermissionText}
+                  </span>
+                ) : null}
                 {row.channel === 'desktop' ? (
+                  // 指引行：说「你可以做什么」。和状态行并存，不相replace。
                   <span className="notification-channel-state" data-desktop-gate-hint role="note">
                     {labels.desktopSystemGateHint}
                   </span>
@@ -118,6 +170,9 @@ export function NotificationSettingsPane(props: {
               </span>
               <span className="notification-channel-controls">
                 <Switch
+                  aria-describedby={
+                    row.channel === 'desktop' && desktopPermissionText !== null ? DESKTOP_PERMISSION_REASON_ID : undefined
+                  }
                   className="notification-channel-switch"
                   size="small"
                   disabled={!rowWired}

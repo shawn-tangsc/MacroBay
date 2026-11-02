@@ -58,20 +58,53 @@ describe('notification settings availability', () => {
     expect(container.textContent).toContain(labels.scopeNote)
   })
 
-  it('tells the reader what to do, instead of drawing a permission state we cannot read', async () => {
-    const readDesktopPermission = vi.fn(async () => 'unknown')
-    Object.assign(globalThis, { platform: { notifications: { readDesktopPermission } } })
+  it('状态行说「我们知道什么」，指引行说「你可以做什么」，两行并存', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'unknown') } }
+    })
 
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
-    const hint = container.querySelector('[data-desktop-gate-hint]')
 
-    // 静态说明替代状态行：适配器恒返回 unknown，每次打开都写同一句等于没有信息量。
-    expect(hint?.textContent).toBe(labels.desktopSystemGateHint)
-    expect(hint?.textContent).toContain('系统设置')
-    // 也不再读授权：读不到的状态画成三种颜色，用户会当成事实。
-    expect(readDesktopPermission).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-desktop-permission]')).toBeNull()
+    // 状态行：三态如实显示（读不到就说读不到），不替系统背锅。
+    expect(container.querySelector('[data-desktop-permission="unknown"]')?.textContent).toBe(
+      labels.desktopPermissionUnknown
+    )
+    // 指引行：告诉用户下一步做什么。删掉状态行只留指引，是把「我们知道什么」一起丢了。
+    expect(container.querySelector('[data-desktop-gate-hint]')?.textContent).toBe(labels.desktopSystemGateHint)
+  })
+
+  it('原因与开关关联：读屏走到开关时能听到「为什么」', async () => {
+    Object.assign(globalThis, {
+      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'denied') } }
+    })
+
+    const container = await mount()
+    const reason = container.querySelector('[data-desktop-permission="denied"]')
+    const desktopSwitch = [...container.querySelectorAll<HTMLButtonElement>('.notification-channel-switch')].at(-1)
+
+    // 只挂 role="note" 不关联控件，读屏走到开关时听不到原因——这条删掉过一次，没人发现。
+    expect(desktopSwitch?.getAttribute('aria-describedby')).toBe(reason?.getAttribute('id'))
+  })
+
+  it('原因说的是「现在是否成立」：窗口重新获得焦点会重读', async () => {
+    let state: 'granted' | 'denied' | 'unknown' = 'denied'
+    const readDesktopPermission = vi.fn(async () => state)
+    Object.assign(globalThis, { platform: { notifications: { readDesktopPermission } } })
+
+    const container = await mount()
+    expect(container.querySelector('[data-desktop-permission="denied"]')).not.toBeNull()
+
+    // 用户去系统设置放行后切回来：不重读的话，这行还写着「没放行」，他会再改一遍。
+    state = 'granted'
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+
+    expect(readDesktopPermission.mock.calls.length).toBeGreaterThan(1)
+    expect(container.querySelector('[data-desktop-permission="denied"]')).toBeNull()
+    expect(container.querySelector('[data-desktop-permission="granted"]')).not.toBeNull()
   })
 
   it('没有落点的渠道整行不渲染：禁用一个不存在的能力等于说这里本来有', async () => {
