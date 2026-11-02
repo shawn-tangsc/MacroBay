@@ -58,46 +58,20 @@ describe('notification settings availability', () => {
     expect(container.textContent).toContain(labels.scopeNote)
   })
 
-  it('桌面渠道如实报授权状态：读不到就说读不到，不替系统背锅', async () => {
-    Object.assign(globalThis, {
-      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'unknown') } }
-    })
+  it('tells the reader what to do, instead of drawing a permission state we cannot read', async () => {
+    const readDesktopPermission = vi.fn(async () => 'unknown')
+    Object.assign(globalThis, { platform: { notifications: { readDesktopPermission } } })
 
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
-    const state = container.querySelector('[data-desktop-permission]')
+    const hint = container.querySelector('[data-desktop-gate-hint]')
 
-    // 「读不到」和「系统没放行」对用户是两件事：混用会把人送进系统设置白找一圈。
-    expect(state?.getAttribute('data-desktop-permission')).toBe('unknown')
-    expect(state?.textContent).toBe(labels.desktopPermissionUnknown)
-    expect(container.textContent).not.toContain(labels.desktopPermissionDenied)
-  })
-
-  it('系统明确拒绝时说要自己去开', async () => {
-    Object.assign(globalThis, {
-      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'denied') } }
-    })
-
-    const container = await mount()
-    const labels = platformText['zh-CN'].notifications
-    expect(container.querySelector('[data-desktop-permission="denied"]')?.textContent).toBe(
-      labels.desktopPermissionDenied
-    )
-  })
-
-  it('「能力有但被挡住」的那条：渲染 + 禁用 + 原因与控件关联', async () => {
-    Object.assign(globalThis, {
-      platform: { notifications: { readDesktopPermission: vi.fn(async () => 'denied') } }
-    })
-
-    const container = await mount()
-    const labels = platformText['zh-CN'].notifications
-    const reason = container.querySelector('[data-desktop-permission="denied"]')
-    const desktopSwitch = [...container.querySelectorAll<HTMLButtonElement>('.notification-channel-switch')].at(-1)
-
-    expect(reason?.textContent).toBe(labels.desktopPermissionDenied)
-    // 只挂 role="note" 不关联控件，读屏走到开关时听不到原因。
-    expect(desktopSwitch?.getAttribute('aria-describedby')).toBe(reason?.getAttribute('id'))
+    // 静态说明替代状态行：适配器恒返回 unknown，每次打开都写同一句等于没有信息量。
+    expect(hint?.textContent).toBe(labels.desktopSystemGateHint)
+    expect(hint?.textContent).toContain('系统设置')
+    // 也不再读授权：读不到的状态画成三种颜色，用户会当成事实。
+    expect(readDesktopPermission).not.toHaveBeenCalled()
+    expect(container.querySelector('[data-desktop-permission]')).toBeNull()
   })
 
   it('没有落点的渠道整行不渲染：禁用一个不存在的能力等于说这里本来有', async () => {
@@ -134,41 +108,29 @@ describe('notification settings styles', () => {
 })
 
 describe('同一屏不许有两种说法', () => {
-  it('测试提示不下结论，把判断交给上面那条权限状态', async () => {
+  it('测试提示不下结论，把「去系统设置放行」指向上面那句说明', async () => {
     const labels = platformText['zh-CN'].notifications
     const english = platformText['en-US'].notifications
 
-    // 上面一行写着「暂时无法确认」时，下面一行说「多半是系统拦的」，用户会以为结论是确定的。
+    // 不再引用任何「权限状态」：那行状态已经删掉，提示必须自己给出下一步。
     expect(labels.sendTestHint).not.toMatch(/多半是系统/)
     expect(english.sendTestHint).not.toMatch(/probably blocked/)
-    expect(labels.sendTestHint).toContain('权限状态')
-    expect(english.sendTestHint).toContain('permission status')
-  })
-
-  it('原因说的是「现在是否成立」：窗口重新获得焦点会重读一次', async () => {
-    let state: 'granted' | 'denied' | 'unknown' = 'denied'
-    const readDesktopPermission = vi.fn(async () => state)
-    Object.assign(globalThis, { platform: { notifications: { readDesktopPermission } } })
-
-    const container = await mount()
-    expect(container.querySelector('[data-desktop-permission="denied"]')).not.toBeNull()
-
-    // 用户去系统设置放行后切回来：不重读的话，这行还写着「没放行」，他会再改一遍。
-    state = 'granted'
-    await act(async () => {
-      window.dispatchEvent(new Event('focus'))
-      await Promise.resolve()
-    })
-
-    expect(readDesktopPermission.mock.calls.length).toBeGreaterThan(1)
-    expect(container.querySelector('[data-desktop-permission="denied"]')).toBeNull()
-    expect(container.querySelector('[data-desktop-permission="granted"]')).not.toBeNull()
+    expect(labels.sendTestHint).toContain('系统设置')
+    expect(english.sendTestHint).toContain('System Settings')
+    // 与上面那条门禁说明指向同一处，不留第二套说法。
+    expect(labels.desktopSystemGateHint).toContain('系统设置 › 通知')
   })
 })
 
 describe('发送测试通知的反馈', () => {
   it('点完当场给出结果，不是点了没反应', async () => {
-    const sendTest = vi.fn(async () => ({ id: 'test-1' }))
+    const sendTest = vi.fn(async () => ({
+      record: { id: 'test-1' },
+      delivery: [
+        { channel: 'toast', result: 'sent' },
+        { channel: 'desktop', result: 'handed-to-system' }
+      ]
+    }))
     Object.assign(globalThis, { platform: { notifications: { sendTest } } })
 
     const container = await mount()
@@ -182,12 +144,23 @@ describe('发送测试通知的反馈', () => {
     })
 
     expect(sendTest).toHaveBeenCalledTimes(1)
-    // 横幅开着：告诉他去哪看，而不是只回一句「已发送」。
-    expect(container.querySelector('[data-send-test-result]')?.textContent).toBe(labels.sendTestSent)
+    // 横幅真的出了才说「已出现」，桌面那条只说「交给系统了」——交给系统不等于用户看到。
+    const result = container.querySelector('[data-send-test-result]')?.textContent ?? ''
+    expect(result).toContain(labels.sendTestSent)
+    expect(result).toContain(labels.sendTestDesktopQueued)
   })
 
   it('横幅关着就如实说它不会出现，并指向铃铛', async () => {
-    Object.assign(globalThis, { platform: { notifications: { sendTest: vi.fn(async () => ({ id: 'test-2' })) } } })
+    Object.assign(globalThis, {
+      platform: {
+        notifications: {
+          sendTest: vi.fn(async () => ({
+            record: { id: 'test-2' },
+            delivery: [{ channel: 'toast', result: 'skipped', reason: 'toast-disabled' }]
+          }))
+        }
+      }
+    })
 
     const container = await mount(vi.fn(), { ...createDefaultNotificationRuntimeSettings(), toastEnabled: false })
     const labels = platformText['zh-CN'].notifications
@@ -216,5 +189,35 @@ describe('发送测试通知的反馈', () => {
     })
 
     expect(container.querySelector('[data-send-test-result]')?.textContent).toBe(labels.sendTestFailed)
+  })
+
+  it('桌面那条失败时把原因说出来，而不是只说「已发送」', async () => {
+    Object.assign(globalThis, {
+      platform: {
+        notifications: {
+          sendTest: vi.fn(async () => ({
+            record: { id: 'test-3' },
+            delivery: [
+              { channel: 'toast', result: 'sent' },
+              { channel: 'desktop', result: 'failed', reason: 'notifications-disabled' }
+            ]
+          }))
+        }
+      }
+    })
+
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    const button = [...container.querySelectorAll('button')].find((node) => node.textContent === labels.sendTest)
+
+    await act(async () => {
+      button!.click()
+      await Promise.resolve()
+    })
+
+    // 用户点这个按钮就是为了判断「系统放没放行」，原因被吞掉等于没测。
+    expect(container.querySelector('[data-send-test-result]')?.textContent).toContain(
+      labels.sendTestDesktopFailed('notifications-disabled')
+    )
   })
 })

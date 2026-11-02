@@ -1006,9 +1006,6 @@ export type PlatformText = {
   notifications: {
     channelsDescription: string
     scopeNote: string
-    desktopPermissionGranted: string
-    desktopPermissionDenied: string
-    desktopPermissionUnknown: string
     desktopEnabled: string
     desktopDescription: string
     toastEnabled: string
@@ -1029,6 +1026,7 @@ export type PlatformText = {
     centerDeleteReadEmpty: string
     centerCancel: string
     sendTest: string
+    desktopSystemGateHint: string
     sendTestHint: string
     sendTestSent: string
     sendTestToastOff: string
@@ -2095,9 +2093,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
-      desktopPermissionGranted: '系统已放行桌面通知',
-      desktopPermissionDenied: '系统通知没有放行，去 系统设置 › 通知 › MacroBay 打开',
-      desktopPermissionUnknown: '暂时无法确认系统是否放行',
       desktopEnabled: '桌面通知',
       desktopDescription: '通过系统桌面通知提醒你，不要求应用当前保持在前台。',
       toastEnabled: '应用内提示',
@@ -2124,8 +2119,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       sendTestDesktopQueued: '桌面通知已交给系统；没有弹出横幅，多半是系统静音或没放行。',
       sendTestDesktopFailed: (reason) => `桌面通知没发出去：${reason}`, 
       toastClose: '关闭这条通知',
+      desktopSystemGateHint:
+        '横幅由系统弹出，我们读不到系统里的通知开关；没看到横幅，就去「系统设置 › 通知 › 观潮」打开允许通知，再点一次「发送测试通知」。',
       sendTestHint:
-        '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现，取决于上面那条系统权限状态——写着「暂时无法确认」时，别把它当成系统拦了。',
+        '这条只用来验证链路：它不代表任何业务事实。桌面横幅能不能出现由系统决定；没看到就按上面那句去系统设置放行，再点一次。',
       centerRecordedGroup: '仅记录',
       centerExpand: '展开',
       centerCollapse: '收起',
@@ -2247,10 +2244,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       editApiKey: '编辑 API Key',
       clickToReplace: '点击可替换 Key',
       revealApiKeyFailed: '读取已保存 Key 失败，已保持掩码。',
-      revealApiKeyUnavailable: '应用进程缺少该接口，请重启应用后重试。',
+      revealApiKeyUnavailable: '当前版本缺少读取已保存 Key 的接口，关掉应用再打开即可恢复。',
       copyApiKey: '复制密钥',
       apiKeyCopied: '已复制',
-      revealApiKeyBridgeFailed: '与主进程通信失败，请重启应用后重试。',
+      revealApiKeyBridgeFailed: '没能连上主进程，可以重试。',
       revealApiKeyMissing: '没有找到已保存的 Key（可能已被移除）。',
       retry: '重试',
       apiKeyRevealedHint: '完整 Key 已显示，30 秒后自动隐藏（失焦也会隐藏）。',
@@ -3200,9 +3197,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
       scopeNote:
         'Keep at least one lightweight channel enabled. Desktop delivery is useful away from the app, while popups are better for events that need immediate attention.',
-      desktopPermissionGranted: 'The system allows desktop notifications',
-      desktopPermissionDenied: 'System notifications are off. Open System Settings › Notifications › MacroBay',
-      desktopPermissionUnknown: 'Could not check whether the system allows notifications',
       desktopEnabled: 'Desktop notifications',
       desktopDescription: 'Use system notifications even when the app is not the active window.',
       toastEnabled: 'In-app toasts',
@@ -3229,8 +3223,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       sendTestDesktopQueued: 'The desktop alert was handed to the system; no banner usually means the system muted or blocked it.',
       sendTestDesktopFailed: (reason) => `The desktop alert did not go out: ${reason}`,
       toastClose: 'Dismiss this notification',
+      desktopSystemGateHint:
+        'The system draws the banner and we cannot read its notification switch. If no banner appears, open System Settings › Notifications › MacroBay, allow notifications, then press "Send a test notification" again.',
       sendTestHint:
-        'This only proves the pipeline works; it describes no real event. Whether a desktop banner appears depends on the system permission status above — when it says the status could not be checked, do not read that as the system blocked it.',
+        'This only proves the pipeline works; it describes no real event. Whether the desktop banner appears is up to the system — if you do not see it, allow notifications in System Settings as described above and press the button again.',
       centerRecordedGroup: 'Recorded only',
       centerExpand: 'Show more',
       centerCollapse: 'Show less',
@@ -3352,10 +3348,10 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       editApiKey: 'Edit API key',
       clickToReplace: 'Click to replace the key',
       revealApiKeyFailed: 'Could not read the saved key; keeping the mask.',
-      revealApiKeyUnavailable: 'The app process is missing this interface; restart the app and retry.',
+      revealApiKeyUnavailable: 'This build cannot reveal a saved key; close the app and open it again to restore it.',
       copyApiKey: 'Copy key',
       apiKeyCopied: 'Copied',
-      revealApiKeyBridgeFailed: 'Failed to reach the main process; restart the app and retry.',
+      revealApiKeyBridgeFailed: 'Could not reach the main process — you can try again.',
       revealApiKeyMissing: 'No saved key was found (it may have been removed).',
       retry: 'Retry',
       apiKeyRevealedHint: 'Full key visible; hides automatically after 30s (or on blur).',
