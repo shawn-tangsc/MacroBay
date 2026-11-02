@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type FocusEvent as ReactFocusEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
@@ -38,8 +39,8 @@ type TriggerHandlers = {
   onClick?: (event: ReactMouseEvent<HTMLElement>) => void
   onMouseEnter?: (event: ReactMouseEvent<HTMLElement>) => void
   onMouseLeave?: (event: ReactMouseEvent<HTMLElement>) => void
-  onFocus?: (event: ReactMouseEvent<HTMLElement>) => void
-  onBlur?: (event: ReactMouseEvent<HTMLElement>) => void
+  onFocus?: (event: ReactFocusEvent<HTMLElement>) => void
+  onBlur?: (event: ReactFocusEvent<HTMLElement>) => void
 }
 
 /** 一行说明：键 + 这一行自己的参数（已格式化好的字符串）。 */
@@ -150,12 +151,12 @@ export function Popover<K extends string = string>(props: PopoverProps<K>): Reac
       childHandlers.onMouseLeave?.(event)
       setHovered(false)
     },
-    onFocus: (event: ReactMouseEvent<HTMLElement>) => {
+    onFocus: (event: ReactFocusEvent<HTMLElement>) => {
       childHandlers.onFocus?.(event)
       trigger.current = event.currentTarget
       setFocused(true)
     },
-    onBlur: (event: ReactMouseEvent<HTMLElement>) => {
+    onBlur: (event: ReactFocusEvent<HTMLElement>) => {
       childHandlers.onBlur?.(event)
       setFocused(false)
     }

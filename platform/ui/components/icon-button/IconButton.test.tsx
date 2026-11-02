@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { HelpCircle } from 'lucide-react'
+import { HelpCircle, MoreHorizontal, RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -315,6 +315,26 @@ describe('IconButton', () => {
     expect(rules).not.toMatch(/aria-pressed|icon-button--pressed|\[data-pressed/)
   })
 
+  it('forwards the handlers a floating layer injects, and still runs its own onSelect', () => {
+    // 这是 R156 那条链的判据：`Popover` 用克隆子元素的方式注入 onClick/onFocus，
+    // 组件若只绑自己的 onSelect，注进来的处理器会被静默丢掉，图标按钮就当不成触发器。
+    const order: string[] = []
+    const injectedClick = vi.fn(() => order.push('injected'))
+    const onSelect = vi.fn(() => order.push('select'))
+    const injectedFocus = vi.fn()
+
+    const button = mountElement({ onClick: injectedClick, onFocus: injectedFocus, onSelect })
+
+    act(() => button.click())
+    expect(injectedClick).toHaveBeenCalledTimes(1)
+    // 外部注入的先跑，按钮自己的动作后跑；两条都跑，谁也不吃掉谁。
+    expect(order).toEqual(['injected', 'select'])
+    expect(onSelect).toHaveBeenCalledTimes(1)
+
+    act(() => button.focus())
+    expect(injectedFocus).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves the tooltip copy through the same resolver and never uses a native title', () => {
     const seen: string[] = []
     const resolved = (value: string): string => {
@@ -390,5 +410,67 @@ describe('IconButton', () => {
     expect(code).not.toMatch(/@keyframes|animation:|\bspin\b|Loader/i)
     expect(code).toMatch(/from '\.\.\/loading'/)
     expect(rules).not.toMatch(/@keyframes|animation/)
+  })
+
+  it('puts aria-haspopup on the DOM together with aria-expanded, and tracks the open state', () => {
+    // 类型能写对、DOM 上不一定出现——这是 `dataAttributes` 那次留下的教训，所以这里断言属性本体。
+    const closed = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.moreActions"
+        expanded={false}
+        hasPopup="menu"
+        icon={MoreHorizontal}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(closed).toContain('aria-haspopup="menu"')
+    expect(closed).toContain('aria-expanded="false"')
+
+    const open = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.moreActions"
+        expanded
+        hasPopup="menu"
+        icon={MoreHorizontal}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(open).toContain('aria-expanded="true"')
+  })
+
+  it('keeps aria-expanded alone legal, because a control can open an inline panel', () => {
+    // 单向依赖，不是二选一：`expanded` 的语义是「被控制的东西开没开」，不要求那是弹出层。
+    // 写成互相排斥，筛选面板与行展开都会编译不过——而为了过类型去删 `expanded`，
+    // 等于把「开着还是关着」从读屏里拿掉。
+    const html = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.filters"
+        expanded
+        icon={SlidersHorizontal}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(html).toContain('aria-expanded="true"')
+    expect(html).not.toContain('aria-haspopup')
+  })
+
+  it('emits no aria-haspopup at all when the button is not a popup trigger', () => {
+    // 不能出现 `aria-haspopup="undefined"`——那会让读屏读到一颗“说不清开没开”的弹出按钮。
+    const html = renderToStaticMarkup(
+      <IconButton
+        ariaLabelKey="ui.test.refresh"
+        icon={RefreshCw}
+        onSelect={() => undefined}
+        resolveText={(value) => value}
+        size="sm"
+      />
+    )
+    expect(html).not.toContain('aria-haspopup')
   })
 })

@@ -87,6 +87,25 @@ function dataOnly(
  */
 export type IconButtonVariant = 'plain' | 'solid' | 'overlay'
 
+/** `aria-haspopup` 的合法值。闭集，不收 `string`：写错的值读屏直接忽略。 */
+export type IconButtonHasPopup = 'menu' | 'listbox' | 'dialog' | 'tree' | 'grid'
+
+/**
+ * `hasPopup` 与 `expanded` 的配对关系**由类型表达**，不靠文档。
+ *
+ * 单向依赖，不是二选一：
+ * - **只有 `expanded` 是合法的**——它也可以表示「这颗按钮控制的内联面板现在开着」，
+ *   那种情况不需要 `aria-haspopup`（`expanded` 的语义是「被控制的东西开没开」，
+ *   不要求那东西是弹出层）。把它写成互斥会让筛选面板、行展开这类站点编译不过，
+ *   而为了让类型通过去删 `expanded`，等于把「开着还是关着」从读屏里拿掉。
+ * - **只有 `hasPopup` 是无意义的**——读屏听得出是弹出按钮，听不出开没开。
+ *
+ * 代价说明：这个联合必须挂在 props 类型上（见 `IconButtonProps`），否则类型管不住。
+ */
+export type IconButtonPopup =
+  | { hasPopup?: never; expanded?: boolean }
+  | { hasPopup: IconButtonHasPopup; expanded: boolean }
+
 type IconButtonCommon = {
   /**
    * 读屏名的 i18n 键；不收字面量，也不收已解析好的句子。
@@ -147,6 +166,20 @@ type IconButtonCommon = {
    */
   pressed?: boolean
   /**
+   * 这是不是一颗**弹出触发器**（下拉菜单、列出列表、对话框、树、网格）。
+   *
+   * 只影响可访问性：映射到 `aria-haspopup`，取值是闭集——写错的值读屏会忽略，**静默失效**，
+   * 所以这里不收 `string`。
+   *
+   * **必须与 `expanded` 成对**（类型层面强制，见 `IconButtonPopup`）：只有 `aria-haspopup`
+   * 而没有被展开状态，读屏听到的是「这是个弹出按钮」，但听不出它现在开没开——半套无障碍
+   * 比没有更容易让人误判。
+   *
+   * 与 `pressed` **互斥**：一颗按钮要么是开关（按下/未按下），要么是弹出触发器（开着/关着）。
+   * 两个同时给，读屏会得到两句互相矛盾的描述。
+   */
+  hasPopup?: IconButtonHasPopup
+  /**
    * 调用方自己的类名：**只用来加定位与状态类，不碰尺寸与外观**。
    *
    * 为什么安全：组件的尺寸写在行内 `style`，**行内样式优先于任何类规则**，所以这里加
@@ -178,15 +211,27 @@ type IconButtonCommon = {
    * 触发器（持仓卡那颗「?」就是卡在这里）。透传的是**标准 DOM 交互**，不是让人改外观；
    * `className` / `style` 的边界不因此松动。
    */
-  onMouseEnter?: (event: MouseEvent<HTMLButtonElement>) => void
-  onMouseLeave?: (event: MouseEvent<HTMLButtonElement>) => void
-  onFocus?: (event: FocusEvent<HTMLButtonElement>) => void
-  onBlur?: (event: FocusEvent<HTMLButtonElement>) => void
+  onClick?: (event: MouseEvent<HTMLElement>) => void
+  onMouseEnter?: (event: MouseEvent<HTMLElement>) => void
+  onMouseLeave?: (event: MouseEvent<HTMLElement>) => void
+  onFocus?: (event: FocusEvent<HTMLElement>) => void
+  onBlur?: (event: FocusEvent<HTMLElement>) => void
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
 
-export type IconButtonProps = IconButtonCommon &
+export type IconButtonProps = Omit<IconButtonCommon, 'hasPopup' | 'expanded' | 'pressed'> &
+  IconButtonPopup &
+  (
+    | {
+        /** 纯开关：与弹出触发器互斥，两者同时给读屏会得到矛盾的描述。 */
+        pressed?: boolean
+        hasPopup?: never
+      }
+    | {
+        pressed?: never
+      }
+  ) &
   (
     | {
         disabled?: false
@@ -217,9 +262,11 @@ export function IconButton({
   expanded,
   controls,
   pressed,
+  hasPopup,
   className,
   style,
   dataAttributes,
+  onClick,
   onMouseEnter,
   onMouseLeave,
   onFocus,
@@ -260,9 +307,16 @@ export function IconButton({
           <Glyph className="icon-button__glyph" size={GLYPH_PX[size]} aria-hidden="true" />
         )
       }
-      onClick={onSelect}
+      onClick={(event) => {
+        // 注入的先跑，按钮自己的动作后跑：两条都跑，谁也不吃掉谁。
+        onClick?.(event)
+        onSelect(event)
+      }}
       // 只有真的传了才写：`aria-expanded={undefined}` 在 DOM 里会变成字符串 "undefined"。
       {...(expanded === undefined ? {} : { 'aria-expanded': expanded })}
+      // 与 `expanded` 同一条：只有真的传了才写。类型上 `hasPopup` 一定伴随 `expanded`，
+      // 但运行时这里仍旧分开判断——**类型写对不代表属性出现**，DOM 断言钉的是这一行。
+      {...(hasPopup === undefined ? {} : { 'aria-haspopup': hasPopup })}
       {...(controls === undefined ? {} : { 'aria-controls': controls })}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       // 尺寸放在最后：调用方拿得到定位，拿不到覆盖 22/24 的机会。
