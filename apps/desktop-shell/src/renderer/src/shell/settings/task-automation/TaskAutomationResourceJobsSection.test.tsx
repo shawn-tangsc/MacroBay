@@ -57,7 +57,7 @@ describe('TaskAutomationResourceJobsSection filters', () => {
       typeInto(input, 'zzz')
     })
     expect(rows(container)).toHaveLength(0)
-    expect(container.textContent).toContain(labels.filterEmpty)
+    expect(container.textContent).toContain('有数据，但被当前筛选挡住了')
     const clear = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.trim() === labels.clearFilters)
     expect(clear).toBeDefined()
@@ -131,7 +131,7 @@ describe('TaskAutomationResourceJobsSection pagination', () => {
     })
 
     expect(rows(container)).toHaveLength(0)
-    expect(text(container)).toContain(labels.filterEmpty)
+    expect(text(container)).toContain('有数据，但被当前筛选挡住了')
     expect(container.querySelector('.task-automation-pagination')).toBeNull()
     expect(container.querySelector('.task-automation-filters')).not.toBeNull()
   })

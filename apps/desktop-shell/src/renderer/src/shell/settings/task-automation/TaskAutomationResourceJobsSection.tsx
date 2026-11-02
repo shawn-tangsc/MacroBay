@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 
 import type { JobScheduleView } from '@platform/jobs'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
 
 import { formatJobSchedule, formatTimestamp, type TaskAutomationLabels } from './taskAutomationFormat'
 import { BlockEmpty, BlockError, BlockLoading } from './TaskAutomationBlockParts'
@@ -134,7 +135,12 @@ export function TaskAutomationResourceJobsSection(props: {
             </span>
           </div>
           {matched.length === 0 ? (
-            <BlockEmpty body={labels.filterEmpty} actionLabel={labels.clearFilters} onAction={clearFilters} />
+            <StateView
+              state="empty"
+              reasonCode="filtered-out"
+              size="md"
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.clear_filter, onSelect: clearFilters }}
+            />
           ) : (
             <>
               <table className="task-automation-table">
