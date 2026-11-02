@@ -172,6 +172,7 @@ import { registerWebIpc } from './ipc/webIpc'
 import { registerChannelIpc } from './ipc/channelIpc'
 import { registerModelIpc } from './ipc/modelIpc'
 import { registerAssistantIpc } from './ipc/assistantIpc'
+import { registerAgentIpc } from './ipc/agentIpc'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
@@ -1381,182 +1382,23 @@ function registerIpcHandlers(
   // Web Search 8 个 handler 搬到 ipc/webIpc.ts；缓存 5 个已在 storageIpc 那一处接线。
   registerWebIpc(ipcMain, { webSearch: webSearchIpcHandlers })
 
-  ipcMain.handle(IpcChannels.agentsGetState, () => agentIpcHandlers.getState())
-  ipcMain.handle(
-    IpcChannels.agentsGetRuntimeCompatibility,
-    (_event: IpcMainInvokeEvent, providerId: string, modelId: string, runtimeId: string) =>
-      agentIpcHandlers.getRuntimeCompatibility(providerId, modelId, runtimeId as 'claude-code' | 'openai-agents')
-  )
-  ipcMain.handle(
-    IpcChannels.agentsProbeRuntimeCompatibility,
-    (_event: IpcMainInvokeEvent, providerId: string, modelId: string, runtimeId: string) =>
-      agentIpcHandlers.probeRuntimeCompatibility(providerId, modelId, runtimeId as 'claude-code' | 'openai-agents')
-  )
-  ipcMain.handle(IpcChannels.agentsGetModelGatewayStatus, () => agentIpcHandlers.getModelGatewayStatus())
-  ipcMain.handle(
-    IpcChannels.agentsStartModelGateway,
-    (_event: IpcMainInvokeEvent, providerId?: string, modelId?: string) =>
-      agentIpcHandlers.startModelGateway(providerId, modelId)
-  )
-  ipcMain.handle(IpcChannels.agentsStopModelGateway, () => agentIpcHandlers.stopModelGateway())
-  ipcMain.handle(IpcChannels.agentsSetModelGatewayEnabled, (_event: IpcMainInvokeEvent, enabled: boolean) =>
-    agentIpcHandlers.setModelGatewayEnabled(enabled)
-  )
-  ipcMain.handle(IpcChannels.agentsExecuteRuntimeCommand, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const result = await agentIpcHandlers.executeRuntimeCommand(
-      input as Parameters<typeof agentIpcHandlers.executeRuntimeCommand>[0]
-    )
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, result.state)
-    return result
+  // 智能体会话/运行时 36 个 handler 搬到 ipc/agentIpc.ts。
+  registerAgentIpc(ipcMain, {
+    agentIpcHandlers,
+    getState: () => agentStore.getState(),
+    syncAfterMutation: (previousState) => syncAgentStateAfterMutation(previousState),
+    broadcastStateChanged: (state) => {
+      getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
+    },
+    replaceState: (state) => replaceAgentState(state),
+    cancelMessage: (runId) => agentRuntimeService.cancelMessage(runId)
   })
-  ipcMain.handle(IpcChannels.agentsGetRuntimeSnapshot, () => agentIpcHandlers.getRuntimeSnapshot())
-  ipcMain.handle(IpcChannels.agentsGetChannelRuntimeSnapshot, (_event: IpcMainInvokeEvent, options?: unknown) =>
-    agentIpcHandlers.getChannelRuntimeSnapshot(
-      (options as Parameters<typeof agentIpcHandlers.getChannelRuntimeSnapshot>[0]) ?? undefined
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsRestartChannelRuntime, (_event: IpcMainInvokeEvent, channelId: string) =>
-    agentIpcHandlers.restartChannelRuntime(channelId)
-  )
-  ipcMain.handle(IpcChannels.agentsListToolApprovals, () => agentIpcHandlers.listToolApprovals())
-  ipcMain.handle(IpcChannels.agentsResolveToolApproval, (_event: IpcMainInvokeEvent, approvalId: string, decision: unknown) =>
-    agentIpcHandlers.resolveToolApproval(
-      approvalId,
-      decision as Parameters<typeof agentIpcHandlers.resolveToolApproval>[1]
-    )
-  )
-  ipcMain.handle(IpcChannels.agentsListAgents, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    agentIpcHandlers.listAgents((query as Parameters<typeof agentIpcHandlers.listAgents>[0]) ?? {})
-  )
-  ipcMain.handle(IpcChannels.agentsCreateAgent, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const previousState = await agentStore.getState()
-    const created = await agentIpcHandlers.createAgent(input as Parameters<typeof agentIpcHandlers.createAgent>[0])
-    await syncAgentStateAfterMutation(previousState)
-    return created
-  })
+  // 任务排程的 15 个 handler 仍由它自己的注册函数负责。
   registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {
     getScheduleValidationOptions: taskIpcScheduleValidationOptions,
     afterCommit: refreshTaskStateAfterCommit
   })
-  ipcMain.handle(IpcChannels.agentsListSessions, (_event: IpcMainInvokeEvent, query?: unknown) =>
-    agentIpcHandlers.listSessions((query as Parameters<typeof agentIpcHandlers.listSessions>[0]) ?? {})
-  )
-  ipcMain.handle(
-    IpcChannels.agentsListSessionMessages,
-    (_event: IpcMainInvokeEvent, sessionId: string, query?: unknown) =>
-      agentIpcHandlers.listSessionMessages(
-        sessionId,
-        (query as Parameters<typeof agentIpcHandlers.listSessionMessages>[1]) ?? {}
-      )
-  )
-  ipcMain.handle(IpcChannels.agentsCreateSession, async (_event: IpcMainInvokeEvent, input: unknown) => {
-    const previousState = await agentStore.getState()
-    const created = await agentIpcHandlers.createSession(input as Parameters<typeof agentIpcHandlers.createSession>[0])
-    await syncAgentStateAfterMutation(previousState)
-    return created
-  })
-  ipcMain.handle(IpcChannels.agentsUpdateAgent, async (_event: IpcMainInvokeEvent, agentId: string, patch: unknown) => {
-    const updated = await agentIpcHandlers.updateAgent(
-      agentId,
-      patch as Parameters<typeof agentIpcHandlers.updateAgent>[1]
-    )
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, await agentServices.state.getState())
-    return updated
-  })
-  ipcMain.handle(IpcChannels.agentsDeleteAgent, async (_event: IpcMainInvokeEvent, agentId: string) => {
-    const previousState = await agentStore.getState()
-    await agentIpcHandlers.deleteAgent(agentId)
-    return syncAgentStateAfterMutation(previousState)
-  })
-  ipcMain.handle(IpcChannels.agentsReorderAgents, async (_event: IpcMainInvokeEvent, orderedAgentIds: string[]) => {
-    const state = await agentIpcHandlers.reorderAgents(orderedAgentIds)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsSelectAgent, async (_event: IpcMainInvokeEvent, agentId: string) => {
-    const state = await agentIpcHandlers.selectAgent(agentId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(
-    IpcChannels.agentsUpdateSession,
-    async (_event: IpcMainInvokeEvent, sessionId: string, patch: unknown) => {
-      const typedPatch = patch as Parameters<typeof agentIpcHandlers.updateSession>[1]
-      const previousState = typedPatch.agentId === undefined ? null : await agentStore.getState()
-      const updated = await agentIpcHandlers.updateSession(sessionId, typedPatch)
-      if (previousState) {
-        await syncAgentStateAfterMutation(previousState)
-      } else {
-        getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, await agentServices.state.getState())
-      }
-      return updated
-    }
-  )
-  ipcMain.handle(IpcChannels.agentsDeleteSessions, async (_event: IpcMainInvokeEvent, sessionIds: string[]) => {
-    const previousState = await agentStore.getState()
-    const result = await agentIpcHandlers.deleteSessions(sessionIds)
-    await syncAgentStateAfterMutation(previousState)
-    return result
-  })
-  ipcMain.handle(IpcChannels.agentsReorderSessions, async (_event: IpcMainInvokeEvent, orderedSessionIds: string[]) => {
-    const state = await agentIpcHandlers.reorderSessions(orderedSessionIds)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsSetSessionAgent, async (_event: IpcMainInvokeEvent, sessionId: string, agentId: string | null) => {
-    const previousState = await agentStore.getState()
-    const session = await agentIpcHandlers.setSessionAgent(sessionId, agentId)
-    await syncAgentStateAfterMutation(previousState)
-    return session
-  })
-  ipcMain.handle(IpcChannels.agentsSetSessionWorkspace, async (_event: IpcMainInvokeEvent, sessionId: string, source: unknown) => {
-    const previousState = await agentStore.getState()
-    const session = await agentIpcHandlers.setSessionWorkspace(
-      sessionId,
-      source as Parameters<typeof agentIpcHandlers.setSessionWorkspace>[1]
-    )
-    await syncAgentStateAfterMutation(previousState)
-    return session
-  })
-  ipcMain.handle(IpcChannels.agentsSetSessionWorkspaceByPath, async (_event: IpcMainInvokeEvent, sessionId: string, path: string) => {
-    const previousState = await agentStore.getState()
-    const session = await agentIpcHandlers.setSessionWorkspaceByPath(sessionId, path)
-    await syncAgentStateAfterMutation(previousState)
-    return session
-  })
-  ipcMain.handle(IpcChannels.agentsSwitchSessionPinState, async (_event: IpcMainInvokeEvent, sessionId: string) => {
-    const state = await agentIpcHandlers.toggleSessionPin(sessionId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsSelectSession, async (_event: IpcMainInvokeEvent, sessionId: string) => {
-    const state = await agentIpcHandlers.selectSession(sessionId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(IpcChannels.agentsClearSessionMessages, async (_event: IpcMainInvokeEvent, sessionId: string) => {
-    const state = await agentIpcHandlers.clearSessionMessages(sessionId)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-    return state
-  })
-  ipcMain.handle(
-    IpcChannels.agentsDeleteSessionMessage,
-    async (_event: IpcMainInvokeEvent, sessionId: string, messageId: string) => {
-      const state = await agentIpcHandlers.deleteSessionMessage(sessionId, messageId)
-      getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, state)
-      return state
-    }
-  )
-  ipcMain.handle(IpcChannels.agentsReplaceState, (_event: IpcMainInvokeEvent, state: AgentStoreState) => replaceAgentState(state))
-  ipcMain.handle(IpcChannels.agentsSendMessage, async (_event: IpcMainInvokeEvent, request: AgentChatRuntimeRequest) => {
-    const result = await agentIpcHandlers.sendMessage(request)
-    getMainWindow()?.webContents.send(IpcChannels.agentsStateChanged, result.state)
-    return result
-  })
-  ipcMain.handle(IpcChannels.agentsCancelMessage, (_event: IpcMainInvokeEvent, runId: string) => agentRuntimeService.cancelMessage(runId))
-  ipcMain.handle(IpcChannels.agentsCancelSession, (_event: IpcMainInvokeEvent, sessionId: string) =>
-    agentIpcHandlers.cancelSession(sessionId)
-  )
+
   ipcMain.handle(IpcChannels.agentsRefreshMcpTools, async (_event: IpcMainInvokeEvent, serverId: string) =>
     refreshAgentMcpTools(
       {

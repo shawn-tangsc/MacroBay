@@ -20,6 +20,7 @@ const storageIpcSource = readSource('ipc/storageIpc.ts')
 const channelIpcSource = readSource('ipc/channelIpc.ts')
 const modelIpcSource = readSource('ipc/modelIpc.ts')
 const assistantIpcSource = readSource('ipc/assistantIpc.ts')
+const agentIpcSource = readSource('ipc/agentIpc.ts')
 // 第 1 步起，窗口/应用/外壳/对话框这 16 个 handler 的归属文件是 ipc/windowIpc.ts。
 const windowIpcSource = readSource('ipc/windowIpc.ts')
 
@@ -82,14 +83,14 @@ describe('desktop main IPC surface', () => {
     expect(appSource).toContain('createElectronChannelCredentialVault')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersRunRuntimeChecks')
     expect(modelIpcSource).toContain('IpcChannels.modelProvidersGetRuntimeCheckReport')
-    expect(appSource).toContain('IpcChannels.agentsGetRuntimeCompatibility')
-    expect(appSource).toContain('IpcChannels.agentsProbeRuntimeCompatibility')
-    expect(appSource).toContain('IpcChannels.agentsGetModelGatewayStatus')
-    expect(appSource).toContain('IpcChannels.agentsStartModelGateway')
-    expect(appSource).toContain('IpcChannels.agentsStopModelGateway')
-    expect(appSource).toContain('IpcChannels.agentsSetModelGatewayEnabled')
-    expect(appSource).toContain('IpcChannels.agentsExecuteRuntimeCommand')
-    expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
+    expect(agentIpcSource).toContain('IpcChannels.agentsGetRuntimeCompatibility')
+    expect(agentIpcSource).toContain('IpcChannels.agentsProbeRuntimeCompatibility')
+    expect(agentIpcSource).toContain('IpcChannels.agentsGetModelGatewayStatus')
+    expect(agentIpcSource).toContain('IpcChannels.agentsStartModelGateway')
+    expect(agentIpcSource).toContain('IpcChannels.agentsStopModelGateway')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSetModelGatewayEnabled')
+    expect(agentIpcSource).toContain('IpcChannels.agentsExecuteRuntimeCommand')
+    expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(appSource).toContain('getPolicyPreset: async () => (await settingsStore.get()).agent.taskAutomation.policyPreset')
     expect(appSource).toContain('taskManagementRuntime: taskManagementToolRuntimeService')
     expect(appSource).toContain('taskManagementToolBridge: {')
@@ -169,7 +170,7 @@ describe('desktop main IPC surface', () => {
     expect(collapseWhitespace(appSource)).toContain(
       collapseWhitespace('registerProductServices: taskAutomationSmokeProfile.enabled ? undefined : async () => options.registerProductServices?.({')
     )
-    expect(appSource).toContain('agentIpcHandlers.sendMessage(request)')
+    expect(agentIpcSource).toContain('agentIpcHandlers.sendMessage(request)')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(storageIpcSource).toContain('IpcChannels.storageListCaches')
@@ -228,7 +229,7 @@ describe('desktop main IPC surface', () => {
     expect(appSource).not.toContain('testModelProviderConnection(provider, options)')
     expect(appSource).not.toContain('apiKey: options?.apiKey')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
   })
 
@@ -276,7 +277,7 @@ describe('desktop main IPC surface', () => {
       expect(appSource).not.toContain(writeChannel)
     }
     // 既有受保护面逐字未变
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     expect(appSource).toContain('registerAgentTaskIpcHandlers(ipcMain, agentIpcHandlers, {')
@@ -378,7 +379,7 @@ describe('desktop main IPC surface', () => {
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsEditAndResendUserMessage')
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
     expect(appSource).toContain('IpcChannels.agentsListProductToolPackages')
   })
 
@@ -393,7 +394,7 @@ describe('desktop main IPC surface', () => {
     expect(storageIpcSource).toContain('IpcChannels.storageListCacheOperations')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(webIpcSource).toContain('IpcChannels.webSearchFetchUrls')
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
   })
 
   it('wires renderer lifecycle diagnostics to every main window', () => {
@@ -472,7 +473,7 @@ describe('desktop main IPC surface', () => {
       expect(preloadSource).toContain(`${method}:`)
     }
     // 既有受保护 seam 不得因 workspace 接线丢失
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
     // web search handler 已搬到 ipc/webIpc.ts：受保护 seam 看模块而不是只看 app.ts。
@@ -542,7 +543,7 @@ describe('desktop main IPC surface', () => {
       'platform:model-providers-upsert'
     ])
     // 既有受保护面逐字未变（agent / assistant / product）
-    expect(appSource).toContain('IpcChannels.agentsSendMessage')
+    expect(agentIpcSource).toContain('IpcChannels.agentsSendMessage')
     expect(assistantIpcSource).toContain('IpcChannels.assistantsStreamOpen')
     expect(appSource).toContain('IpcChannels.productIpcInvoke')
   })
