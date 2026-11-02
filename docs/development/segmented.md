@@ -11,7 +11,7 @@ one value changes** — a range, a view, a language. When switching swaps a whol
 | --- | --- |
 | `Segmented` | One group of mutually exclusive values. |
 | `SegmentedProps` | The props type. |
-| `ChoiceItem` | `{ value, labelKey, disabled? }` — shared with `Tabs`. |
+| `ChoiceItem` | `{ value, labelKey, disabled? }` — shared with `Tabs`; **defined in [Tabs](tabs.md)**, not here. |
 
 ### Props
 
@@ -31,8 +31,10 @@ one value changes** — a range, a view, a language. When switching swaps a whol
   reader is usually comparing two or three options before deciding.
 - **Disabled values** leave the tab order and the arrow sequence.
 - **Selection reads in grayscale**: the chosen item differs by fill and weight, not by hue.
-- **A stale `value` still leaves the group reachable**, and the component calls
-  `onChange(firstEnabled)` once, the same rule as `Tabs`.
+- **A stale `value` still leaves the group reachable**, with the same once-only fallback as `Tabs`
+  — the rule, the guard and its reasoning are written down in [Tabs](tabs.md) and are not repeated
+  here. What is specific to this component is the *interaction*: arrows move focus without
+  selecting, so a stale value can only be repaired by the fallback callback, never by a key press.
 
 ## How to verify a page that uses it
 

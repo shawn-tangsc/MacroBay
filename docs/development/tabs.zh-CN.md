@@ -5,13 +5,17 @@
 **切换后换了一整块内容**时用 `@platform/ui/components/tabs` 的 `Tabs`；同一块内容只换一个取值时用
 `Segmented`。两者不是一件组件加 `mode` 开关：交互、ARIA、键盘都不同，布尔只会把差别藏起来。
 
+**一个定义，只在一处。** `ChoiceItem` 的形状与「选中值失效」的兜底规则（`useChoiceValue`）写在**本页**，
+`segmented.md` 只指回来、不再复述。改 `ChoiceItem` 的形状或兜底规则时，**两份文档同笔改**——
+一份还写着旧形状，比没有这份文档更糟。
+
 ## 组件
 
 | 导出 | 用途 |
 | --- | --- |
 | `Tabs` | 一个 tablist 加它的面板。 |
 | `TabsProps` | props 类型。 |
-| `ChoiceItem` | `{ value, labelKey, disabled? }`——与 `Segmented` 共用。 |
+| `ChoiceItem` | `{ value, labelKey, disabled? }`——与 `Segmented` 共用，**权威定义在本页**。 |
 
 ```tsx
 <Tabs

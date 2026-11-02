@@ -7,13 +7,18 @@ When the same block keeps its place and only one value changes, use `Segmented` 
 not one component with a `mode` switch: their interaction, ARIA and keyboard differ, and a boolean
 would only hide that.
 
+**One definition, one page.** `ChoiceItem` and the stale-`value` fallback (`useChoiceValue`) are
+described here, and only here; `segmented.md` points back to this page instead of repeating them.
+Changing the shape of `ChoiceItem` or the fallback rule means editing **both** documents in the same
+change — a page that silently describes the old shape is worse than a missing page.
+
 ## The component
 
 | Export | Use it for |
 | --- | --- |
 | `Tabs` | One tablist plus its panel. |
 | `TabsProps` | The props type. |
-| `ChoiceItem` | `{ value, labelKey, disabled? }` — shared with `Segmented`. |
+| `ChoiceItem` | `{ value, labelKey, disabled? }` — shared with `Segmented`. **Its authoritative definition is here**, in this page. |
 
 ```tsx
 <Tabs
