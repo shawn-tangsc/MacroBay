@@ -1,6 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
 
-import type { StateSize } from '../empty-state'
 import type { STATE_VIEW_ACTION_KEYS } from './stateViewText'
 import { LoadingState } from '../loading'
 
@@ -94,6 +93,15 @@ export const STATE_VIEW_TEXT_KEYS = [
 export type StateViewTextKey =
   | (typeof STATE_VIEW_TEXT_KEYS)[number]
   | (typeof STATE_VIEW_ACTION_KEYS)[keyof typeof STATE_VIEW_ACTION_KEYS]
+
+/**
+ * 三档高度。与 `IconButton` 的尺寸词共用一套（`sm` / `md` / `lg`）——同一个界面里两套密度词，
+ * 读者会以为是两件事。
+ *
+ * 这个类型原来住在 `../empty-state` 里（旧组件复用），旧组件退役时搬了过来：**退役不是删目录，
+ * 是把还被用着的东西搬出来再删**。删掉目录却没搬类型，`tsc` 当场红——那次红就是这条注释的来历。
+ */
+export type StateSize = 'sm' | 'md' | 'lg'
 
 export type StateViewAction = {
   /** 动作文案的 i18n 键；不收字面量，且必须是本组件码表里的键。 */

@@ -8,6 +8,7 @@ export type {
   ProductReason,
   StateViewAction,
   StateViewProps,
+  StateSize,
   StateViewState,
   StateViewTextKey
 } from './StateView'
