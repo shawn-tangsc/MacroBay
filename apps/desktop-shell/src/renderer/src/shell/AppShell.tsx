@@ -46,8 +46,8 @@ import { resolveProviderHost } from './model-service/ModelServiceBrandBlock'
 import { sanitizeProxyAddressForDisplay } from './proxyAddressDisplay'
 import { NotificationBell } from './notifications/NotificationBell'
 import { NotificationCenterDrawer } from './notifications/NotificationCenterDrawer'
-import { NotificationToasts } from './notifications/NotificationToasts'
-import { resolveNotificationNavigation } from './notifications/notificationDeeplink'
+import { NotificationBanner } from './notifications/NotificationBanner'
+import { createNotificationDeeplinkHandler } from './notifications/notificationDeeplinkHandler'
 import { proxyAddressUsesImplicitSocks5, proxyRejectionNotice } from './proxySettingsNotice'
 import {
   buildProxyProbeUrl,
@@ -214,6 +214,7 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
   const [activeNavKey, setActiveNavKey] = useState('assistants')
   const [settingsPanelKey, setSettingsPanelKey] = useState('models')
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
+  const openNotificationTarget = createNotificationDeeplinkHandler({ productMenuEntries, setActiveNavKey, setSettingsPanelKey, setNotificationCenterOpen })
   const [settings, setSettings] = useState<AppSettings>(createDefaultAppSettings)
   const [bootDataReady, setBootDataReady] = useState(false)
   const [assistantOpenRequest, setAssistantOpenRequest] = useState<AssistantOpenRequest | null>(null)
@@ -1736,22 +1737,12 @@ function AppShellContent(props: { onLanguageChange?: (language: AppLanguage) => 
         <WindowControls />
       </header>
 
-      {/* 右上角横幅：投递事件来了就画，不靠轮询；点它打开通知中心。 */}
-      <NotificationToasts
-        labels={t.notifications}
-        language={settings.language}
-        onOpen={() => setNotificationCenterOpen(true)}
-      />
+      {/* 右上角横幅：挂载点只占一行，文案与语言由组件自己取。 */}
+      <NotificationBanner onOpen={() => setNotificationCenterOpen(true)} />
 
       <NotificationCenterDrawer
         open={notificationCenterOpen}
-        onOpenDeeplink={(deeplink) => {
-          setNotificationCenterOpen(false)
-          const target = resolveNotificationNavigation(deeplink, productMenuEntries)
-          if (!target) return
-          if (target.settingsPanelKey !== undefined) setSettingsPanelKey(target.settingsPanelKey)
-          if (target.navKey !== undefined) setActiveNavKey(target.navKey)
-        }}
+        onOpenDeeplink={openNotificationTarget}
         onClose={() => {
           setNotificationCenterOpen(false)
           // 关闭后焦点回铃铛：键盘用户不该被扔回文档开头。

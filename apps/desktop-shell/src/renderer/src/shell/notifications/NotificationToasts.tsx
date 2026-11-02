@@ -7,6 +7,7 @@ import type { SafeNotificationRecord } from '@platform/notifications/contracts/n
 
 import type { PlatformText } from '../../i18n/platformText'
 
+import { createNotificationCenterSource } from './notificationCenterSource'
 import { resolveNotificationText } from './notificationText'
 
 import './notificationToasts.css'
@@ -64,6 +65,15 @@ export function NotificationToasts(props: {
     })
   }, [props.language, props.subscribe])
 
+  /** 点开横幅 = 看过了：先标读再开中心，别让用户「弹过了还得再点开中心才算看过」。 */
+  const markToastRead = useCallback(async (id: string): Promise<void> => {
+    try {
+      await createNotificationCenterSource().markRead(id)
+    } catch {
+      // 标读失败不该挡住跳转：横幅已经点开了，中心里那条仍然是未读，用户能看见。
+    }
+  }, [])
+
   const dismiss = useCallback((id: string) => {
     setItems((current) => current.filter((item) => item.id !== id))
   }, [])
@@ -76,6 +86,7 @@ export function NotificationToasts(props: {
           key={item.id}
           labels={props.labels}
           onClose={() => dismiss(item.id)}
+          onMarkRead={() => void markToastRead(item.id)}
           onOpen={props.onOpen}
         />
       ))}
@@ -87,13 +98,21 @@ function ToastRow(props: {
   item: NotificationToastItem
   labels: PlatformText['notifications']
   onClose: () => void
+  onMarkRead: () => void
   onOpen: () => void
 }): React.ReactElement {
   useAutoDismiss(props.onClose)
 
   return (
     <div className="notification-toast" data-notification-toast={props.item.id}>
-      <button type="button" className="notification-toast-body" onClick={props.onOpen}>
+      <button
+        type="button"
+        className="notification-toast-body"
+        onClick={() => {
+          // 一次点击两个效果：打开中心，同时把这条标已读——两端语义一致。
+          props.onMarkRead()
+          props.onOpen()
+        }}>
         <strong className="notification-toast-title">{props.item.title}</strong>
         {props.item.body ? <span className="notification-toast-text">{props.item.body}</span> : null}
       </button>

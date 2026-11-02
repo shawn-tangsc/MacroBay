@@ -149,4 +149,28 @@ describe('右上角横幅', () => {
 
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
+
+  it('点击横幅同时打开中心并标已读：弹过就算看过', async () => {
+    const markRead = vi.fn(async () => undefined)
+    const bridge = { markRead } as unknown as { markRead: (id: string) => Promise<unknown> }
+    Object.defineProperty(window, 'platform', {
+      value: { notifications: bridge },
+      configurable: true
+    })
+    await mount()
+    await act(async () => {
+      emit({ channel: 'toast', record: record({ id: 't9' }) })
+    })
+
+    const body = document.querySelector<HTMLButtonElement>('.notification-toast-body')
+    expect(body).not.toBeNull()
+    await act(async () => {
+      body!.click()
+    })
+    await act(async () => { await Promise.resolve() })
+
+    // 两个效果都要有：开中心 + 标读；只开不标会让用户「弹过了还得再点开才算看过」。
+    expect(onOpen).toHaveBeenCalled()
+    expect(markRead).toHaveBeenCalledWith('t9')
+  })
 })
