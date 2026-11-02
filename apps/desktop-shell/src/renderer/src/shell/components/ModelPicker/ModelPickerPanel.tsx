@@ -16,6 +16,9 @@ import {
   type ModelPickerOptions
 } from './modelPickerOptions'
 
+const CATEGORY_GROUP_KEY = 'models.pickerFilterCategories'
+const PROTOCOL_GROUP_KEY = 'models.pickerFilterProtocols'
+
 const CATEGORY_LABEL_KEYS: Record<ModelPickerCategory, keyof PlatformText['models']> = {
   vision: 'pickerCategoryVision',
   audio: 'pickerCategoryAudio',
@@ -79,8 +82,11 @@ export function ModelPickerPanel({
 }: ModelPickerPanelProps): React.ReactElement {
   const hasActiveFilters = categories.length + protocols.length > 0
   // 平台组件的文案字段只收键；这里把 `labels` 当成「键 → 句子」表，未知键返回空串。
+  // 组名按平台口径用**全键**（点分），解析时剥掉可选的 `models.` 前缀再查本页文案表：
+  // 键形状守卫只认点分键，裸键必红；而 `labels` 里这些名字仍是不带前缀的短名。
   const resolveChipText = (key: string): string => {
-    const value = (labels as unknown as Record<string, unknown>)[key]
+    const bare = key.startsWith('models.') ? key.slice('models.'.length) : key
+    const value = (labels as unknown as Record<string, unknown>)[bare]
     return typeof value === 'string' ? value : ''
   }
   // 空态原因由数据层按 constraints 推导（这里只渲染 title/hint，不写 if 堆）。
@@ -146,7 +152,7 @@ export function ModelPickerPanel({
         hidden={!filtersOpen}
         style={{ display: filtersOpen ? 'flex' : 'none' }}>
         <div className="model-picker-chips">
-          <FilterChipGroup ariaLabelKey="pickerFilterCategories" resolveText={resolveChipText}>
+          <FilterChipGroup ariaLabelKey={CATEGORY_GROUP_KEY} resolveText={resolveChipText}>
             {built.categories.map((chip) => (
               <FilterChip
                 count={String(chip.count)}
@@ -162,7 +168,7 @@ export function ModelPickerPanel({
 
         {built.showProtocolFilter ? (
           <div className="model-picker-chips">
-            <FilterChipGroup ariaLabelKey="pickerFilterProtocols" resolveText={resolveChipText}>
+            <FilterChipGroup ariaLabelKey={PROTOCOL_GROUP_KEY} resolveText={resolveChipText}>
               {built.protocols.map((chip) => (
                 <FilterChip
                   count={String(chip.count)}
