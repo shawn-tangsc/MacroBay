@@ -3,7 +3,6 @@
   "entries": {
     "apps/desktop-shell/src/renderer/src/shell/agents/components/AgentChatNavbar/OpenExternalAppButton.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/agents/components/SessionItem.tsx": 1,
-    "apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/tools/McpCatalog.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/assistants/AssistantInputbar.tsx": 1,
     "apps/desktop-shell/src/renderer/src/shell/assistants/library/CreateAssistantDialog.tsx": 1,
     "products/market-intelligence/desktop/features/macro/economic-calendar/CalendarEventRow.tsx": 1,

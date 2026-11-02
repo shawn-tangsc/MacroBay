@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Button, Input, Switch, Tag, Tooltip } from 'antd'
+import { Button, Input, Switch, Tag } from 'antd'
 import type { InputRef } from 'antd'
 import { Copy, ExternalLink, Network, Plus, RefreshCw, Settings2 } from 'lucide-react'
 
@@ -8,10 +8,12 @@ import type { RuntimeCredentialAction } from '@platform/ai/agent-platform/mcp/ru
 import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
+import { resolveAgentTextKey } from '../../../agentTooltipText'
 import type { AgentText } from '../../../agentText'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { StatusPill } from '@platform/ui/components/status-pill'
+import { Tooltip } from '@platform/ui/components/tooltip'
 import { useToast, type ToastApi } from '@platform/ui/components/toast'
 import {
   emptyToolsHint,
@@ -262,11 +264,14 @@ function McpCredentialActionButton({
   text: AgentText
   onRestart?: () => void
 }): React.ReactElement {
-  const label = resolveCredentialActionLabel(action, text)
+  // 动作自带的是键（`editor.tools.mcpActionOpenUrl` 这类），句子由本线文案表解析——
+  // 不再在调用点按 id 重写一张 if 表，动作多一种也不会漏（`RuntimeCredentialAction` 自己带键）。
+  const resolveText = (key: string): string => resolveAgentTextKey(text, key)
+  const label = resolveText(action.labelKey)
   const toast = useToast()
 
   return (
-    <Tooltip title={label}>
+    <Tooltip labelKey={action.labelKey} resolveText={resolveText}>
       <Button
         className="ant-secondary-button"
         size="small"
@@ -279,14 +284,6 @@ function McpCredentialActionButton({
       </Button>
     </Tooltip>
   )
-}
-
-function resolveCredentialActionLabel(action: RuntimeCredentialAction, text: AgentText): string {
-  if (action.id === 'open-url') return text.editor.tools.mcpActionOpenUrl
-  if (action.id === 'restart') return text.editor.tools.mcpActionRestart
-  if (action.id === 'open-settings') return text.editor.tools.mcpActionOpenSettings
-  if (action.id === 'copy-hint') return text.editor.tools.mcpActionCopyHint
-  return text.editor.tools.mcpActionRetry
 }
 
 function credentialActionIcon(id: RuntimeCredentialAction['id']): React.ReactNode {
