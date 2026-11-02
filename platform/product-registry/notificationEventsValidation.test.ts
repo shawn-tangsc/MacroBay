@@ -1,0 +1,85 @@
+import { resolve } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import type { ProductManifest } from '../product-manifest'
+import { buildGeneratedProductRegistry } from './generate'
+import { ProductRegistryValidationError, validateDiscoveredProductManifest } from './validate'
+
+const productDir = resolve(process.cwd(), 'products/market-intelligence')
+
+/**
+ * 通知事件声明的生成期校验（契约 §3）。这些形状错误在运行期只表现为「读者收不到」或
+ * 「两条永远合不上」——静默、难查，所以必须在生成期就红。
+ */
+function manifestWith(notificationEvents: unknown): ProductManifest {
+  return {
+    id: 'market-intelligence',
+    name: { 'zh-CN': '行情情报', 'en-US': 'Market Intelligence' },
+    version: '0.0.1',
+    shellContributions: { menuPages: [], settingsSections: [] },
+    routes: [],
+    navigation: [],
+    settingsSections: [],
+    serviceRoutes: [],
+    tools: [],
+    skills: [],
+    agents: [],
+    workflows: [],
+    policies: [],
+    evaluations: [],
+    jobHandlers: [],
+    notificationEvents,
+    migrations: []
+  } as unknown as ProductManifest
+}
+
+function validate(manifest: ProductManifest): void {
+  validateDiscoveredProductManifest('market-intelligence', productDir, manifest, new Set(), new Set(), new Set())
+}
+
+function event(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'market-intelligence.briefing.ready',
+    titleKey: 'notification.event.market-intelligence.briefing.ready.title',
+    reasonKey: 'notification.event.market-intelligence.briefing.ready.reason',
+    requiresUserAction: false,
+    requestedDisruptionLevels: ['desktop', 'channel'],
+    dedupeKeyTemplate: 'brief-done:{date}:{period}',
+    dedupeUnit: 'occurrence',
+    notifyOnlyIfSubscribed: true,
+    ...overrides
+  }
+}
+
+describe('notification event declarations', () => {
+  it('accepts a well-formed declaration and a product that declares none', () => {
+    expect(() => validate(manifestWith([event()]))).not.toThrow()
+    expect(() => validate(manifestWith(undefined))).not.toThrow()
+    expect(() => validate(manifestWith([]))).not.toThrow()
+  })
+
+  it.each([
+    ['an id outside the product prefix', { id: 'platform.job.failed-terminal' }],
+    ['a missing title key', { titleKey: '  ' }],
+    ['a missing reason key', { reasonKey: undefined }],
+    ['a center request (center is never requestable)', { requestedDisruptionLevels: ['center'] }],
+    ['an unknown requested level', { requestedDisruptionLevels: ['sms'] }],
+    ['a repeated requested level', { requestedDisruptionLevels: ['desktop', 'desktop'] }],
+    ['both a template and a builder', { dedupeKeyBuilder: 'sourceIssue' }],
+    ['neither a template nor a builder', { dedupeKeyTemplate: undefined }],
+    ['a constant template (would merge every occurrence)', { dedupeKeyTemplate: 'brief-done' }],
+    ['an unregistered builder', { dedupeKeyTemplate: undefined, dedupeKeyBuilder: 'handWritten' }],
+    ['an unknown dedupe unit', { dedupeUnit: 'window' }],
+    ['condition without a window', { dedupeUnit: 'condition' }],
+    ['occurrence with a window', { dedupeUnit: 'occurrence', conditionWindowMs: 3_600_000 }],
+    ['a non-boolean notifyOnlyIfSubscribed', { notifyOnlyIfSubscribed: 'yes' }]
+  ])('rejects %s', (_label, overrides) => {
+    expect(() => validate(manifestWith([event(overrides)]))).toThrow(ProductRegistryValidationError)
+  })
+
+  it('rejects a duplicate id inside one product and a non-array declaration', () => {
+    expect(() => validate(manifestWith([event(), event()]))).toThrow(/duplicate notification event/)
+    expect(() => validate(manifestWith('market-intelligence.briefing.ready'))).toThrow(/must be an array/)
+  })
+})

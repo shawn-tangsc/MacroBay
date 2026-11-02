@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 
+import type { NotificationEventDeclaration } from '../notifications/contracts/notificationEventCatalog'
 import type {
   ProductManifest,
   ProductAssistantTemplateRegistration,
@@ -85,6 +86,105 @@ export function assertKebabCaseId(value: string, label: string): void {
 export function assertLocalizedText(title: ProductMenuPageContribution['title'], label: string): void {
   if (!title['zh-CN']?.trim() || !title['en-US']?.trim()) {
     throw new ProductRegistryValidationError(`${label} must include both zh-CN and en-US text`)
+  }
+}
+
+const NOTIFICATION_REQUESTED_LEVELS = new Set(['toast', 'popup', 'desktop', 'channel'])
+const NOTIFICATION_DEDUPE_UNITS = new Set(['occurrence', 'condition'])
+const NOTIFICATION_TEMPLATE_PLACEHOLDER = /\{[a-zA-Z][a-zA-Z0-9]*\}/
+
+/**
+ * 该产品**声明**的通知事件（契约 §3）。生成期校验五条，缺一条就是「建得成、永远不响」或
+ * 「合并永远合不上」——这两类毛病在运行期都只表现为读者收不到、或者收两条，静默且难查。
+ *
+ * 批准值不在这里校验：生效表面只读平台批准表（契约 §4），产品改了申请、平台没批，行为不变。
+ */
+function assertNotificationEvents(manifest: ProductManifest, productId: string): void {
+  const events = manifest.notificationEvents
+  if (events === undefined) return
+  if (!Array.isArray(events)) {
+    throw new ProductRegistryValidationError(`product "${productId}" notificationEvents must be an array`)
+  }
+
+  const seen = new Set<string>()
+  for (const event of events as readonly NotificationEventDeclaration[]) {
+    const id = typeof event.id === 'string' ? event.id : ''
+    if (!id.startsWith(`${productId}.`) || id !== id.trim()) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" notification event id must start with "${productId}.", got "${id}"`
+      )
+    }
+    if (seen.has(id)) {
+      throw new ProductRegistryValidationError(`product "${productId}" declares duplicate notification event: ${id}`)
+    }
+    seen.add(id)
+
+    if (typeof event.titleKey !== 'string' || event.titleKey.trim() === '') {
+      throw new ProductRegistryValidationError(`notification event "${id}" needs a non-empty titleKey`)
+    }
+    if (typeof event.reasonKey !== 'string' || event.reasonKey.trim() === '') {
+      throw new ProductRegistryValidationError(`notification event "${id}" needs a non-empty reasonKey`)
+    }
+    if (typeof event.requiresUserAction !== 'boolean' || typeof event.notifyOnlyIfSubscribed !== 'boolean') {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" must declare requiresUserAction and notifyOnlyIfSubscribed as booleans`
+      )
+    }
+
+    const levels = event.requestedDisruptionLevels
+    if (!Array.isArray(levels) || levels.some((level) => !NOTIFICATION_REQUESTED_LEVELS.has(level))) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" requestedDisruptionLevels must be a subset of toast/popup/desktop/channel`
+      )
+    }
+    if (new Set(levels).size !== levels.length) {
+      throw new ProductRegistryValidationError(`notification event "${id}" repeats a requested disruption level`)
+    }
+
+    const hasTemplate = typeof event.dedupeKeyTemplate === 'string'
+    const hasBuilder = typeof event.dedupeKeyBuilder === 'string'
+    if (hasTemplate === hasBuilder) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" must declare exactly one of dedupeKeyTemplate or dedupeKeyBuilder`
+      )
+    }
+    if (hasTemplate && !NOTIFICATION_TEMPLATE_PLACEHOLDER.test(event.dedupeKeyTemplate ?? '')) {
+      // 常量模板 = 这个事件永远只有一条：第二次发生会并进第一次，次数也不加。
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" dedupeKeyTemplate must contain a variable placeholder`
+      )
+    }
+    if (hasBuilder && event.dedupeKeyBuilder !== 'moduleSignal' && event.dedupeKeyBuilder !== 'sourceIssue') {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" dedupeKeyBuilder must be one of the registered builders`
+      )
+    }
+
+    if (!NOTIFICATION_DEDUPE_UNITS.has(event.dedupeUnit)) {
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" dedupeUnit must be "occurrence" or "condition"`
+      )
+    }
+    const window = event.conditionWindowMs
+    const hasWindow = window !== undefined
+    if (event.dedupeUnit === 'condition') {
+      if (!hasWindow || !Number.isInteger(window) || (window ?? 0) <= 0) {
+        throw new ProductRegistryValidationError(
+          `notification event "${id}" condition cadence needs a positive integer conditionWindowMs`
+        )
+      }
+    } else if (hasWindow) {
+      // occurrence 带窗口 = 「一天」被写成了毫秒：两个概念不许挤在一个字段里。
+      throw new ProductRegistryValidationError(
+        `notification event "${id}" occurrence cadence must not declare conditionWindowMs`
+      )
+    }
+    if (event.dedupeKeyTemplate !== undefined && typeof event.dedupeKeyTemplate !== 'string') {
+      throw new ProductRegistryValidationError(`notification event "${id}" dedupeKeyTemplate must be a string`)
+    }
+    if (event.requestedBypassQuietHours !== undefined && typeof event.requestedBypassQuietHours !== 'boolean') {
+      throw new ProductRegistryValidationError(`notification event "${id}" requestedBypassQuietHours must be a boolean`)
+    }
   }
 }
 
@@ -279,6 +379,7 @@ export function validateDiscoveredProductManifest(
 
   assertLocalizedText(manifest.name, `product "${productId}" name`)
   assertPublishableEventTopics(manifest, productId)
+  assertNotificationEvents(manifest, productId)
 
   const reservedProductIds = RESERVED_SHELL_ROUTE_PATHS.map((routePath) => routePath.slice(1))
   if (reservedProductIds.includes(productId)) {

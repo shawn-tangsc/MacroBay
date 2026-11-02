@@ -1,4 +1,5 @@
 import type { WorkspacePanelRegistration } from './workspace/contracts'
+import type { NotificationEventDeclaration } from './notifications/contracts/notificationEventCatalog'
 
 export interface LocalizedText {
   'zh-CN': string
@@ -190,6 +191,14 @@ export interface ProductManifest {
    */
   eventTopics?: readonly string[]
   eventConsumers?: readonly ProductEventConsumerRegistration[]
+  /**
+   * 该产品**声明**的通知事件（契约 §3）。目录由平台汇总注入，平台不 import 产品代码。
+   *
+   * 每条声明只写一次性的事实（id、标题/理由键、申请档位、去重键的输入形状）；批准值不在这里——
+   * 生效表面只读 `platform/notifications/contracts/notificationEventPolicy.ts` 的批准表。
+   * 形状错误在生成期报（`validate.ts`），不等到读者勾了订阅才发现永远不响。
+   */
+  notificationEvents?: readonly NotificationEventDeclaration[]
   productAgentTools?: readonly ProductAgentToolRegistration[]
   assistantTemplates?: readonly ProductAssistantTemplateRegistration[]
   migrations: readonly unknown[]
