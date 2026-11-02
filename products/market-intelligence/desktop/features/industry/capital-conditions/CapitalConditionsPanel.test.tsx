@@ -227,7 +227,7 @@ describe('CapitalConditionsPanel', () => {
 
     const legend = container.querySelector<HTMLElement>('[data-flow-tooltip]')!
     expect(legend.textContent).toContain('2026-08-24')
-    expect(legend.textContent).toContain(text.funds)
+    expect(legend.textContent).toContain(text.fundsColumn)
     expect(legend.textContent).toContain(text.btc)
     expect(legend.textContent).toContain(text.eth)
     expect(legend.textContent).toContain('+$13')
