@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import type { KeyboardEvent, ReactElement } from 'react'
 
 import type { ChoiceItem } from '../choice/choiceItem'
+import { resolveActiveValue, useChoiceFallback } from '../choice/useChoiceValue'
 
 import './segmented.css'
 
@@ -28,6 +29,9 @@ export type SegmentedProps = {
 export function Segmented({ items, value, onChange, ariaLabelKey, resolveText }: SegmentedProps): ReactElement {
   const refs = useRef<Array<HTMLButtonElement | null>>([])
   const enabled = items.map((item, index) => ({ item, index })).filter(({ item }) => item.disabled !== true)
+  // 选中值失效时兜底首个可用项，并回调一次——显示与状态只能有一个来源。
+  useChoiceFallback(items, value, onChange)
+  const activeValue = resolveActiveValue(items, value)
 
   function focusAt(index: number, delta: 1 | -1): void {
     if (enabled.length === 0) return
@@ -69,7 +73,7 @@ export function Segmented({ items, value, onChange, ariaLabelKey, resolveText }:
             ref={(node) => {
               refs.current[index] = node
             }}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={item.value === activeValue ? 0 : -1}
             type="button">
             {resolveText(item.labelKey)}
           </button>

@@ -72,6 +72,26 @@ describe('Segmented', () => {
     expect(document.activeElement?.textContent).toBe('ui.test.day')
   })
 
+  it('keeps the group reachable when the value is gone, and reports it once', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const onChange = vi.fn()
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<Segmented ariaLabelKey="ui.test.range" items={items} onChange={onChange} resolveText={key} value="ghost" />)
+    })
+
+    const reachable = host.querySelectorAll<HTMLButtonElement>('button[tabindex="0"]')
+    expect(reachable).toHaveLength(1)
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('day')
+
+    await act(async () => {
+      root!.render(<Segmented ariaLabelKey="ui.test.range" items={items} onChange={onChange} resolveText={key} value="day" />)
+    })
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
   it('selects on click', async () => {
     const { host, onChange } = await mount()
     const second = host.querySelectorAll<HTMLButtonElement>('button')[1]!

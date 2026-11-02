@@ -2,6 +2,7 @@ import { useId, useRef } from 'react'
 import type { KeyboardEvent, ReactElement, ReactNode } from 'react'
 
 import type { ChoiceItem } from '../choice/choiceItem'
+import { resolveActiveValue, useChoiceFallback } from '../choice/useChoiceValue'
 
 import './tabs.css'
 
@@ -27,8 +28,8 @@ export type TabsProps = {
   /** tablist 可访问名（键），必填：读屏要靠它知道这是哪一组标签。 */
   ariaLabelKey: string
   resolveText: (key: string) => string
-  /** 选中项的面板。 */
-  panel?: ReactNode
+  /** 选中项的面板。**必填**：没有面板就不该用 `Tabs`（那样该用 `Segmented` 或不要页签）。 */
+  panel: ReactNode
 }
 
 export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel }: TabsProps): ReactElement {
@@ -39,6 +40,9 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
 
   const enabled = items.map((item, index) => ({ item, index })).filter(({ item }) => item.disabled !== true)
   const selectedIndex = items.findIndex((item) => item.value === value)
+  // 选中值失效时兜底首个可用项：只兜显示不回调，就会「看着是 A、动起来是 B」。
+  useChoiceFallback(items, value, onChange)
+  const activeValue = resolveActiveValue(items, value)
 
   function move(from: number, delta: 1 | -1): void {
     if (enabled.length === 0) return
@@ -96,14 +100,18 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
               onClick={() => onChange(item.value)}
               onKeyDown={(event) => onKeyDown(event, index)}
               role="tab"
-              tabIndex={selected ? 0 : -1}
+              tabIndex={item.value === activeValue ? 0 : -1}
               type="button">
               {resolveText(item.labelKey)}
             </button>
           )
         })}
       </div>
-      <div aria-labelledby={selectedIndex >= 0 ? tabId(selectedIndex) : undefined} className="tabs__panel" id={panelId} role="tabpanel">
+      <div
+        aria-labelledby={selectedIndex >= 0 ? tabId(selectedIndex) : undefined}
+        className="tabs__panel"
+        id={panelId}
+        role="tabpanel">
         {panel}
       </div>
     </div>

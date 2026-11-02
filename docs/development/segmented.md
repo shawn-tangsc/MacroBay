@@ -31,6 +31,8 @@ one value changes** — a range, a view, a language. When switching swaps a whol
   reader is usually comparing two or three options before deciding.
 - **Disabled values** leave the tab order and the arrow sequence.
 - **Selection reads in grayscale**: the chosen item differs by fill and weight, not by hue.
+- **A stale `value` still leaves the group reachable**, and the component calls
+  `onChange(firstEnabled)` once, the same rule as `Tabs`.
 
 ## How to verify a page that uses it
 

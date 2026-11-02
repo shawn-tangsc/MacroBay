@@ -38,7 +38,7 @@ would only hide that.
 | `onChange` | `(value: string) => void` | yes | Emits the new `value`. |
 | `ariaLabelKey` | `string` | yes | The tablist's accessible name, **as a key**. |
 | `resolveText` | `(key: string) => string` | yes | The caller's resolver. |
-| `panel` | `ReactNode` | no | The selected panel. Loading, empty and error live inside it. |
+| `panel` | `ReactNode` | yes | The selected panel. Loading, empty and error live inside it. Without a panel this is not a `Tabs` — use `Segmented` or drop the tabs. |
 
 ## Rules the component enforces
 
@@ -50,6 +50,13 @@ would only hide that.
 - **Disabled tabs** leave the tab order and are skipped by the arrows. They carry no tooltip — a
   disabled control takes no focus.
 - **The tab strip never shows a spinner.** Loading/empty/error belong to the panel.
+- **A stale `value` still leaves the group reachable.** If `value` is not in `items` (an item was
+  added or removed), the first enabled tab takes the keyboard entry and the component calls
+  `onChange(firstEnabled)` **once**, in an effect, keyed by the stale value. Showing A while the
+  caller still holds B would let a later save or export act on B.
+- **`panel` must derive from the same `value`.** Between the fallback callback and the caller's
+  re-render the panel may still show the old content; that frame is the caller's obligation, not
+  something the component can fix.
 
 ## How to verify a page that uses it
 

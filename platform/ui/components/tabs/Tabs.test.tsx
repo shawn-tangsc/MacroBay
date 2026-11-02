@@ -104,6 +104,35 @@ describe('Tabs', () => {
     expect(css).not.toContain('more')
   })
 
+  it('keeps the group reachable when the selected value is gone, and reports it once', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const onChange = vi.fn()
+    root = createRoot(host)
+    // `ghost` 不在 items 里：items 增删后旧的选中值失效是常态。
+    await act(async () => {
+      root!.render(
+        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p>panel</p>} resolveText={key} value="ghost" />
+      )
+    })
+
+    // 兜底：首个可用项拿到 tabIndex 0，Tab 键进得来。
+    const reachable = host.querySelectorAll<HTMLButtonElement>('[role="tab"][tabindex="0"]')
+    expect(reachable).toHaveLength(1)
+    expect(reachable[0]?.textContent).toBe('ui.test.a')
+    // 而且回调一次：只兜显示不回调，就会「看着是 A、动起来是 B」。
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('a')
+
+    // 父级把合法值传回来之后，不许二次触发。
+    await act(async () => {
+      root!.render(
+        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p>panel</p>} resolveText={key} value="a" />
+      )
+    })
+    expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
   it('never renders a spinner in the tab strip itself', async () => {
     const { host } = await mount()
     expect(host.querySelector('[role="tablist"] [data-loading-state]')).toBeNull()
