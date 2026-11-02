@@ -86,3 +86,21 @@ describe('empty rail state', () => {
     expect(document.activeElement).toBe(nameInput)
   })
 })
+
+describe('status pills', () => {
+  it('takes the tone from the status value, not from the position in the list', async () => {
+    installPlatform({})
+    const container = await mount()
+
+    // 目录状态两枚：planned → muted、blocked → bad。档位查表得出，同一数据值只有一个答案。
+    const planned = [...container.querySelectorAll('.status-pill')].find(
+      (pill) => pill.textContent?.trim() === labels.channelCatalogStatus.planned
+    )
+    const blocked = [...container.querySelectorAll('.status-pill')].find(
+      (pill) => pill.textContent?.trim() === labels.channelCatalogStatus.blocked
+    )
+
+    expect(planned?.className).toContain('status-pill--muted')
+    expect(blocked?.className).toContain('status-pill--bad')
+  })
+})

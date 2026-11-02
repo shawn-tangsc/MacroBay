@@ -1,8 +1,9 @@
-import { Button, Input, Popconfirm, Select, Switch, Tag, type InputRef } from 'antd'
+import { Button, Input, Popconfirm, Select, Switch, type InputRef } from 'antd'
 import { Plus, RefreshCw, RotateCw, ShieldOff, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { StateView } from '@platform/ui/components/state'
+import { StatusPill, type StatusPillTone } from '@platform/ui/components/status-pill'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { platformText } from '../../../i18n/platformText'
 import { clearSensitiveDraft, encryptChannelHandoff } from './secureCredentialHandoff'
@@ -22,6 +23,16 @@ type Candidate = { id: string; kind: 'direct' | 'group' | 'channel'; displayLabe
 type Policy = { id: string; subjectType: 'user' | 'conversation'; conversationKind: string | null }
 type Agent = { id: string; name: string }
 type Catalog = { type: string; status: 'planned' | 'blocked' | 'supported'; reason: string; implemented: boolean }
+
+/** 目录状态 → 档位：按数据值查表，穷举闭集；多一个取值就编译不过，没有兜底档。 */
+const catalogTone: Record<Catalog['status'], StatusPillTone> = {
+  supported: 'ok',
+  planned: 'muted',
+  blocked: 'bad'
+}
+
+/** 通道运行态 → 档位：`runtime-ready` 才是在跑，其余都是「还没起来」。 */
+const runtimeTone = (state: Channel['state']): StatusPillTone => (state === 'runtime-ready' ? 'ok' : 'muted')
 
 /** A blocked adapter must say what it is missing, not only that it is blocked. */
 function catalogReason(
@@ -62,6 +73,12 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
   const focusCreateForm = (): void => {
     nameInputRef.current?.input?.scrollIntoView({ block: 'nearest' })
     nameInputRef.current?.focus()
+  }
+
+  /** 药丸只收键；键就是状态值本身，取值仍来自同一张文案表（不另造一套键名）。 */
+  const resolveChannelLabel = (key: string): string => {
+    const value = (labels as unknown as Record<string, unknown>)[key]
+    return typeof value === 'string' ? value : ''
   }
 
   const current = useMemo(() => channels.find((channel) => channel.id === selected) ?? null, [channels, selected])
@@ -245,7 +262,14 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
         </section>
         {catalog.map((entry) => (
           <p key={entry.type}>
-            <Tag>{labels.channelCatalogStatus[entry.status]}</Tag>
+            <StatusPill
+              tone={catalogTone[entry.status]}
+              labelKey={`channelCatalogStatus.${entry.status}`}
+              resolveText={(key) => {
+                const status = key.slice('channelCatalogStatus.'.length) as Catalog['status']
+                return labels.channelCatalogStatus[status] ?? ''
+              }}
+            />
             {entry.type}
             <small>{catalogReason(entry, labels)}</small>
           </p>
@@ -257,7 +281,11 @@ export function ChannelSettingsPage({ language }: { language: 'zh-CN' | 'en-US' 
           <>
             <header>
               <strong>{current.name}</strong>
-              <Tag>{current.state === 'runtime-ready' ? labels.channelRunning : labels.channelPlanned}</Tag>
+              <StatusPill
+                tone={runtimeTone(current.state)}
+                labelKey={current.state === 'runtime-ready' ? 'channelRunning' : 'channelPlanned'}
+                resolveText={resolveChannelLabel}
+              />
             </header>
             <p>{credentialStatusLabel(current.credential.status, labels)}</p>
             <Input value={editName} aria-label={labels.channelName} onChange={(event) => setEditName(event.target.value)} />
