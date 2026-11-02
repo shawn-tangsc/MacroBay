@@ -18,7 +18,6 @@ import {
   type EconomicCalendarProjection
 } from './economicCalendarModel'
 import { LoadingState } from '@platform/ui/components/loading'
-import { StateView } from '@platform/ui/components/state'
 import { useShellLanguage } from '@platform/ui/shell/ShellLanguageContext'
 import { useShellTimeZone } from '@platform/ui/shell/ShellTimeZoneContext'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
@@ -400,8 +399,11 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
             <h3>{text.unifiedDay.groupCount.replace('{type}', text.market.kinds[group.eventType]).replace('{count}', String(group.items.length))}</h3>
             {group.items.map(item => <div role="listitem" key={item.key}><CalendarEventRow item={item} marketSources={market.sources} text={text} statusNow={statusNow} selected={item.source === 'market' ? item.event.eventKey === selectedMarket?.eventKey : item.event.eventKey === selectedEventKey} onSelect={value => selectItem(value)} /></div>)}
           </section>)}</div>
-          {coverage === 'complete' && !dayEvents.items.length ? <StateView state="empty" reasonCode="nothing-in-window" size="md"
-            productReason={{ key: 'mi.calendar.empty-day', resolve: () => text.unifiedDay.empty }} /> : null}
+          {/* A quiet day is a reading, not a missing block: the sources answered and the answer is
+              zero. It carries no action because nothing the reader can press would produce events,
+              and a button that does nothing is worse than none. The sentence stays visible so a
+              blank area cannot be mistaken for "not loaded yet". */}
+          {coverage === 'complete' && !dayEvents.items.length ? <p>{text.unifiedDay.empty}</p> : null}
         </section>
       </div>
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />

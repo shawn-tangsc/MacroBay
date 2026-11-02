@@ -232,8 +232,10 @@ export function MarketCalendarCard({ projection, text, onOpenCalendar, onRefresh
     <div className="mi-calendar-card__body">
       {projection.state === 'unavailable' ? <StateView state="error" reasonCode="unreadable" size="md"
         action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
-      {projection.state === 'empty' ? <StateView state="empty" reasonCode="nothing-in-window" size="md"
-        productReason={{ key: 'mi.calendar.empty-card', resolve: () => text.empty }} /> : null}
+      {/* Readable months with no events at all: the card's answer is "nothing here", not a gap.
+          Keeping it as a line (not a state surface) is the point — there is no window left to widen
+          and no button that would produce an event. */}
+      {projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
       {projection.state === 'available' && projection.today.length === 0
         ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
         : null}
