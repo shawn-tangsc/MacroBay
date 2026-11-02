@@ -23,8 +23,6 @@
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-availability-icon.is-failed": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-picker-option-tag.is-free": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-inline-error": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-model-availability[data-model-availability='failed']": 1,
-  "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-model-detection[data-model-detection-status='failed']": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-model-free": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-model-row.is-protocol-failed .model-service-model-name": 1,
   "apps/desktop-shell/src/renderer/src/styles.css :: .model-service-more-item": 1,
