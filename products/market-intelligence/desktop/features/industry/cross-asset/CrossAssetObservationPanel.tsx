@@ -20,35 +20,22 @@ import { macroRatesSnapshotPublicPolicy } from '../../../../contracts/macro/macr
 import { useCrossAssetObservation } from './useCrossAssetObservation'
 import { useProductTextKey } from '../../../shared/i18n/productTextKey'
 import { crossAssetMacroReading, crossAssetRatesSeriesIds, resolveCrossAssetStatusRows } from './crossAssetStatusRegistry'
-import { crossAssetWindowReturns, crossAssetWindows, type CrossAssetWindow } from './crossAssetWindowReturns'
+import { crossAssetWindows } from './crossAssetWindowReturns'
 import { CrossAssetReturnChart } from './CrossAssetReturnChart'
 import { CrossAssetReadingLine } from './CrossAssetReadingLine'
 import { crossAssetSignedValue } from './crossAssetFormat'
 import { LiveBadge } from './CrossAssetLiveBadge'
+import {
+  AssetStatusRow, IndexObservation, IndexStatusRow, PlannedStatusRow, WindowCells, indexRowName, levelText, livePriceText, macroMetrics,
+  type MacroDriverId, type RowMetrics, type Text
+} from './crossAssetStatusRows'
+import { crossAssetTextKeys, crossAssetWindowLabelKeys } from './crossAssetTextKeys'
 import type { CrossAssetEventLine } from './crossAssetEventLines'
 import { useCrossAssetEventLines } from './useCrossAssetEventLines'
 import { basisPointsText, crossAssetRatesDailyExtras } from './crossAssetRatesDaily'
 import { macroEconomicCalendarClient } from '../../../shared/ipc/macroEconomicCalendarClient'
 import { MARKET_ANALYSIS_CONTEXT_CAVEATS } from '../../../../contracts/marketAnalysisContracts'
 
-/**
- * The row's name, read from the instrument that is actually answering it.
- *
- * A row called 「纳斯达克 100」 that prints `QQQUSDT`'s price is a name disagreeing with its own figure —
- * the reader asked "QQQ 呢?" the moment they saw it. So the name follows the source: the licensed cash
- * index is named as the index, and the tokenised perpetual is named `QQQ` and carries the 代理 label
- * beside it. A row with no reading is named after its *default* instrument, which is what it would
- * display, so the name never promises an instrument the row is not showing.
- */
-function indexRowName(snapshot: CrossAssetSnapshot | undefined, text: Text): string {
-  return snapshot?.indexSource === 'real' ? text.indexNames.real : text.indexNames.proxy
-}
-
-/** The provider sends five decimals; the panel shows the two a reader compares prices with. */
-function livePriceText(price: string): string {
-  const value = Number(price)
-  return Number.isFinite(value) ? value.toFixed(2) : price
-}
 import './CrossAssetObservationPanel.css'
 import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 
@@ -68,114 +55,11 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
 const sourceStateTone: Readonly<Record<'disabled' | 'connecting' | 'live' | 'stale' | 'limited' | 'unavailable', StatusPillTone>> = Object.freeze({
   disabled: 'muted', connecting: 'info', live: 'ok', stale: 'warn', limited: 'warn', unavailable: 'bad'
 })
-const crossAssetTextKeys = Object.freeze({
-  subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
-  refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
-  noData: 'pages.intelligence.portal.dashboard.crossAsset.noData',
-  dailyFrequency: 'pages.intelligence.portal.dashboard.crossAsset.dailyFrequency',
-  dailyMixedDates: 'pages.intelligence.portal.dashboard.crossAsset.dailyMixedDates',
-  dailyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.dailyCaveat',
-  dailySpreadAndInflation: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadAndInflation',
-  dailySpreadOnly: 'pages.intelligence.portal.dashboard.crossAsset.dailySpreadOnly',
-  dailyChangeWithDate: 'pages.intelligence.portal.dashboard.crossAsset.dailyChangeWithDate',
-  dailyChangeUnknownWithDate: 'pages.intelligence.portal.dashboard.crossAsset.dailyChangeUnknownWithDate',
-  inflationExpectationWithDate: 'pages.intelligence.portal.dashboard.crossAsset.inflationExpectationWithDate',
-  syntheticCaveat: 'pages.intelligence.portal.dashboard.crossAsset.syntheticCaveat',
-  proxyCaveat: 'pages.intelligence.portal.dashboard.crossAsset.proxyCaveat',
-  marketClosedHint: 'pages.intelligence.portal.dashboard.crossAsset.marketClosedHint',
-  rangeLabel: 'pages.intelligence.portal.dashboard.crossAsset.rangeLabel',
-  hintAnalysis: 'pages.intelligence.portal.dashboard.crossAsset.hintAnalysis',
-  hintCoverage: 'pages.intelligence.portal.dashboard.crossAsset.hintCoverage',
-  hintCorrelations: 'pages.intelligence.portal.dashboard.crossAsset.hintCorrelations',
-  unavailable: 'pages.intelligence.portal.dashboard.crossAsset.unavailable',
-  states: Object.freeze({
-    disabled: 'pages.intelligence.portal.dashboard.crossAsset.states.disabled',
-    connecting: 'pages.intelligence.portal.dashboard.crossAsset.states.connecting',
-    live: 'pages.intelligence.portal.dashboard.crossAsset.states.live',
-    stale: 'pages.intelligence.portal.dashboard.crossAsset.states.stale',
-    limited: 'pages.intelligence.portal.dashboard.crossAsset.states.limited',
-    unavailable: 'pages.intelligence.portal.dashboard.crossAsset.states.unavailable'
-  })
-})
-/** 窗口切换每一项的文案键：句子仍是 1H/24H/7D，只是不再在调用点拼字符串。 */
-const crossAssetWindowLabelKeys: Readonly<Record<CrossAssetRange, string>> = Object.freeze({
-  '1h': 'pages.intelligence.portal.dashboard.crossAsset.ranges.1h',
-  '24h': 'pages.intelligence.portal.dashboard.crossAsset.ranges.24h',
-  '7d': 'pages.intelligence.portal.dashboard.crossAsset.ranges.7d'
-})
 const crossAssetRanges = crossAssetContractPolicy.ranges
 type CrossAssetRange = typeof crossAssetRanges[number]
 
-type Text = typeof productText['zh-CN' | 'en-US']['pages']['intelligence']['portal']['dashboard']['crossAsset']
-type MacroDriverId = 'dxy' | 'gold' | 'us10y' | 'realRate'
-type RowMetrics = Readonly<Record<CrossAssetWindow, CrossAssetMetric>>
-/**
- * 浮层的一行：键 + **这一行自己的**参数（契约 §8）。
- *
- * 写成本地类型而不是从左邻右舍推出来：三行的参数键各不相同，不标注时 TS 会把数组元素推成
- * 「每行都带一整套可选参数」的联合，反而塞不进 `PopoverLine`（`undefined` 不是字符串）。
- */
 type HintLine = { labelKey: string; params?: Readonly<Record<string, string>> }
 
-function priceOf(snapshot: CrossAssetSnapshot | undefined, asset: CrossAssetId): string {
-  const quote = snapshot?.quotes?.[asset]
-  return quote && quote.state !== 'missing' && quote.price ? quote.price : '—'
-}
-function value(metric: CrossAssetMetric | undefined, unit: string, empty: string): string {
-  if (!metric || metric.state !== 'available') return empty
-  // One formatter for both surfaces that print these figures: the table's cells and the reading line.
-  return crossAssetSignedValue(metric.value, unit)
-}
-/** A stored level is a real number or nothing at all; it is never rounded into existence. */
-function levelText(reading: MacroMarketSnapshotReading | undefined): string {
-  return reading && Number.isFinite(reading.level) ? reading.level.toFixed(2) : '—'
-}
-function assetMetrics(snapshot: CrossAssetSnapshot | undefined, asset: CrossAssetId): RowMetrics | undefined {
-  return snapshot && crossAssetWindowReturns({ range: snapshot.range, curves: snapshot.curves[asset], closedReturns: snapshot.closedReturns[asset] })
-}
-/** Windows the series could not answer stay `unavailable`, so the cell prints 无数据 rather than 0. */
-function macroMetrics(reading: MacroMarketSnapshotReading | undefined): RowMetrics | undefined {
-  if (!reading) return undefined
-  const metrics = {} as Record<CrossAssetWindow, CrossAssetMetric>
-  for (const window of crossAssetWindows) {
-    const percent = reading.returns[window]
-    metrics[window] = percent === undefined ? { state: 'unavailable', reason: 'missing' } : { state: 'available', value: percent }
-  }
-  return Object.freeze(metrics)
-}
-function WindowCells({ id, metrics, text }: { id: string; metrics?: RowMetrics; text: Text }): React.ReactElement {
-  const resolveText = useProductTextKey()
-  return <>{crossAssetWindows.map(window => {
-    const metric = metrics?.[window]
-    // A missing window is a dash in the cell and 无数据 in a tooltip: the column stays narrow and the
-    // dash cannot be misread as a printed zero. The tooltip opens on focus as well as hover, so the
-    // same sentence is reachable with the keyboard (a bare `title` reaches only the mouse).
-    const percent = metric && metric.state === 'available' ? value(metric, '%', text.noData) : undefined
-    const cell = <td key={window} data-asset-return={`${id}:${window}`}
-      data-direction={metric?.state === 'available' ? Math.sign(metric.value) : 0}
-      data-unavailable={percent === undefined ? 'true' : undefined}
-      aria-label={percent === undefined ? text.noData : undefined}>{percent ?? text.windowNoData}</td>
-    // 不是真控件就不迁：单元格套 `tabIndex` + 浮层是假控件，说明改挂在可访问名上。
-    return cell
-  })}</>
-}
-/** No figure and no value cell at all: the row states the gap instead of filling it. */
-function PlannedStatusRow({ id, text }: { id: MacroDriverId; text: Text }): React.ReactElement {
-  return <tr data-status-row={id} data-connected="false">
-    <th scope="row"><span>{text.assetLabels[id]}</span><small>{text.statusReads[id]}</small></th>
-    <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
-  </tr>
-}
-/**
- * A daily FRED close. The 最新 cell prints the level at two decimals; the four intraday window
- * columns collapse into one cell that prints the day-over-day change in basis points with the
- * observation date, because a daily close cannot answer a 15m window and must not pretend to.
- *
- * The extras under it answer "which day is this number about?" before they are stated: the term
- * spread only while both legs describe one trading day (a difference between two days describes no
- * day), and the inflation expectation always with its own date, since it is its own series and can be
- * a day ahead — it was on 2026-10-15 (T10YIE 10-14, the yields 10-13).
- */
 function RatesStatusRow({ id, reading, rates, text }: {
   id: 'us10y' | 'realRate'; reading: MacroRatesReading
   rates: ReadonlyMap<string, MacroRatesReading>; text: Text
@@ -248,64 +132,6 @@ function MacroStatusRow({ id, reading, text, formatTime }: {
     <td data-asset-price={id}>{live ? livePriceText(live.price) : levelText(reading)}</td>
     <WindowCells id={id} metrics={macroMetrics(reading)} text={text} />
   </tr>
-}
-function AssetStatusRow({ id, snapshot, text }: { id: CrossAssetId; snapshot?: CrossAssetSnapshot; text: Text }): React.ReactElement {
-  return <tr data-status-row={id} data-connected="true">
-    <th scope="row"><span>{text.assets[id]}</span>{text.statusReads[id] ? <small>{text.statusReads[id]}</small> : null}</th>
-    <td data-asset-price={id}>{priceOf(snapshot, id)}</td>
-    <WindowCells id={id} metrics={assetMetrics(snapshot, id)} text={text} />
-  </tr>
-}
-/**
- * The Nasdaq 100 row, which has two admitted sources and therefore two things to say.
- *
- * The value is always the last bar that actually closed: the real index prints only inside the US
- * cash session, so outside it the last close *is* the current reading, and the row says 休市 beside
- * it. The proxy answers the row only when the real source has nothing at all, and it wears the 代理
- * label whenever it does — a tokenised perpetual is never shown as the standard index. When neither
- * leg has a bar the row says 未接入 and prints no number.
- */
-function IndexStatusRow({ snapshot, text, formatTime }: {
-  snapshot?: CrossAssetSnapshot; text: Text; formatTime: (value: string, precision: 'second') => string
-}): React.ReactElement {
-  const source = snapshot?.indexSource ?? 'unavailable'
-  const resolveText = useProductTextKey()
-  // Neither leg has a reading: the row states the gap in one cell, exactly like a macro row whose
-  // series is not connected yet. It prints no figure and no window, because there is nothing to
-  // compute either from — 未接入 is the honest answer, and it is not a number.
-  if (source === 'unavailable') {
-    return <tr data-status-row="index" data-connected="false" data-index-source="unavailable" data-market-state="unavailable"
-      data-index-name={indexRowName(snapshot, text)}>
-      <th scope="row"><span>{indexRowName(snapshot, text)}</span><small>{text.statusReads.index}</small></th>
-      <td colSpan={crossAssetWindows.length + 1} className="mi-cross-asset__not-connected"><span>{text.notConnected}</span><small>{text.notConnectedHint}</small></td>
-    </tr>
-  }
-  const proxy = source === 'proxy'
-  const quote = snapshot?.quotes?.index
-  const lastClosed = snapshot?.lastClosed?.index ?? null
-  const marketState = snapshot?.marketState?.index ?? 'open'
-  // A live trade belongs to the proxy leg alone; the real index has none, so its newest value is the
-  // last bar that closed.
-  const live = proxy && quote && quote.state !== 'missing' && quote.price ? quote.price : undefined
-  const value = live ?? lastClosed?.close
-  return <tr data-status-row="index" data-connected="true" data-index-source={source} data-market-state={marketState}
-    data-index-name={indexRowName(snapshot, text)}>
-    <th scope="row"><span>{indexRowName(snapshot, text)}
-      {proxy ? <em className="mi-cross-asset__synthetic" data-index-proxy="true" data-caveat="tokenized-index-proxy"
-        aria-label={text.proxyCaveat}>{text.proxyTag}</em> : null}
-      {marketState === 'closed' ? <em className="mi-cross-asset__synthetic" data-market-state-tag="closed"
-        aria-label={text.marketClosedHint}>{text.marketClosed}</em> : null}
-    </span>{text.statusReads.index ? <small>{text.statusReads.index}</small> : null}</th>
-    <td data-asset-price="index" data-last-closed-at={lastClosed?.at}>{value === undefined ? text.notConnected : livePriceText(value)}</td>
-    <WindowCells id="index" metrics={assetMetrics(snapshot, 'index')} text={text} />
-  </tr>
-}
-/** The last closed bar of the index row, in the snapshot's own clock. */
-function IndexObservation({ snapshot, text, formatTime }: {
-  snapshot: CrossAssetSnapshot; text: Text; formatTime: (value: string, precision: 'second') => string
-}): React.ReactElement | null {
-  const at = snapshot.lastClosed?.index?.at
-  return at ? <>{` · ${text.lastClosedBar} `}<time>{formatTime(at, 'second')}</time></> : null
 }
 export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calendar = macroEconomicCalendarClient, readMarketEvents, onSelectEvent, text }: {
   client: ReturnType<typeof createCrossAssetObservationClient>; macroSnapshot?: MacroMarketSnapshotView
@@ -439,8 +265,22 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
         <small>{text.closed}{snapshot ? <IndexObservation snapshot={snapshot} text={text} formatTime={formatTime} /> : null}</small>
       </div>
       <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
-        <FocusPopover {...historyHint} resolveText={resolveProductText}>
-          <Button type="text" size="small" aria-label={text.analysis} icon={<Info size={13} />} /></FocusPopover></div>
+        <FocusPopover
+          {...historyHint}
+          resolveText={resolveProductText}
+          trigger={(triggerProps) => (
+            <Button
+              aria-expanded={triggerProps.expanded}
+              aria-label={text.analysis}
+              icon={<Info size={13} />}
+              onBlur={triggerProps.onBlur}
+              onClick={triggerProps.onSelect}
+              onFocus={triggerProps.onFocus}
+              onMouseEnter={triggerProps.onMouseEnter}
+              onMouseLeave={triggerProps.onMouseLeave}
+              size="small"
+              type="text" />
+          )} /></div>
         <div className="mi-cross-asset__chart-actions"><Segmented value={view.range} ariaLabelKey={crossAssetTextKeys.rangeLabel} resolveText={resolveProductText}
             items={crossAssetRanges.map(range => ({ value: range, labelKey: crossAssetWindowLabelKeys[range] }))}
             onChange={range => view.setRange(range as CrossAssetRange)} />
