@@ -222,16 +222,21 @@ export function SyncRunSection({ knownSources, text }: Readonly<{
         <span role="columnheader">{text.columns.duration}</span>
         <span role="columnheader">{text.columns.detail}</span>
       </div>
+      <p className="mi-sync-run__legend">{text.noSourceHint}</p>
       {visible.map((row) => <div className="mi-sync-run__grid" data-outcome={row.outcome} key={row.runId} role="row">
         <span className="mi-sync-run__time" role="cell">{formatTime(row.at, timeZone)}</span>
         <span className="mi-sync-run__task" role="cell">{taskLabelOf(row)}</span>
-        <span className="mi-sync-run__source" role="cell">
+        {/* Nothing here is hidden behind a hover: the count is visible text, and the full list is
+            the cell's accessible name, so a keyboard or a screen reader gets the same facts. */}
+        <span
+          aria-label={row.sources.length === 0 ? text.noSourceHint : row.sources.map(sourceLabelOf).join(text.joiner)}
+          className="mi-sync-run__source"
+          role="cell"
+        >
           {row.sources.length === 0
-            ? <Tooltip title={text.noSourceHint}><span className="mi-sync-run__hint" tabIndex={0}>{text.allSourcesNote}</span></Tooltip>
-            : <Tooltip title={row.sources.map(sourceLabelOf).join(text.joiner)}>
-              <span className="mi-sync-run__hint" tabIndex={0}>{row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}</span>
-            </Tooltip>}
-          {row.sources.length > 2 ? ` +${row.sources.length - 2}` : ''}
+            ? text.allSourcesNote
+            : row.sources.slice(0, 2).map(sourceLabelOf).join(text.joiner)}
+          {row.sources.length > 2 ? <span className="mi-sync-run__more">{` +${row.sources.length - 2}`}</span> : null}
         </span>
         <span role="cell">{text.actions[row.action]}</span>
         <span role="cell" data-outcome={row.outcome}>{text.outcomes[row.outcome]}</span>
