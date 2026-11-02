@@ -163,6 +163,11 @@ export type ClaimOptions = {
    * 允许整体一笔。判据必须机械：提交里只有删除、没有任何新增，且所有删除行的文本完全相同。
    */
   isMechanicalDeletion?: (hash: string) => boolean
+  /**
+   * 已被 revert 的提交，以及 revert 提交本身：**净效果为零**，不该再要求归属声明。
+   * 判据来自 git 自己的 revert 正文（`This reverts commit <hash>`），不靠人写说明。
+   */
+  isReverted?: (hash: string) => boolean
 }
 
 export function claimsIn(commit: InspectedCommit): Claim[] {
@@ -281,6 +286,7 @@ export function findViolations(
 ): ComponentOwnershipViolation[] {
   const claimed = claimedCommits(commits, options)
   const isMechanicalDeletion = options.isMechanicalDeletion ?? ((): boolean => false)
+  const isReverted = options.isReverted ?? ((): boolean => false)
   const violations: ComponentOwnershipViolation[] = []
   for (const commit of commits) {
     if (!touchesComponents(commit.files)) continue
@@ -289,6 +295,8 @@ export function findViolations(
     if (claimed.has(commit.hash)) continue
     // 同一行文本全仓机械删除：允许整体一笔，不要求逐文件解释。
     if (isMechanicalDeletion(commit.hash)) continue
+    // 已被 revert、或本身就是 revert：进树又出树，净效果为零。
+    if (isReverted(commit.hash)) continue
     const unexplained = unexplainedFiles(commit.files, commit.message)
     if (declaresComponentOwner(commit.message) && unexplained.length === 0) continue
     violations.push({
@@ -368,7 +376,19 @@ function main(): void {
       return false
     }
   }
-  const violations = findViolations(commits, { isMechanicalDeletion: mechanical })
+  // revert 对：git 的 revert 正文自带 `This reverts commit <hash>`，据此把成对的两笔都认出来。
+  const revertedPairs = new Set<string>()
+  for (const commit of commits) {
+    const match = /This reverts commit ([0-9a-f]{7,40})/u.exec(commit.message)
+    if (match?.[1] === undefined) continue
+    revertedPairs.add(commit.hash)
+    const target = commits.find((candidate) => candidate.hash.startsWith(match[1] as string))
+    if (target !== undefined) revertedPairs.add(target.hash)
+  }
+  const violations = findViolations(commits, {
+    isMechanicalDeletion: mechanical,
+    isReverted: (hash) => revertedPairs.has(hash)
+  })
   if (violations.length === 0) {
     console.log(`components-ownership: ${commits.length} commit(s) checked, none touched ${COMPONENTS_DIR} without a ${OWNER_TRAILER} trailer.`)
     // 认领数量必须看得见：一晚上认领十几笔，说明分工本身出了问题。
