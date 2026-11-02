@@ -4,7 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { IconButton } from '../icon-button'
 import { Popover } from './Popover'
+
+import { Info } from 'lucide-react'
 
 const key = (value: string): string => value
 
@@ -243,5 +246,36 @@ describe('Popover', () => {
     await tick()
     expect(isOpen(trigger)).toBe(false)
     expect(document.body.textContent).not.toContain('ui.test.help')
+  })
+
+  it('composes with the platform icon button as its trigger', async () => {
+    // 两个平台组件必须能合成一个触发器：`Popover` 交出的鼠标/焦点处理器要能落到 `IconButton`
+    // 内部的 `<button>` 上。持仓卡那颗「?」卡的就是这一步——`IconButton` 早先只绑了自己的
+    // `onSelect`，注入进来的处理器被丢掉，悬停和聚焦都不会开。
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root_ = createRoot(host)
+    root = root_
+    act(() => {
+      root_.render(
+        <Popover labelKey="ui.test.help" resolveText={key}>
+          <IconButton
+            ariaLabelKey="ui.test.trigger"
+            icon={Info}
+            onSelect={() => undefined}
+            resolveText={key}
+            size="sm"
+          />
+        </Popover>
+      )
+    })
+    const button = host.querySelector<HTMLButtonElement>('button')
+    if (!button) throw new Error('no trigger rendered')
+
+    await act(async () => {
+      button.focus()
+    })
+    await tick()
+    expect(button.className).toContain('ant-popover-open')
   })
 })

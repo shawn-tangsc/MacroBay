@@ -2,7 +2,7 @@ import { Button, Tooltip } from 'antd'
 import { fillLabelParams } from '../textKeyParams'
 
 import type { LucideIcon } from 'lucide-react'
-import type { CSSProperties, MouseEvent, ReactElement } from 'react'
+import type { CSSProperties, FocusEvent, MouseEvent, ReactElement } from 'react'
 
 import { LoadingSpinner } from '../loading'
 
@@ -170,6 +170,18 @@ type IconButtonCommon = {
    * 伪装成属性的尺寸，那会让 22/24 的闭集从内部被绕过。
    */
   dataAttributes?: Readonly<Record<`data-${string}`, string | number | boolean | undefined>>
+  /**
+   * 标准交互事件：**浮层类组件的触发器**要用它们（`Popover` 的 render-prop 交出来的就是这一组）。
+   *
+   * 为什么必须在这里收：`Popover` 早先用 `cloneElement` 往子组件注入 `onMouseEnter` 等处理器，
+   * 而 `IconButton` 只绑了自己的 `onSelect`，注进来的处理器被丢掉——两个平台组件因此组合不成一个
+   * 触发器（持仓卡那颗「?」就是卡在这里）。透传的是**标准 DOM 交互**，不是让人改外观；
+   * `className` / `style` 的边界不因此松动。
+   */
+  onMouseEnter?: (event: MouseEvent<HTMLButtonElement>) => void
+  onMouseLeave?: (event: MouseEvent<HTMLButtonElement>) => void
+  onFocus?: (event: FocusEvent<HTMLButtonElement>) => void
+  onBlur?: (event: FocusEvent<HTMLButtonElement>) => void
   /** 文案解析入口，由调用方注入（壳层传 `t` 的包装，测试传键回显）。 */
   resolveText: (key: string) => string
 }
@@ -208,6 +220,10 @@ export function IconButton({
   className,
   style,
   dataAttributes,
+  onMouseEnter,
+  onMouseLeave,
+  onFocus,
+  onBlur,
   resolveText
 }: IconButtonProps): ReactElement {
   const ariaLabel = fillLabelParams(resolveText(ariaLabelKey), ariaLabelParams)
@@ -219,6 +235,10 @@ export function IconButton({
   const button = (
     <Button
       aria-label={ariaLabel}
+      onBlur={onBlur}
+      onFocus={onFocus}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       className={[
         'icon-button',
         `icon-button--${size}`,
