@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { Button, Popover, Tooltip } from 'antd'
+import { Button, Popover } from 'antd'
 
 import { LoadingState } from '@platform/ui/components/loading'
 import { STATE_VIEW_ACTION_KEYS, StateView } from '@platform/ui/components/state'
