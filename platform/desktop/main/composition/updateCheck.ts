@@ -6,6 +6,8 @@ import { registerUpdateCheckIpc } from '../../../updates/ipc/registerUpdateCheck
 import { openUpdateLink } from '../../../updates/runtime/openUpdateLink'
 import { autoCheckDelayMs, createUpdateCheckService, type UpdateCheckMode } from '../../../updates/runtime/updateCheckService'
 import { createEmptyUpdateCheckState } from '../../../updates/runtime/updateCheckState'
+import { parseReleaseNotes } from '../../../updates/contracts/releaseNotes'
+import { createReleaseNotesService } from '../../../updates/runtime/releaseNotesService'
 
 /**
  * 更新检查的装配：建服务、注册三条通道、把自动检查排到主界面之后。
@@ -22,6 +24,8 @@ export type UpdateCheckCompositionPorts = Readonly<{
   platform: string
   /** `userData/platform/updates/state.json`：日桶、上次结论、上次手动检查都记在这里。 */
   stateFilePath: string
+  /** `userData/platform/updates/release-notes.json`：按版本号缓存的说明正文（原文只在主进程）。 */
+  releaseNotesFilePath: string
   fetch: typeof fetch
   now: () => Date
   isCheckEnabled: () => Promise<boolean>
@@ -50,10 +54,26 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
     log: ports.log
   })
 
+  const notesService = createReleaseNotesService({
+    storage: createJsonFileStorage(ports.releaseNotesFilePath, { version: '', fetchedAt: '', text: '' }),
+    fetch: ports.fetch,
+    now: ports.now,
+    log: ports.log
+  })
+
   registerUpdateCheckIpc(ports.ipcMain, {
     mode: ports.mode,
     getProjection: service.getProjection,
     checkNow: () => service.checkNow('manual'),
+    getReleaseNotes: async () => {
+      // 版本由主进程自己的结论取：渲染层不传版本号，也拿不到原文。
+      const projection = service.getProjection()
+      if (projection.state !== 'available') return { ok: false }
+      const body = await notesService.getBody(projection.latestVersion)
+      if (body === null) return { ok: false }
+      const nodes = parseReleaseNotes(body)
+      return nodes === null ? { ok: false } : { ok: true, version: projection.latestVersion, nodes }
+    },
     openUpdateLink: (destination) =>
       openUpdateLink(destination, {
         openExternal: ports.openExternal,

@@ -23,11 +23,13 @@ afterEach(async () => {
 
 function clientFor(
   state: UpdateCheckProjection,
-  options: { openOk?: boolean; opened?: string[] } = {}
+  options: { openOk?: boolean; opened?: string[]; notes?: unknown[] | null } = {}
 ): UpdateCheckClient {
   return {
     getState: async () => state,
     checkNow: async () => state,
+    getReleaseNotes: async () =>
+      options.notes ? { ok: true, version: '0.4.0', nodes: options.notes as never } : { ok: false },
     openUpdateLink: async (destination) => {
       options.opened?.push(destination)
       return { ok: options.openOk !== false }
@@ -118,6 +120,26 @@ describe('the about page', () => {
       buttons[2].dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(container.querySelector('[role="status"]')?.textContent).toBe(text.links.openFailed)
+  })
+
+  it('shows the notes only when a newer version exists', async () => {
+    const notes = [
+      { kind: 'section', title: '本次更新' },
+      { kind: 'paragraph', runs: [{ text: '修好了一个问题', bold: false }] }
+    ]
+    const shown = await mount(
+      { state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' },
+      clientFor({ state: 'available', currentVersion: '0.3.1', latestVersion: '0.4.0', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes })
+    )
+    expect(shown.querySelector('[data-structured-text]')).not.toBeNull()
+    expect(shown.textContent).toContain('修好了一个问题')
+
+    const hidden = await mount(
+      { state: 'up-to-date', currentVersion: '0.3.1', latestVersion: '0.3.1', checkedAt: '2026-11-03T00:10:00.000Z' },
+      clientFor({ state: 'up-to-date', currentVersion: '0.3.1', latestVersion: '0.3.1', checkedAt: '2026-11-03T00:10:00.000Z' }, { notes })
+    )
+    // 已是最新时不铺开：那段正文属于最新那版，未必是读者正在跑的这版。
+    expect(hidden.querySelector('[data-structured-text]')).toBeNull()
   })
 
   it('holds no address anywhere in the page', async () => {

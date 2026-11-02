@@ -41,6 +41,11 @@ export const IpcChannels = {
    * 载荷是那一刻的投影 `UpdateCheckProjection`，**不是事件对象**。
    */
   updatesChanged: 'platform:updates-changed',
+  /**
+   * 取「这一版」的更新说明。**无载荷**：版本由主进程从自己的结论取，渲染层不传任何东西。
+   * 返回节点，不返回原文——远端文字只能在主进程里变成受控结构。
+   */
+  updatesGetReleaseNotes: 'platform:updates-get-release-notes',
   channelsCatalog: 'platform:channels-catalog',
   channelsList: 'platform:channels-list',
   /**

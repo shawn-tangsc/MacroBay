@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Info } from 'lucide-react'
 import { Button } from 'antd'
 
 import type { AppSettings, AppSettingsPatch } from '@platform/settings/schema/appSettings'
 
 import { platformText } from '../../../i18n/platformText'
+import type { StructuredTextNode } from '@platform/contracts/structuredText'
 import type { UpdateLinkId } from '@platform/updates/updateSource'
+import { StructuredText } from '@platform/ui/components/structured-text'
 
 import { VersionCheckRow } from '../version/VersionCheckRow'
 import { platformUpdateCheckClient, type UpdateCheckClient } from '../version/updateCheckClient'
@@ -29,6 +31,38 @@ export function AboutSettingsPage(props: {
   const text = platformText[props.settings.language].about
   const client = props.client ?? platformUpdateCheckClient
   const [openFailed, setOpenFailed] = useState<UpdateLinkId | null>(null)
+  const [hasNewer, setHasNewer] = useState(false)
+  const [notes, setNotes] = useState<readonly StructuredTextNode[] | null>(null)
+  const [notesExpanded, setNotesExpanded] = useState(false)
+
+  // 只有「有新版本」才显示说明块：它的正文属于最新那版，未必是读者正在跑的那一版。
+  useEffect(() => {
+    let alive = true
+    const apply = (projection: { state: string }): void => {
+      if (!alive) return
+      const newer = projection.state === 'available'
+      setHasNewer(newer)
+      if (!newer) {
+        setNotes(null)
+        return
+      }
+      void client
+        .getReleaseNotes()
+        .then((result) => {
+          if (!alive) return
+          setNotes(result.ok && result.nodes ? result.nodes : null)
+        })
+        .catch(() => {
+          if (alive) setNotes(null)
+        })
+    }
+    void client.getState().then(apply).catch(() => undefined)
+    const unsubscribe = client.onChanged((projection) => apply(projection))
+    return () => {
+      alive = false
+      unsubscribe()
+    }
+  }, [client])
 
   // 「打开下载页」由更新块渲染；链接块固定四颗，download 不在这里重复（两颗按钮开同一地址就是缺陷）。
   const linkRows: { id: UpdateLinkId; label: string; action: string }[] = [
@@ -63,6 +97,19 @@ export function AboutSettingsPage(props: {
         <h3 className="about-section-title">{text.updates}</h3>
         <VersionCheckRow settings={props.settings} onUpdateSettings={props.onUpdateSettings} client={client} />
       </div>
+
+      {hasNewer && notes !== null ? (
+        <div className="about-section about-notes">
+          <h3 className="about-section-title">{text.notes.title}</h3>
+          {/* 组件不记状态：展开由这一页给 maxNodes。默认 7 块。 */}
+          <StructuredText nodes={notes} maxNodes={notesExpanded ? undefined : 7} />
+          {notes.length > 7 ? (
+            <Button type="link" size="small" onClick={() => setNotesExpanded((value) => !value)}>
+              {notesExpanded ? text.notes.collapse : text.notes.expand}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="about-section">
         <h3 className="about-section-title">{text.links.title}</h3>

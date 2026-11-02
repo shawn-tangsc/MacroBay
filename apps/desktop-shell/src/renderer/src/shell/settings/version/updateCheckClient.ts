@@ -1,4 +1,5 @@
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
+import type { StructuredTextNode } from '@platform/contracts/structuredText'
 import type { UpdateLinkId } from '@platform/updates/updateSource'
 
 /**
@@ -15,6 +16,8 @@ export type UpdateCheckClient = Readonly<{
   openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
   /** 订阅「结论变了」，返回退订函数。壳层只订阅，不轮询、不自己比版本号。 */
   onChanged: (callback: (projection: UpdateCheckProjection) => void) => () => void
+  /** 取这一版的更新说明；`ok:false` 表示「没有这一块」，不是错误。 */
+  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[] }>
 }>
 
 /**
@@ -34,7 +37,8 @@ export const platformUpdateCheckClient: UpdateCheckClient = {
     } catch {
       return () => undefined
     }
-  }
+  },
+  getReleaseNotes: async () => requireBridge().getReleaseNotes()
 }
 
 type UpdateCheckBridge = {
@@ -42,6 +46,7 @@ type UpdateCheckBridge = {
   checkNow: () => Promise<UpdateCheckProjection>
   openUpdateLink: (destination: UpdateLinkId) => Promise<{ ok: boolean }>
   onChanged: (callback: (projection: UpdateCheckProjection) => void) => () => void
+  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[] }>
 }
 
 function requireBridge(): UpdateCheckBridge {

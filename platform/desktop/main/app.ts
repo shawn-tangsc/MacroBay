@@ -1172,7 +1172,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   const updateCheck = await composeUpdateCheck({
     ipcMain, mode: 'packaged', // DEV-GATE: 交付前必须改成 app.isPackaged ? 'packaged' : 'development'
     currentVersion: app.getVersion(), platform: process.platform,
-    stateFilePath: join(platformDataDirectory, 'updates', 'state.json'), fetch: getPlatformFetch(),
+    stateFilePath: join(platformDataDirectory, 'updates', 'state.json'), releaseNotesFilePath: join(platformDataDirectory, 'updates', 'release-notes.json'), fetch: getPlatformFetch(),
     now: () => new Date(), isCheckEnabled: async () => (await settingsStore.get()).updates.checkEnabled,
     openExternal: (url) => shell.openExternal(url), log: appLog.log,
     broadcast: (projection) => safeSendToMainWindow(getMainWindow, IpcChannels.updatesChanged, projection)

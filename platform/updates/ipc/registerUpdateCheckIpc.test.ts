@@ -34,13 +34,15 @@ describe('registering the update check channels', () => {
       mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
-      openUpdateLink: async () => ({ ok: true })
+      openUpdateLink: async () => ({ ok: true }),
+      getReleaseNotes: async () => ({ ok: false })
     })
 
     expect(ipc.channels).toEqual([
       IpcChannels.updatesGetState,
       IpcChannels.updatesCheckNow,
-      IpcChannels.updatesOpenLink
+      IpcChannels.updatesOpenLink,
+      IpcChannels.updatesGetReleaseNotes
     ])
   })
 
@@ -48,12 +50,14 @@ describe('registering the update check channels', () => {
     const ipc = createIpcMain()
     const checkNow = vi.fn(async () => projection)
     const openUpdateLink = vi.fn(async () => ({ ok: true }))
+    const getReleaseNotes = vi.fn(async () => ({ ok: false }))
 
     registerUpdateCheckIpc(ipc.ipcMain, {
       mode: 'development',
       getProjection: () => ({ state: 'development' }),
       checkNow,
-      openUpdateLink
+      openUpdateLink,
+      getReleaseNotes
     })
 
     expect(ipc.channels).toEqual([IpcChannels.updatesGetState])
@@ -62,6 +66,7 @@ describe('registering the update check channels', () => {
     expect(ipc.handlers.has(IpcChannels.updatesOpenLink)).toBe(false)
     expect(checkNow).not.toHaveBeenCalled()
     expect(openUpdateLink).not.toHaveBeenCalled()
+    expect(getReleaseNotes).not.toHaveBeenCalled()
   })
 
   it('answers the state channel with the current projection', async () => {
@@ -70,7 +75,8 @@ describe('registering the update check channels', () => {
       mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
-      openUpdateLink: async () => ({ ok: true })
+      openUpdateLink: async () => ({ ok: true }),
+      getReleaseNotes: async () => ({ ok: false })
     })
 
     const handler = ipc.handlers.get(IpcChannels.updatesGetState)
@@ -91,7 +97,8 @@ describe('registering the update check channels', () => {
             opened.push(url)
           },
           log: () => undefined
-        })
+        }),
+      getReleaseNotes: async () => ({ ok: false })
     })
 
     const handler = ipc.handlers.get(IpcChannels.updatesOpenLink)
@@ -112,7 +119,8 @@ describe('registering the update check channels', () => {
       mode: 'packaged',
       getProjection: () => projection,
       checkNow: async () => projection,
-      openUpdateLink: async () => ({ ok: false })
+      openUpdateLink: async () => ({ ok: false }),
+      getReleaseNotes: async () => ({ ok: false })
     })
 
     const handler = ipc.handlers.get(IpcChannels.updatesOpenLink)

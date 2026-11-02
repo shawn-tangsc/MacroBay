@@ -22,6 +22,7 @@ function clientFor(initial: UpdateCheckProjection) {
     getState: async () => initial,
     checkNow: async () => initial,
     openUpdateLink: async () => ({ ok: true }),
+    getReleaseNotes: async () => ({ ok: false }),
     onChanged: (callback) => {
       listeners.add(callback)
       return () => listeners.delete(callback)

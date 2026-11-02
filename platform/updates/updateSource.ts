@@ -50,6 +50,34 @@ export function updateMetadataUrl(platform: string): string | null {
  * 关于页与更新块能打开的五个去处。**id 就是按钮的名字**（`changelog` 对应「更新日志」），
  * 载荷类型就是这五个字面量的联合——渲染层没有位置放地址。
  */
+/** 发布记录接口的主机（与 `github.com` 不是一个主机，所以单独精确比对）。 */
+export const releaseNotesApiHost = 'api.github.com'
+
+const releaseNotesApiPathSegments = ['repos', UPDATE_REPOSITORY.owner, UPDATE_REPOSITORY.name, 'releases', 'latest'] as const
+
+export function updateReleaseNotesApiUrl(): string {
+  return `https://${releaseNotesApiHost}/${releaseNotesApiPathSegments.join('/')}`
+}
+
+/**
+ * 取正文这一条**单独校验**：主机精确 + 路径段严格相等。
+ * 与打开链接同一类风险，所以写两遍是故意的——两处放行条件不同（一个是网页、一个是接口）。
+ */
+export function isAllowedReleaseNotesApiUrl(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  if (parsed.protocol !== 'https:') return false
+  if (parsed.host !== releaseNotesApiHost) return false
+  const segments = pathSegments(parsed.pathname)
+  if (segments.some((segment) => segment.includes('%'))) return false
+  if (segments.length !== releaseNotesApiPathSegments.length) return false
+  return segments.every((segment, index) => segment === releaseNotesApiPathSegments[index])
+}
+
 export const updateLinkIds = ['download', 'changelog', 'docs', 'site', 'feedback'] as const
 
 export type UpdateLinkId = (typeof updateLinkIds)[number]

@@ -79,6 +79,7 @@ const api = {
    */
   updates: {
     getState: () => ipcRenderer.invoke(IpcChannels.updatesGetState),
+    getReleaseNotes: () => ipcRenderer.invoke(IpcChannels.updatesGetReleaseNotes),
     checkNow: () => ipcRenderer.invoke(IpcChannels.updatesCheckNow),
     openUpdateLink: (destination: unknown) => ipcRenderer.invoke(IpcChannels.updatesOpenLink, destination),
     /** 订阅「结论变了」。返回退订函数：拿不到退订等于每次挂载漏一个监听。 */

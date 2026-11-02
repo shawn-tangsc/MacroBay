@@ -57,6 +57,7 @@ function createClient(
       return options.next ?? available
     },
     onChanged: () => () => undefined,
+    getReleaseNotes: async () => ({ ok: false }),
     openUpdateLink: async () => {
       calls.openUpdateLink += 1
       if (options.openOk !== false) calls.opened += 1

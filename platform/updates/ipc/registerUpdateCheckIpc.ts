@@ -1,5 +1,7 @@
 import type { IpcMain } from 'electron'
 
+import type { StructuredTextNode } from '@platform/contracts/structuredText'
+
 import type { UpdateCheckProjection } from '../contracts/updateCheck'
 import { IpcChannels } from '../../desktop/ipc/channels'
 
@@ -19,6 +21,8 @@ export type UpdateCheckIpcPorts = Readonly<{
   checkNow: () => Promise<UpdateCheckProjection>
   /** `destination` 由渲染层传入，可能是任何东西——处理器原样交给端口，由端口做封闭校验。 */
   openUpdateLink: (destination: unknown) => Promise<{ ok: boolean }>
+  /** 说明正文：成功给版本与节点，失败或冷却期一律 `{ ok: false }`（没有这一块）。 */
+  getReleaseNotes: () => Promise<{ ok: boolean; version?: string; nodes?: StructuredTextNode[] }>
 }>
 
 export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: UpdateCheckIpcPorts): void {
@@ -29,4 +33,5 @@ export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: 
 
   ipcMain.handle(IpcChannels.updatesCheckNow, () => ports.checkNow())
   ipcMain.handle(IpcChannels.updatesOpenLink, (_event, destination: unknown) => ports.openUpdateLink(destination))
+  ipcMain.handle(IpcChannels.updatesGetReleaseNotes, () => ports.getReleaseNotes())
 }
