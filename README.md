@@ -46,11 +46,11 @@ overnight, and what to watch today. It can be generated on a schedule or on dema
 keeps its source and its cutoff time.
 
 <p align="center">
-  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: crypto market checklist, market status, cross-asset returns, capital conditions, sentiment, funding and the watchlist" width="100%">
+  <img src="./docs/assets/screenshots/dashboard-window-en.png" alt="MacroBay dashboard: AI conclusion, market status, common-anchor returns, market sentiment and capital conditions, perpetual positioning and funding, source status, and the policy path and key sentiment rail" width="100%">
 </p>
 
 <p align="center">
-  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
+  <sub>The whole desk on one page — AI conclusion, market status, cross-asset returns, capital conditions, sentiment and funding, with the policy path, calendar and sentiment in the right column. <a href="./docs/assets/screenshots/demo-en.gif">Watch the 38-second demo</a>.</sub>
 </p>
 
 ## Download
