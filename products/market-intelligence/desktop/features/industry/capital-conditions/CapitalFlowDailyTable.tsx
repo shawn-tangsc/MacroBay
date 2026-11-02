@@ -1,5 +1,4 @@
 import { useId, useState } from 'react'
-import { Button } from 'antd'
 
 import { flowAccessibleName, type FlowAccessibleText } from './capitalFlowAccessibleName'
 import { formatFlowUsd } from './capitalFlowFormat'
@@ -41,11 +40,12 @@ export function CapitalFlowDailyTable({ rows, text, notComparable }: Readonly<{
 
   return <div className="mi-capital-conditions__daily">
     <div className="mi-capital-conditions__daily-toggle">
-      <Button className="mi-capital-conditions__daily-button" size="small" type="link"
+      {/* 句子里的文字动作：颜色/焦点环走共享类，调用点只留布局用的那个类名。 */}
+      <button type="button" className="text-action mi-capital-conditions__daily-button"
         aria-expanded={open} {...(open ? { 'aria-controls': tableId } : {})}
         onClick={() => setOpen((current) => !current)}>
         {open ? text.collapseDaily : text.expandDaily}
-      </Button>
+      </button>
       <span className="mi-capital-conditions__daily-source">{text.sameSource}</span>
     </div>
     {open ? <div id={tableId}>
