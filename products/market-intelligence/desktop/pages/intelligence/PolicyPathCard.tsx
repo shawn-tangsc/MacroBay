@@ -1,4 +1,6 @@
-import { Button, Tooltip } from 'antd'
+import { Button } from 'antd'
+import { Popover } from '@platform/ui/components/popover'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import { ArrowUpRight, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import './policyPathCard.css'
@@ -78,6 +80,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
   const Direction = change === undefined || change === 0 ? Minus : change > 0 ? TrendingUp : TrendingDown
   const freshness = text[reading.staleness] ?? text.unavailable
   // The leading bucket is the market's answer, not necessarily a hike.
+  const resolveKey = useProductTextKey()
   const outcomeLabel = probability
     ? text.outcomeLead.replace('{month}', month).replace('{outcome}', text.outcomes[probability.outcome])
     : ''
@@ -132,7 +135,7 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     ? '—'
     : <>{reading.sep.medianCurrentYear.toFixed(1)}%<span className="mi-policy-card__muted">（{reading.sep.asOf.slice(5)}）</span></>
 
-  const facts: ReadonlyArray<Readonly<{ label: string; value: React.ReactNode; hint?: string }>> = strip
+  const facts: ReadonlyArray<Readonly<{ label: string; value: React.ReactNode; hintParams?: Readonly<Record<string, string>> }>> = strip
     ? [
         { label: text.newTargetRange, value: rangeValue },
         { label: text.voteTally, value: reading.lastDecision?.vote ? `${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}` : '—' },
@@ -154,9 +157,10 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
             value: reading.lastDecision?.vote
               ? `${lastActionOf(reading, settlement, text)} · ${reading.lastDecision.vote.for}–${reading.lastDecision.vote.against}`
               : '—',
-            ...(reading.lastDecision?.vote ? { hint: text.voteHint
-              .replace('{for}', String(reading.lastDecision.vote.for))
-              .replace('{against}', String(reading.lastDecision.vote.against)) } : {})
+            // The numbers ride as parameters, not as a sentence built here: the template stays in the
+            // copy table and the callsite only formats what it already knows.
+            ...(reading.lastDecision?.vote ? { hintParams: {
+              for: String(reading.lastDecision.vote.for), against: String(reading.lastDecision.vote.against) } } : {})
           }
         ]
 
@@ -211,8 +215,9 @@ export function PolicyPathCard({ reading, text, month, onOpen }: Readonly<{
     <dl className="mi-policy-card__facts">
       {facts.map((row) => <div key={row.label}>
         <dt>{row.label}</dt>
-        {row.hint
-          ? <Tooltip title={row.hint} trigger={['hover', 'focus']}><dd tabIndex={0}>{row.value}</dd></Tooltip>
+        {row.hintParams
+          ? <Popover labelKey="pages.intelligence.portal.dashboard.policyPath.voteHint"
+              labelParams={row.hintParams} resolveText={resolveKey}><dd tabIndex={0}>{row.value}</dd></Popover>
           : <dd>{row.value}</dd>}
       </div>)}
     </dl>
