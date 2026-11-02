@@ -4,7 +4,7 @@ import { Button } from 'antd'
 import { LoadingState } from '@platform/ui/components/loading'
 import { StateView } from '@platform/ui/components/state'
 import { Drawer } from '@platform/ui/components/drawer'
-import { notificationCopy, type NotificationCopyLanguage, type NotificationCopyKey } from '@platform/i18n/notificationCopy'
+import { notificationCopy, type NotificationCopyKey, type NotificationCopyLanguage } from '@platform/i18n/notificationCopy'
 import type {
   NotificationDeeplink,
   SafeNotificationRecord
@@ -13,6 +13,7 @@ import type {
 import type { PlatformText } from '../../i18n/platformText'
 
 import { createNotificationCenterSource, type NotificationCenterSource } from './notificationCenterSource'
+import { resolveNotificationText } from './notificationText'
 
 import './notificationCenter.css'
 
@@ -29,23 +30,6 @@ type NotificationCenterDrawerProps = {
 }
 
 type LoadState = 'loading' | 'ready' | 'error'
-
-/** 记录里存的是键 + 参数，句子在这里按当前语言解析：切了语言，历史通知也跟着变。 */
-export function resolveNotificationText(
-  record: SafeNotificationRecord,
-  language: NotificationCopyLanguage
-): { title: string; body: string } {
-  const table = notificationCopy[language]
-  const fill = (template: string, params?: Readonly<Record<string, string>>): string =>
-    params === undefined
-      ? template
-      : template.replace(/\{(\w+)\}/g, (whole, name: string) =>
-          Object.prototype.hasOwnProperty.call(params, name) ? params[name]! : whole
-        )
-  const title = table[record.titleKey as NotificationCopyKey] ?? record.titleKey
-  const body = record.bodyKey === undefined ? '' : table[record.bodyKey as NotificationCopyKey] ?? record.bodyKey
-  return { title: fill(title, record.titleParams), body: fill(body, record.bodyParams) }
-}
 
 /**
  * 通知中心抽屉。
