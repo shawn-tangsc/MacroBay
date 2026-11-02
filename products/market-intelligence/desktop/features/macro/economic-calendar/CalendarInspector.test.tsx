@@ -1,60 +1,105 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ConfigProvider } from 'antd'
 import { expect, it, vi } from 'vitest'
+
+import { productText } from '../../../shared/i18n/productText'
+import { CalendarInspector } from './CalendarInspector'
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
-it('opens one detail drawer on the left, without a mask, with its close control in the header corner', async () => {
-  const { CalendarInspector } = await import('./CalendarInspector')
+
+const DETAIL_TITLE = productText['zh-CN'].pages.intelligence.portal.calendar.details.title
+
+it('opens one side panel, not a drawer: the board beside it stays visible and clickable', async () => {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host)
   const close = vi.fn()
   try {
-    await act(async () => root.render(<CalendarInspector open onClose={close} title="Details"><p>Derived detail</p></CalendarInspector>))
+    await act(async () => root.render(
+      <CalendarInspector contentId="US.CPI.AUGUST" onClose={close} open when="20:30 GMT+8"><p>Derived detail</p></CalendarInspector>
+    ))
     expect(host.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
     expect(host.querySelector('[data-calendar-detail-container]')?.textContent).toContain('Derived detail')
-    // Left and unmasked: the surface the reader was reading stays visible and clickable underneath.
-    expect(host.querySelector('.ant-drawer-left')).not.toBeNull()
+    // A panel, not a modal: no drawer root, no mask, no dialog role. The panel takes its own column
+    // and the calendar keeps the rest, so nothing has to be dismissed before picking the next row.
+    const panel = host.querySelector('aside')
+    expect(panel?.classList.contains('side-panel')).toBe(true)
+    expect(panel?.classList.contains('mi-calendar-detail')).toBe(true)
+    expect(host.querySelector('.ant-drawer')).toBeNull()
     expect(host.querySelector('.ant-drawer-mask')).toBeNull()
-    expect(host.querySelector('[role="dialog"]')).not.toBeNull()
-    // One width for both entry points (calendar page and dashboard card), wide enough that the
-    // release title and the source/period rows do not wrap on their first line.
-    expect(host.querySelector<HTMLElement>('.ant-drawer-content-wrapper')?.style.width).toBe('480px')
-    // One visible way out, in the header's own corner rather than in front of the title.
-    const closeControl = host.querySelector<HTMLButtonElement>('.ant-drawer-close')!
-    expect(closeControl).not.toBeNull()
-    expect(closeControl.classList.contains('ant-drawer-close-end')).toBe(true)
+    expect(host.querySelector('[role="dialog"]')).toBeNull()
+    // One visible way out, named by the component's own text table rather than the caller's key space.
+    const closeControl = host.querySelector<HTMLButtonElement>('aside button')!
+    expect(closeControl.getAttribute('aria-label')).toBe('收起面板')
     await act(async () => closeControl.click())
     expect(close).toHaveBeenCalledOnce()
   } finally { await act(async () => root.unmount()); host.remove() }
 })
-it('keeps nothing of the detail mounted while the drawer is closed', async () => {
-  const { CalendarInspector: Inspector } = await import('./CalendarInspector')
-  const CalendarInspector = (props: Parameters<typeof Inspector>[0]) => <ConfigProvider theme={{ token: { motion: false } }}><Inspector {...props} /></ConfigProvider>
+
+it('keeps nothing of the detail mounted while the panel is closed', async () => {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host)
   try {
-    await act(async () => root.render(<CalendarInspector open={false} onClose={() => {}} title="Details"><p>Derived detail</p></CalendarInspector>))
+    await act(async () => root.render(
+      <CalendarInspector contentId="US.CPI.AUGUST" onClose={() => {}} open={false} when="20:30 GMT+8"><p>Derived detail</p></CalendarInspector>
+    ))
     expect(host.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(0)
     expect(host.textContent).not.toContain('Derived detail')
   } finally { await act(async () => root.unmount()); host.remove() }
 })
-it('closes on Escape from anywhere, and ignores Escape while closed', async () => {
-  const { CalendarInspector: Inspector } = await import('./CalendarInspector')
-  const CalendarInspector = (props: Parameters<typeof Inspector>[0]) => <ConfigProvider theme={{ token: { motion: false } }}><Inspector {...props} /></ConfigProvider>
+
+it('closes on Escape from anywhere, and leaves the reader\'s focus on the row they picked', async () => {
   const host = document.createElement('div'); document.body.append(host)
-  const outside = document.createElement('button'); document.body.append(outside)
+  const outside = document.createElement('button'); outside.textContent = 'event row'; document.body.append(outside)
   const root = createRoot(host)
   const close = vi.fn()
   try {
-    await act(async () => root.render(<CalendarInspector open={false} onClose={close} title="Details">List</CalendarInspector>))
+    await act(async () => root.render(
+      <CalendarInspector contentId="US.CPI.AUGUST" onClose={close} open={false} when="20:30 GMT+8">List</CalendarInspector>
+    ))
     outside.focus()
     await act(async () => outside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     expect(close).not.toHaveBeenCalled()
-    await act(async () => root.render(<CalendarInspector open onClose={close} title="Details"><p>Event detail</p></CalendarInspector>))
-    // Without a mask the reader can click the calendar, so the key can arrive outside the drawer.
+
+    await act(async () => root.render(
+      <CalendarInspector contentId="US.CPI.AUGUST" onClose={close} open when="20:30 GMT+8"><p>Event detail</p></CalendarInspector>
+    ))
+    // `stay`: the reader is clicking down the list, so opening the panel must not pull them out of it.
     expect(document.activeElement).toBe(outside)
+    // The panel does not take Escape (the reader walks between both sides), so the detail keeps its
+    // own key: it is opened from a list and has to stay dismissable from the keyboard.
     await act(async () => outside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     expect(close).toHaveBeenCalledOnce()
   } finally { await act(async () => root.unmount()); host.remove(); outside.remove() }
+})
+
+it('announces which row is showing, with its moment, once for a burst of picks', async () => {
+  vi.useFakeTimers()
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host)
+  const render = async (contentId: string, when: string): Promise<void> => {
+    await act(async () => {
+      root.render(
+        <CalendarInspector contentId={contentId} onClose={() => undefined} open when={when}><p>Event detail</p></CalendarInspector>
+      )
+    })
+  }
+  try {
+    await render('US.CPI.AUGUST', '20:30 GMT+8')
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    const first = host.querySelector('[role="status"]')?.textContent ?? ''
+    expect(first).toContain(DETAIL_TITLE)
+    expect(first).toContain('20:30 GMT+8')
+    // A template that was never filled also "contains the title", so the placeholder check is the
+    // one that catches an empty `when`.
+    expect(first).not.toContain('{')
+
+    // Two picks inside the debounce window: the reader wants "where did I land", not a transcript.
+    await render('US.FOMC.SEPTEMBER', '21:00 GMT+8')
+    await render('US.NFP.SEPTEMBER', '21:30 GMT+8')
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+    const status = host.querySelector('[role="status"]')?.textContent ?? ''
+    expect(status).toContain('21:30 GMT+8')
+    expect(status).not.toContain('21:00 GMT+8')
+  } finally { vi.useRealTimers(); await act(async () => root.unmount()); host.remove() }
 })

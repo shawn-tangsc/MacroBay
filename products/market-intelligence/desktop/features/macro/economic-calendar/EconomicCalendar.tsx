@@ -293,6 +293,20 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
     : market.failure || monthState.state !== 'available' || monthState.incomplete ? 'incomplete' : 'complete'
   const timeZoneLabel = formatShellTimeZoneLabel(timeZone, useShellLanguage())
   const formatTime = useShellTimeFormat()
+  /**
+   * What the detail panel shows, as an identity plus a moment — the panel announces both when the
+   * reader keeps clicking down the list without the focus ever leaving it. A title alone cannot
+   * separate two rows that share one (two FOMC decisions on a day read as the same thing), and the
+   * moment comes from the platform formatter so it follows the reader's display zone.
+   */
+  const detailContentId = selectedMarket?.eventKey ?? selectedEventKey
+  const detailWhen = selectedMarket
+    ? formatTime(selectedMarket.scheduledAt)
+    : selectedEvent === undefined
+      ? undefined
+      : selectedEvent.event.scheduledAt
+        ? formatTime(selectedEvent.event.scheduledAt)
+        : selectedEvent.event.scheduledDate
   const dayEvents = unifiedCalendarDay(selectedDay, monthState.state === 'available' ? monthState.events : [], market.events, coverage, timeZone,
     new Set(market.events.filter(event => event.officialLink).map(event => event.eventKey)))
   const dayList = useRef<HTMLElement>(null)
@@ -331,6 +345,9 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
 
   return (
     <main className="intelligence-page mi-economic-calendar" aria-label={text.title}>
+      {/* The calendar side of the row. The detail panel is the second child (see the CSS comment on
+          `row-reverse`), so this wrapper is what the panel squeezes — toolbar included. */}
+      <div className="mi-economic-calendar__column">
       <header className="mi-economic-calendar__header">
         <div className="mi-economic-calendar__heading">
           <h1>{text.title}</h1>
@@ -406,8 +423,9 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           {coverage === 'complete' && !dayEvents.items.length ? <p>{text.unifiedDay.empty}</p> : null}
         </section>
       </div>
+      </div>
       <DashboardPanelDrawer open={calendarPanelOpen} panelId="economic-calendar" titleKey="pages.intelligence.portal.calendar.calendarSettings" onClose={() => setCalendarPanelOpen(false)} />
-      <DetailDrawer open={selectedMarket !== undefined || selectedEventKey !== undefined} title={text.details.title} onClose={clearDetail}>
+      <DetailDrawer contentId={detailContentId} onClose={clearDetail} open={detailContentId !== undefined} when={detailWhen}>
         {selectedMarket && selectedMarketSourceAdvanced ? <p className="mi-economic-calendar__comparison-rule" data-source-advanced>{text.market.sourceAdvanced}</p> : null}
         {selectedMarket ? <MarketCalendarInspector event={selectedMarket} source={market.sources.find(source => source.eventType === selectedMarket.eventType)} text={text} /> : null}
         {selectedLinkedMarket ? <MarketCalendarInspector event={selectedLinkedMarket} source={market.sources.find(source => source.eventType === selectedLinkedMarket.eventType)} text={text} /> : null}

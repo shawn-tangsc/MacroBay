@@ -342,7 +342,7 @@ describe('macro economic calendar', () => {
       expect(container.querySelector('[data-calendar-detail-actions]')).toBeNull()
     } finally { spy.mockRestore() }
   })
-  it('opens one left drawer without a mask for the event the reader picks, and keeps the calendar clickable', async () => {
+  it('opens the detail in its own column beside the calendar instead of covering it', async () => {
     const copy = productText['zh-CN'].pages.intelligence.portal.calendar
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
     const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [event] }),
@@ -352,54 +352,49 @@ describe('macro economic calendar', () => {
     await flush()
     const detail = container.querySelector<HTMLElement>('[data-calendar-detail-container]')!
     expect(detail.textContent).toContain(copy.events.cpi)
-    // Left, and without a mask: the month grid underneath stays reachable.
-    expect(container.querySelector('.ant-drawer-left')).not.toBeNull()
+    // A side panel, not a drawer and not a modal: no overlay, no dialog role, and the month grid
+    // beside it stays where it was and stays clickable. That is what giving up a column buys.
+    const panel = container.querySelector('aside')
+    expect(panel?.classList.contains('side-panel')).toBe(true)
+    expect(panel?.classList.contains('mi-calendar-detail')).toBe(true)
+    expect(container.querySelector('.ant-drawer')).toBeNull()
     expect(container.querySelector('.ant-drawer-mask')).toBeNull()
-    // 类必须落在**根节点**上：antd 把 `className` 交给 `.ant-drawer-content`，而 12px 浮卡与圆角的选择器
-    // 需要根节点同时带 `.ant-drawer` 与 `.ant-drawer-left`。这一条以前只断言 CSS 源码文本，所以那条规则
-    // 匹配不到任何元素、读者的"四面 12px 浮卡"从未生效——正是独立评审 be5e5e55 的 Critical。
-    const root = container.querySelector('.ant-drawer')
-    expect(root?.classList.contains('mi-calendar-drawer')).toBe(true)
-    expect(container.querySelector('.ant-drawer-content')?.classList.contains('mi-calendar-drawer')).toBe(false)
-    // 元素级样式要跟着块走：图表页打开的抽屉没有 `.mi-economic-calendar` 祖先，字段名否则不是灰的。
-    const drawerClassRules = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
-    for (const rule of ['.mi-calendar-drawer dt', '.mi-calendar-drawer dd', '.mi-calendar-drawer h2']) {
-      expect(drawerClassRules, rule).toContain(rule)
-    }
-    // …and anchored to this page's own box. An inline antd drawer is `position: absolute`, so with no
-    // positioned ancestor it resolved against the initial containing block and covered the app's icon
-    // rail and tab strip — while the same drawer opened from the dashboard stops at the content
-    // area's edge. Both surfaces must put it in the same place.
+    expect(container.querySelector('[role="dialog"]')).toBeNull()
+    // 元素级样式要跟着块走：规则写在面板自己的类上，而不是写在一个已不存在的 antd 抽屉上。
     const styles = readFileSync(resolve(process.cwd(), 'products/market-intelligence/desktop/features/macro/economic-calendar/economicCalendar.css'), 'utf8')
+    for (const rule of ['.mi-calendar-detail dt', '.mi-calendar-detail dd', '.mi-calendar-detail h2']) {
+      expect(styles, rule).toContain(rule)
+    }
+    // The page is the row; the calendar keeps the page padding in its own column. The panel is the
+    // DOM's second child (opened from a row, so "calendar, then detail" is the reading order) and
+    // lands on the left through `row-reverse`, where the drawer used to be.
     const pageRule = styles.slice(styles.indexOf('.mi-economic-calendar {'))
-    expect(pageRule.slice(0, pageRule.indexOf('\n}'))).toContain('position: relative')
-    // And it floats: 12px off every side of the content area, rounded, rather than glued to the icon
-    // rail and the tab strip. The placement class has to be in the selector — antd injects its own
-    // `top/bottom/left: 0` at runtime, so a two-class rule would tie and lose on source order.
-    expect(styles).toMatch(/\.mi-calendar-drawer \{ --mi-calendar-drawer-inset: 12px/)
-    const wrapper = styles.slice(styles.indexOf('.mi-calendar-drawer.ant-drawer-left > .ant-drawer-content-wrapper'))
-    const wrapperRule = wrapper.slice(wrapper.indexOf('{') + 1, wrapper.indexOf('\n}'))
-    for (const edge of ['top', 'bottom', 'left']) expect(wrapperRule).toContain(`${edge}: var(--mi-calendar-drawer-inset)`)
-    expect(wrapperRule).toContain('max-width: calc(100% - 2 * var(--mi-calendar-drawer-inset))')
-    // 圆角与裁切现在真的能匹配（类在根节点上）；浮卡四边的位移本身在 happy-dom 里算不出来，
-    // 所以这半边只能断言规则形状，类挂在哪一侧由上面的 DOM 断言负责。
-    expect(styles).toContain('.mi-calendar-drawer .ant-drawer-content { border-radius: var(--mi-calendar-drawer-radius); overflow: hidden; }')
-    // The reused body's tokens travel with the drawer. Opened from the market dashboard there is no
+    expect(pageRule.slice(0, pageRule.indexOf('\n}'))).toContain('flex-direction: row-reverse')
+    expect(styles).toContain('.mi-economic-calendar__column {')
+    expect(container.querySelector('.mi-economic-calendar__column .mi-economic-calendar__header')).not.toBeNull()
+    // Under 1300 the panel covers the row exactly as the drawer did. The threshold is arithmetic,
+    // not taste: panel 480 + gap 22 + day list 320 + padding 40 leaves the month 140px at 1000.
+    expect(styles).toContain('@media (max-width: 1299px)')
+    expect(styles).toContain('.mi-economic-calendar .mi-calendar-detail { position: absolute; inset: 0; width: 100%; z-index: 2; }')
+    // The reused body's tokens travel with the surface. Opened from the market dashboard there is no
     // `.mi-economic-calendar` ancestor, and an undefined `var()` is invalid at computed-value time —
     // it unsets the property instead of falling back — so the body silently lost its padding and the
     // inspector's labels their muted colour. The BLS import dialog lands on `body` too (the platform
     // `Modal` has no container slot), so it must carry the same tokens on its own class.
-    const tokenSelector = '.mi-economic-calendar,\n.mi-calendar-drawer,\n.mi-bls-ics-dialog {'
+    const tokenSelector = '.mi-economic-calendar,\n.mi-calendar-detail,\n.mi-bls-ics-dialog {'
     expect(styles).toContain(tokenSelector)
     const tokenRule = styles.slice(styles.indexOf(tokenSelector))
     const tokens = tokenRule.slice(tokenRule.indexOf('{') + 1, tokenRule.indexOf('\n}'))
     for (const token of ['--mi-economic-page-inline', '--mi-economic-muted', '--mi-economic-line', '--mi-economic-surface', '--mi-economic-text']) {
       expect(tokens).toContain(`${token}:`)
     }
-    // A close control in the header, and no release-progress row: the detail is the drawer's content.
-    const closeControl = container.querySelector<HTMLButtonElement>('.ant-drawer-close')!
-    expect(closeControl, 'the reader needs a visible way out of an unmasked drawer').not.toBeNull()
+    // A close control in the header, and no release-progress row: the detail is the panel's content.
+    const closeControl = panel!.querySelector<HTMLButtonElement>('button')!
+    expect(closeControl, 'the reader needs a visible way out of a panel').not.toBeNull()
     expect(closeControl.getAttribute('aria-label')).toBeTruthy()
+    // `stay`: the reader picks row after row from the list, so the panel must say which one is
+    // showing instead of taking the focus away.
+    expect(panel!.querySelector('[role="status"]')).not.toBeNull()
     expect(detail.textContent).not.toContain(copy.eventStatus.label)
     expect(detail.textContent).not.toContain(copy.dayEvents.close)
     // The day that event belongs to is what the standing column shows, and it never left.
@@ -422,14 +417,15 @@ describe('macro economic calendar', () => {
       await act(async () => container.querySelector<HTMLButtonElement>('[data-market-event]')!.click())
       await flush()
       expect(container.querySelectorAll('[data-calendar-detail-container]')).toHaveLength(1)
-      expect(container.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+      // One panel, not two: the second pick swaps the content of the same column.
+      expect(container.querySelectorAll('aside.side-panel')).toHaveLength(1)
       expect(container.querySelector('.mi-market-calendar__inspector')?.textContent).toContain(market.title)
       expect(container.querySelector('[data-release-time-row]')).toBeNull()
       // The list it replaced is still standing behind it.
       expect(container.querySelector('[data-calendar-day-list]')).not.toBeNull()
     } finally { spy.mockRestore() }
   })
-  it('collapses the drawer when the reader picks the same event again, and closes it on Escape', async () => {
+  it('collapses the panel when the reader picks the same event again, and closes it on Escape', async () => {
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
     const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [event] }),
       getEventDetail: async () => ({ state: 'available', asOf, event }) })
@@ -451,14 +447,14 @@ describe('macro economic calendar', () => {
     expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
     expect(container.querySelector('[data-calendar-day-list] [data-event-key="US.CPI.AUGUST"]')).not.toBeNull()
   })
-  it('closes the drawer from its header control and keeps the day list standing', async () => {
+  it('closes the panel from its header control and keeps the day list standing', async () => {
     const event = blsEvent({ eventKey: 'US.CPI.AUGUST', scheduledDate: '2026-08-12', scheduledAt: '2026-08-12T12:30:00.000Z' })
     const { container } = await renderCalendar({ queryMonth: async () => ({ state: 'available', asOf, events: [event] }),
       getEventDetail: async () => ({ state: 'available', asOf, event }) })
     await flush()
     await act(async () => eventButton(container, event.eventKey).click())
     await flush()
-    await act(async () => container.querySelector<HTMLButtonElement>('.ant-drawer-close')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('aside button')!.click())
     expect(container.querySelector('[data-calendar-detail-container]')).toBeNull()
     expect(container.querySelector('.mi-economic-calendar__inspector')).toBeNull()
     expect(container.querySelector('[data-calendar-day-list]')).not.toBeNull()
