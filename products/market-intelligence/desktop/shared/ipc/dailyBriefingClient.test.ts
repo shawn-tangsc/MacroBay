@@ -50,6 +50,21 @@ describe('daily briefing client', () => {
     expect(missing.state).toBe('missing')
   })
 
+  it('reads the storage upgrade state, and never calls an unread state ready', async () => {
+    stubInvoke((method) => {
+      if (method === 'intelligence.dailyBriefing.getStorageState') return { state: 'incomplete', reason: 'migration-failed' }
+      if (method === 'intelligence.dailyBriefing.retryUpgrade') return { state: 'ready' }
+      return {}
+    })
+    expect(await dailyBriefingClient.getStorageState()).toEqual({ state: 'incomplete', reason: 'migration-failed' })
+    expect(await dailyBriefingClient.retryUpgrade()).toEqual({ state: 'ready' })
+
+    stubInvoke(() => ({ state: 'incomplete', reason: 'something-else' }))
+    expect(await dailyBriefingClient.getStorageState()).toEqual({ state: 'unavailable' })
+    vi.stubGlobal('window', {})
+    expect(await dailyBriefingClient.getStorageState()).toEqual({ state: 'unavailable' })
+  })
+
   it('rejects a malformed document and a failed bridge without throwing', async () => {
     stubInvoke(() => ({ state: 'available', document: { schemaVersion: 1 } }))
     expect(await dailyBriefingClient.getToday({ locale: 'zh-CN', timeZone: 'UTC' })).toEqual({

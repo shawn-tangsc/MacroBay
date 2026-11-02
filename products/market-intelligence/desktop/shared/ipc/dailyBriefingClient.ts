@@ -24,7 +24,9 @@ const METHODS = Object.freeze({
   regenerate: 'intelligence.dailyBriefing.regenerate',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
-  saveSettings: 'intelligence.dailyBriefing.saveSettings'
+  saveSettings: 'intelligence.dailyBriefing.saveSettings',
+  getStorageState: 'intelligence.dailyBriefing.getStorageState',
+  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade'
 })
 
 export type DailyBriefingClientInput = Readonly<{ locale: 'zh-CN' | 'en-US'; timeZone: string }>
@@ -90,6 +92,16 @@ export type DailyBriefingSettingsResult =
   | Readonly<{ state: 'available'; view: DailyBriefingSettingsView }>
   | Readonly<{ state: 'unavailable'; failureCode: string }>
 
+/**
+ * Which table shape the brief is running on. `incomplete` is a state the page has to show: the
+ * reader's history is still there, but the upgrade did not finish and can be retried. A read that
+ * failed is `unavailable`, never `ready` — that would report a finished upgrade nobody observed.
+ */
+export type DailyBriefingStorageStateResult =
+  | Readonly<{ state: 'ready' }>
+  | Readonly<{ state: 'incomplete'; reason: 'backup-failed' | 'migration-failed' }>
+  | Readonly<{ state: 'unavailable' }>
+
 export type DailyBriefingClient = Readonly<{
   getToday: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientTodayResult>
   list: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientListResult>
@@ -98,6 +110,8 @@ export type DailyBriefingClient = Readonly<{
   getProgress: (input: DailyBriefingClientInput) => Promise<DailyBriefingClientProgressResult>
   getSettings: () => Promise<DailyBriefingSettingsResult>
   saveSettings: (patch: DailyBriefingSettingsPatch) => Promise<DailyBriefingSettingsResult>
+  getStorageState: () => Promise<DailyBriefingStorageStateResult>
+  retryUpgrade: () => Promise<DailyBriefingStorageStateResult>
 }>
 
 export const dailyBriefingClient: DailyBriefingClient = {
@@ -159,6 +173,12 @@ export const dailyBriefingClient: DailyBriefingClient = {
   async saveSettings(patch) {
     return readSettings(() => invoke(METHODS.saveSettings, patch))
   },
+  async getStorageState() {
+    return readStorageState(() => invoke(METHODS.getStorageState, {}))
+  },
+  async retryUpgrade() {
+    return readStorageState(() => invoke(METHODS.retryUpgrade, {}))
+  },
   async get(input) {
     try {
       const value = await invoke(METHODS.get, input)
@@ -188,6 +208,20 @@ function unavailableWithTrace(value: Record<string, unknown>): Readonly<{ state:
   const failureCode = isText(value.failureCode) ? value.failureCode : 'daily-briefing-request-failed'
   const generationTrace = isBriefingGenerationTrace(value.generationTrace) ? value.generationTrace : undefined
   return { state: 'unavailable', failureCode, ...(generationTrace ? { generationTrace } : {}) }
+}
+
+async function readStorageState(read: () => Promise<unknown>): Promise<DailyBriefingStorageStateResult> {
+  try {
+    const value = await read()
+    if (!isRecord(value)) return { state: 'unavailable' }
+    if (value.state === 'ready') return { state: 'ready' }
+    if (value.state === 'incomplete' && (value.reason === 'backup-failed' || value.reason === 'migration-failed')) {
+      return { state: 'incomplete', reason: value.reason }
+    }
+    return { state: 'unavailable' }
+  } catch {
+    return { state: 'unavailable' }
+  }
 }
 
 async function readSettings(read: () => Promise<unknown>): Promise<DailyBriefingSettingsResult> {

@@ -11,7 +11,10 @@ const service = {
   getToday: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
   list: vi.fn(async () => ({ state: 'available' as const, result: { editions: [] } })),
   get: vi.fn(async () => ({ state: 'missing' as const })),
-  regenerate: vi.fn(async () => ({ state: 'available' as const, document: {} as never }))
+  regenerate: vi.fn(async () => ({ state: 'available' as const, document: {} as never })),
+  getProgress: vi.fn(async () => ({ state: 'idle' as const })),
+  getStorageState: vi.fn(() => ({ state: 'incomplete' as const, reason: 'backup-failed' as const })),
+  retryUpgrade: vi.fn(async () => ({ state: 'ready' as const }))
 }
 
 const settings = {
@@ -62,6 +65,12 @@ describe('daily briefing IPC', () => {
   it('forwards a valid dated read', async () => {
     await handlers.get(DAILY_BRIEFING_IPC_METHODS.get)!({ date: '2026-10-30', locale: 'zh-CN' })
     expect(service.get).toHaveBeenCalledWith({ date: '2026-10-30', locale: 'zh-CN' })
+  })
+
+  it('reports the storage upgrade state and retries it', async () => {
+    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.getStorageState)!({})).resolves.toEqual({ state: 'incomplete', reason: 'backup-failed' })
+    await expect(handlers.get(DAILY_BRIEFING_IPC_METHODS.retryUpgrade)!({})).resolves.toEqual({ state: 'ready' })
+    expect(service.retryUpgrade).toHaveBeenCalledTimes(1)
   })
 
   it('rejects an unknown locale, a missing zone or a non-canonical date', async () => {

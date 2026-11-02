@@ -76,6 +76,12 @@ export type DailyBriefingStorageState = Readonly<
   | { state: 'incomplete'; reason: 'backup-failed' | 'migration-failed' }
 >
 
+/** What the page shows when the storage upgrade could not run, and the way to try once more. */
+export type DailyBriefingStorageSurface = Readonly<{
+  getState: () => DailyBriefingStorageState
+  retryUpgrade: () => Promise<DailyBriefingStorageState>
+}>
+
 export type DailyBriefingStore = Readonly<{
   /** `periodId` defaults to the single issue `default`, so existing callers read their row. */
   get: (date: string, locale: DailyBriefingLocale, periodId?: string) => Promise<DailyBriefingStoredEdition | undefined>
@@ -136,6 +142,9 @@ export type DailyBriefingService = Readonly<{
    * already travels with the result or with the stored edition. One attempt, one owner.
    */
   getProgress: (input: Readonly<{ locale: DailyBriefingLocale; timeZone: string }>) => Promise<DailyBriefingProgressResult>
+  /** Which table shape the store is on, and a way to retry an upgrade that did not finish. */
+  getStorageState: () => DailyBriefingStorageState
+  retryUpgrade: () => Promise<DailyBriefingStorageState>
 }>
 
 /**
@@ -495,7 +504,15 @@ export function createDailyBriefingService(deps: Readonly<{
     return running ? { state: 'running', progress: running } : { state: 'idle' }
   }
 
-  return { getToday, regenerate, list, get, getProgress }
+  function getStorageState(): DailyBriefingStorageState {
+    return deps.store.upgradeState?.() ?? { state: 'ready' }
+  }
+
+  async function retryUpgrade(): Promise<DailyBriefingStorageState> {
+    return (await deps.store.retryUpgrade?.()) ?? { state: 'ready' }
+  }
+
+  return { getToday, regenerate, list, get, getProgress, getStorageState, retryUpgrade }
 }
 
 /**

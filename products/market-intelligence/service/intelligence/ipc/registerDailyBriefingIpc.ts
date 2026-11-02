@@ -13,7 +13,9 @@ export const DAILY_BRIEFING_IPC_METHODS = Object.freeze({
   regenerate: 'intelligence.dailyBriefing.regenerate',
   getProgress: 'intelligence.dailyBriefing.getProgress',
   getSettings: 'intelligence.dailyBriefing.getSettings',
-  saveSettings: 'intelligence.dailyBriefing.saveSettings'
+  saveSettings: 'intelligence.dailyBriefing.saveSettings',
+  getStorageState: 'intelligence.dailyBriefing.getStorageState',
+  retryUpgrade: 'intelligence.dailyBriefing.retryUpgrade'
 })
 
 /** Read-only: one generation per (day, locale) on first open, then the stored edition. */
@@ -38,6 +40,9 @@ export function registerDailyBriefingIpc(register: ProductIpcRegistrar, service:
     if (!settings) throw new Error('daily-briefing-settings-unavailable')
     return settings.save(readPatch(payload))
   })
+  // Read-only and cheap: the answer is which table shape the brief is running on right now.
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.getStorageState, async () => service.getStorageState())
+  register(PRODUCT_ID, DAILY_BRIEFING_IPC_METHODS.retryUpgrade, async () => service.retryUpgrade())
 }
 
 /** Shape only. The allowed times and window lengths are the settings service's rule. */
