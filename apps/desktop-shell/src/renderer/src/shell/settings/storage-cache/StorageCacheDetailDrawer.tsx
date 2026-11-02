@@ -1,5 +1,7 @@
-import { Button, Drawer } from 'antd'
+import { Button } from 'antd'
 import { RotateCw } from 'lucide-react'
+
+import { Drawer } from '@platform/ui/components/drawer'
 
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { CacheOperationAuditRecord, SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
@@ -18,6 +20,9 @@ import {
 } from './storageCacheDisplay'
 import { StorageCacheOperationList } from './StorageCacheOperationList'
 import { resolveStorageCacheText, resolveStorageCacheWarnings } from './storageCacheViewModel'
+
+/** 标题键：句子由调用页解析进来，组件自己不认识这句话。 */
+export const STORAGE_CACHE_DETAIL_TITLE_KEY = 'storageCache.detailTitle'
 
 type StorageCacheDetailDrawerProps = {
   cache: SafeCacheView | null
@@ -52,11 +57,13 @@ export function StorageCacheDetailDrawer({
   return (
     <Drawer
       className="storage-cache-drawer"
-      width="min(460px, 46vw)"
-      placement="right"
+      mode="modal"
+      size="large"
+      titleKey={STORAGE_CACHE_DETAIL_TITLE_KEY}
+      // 未知键返回空串、不回退键名：宁可标题空着，也不能把键名念给读者。
+      resolveText={(key) => (key === STORAGE_CACHE_DETAIL_TITLE_KEY ? name : '')}
       open={Boolean(cache)}
       onClose={onClose}
-      title={name}
       footer={
         cache ? (
           <div className="drawer-actions drawer-actions-split">
