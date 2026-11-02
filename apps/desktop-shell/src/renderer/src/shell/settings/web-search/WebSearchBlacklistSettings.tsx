@@ -1,7 +1,13 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
+
+import { IconButton } from '@platform/ui/components/icon-button'
 
 import type { PlatformText } from '../../../i18n/platformText'
 import { WebSearchFormRow } from './WebSearchFormGrid'
+
+/** 读屏名模板带着域名参数：句子在文案表里，这里只给可变的那段。 */
+export const REMOVE_KEY = 'webSearch.removeTag'
 
 type WebSearchBlacklistSettingsProps = {
   labels: PlatformText['webSearch']
@@ -37,13 +43,14 @@ export function WebSearchBlacklistSettings({
           {value.map((domain) => (
             <span key={domain} className="web-search-tag">
               <span>{domain}</span>
-              <button
-                type="button"
-                className="web-search-tag-remove"
-                aria-label={labels.removeTag(domain)}
-                onClick={() => onChange(value.filter((item) => item !== domain))}>
-                ×
-              </button>
+              <IconButton
+                ariaLabelKey={REMOVE_KEY}
+                ariaLabelParams={{ domain }}
+                icon={X}
+                onSelect={() => onChange(value.filter((item) => item !== domain))}
+                resolveText={(key) => (key === REMOVE_KEY ? labels.removeTag(domain) : '')}
+                size="sm"
+              />
             </span>
           ))}
           <input

@@ -1645,20 +1645,6 @@ h1 {
   color: var(--muted);
 }
 
-.web-search-tag-remove {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 1;
-}
-
-.web-search-tag-remove:hover {
-  color: var(--text-strong);
-}
-
 /* PLAT-60 · 供应商页：筛选 chips / 表格 / 折叠 / 徽标 */
 .web-search-providers {
   display: grid;
@@ -9225,16 +9211,6 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   gap: 8px;
 }
 
-.settings-segmented.ant-segmented {
-  width: fit-content;
-}
-
-.segmented-icon-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .segmented-control button,
 .swatch-button {
   display: inline-flex;
@@ -12373,65 +12349,12 @@ button.ant-primary-button.ant-btn.ant-btn-disabled {
   align-items: center;
 }
 
-.provider-api-key-eye {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: 0 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.provider-api-key-eye:hover:not(:disabled) {
-  background: transparent;
-  color: var(--text);
-}
-
-.provider-api-key-eye:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.provider-api-key-eye:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
 /* 展开后才有复制：与眼睛同尺寸同位置口径，只是多了「已复制」的短暂回执。 */
 .provider-api-key-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
 }
-
-.provider-api-key-copy {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: 0 2px;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.provider-api-key-copy:hover {
-  color: var(--text);
-}
-
-.provider-api-key-copy:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-
 .provider-api-key-copied {
   color: var(--muted);
   font-size: 11.5px;
