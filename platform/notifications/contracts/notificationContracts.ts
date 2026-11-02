@@ -145,11 +145,21 @@ export function createDefaultNotificationRuntimeSettings(): NotificationRuntimeS
 }
 
 /**
- * Whether anything in the platform submits notifications yet. With no producer the delivery
- * switches filter an empty stream, so the settings pane must present them as unavailable instead
- * of as working toggles. Flip this in the same change that wires the first producer.
+ * 每条投递渠道背后**有没有用户看得见的落点**。可点状态必须等于这一栏，不是等于「平台能不能发通知」。
+ *
+ * 这一格曾被写成一个布尔量（`notificationProducerWired`），它的含义是「有没有生产者了」。接上第一个
+ * 生产者后它变成 `true`，于是四个开关一起点亮——可那一刻只有中心与桌面有落点，应用内横幅与弹窗连
+ * 渲染者都没有。**一个布尔量代表四件事，必然有一次说谎。**
+ *
+ * 接上一个真实落点时改这一处：`toast` 在右上角横幅落地后转真；`popup` 还没有形态，保持 `false`，
+ * 设置页据此逐条禁用并各说各的原因。
  */
-export const notificationProducerWired: boolean = true
+export const notificationDeliveryWired: Readonly<Record<NotificationChannel, boolean>> = Object.freeze({
+  center: true,
+  desktop: true,
+  toast: true,
+  popup: false
+})
 
 export function toSafeNotificationRecord(record: NotificationRecord): SafeNotificationRecord {
   const metadata = record.safeMetadata ? sanitizeMetadata(record.safeMetadata) : undefined

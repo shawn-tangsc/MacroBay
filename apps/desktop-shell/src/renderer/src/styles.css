@@ -376,18 +376,18 @@ button {
   position: relative;
   display: inline-flex;
   align-items: center;
-  /* 锚点显式定高：不写这一行，盒高就交给 `.topbar-actions` 的 flex 默认 stretch（42px），
-     角标再按 42px 的盒子往上偏，就落到顶栏上沿之外被 `overflow: hidden` 裁掉。
-     写 `100%` 与现在的实际高度一致，只把「靠父级默认值」换成「自己声明」。 */
-  height: 100%;
+  /* 锚点高度必须等于它**定位的那个东西**——图标盒（`IconButton` 的 md = 24），不是所在行高。
+     不写高度时盒高交给 `.topbar-actions` 的 flex 默认 stretch（42），角标按 42 的盒子往上偏，
+     就被 `overflow: hidden` 裁掉；对齐到 24 之后 `top: -3px` 落到行内的 6px 处。 */
+  height: 24px;
+  align-self: center;
 }
 
 /* 未读用强调色，不用红色：红在这套界面里代表「出错」，未读不是错误。 */
 .notification-bell-badge {
   position: absolute;
-  /* 角标顶贴住图标盒：图标盒（24px）在行内居中，其上沿 = (行高 - 24px) / 2，
-     再让角标压住图标盒顶 3px。写死 42 会让顶栏改高时立刻错位，所以跟着 token 走。 */
-  top: calc((var(--topbar-height) - 24px) / 2 - 3px);
+  /* 相对图标盒定位：盒子本身就是 24，压住它顶 3px；行高怎么变都不用跟着改。 */
+  top: -3px;
   right: -4px;
   min-width: 15px;
   height: 15px;

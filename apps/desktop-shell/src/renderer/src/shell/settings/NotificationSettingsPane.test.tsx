@@ -6,7 +6,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { notificationProducerWired } from '@platform/notifications/contracts/notificationContracts'
+import { notificationDeliveryWired } from '@platform/notifications/contracts/notificationContracts'
 import { createDefaultNotificationRuntimeSettings } from '@platform/notifications/contracts/notificationContracts'
 
 import { platformText } from '../../i18n/platformText'
@@ -43,9 +43,8 @@ async function mount(
 
 describe('notification settings availability', () => {
   it('presents working switches and no explanation once the first producer is wired', async () => {
-    // Pinned on purpose: the first producer is wired (task failure), so the pane must present
-    // working switches instead of the "nothing produces notifications" notice.
-    expect(notificationProducerWired).toBe(true)
+    // 逐个渠道钉住：可点状态等于「这条渠道有没有用户看得见的落点」，不是一个布尔量。
+    expect(notificationDeliveryWired).toEqual({ center: true, desktop: true, toast: true, popup: false })
 
     const container = await mount()
     const labels = platformText['zh-CN'].notifications
@@ -57,6 +56,18 @@ describe('notification settings availability', () => {
     expect(switches).toHaveLength(3)
     expect(switches.every((control) => (control as HTMLButtonElement).disabled)).toBe(false)
     expect(container.textContent).toContain(labels.scopeNote)
+  })
+
+  it('没落点的那条渠道单独禁用，并说自己这一个原因', async () => {
+    const container = await mount()
+    const labels = platformText['zh-CN'].notifications
+    const switches = [...container.querySelectorAll<HTMLButtonElement>('.notification-channel-switch')]
+
+    // 弹窗还没有形态：它必须是禁用的，而且原因不能借用「系统没放行」。
+    expect(switches[2]?.disabled).toBe(true)
+    expect(container.textContent).toContain(labels.popupUnavailable)
+    // 横幅已经有落点，所以它可点——这正是逐渠道判的意义。
+    expect(switches[0]?.disabled).toBe(false)
   })
 
   it('keeps the delivery switches enabled once a producer is wired', async () => {
