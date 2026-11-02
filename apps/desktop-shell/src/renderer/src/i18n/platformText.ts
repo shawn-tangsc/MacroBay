@@ -233,7 +233,6 @@ export type PlatformText = {
     loadMore: string
     filterEmpty: string
     clearFilters: string
-    emptyTasksTitle: string
     emptyTasksBody: string
     status: Record<'active' | 'paused' | 'completed', string>
     outcome: Record<'success' | 'failed' | 'skipped' | 'never', string>
@@ -260,7 +259,6 @@ export type PlatformText = {
     resourceLoadFailed: string
     resourceBridgeMissing: string
     resourceLoadTimeout: string
-    resourceEmptyTitle: string
     resourceEmptyBody: string
     resourceNote: string
     allSources: string
@@ -1412,7 +1410,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       columns: { name: '名称', status: '状态', schedule: '调度', nextRun: '下次运行', lastResult: '最近结果', actions: '操作', source: '来源', registration: '注册状态', lastRun: '最近运行' },
       all: '全部', searchTasks: '搜索任务名称', tasksLoading: '正在加载定时任务…', tasksLoadFailed: '定时任务加载失败。', loadMore: '加载更多',
       filterEmpty: '当前筛选下没有任务。', clearFilters: '清除筛选',
-      emptyTasksTitle: '还没有定时任务',
       emptyTasksBody: '在对话里对助手说「每天早上 9 点总结行情」，就会在这里出现一条定时任务；你也可以随时暂停或查看它的投递健康。',
       status: { active: '运行中', paused: '已暂停', completed: '已完成' },
       outcome: { success: '成功', failed: '失败', skipped: '已跳过', never: '从未运行' },
@@ -1434,7 +1431,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       auditAction: { create: '创建', update: '更新', pause: '暂停', resume: '恢复', delete: '删除', 'run-now': '立即运行', 'cancel-run': '取消运行', 'runtime-transition': '运行时状态变更', 'channel-delete-cleanup': '清理投递通道' },
       resourceJobs: '平台与产品资源任务', resourceLoading: '正在加载资源任务…', resourceLoadFailed: '资源任务加载失败。',
       resourceBridgeMissing: '缺少接口，应用可能未重启；请重启应用后重试。', resourceLoadTimeout: '读取资源任务超时，请重试。',
-      resourceEmptyTitle: '当前没有产品注册自动任务',
       resourceEmptyBody: '启用某个产品的自动采集能力后，这里会显示它的调度、注册状态、下次运行与最近一次结果。未注册 ≠ 出错，通常代表该能力未启用。',
       resourceNote: '「未注册」表示该产品当前没有把它的调度注册进平台；通常意味着该能力未启用。本页只读，启用/停用在对应产品里操作。',
       allSources: '全部来源', allStatuses: '全部状态', platform: '平台', product: '产品', registered: '已注册', notRegistered: '未注册',
@@ -2519,7 +2515,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       columns: { name: 'Name', status: 'Status', schedule: 'Schedule', nextRun: 'Next run', lastResult: 'Last result', actions: 'Actions', source: 'Source', registration: 'Registration', lastRun: 'Last run' },
       all: 'All', searchTasks: 'Search job name', tasksLoading: 'Loading scheduled tasks…', tasksLoadFailed: 'Failed to load scheduled tasks.', loadMore: 'Load more',
       filterEmpty: 'No jobs match these filters.', clearFilters: 'Clear filters',
-      emptyTasksTitle: 'No scheduled tasks yet',
       emptyTasksBody: 'Ask the assistant something like “summarize the market every day at 9am” and it will appear here. You can pause it or check its delivery health at any time.',
       status: { active: 'Active', paused: 'Paused', completed: 'Completed' },
       outcome: { success: 'Succeeded', failed: 'Failed', skipped: 'Skipped', never: 'Never' },
@@ -2539,7 +2534,6 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       auditAction: { create: 'Created', update: 'Updated', pause: 'Paused', resume: 'Resumed', delete: 'Deleted', 'run-now': 'Run now', 'cancel-run': 'Cancelled run', 'runtime-transition': 'Runtime transition', 'channel-delete-cleanup': 'Channel cleanup' },
       resourceJobs: 'Platform & product jobs', resourceLoading: 'Loading platform jobs…', resourceLoadFailed: 'Failed to load platform jobs.',
       resourceBridgeMissing: 'The app process is missing this interface; restart the app and retry.', resourceLoadTimeout: 'Timed out reading platform jobs. Please retry.',
-      resourceEmptyTitle: 'No product jobs registered',
       resourceEmptyBody: 'Once a product enables its automatic collection capability, its schedule, registration state, next run, and last result appear here. Not registered does not mean broken; it usually means the capability is disabled.',
       resourceNote: '“Not registered” means the product has not registered its schedule with the platform; it usually means the capability is disabled. This page is read-only — enable or disable it in the owning product.',
       allSources: 'All sources', allStatuses: 'All statuses', platform: 'Platform', product: 'Product', registered: 'Registered', notRegistered: 'Not registered',
