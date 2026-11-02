@@ -120,6 +120,13 @@ describe('Tabs', () => {
     const reachable = host.querySelectorAll<HTMLButtonElement>('[role="tab"][tabindex="0"]')
     expect(reachable).toHaveLength(1)
     expect(reachable[0]?.textContent).toBe('ui.test.a')
+
+    // 而且「可聚焦的那一项」就是「被渲染成选中的那一项」——否则键盘进得来却看不出落在哪。
+    const selectedTab = host.querySelectorAll('[role="tab"][aria-selected="true"]')
+    expect(selectedTab).toHaveLength(1)
+    expect(selectedTab[0]).toBe(reachable[0])
+    // 面板仍有名字：aria-labelledby 指向同一个元素。
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(reachable[0]?.id)
     // 而且回调一次：只兜显示不回调，就会「看着是 A、动起来是 B」。
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(onChange).toHaveBeenCalledWith('a')
@@ -131,6 +138,23 @@ describe('Tabs', () => {
       )
     })
     expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a selected-but-disabled value as stale, so the disabled tab never wears the underline', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const onChange = vi.fn()
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(
+        <Tabs ariaLabelKey="ui.test.tabs" items={items} onChange={onChange} panel={<p>panel</p>} resolveText={key} value="c" />
+      )
+    })
+
+    const disabled = host.querySelector<HTMLElement>('[role="tab"][disabled]')!
+    expect(disabled.getAttribute('aria-selected')).toBe('false')
+    expect(disabled.className).not.toContain('tabs__tab--selected')
+    expect(host.querySelectorAll('[role="tab"][aria-selected="true"]')).toHaveLength(1)
   })
 
   it('never renders a spinner in the tab strip itself', async () => {

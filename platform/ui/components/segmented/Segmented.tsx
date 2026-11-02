@@ -61,7 +61,7 @@ export function Segmented({ items, value, onChange, ariaLabelKey, resolveText }:
   return (
     <div aria-label={resolveText(ariaLabelKey)} className="segmented" role="group">
       {items.map((item, index) => {
-        const selected = item.value === value
+        const selected = item.value === activeValue
         return (
           <button
             aria-pressed={selected}

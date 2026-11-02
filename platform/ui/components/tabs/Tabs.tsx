@@ -39,10 +39,12 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
   const panelId = `${baseId}-panel`
 
   const enabled = items.map((item, index) => ({ item, index })).filter(({ item }) => item.disabled !== true)
-  const selectedIndex = items.findIndex((item) => item.value === value)
   // 选中值失效时兜底首个可用项：只兜显示不回调，就会「看着是 A、动起来是 B」。
   useChoiceFallback(items, value, onChange)
+  // 「哪一项是选中」只有这一个来源：aria-selected、选中样式、面板的 aria-labelledby 全看它。
+  // 只改 tabIndex 会让 tablist 里一个选中项都没有——键盘进得来，但看不出落在哪。
   const activeValue = resolveActiveValue(items, value)
+  const activeIndex = items.findIndex((item) => item.value === activeValue)
 
   function move(from: number, delta: 1 | -1): void {
     if (enabled.length === 0) return
@@ -88,7 +90,7 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
     <div className="tabs">
       <div aria-label={resolveText(ariaLabelKey)} className="tabs__list" ref={listRef} role="tablist">
         {items.map((item, index) => {
-          const selected = item.value === value
+          const selected = item.value === activeValue
           return (
             <button
               aria-controls={panelId}
@@ -108,7 +110,7 @@ export function Tabs({ items, value, onChange, ariaLabelKey, resolveText, panel 
         })}
       </div>
       <div
-        aria-labelledby={selectedIndex >= 0 ? tabId(selectedIndex) : undefined}
+        aria-labelledby={activeIndex >= 0 ? tabId(activeIndex) : undefined}
         className="tabs__panel"
         id={panelId}
         role="tabpanel">

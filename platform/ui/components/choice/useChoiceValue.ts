@@ -26,16 +26,18 @@ export function useChoiceFallback(
   const reported = useRef<string | null>(null)
 
   useEffect(() => {
-    if (items.some((item) => item.value === value)) {
+    // 有效性只定义一次：`activeValue` 是「选中且可用」，不是「存在于 items」。
+    // 只判存在会让「选中值指向一个被禁用的项」漏过去——那一项仍被渲染成选中，还带着下划线。
+    const active = resolveActiveValue(items, value)
+    if (active === undefined) return
+    if (active === value) {
       // 值重新合法了：门闩复位，下一次过期还能再报一次。
       reported.current = null
       return
     }
-    const first = items.find((item) => item.disabled !== true)
-    if (first === undefined) return
     if (reported.current === value) return
     reported.current = value
-    onChange(first.value)
+    onChange(active)
   }, [items, value, onChange])
 }
 

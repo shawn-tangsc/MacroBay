@@ -83,6 +83,10 @@ describe('Segmented', () => {
 
     const reachable = host.querySelectorAll<HTMLButtonElement>('button[tabindex="0"]')
     expect(reachable).toHaveLength(1)
+    // 可聚焦项 = 被渲染成按下的那一项，且恰好一个。
+    const pressed = host.querySelectorAll('button[aria-pressed="true"]')
+    expect(pressed).toHaveLength(1)
+    expect(pressed[0]).toBe(reachable[0])
     expect(onChange).toHaveBeenCalledTimes(1)
     expect(onChange).toHaveBeenCalledWith('day')
 
@@ -90,6 +94,21 @@ describe('Segmented', () => {
       root!.render(<Segmented ariaLabelKey="ui.test.range" items={items} onChange={onChange} resolveText={key} value="day" />)
     })
     expect(onChange).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a pressed-but-disabled value as stale', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const onChange = vi.fn()
+    root = createRoot(host)
+    await act(async () => {
+      root!.render(<Segmented ariaLabelKey="ui.test.range" items={items} onChange={onChange} resolveText={key} value="month" />)
+    })
+
+    const disabled = host.querySelector<HTMLButtonElement>('button[disabled]')!
+    expect(disabled.getAttribute('aria-pressed')).toBe('false')
+    expect(disabled.className).not.toContain('segmented__item--selected')
+    expect(host.querySelectorAll('[aria-pressed="true"]')).toHaveLength(1)
   })
 
   it('selects on click', async () => {
