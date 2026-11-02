@@ -581,8 +581,12 @@ describe('cross-asset observation workspace', () => {
       release: vi.fn(async () => ({ state: 'released' })) }
     try {
       await act(async () => root.render(createElement(ScopedCrossAssetObservationPanel, { client: client as never, text })))
-      // 选项直接来自契约：30d 是后来加上去的窗口，手抄一份清单就会漏掉它。
-      expect([...host.querySelectorAll('.ant-segmented-item-label')].map(node => node.textContent)).toEqual(['1H', '24H', '7D'])
+      // 选项直接来自契约：手抄一份清单就会漏掉后来加的窗口。平台分段把整组当一个
+      // `role="group"`、每项一个 `aria-pressed` 按钮，一次 Tab 进组。
+      const group = host.querySelector('[role="group"][aria-label]')
+      expect(group?.getAttribute('aria-label')).toBe(text.rangeLabel)
+      expect([...group!.querySelectorAll('button')].map(node => node.textContent)).toEqual(['1H', '24H', '7D'])
+      expect([...group!.querySelectorAll('button')].filter(node => node.getAttribute('aria-pressed') === 'true')).toHaveLength(1)
       expect(asked).toEqual(['24h'])
     } finally { await act(async () => root.unmount()); host.remove() }
   })

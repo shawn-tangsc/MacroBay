@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Button, Popover, Segmented, Tooltip } from 'antd'
+import { Button, Popover, Tooltip } from 'antd'
 import { Info, RefreshCw } from 'lucide-react'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Segmented } from '@platform/ui/components/segmented'
 import { StateView, STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state'
 import { Tooltip as FocusTooltip } from '@platform/ui/components/tooltip'
 import type { productText } from '../../../shared/i18n/productText'
@@ -56,7 +57,14 @@ import { useShellTimeFormat } from '@platform/ui/time/useShellTimeFormat'
  */
 const crossAssetTextKeys = Object.freeze({
   subtitle: 'pages.intelligence.portal.dashboard.crossAsset.subtitle',
-  refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh'
+  refresh: 'pages.intelligence.portal.dashboard.crossAsset.refresh',
+  rangeLabel: 'pages.intelligence.portal.dashboard.crossAsset.rangeLabel'
+})
+/** 窗口切换每一项的文案键：句子仍是 1H/24H/7D，只是不再在调用点拼字符串。 */
+const crossAssetWindowLabelKeys: Readonly<Record<CrossAssetRange, string>> = Object.freeze({
+  '1h': 'pages.intelligence.portal.dashboard.crossAsset.ranges.1h',
+  '24h': 'pages.intelligence.portal.dashboard.crossAsset.ranges.24h',
+  '7d': 'pages.intelligence.portal.dashboard.crossAsset.ranges.7d'
 })
 const crossAssetRanges = crossAssetContractPolicy.ranges
 type CrossAssetRange = typeof crossAssetRanges[number]
@@ -349,7 +357,9 @@ export function CrossAssetObservationPanel({ client, macroSnapshot, rates, calen
       </div>
       <div data-cross-asset-region="chart"><div className="mi-cross-asset__chart-toolbar"><div className="mi-cross-asset__chart-actions"><h3>{text.chart}</h3>
         <Tooltip title={historyInfo} trigger={['hover', 'focus', 'click']}><Button type="text" size="small" aria-label={text.analysis} icon={<Info size={13} />} /></Tooltip></div>
-        <div className="mi-cross-asset__chart-actions"><Segmented size="small" value={view.range} options={crossAssetRanges.map(range => ({ label: range.toUpperCase(), value: range }))} onChange={range => view.setRange(range as CrossAssetRange)} />
+        <div className="mi-cross-asset__chart-actions"><Segmented value={view.range} ariaLabelKey={crossAssetTextKeys.rangeLabel} resolveText={resolveProductText}
+            items={crossAssetRanges.map(range => ({ value: range, labelKey: crossAssetWindowLabelKeys[range] }))}
+            onChange={range => view.setRange(range as CrossAssetRange)} />
           <FocusTooltip labelKey={crossAssetTextKeys.refresh} resolveText={resolveProductText}>
             <Button type="text" size="small" aria-label={text.refresh} loading={view.refreshing} icon={<RefreshCw size={13} />} onClick={() => void view.refresh()} /></FocusTooltip></div></div>
         {snapshot?.sourceState && snapshot.sourceState !== 'live' ? <small data-source-state={snapshot.sourceState}>{text.states[snapshot.sourceState]}</small> : null}

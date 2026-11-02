@@ -22,7 +22,6 @@ const ANTD_BASELINE: ReadonlySet<string> = new Set([
   'apps/desktop-shell/src/renderer/src/shell/AppShell.tsx',
   'apps/desktop-shell/src/renderer/src/shell/agents/editor/sections/ToolsSection.tsx',
   'apps/desktop-shell/src/renderer/src/shell/workspace/WorkspacePanelFrame.tsx',
-  'products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx',
   'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentCard.tsx',
   'products/market-intelligence/desktop/features/industry/news-sentiment/NewsSentimentDrawer.tsx',
   'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisDashboardLayout.tsx',

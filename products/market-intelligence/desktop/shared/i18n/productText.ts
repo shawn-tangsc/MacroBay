@@ -289,6 +289,9 @@ export const productText = {
             crossAsset: {
               title: '纳斯达克 100 / QQQ 代理 × BTC × ETH 联动', subtitle: 'Binance QQQUSDT 代币化永续代理（24/7，默认，带「代理」标签）；该腿不可用时回落到真实纳斯达克 100 指数（USTEC · 美股现金时段）',
               chart: '同起点收益率',
+              // 窗口切换的选项与整组的可访问名：与界面上原来的 1H/24H/7D 逐字一致，只是改成键。
+              rangeLabel: '收益率窗口',
+              ranges: { '1h': '1H', '24h': '24H', '7d': '7D' },
               eventLine: '事件',
               // 官方与 provider 同分钟、未能确认是同一条发布时的线上说明（设计 145 §8 B 的留痕）。
               eventLineIdentityUnconfirmed: '同一分钟里官方日历也有一条发布，没能确认是同一条，两边的名字都保留',
@@ -2148,6 +2151,8 @@ loadMore: 'Load more', selectEntry: 'Select a timeline entry to view details.',
             crossAsset: {
               title: 'Nasdaq 100 / QQQ proxy × BTC × ETH', subtitle: 'Binance QQQUSDT, the tokenised perpetual proxy (24/7, default, labelled “Proxy”); the real Nasdaq 100 index (USTEC, US cash session) answers only when that leg cannot',
               chart: 'Common-anchor returns',
+              rangeLabel: 'Return window',
+              ranges: { '1h': '1H', '24h': '24H', '7d': '7D' },
               eventLine: 'Event',
               eventLineIdentityUnconfirmed: 'An official calendar release falls in the same minute; not confirmed to be the same event, so both names are kept',
               eventsCollapsed: '{count} events folded',
