@@ -7,7 +7,10 @@ import { describe, expect, it } from 'vitest'
 import {
   createJsonFileStorage,
   quarantineCorruptFile,
+  readJsonFileRecovering,
+  readJsonFileRecoveringSync,
   recoverJsonArray,
+  recoverJsonValue,
   writeJsonFileAtomically
 } from './jsonFileStorage'
 
@@ -60,6 +63,37 @@ describe('json file storage', () => {
     const copies = (await readdir(directory)).filter((name) => name.startsWith('state.json.corrupt-'))
     expect(copies).toHaveLength(1)
     await expect(readFile(join(directory, copies[0]), 'utf8')).resolves.toBe('{ broken')
+
+    await rm(directory, { recursive: true, force: true })
+  })
+
+  it('recovers any document that has a second fragment after it', () => {
+    expect(recoverJsonValue('{"a":1}\n\n  }\n]\n')).toEqual({ a: 1 })
+    expect(recoverJsonValue('[1,2]\n]')).toEqual([1, 2])
+    expect(recoverJsonValue('{ not json')).toBeUndefined()
+  })
+
+  it('reads back a torn file, keeps the raw copy and rewrites the clean value', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'platform-storage-'))
+    const file = join(directory, 'state.json')
+    await writeFile(file, '{"enabled":true}\n\n  }\n]\n', 'utf8')
+
+    await expect(readJsonFileRecovering(file)).resolves.toEqual({ enabled: true })
+    await expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({ enabled: true })
+    expect((await readdir(directory)).filter((name) => name.includes('.corrupt-'))).toHaveLength(1)
+
+    await rm(directory, { recursive: true, force: true })
+  })
+
+  it('returns undefined for a missing file and recovers the synchronous read as well', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'platform-storage-'))
+
+    await expect(readJsonFileRecovering(join(directory, 'missing.json'))).resolves.toBeUndefined()
+    expect(readJsonFileRecoveringSync(join(directory, 'missing.json'))).toBeUndefined()
+
+    const file = join(directory, 'torn.json')
+    await writeFile(file, '[1]\n}', 'utf8')
+    expect(readJsonFileRecoveringSync(file)).toEqual([1])
 
     await rm(directory, { recursive: true, force: true })
   })

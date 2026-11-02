@@ -1,5 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { readJsonFileRecoveringSync, writeJsonFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
 import type { MacroCalendarProviderHealthRevision, MacroCalendarProviderId } from './macroCalendarContracts'
 import { macroCalendarHealthHistoryPolicy } from './macroCalendarPolicy'
@@ -67,9 +66,10 @@ export function createInMemoryMacroCalendarProviderHealthStorage(initial: MacroC
 export function createMacroCalendarProviderHealthJsonStorage(filePath: string): MacroCalendarProviderHealthStorage {
   return {
     read() {
-      try { return normalizeSnapshot(JSON.parse(readFileSync(filePath, 'utf8')) as MacroCalendarProviderHealthSnapshot) } catch (error) { if (isMissing(error)) return emptySnapshot(); throw error }
+      const parsed = readJsonFileRecoveringSync(filePath)
+      return parsed === undefined ? emptySnapshot() : normalizeSnapshot(parsed as MacroCalendarProviderHealthSnapshot)
     },
-    write(snapshot) { mkdirSync(dirname(filePath), { recursive: true }); writeFileSync(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8') }
+    write(snapshot) { writeJsonFileAtomicallySync(filePath, snapshot) }
   }
 }
 

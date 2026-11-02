@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import type { MacroCalendarProviderId } from './macroCalendarContracts'
 import { defaultMacroCalendarProviderProfile, macroCalendarProviderDefinitions, type MacroCalendarProviderProfile } from './macroCalendarProviderProfile'
@@ -61,9 +60,10 @@ export function createInMemoryMacroCalendarProviderProfileStorage(initial: Macro
 export function createMacroCalendarProviderProfileJsonStorage(filePath: string): MacroCalendarProviderProfileStorage {
   return {
     async readAll() {
-      try { return normalize(JSON.parse(await readFile(filePath, 'utf8')) as MacroCalendarProviderProfile[]) } catch (error) { if (isMissing(error)) return []; throw error }
+      const parsed = await readJsonFileRecovering(filePath)
+      return parsed === undefined ? [] : normalize(parsed as MacroCalendarProviderProfile[])
     },
-    async writeAll(profiles) { await mkdir(dirname(filePath), { recursive: true }); await writeFile(filePath, `${JSON.stringify(normalize(profiles), null, 2)}\n`, 'utf8') }
+    async writeAll(profiles) { await writeJsonFileAtomically(filePath, normalize(profiles)) }
   }
 }
 

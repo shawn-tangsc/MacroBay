@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 /**
  * The reader's own release time for one scheduled event.
@@ -110,17 +109,11 @@ export function createMacroCalendarReleaseTimeOverrideStore(storage: MacroCalend
 export function createMacroCalendarReleaseTimeOverrideJsonStorage(filePath: string): MacroCalendarReleaseTimeOverrideStorage {
   return {
     async readAll() {
-      try {
-        const parsed = JSON.parse(await readFile(filePath, 'utf8')) as unknown
-        return Array.isArray(parsed) ? parsed as MacroCalendarReleaseTimeOverride[] : []
-      } catch (error) {
-        if (isMissing(error)) return []
-        throw error
-      }
+      const parsed = await readJsonFileRecovering(filePath)
+      return Array.isArray(parsed) ? parsed as MacroCalendarReleaseTimeOverride[] : []
     },
     async writeAll(overrides) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, `${JSON.stringify(overrides, null, 2)}\n`, 'utf8')
+      await writeJsonFileAtomically(filePath, overrides)
     }
   }
 }

@@ -1,5 +1,7 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+
+import { writeFileAtomically } from '../../storage/jsonFileStorage'
 
 import type { ChannelSecretBlobStore } from './channelCredentialContracts'
 
@@ -19,8 +21,7 @@ export function createEncryptedChannelSecretBlobStore(directory: string): Channe
     },
     async write(ref, encryptedBlob) {
       const filePath = blobPath(directory, ref)
-      await mkdir(directory, { recursive: true })
-      await writeFile(filePath, Buffer.from(encryptedBlob).toString('base64'), 'utf8')
+      await writeFileAtomically(filePath, Buffer.from(encryptedBlob).toString('base64'))
     },
     async delete(ref) {
       await rm(blobPath(directory, ref), { force: true })

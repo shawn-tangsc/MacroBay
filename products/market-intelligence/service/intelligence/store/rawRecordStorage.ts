@@ -1,6 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, readJsonFileRecoveringSync, writeJsonFileAtomicallySync } from '@platform/storage/jsonFileStorage'
 
 import type { RawIntelligenceRecord } from '../schema/intelligenceRecord'
 
@@ -40,17 +38,11 @@ export function createInMemoryRawRecordStorage(initial: RawRecordSnapshot = crea
 export function createRawRecordJsonStorage(filePath: string): RawRecordStorage {
   return {
     async readAll() {
-      try {
-        const parsed = JSON.parse(await readFile(filePath, 'utf8')) as unknown
-        return normalizeRawRecordSnapshot(parsed)
-      } catch (error) {
-        if (isMissingFileError(error)) return createEmptyRawRecordSnapshot()
-        throw error
-      }
+      const parsed = await readJsonFileRecovering(filePath)
+      return parsed === undefined ? createEmptyRawRecordSnapshot() : normalizeRawRecordSnapshot(parsed)
     },
     writeAllSync(snapshot) {
-      mkdirSync(dirname(filePath), { recursive: true })
-      writeFileSync(filePath, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8')
+      writeJsonFileAtomicallySync(filePath, snapshot)
     },
     async writeAll(snapshot) {
       this.writeAllSync?.(snapshot)
@@ -59,13 +51,8 @@ export function createRawRecordJsonStorage(filePath: string): RawRecordStorage {
 }
 
 export function readRawRecordSnapshotSync(filePath: string): RawRecordSnapshot {
-  try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
-    return normalizeRawRecordSnapshot(parsed)
-  } catch (error) {
-    if (isMissingFileError(error)) return createEmptyRawRecordSnapshot()
-    throw error
-  }
+  const parsed = readJsonFileRecoveringSync(filePath)
+  return parsed === undefined ? createEmptyRawRecordSnapshot() : normalizeRawRecordSnapshot(parsed)
 }
 
 export function normalizeRawRecordSnapshot(value: unknown): RawRecordSnapshot {

@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readFile } from 'node:fs/promises'
+
+import { writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import {
   hasHalfBoundDailyBriefingModel,
@@ -37,8 +38,7 @@ export function createDailyBriefingAiSettingsJsonStorage(filePath: string): Dail
       }
     },
     async write(settings) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, JSON.stringify(settings, null, 2), 'utf8')
+      await writeJsonFileAtomically(filePath, settings)
     }
   }
 }
