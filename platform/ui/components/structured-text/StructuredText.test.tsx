@@ -99,13 +99,40 @@ describe('StructuredText', () => {
     expect(a).toBe(b)
   })
 
-  it('keeps the node kinds a closed set of three, because a fourth kind is a security decision', () => {
+  it('keeps the node kinds a closed set, because a new kind is a security decision', () => {
     // 远端文字能决定我们渲染什么，等于写文案的人能决定界面长什么样。所以 `kind` 的闭集不是风格：
     // 有人想加 `kind: 'html'` 时，这条必须红，并且红在一个写着「安全问题」的地方。
     const kinds = [...sourceCode.matchAll(/kind:\s*'([a-z]+)'/gu)].map((match) => match[1])
-    expect([...new Set(kinds)].sort()).toEqual(['list', 'paragraph', 'section'])
+    // 允许集合是**四种**：三种正文节点 + 代码块。加第五种先红在这里。
+    expect([...new Set(kinds)].sort()).toEqual(['code', 'list', 'paragraph', 'section'])
     // 类型声明本身也钉住：三种之外的 kind 不许出现在 TypeScript 里。
-    expect(sourceCode).not.toMatch(/kind:\s*'(html|raw|markdown|link)'/u)
+    expect(sourceCode).not.toMatch(/kind:\s*'(html|raw|markdown|link|table|image|htmlBlock)'/u)
+  })
+
+  it('renders a code block verbatim: no list, no bold, no element, no horizontal scroll', () => {
+    const lines = ['npm run verify', '- 这一行不是列表', '**这一行不是加粗**', '<img src=x onerror="alert(1)">']
+    const host = mount([{ kind: 'code', lines }])
+    const pre = host.querySelector('pre')
+    expect(pre).not.toBeNull()
+    // 换行结构保留，标记一个字符都不解释。
+    expect(pre?.textContent).toBe(lines.join('\n'))
+    expect(host.querySelectorAll('ul, li, strong, img')).toHaveLength(0)
+    expect(host.innerHTML).not.toContain('dangerouslySetInnerHTML')
+    // 长行换行而不是出横向滚动条：规则必须同时具备 pre-wrap 与 anywhere，且**不许** overflow-x: auto/scroll。
+    const codeRule = /\.structured-text__code\s*\{([^}]*)\}/u.exec(cssRules)?.[1] ?? ''
+    expect(codeRule).toContain('white-space: pre-wrap')
+    expect(codeRule).toContain('overflow-wrap: anywhere')
+    expect(codeRule).not.toMatch(/overflow-x:\s*(auto|scroll)/u)
+  })
+
+  it('shows inline code as monospace text, never as a link or a control', () => {
+    const host = mount([{ kind: 'paragraph', runs: [{ text: '先跑 ', bold: false }, { text: 'npm run verify', bold: false, code: true }] }])
+    const inline = host.querySelector('code.structured-text__inline-code')
+    expect(inline?.textContent).toBe('npm run verify')
+    expect(host.querySelectorAll('a')).toHaveLength(0)
+    expect(host.querySelectorAll('[href]')).toHaveLength(0)
+    // 不是按钮、不带 tabindex：行内代码不是可操作的东西。
+    expect(inline?.closest('button, a, [tabindex]')).toBeNull()
   })
 
   it('admits no rich-text machinery: no HTML sink, no Markdown library, no link builder', () => {
@@ -125,10 +152,16 @@ export function structuredTextTypeContract(): void {
   const sectionWithRuns: StructuredTextNode = { kind: 'section', title: 'x', runs: [] }
   // @ts-expect-error run 只有 text 与 bold
   const runWithLink: StructuredTextNode = { kind: 'paragraph', runs: [{ text: 'x', bold: false, href: 'https://x' }] }
+  // @ts-expect-error 代码块只有 `lines`，没有 `lang`/`title`：远端不能给代码块加解释入口
+  const codeWithLang: StructuredTextNode = { kind: 'code', lines: ['x'], lang: 'ts' }
+  // @ts-expect-error 行内标记只有 code，没有 href
+  const runWithHref: StructuredTextNode = { kind: 'paragraph', runs: [{ text: 'x', bold: false, href: '#' }] }
   const props: Parameters<typeof StructuredText>[0] = {
     // @ts-expect-error 组件不收字符串：输入是节点，不是 Markdown 文本
     nodes: '## 标题'
   }
+  void codeWithLang
+  void runWithHref
   void wrongKind
   void sectionWithRuns
   void runWithLink

@@ -13,8 +13,11 @@ our interface shows. So the component takes three node kinds and nothing else:
 ```ts
 type StructuredTextNode =
   | { kind: 'section'; title: string }
-  | { kind: 'paragraph'; runs: { text: string; bold: boolean }[] }
-  | { kind: 'list'; items: { text: string; bold: boolean }[][] }
+  | { kind: 'paragraph'; runs: StructuredTextRun[] }
+  | { kind: 'list'; items: StructuredTextRun[][] }
+  | { kind: 'code'; lines: string[] }        // whole code block, shown line by line
+
+type StructuredTextRun = { text: string; bold: boolean; code?: boolean }
 ```
 
 Parsing happens in the main process. `StructuredText` only arranges these three shapes into semantic
@@ -34,10 +37,29 @@ design decision rather than an omission.
 - **Long runs break instead of widening the page.** `overflow-wrap: anywhere` — a 300-character unbroken
   string (URL, hash, base64 fragment) wraps; `break-all` is deliberately not used because it cuts ordinary
   English words in half.
+- **A code block is text, not markup.** `lines` are joined and rendered inside one `<pre><code>`:
+  `-` stays a hyphen (not a list), `**` stays two asterisks (not bold), `<img …>` stays characters.
+  No per-line wrappers, no language label, no copy button — anything extra would be an entry point that
+  remote text could eventually drive.
+- **Code wraps instead of scrolling sideways.** `white-space: pre-wrap` plus `overflow-wrap: anywhere`,
+  and deliberately **no `overflow-x`**: a long command line must wrap. The visual values (padding, radius,
+  border, mixed surface) are copied from the existing message code block so the app does not grow a second
+  look; the wrapping rule is the one intentional difference.
+- **Inline `code` only changes the typeface.** It is not a link, not clickable, not focusable.
 - **The component does not decide width.** The container does; the page caps reading width (480 px). The
   component only guarantees it will not push the container wider.
 - **No expansion state.** `maxNodes` truncates and nothing else; "show all / show less" belongs to the page,
   which owns the flag.
+
+## Deliberately not doing
+
+- **Tables.** Release notes rarely need them, and a table that reads well (column widths, alignment,
+  narrow windows) is a separate piece of work — building it half-way would squeeze the prose it is
+  supposed to support. If tables are ever needed, they arrive as their own node kind with their own
+  narrow-window rules, not as an escape hatch inside this one.
+- **HTML and Markdown input.** Not a limitation, a boundary: parsing happens in the main process.
+- **Links, images, syntax highlighting, copy buttons.** Each one would let remote text or remote data
+  choose something about our interface.
 
 ## Using it
 

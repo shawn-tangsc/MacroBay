@@ -19,16 +19,23 @@ import './structuredText.css'
  *   不是一个开关）。
  */
 
-/** 行内片段：`bold` 只有真假两态，没有斜体/链接/颜色——多一种就是多一个远端能控制的东西。 */
+/** 行内片段：`bold` 与 `code` 各自只有真假两态，没有斜体/链接/颜色——多一种就是多一个远端能控制的东西。 */
 export type StructuredTextRun = {
   text: string
   bold: boolean
+  /** 行内代码：**只是换字体**，内容仍是纯文本，不可点、不是链接、不解析任何标记。 */
+  code?: boolean
 }
 
 export type StructuredTextNode =
   | { kind: 'section'; title: string }
   | { kind: 'paragraph'; runs: readonly StructuredTextRun[] }
   | { kind: 'list'; items: readonly (readonly StructuredTextRun[])[] }
+  /**
+   * 整块代码（README 里的命令、配置片段）。**逐行原样**：里面的 `-` 不是列表、`**` 不是加粗、
+   * `<img>` 不是元素——只有换行结构被保留，其余一个字符都不解释。
+   */
+  | { kind: 'code'; lines: readonly string[] }
 
 export type StructuredTextProps = {
   nodes: readonly StructuredTextNode[]
@@ -42,9 +49,11 @@ export type StructuredTextProps = {
 }
 
 function renderRuns(runs: readonly StructuredTextRun[]): ReactNode {
-  return runs.map((run, index) =>
-    run.bold ? <strong key={index}>{run.text}</strong> : <span key={index}>{run.text}</span>
-  )
+  return runs.map((run, index) => {
+    // 行内代码同样走 React 的文本节点：`<b>` 只会是那三个字符，不会变成元素。
+    const content = run.code === true ? <code className="structured-text__inline-code">{run.text}</code> : run.text
+    return run.bold ? <strong key={index}>{content}</strong> : <span key={index}>{content}</span>
+  })
 }
 
 export function StructuredText({ nodes, maxNodes, className }: StructuredTextProps): ReactElement {
@@ -65,6 +74,15 @@ export function StructuredText({ nodes, maxNodes, className }: StructuredTextPro
             <p className="structured-text__paragraph" key={index}>
               {renderRuns(node.runs)}
             </p>
+          )
+        }
+        if (node.kind === 'code') {
+          // 一个 `<pre><code>`，内容是 `lines.join('\n')` 的**纯文本**：换行结构保留，标记不解释。
+          // 不渲染成 HTML、不逐行包 `<span>`（那会给出一个「这行有样式」的入口），也没有复制按钮。
+          return (
+            <pre className="structured-text__code" key={index}>
+              <code>{node.lines.join('\n')}</code>
+            </pre>
           )
         }
         return (

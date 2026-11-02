@@ -13,8 +13,11 @@
 ```ts
 type StructuredTextNode =
   | { kind: 'section'; title: string }
-  | { kind: 'paragraph'; runs: { text: string; bold: boolean }[] }
-  | { kind: 'list'; items: { text: string; bold: boolean }[][] }
+  | { kind: 'paragraph'; runs: StructuredTextRun[] }
+  | { kind: 'list'; items: StructuredTextRun[][] }
+  | { kind: 'code'; lines: string[] }        // 整块代码，逐行原样显示
+
+type StructuredTextRun = { text: string; bold: boolean; code?: boolean }
 ```
 
 解析在主进程做，`StructuredText` 只把三种形状摆成语义化 DOM。**类型上没有「传一段 HTML」或
@@ -30,8 +33,22 @@ type StructuredTextNode =
   段落用 `<p>`、列表用 `<ul>` / `<li>`。没有 `role`、没有 `aria-*`：这是普通文档内容，不是地标。
 - **长串断行，不许撑破页面。** `overflow-wrap: anywhere`：300 字符的连续串（网址、哈希、base64 片段）
   会折行；刻意不用 `break-all`，那会把英文单词拦腰截断。
+- **代码块是文字，不是标记。** `lines` 拼进一个 `<pre><code>`：`-` 仍是连字符（不是列表）、`**` 仍是两个星号
+  （不是加粗）、`<img …>` 仍是几个字符。不逐行包元素、不加语言标签、不做复制按钮——多一样就多一个
+  「将来远端能驱动它」的入口。
+- **代码换行，不横向滚动。** `white-space: pre-wrap` + `overflow-wrap: anywhere`，并**刻意不写 `overflow-x`**：
+  长命令行必须折行。视觉值（内边距、圆角、边框、混合底色）沿用仓里既有的消息代码块，避免长出第二套观感；
+  唯一的刻意差异就是换行这条。
+- **行内 `code` 只换字体。** 不是链接、不可点、不可聚焦。
 - **组件不决定宽度。** 宽度由容器给，页面把正文行宽限制在 480px；组件只保证自己不把容器撑宽。
 - **组件不持有展开状态。** `maxNodes` 只是截断，不是开关；「展开全部 / 收起」归页面。
+
+## 明确不做
+
+- **表格。** 发布说明里表格很少，而表格要好看（列宽、对齐、窄窗口）是另一摊工作——做到一半反而会挤掉它本该支撑的正文。
+  真需要时，它作为**自己的节点种类**进来，并带上自己的窄窗口规则，而不是在这里开一个逃生口。
+- **HTML 与 Markdown 输入。** 这不是能力不足，是边界：解析在主进程做。
+- **链接、图片、语法高亮、复制按钮。** 每一样都会让远端文字或远端数据决定我们界面的某一件事。
 
 ## 用法
 
