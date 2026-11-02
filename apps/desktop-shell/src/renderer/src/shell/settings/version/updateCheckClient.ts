@@ -11,7 +11,7 @@ export type UpdateCheckClient = Readonly<{
   getState: () => Promise<UpdateCheckProjection>
   checkNow: () => Promise<UpdateCheckProjection>
   /** 打开下载页；主进程回 `{ ok: false }` 表示没交给系统打开。**不 throw** 是契约的一部分。 */
-  openDownloadPage: () => Promise<{ ok: boolean }>
+  openUpdateLink: () => Promise<{ ok: boolean }>
 }>
 
 /**
@@ -23,13 +23,13 @@ export type UpdateCheckClient = Readonly<{
 export const platformUpdateCheckClient: UpdateCheckClient = {
   getState: async () => requireBridge().getState(),
   checkNow: async () => requireBridge().checkNow(),
-  openDownloadPage: async () => requireBridge().openDownloadPage()
+  openUpdateLink: async () => requireBridge().openUpdateLink()
 }
 
 type UpdateCheckBridge = {
   getState: () => Promise<UpdateCheckProjection>
   checkNow: () => Promise<UpdateCheckProjection>
-  openDownloadPage: () => Promise<{ ok: boolean }>
+  openUpdateLink: () => Promise<{ ok: boolean }>
 }
 
 function requireBridge(): UpdateCheckBridge {

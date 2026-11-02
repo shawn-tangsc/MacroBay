@@ -80,7 +80,7 @@ const api = {
   updates: {
     getState: () => ipcRenderer.invoke(IpcChannels.updatesGetState),
     checkNow: () => ipcRenderer.invoke(IpcChannels.updatesCheckNow),
-    openDownloadPage: () => ipcRenderer.invoke(IpcChannels.updatesOpenDownload)
+    openUpdateLink: () => ipcRenderer.invoke(IpcChannels.updatesOpenLink)
   },
   channels: {
     catalog: () => ipcRenderer.invoke(IpcChannels.channelsCatalog),

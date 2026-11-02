@@ -3,7 +3,7 @@ import type { IpcMain } from 'electron'
 import { createJsonFileStorage } from '../../../storage/jsonFileStorage'
 import type { UpdateCheckProjection } from '../../../updates/contracts/updateCheck'
 import { registerUpdateCheckIpc } from '../../../updates/ipc/registerUpdateCheckIpc'
-import { openUpdateDownloadPage } from '../../../updates/runtime/openUpdateDownloadPage'
+import { openUpdateLink } from '../../../updates/runtime/openUpdateLink'
 import { autoCheckDelayMs, createUpdateCheckService, type UpdateCheckMode } from '../../../updates/runtime/updateCheckService'
 import { createEmptyUpdateCheckState } from '../../../updates/runtime/updateCheckState'
 
@@ -51,8 +51,8 @@ export async function composeUpdateCheck(ports: UpdateCheckCompositionPorts): Pr
     mode: ports.mode,
     getProjection: service.getProjection,
     checkNow: () => service.checkNow('manual'),
-    openDownloadPage: () =>
-      openUpdateDownloadPage({
+    openUpdateLink: () =>
+      openUpdateLink({
         openExternal: ports.openExternal,
         log: ports.log
       })

@@ -30,11 +30,11 @@ export const IpcChannels = {
    *
    * - `get-state` 在**所有**模式下都注册：界面要拿到「开发态」这个值，否则只能靠猜；
    * - 另外两条只在装好的包里注册：不存在的通道发不出请求，「零出网」由「没有那条路」保证；
-   * - `open-download` **不收地址**：地址与白名单都在主进程，渲染层只发「打开」这个动作。
+   * - `open-link` **不收地址**：地址与白名单都在主进程，渲染层只发「打开」这个动作。
    */
   updatesGetState: 'platform:updates-get-state',
   updatesCheckNow: 'platform:updates-check-now',
-  updatesOpenDownload: 'platform:updates-open-download',
+  updatesOpenLink: 'platform:updates-open-link',
   channelsCatalog: 'platform:channels-catalog',
   channelsList: 'platform:channels-list',
   /**

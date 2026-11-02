@@ -14,14 +14,14 @@ import { updateDownloadAllowedHosts, updateDownloadPageUrl } from '../updateSour
 
 export type UpdateDownloadLog = (level: 'info' | 'warn', event: string, fields?: Record<string, unknown>) => void
 
-export type OpenUpdateDownloadPagePorts = Readonly<{
+export type OpenUpdateLinkPorts = Readonly<{
   openExternal: (url: string) => Promise<void>
   log: UpdateDownloadLog
 }>
 
-export type OpenUpdateDownloadPageResult = { ok: boolean }
+export type OpenUpdateLinkResult = { ok: boolean }
 
-export function isAllowedUpdateDownloadUrl(url: string): boolean {
+export function isAllowedUpdateLinkUrl(url: string): boolean {
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -31,13 +31,13 @@ export function isAllowedUpdateDownloadUrl(url: string): boolean {
   return parsed.protocol === 'https:' && (updateDownloadAllowedHosts as readonly string[]).includes(parsed.host)
 }
 
-export async function openUpdateDownloadPage(
-  ports: OpenUpdateDownloadPagePorts
-): Promise<OpenUpdateDownloadPageResult> {
+export async function openUpdateLink(
+  ports: OpenUpdateLinkPorts
+): Promise<OpenUpdateLinkResult> {
   const url = updateDownloadPageUrl()
-  if (!isAllowedUpdateDownloadUrl(url)) {
+  if (!isAllowedUpdateLinkUrl(url)) {
     // 常量本身不合格属于代码错误，不许交给系统打开，也不许静默——记一条 warn 就够了，界面只看到失败。
-    ports.log('warn', 'update.open-download.rejected', { reason: 'not-allowed' })
+    ports.log('warn', 'update.open-link.rejected', { reason: 'not-allowed' })
     return { ok: false }
   }
 
@@ -45,7 +45,7 @@ export async function openUpdateDownloadPage(
     await ports.openExternal(url)
     return { ok: true }
   } catch (error) {
-    ports.log('warn', 'update.open-download.failed', {
+    ports.log('warn', 'update.open-link.failed', {
       message: error instanceof Error ? error.message : String(error)
     })
     return { ok: false }

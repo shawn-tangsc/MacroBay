@@ -10,14 +10,14 @@ import { IpcChannels } from '../../desktop/ipc/channels'
  * 不存在的通道发不出请求——「零出网」由「没有那条路」保证，不靠调用方自觉。
  * `get-state` 必须留，否则界面拿不到「开发态」这个值，只能靠猜。
  *
- * 载荷一律为空：`open-download` 的地址由主进程常量拼出，处理器**连地址参数都不接**，
+ * 载荷一律为空：`open-link` 的地址由主进程常量拼出，处理器**连地址参数都不接**，
  * 让「传地址」在类型层就不存在，而不是靠调用方守规矩。
  */
 export type UpdateCheckIpcPorts = Readonly<{
   mode: 'packaged' | 'development'
   getProjection: () => UpdateCheckProjection
   checkNow: () => Promise<UpdateCheckProjection>
-  openDownloadPage: () => Promise<{ ok: boolean }>
+  openUpdateLink: () => Promise<{ ok: boolean }>
 }>
 
 export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: UpdateCheckIpcPorts): void {
@@ -27,5 +27,5 @@ export function registerUpdateCheckIpc(ipcMain: Pick<IpcMain, 'handle'>, ports: 
   if (ports.mode !== 'packaged') return
 
   ipcMain.handle(IpcChannels.updatesCheckNow, () => ports.checkNow())
-  ipcMain.handle(IpcChannels.updatesOpenDownload, () => ports.openDownloadPage())
+  ipcMain.handle(IpcChannels.updatesOpenLink, () => ports.openUpdateLink())
 }

@@ -33,7 +33,7 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
-type ClientCalls = { getState: number; checkNow: number; openDownloadPage: number; opened: number }
+type ClientCalls = { getState: number; checkNow: number; openUpdateLink: number; opened: number }
 
 function createClient(
   options: {
@@ -43,7 +43,7 @@ function createClient(
     checkRejects?: boolean
   } = {}
 ): { client: UpdateCheckClient; calls: ClientCalls } {
-  const calls: ClientCalls = { getState: 0, checkNow: 0, openDownloadPage: 0, opened: 0 }
+  const calls: ClientCalls = { getState: 0, checkNow: 0, openUpdateLink: 0, opened: 0 }
   const client: UpdateCheckClient = {
     getState: async () => {
       calls.getState += 1
@@ -54,8 +54,8 @@ function createClient(
       if (options.checkRejects === true) throw new Error('No handler registered')
       return options.next ?? available
     },
-    openDownloadPage: async () => {
-      calls.openDownloadPage += 1
+    openUpdateLink: async () => {
+      calls.openUpdateLink += 1
       if (options.openOk !== false) calls.opened += 1
       return { ok: options.openOk !== false }
     }
@@ -129,7 +129,7 @@ describe('the version row in the settings page', () => {
       buttonWithText(container, text.openDownloadPage)?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(calls.openDownloadPage).toBe(1)
+    expect(calls.openUpdateLink).toBe(1)
   })
 
   it('says it could not open the browser without touching the version conclusion', async () => {
@@ -212,7 +212,7 @@ describe('the version row in the settings page', () => {
     await act(async () => {
       download?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
-    expect(calls.openDownloadPage).toBe(1)
+    expect(calls.openUpdateLink).toBe(1)
   })
 
   it('uses the description slot for "automatic checks are off" only when the conclusion has no sentence', async () => {

@@ -19,7 +19,7 @@ export type UpdateCheckRowState = {
   justChecked: boolean
   openFailed: boolean
   checkNow: () => Promise<void>
-  openDownloadPage: () => Promise<void>
+  openUpdateLink: () => Promise<void>
 }
 
 export function useUpdateCheckRow(client: UpdateCheckClient): UpdateCheckRowState {
@@ -61,14 +61,14 @@ export function useUpdateCheckRow(client: UpdateCheckClient): UpdateCheckRowStat
     }
   }, [client])
 
-  const openDownloadPage = useCallback(async () => {
+  const openUpdateLink = useCallback(async () => {
     try {
-      const result = await client.openDownloadPage()
+      const result = await client.openUpdateLink()
       setOpenFailed(!result.ok)
     } catch {
       setOpenFailed(true)
     }
   }, [client])
 
-  return { state, checking, justChecked, openFailed, checkNow, openDownloadPage }
+  return { state, checking, justChecked, openFailed, checkNow, openUpdateLink }
 }
