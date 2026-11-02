@@ -1,17 +1,22 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { AsyncState } from '@platform/ui/async/asyncState'
+
 import { ShellLanguageProvider } from '@platform/ui/shell/ShellLanguageContext'
 import { ToastHost } from '@platform/ui/components/toast'
 import { resolveStateViewText, STATE_VIEW_ACTION_KEYS, stateViewTextKeys } from '@platform/ui/components/state'
 import { platformText } from '../../../i18n/platformText'
 import { StorageCacheSettingsPage } from './StorageCacheSettingsPage'
 
-/** Mutable so a test can render the same page in its failed-read state. */
+/**
+ * Mutable so a test can render the same page in each phase of the read's lifecycle.
+ *
+ * 这里存的是**生命周期**而不是几个并列布尔：`ready` 才有行数据，`error` 只有一个原因码，
+ * 所以「加载中同时带着行」「首帧就是错误」这两种处境在用例里也写不出来。
+ */
 const mockFeed = vi.hoisted(() => ({
-  loading: false,
-  error: null as string | null,
-  caches: [] as unknown[]
+  state: { status: 'loading' } as unknown
 }))
 
 const inspectCache = vi.fn(async () => undefined)
@@ -85,24 +90,23 @@ const caches = [
   }
 ]
 
+const operations = [
+  {
+    operationId: 'op-1',
+    cacheId: 'derived.cache',
+    ownerType: 'product',
+    ownerId: 'sample-product',
+    operation: 'clear',
+    dryRun: true,
+    requestedAt: '2026-07-12T00:00:00.000Z',
+    completedAt: '2026-07-12T00:00:01.000Z',
+    status: 'skipped'
+  }
+]
+
 vi.mock('./useStorageCacheSettings', () => ({
   useStorageCacheSettings: () => ({
-    loading: mockFeed.loading,
-    error: mockFeed.error,
-    caches: mockFeed.caches,
-    operations: [
-      {
-        operationId: 'op-1',
-        cacheId: 'derived.cache',
-        ownerType: 'product',
-        ownerId: 'sample-product',
-        operation: 'clear',
-        dryRun: true,
-        requestedAt: '2026-07-12T00:00:00.000Z',
-        completedAt: '2026-07-12T00:00:01.000Z',
-        status: 'skipped'
-      }
-    ],
+    state: mockFeed.state as AsyncState<unknown>,
     reload: async () => undefined,
     inspectCache,
     clearCache,
@@ -112,9 +116,7 @@ vi.mock('./useStorageCacheSettings', () => ({
 
 describe('Storage and Cache settings UI', () => {
   beforeEach(() => {
-    mockFeed.loading = false
-    mockFeed.error = null
-    mockFeed.caches = caches
+    mockFeed.state = { status: 'ready', data: { caches, operations } }
     inspectCache.mockClear()
     clearCache.mockClear()
     compactCache.mockClear()
@@ -171,7 +173,7 @@ describe('Storage and Cache settings UI', () => {
   })
   it('renders an empty list as a failed read and offers the retry that re-reads', () => {
     // The registry always has entries, so no rows means the read failed; it must not say "none yet".
-    mockFeed.caches = []
+    mockFeed.state = { status: 'ready', data: { caches: [], operations } }
     const markup = renderToStaticMarkup(
       <ToastHost>
         <ShellLanguageProvider language="en-US">
@@ -189,9 +191,7 @@ describe('Storage and Cache settings UI', () => {
 
   it('shows only the loading state before the first read completes', () => {
     // 首次进入：读还没回来，屏幕上不许出现错误或空态——空态是「确实没有」，不是「还没读到」。
-    mockFeed.loading = true
-    mockFeed.caches = []
-    mockFeed.error = null
+    mockFeed.state = { status: 'loading' }
     const labels = platformText['en-US'].storageCache
     const markup = renderToStaticMarkup(
       <ToastHost>
@@ -209,8 +209,7 @@ describe('Storage and Cache settings UI', () => {
 
   it('keeps the rows visible while a refresh is still running', () => {
     // 手里已经有读数时，刷新期间不许把表格换成加载块：那会让表格闪一下消失再回来。
-    mockFeed.loading = true
-    mockFeed.caches = caches
+    mockFeed.state = { status: 'ready', data: { caches, operations }, refreshing: true }
     const labels = platformText['en-US'].storageCache
     const markup = renderToStaticMarkup(
       <ToastHost>
@@ -229,7 +228,7 @@ describe('Storage and Cache settings UI', () => {
   it('keeps the last rows when a refresh fails, and says they are stale', () => {
     // 「拿到新的失败」不等于「没有数据」：把旧表换成页面级空态，等于用一次刷新失败惩罚用户。
     const labels = platformText['en-US'].storageCache
-    mockFeed.error = 'Error invoking remote method platform-unavailable'
+    mockFeed.state = { status: 'ready', data: { caches, operations }, stale: true }
     const markup = renderToStaticMarkup(
       <ToastHost>
         <ShellLanguageProvider language="en-US">
@@ -244,7 +243,7 @@ describe('Storage and Cache settings UI', () => {
     // 说清是「上次读到的」，不是「读不到」
     expect(markup).toContain(labels.staleDataNotice)
     expect(markup).not.toContain('data-state="error"')
-    // 运行时原文（IPC message）是给实现的证据，不进界面
-    expect(markup).not.toContain('platform-unavailable')
+    // 失败的原因只以原因码存在（`unreadable`），运行时原文没有进状态的通道。
+    expect(markup).not.toContain('Error invoking remote method')
   })
 })

@@ -2,6 +2,7 @@ import { Button, Switch } from 'antd'
 import { ChevronRight, RotateCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
+import type { ErrorReasonCode } from '@platform/contracts/queryOutcome'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 import type { SafeCacheView } from '@platform/storage/cache-governance/cacheContracts'
 import { LoadingState } from '@platform/ui/components/loading'
@@ -59,10 +60,24 @@ function retryOf(
   return { label, onSelect: () => void run(cache) }
 }
 
+/**
+ * 区域级错误只有四档；`page-load-failed` 说的是「整个页面没起来」，它的动作是重载页面，
+ * 不属于这一块。真到了这里就按「这次没读到」显示——这个面板能给的只有重试。
+ */
+function regionErrorReasonCode(
+  reasonCode: ErrorReasonCode
+): 'unreadable' | 'unavailable' | 'operation-failed' | 'needs-restart' {
+  return reasonCode === 'page-load-failed' ? 'unreadable' : reasonCode
+}
+
 export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageProps): React.ReactElement {
   const labels = getStorageCacheLabels(language)
   const toast = useToast()
-  const state = useStorageCacheSettings()
+  const { state, reload, inspectCache, clearCache, compactCache } = useStorageCacheSettings()
+  // `data` 只在 `ready` 上，所以下面每一处用到行数据的地方都先证明它——这正是类型要的。
+  const snapshot = state.status === 'ready' ? state.data : null
+  const caches = snapshot?.caches ?? []
+  const operations = snapshot?.operations ?? []
   const [dryRun, setDryRun] = useState(false)
   const [activeFilter, setActiveFilter] = useState<StorageCacheFilterKey>('all')
   const [detailCacheId, setDetailCacheId] = useState<string | null>(null)
@@ -78,17 +93,14 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     if (key === SHELL_KEY_FOR_FILTER_GROUP) return labels.title
     return filters.find((filter) => FILTER_LABEL_KEYS[filter.key] === key)?.label ?? ''
   }
-  const filteredCaches = useMemo(
-    () => filterCachesByKey(state.caches, activeFilter),
-    [activeFilter, state.caches]
-  )
-  const summary = useMemo(() => buildStorageCacheSummary(state.caches), [state.caches])
+  const filteredCaches = useMemo(() => filterCachesByKey(caches, activeFilter), [activeFilter, caches])
+  const summary = useMemo(() => buildStorageCacheSummary(caches), [caches])
   const detailCache = detailCacheId
-    ? state.caches.find((cache) => cache.cacheId === detailCacheId) ?? null
+    ? caches.find((cache) => cache.cacheId === detailCacheId) ?? null
     : null
   const detailRecords = useMemo(
-    () => (detailCacheId ? state.operations.filter((record) => record.cacheId === detailCacheId) : []),
-    [detailCacheId, state.operations]
+    () => (detailCacheId ? operations.filter((record) => record.cacheId === detailCacheId) : []),
+    [detailCacheId, operations]
   )
 
   /**
@@ -130,7 +142,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     )
     if (!confirmed) return
     try {
-      const result = await state.clearCache(cache.cacheId, dryRun)
+      const result = await clearCache(cache.cacheId, dryRun)
       notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runClear, labels.clear))
     } catch {
       // 原文（可能是 `ENOENT: no such file or directory…`）只该进日志，不上屏。
@@ -146,7 +158,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
     )
     if (!confirmed) return
     try {
-      const result = await state.compactCache(cache.cacheId, dryRun)
+      const result = await compactCache(cache.cacheId, dryRun)
       notify(formatStorageOperationNotice(cache, result, language), retryOf(cache, runCompact, labels.compact))
     } catch {
       notify(formatStorageOperationErrorNotice('compact', language), retryOf(cache, runCompact, labels.compact))
@@ -155,7 +167,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
 
   async function runRecheck(cache: SafeCacheView): Promise<void> {
     try {
-      await state.inspectCache(cache.cacheId)
+      await inspectCache(cache.cacheId)
     } catch {
       notify(formatStorageOperationErrorNotice('recheck', language), retryOf(cache, runRecheck, labels.recheck))
     }
@@ -178,7 +190,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
             <Button
               className="ant-secondary-button"
               icon={<RotateCw size={14} />}
-              onClick={() => void state.reload()}>
+              onClick={() => void reload()}>
               {labels.refresh}
             </Button>
           </div>
@@ -189,10 +201,10 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
          * 等于用一次失败惩罚他。这里只说清「这是上次读到的数据」，并把重试留在原处。
          * 运行时原文（IPC 的 message）是给实现的证据，不进界面。
          */}
-        {state.error && state.caches.length > 0 ? (
+        {state.status === 'ready' && state.stale === true ? (
           <div className="storage-cache-error" role="status">
             <span>{labels.staleDataNotice}</span>
-            <Button size="small" onClick={() => void state.reload()}>{labels.refresh}</Button>
+            <Button size="small" onClick={() => void reload()}>{labels.refresh}</Button>
           </div>
         ) : null}
 
@@ -218,19 +230,19 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
          * 只有「还没有任何数据」时才整块显示加载中：手里已经有旧读数时再转圈，
          * 用户会看到表格闪一下消失再回来——那是「等待」被画成了「丢了又找回」。
          */}
-        {state.loading && state.caches.length === 0 ? (
+        {state.status === 'loading' ? (
           <div className="storage-cache-placeholder">
             <LoadingState label={labels.loading} />
           </div>
-        ) : state.caches.length === 0 ? (
+        ) : caches.length === 0 ? (
           // The registry always has entries, so an empty list is a failed read, not "no caches yet":
           // it renders the shared error state with the retry that actually re-reads.
           <div className="storage-cache-placeholder">
             <StateView
               state="error"
-              reasonCode="unreadable"
+              reasonCode={state.status === 'error' ? regionErrorReasonCode(state.reasonCode) : 'unreadable'}
               size="md"
-              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void state.reload() }}
+              action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: () => void reload() }}
             />
           </div>
         ) : (
@@ -267,14 +279,14 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
               className={historyOpen ? 'storage-cache-chevron open' : 'storage-cache-chevron'}
             />
             <span>{labels.historyTitle}</span>
-            <small>{state.operations.length}</small>
+            <small>{operations.length}</small>
           </button>
           {historyOpen ? (
             <StorageCacheOperationList
               language={language}
               labels={labels}
-              records={state.operations}
-              caches={state.caches}
+              records={operations}
+              caches={caches}
               showCacheName
             />
           ) : null}
@@ -283,7 +295,7 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
 
       <StorageCacheDetailDrawer
         cache={detailCache}
-        caches={state.caches}
+        caches={caches}
         records={detailRecords}
         language={language}
         labels={labels}
