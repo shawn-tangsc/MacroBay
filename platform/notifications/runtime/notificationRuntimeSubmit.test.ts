@@ -87,7 +87,13 @@ const catalog = createNotificationEventCatalog({
   ]
 })
 
-function createRuntime(initial?: unknown) {
+function createRuntime(
+  initial?: unknown,
+  extra: {
+    producerOwnership?: Record<string, 'platform' | { productId: string }>
+    platformProducerIds?: () => readonly string[]
+  } = {}
+) {
   let state: any = initial ?? { records: [], dailyCounters: {}, subscriptions: {}, pushBackoff: {} }
   const storage: NotificationStorage = {
     read: async () => JSON.parse(JSON.stringify(state)),
@@ -100,6 +106,8 @@ function createRuntime(initial?: unknown) {
     storage,
     catalog,
     diagnostics: (entry) => diagnostics.push(entry.code),
+    ...(extra.producerOwnership === undefined ? {} : { producerOwnership: extra.producerOwnership }),
+    ...(extra.platformProducerIds === undefined ? {} : { platformProducerIds: extra.platformProducerIds }),
     getSettings: async () => settings,
     clock
   })
@@ -179,6 +187,36 @@ describe('notification runtime submit', () => {
       request({ eventTypeId: 'platform.merge-c', dedupeVars: { builder: 'template', vars: { id: 'y' } } })
     )
     expect(state().records[0].bodyKey).toBe('notification.aggregate.title')
+  })
+
+  it('S10: a claimed producer is delegated to its product, with one diagnostic', async () => {
+    const { runtime, state, diagnostics } = createRuntime(undefined, {
+      producerOwnership: { 'market-intelligence.dailyBriefing': { productId: 'market-intelligence' } }
+    })
+    await expect(
+      runtime.submit(request({ producerId: 'market-intelligence.dailyBriefing' }))
+    ).resolves.toMatchObject({
+      kind: 'delegated',
+      producerId: 'market-intelligence.dailyBriefing',
+      ownerProductId: 'market-intelligence'
+    })
+    expect(state().records).toHaveLength(0)
+    expect(diagnostics).toEqual(['delegated'])
+  })
+
+  it('S10: an unclaimed producer is sent by the platform and diagnosed once', async () => {
+    const { runtime, diagnostics } = createRuntime()
+    await runtime.submit(request({ producerId: 'new-job' }))
+    await runtime.submit(request({ producerId: 'new-job', dedupeVars: { builder: 'template', vars: { id: 'job-2', date: '2026-11-04' } } }))
+    expect(diagnostics).toEqual(['unclaimed-producer'])
+  })
+
+  it('S10: a platform handler id is treated as registered and never diagnosed', async () => {
+    const { runtime, diagnostics } = createRuntime(undefined, {
+      platformProducerIds: () => ['platform.agent-task']
+    })
+    await runtime.submit(request({ producerId: 'platform.agent-task' }))
+    expect(diagnostics).toEqual([])
   })
 
   it('T19: unchecking the desktop column returns the record to suppressed', async () => {

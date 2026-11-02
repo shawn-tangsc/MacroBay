@@ -268,6 +268,8 @@ export type NotificationSubmitOutcome =
   | { kind: 'merged'; recordId: string; occurrenceCount: number; mergedEventTypes: string[] }
   | { kind: 'collapsed'; aggregateRecordId: string; collapsedCount: number }
   | { kind: 'suppressed'; reason: 'not-subscribed'; eventTypeId: string }
+  /** 让渡给了产品：平台不落库、不投递，只记一条 `delegated` 诊断（契约 §14）。 */
+  | { kind: 'delegated'; eventTypeId: string; producerId: string; ownerProductId: string }
   | {
       kind: 'rejected'
       reason:

@@ -11,6 +11,7 @@ import type {
 } from '@platform/notifications/contracts/notificationContracts'
 import { configureNotificationRuntime } from '@platform/notifications/ipc/registerNotificationIpc'
 import { createChannelPushPort, type ChannelPushPortDeps } from '@platform/notifications/delivery/channelPushPort'
+import { createNotificationProducerOwnership } from '@platform/notifications/contracts/notificationProducerOwnership'
 import type { DeliveryHooks } from '@platform/notifications/runtime/notificationRouting'
 
 /**
@@ -36,6 +37,8 @@ export type NotificationCompositionPorts = Readonly<{
   diagnostics?: NotificationDiagnosticsSink
   /** 出站端口；装上后 pushWired 才为真。 */
   push?: DeliveryHooks['push']
+  /** 平台自有任务的 handlerId（视为已登记）；由 app 从 job 定义投影。 */
+  platformProducerIds?: () => readonly string[]
 }>
 
 export function composeNotificationRuntime(ports: NotificationCompositionPorts): void {
@@ -50,8 +53,14 @@ export function composeNotificationRuntime(ports: NotificationCompositionPorts):
     policy: NOTIFICATION_EVENT_POLICY
   })
 
+  const producerOwnership = createNotificationProducerOwnership({
+    manifests: ports.manifests,
+    platformProducerIds: ports.platformProducerIds?.()
+  })
   configureNotificationRuntime({
     getSettings: async () => (await ports.getSettings()).notifications,
+    producerOwnership,
+    ...(ports.platformProducerIds === undefined ? {} : { platformProducerIds: ports.platformProducerIds }),
     clock: { now: () => new Date(), timeZone: ports.timeZone },
     getLanguage: async (): Promise<AppLanguage> => {
       const language = (await ports.getSettings()).language

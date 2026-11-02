@@ -212,6 +212,35 @@ function assertGeneratedEventKey(eventTypeId: string, field: string, actual: unk
  * 该产品**发布**的话题声明（`MI-11-R22` A1）。任务的订阅校验以这份声明为目录，
  * 所以形状错误必须在生成期就报出来，而不是等到读者建任务时才发现订阅永远不命中。
  */
+/**
+ * 通知生产者 claim（契约 §14.1/§14.4）：只能做格式校验，做不到「声明的 id 一定存在」——
+ * job 定义是运行时注册的，manifest 里没有静态清单。存在性靠 `claim-never-registered` 诊断。
+ */
+function assertNotificationProducerClaims(manifest: ProductManifest, productId: string): void {
+  const claims = manifest.notificationProducerClaims
+  if (claims === undefined) return
+  if (!Array.isArray(claims)) {
+    throw new ProductRegistryValidationError(`product "${productId}" notificationProducerClaims must be an array`)
+  }
+  const seen = new Set<string>()
+  for (const claim of claims) {
+    if (typeof claim !== 'string' || claim.trim() === '' || claim !== claim.trim()) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" notificationProducerClaims must contain non-empty trimmed strings`
+      )
+    }
+    if (!claim.startsWith(`${productId}.`)) {
+      throw new ProductRegistryValidationError(
+        `product "${productId}" notificationProducerClaim must start with "${productId}.", got "${claim}"`
+      )
+    }
+    if (seen.has(claim)) {
+      throw new ProductRegistryValidationError(`product "${productId}" declares duplicate notification producer: ${claim}`)
+    }
+    seen.add(claim)
+  }
+}
+
 function assertPublishableEventTopics(manifest: ProductManifest, productId: string): void {
   const topics = manifest.eventTopics
   if (topics === undefined) return
@@ -400,6 +429,7 @@ export function validateDiscoveredProductManifest(
   assertLocalizedText(manifest.name, `product "${productId}" name`)
   assertPublishableEventTopics(manifest, productId)
   assertNotificationEvents(manifest, productId)
+  assertNotificationProducerClaims(manifest, productId)
 
   const reservedProductIds = RESERVED_SHELL_ROUTE_PATHS.map((routePath) => routePath.slice(1))
   if (reservedProductIds.includes(productId)) {

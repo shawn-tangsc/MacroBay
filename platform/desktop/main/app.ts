@@ -1027,8 +1027,6 @@ function registerIpcHandlers(
     getLanguage: async () => (await settingsStore.get()).language
   })
 
-  // 通知运行时的端口在 composition 里定义；这里只给设置、时区、产品声明与日志出口。
-  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request) })
   registerNotificationIpcHandlers()
   registerEventBusIpcHandlers()
   registerJobIpcHandlers(ipcMain, jobRunQueryService, jobScheduleQueryService)
@@ -1118,7 +1116,7 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
   const onRunTerminal = wireTaskFailureNotifier({
     submit: (request) => getNotificationRuntime().submit(request),
     listDefinitions: () => jobRuntime.listSchedules(),
-    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant))
+    dayToken: (instant) => new Intl.DateTimeFormat('en-CA', { timeZone: shellTimeZone.get() }).format(new Date(instant)), listDefinitionRuns: (definitionId) => jobRuntime.listRuns({ definitionId, statuses: ['completed', 'failed', 'cancelled'], newestFirst: true, limit: 50 })
   })
   const jobRuntime = createJobRuntime({ store: jobRunStore, onRunTerminal })
   setJobRuntimeForDisposal(jobRuntime)
@@ -1159,6 +1157,8 @@ export async function bootstrapDesktopApp(options: DesktopAppBootstrapOptions = 
     if (localizedState === currentState) return
     await replaceAgentState(localizedState)
   }
+  // 通知运行时的端口：jobRuntime 已就绪，平台 handlerId 视为已登记。
+  composeNotificationRuntimeForApp({ getSettings: settingsStore.get, timeZone: () => shellTimeZone.get(), manifests: productManifests, settingsStore, log: appLog, channels: channelManagementService, deliver: (request) => channelDeliveryService.deliver(request), platformProducerIds: () => jobRuntime.listSchedules().filter((definition) => definition.owner === 'platform').map((definition) => definition.handlerId) })
   registerIpcHandlers(
     productManifests,
     productIpcRegistry,

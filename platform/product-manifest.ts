@@ -199,6 +199,12 @@ export interface ProductManifest {
    * 形状错误在生成期报（`validate.ts`），不等到读者勾了订阅才发现永远不响。
    */
   notificationEvents?: readonly NotificationEventDeclaration[]
+  /**
+   * 该产品**声明**的 producerId（契约 §14.1）：产品自己发的事件所用的稳定任务/来源标识。
+   * 声明之后平台不再为同一个 producerId 兜底发；没声明的默认平台发，并记一次
+   * `unclaimed-producer` 诊断。格式在生成期校验（前缀、非空、去重），存在性只能运行期观察。
+   */
+  notificationProducerClaims?: readonly string[]
   productAgentTools?: readonly ProductAgentToolRegistration[]
   assistantTemplates?: readonly ProductAssistantTemplateRegistration[]
   migrations: readonly unknown[]

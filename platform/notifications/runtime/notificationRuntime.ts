@@ -33,6 +33,7 @@ import type {
   SafeNotificationRecord
 } from '../contracts/notificationContracts'
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
+import type { NotificationProducerOwnership } from '../contracts/notificationProducerOwnership'
 import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import { toSafeNotificationRecord } from '../contracts/notificationContracts'
 import { pruneNotificationRecords } from '../store/notificationRetention'
@@ -87,6 +88,10 @@ export type NotificationRuntimeDependencies = {
   catalog?: NotificationEventCatalog
   /** 诊断出口（runtime §2）：必传于装配层；这里可缺省是为了旧测试的迁移，缺省即无人接收。 */
   diagnostics?: NotificationDiagnosticsSink
+  /** 生产者归属表（契约 §14）：未登记 → 平台发；让渡给产品 → 平台不发，只记诊断。 */
+  producerOwnership?: NotificationProducerOwnership
+  /** 平台自有任务的 handlerId：视为已登记，不触发 `unclaimed-producer`。 */
+  platformProducerIds?: () => readonly string[]
   /** 读者语言：正文在投递前解析一次，四个钩子拿同一份 content。 */
   getLanguage?: () => Promise<'zh-CN' | 'en-US'>
   /** 文案解析端口（契约 §3.3）：平台键/产品键都走它；缺省时退回平台闭集。 */
@@ -107,6 +112,8 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
   const nowIso = (): string => deps.clock.now().toISOString()
   /** 进程内单调递增的变更版本：订阅方用它丢掉重复/乱序事件，重启后从 1 重新开始即可。 */
   let version = 0
+  /** 每个未登记的 producerId 只记一次诊断；进程重启后再记一次是可接受的。 */
+  const seenUnclaimedProducers = new Set<string>()
 
   async function load(): Promise<NotificationStoreState> {
     if (cache) return cache
@@ -154,6 +161,22 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     const now = nowIso()
     if (!deps.catalog) {
       return { kind: 'rejected', reason: 'unknown-event-type', message: 'notification catalog is not configured' }
+    }
+
+    const producerId = request.producerId
+    if (producerId !== undefined) {
+      const owner = deps.producerOwnership?.[producerId]
+      if (owner !== undefined && owner !== 'platform') {
+        // 让渡：平台不发、不落库；产品自己会发它那条。记一条诊断，排查「为什么没发」时能看到是谁接的。
+        deps.diagnostics?.({ code: 'delegated', eventTypeId: request.eventTypeId, producerId, at: now })
+        return { kind: 'delegated', eventTypeId: request.eventTypeId, producerId, ownerProductId: owner.productId }
+      }
+      const platformProducer = owner === 'platform' || (deps.platformProducerIds?.() ?? []).includes(producerId)
+      if (!platformProducer && !seenUnclaimedProducers.has(producerId)) {
+        // 未声明：平台照发（漏发是安静的），但第一次见到时留一条诊断，别让新任务变成黑箱。
+        seenUnclaimedProducers.add(producerId)
+        deps.diagnostics?.({ code: 'unclaimed-producer', eventTypeId: request.eventTypeId, producerId, at: now })
+      }
     }
 
     const first = planNotificationSubmit({
