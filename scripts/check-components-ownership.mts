@@ -177,8 +177,14 @@ export function claimedCommits(
     for (const target of claimsIn(claim)) {
       const claimedCommit = find(target)
       if (claimedCommit === undefined) continue
-      // 已经被任何一家标签过的提交不再被认领：同一笔不能有第二份归属声明。
-      if (/^Component-Owner:/mu.test(claimedCommit.message)) continue
+      // 已经被**另一家**标签过的提交不再被认领：同一笔不能有第二份归属声明。
+      //
+      // 但「同一家补漏项」要放行：一笔提交可能已经声明了 `Component-Owner`，却漏了组件目录以外
+      // 那几行的 `Also:`——2026-11-02 的 `8e096aaa`（加 `target-missing`）就是这样，它把码加在
+      // 契约文件、句子加在组件文案表，两处必须同笔，`Also:` 漏了。那一半不是「归属不明」，是
+      // 「理由漏写」，补的仍是对同一家的声明，不构成两家争一笔。
+      const declaredOwner = declaresComponentOwner(claimedCommit.message)
+      if (/^Component-Owner:/mu.test(claimedCommit.message) && !declaredOwner) continue
       if (isPushed(claimedCommit.hash)) continue
       if (unexplainedFiles(claimedCommit.files, claim.message).length > 0) continue
       claimed.add(claimedCommit.hash)

@@ -218,6 +218,41 @@ describe('components ownership guard', () => {
       files
     })
 
+
+  it('lets the same owner fill in a missing Also line, but never a second owner', () => {
+    // 2026-11-02 的现场：8e096aaa 已经声明了 Component-Owner，却漏了契约文件那行 `Also:`。
+    // 那一半不是「归属不明」，是「理由漏写」——补的仍是对同一家的声明。
+    const tagged = {
+      hash: 'e1e1e1e',
+      subject: 'feat(state): add a reason code',
+      message: ['feat(state): add a reason code', '', 'Component-Owner: 前端组件'].join('\n'),
+      authorDate: AFTER,
+      files: [`${COMPONENTS_DIR}/state/StateView.tsx`, 'platform/contracts/queryOutcome.ts']
+    }
+    const claim = (owner: string, also: boolean) => ({
+      hash: 'f1f1f1f',
+      subject: 'chore: claim the code commit',
+      message: [
+        'chore: claim the code commit',
+        '',
+        `Component-Owner: ${owner}`,
+        'Owns: e1e1e1e',
+        ...(also ? ['Also: platform/contracts/queryOutcome.ts — the code lives there, the sentences here'] : [])
+      ].join('\n'),
+      authorDate: LATER,
+      files: ['scripts/check-components-ownership.mts']
+    })
+
+    // 缺那一行 → 红；这是它的真实状态，不能因为“有 owner”就放过。
+    expect(findViolations([tagged])).toHaveLength(1)
+    // 同一家补上理由 → 绿。
+    expect(findViolations([tagged, claim('前端组件', true)])).toEqual([])
+    // 补了 `Owns:` 却没补理由 → 仍然红，认领不能只看声明。
+    expect(findViolations([tagged, claim('前端组件', false)])).toHaveLength(1)
+    // 别家来认领一笔已经归组件线的提交 → 不成立，那才是「两家争一笔」。
+    expect(findViolations([tagged, claim('别的线', true)])).toHaveLength(1)
+  })
+
     it('rescues an untagged component commit, and only when the claim exists', () => {
       // 反向实测：拿掉认领，原来红的那笔必须重新红。
       expect(findViolations([untagged])).toHaveLength(1)
