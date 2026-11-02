@@ -189,3 +189,15 @@
 .mi-daily-briefing-page__websearch-warning small { display: block; margin-top: 2px; color: #bda879; font-size: 9.5px; }
 .mi-daily-briefing-page__websearch-warning button { flex: none; height: 26px; padding: 0 9px; border: 1px solid #8b6d2e; border-radius: 6px; background: transparent; color: #f2d59a; font-size: 10px; cursor: pointer; }
 
+
+/* Live generation steps: eight rows from the contract's mapping, no percentage anywhere. */
+.mi-brief-steps { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.mi-brief-steps__list { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.mi-brief-steps__row { display: flex; align-items: baseline; gap: 8px; color: var(--mi-dashboard-muted); font-size: 12px; line-height: 1.6; }
+.mi-brief-steps__row[data-step-state='done'] { color: var(--mi-dashboard-text); }
+.mi-brief-steps__row[data-step-state='running'] { color: var(--mi-dashboard-text); }
+.mi-brief-steps__row[data-step-state='failed'] { color: var(--mi-dashboard-negative); }
+.mi-brief-steps__icon { flex: none; align-self: center; }
+.mi-brief-steps__name { flex: 1 1 auto; min-width: 0; }
+.mi-brief-steps__detail { flex: none; font-variant-numeric: tabular-nums; }
+.mi-brief-steps__note { margin: 2px 0 0; color: var(--mi-dashboard-muted); font-size: 11px; line-height: 1.6; }

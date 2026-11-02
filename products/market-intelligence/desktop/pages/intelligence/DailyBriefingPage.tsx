@@ -21,8 +21,10 @@ import { DailyBriefingShareCard } from './DailyBriefingShareCard'
 import { briefingIssueCounts, briefingIssues, groupBriefingIssues } from './dailyBriefingIssues'
 import { posterExportBackground } from './dailyBriefingExport'
 import { DailyBriefingIssueDrawer } from './DailyBriefingIssueDrawer'
-import { briefFailureCodeLabel, failureAdvice, readableFailureDetail } from './dailyBriefingFailureDetail'
+import { DailyBriefingLiveSteps, runningRowName } from './DailyBriefingLiveSteps'
+import { useDailyBriefingProgress } from './useDailyBriefingProgress'
 import { readGenerationTrace, type GenerationTrace } from './dailyBriefingGenerationTrace'
+import { DailyBriefingFailurePanel, type BriefFailure } from './DailyBriefingFailurePanel'
 import { DailyBriefingGenerationTimeline } from './DailyBriefingGenerationTimeline'
 import { localizedDirectionTerm } from './analysisConclusionDirectionPolicy'
 
@@ -33,13 +35,6 @@ type ViewState =
   | Readonly<{ status: 'loading' }>
   | Readonly<{ status: 'unavailable'; failureCode?: string; generationTrace?: GenerationTrace }>
   | Readonly<{ status: 'ready'; document: DailyBriefingDocument; kind: 'today' | 'history' }>
-
-type BriefFailure = Readonly<{
-  kind: 'editorial' | 'generation'
-  code?: string
-  detail?: string
-  generationTrace?: GenerationTrace
-}>
 
 /**
  * The daily brief as its own reading page, not a modal: the dashboard entry navigates here and the
@@ -54,7 +49,7 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   onConfigureWebSearch?: () => void
   /** Overrides the built-in platform model-service navigation. */
   onOpenModelSettings?: () => void
-  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings'>
+  client?: Pick<DailyBriefingClient, 'getToday' | 'list' | 'get' | 'regenerate' | 'getSettings' | 'saveSettings' | 'getProgress'>
 }>): React.ReactElement {
   const timeZone = useShellTimeZone()
   const formatTime = useShellTimeFormat()
@@ -81,6 +76,10 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
   const exportTimer = useRef<number | undefined>(undefined)
   const copyTimer = useRef<number | undefined>(undefined)
   const todayDate = useMemo(() => localDate(timeZone), [timeZone])
+  // Follows the run only while one is in flight: the hook stops and forgets on its own.
+  const generating = view.status === 'loading' || regenerating
+  const progress = useDailyBriefingProgress({ client, running: generating, locale, timeZone })
+  const liveProgress = progress?.state === 'running' ? progress.progress : undefined
 
   useEffect(() => {
     let active = true
@@ -306,13 +305,19 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
     </header>
     <div className={bodyClass}>
       <DailyBriefingHistoryRail editions={editions} selectedDate={selectedDate} todayDate={todayDate}
+        generatingStage={liveProgress ? runningRowName(liveProgress, text) : undefined}
         locale={locale} text={text} formatTime={formatTime} onSelect={selectEdition} />
       <section className="mi-daily-briefing-page__content">
         {webSearchEnabled === false && !settingsOpen ? <div className="mi-daily-briefing-page__websearch-warning" role="alert">
           <div><strong>{text.aiSettings.webSearchOff}</strong><small>{text.aiSettings.webSearchOffHint}</small></div>
           <Button onClick={() => setSettingsOpen(true)}>{text.aiSettings.goEnable}</Button>
         </div> : null}
-        {view.status === 'loading' ? <div className="mi-daily-briefing__state"><LoadingState label={text.generating} minHeight={220} /><p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p></div> : null}
+        {view.status === 'loading' ? <div className="mi-daily-briefing__state">
+          <LoadingState label={text.generating} minHeight={220} />
+          <p className="mi-daily-briefing-page__loading-hint">{text.generateHint}</p>
+          {/* The one spinner stays; the rows say which step it is on. */}
+          {liveProgress ? <DailyBriefingLiveSteps nowMs={Date.now()} progress={liveProgress} text={text} /> : null}
+        </div> : null}
         {view.status === 'unavailable' && !failure ? (editions.every((edition) => edition.state === 'missing')
           ? <StateView
               state="empty"
@@ -412,39 +417,6 @@ export function DailyBriefingPage({ locale, text, eventTitles, onBack, onConfigu
       </div>
     </div> : null}
   </main>
-}
-
-function DailyBriefingFailurePanel({ failure, text, formatTime, regenerating, onRetry, onOpenAiSettings, onOpenModelSettings, onConfigureSources }: Readonly<{
-  failure: BriefFailure
-  text: DailyBriefingText
-  formatTime: (value: string, precision?: 'minute' | 'second') => string
-  regenerating: boolean
-  onRetry: () => void
-  onOpenAiSettings: () => void
-  onOpenModelSettings: () => void
-  onConfigureSources?: () => void
-}>): React.ReactElement {
-  const advice = failureAdvice(failure.code)
-  const codeLabel = briefFailureCodeLabel(failure.code, { failure: text.aiSettings.failure, failurePanel: text.failurePanel })
-  const detail = readableFailureDetail(failure.detail, text.failurePanel.detail)
-  const separator = text.labelSeparator
-  return <div className="mi-daily-briefing-page__empty mi-daily-briefing-page__failure" role="alert"
-    data-daily-brief-failure="true" data-failure-kind={failure.kind} data-failure-advice={advice}
-    {...(failure.code ? { 'data-failure-code': failure.code } : {})}>
-    <h2>{failure.kind === 'editorial' ? text.failurePanel.editorialTitle : text.failurePanel.generationTitle}</h2>
-    <p data-failure-code-label>{text.failurePanel.codeLabel}{separator}{codeLabel}</p>
-    {detail ? <p data-failure-detail>{text.failurePanel.detailLabel}{separator}{detail}</p> : null}
-    <p data-failure-advice-text>{text.failurePanel.suggestionLabel}{separator}{text.failurePanel.advice[advice]}</p>
-    <DailyBriefingGenerationTimeline trace={failure.generationTrace} text={text} formatTime={formatTime} />
-    <div className="mi-daily-briefing-page__empty-actions">
-      <Button type="primary" className="mi-daily-briefing-page__primary" data-failure-action="retry" disabled={regenerating} onClick={onRetry}>
-        {regenerating ? text.regenerating : text.regenerate}
-      </Button>
-      <Button data-failure-action="ai-settings" onClick={onOpenAiSettings}>{text.failurePanel.openAiSettings}</Button>
-      {advice !== 'data' ? <Button data-failure-action="model-service" onClick={onOpenModelSettings}>{text.failurePanel.openModelService}</Button> : null}
-      {advice === 'data' && onConfigureSources ? <Button data-failure-action="sources" onClick={onConfigureSources}>{text.configureSources}</Button> : null}
-    </div>
-  </div>
 }
 
 function summaryFromDocument(document: DailyBriefingDocument): DailyBriefingEditionSummary {
