@@ -1,0 +1,124 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join, relative, resolve } from 'node:path'
+
+import { describe, expect, it } from 'vitest'
+
+import { looksLikeTextKey } from '../textKeyShape'
+
+/**
+ * `Popover` 的调用点守卫。
+ *
+ * 1. **浮层只有一份实现**：`apps/` 与 `products/` 里不许再出现 `import { Popover } from 'antd'`。
+ *    现存 7 处是迁移欠账，记在下面的清单里，**只减不增**：切掉一处必须同笔删掉那一行，否则
+ *    「清单在缩小」那条红——一份只会变长的豁免，第二天就成了永久豁免。
+ * 2. **文案只收键**：本组件调用点的 `labelKey` 字面量必须是键形状（点分、无空白、无中文）。
+ *    与 `Tooltip` / `IconButton` 共用同一份判据（`../textKeyShape`）。
+ *
+ * 两条都配了反向用例：一条永远通过的守卫比没有守卫更糟。
+ */
+
+const ROOT = resolve(__dirname, '../../../..')
+const SCANNED_ROOTS = ['apps', 'products']
+const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
+const OUR_IMPORT = '@platform/ui/components/popover'
+
+/** antd `Popover` 的既有调用点（迁移欠账，按文件记，不按行号——行号会随迁移漂）。 */
+const ANTD_POPOVER_BASELINE = new Map<string, number>([
+  ['apps/desktop-shell/src/renderer/src/shell/assistants/AssistantMentionedModelsPicker.tsx', 1],
+  ['apps/desktop-shell/src/renderer/src/shell/agents/components/AgentSessionInputbarFooter.tsx', 1],
+  ['apps/desktop-shell/src/renderer/src/shell/agents/components/AgentComposerModelMenu.tsx', 1],
+  ['apps/desktop-shell/src/renderer/src/shell/components/ModelPicker/ModelPicker.tsx', 1],
+  ['products/market-intelligence/desktop/settings/intelligence-sources/SyncRunSection.tsx', 1],
+  ['products/market-intelligence/desktop/features/industry/cross-asset/CrossAssetObservationPanel.tsx', 1],
+  ['products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSessionMenu.tsx', 1]
+])
+
+function sourceFiles(dir: string): string[] {
+  const found: string[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (SKIPPED_DIRS.has(entry.name)) continue
+      found.push(...sourceFiles(join(dir, entry.name)))
+      continue
+    }
+    if (!/\.tsx$/.test(entry.name)) continue
+    if (/\.test\.tsx$/.test(entry.name)) continue
+    found.push(join(dir, entry.name))
+  }
+  return found
+}
+
+const FILES = SCANNED_ROOTS.flatMap((root) => {
+  try {
+    return sourceFiles(join(ROOT, root))
+  } catch {
+    return []
+  }
+})
+
+function relativeToRoot(file: string): string {
+  return relative(ROOT, file).replace(/\\/g, '/')
+}
+
+/** 从 `import … from 'antd'` 的具名列表里取出 `Popover`（`Popover as X` 也算）。 */
+function importsAntdPopover(text: string): boolean {
+  for (const match of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*'antd'/g)) {
+    const names = (match[1] ?? '').split(',')
+    if (names.some((name) => /^\s*Popover(\s+as\s+\w+)?\s*$/.test(name))) return true
+  }
+  return false
+}
+
+describe('Popover call sites', () => {
+  it('keeps the hand-written antd popovers on the shrinking list, and nothing else', () => {
+    const offenders = FILES.map(relativeToRoot).filter(
+      (file) => importsAntdPopover(readFileSync(join(ROOT, file), 'utf8')) && !ANTD_POPOVER_BASELINE.has(file)
+    )
+
+    // 要一块浮层说明就用 `@platform/ui/components/popover`；手写第二份等于绕开焦点与关闭规则。
+    expect(offenders).toEqual([])
+  })
+
+  it('shrinks the list: a migrated file must have its line deleted', () => {
+    const stale = [...ANTD_POPOVER_BASELINE.keys()].filter((file) => {
+      try {
+        return !importsAntdPopover(readFileSync(join(ROOT, file), 'utf8'))
+      } catch {
+        // 文件没了也算迁移完成：同样必须删掉清单里那一行。
+        return true
+      }
+    })
+
+    expect(stale).toEqual([])
+  })
+
+  it('only ever passes a key-shaped string as the explanation', () => {
+    const offenders: Array<{ file: string; literal: string }> = []
+    for (const file of FILES) {
+      const text = readFileSync(file, 'utf8')
+      if (!text.includes(OUR_IMPORT)) continue
+      for (const match of text.matchAll(/<Popover\b/g)) {
+        const window = text.slice(match.index ?? 0, (match.index ?? 0) + 400)
+        const literal = /labelKey\s*[:=]\s*\{?\s*['"`]([^'"`\n]*)['"`]/.exec(window)?.[1]
+        // 传变量/常量的调用点由定义处判，这里只判字面量。
+        if (literal === undefined || looksLikeTextKey(literal)) continue
+        offenders.push({ file: relativeToRoot(file), literal })
+      }
+    }
+
+    expect(offenders).toEqual([])
+  })
+
+  it('catches both shapes, so neither guard passes vacuously', () => {
+    // 反向实测：antd 的写法必须被认出来，本组件的写法不能被误判。
+    expect(importsAntdPopover("import { Button, Popover } from 'antd'")).toBe(true)
+    expect(importsAntdPopover("import { Popover as P } from 'antd'")).toBe(true)
+    expect(importsAntdPopover("import { Button } from 'antd'")).toBe(false)
+    expect(importsAntdPopover("import { Popover } from '@platform/ui/components/popover'")).toBe(false)
+
+    // 键形状：中文或带空白的「句子」必须被拒，点分驼峰键必须放行。
+    expect(looksLikeTextKey('pages.intelligence.sources.help')).toBe(true)
+    expect(looksLikeTextKey('先检查来源，再重新采集')).toBe(false)
+    expect(looksLikeTextKey('pages.intelligence.来源')).toBe(false)
+  })
+})
