@@ -27,18 +27,23 @@ export type TooltipProps = {
   resolveText: (key: string) => string
   /** 触发器：必须是可聚焦元素（按钮、链接、带 tabIndex 的元素）。 */
   children: ReactElement
-  /** 默认下方；空间不足时 antd 自动翻到上方。 */
-  placement?: 'bottom' | 'top'
 }
 
-export function Tooltip({ labelKey, resolveText, children, placement = 'bottom' }: TooltipProps): ReactElement {
+/**
+ * 定位不接受参数（契约 §6）：默认下方，上方空间不足时由 antd 自动翻转。
+ * 今天能传 `top`，明天就会有人传 `left`，再往后就开始自己算坐标——那正是这个组件要收掉的。
+ * 唯一的位置在下一行，`Placement` 不暴露、也不从 props 透传。
+ */
+const PLACEMENT = 'bottom' as const
+
+export function Tooltip({ labelKey, resolveText, children }: TooltipProps): ReactElement {
   const text = resolveText(labelKey)
 
   // 没有句子就不存在提示：空气泡比没有气泡更糟，键名更糟。
   if (text.trim() === '') return children
 
   return (
-    <AntTooltip mouseEnterDelay={0.3} placement={placement} title={text} trigger={['hover', 'focus']}>
+    <AntTooltip mouseEnterDelay={0.3} placement={PLACEMENT} title={text} trigger={['hover', 'focus']}>
       {children}
     </AntTooltip>
   )

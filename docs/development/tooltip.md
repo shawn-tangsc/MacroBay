@@ -29,7 +29,10 @@ component adds the focus trigger and the copy rules.
 | `labelKey` | `string` | yes | The hint, **as a key**. |
 | `resolveText` | `(key: string) => string` | yes | The caller's resolver. An unknown key resolves to an empty string. |
 | `children` | `ReactElement` | yes | The trigger. It must be focusable — a button, a link, or something with `tabIndex`. |
-| `placement` | `'bottom' \| 'top'` | no, default `bottom` | Flips automatically when there is no room. |
+
+There is no `placement`, no `open`, no `onOpenChange` and no rich content: the trigger set and the
+position are fixed behaviour, not call-site options. The bubble sits below the trigger and flips up
+only when there is no room.
 
 ## Rules the component enforces
 

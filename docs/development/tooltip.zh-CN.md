@@ -27,7 +27,9 @@ import { Tooltip } from '@platform/ui/components/tooltip'
 | `labelKey` | `string` | 是 | 提示文案，**收键**。 |
 | `resolveText` | `(key: string) => string` | 是 | 调用方的解析入口；未知键解析成空串。 |
 | `children` | `ReactElement` | 是 | 触发器，必须可聚焦——按钮、链接或带 `tabIndex` 的元素。 |
-| `placement` | `'bottom' \| 'top'` | 否，默认 `bottom` | 空间不足时自动翻转。 |
+
+没有 `placement`、没有 `open` / `onOpenChange`、也不放富内容：触发方式和位置是固定行为，不是调用点选项。
+气泡在触发器下方，只有空间不足时才向上翻转。
 
 ## 组件自己保证的几条
 

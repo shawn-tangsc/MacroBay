@@ -4,7 +4,12 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { TOOLTIP_MAX_CJK, TOOLTIP_MAX_LATIN, Tooltip } from './Tooltip'
+
+const source = readFileSync(join(__dirname, 'Tooltip.tsx'), 'utf8')
 
 const key = (value: string): string => value
 
@@ -101,6 +106,14 @@ describe('Tooltip', () => {
     expect(trigger.hasAttribute('data-trigger')).toBe(true)
     // 我们自己不包容器：包一层会改掉父级布局，也是「无法聚焦的包裹元素」那种变体的入口。
     expect(document.querySelector('.ant-tooltip-open')).toBeNull()
+  })
+
+  it('takes no placement: the position is fixed behaviour, not a call-site option', () => {
+    const props = source.slice(source.indexOf('export type TooltipProps'), source.indexOf('const PLACEMENT'))
+    expect(props).not.toMatch(/placement\s*\??:/)
+    // 位置只出现在组件自己那一行；调用点传 `placement` 一律不生效，因为 props 里根本没有这个字段。
+    expect(source).toContain("const PLACEMENT = 'bottom' as const")
+    expect(source.match(/placement=/g)).toHaveLength(1)
   })
 
   it('keeps the copy ceiling visible in the exported constants', () => {
