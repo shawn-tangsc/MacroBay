@@ -121,14 +121,20 @@ describe('desktop preload platform api', () => {
       'acknowledge',
       'deleteRead',
       'dismiss',
+      'getDeliverySettings',
+      'getSubscriptions',
       'getUnreadState',
       'list',
+      'listEventCatalog',
       'markAllRead',
       'markRead',
       'onChanged',
       'onDelivered',
       'readDesktopPermission',
       'sendTest',
+      'setPushChannel',
+      'setSubscription',
+      'setToastEnabled',
       'snooze'
     ])
     // 没有任意 channel 透传口：删除只能走这一条。

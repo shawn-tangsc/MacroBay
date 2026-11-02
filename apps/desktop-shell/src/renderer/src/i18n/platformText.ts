@@ -1,6 +1,7 @@
 import type { ChannelDeliverySkipReason } from '@platform/ai/agent-platform/channels/ChannelDeliveryContracts'
 import type { ProviderCategoryId } from '@platform/ai/providers/providerPresets'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
+import { notificationCopy } from '@platform/i18n/notificationCopy'
 
 export type PlatformText = {
   brand: {
@@ -1057,6 +1058,13 @@ export type PlatformText = {
     }
   }
   notifications: {
+    deliveryReason: {
+      desktopDisabled: string
+      pushUnavailable: string
+      systemUnsupported: string
+      handedToSystem: string
+      sendFailedUnknown: string
+    }
     channelsDescription: string
     scopeNote: string
     desktopEnabled: string
@@ -2204,6 +2212,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }
     },
     notifications: {
+      deliveryReason: {
+        desktopDisabled: notificationCopy['en-US']['notification.deliveryReason.desktopDisabled'],
+        pushUnavailable: notificationCopy['en-US']['notification.deliveryReason.pushUnavailable'],
+        systemUnsupported: notificationCopy['en-US']['notification.deliveryReason.systemUnsupported'],
+        handedToSystem: notificationCopy['en-US']['notification.deliveryReason.handedToSystem'],
+        sendFailedUnknown: notificationCopy['en-US']['notification.deliveryReason.sendFailedUnknown'],
+      },
       channelsHeading: '投递渠道',
       channelsDescription: '控制平台如何分发消息。这里的开关是平台级配置，会影响所有产品的通知展示方式。',
       scopeNote: '建议至少保留一个轻量渠道。桌面通知适合离开应用时接收提醒，高优先级弹窗适合需要立即处理的事件。',
@@ -3360,6 +3375,13 @@ export const platformText: Record<AppLanguage, PlatformText> = {
       }
     },
     notifications: {
+      deliveryReason: {
+        desktopDisabled: notificationCopy['zh-CN']['notification.deliveryReason.desktopDisabled'],
+        pushUnavailable: notificationCopy['zh-CN']['notification.deliveryReason.pushUnavailable'],
+        systemUnsupported: notificationCopy['zh-CN']['notification.deliveryReason.systemUnsupported'],
+        handedToSystem: notificationCopy['zh-CN']['notification.deliveryReason.handedToSystem'],
+        sendFailedUnknown: notificationCopy['zh-CN']['notification.deliveryReason.sendFailedUnknown'],
+      },
       channelsHeading: 'Delivery Channels',
       channelsDescription:
         'Control how the platform delivers messages. These are platform-level switches and apply across all products.',
