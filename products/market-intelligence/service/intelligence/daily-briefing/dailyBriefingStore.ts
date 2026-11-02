@@ -59,15 +59,15 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
   const pruneAttemptsStatement = db.prepare('delete from daily_briefing_attempts where edition_date < ?')
 
   return Object.freeze({
-    async get(date, locale) {
-      return parseRow(getStatement.get(date, locale, dailyBriefingStoragePolicy.defaultEditionSerial) as Row | undefined)
+    async get(date, locale, editionSerial) {
+      return parseRow(getStatement.get(date, locale, editionSerial ?? dailyBriefingStoragePolicy.defaultEditionSerial) as Row | undefined)
     },
     async put(edition) {
       if (!isDailyBriefingDocumentWithinBudget(edition.document)) throw new Error('daily-briefing-document-too-large')
       putStatement.run(
         edition.date,
         edition.locale,
-        dailyBriefingStoragePolicy.defaultEditionSerial,
+        edition.editionSerial ?? dailyBriefingStoragePolicy.defaultEditionSerial,
         edition.generatedAt,
         edition.windowStart,
         edition.windowEnd,
@@ -83,7 +83,7 @@ export function createDailyBriefingSqliteStore(filePath: string): DailyBriefingS
       }))
     },
     async putAttempt(attempt) {
-      putAttemptStatement.run(attempt.date, attempt.locale, dailyBriefingStoragePolicy.defaultEditionSerial, JSON.stringify(attempt.trace), attempt.trace.finishedAt)
+      putAttemptStatement.run(attempt.date, attempt.locale, attempt.editionSerial ?? dailyBriefingStoragePolicy.defaultEditionSerial, JSON.stringify(attempt.trace), attempt.trace.finishedAt)
     },
     async getAttempt(date, locale) {
       const row = getAttemptStatement.get(date, locale, dailyBriefingStoragePolicy.defaultEditionSerial) as { trace_json?: string } | undefined

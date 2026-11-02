@@ -38,6 +38,8 @@ const defaultGeneration: DailyBriefingGeneration = Object.freeze({
 /** The stored shape. The store owns the file; the service owns when a row is written. */
 export type DailyBriefingStoredEdition = Readonly<{
   date: string
+  /** Which issue of that day this edition is; absent means the only one, `default`. */
+  editionSerial?: string
   locale: DailyBriefingLocale
   generatedAt: string
   windowStart: string
@@ -47,12 +49,15 @@ export type DailyBriefingStoredEdition = Readonly<{
 
 export type DailyBriefingAttempt = Readonly<{
   date: string
+  /** Which issue the failed attempt belonged to; absent means `default`. */
+  editionSerial?: string
   locale: DailyBriefingLocale
   trace: BriefingGenerationTrace
 }>
 
 export type DailyBriefingStore = Readonly<{
-  get: (date: string, locale: DailyBriefingLocale) => Promise<DailyBriefingStoredEdition | undefined>
+  /** `editionSerial` defaults to the single-issue `default`, so existing callers read their row. */
+  get: (date: string, locale: DailyBriefingLocale, editionSerial?: string) => Promise<DailyBriefingStoredEdition | undefined>
   put: (edition: DailyBriefingStoredEdition) => Promise<void>
   list: (from: string, to: string, locale: DailyBriefingLocale) => Promise<readonly DailyBriefingStoredEdition[]>
   prune: (beforeDate: string) => Promise<void>

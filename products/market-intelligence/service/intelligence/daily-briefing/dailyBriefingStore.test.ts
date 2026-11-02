@@ -86,3 +86,16 @@ describe('daily briefing store', () => {
     expect(await store.list('2026-10-30', '2026-10-30', 'en-US')).toHaveLength(1)
   })
 })
+
+it('keeps two issues of the same day apart, and leaves the old API on the default one', async () => {
+  const store = createDailyBriefingSqliteStore(':memory:')
+  await store.put(edition('2026-10-30', '第一期'))
+  await store.put({ ...edition('2026-10-30', '第二期'), editionSerial: 'second' })
+
+  // A caller that knows nothing about issues still reads the row it wrote.
+  expect((await store.get('2026-10-30', 'zh-CN'))?.document.lede.text).toBe('第一期')
+  expect((await store.get('2026-10-30', 'zh-CN', 'second'))?.document.lede.text).toBe('第二期')
+  // Both issues are listed for the day; neither replaced the other.
+  expect((await store.list('2026-10-30', '2026-10-30', 'zh-CN')).map((row) => row.document.lede.text).sort())
+    .toEqual(['第一期', '第二期'])
+})
