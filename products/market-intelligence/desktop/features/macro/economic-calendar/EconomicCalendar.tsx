@@ -391,7 +391,7 @@ export function EconomicCalendar({ client, now, text, onBack, openTarget }: Prop
           onOpenDay={day => showDay(day)}
           onSelectItem={item => selectItem(item)}
           coverage={coverage}
-          events={monthState.state === 'available' ? monthState.events : []}
+          events={/* state-ternary: reviewed — 表达式取数据，不是「状态决定画不画」；这行渲染的是同一个日历，只换数据。 */monthState.state === 'available' ? monthState.events : []}
           marketEvents={market.events}
           marketSources={market.sources}
           selectedEventKey={selectedEventKey}

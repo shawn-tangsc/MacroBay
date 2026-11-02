@@ -239,21 +239,27 @@ export function MarketCalendarCard({ projection, state = 'ready', stale = false,
         they are looking at while scanning further down the schedule — so it stays outside the
         scroll region instead of travelling with the rows. */}
     <div className="mi-calendar-card__body">
+      {/* state-ternary: reviewed — 这一枝只渲染加载组件，没有内容容器；下面几处列表各自按 length 判。 */}
       {state === 'loading' ? <LoadingState label={text.loading} /> : null}
+      {/* state-ternary: reviewed — 这一枝只渲染错误组件；读失败与「今天没有事件」是两个判断，不是一件事。 */}
       {state === 'error' ? <StateView state="error" reasonCode="unreadable" size="md"
         action={{ labelKey: STATE_VIEW_ACTION_KEYS.retry, onSelect: onRefresh }} /> : null}
+      {/* state-ternary: reviewed — 只加一行「数据是旧的」附注，列表照常在下；旧数据不许被这条删掉。 */}
       {state === 'ready' && stale ? <p className="mi-calendar-card__state" data-calendar-card-stale>{text.staleNotice}</p> : null}
       {/* Readable months with no events at all: the card's answer is "nothing here", not a gap.
           Keeping it as a line (not a state surface) is the point — there is no window left to widen
           and no button that would produce an event. */}
+      {/* state-ternary: reviewed — 一行说明，不承担列表；内容块按数组长度判。 */}
       {state === 'ready' && projection.state === 'empty' ? <p className="mi-calendar-card__state">{text.empty}</p> : null}
       {state === 'ready' && projection.state === 'available' && projection.today.length === 0
         ? <p className="mi-calendar-card__state">{text.releasedEmpty.replace('{days}', String(calendarUpcomingPolicy.releasedWindowDays))}</p>
         : null}
+      {/* state-ternary: reviewed — 状态只证明读完了，真正的开关是 `today.length > 0`：数据在就画，不靠状态位藏内容。 */}
       {state === 'ready' && projection.today.length > 0 ? <>
         <p className="mi-calendar-card__section">{text.todaySection}</p>
         <ul className="mi-calendar-card__list">{projection.today.map(row)}</ul>
       </> : null}
+      {/* state-ternary: reviewed — 同上：开关是 `upcoming.length > 0`，状态不决定这块内容画不画。 */}
       {state === 'ready' && projection.upcoming.length > 0 ? <>
         <p className="mi-calendar-card__section">{text.upcomingSection}</p>
         <ul className="mi-calendar-card__list">{projection.upcoming.map(row)}</ul>

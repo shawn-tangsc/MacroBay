@@ -105,6 +105,7 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
                   params: { legs: state.missing.map(leg => text.legs[leg]).join(text.withheldListSep) } }
               : { key: `pages.intelligence.portal.dashboard.divergence.unavailableWhy.${state.reason}` })} />
         ) : null}
+        {/* state-ternary: reviewed — 这一枝只输出一行「今天没有背离」，不渲染列表；列表见下面 available 分支。 */}
         {state.state === 'empty' && !nothingCompared ? (
           // One line, no block: a card with nothing to report must not take half a screen to say so,
           // and the platform's empty-state heading ("nothing here yet") adds nothing on a quiet day.
@@ -119,6 +120,8 @@ export function DivergencePanel({ state, text, onRetry }: Readonly<{
             <p className="mi-divergence__status-sub">{groupWithheld(withheld).map(group => withheldLine(text, group, when)).join(text.withheldListSep)}</p>
           </>
         ) : null}
+        {/* state-ternary: reviewed — 仍是迁移前自己那套三态：`available` 才带 `rows`，读失败由上面的 error 分支单独处理。
+            R161 迁到 `AsyncState` 时连同「按 rows.length 判」一起改，那时这条注释随之删掉。 */}
         {state.state === 'available' ? (
           <div className="mi-divergence__conclusion" data-tone="conclusion">
             <ul className="mi-divergence__rows">
