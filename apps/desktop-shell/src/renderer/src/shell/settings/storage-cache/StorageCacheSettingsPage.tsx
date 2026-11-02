@@ -28,7 +28,17 @@ type StorageCacheSettingsPageProps = {
   language: AppLanguage
 }
 
-const FILTER_KEY_PREFIX = 'storageCacheFilter.'
+/**
+ * 过滤项的键是**字面量表**，不是 `前缀 + 变量`：拼串在静态守卫眼里看不见形状，
+ * 界面上就会显示成键名；而换成表之后，多一个筛选项就编译不过。
+ */
+const FILTER_LABEL_KEYS: Record<StorageCacheFilterKey, string> = {
+  all: 'storageCacheFilter.all',
+  platform: 'storageCacheFilter.platform',
+  'ai-runtime': 'storageCacheFilter.ai-runtime',
+  product: 'storageCacheFilter.product',
+  'derived-data': 'storageCacheFilter.derived-data'
+}
 const SHELL_KEY_FOR_FILTER_GROUP = 'storageCacheFilterGroup'
 
 export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageProps): React.ReactElement {
@@ -42,13 +52,12 @@ export function StorageCacheSettingsPage({ language }: StorageCacheSettingsPageP
   const filters = useMemo(() => listStorageCacheFilters(language), [language])
   // 分段器只收键：文案的唯一定义仍在 platformText，页面只负责把键解析回来。
   const filterItems = useMemo(
-    () => filters.map((filter) => ({ value: filter.key, labelKey: `${FILTER_KEY_PREFIX}${filter.key}` })),
+    () => filters.map((filter) => ({ value: filter.key, labelKey: FILTER_LABEL_KEYS[filter.key] })),
     [filters]
   )
   function resolveFilterText(key: string): string {
     if (key === SHELL_KEY_FOR_FILTER_GROUP) return labels.title
-    const filterKey = key.slice(FILTER_KEY_PREFIX.length) as StorageCacheFilterKey
-    return filters.find((filter) => filter.key === filterKey)?.label ?? ''
+    return filters.find((filter) => FILTER_LABEL_KEYS[filter.key] === key)?.label ?? ''
   }
   const filteredCaches = useMemo(
     () => filterCachesByKey(state.caches, activeFilter),
