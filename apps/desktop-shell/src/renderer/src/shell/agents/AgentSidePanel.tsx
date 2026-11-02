@@ -9,16 +9,16 @@ import type { AgentStoreState } from '@platform/ai/agent-platform/store/agentSto
 
 import AgentRoster from './components/AgentRoster'
 import Sessions from './components/Sessions'
-import { createDefaultAgentSession, deleteSessions, selectAgentById, selectSession, setAgentModel } from './agentStateActions'
-import { createSessionViaApi, deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi, setAgentModelViaApi } from './agentSessionDataApi'
+import { deleteSessions, selectAgentById, selectSession } from './agentStateActions'
+import { deleteSessionsViaApi, selectAgentViaApi, selectSessionViaApi } from './agentSessionDataApi'
 import { getSessionChannelTypeBySessionId } from './agentChannelVisuals'
-import { filterSessionsForAgent, getAgentPrimarySessionId, getCreateSessionAgentId } from './agentSessionViewModel'
+import { filterSessionsForAgent, getAgentPrimarySessionId } from './agentSessionViewModel'
 import { DisabledHint } from '@platform/ui/components/disabled-hint'
 import { Tooltip } from '@platform/ui/components/tooltip'
 
 import { useAgentText } from './agentTextProvider'
 import { resolveAgentTextKey, resolveAgentTooltipText, type AgentTooltipKey } from './agentTooltipText'
-import { isUnconfiguredAgentModel } from '@platform/ai/agent-platform/runtime/effectiveAgentModel'
+import { startDefaultSession } from './startDefaultSession'
 
 type AgentSidePanelTab = 'agents' | 'sessions'
 
@@ -80,21 +80,13 @@ export default function AgentSidePanel({
   const channelTypeBySessionId = useMemo(() => getSessionChannelTypeBySessionId(state.channels), [state.channels])
 
   function createDefaultSession(): void {
-    const agentId = getCreateSessionAgentId(activeAgentId)
-    if (!agentId) return
-    const agent = state.agents.find((item) => item.id === agentId)
-    if (agent && defaultAgentModelId && isUnconfiguredAgentModel(agent.model)) {
-      void setAgentModelViaApi(window.platform, agent.id, defaultAgentModelId).catch(() => {
-        onStateChange((current) => setAgentModel(current, agent.id, defaultAgentModelId))
-      })
-    }
-
-    void createSessionViaApi(window.platform, {
-      agentId,
-      name: t.sidePanel.defaultSessionName,
-      workspace: { type: 'system' }
-    }).catch(() => {
-      onStateChange((current) => createDefaultAgentSession(current, t.sidePanel.defaultSessionName, agentId))
+    // 流程在 `startDefaultSession` 里，空会话页用的是同一份实现。
+    startDefaultSession({
+      state,
+      activeAgentId,
+      defaultAgentModelId,
+      sessionName: t.sidePanel.defaultSessionName,
+      onStateChange
     })
   }
 
