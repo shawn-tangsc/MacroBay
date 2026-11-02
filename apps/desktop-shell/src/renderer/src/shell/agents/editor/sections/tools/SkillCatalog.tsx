@@ -13,6 +13,9 @@ import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
+/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
+const noopText = (): string => ''
+
 type SkillCatalogProps = {
   text: AgentText
   skills: ReturnType<typeof buildAgentSkillCatalog>
@@ -154,7 +157,7 @@ function SkillCatalogRow({
         <strong>{skill.name}</strong>
         <small>{runtimeView.primarySummary ?? skill.description ?? skill.folderName}</small>
         <span className="agent-marketplace-meta">
-          <MetaChip labelKey={SKILL_SOURCE_KEY} resolveText={() => skill.source} />
+          <MetaChip kind="text" text={skill.source} resolveText={noopText} />
           {runtimeView.toolCount > 0 ? <span>{text.editor.tools.skillRuntimeToolCount(runtimeView.toolCount)}</span> : null}
           {runtimeView.capabilityCount > 0 ? (
             <span>{text.editor.tools.skillRuntimeCapabilityCount(runtimeView.capabilityCount)}</span>

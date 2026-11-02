@@ -26,6 +26,9 @@ const SKILL_TOOL_ID_KEY = 'agent.skills.toolId'
 const SKILL_ENTRY_KEY = 'agent.skills.entry'
 const SKILL_LANGUAGE_KEY = 'agent.skills.language'
 
+/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
+const noopText = (): string => ''
+
 type SkillDetailModalProps = {
   open: boolean
   text: ReturnType<typeof useAgentText>
@@ -127,7 +130,7 @@ export default function SkillDetailModal({
               <strong>{skill.name}</strong>
               <small>{skill.description ?? text.common.noDescription}</small>
               <span className="agent-marketplace-meta">
-                <MetaChip labelKey={SKILL_SOURCE_KEY} resolveText={() => skill.source} />
+                <MetaChip kind="text" text={skill.source} resolveText={noopText} />
                 {skill.author ? <span>{skill.author}</span> : null}
                 {skill.sourceTags.slice(0, 4).map((tag) => (
                   <span key={tag}>{tag}</span>
@@ -148,7 +151,7 @@ export default function SkillDetailModal({
                   {runtimeView.runtimeTools.map((tool) => (
                     <div key={tool.toolId} className="agent-skill-runtime-row">
                       <strong>{tool.toolName}</strong>
-                      <MetaChip labelKey={SKILL_TOOL_ID_KEY} resolveText={() => tool.toolId} />
+                      <MetaChip kind="text" text={tool.toolId} resolveText={noopText} />
                     </div>
                   ))}
                 </div>
@@ -165,10 +168,7 @@ export default function SkillDetailModal({
                     <div key={capability.capabilityId} className="agent-skill-capability-card">
                       <div className="agent-skill-runtime-row">
                         <strong>{capability.title}</strong>
-                        <MetaChip
-                          labelKey={SKILL_ENTRY_KEY}
-                          resolveText={() => capability.entryFile ?? capability.kind}
-                        />
+                        <MetaChip kind="text" text={capability.entryFile ?? capability.kind} resolveText={noopText} />
                       </div>
                       {capability.summary ? <p>{capability.summary}</p> : null}
                       {capability.bodyPreview ? (
@@ -215,7 +215,7 @@ export default function SkillDetailModal({
               <div className="agent-skill-preview-title">
                 <strong>{selectedFile ?? text.editor.tools.selectSkillFile}</strong>
                 {selectedFile ? (
-                  <MetaChip labelKey={SKILL_LANGUAGE_KEY} resolveText={() => guessSkillFileLanguage(selectedFile)} />
+                  <MetaChip kind="text" text={guessSkillFileLanguage(selectedFile)} resolveText={noopText} />
                 ) : null}
               </div>
               {loadingContent ? (

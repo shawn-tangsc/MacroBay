@@ -20,6 +20,9 @@ import {
   UNBINDABLE_STATUSES
 } from './mcpRowStatus'
 
+/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
+const noopText = (): string => ''
+
 type McpCatalogProps = {
   text: AgentText
   value: string
@@ -200,7 +203,7 @@ function McpRow({
         {tools.length > 0 ? (
           <span className="agent-mcp-tool-list">
             {tools.slice(0, 4).map((tool) => (
-              <MetaChip key={tool.id} labelKey={MCP_TOOL_CHIP_KEY} resolveText={() => tool.name} />
+              <MetaChip key={tool.id} kind="text" text={tool.name} resolveText={noopText} />
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>

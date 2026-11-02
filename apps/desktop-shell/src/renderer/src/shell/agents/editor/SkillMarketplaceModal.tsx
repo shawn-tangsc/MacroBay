@@ -18,6 +18,9 @@ const MARKETPLACE_TITLE_KEY = 'editor.tools.marketplaceTitle'
 /** 来源注册表名是分类名词。 */
 const REGISTRY_KEY = 'agent.skills.registry'
 
+/** `kind="text"` 档从不查表——这些是数据，不是句子；签名要求一个解析器，给个空实现。 */
+const noopText = (): string => ''
+
 type SkillMarketplaceModalProps = {
   open: boolean
   text: ReturnType<typeof useAgentText>
@@ -121,7 +124,7 @@ export default function SkillMarketplaceModal({
                   <strong>{row.name}</strong>
                   <small>{row.description ?? text.common.noDescription}</small>
                   <span className="agent-marketplace-meta">
-                    <MetaChip labelKey={REGISTRY_KEY} resolveText={() => row.sourceRegistry} />
+                    <MetaChip kind="text" text={row.sourceRegistry} resolveText={noopText} />
                     <span>{row.statsText}</span>
                     {row.author ? <span>{row.author}</span> : null}
                   </span>
