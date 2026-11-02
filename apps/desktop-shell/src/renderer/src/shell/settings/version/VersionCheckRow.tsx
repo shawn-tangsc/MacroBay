@@ -7,7 +7,17 @@ import { formatShellInstant, resolveShellTimeZone } from '@platform/ui/time/shel
 import type { UpdateCheckProjection } from '@platform/updates/contracts/updateCheck'
 
 import { platformText } from '../../../i18n/platformText'
-import { describeVersionCheck } from './versionCheckViewModel'
+
+/** 药丸文案键：一一对应，字面量写死在常量里（守卫用例要求键是字面量）。 */
+const pillLabelKeys: Record<VersionCheckPill, string> = {
+  upToDate: 'preferences.version.pill.upToDate',
+  available: 'preferences.version.pill.available',
+  unavailable: 'preferences.version.pill.unavailable',
+  checking: 'preferences.version.pill.checking',
+  notChecked: 'preferences.version.pill.notChecked',
+  autoOff: 'preferences.version.pill.autoOff'
+}
+import { describeVersionCheck, type VersionCheckPill } from './versionCheckViewModel'
 import { platformUpdateCheckClient, type UpdateCheckClient } from './updateCheckClient'
 import { useUpdateCheckRow } from './useUpdateCheckRow'
 
@@ -40,8 +50,9 @@ export function VersionCheckRow(props: {
     openFailed: row.openFailed
   })
 
+  // 键必须是字面量常量：StatusPill 的守卫要求「只收键」，动态拼出来的键既没法 grep 也没法翻。
   const resolvePillText = (key: string): string => {
-    const name = key.replace(/^pill\./u, '')
+    const name = key.slice(key.lastIndexOf('.') + 1)
     return (text.pill as Record<string, string>)[name] ?? key
   }
 
@@ -90,7 +101,7 @@ export function VersionCheckRow(props: {
             <span className="version-key">{text.latest}</span>
             <b className="version-value">{view.latestVersion ?? text.unknown}</b>
             {view.pill === null ? null : (
-              <StatusPill tone={view.pillTone} labelKey={`pill.${view.pill}`} resolveText={resolvePillText} />
+              <StatusPill tone={view.pillTone} labelKey={pillLabelKeys[view.pill]} resolveText={resolvePillText} />
             )}
             <span className="version-spacer" />
             {view.showDownloadButton ? (

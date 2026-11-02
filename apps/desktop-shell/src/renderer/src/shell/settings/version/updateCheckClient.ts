@@ -14,9 +14,26 @@ export type UpdateCheckClient = Readonly<{
   openDownloadPage: () => Promise<{ ok: boolean }>
 }>
 
-/** 生产实现：唯一一处直接读 `window.platform.updates`。 */
+/**
+ * 生产实现：唯一一处直接读 `window.platform.updates`。
+ *
+ * 桥不在时**返回 rejected promise，而不是同步抛**：读不到投影的那条路已经有处理（停在「还没检查」），
+ * 但同步抛会从 effect 里冒出去、把整个设置页炸掉——「应用可能没重启」这种常见情况不该白屏。
+ */
 export const platformUpdateCheckClient: UpdateCheckClient = {
-  getState: () => window.platform.updates.getState(),
-  checkNow: () => window.platform.updates.checkNow(),
-  openDownloadPage: () => window.platform.updates.openDownloadPage()
+  getState: async () => requireBridge().getState(),
+  checkNow: async () => requireBridge().checkNow(),
+  openDownloadPage: async () => requireBridge().openDownloadPage()
+}
+
+type UpdateCheckBridge = {
+  getState: () => Promise<UpdateCheckProjection>
+  checkNow: () => Promise<UpdateCheckProjection>
+  openDownloadPage: () => Promise<{ ok: boolean }>
+}
+
+function requireBridge(): UpdateCheckBridge {
+  const bridge = (window.platform as { updates?: UpdateCheckBridge }).updates
+  if (!bridge) throw new Error('update check bridge is not available; the app may need a restart')
+  return bridge
 }
