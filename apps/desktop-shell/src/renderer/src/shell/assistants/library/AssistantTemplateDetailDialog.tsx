@@ -1,9 +1,14 @@
-import { Button, Tag } from 'antd'
+import { Button } from 'antd'
 import type { AssistantTemplateDetail } from '@platform/ai/assistant-platform/library/assistantTemplateSchemas'
 import { Modal } from '@platform/ui/components/modal'
+import { MetaChip } from '@platform/ui/components/meta-chip'
 import type { PlatformText } from '../../../i18n/platformText'
 
 const TEMPLATE_DETAIL_TITLE_KEY = 'assistants.library.title'
+
+/** 分类词：来源与模板自带的标签。句子是数据本身，键只回答「这是哪一类」。 */
+const TEMPLATE_SOURCE_KEY = 'assistants.template.source'
+const TEMPLATE_TAG_KEY = 'assistants.template.tag'
 
 type AssistantTemplateDetailDialogProps = {
   labels: PlatformText['assistants']['library']
@@ -59,9 +64,9 @@ export function AssistantTemplateDetailDialog({
             <div>
               <p>{template.description || template.promptPreview}</p>
               <div className="assistant-template-detail-tags">
-                <Tag>{source}</Tag>
+                <MetaChip labelKey={TEMPLATE_SOURCE_KEY} resolveText={() => source} />
                 {template.tags.map((tag) => (
-                  <Tag key={tag}>{tag}</Tag>
+                  <MetaChip key={tag} labelKey={TEMPLATE_TAG_KEY} resolveText={() => tag} />
                 ))}
               </div>
             </div>

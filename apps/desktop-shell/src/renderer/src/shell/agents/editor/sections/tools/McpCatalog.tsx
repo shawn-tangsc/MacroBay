@@ -9,6 +9,7 @@ import type { McpTool } from '@platform/ai/agent-platform/schemas/toolSchemas'
 
 import { copyTextToClipboard } from '../../../../clipboard'
 import type { AgentText } from '../../../agentText'
+import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 import { StatusPill } from '@platform/ui/components/status-pill'
@@ -37,6 +38,8 @@ type McpCatalogProps = {
 
 /** 「手动绑定」是状态词，不是描述标签。 */
 const MANUAL_BADGE_KEY = 'agent.tools.mcpManualBadge'
+/** 工具名是分类名词（这个服务器提供了什么），不是状态。 */
+const MCP_TOOL_CHIP_KEY = 'agent.tools.mcpToolChip'
 
 export function McpCatalog({
   text,
@@ -197,9 +200,7 @@ function McpRow({
         {tools.length > 0 ? (
           <span className="agent-mcp-tool-list">
             {tools.slice(0, 4).map((tool) => (
-              <Tag key={tool.id} className="agent-mcp-tool-chip">
-                {tool.name}
-              </Tag>
+              <MetaChip key={tool.id} labelKey={MCP_TOOL_CHIP_KEY} resolveText={() => tool.name} />
             ))}
             {tools.length > 4 ? <Tag className="agent-mcp-tool-chip">+{tools.length - 4}</Tag> : null}
           </span>

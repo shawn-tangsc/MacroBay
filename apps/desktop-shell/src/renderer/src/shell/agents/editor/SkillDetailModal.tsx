@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Tag } from 'antd'
 import { ChevronRight, FileText, Folder, Sparkles } from 'lucide-react'
 
 import type { InstalledSkill, SkillFileNode } from '@platform/ai/agent-platform/schemas/skillSchemas'
 import type { AgentSkillRuntimeCatalogEntry } from '@platform/ai/agent-platform/skills/skillRuntimeSchemas'
 import { LoadingState } from '@platform/ui/components/loading'
+import { MetaChip } from '@platform/ui/components/meta-chip'
 import { Modal } from '@platform/ui/components/modal'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
@@ -19,6 +19,12 @@ import {
 } from './skillFileTreeViewModel'
 
 const SKILL_DETAIL_TITLE_KEY = 'editor.tools.skillDetailTitle'
+
+/** 分类名词：技能来源、工具标识、入口文件、文件语言。句子是数据，键只回答「这是哪一类」。 */
+const SKILL_SOURCE_KEY = 'agent.skills.source'
+const SKILL_TOOL_ID_KEY = 'agent.skills.toolId'
+const SKILL_ENTRY_KEY = 'agent.skills.entry'
+const SKILL_LANGUAGE_KEY = 'agent.skills.language'
 
 type SkillDetailModalProps = {
   open: boolean
@@ -121,7 +127,7 @@ export default function SkillDetailModal({
               <strong>{skill.name}</strong>
               <small>{skill.description ?? text.common.noDescription}</small>
               <span className="agent-marketplace-meta">
-                <Tag className="agent-tool-approval">{skill.source}</Tag>
+                <MetaChip labelKey={SKILL_SOURCE_KEY} resolveText={() => skill.source} />
                 {skill.author ? <span>{skill.author}</span> : null}
                 {skill.sourceTags.slice(0, 4).map((tag) => (
                   <span key={tag}>{tag}</span>
@@ -142,7 +148,7 @@ export default function SkillDetailModal({
                   {runtimeView.runtimeTools.map((tool) => (
                     <div key={tool.toolId} className="agent-skill-runtime-row">
                       <strong>{tool.toolName}</strong>
-                      <Tag className="agent-tool-approval">{tool.toolId}</Tag>
+                      <MetaChip labelKey={SKILL_TOOL_ID_KEY} resolveText={() => tool.toolId} />
                     </div>
                   ))}
                 </div>
@@ -159,7 +165,10 @@ export default function SkillDetailModal({
                     <div key={capability.capabilityId} className="agent-skill-capability-card">
                       <div className="agent-skill-runtime-row">
                         <strong>{capability.title}</strong>
-                        <Tag className="agent-tool-approval">{capability.entryFile ?? capability.kind}</Tag>
+                        <MetaChip
+                          labelKey={SKILL_ENTRY_KEY}
+                          resolveText={() => capability.entryFile ?? capability.kind}
+                        />
                       </div>
                       {capability.summary ? <p>{capability.summary}</p> : null}
                       {capability.bodyPreview ? (
@@ -205,7 +214,9 @@ export default function SkillDetailModal({
             <section className="agent-skill-file-preview">
               <div className="agent-skill-preview-title">
                 <strong>{selectedFile ?? text.editor.tools.selectSkillFile}</strong>
-                {selectedFile ? <Tag className="agent-tool-approval">{guessSkillFileLanguage(selectedFile)}</Tag> : null}
+                {selectedFile ? (
+                  <MetaChip labelKey={SKILL_LANGUAGE_KEY} resolveText={() => guessSkillFileLanguage(selectedFile)} />
+                ) : null}
               </div>
               {loadingContent ? (
                 <LoadingState layout="inline" size="sm" label={text.editor.tools.loadingSkillFile} />

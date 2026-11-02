@@ -9,6 +9,7 @@ import type { AgentText } from '../../../agentText'
 import SkillDetailModal from '../../SkillDetailModal'
 import SkillMarketplaceModal from '../../SkillMarketplaceModal'
 import { buildAgentSkillRuntimeViewModel } from '../../agentSkillRuntimeViewModel'
+import { MetaChip } from '@platform/ui/components/meta-chip'
 import { StateView } from '@platform/ui/components/state'
 import { STATE_VIEW_ACTION_KEYS } from '@platform/ui/components/state/stateViewText'
 
@@ -25,6 +26,9 @@ type SkillCatalogProps = {
   searchActive: boolean
   onClearSearch: () => void
 }
+
+/** 技能来源是分类名词。 */
+const SKILL_SOURCE_KEY = 'agent.skills.source'
 
 export function SkillCatalog({
   text,
@@ -150,7 +154,7 @@ function SkillCatalogRow({
         <strong>{skill.name}</strong>
         <small>{runtimeView.primarySummary ?? skill.description ?? skill.folderName}</small>
         <span className="agent-marketplace-meta">
-          <Tag className="agent-tool-approval">{skill.source}</Tag>
+          <MetaChip labelKey={SKILL_SOURCE_KEY} resolveText={() => skill.source} />
           {runtimeView.toolCount > 0 ? <span>{text.editor.tools.skillRuntimeToolCount(runtimeView.toolCount)}</span> : null}
           {runtimeView.capabilityCount > 0 ? (
             <span>{text.editor.tools.skillRuntimeCapabilityCount(runtimeView.capabilityCount)}</span>
