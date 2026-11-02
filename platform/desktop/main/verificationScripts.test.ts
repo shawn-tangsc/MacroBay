@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
@@ -24,7 +24,12 @@ const read = (relativePath: string): string => readFileSync(`${ROOT}${relativePa
 /** 与 `package.json` 里的命名约定一致：这三类都算「一个检查」。 */
 const CHECK_PREFIXES = ['check:', 'verify', 'demo:verify', 'acceptance']
 
-const MANUAL_ONLY_DOC = 'docs-private/10-development/manual-only-checks.md'
+/**
+ * 清单的位置**必须在版本库里**：它住在 `docs-private/`（gitignore）时，本机绿、干净快照红——
+ * 守卫自己成了"只在某人机器上成立"的东西。放在 `scripts/` 是因为它描述的就是这些脚本，
+ * 而且它不能进 `docs/`：那里的公开文档要求中英成对。
+ */
+const MANUAL_ONLY_DOC = 'scripts/manual-only-checks.md'
 
 /**
  * 入口本身不算「一个检查」：`verify` 就是那条链，`verify:sole` 是它的严格版入口。
@@ -56,9 +61,13 @@ function runnerSteps(): string[] {
     .map((name) => `verify:${name}`)
 }
 
-/** manual-only 清单里声明的键：表格里以 `pnpm <key>` 形式出现。 */
+/**
+ * manual-only 清单里声明的键：表格里以 `pnpm <key>` 形式出现。
+ *
+ * 文件不在就**直接红**，不再当作"清单为空"：早先那行 `if (!existsSync) return []` 会把
+ * "清单被删了/根本没进快照"翻译成"一个都没声明"，于是所有键一起变孤儿——红得很响，但指向错的地方。
+ */
 function manualOnlyKeys(): string[] {
-  if (!existsSync(`${ROOT}${MANUAL_ONLY_DOC}`)) return []
   const text = read(MANUAL_ONLY_DOC)
   return [...text.matchAll(/`pnpm\s+([^`\s]+)`/gu)].map((match) => match[1])
 }
