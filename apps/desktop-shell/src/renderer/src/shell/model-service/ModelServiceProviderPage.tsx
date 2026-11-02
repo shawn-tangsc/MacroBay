@@ -4,6 +4,7 @@ import { message, Modal } from 'antd'
 import type { ModelDefinition, ProviderChatEndpoint, SafeModelProvider } from '@platform/ai/providers/modelProviderTypes'
 import { needsModelProtocolNotice, providerReachabilityOf, resolveProviderKeyUrl } from '@platform/ai/providers/providerPresets'
 import { configuredModelChatProtocols } from '@platform/ai/providers/providerChatEndpoints'
+import { StateView } from '@platform/ui/components/state'
 import type { AppLanguage } from '@platform/settings/schema/appSettings'
 
 import type { PlatformText } from '../../i18n/platformText'
@@ -237,7 +238,8 @@ export function ModelServiceProviderPage({
 
       <div className="model-service-detail">
         {provider === null ? (
-          <p className="model-service-empty">{labels.noProviders}</p>
+          // 空态走平台组件：图标、文案、读屏播报只有一处定义；这里只表达「还没有创建过」。
+          <StateView state="empty" reasonCode="never-created" size="md" />
         ) : (
           <>
             {removeError !== null ? (
