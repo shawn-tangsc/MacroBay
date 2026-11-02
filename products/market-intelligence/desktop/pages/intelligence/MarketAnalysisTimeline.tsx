@@ -175,7 +175,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
               message={text.attemptFailed}
               detail={text.failureReasons[failedAttempt.failureCode ?? ''] ?? text.initialAnalysisFailed}
               meta={[`${text.analysisRun}：${failedAttempt.id}`, `${text.evidenceCount}：${failedAttempt.evidenceCount}`]}
-              dismissLabel={text.dismissError}
+              dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
               onDismiss={attemptError.dismiss}
             /> : null}
             {/* The label stays a label; the queued sentence below is the only place it is said. */}
@@ -184,7 +184,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
             {requestState === 'unavailable' ? <p role="alert" className="mi-analysis-timeline__state">{text.initialAnalysisUnavailable}</p> : null}
             {initialError.visible ? <AnalysisRequestErrorBanner
               message={text.initialAnalysisFailed}
-              dismissLabel={text.dismissError}
+              dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
               onDismiss={initialError.dismiss}
             /> : null}
           </> : null}
@@ -199,7 +199,7 @@ export function MarketAnalysisTimeline({ onBack, text, timeline, onSelect }: Pro
             // Only a run failure has a reason. A refused click must not inherit the previous
             // attempt's reason, which would attribute an old run's defect to this request.
             detail={timeline.requestFailure === 'run' && attempt?.failureCode ? text.failureReasons[attempt.failureCode] : undefined}
-            dismissLabel={text.dismissError}
+            dismissLabelKey="pages.intelligence.portal.analysisTimeline.dismissError"
             onDismiss={refreshError.dismiss}
           /> : null}
           {state.entries.slice(0, shown.visible).map((entry) => { const direction = entry.direction ?? readConclusionDirection(entry.safeExcerpt ?? ''); const groupCaption = spansGroups ? groupCaptionFor(entry, groupTypes) : null; // A row, not a button: the whole line is one action (select and open this conclusion), and
