@@ -45,6 +45,8 @@ describe('daily briefing generation settings modal', () => {
     const { client, onClose } = await render()
     expect(document.body.textContent).toContain(text.generationSettings.title)
     expect(document.body.textContent).not.toContain(text.aiSettings.title)
+    // 标题现在由共用弹窗按键解析：键写错会渲染成空标题，所以这里断言渲染值，不只断言文本包含。
+    expect(document.querySelector('.modal__title')?.textContent).toBe(text.generationSettings.title)
     expect(document.body.textContent).toContain(text.generationSettings.note)
 
     const save = [...document.body.querySelectorAll('button')].find((button) => button.textContent?.replace(/\s/g, '') === text.generationSettings.save)!

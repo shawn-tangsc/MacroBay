@@ -1,4 +1,4 @@
-import { Modal, Select } from 'antd'
+import { Button, Select } from 'antd'
 import { useEffect, useState } from 'react'
 
 import {
@@ -6,9 +6,11 @@ import {
   dailyBriefingGenerationTimes
 } from '../../../contracts/dailyBriefing'
 import { LoadingState } from '@platform/ui/components/loading'
+import { Modal } from '@platform/ui/components/modal'
 import { formatShellTimeZoneLabel } from '@platform/ui/time/shellTimeFormat'
 
 import type { DailyBriefingClient } from '../../shared/ipc/dailyBriefingClient'
+import { useProductTextKey } from '../../shared/i18n/productTextKey'
 import type { DailyBriefingText } from './dailyBriefingText'
 
 type GenerationDraft = Readonly<{ generationTime: string; windowHours: number }>
@@ -32,6 +34,7 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
   const [invalidZone, setInvalidZone] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [loadFailed, setLoadFailed] = useState(false)
+  const resolveProductText = useProductTextKey()
 
   useEffect(() => {
     if (!open) return
@@ -71,14 +74,18 @@ export function DailyBriefingGenerationSettingsModal({ open, text, client, onClo
   }
 
   return <Modal
+    footer={<>
+      <Button onClick={onClose}>{text.generationSettings.cancel}</Button>
+      <Button disabled={!draft || loadFailed} loading={saving} onClick={() => void save()} type="primary">
+        {saving ? text.generationSettings.saving : text.generationSettings.save}
+      </Button>
+    </>}
+    layer="over-drawer"
+    onClose={onClose}
     open={open}
-    title={text.generationSettings.title}
-    onCancel={onClose}
-    onOk={() => void save()}
-    okText={saving ? text.generationSettings.saving : text.generationSettings.save}
-    cancelText={text.generationSettings.cancel}
-    okButtonProps={{ loading: saving, disabled: !draft || loadFailed }}
-    zIndex={1500}
+    resolveText={resolveProductText}
+    titleKey="pages.intelligence.portal.dashboard.dailyBriefing.generationSettings.title"
+    width="standard"
   >
     {!draft ? <LoadingState label={text.generationSettings.loading} minHeight={90} /> : <>
       <div className="mi-daily-briefing__settings-row">
