@@ -1,7 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
-import { notificationCopyText } from '../../i18n/notificationCopy'
 
 import type { JsonFileStorage } from '../../storage/jsonFileStorage'
 import {
@@ -34,23 +33,28 @@ import type {
   SafeNotificationRecord
 } from '../contracts/notificationContracts'
 import type { NotificationEventCatalog } from '../contracts/notificationEventCatalog'
+import type { NotificationCopyPort } from '../contracts/notificationCopyPort'
 import { toSafeNotificationRecord } from '../contracts/notificationContracts'
-import {
-  decideNotificationBreaker,
-  pruneNotificationDailyCounters,
-  utcDayOf
-} from './notificationBreaker'
 import { pruneNotificationRecords } from '../store/notificationRetention'
 import { findActiveDuplicate } from '../runtime/notificationDedupe'
 import { planNotificationSubmit } from './notificationSubmitPlan'
+import { pruneNotificationDailyCounters } from './notificationBreaker'
+import { createLegacySubmit, withCenterForDisruptiveChannels } from './notificationRuntimeLegacy'
 import {
   normalizeRequestedChannels,
   routeTransientDelivery,
   type DeliveryAttempt,
   type DeliveryHooks,
-  type NotificationClock,
-  type NotificationDeliveryContent
+  type NotificationClock
 } from '../runtime/notificationRouting'
+import { createNotificationDelivery } from './notificationRuntimeDelivery'
+import { createNotificationSettingsSurface } from './notificationRuntimeSettings'
+import {
+  compareNotifications,
+  notificationCursorKey,
+  resumeIndex,
+  unreadStateOf
+} from './notificationRuntimeQuery'
 
 export type NotificationStorage = JsonFileStorage<NotificationStoreState>
 
@@ -85,6 +89,12 @@ export type NotificationRuntimeDependencies = {
   diagnostics?: NotificationDiagnosticsSink
   /** 读者语言：正文在投递前解析一次，四个钩子拿同一份 content。 */
   getLanguage?: () => Promise<'zh-CN' | 'en-US'>
+  /** 文案解析端口（契约 §3.3）：平台键/产品键都走它；缺省时退回平台闭集。 */
+  copy?: NotificationCopyPort
+  /** 写读者级设置（提示开关 / 通道选择）；由装配层接到设置 store，runtime 不自己写设置文件。 */
+  updateSettings?: (patch: Partial<NotificationRuntimeSettings>) => Promise<void>
+  /** 通道侧投影：可用通道 + 目标只读；没有通道线时为空数组。 */
+  getPushTargets?: () => Promise<readonly unknown[]>
   /** 只有「系统能回答授没授权」时才给 granted/denied；查不到就返回 unknown，不许拿支持性冒充授权。 */
   readDesktopPermission?: () => Promise<DesktopNotificationPermission>
   /** 记录有任何变化（投递 / 标读 / 撤销 / 稍后 / 清理）时调用一次，载荷是递增的版本号。 */
@@ -117,58 +127,12 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     await deps.storage.write(state)
   }
 
-  async function submitLegacy(request: NotificationRequest): Promise<SafeNotificationRecord> {
-    const state = await load()
-    const settings = await deps.getSettings()
-    const now = nowIso()
-    const duplicate = findActiveDuplicate(state.records, request, now)
-
-    // 折叠第一层：同 dedupeKey 且仍活跃 → 只累加次数，不新增记录，也不消耗熔断额度。
-    if (duplicate) {
-      const merged = mergeDuplicateNotification(duplicate, request, now)
-      const mergedRecords = state.records.map((item: NotificationRecord) => (item.id === merged.id ? merged : item))
-      await persist({ ...state, records: mergedRecords })
-      notifyChanged()
-      return toSafeNotificationRecord(merged)
-    }
-
-    const ownerId = request.productId ?? 'platform'
-    const breaker = decideNotificationBreaker({
-      counters: state.dailyCounters ?? {},
-      ownerId,
-      now
-    })
-    const dailyCounters = pruneNotificationDailyCounters(breaker.counters, now)
-
-    // 折叠第二层：超过当日上限后原文不落库，只把「今天还出过几条」留在聚合记录上。
-    if (breaker.action === 'fold') {
-      const folded = foldIntoAggregate(state.records, request, ownerId, now)
-      await persist({ ...state, records: folded.records, dailyCounters })
-      notifyChanged()
-      return toSafeNotificationRecord(folded.aggregate)
-    }
-
-    const record = createNotificationFromRequest(
-      {
-        ...request,
-        requestedChannels: withCenterForDisruptiveChannels(request, normalizeRequestedChannels(request, settings, deps.clock))
-      },
-      now
-    )
-
-    await persist({ ...state, records: [record, ...state.records], dailyCounters })
-    notifyChanged()
-    await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock, await resolveContent(record))
-
-    return toSafeNotificationRecord(record)
-  }
-
   function submit(request: NotificationSubmitRequest): Promise<NotificationSubmitOutcome>
   function submit(request: NotificationRequest): Promise<SafeNotificationRecord>
   function submit(
     request: NotificationRequest | NotificationSubmitRequest
   ): Promise<SafeNotificationRecord | NotificationSubmitOutcome> {
-    return 'dedupeVars' in request ? submitEvent(request) : submitLegacy(request)
+    return 'dedupeVars' in request ? submitEvent(request) : legacySubmit.submitLegacy(request)
   }
 
   async function persistWithDiagnostics(state: NotificationStoreState): Promise<void> {
@@ -177,23 +141,6 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     } catch (error) {
       deps.diagnostics?.({ code: 'persist-failed', at: nowIso() })
       throw error
-    }
-  }
-
-  async function resolveContent(record: NotificationRecord): Promise<NotificationDeliveryContent> {
-    const language = (await deps.getLanguage?.()) ?? 'zh-CN'
-    const fallback = language === 'en-US' ? 'A notification' : '有一条通知'
-    const resolve = (key: NotificationRecord['titleKey'] | undefined): string => {
-      if (key === undefined) return ''
-      const text = notificationCopyText(language, key)
-      return typeof text === 'string' && text.length > 0 ? text : fallback
-    }
-    return {
-      title: resolve(record.titleKey),
-      body: resolve(record.bodyKey),
-      reason: resolve(record.reasonKey),
-      ...(record.deeplink === undefined ? {} : { deeplink: record.deeplink }),
-      shortId: record.id.slice(0, 8)
     }
   }
 
@@ -249,7 +196,7 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     const record = plan.record
     await persistWithDiagnostics({ ...state, records: [record, ...state.records] })
     notifyChanged()
-    const delivered = await deliverNewRecord(record, settings)
+    const delivered = await delivery.deliverNewRecord(record, settings)
     if (delivered !== record) {
       const records = [delivered, ...state.records]
       await persistWithDiagnostics({ ...state, records })
@@ -258,46 +205,35 @@ export function createNotificationRuntime(deps: NotificationRuntimeDependencies)
     return plan.outcome
   }
 
-  /**
-   * 只在这一步投递一次（契约 §16.3「合并不重推」）。跳过不算失败：该表面不写 delivery 条目；
-   * `unknown-after-send` 是独立原因码，不能写成「没发到手机」。
-   */
-  async function deliverNewRecord(
-    record: NotificationRecord,
-    settings: NotificationRuntimeSettings
-  ): Promise<NotificationRecord> {
-    const content = await resolveContent(record)
-    const attempts = await routeTransientDelivery(record, settings, deps.deliveryHooks ?? {}, deps.clock, content)
-    const delivery: NotificationRecord['delivery'] = { ...record.delivery }
-    for (const attempt of attempts) {
-      if (attempt.channel !== 'toast' && attempt.channel !== 'popup' && attempt.channel !== 'desktop') continue
-      if (attempt.result === 'skipped') {
-        delete delivery[attempt.channel]
-        continue
-      }
-      delivery[attempt.channel] = {
-        state: attempt.result === 'failed' ? 'failed' : 'sent-accepted',
-        at: attempt.attemptedAt,
-        ...(attempt.reason === undefined ? {} : { reason: attempt.reason })
-      }
-    }
-
-    if (delivery.push?.state === 'queued') {
-      const at = nowIso()
-      if (settings.push.channelId === null || !deps.deliveryHooks?.push) {
-        delivery.push = { state: 'failed', reason: 'push-unavailable', at }
-      } else {
-        const result = await deps.deliveryHooks.push({ ...record, delivery }, content)
-        delivery.push = result.ok
-          ? { state: 'sent-accepted', at, ...(result.messageId === undefined ? {} : { messageId: result.messageId }) }
-          : { state: 'failed', reason: result.reason ?? 'channel-rejected', at }
-      }
-    }
-    return { ...record, delivery }
-  }
+  const settingsSurface = createNotificationSettingsSurface({
+    getCatalog: () => deps.catalog,
+    getSettings: deps.getSettings,
+    updateSettings: deps.updateSettings,
+    getPushTargets: deps.getPushTargets,
+    load,
+    persistWithDiagnostics,
+    notifyChanged
+  })
+  const delivery = createNotificationDelivery({
+    deliveryHooks: deps.deliveryHooks,
+    clock: deps.clock,
+    getLanguage: deps.getLanguage,
+    copy: deps.copy,
+    now: nowIso
+  })
+  const legacySubmit = createLegacySubmit({
+    load,
+    persist,
+    notifyChanged,
+    deps,
+    now: nowIso,
+    delivery
+  })
 
   return {
     submit,
+
+    ...settingsSurface,
 
     async initialize(): Promise<void> {
       await load()
@@ -489,126 +425,13 @@ export type NotificationRuntime = ReturnType<typeof createNotificationRuntime>
  * 归一化放在这里一处，**不靠四个生产者各自记得传**——靠调用点记得，等于有四个地方会忘。
  * 这条不为「要不要响」负责：免打扰和通道开关仍由路由决定，它只保证「响过的东西一定能回看」。
  */
-function withCenterForDisruptiveChannels(
-  request: NotificationRequest,
-  channels: readonly NotificationChannel[]
-): NotificationChannel[] {
-  const disruptive = channels.some((channel) => channel === 'desktop' || channel === 'toast' || channel === 'popup')
-  if (!disruptive || channels.includes('center')) return [...channels]
-  return ['center', ...channels]
-}
-
-
-/**
- * 熔断的聚合记录：**同一 owner 同一天只有一条**。
- *
- * 折叠掉的是原文，不是事实——正文不落库，但「今天还出过几条、属于哪个 owner」必须留下。
- * 标题只是一个稳定标识，界面从 `collapsedCount` 出文案，**不要直接显示这个字符串**。
- */
-const NOTIFICATION_AGGREGATE_TITLE = 'notification-aggregate'
-/** 聚合记录的稳定标识键；界面从 `collapsedCount` 出文案，不直接显示这一句。 */
-const NOTIFICATION_AGGREGATE_TITLE_KEY = 'notification.aggregate.title' as const
-
-function aggregateDedupeKey(ownerId: string, now: string): string {
-  return `${NOTIFICATION_AGGREGATE_TITLE}|${ownerId}|${utcDayOf(now)}`
-}
-
-function foldIntoAggregate(
-  records: readonly NotificationRecord[],
-  request: NotificationRequest,
-  ownerId: string,
-  now: string
-): { records: NotificationRecord[]; aggregate: NotificationRecord } {
-  const dedupeKey = aggregateDedupeKey(ownerId, now)
-  const existing = records.find((record) => record.dedupeKey === dedupeKey)
-  if (existing) {
-    const aggregate: NotificationRecord = {
-      ...existing,
-      collapsedCount: (existing.collapsedCount ?? 0) + 1,
-      occurrenceCount: existing.occurrenceCount + 1,
-      updatedAt: now
-    }
-    return {
-      records: records.map((record) => (record.id === aggregate.id ? aggregate : record)),
-      aggregate
-    }
-  }
-
-  const aggregate: NotificationRecord = {
-    id: createNotificationId(),
-    owner: request.owner,
-    productId: request.productId,
-    sourceId: NOTIFICATION_AGGREGATE_TITLE,
-    eventTypeId: 'legacy.aggregate',
-    delivery: {},
-    titleKey: NOTIFICATION_AGGREGATE_TITLE_KEY,
-    severity: 'warning',
-    priority: 'low',
-    channels: ['center'],
-    state: 'unread',
-    actions: [],
-    dedupeKey,
-    safeMetadata: { aggregate: true },
-    occurrenceCount: 1,
-    collapsedCount: 1,
-    createdAt: now,
-    updatedAt: now
-  }
-  return { records: [aggregate, ...records], aggregate }
-}
-
-/** 未读数与版本的唯一算法：角标、清空、事件三处读同一个结果。 */
-function unreadStateOf(
-  records: readonly NotificationRecord[],
-  now: string,
-  productId: string | undefined,
-  version: number
-): NotificationUnreadState {
-  const unread = records.filter(
-    (record) =>
-      record.state === 'unread' &&
-      isActiveNotification(record, now) &&
-      (!productId || record.productId === productId)
-  ).length
-  return { unread, version }
-}
-
 function isMissingFileError(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }
 
 /** 未读优先时未读组在前；组内按 `createdAt` 倒序，同一毫秒用 `id` 兜底保证顺序稳定。 */
-function compareNotifications(left: NotificationRecord, right: NotificationRecord, unreadFirst: boolean): number {
-  if (unreadFirst) {
-    const leftRank = left.state === 'unread' ? 0 : 1
-    const rightRank = right.state === 'unread' ? 0 : 1
-    if (leftRank !== rightRank) return leftRank - rightRank
-  }
-  if (left.createdAt !== right.createdAt) return left.createdAt < right.createdAt ? 1 : -1
-  if (left.id === right.id) return 0
-  return left.id < right.id ? 1 : -1
-}
-
 /** 键游标 `createdAt|id`：同一毫秒的多条各有不同 id，因此不会丢；也是排序位置，插入不影响已翻过的页。 */
-function notificationCursorKey(record: NotificationRecord): string {
-  return `${record.createdAt}|${record.id}`
-}
-
 /**
  * 从游标继续：找到那一条就从它之后开始；找不到（被删或被改状态移出本组）就按排序键
  * 取「排在游标之后」的第一条，**绝不退回数组下标**。
  */
-function resumeIndex(sorted: readonly NotificationRecord[], cursor: string, unreadFirst: boolean): number {
-  const exact = sorted.findIndex((record) => notificationCursorKey(record) === cursor)
-  if (exact >= 0) return exact + 1
-
-  const separator = cursor.lastIndexOf('|')
-  if (separator <= 0) return 0
-  const createdAtPart = cursor.slice(0, separator)
-  const idPart = cursor.slice(separator + 1)
-  const index = sorted.findIndex((record) => {
-    if (record.createdAt !== createdAtPart) return record.createdAt > createdAtPart
-    return record.id > idPart
-  })
-  return index < 0 ? sorted.length : index
-}
