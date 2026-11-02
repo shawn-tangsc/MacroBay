@@ -18,10 +18,25 @@ const ROOT = resolve(__dirname, '../../../..')
 const SCANNED_ROOTS = ['apps', 'products']
 const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'out', 'coverage', '.git', 'build', 'release'])
 
-/** antd `Modal` 的既有调用点（迁移欠账，按文件记，不按行号——行号会随迁移漂）。 */
-const ANTD_BASELINE: ReadonlySet<string> = new Set([
-  'products/market-intelligence/desktop/pages/intelligence/MarketAnalysisSettingsDialog.tsx'
-])
+/**
+ * 迁移欠账清单：`scripts/migration-debt/modal.json`，被 git 追踪、不在组件目录。
+ *
+ * **不写在这个文件里**：清单写进守卫，就等于「划掉欠账」必须触碰组件目录，而那个目录只有
+ * 组件线能写——今天已经因此判过四条正经迁移收尾为违规（`choice` 那份）。账是账、代码是代码。
+ *
+ * **现在是空清单，不是删掉清单**：空清单让两个方向继续跑——下一处 antd `Modal` 一出现就红，
+ * 而不是安静地溜进来。删掉清单，守卫就只剩「读不到就抛」，而那是另一回事。
+ */
+const DEBT_FILE = resolve(ROOT, 'scripts/migration-debt/modal.json')
+
+/** 读不到就抛，不吞：静默降级会让这条红在快照/CI 里无声失效。 */
+function readDebt(): ReadonlySet<string> {
+  const parsed = JSON.parse(readFileSync(DEBT_FILE, 'utf8')) as { entries?: Record<string, number> }
+  if (parsed.entries === undefined) throw new Error(`${DEBT_FILE} has no "entries"`)
+  return new Set(Object.keys(parsed.entries))
+}
+
+const ANTD_BASELINE: ReadonlySet<string> = readDebt()
 
 function sourceFiles(dir: string): string[] {
   const found: string[] = []
