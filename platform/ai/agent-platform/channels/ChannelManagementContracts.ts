@@ -60,7 +60,7 @@ export type ChannelRuntimeSafeView = {
 
 export type ChannelDeliveryAttemptSafeView = {
   id: string
-  source: 'inbound-reply' | 'task-result' | 'agent-notify'
+  source: 'inbound-reply' | 'task-result' | 'agent-notify' | 'notification'
   status: 'pending' | 'sending' | 'delivered' | 'failed' | 'unknown-after-send' | 'skipped'
   code: string | null
   createdAt: string

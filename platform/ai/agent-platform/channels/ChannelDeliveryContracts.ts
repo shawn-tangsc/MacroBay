@@ -1,6 +1,10 @@
 import type { ChannelExecutionClaim } from './ChannelInboundContracts'
 
-export type ChannelDeliverySource = 'inbound-reply' | 'task-result' | 'agent-notify'
+/**
+ * 一条出站消息从哪来。`notification` 是通知推送（通道方案 §2.2）：幂等键是通知记录 id，
+ * 与任务的 `task-result` 分开记账——两边的失败语义与重试策略都不一样。
+ */
+export type ChannelDeliverySource = 'inbound-reply' | 'task-result' | 'agent-notify' | 'notification'
 /**
  * Where one delivered message stands. NOT `TaskResultOutcome` (completed/failed/cancelled), which is
  * what happened to the task run and goes into `source_id`. The two never convert into each other;
