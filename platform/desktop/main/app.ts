@@ -166,6 +166,7 @@ import { assertBoolean } from '../../ai/agent-platform/channels/ChannelManagemen
 import { createProductIpcRegistry, type ProductIpcMethod } from '../ipc/productIpcRegistry'
 import { createProductIpcInvoker } from './productIpcInvoker'
 import { registerWindowIpc } from './ipc/windowIpc'
+import { registerSettingsIpc } from './ipc/settingsIpc'
 import { registerPlatformRetentionJobs } from './platformRetentionJobs'
 import { runProductBootstrap } from './productBootstrap'
 import { showBootFailurePage } from './bootFailureWindow'
@@ -1389,22 +1390,13 @@ function registerIpcHandlers(
   ipcMain.handle(IpcChannels.externalAppsLaunchWorkspace, (_event: IpcMainInvokeEvent, input: unknown) =>
     externalAppsService.launchWorkspace(validateLaunchExternalAppRequest(input)))
 
-  ipcMain.handle(IpcChannels.settingsGet, () => settingsStore.get())
-  ipcMain.handle(IpcChannels.settingsUpdate, async (_event: IpcMainInvokeEvent, patch: AppSettingsPatch) => {
-    // 非法代理地址必须在这里就被拒：校验先于落盘，settings.json 一个字都不写。
-    assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)
-    const next = await settingsStore.update(patch)
-    if (patch.language) {
-      await ensureDefaultAssistantSeed()
-      // 内置 Agent/会话文案按 id 重新解析到新语言；用户改过的字段不动，也不写任何迁移标记。
-      await refreshBuiltinSeedCopy(next.language)
-    }
-    await shellTimeZone.refresh()
-    await applySessionProxySettings(next.network)
-    // PLAT-32/S1：偏好的**唯一对账点** = 这条显式通知（受控读取不再带副作用；通知自身绝不 reject）
-    void panelWorkspaceForDisposal?.notifyPreferencesChanged()
-    settingsStore.notifyCommitted()
-    return next
+  // 设置读写两个 handler 搬到 ipc/settingsIpc.ts：端口按「设置存储 / 助手种子 / 时区 / 工作区通知」四个域给。
+  registerSettingsIpc(ipcMain, {
+    settings: settingsStore,
+    ensureDefaultAssistantSeed,
+    refreshBuiltinSeedCopy,
+    refreshShellTimeZone: () => shellTimeZone.refresh(),
+    notifyPreferencesChanged: () => panelWorkspaceForDisposal?.notifyPreferencesChanged()
   })
   ipcMain.handle(IpcChannels.channelsCatalog, () => channelManagementService.catalog())
   ipcMain.handle(IpcChannels.channelsList, () => channelManagementService.list())

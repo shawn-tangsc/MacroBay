@@ -601,11 +601,13 @@ describe('desktop main IPC surface', () => {
   })
 
   it('rejects an invalid proxy address before the settings file is written', () => {
-    expect(appSource).toContain("import { assertProxySettingsPatchAccepted } from '../../network/proxySettingsGuard'")
-    const guardIndex = appSource.indexOf('assertProxySettingsPatchAccepted(patch, (await settingsStore.get()).network)')
+    // handler 已搬到 ipc/settingsIpc.ts：断言跟着实现走，不再读 app.ts 的文本。
+    const settingsSource = readSource('ipc/settingsIpc.ts')
+    expect(settingsSource).toContain("import { assertProxySettingsPatchAccepted } from '../../../network/proxySettingsGuard'")
+    const guardIndex = settingsSource.indexOf('assertProxySettingsPatchAccepted(patch, (await ports.settings.get()).network)')
     expect(guardIndex).toBeGreaterThan(-1)
-    // 校验必须先于落盘：抛错时 settingsStore.update 根本没被调用，settings.json 不会留下坏地址。
-    expect(guardIndex).toBeLessThan(appSource.indexOf('const next = await settingsStore.update(patch)'))
+    // 校验必须先于落盘：抛错时 settings.update 根本没被调用，settings.json 不会留下坏地址。
+    expect(guardIndex).toBeLessThan(settingsSource.indexOf('const next = await ports.settings.update(patch)'))
   })
 
   it('keeps the attachment text preview on its existing channel but reads it from platform/files', () => {

@@ -26,7 +26,8 @@ describe('preferences settings boundary', () => {
     // 偏好写入后的对账**已搬到 Main**（PLAT-32/S1）。PLAT-36 清掉了渲染侧残留：`settings.update` 成功路径
     // 由 Main 显式 `notifyPreferencesChanged()`，渲染侧不得再单飞一次受控读取（否则每次语言/主题/时区切换
     // 都多一条无产出的 IPC）。断言守护「只有一个对账点」这个当前事实 —— 两条边都看。
-    const mainSource = readFileSync(resolve(process.cwd(), 'platform/desktop/main/app.ts'), 'utf8')
+    // handler 已搬到 ipc/settingsIpc.ts：断言跟着实现走，不再读 app.ts 的文本。
+    const mainSource = readFileSync(resolve(process.cwd(), 'platform/desktop/main/ipc/settingsIpc.ts'), 'utf8')
     const settingsUpdateStart = mainSource.indexOf('ipcMain.handle(IpcChannels.settingsUpdate')
     expect(settingsUpdateStart).toBeGreaterThan(-1)
     const settingsUpdateHandler = mainSource.slice(settingsUpdateStart)

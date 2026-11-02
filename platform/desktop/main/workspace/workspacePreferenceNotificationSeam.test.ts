@@ -255,6 +255,7 @@ describe('S1 ④：OS 外观变化（nativeTheme updated）与设置切换同一
 describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式通知一行）', () => {
   const composeSource = readFileSync(resolve(__dirname, './composePanelWorkspace.ts'), 'utf8')
   const appSource = readFileSync(resolve(__dirname, '../app.ts'), 'utf8')
+  const settingsIpcSource = readFileSync(resolve(__dirname, '../ipc/settingsIpc.ts'), 'utf8')
 
   it('compose 的受控读取包装里不再出现 reconcile（读带副作用已移除）', () => {
     expect(composeSource).not.toContain('preferenceChanges.reconcile(outcome.context.preferences)')
@@ -263,14 +264,15 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
     expect(composeSource).toContain('await preferenceFollow.ensureBaseline()')
   })
 
-  it('app.ts 的 settingsUpdate 成功路径含显式通知（唯一调用点）', () => {
-    const start = appSource.indexOf('ipcMain.handle(IpcChannels.settingsUpdate')
+  it('settingsUpdate 成功路径含显式通知（handler 已搬到 ipc/settingsIpc.ts）', () => {
+    // 搬家后断言跟着实现走：读 app.ts 文本的旧写法会把「搬走」误判成「丢了」。
+    const start = settingsIpcSource.indexOf('ipcMain.handle(IpcChannels.settingsUpdate')
     expect(start).toBeGreaterThan(-1)
-    const end = appSource.indexOf('ipcMain.handle(', start + 10)
-    const block = appSource.slice(start, end === -1 ? undefined : end)
+    const end = settingsIpcSource.indexOf('ipcMain.handle(', start + 10)
+    const block = settingsIpcSource.slice(start, end === -1 ? undefined : end)
 
-    expect(block).toContain('const next = await settingsStore.update(patch)')
-    expect(block).toContain('panelWorkspaceForDisposal?.notifyPreferencesChanged()')
+    expect(block).toContain('const next = await ports.settings.update(patch)')
+    expect(block).toContain('ports.notifyPreferencesChanged()')
     expect(block).toContain('return next')
   })
 
@@ -282,7 +284,9 @@ describe('S1 ③：seam 结构判据（读取侧副作用移除 + app.ts 显式�
     // 方法）。成员列表会随功能增减（例如 Windows 菜单条引入的 Menu），所以只断言这条 import 里有
     // nativeTheme，而不是锁死整行文本。
     expect(appSource).toMatch(/import \{[^}]*\bnativeTheme\b[^}]*\} from 'electron'/)
-    // 恰两处显式通知：设置写入（settingsUpdate 成功路径）+ OS 外观变化；没有第三条对账链
+    // 恰两处显式通知：设置写入（settingsIpc 成功路径）+ OS 外观变化；没有第三条对账链。
+    expect(settingsIpcSource.split('ports.notifyPreferencesChanged()').length - 1).toBe(1)
+    // app.ts 只剩接线（端口接线 + nativeTheme 回调两处引用）。
     expect(appSource.split('notifyPreferencesChanged()').length - 1).toBe(2)
   })
 })
