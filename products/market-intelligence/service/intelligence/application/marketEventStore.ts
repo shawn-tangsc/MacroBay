@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { readJsonFileRecovering, writeJsonFileAtomically } from '@platform/storage/jsonFileStorage'
 
 import {
   createEmptyMarketEventState,
@@ -16,16 +15,11 @@ export type MarketEventStorage = {
 export function createMarketEventJsonStorage(filePath: string): MarketEventStorage {
   return {
     async read() {
-      try {
-        return JSON.parse(await readFile(filePath, 'utf8')) as MarketEventState
-      } catch (error) {
-        if (isMissingFileError(error)) return null
-        throw error
-      }
+      const parsed = await readJsonFileRecovering(filePath)
+      return (parsed as MarketEventState | undefined) ?? null
     },
     async write(value) {
-      await mkdir(dirname(filePath), { recursive: true })
-      await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+      await writeJsonFileAtomically(filePath, value)
     }
   }
 }
