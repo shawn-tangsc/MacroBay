@@ -78,6 +78,36 @@ describe('notification event declarations', () => {
     expect(() => validate(manifestWith([event(overrides)]))).toThrow(ProductRegistryValidationError)
   })
 
+  it('accepts an empty requested level list: approval center-only is a legal ceiling', () => {
+    // N8 / N9 的批准表只有 center，声明就申请空数组——空数组是「本机不打搅」，不是缺字段。
+    expect(() => validate(manifestWith([event({ requestedDisruptionLevels: [] })]))).not.toThrow()
+  })
+
+  it('rejects hand-written title and reason keys, printing expected and actual', () => {
+    expect(() => validate(manifestWith([event({ titleKey: 'notifications.briefing.ready.title' })])))
+      .toThrow(/titleKey must be "notification\.event\.market-intelligence\.briefing\.ready\.title".*got "notifications\.briefing\.ready\.title"/)
+    expect(() => validate(manifestWith([event({ reasonKey: 'notifications.briefing.ready.reason' })])))
+      .toThrow(/reasonKey must be "notification\.event\.market-intelligence\.briefing\.ready\.reason"/)
+  })
+
+  it('rejects a body key or a variant key outside the generated prefix', () => {
+    expect(() => validate(manifestWith([event({ bodyKey: 'notifications.briefing.ready.body' })])))
+      .toThrow(/bodyKey must be "notification\.event\.market-intelligence\.briefing\.ready\.body"/)
+    expect(() => validate(manifestWith([event({
+      bodyKeyByVariant: { failed: 'notifications.briefing.failed.body' }
+    })]))).toThrow(/bodyKeyByVariant\.failed must be "notification\.event\.market-intelligence\.briefing\.ready\.body\.failed"/)
+  })
+
+  it('accepts generated body and variant keys', () => {
+    expect(() => validate(manifestWith([event({
+      bodyKey: 'notification.event.market-intelligence.briefing.ready.body',
+      bodyKeyByVariant: {
+        failed: 'notification.event.market-intelligence.briefing.ready.body.failed',
+        'data-only': 'notification.event.market-intelligence.briefing.ready.body.data-only'
+      }
+    })]))).not.toThrow()
+  })
+
   it('rejects a duplicate id inside one product and a non-array declaration', () => {
     expect(() => validate(manifestWith([event(), event()]))).toThrow(/duplicate notification event/)
     expect(() => validate(manifestWith('market-intelligence.briefing.ready'))).toThrow(/must be an array/)

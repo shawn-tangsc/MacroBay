@@ -2,6 +2,7 @@ import { existsSync, lstatSync, realpathSync, statSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 
 import type { NotificationEventDeclaration } from '../notifications/contracts/notificationEventCatalog'
+import { notificationEventReasonKey, notificationEventTitleKey } from '../notifications/contracts/platformNotificationEvents'
 import type {
   ProductManifest,
   ProductAssistantTemplateRegistration,
@@ -119,11 +120,22 @@ function assertNotificationEvents(manifest: ProductManifest, productId: string):
     }
     seen.add(id)
 
-    if (typeof event.titleKey !== 'string' || event.titleKey.trim() === '') {
-      throw new ProductRegistryValidationError(`notification event "${id}" needs a non-empty titleKey`)
+    // 键名只有一个命名空间：`notification.event.<完整 id>.*`。手写的键在事件改名时不会有人同步，
+    // 目录解析出来就落空——所以**生成期**就比对期望值与实际值，不靠记性，也不留到运行期。
+    assertGeneratedEventKey(id, 'titleKey', event.titleKey, notificationEventTitleKey(id))
+    assertGeneratedEventKey(id, 'reasonKey', event.reasonKey, notificationEventReasonKey(id))
+    const bodyBase = `notification.event.${id}.body`
+    if (event.bodyKey !== undefined) {
+      assertGeneratedEventKey(id, 'bodyKey', event.bodyKey, bodyBase)
     }
-    if (typeof event.reasonKey !== 'string' || event.reasonKey.trim() === '') {
-      throw new ProductRegistryValidationError(`notification event "${id}" needs a non-empty reasonKey`)
+    if (event.bodyKeyByVariant !== undefined) {
+      if (!event.bodyKeyByVariant || typeof event.bodyKeyByVariant !== 'object' || Array.isArray(event.bodyKeyByVariant)) {
+        throw new ProductRegistryValidationError(`notification event "${id}" bodyKeyByVariant must be an object`)
+      }
+      for (const [variant, key] of Object.entries(event.bodyKeyByVariant)) {
+        // 变体键与主键同一前缀：`.body.<variant>`，不开第二个命名空间。
+        assertGeneratedEventKey(id, `bodyKeyByVariant.${variant}`, key, `${bodyBase}.${variant}`)
+      }
     }
     if (typeof event.requiresUserAction !== 'boolean' || typeof event.notifyOnlyIfSubscribed !== 'boolean') {
       throw new ProductRegistryValidationError(
@@ -186,6 +198,14 @@ function assertNotificationEvents(manifest: ProductManifest, productId: string):
       throw new ProductRegistryValidationError(`notification event "${id}" requestedBypassQuietHours must be a boolean`)
     }
   }
+}
+
+/** 期望值与实际值都写进消息：红的时候唯一被读到的就是这句话。 */
+function assertGeneratedEventKey(eventTypeId: string, field: string, actual: unknown, expected: string): void {
+  if (actual === expected) return
+  throw new ProductRegistryValidationError(
+    `notification event "${eventTypeId}" ${field} must be "${expected}" (generated from the event id), got "${String(actual)}"`
+  )
 }
 
 /**
