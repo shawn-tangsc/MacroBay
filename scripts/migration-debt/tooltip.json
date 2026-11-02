@@ -8,7 +8,7 @@
     "apps/desktop-shell/src/renderer/src/shell/agents/components/SessionItem.tsx": {
       "decision": "keep",
       "decidedOn": "2026-11-02",
-      "reason": "Both hints hang on plain spans with no focus of their own (the session status dot, the channel glyph). The full text is already on screen next to them, so a screen reader loses nothing; making them focusable would add one Tab stop per session row, which costs more than the hover-only hint is worth. Adding a Tab stop per row is the same trade the calendar card's non-focusable text got."
+      "reason": "Two hints, two reasons, both about what a hint can hold rather than about taste. (1) The runtime status hint hangs on a colour dot: its text already reaches assistive tech through the span's aria-label, and the only way to let a keyboard user read the word is to make the dot focusable — that is one Tab stop per session row, which costs more than a mouse-only hint. (2) The channel-runtime hint renders a node (a labelled badge with a tone), not a sentence; the shared tooltip takes a key or one line of data, and its trigger here is an icon span that cannot take focus. Migrating it would either drop the badge or invent a multi-line channel for one site."
     }
   }
 }
